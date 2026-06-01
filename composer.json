@@ -1,0 +1,54 @@
+{
+  "name": "drupal/daedalus",
+  "description": ".",
+  "homepage": "https://www.drupal.org/project/daedalus",
+  "type": "drupal-recipe",
+  "license": "GPL-2.0-or-later",
+  "authors": [
+    {
+      "name": "Tim Bozeman",
+      "homepage": "https://bozeman.engineering",
+      "role": "Maintainer"
+    },
+    {
+      "name": "Lillian Bozeman",
+      "homepage": "https://lilybozeman.com",
+      "role": "Maintainer"
+    }
+  ],
+  "support": {
+    "issues": "https://www.drupal.org/project/issues/daedalus",
+    "source": "http://cgit.drupalcode.org/daedalus"
+  },
+  "require": {
+    "drupal/core": "11.3.3",
+    "drupal/navigation_plus": "2.3.x-dev",
+    "drupal/lb_plus": "3.6.x-dev",
+    "drupal/edit_plus": "2.3.x-dev",
+    "drupal/field_sample_value": "1.0.x-dev",
+    "drupal/twig_events": "1.0.x-dev",
+    "drupal/tempstore_plus": "1.0.x-dev",
+    "drupal/dropzonejs": "2.11.0",
+    "drupal/section_library": "1.2.2",
+    "enyo/dropzone": "6.0.0-beta.2"
+  },
+  "require-dev": {
+    "drupal/core-dev": "^11.3"
+  },
+  "minimum-stability": "dev",
+  "prefer-stable": true,
+  "repositories": {
+    "dropzone": {
+      "type": "package",
+      "package": {
+        "name": "enyo/dropzone",
+        "version": "6.0.0-beta.2",
+        "type": "drupal-library",
+        "dist": {
+          "type": "zip",
+          "url": "https://github.com/dropzone/dropzone/releases/download/v6.0.0-beta.2/dist.zip"
+        }
+      }
+    }
+  }
+}
