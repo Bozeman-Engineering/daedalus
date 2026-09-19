@@ -1,0 +1,7 @@
+name: 'Daedalus Stylish Layouts Retired Test'
+description: 'Re-declares the retired daedalus_stylish_onecol..fourcol layout plugins so migration tests can persist captured pre-migration section data (core Section::toArray() instantiates the layout plugin on save).'
+type: module
+core_version_requirement: ^11
+package: Testing
+dependencies:
+  - drupal:layout_builder

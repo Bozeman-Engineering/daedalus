@@ -1,0 +1,58 @@
+# The chat's edit-mode chrome: selection chips live-following the one
+# selection spine. Attached by ChatSidebar::build() where Edit Mode applies
+# (the DaedalusAi tool died with the selection-spine convergence).
+edit_mode:
+  js:
+    js/daedalus-ai-chat-chips.js: {}
+  css:
+    theme:
+      css/daedalus-ai-chat-chips.css: {}
+      css/daedalus-ai-generating.css: {}
+  dependencies:
+    - ai_chatbot/deepchat
+    - core/drupal
+    - daedalus_ui/modes
+    - daedalus_ui/edit_mode
+    # The selection chips wear the kit's daedalus-ui-chip/daedalus-ui-icon-button recipes.
+    - daedalus_ui/panel_controls
+    - daedalus_ui/update_element
+
+chat:
+  js:
+    # The design posture state and its design_posture context provider,
+    # ahead of the kebab that flips it. The provider registers with
+    # Drupal.Daedalus.AiContext, which rides the ai_chatbot/deepchat dependency.
+    js/daedalus-ai-design-posture.js: {}
+    js/daedalus-ai-chat-menu.js: {}
+    js/daedalus-ai-chat-panel.js: {}
+  css:
+    theme:
+      css/daedalus-ai-deep-chat.css: {}
+  dependencies:
+    # The root the design posture facade attaches Drupal.Daedalus.Ai to.
+    - daedalus_ui/daedalus
+    - ai_chatbot/deepchat
+    - core/drupal
+    - core/once
+    # The header's options kebab opens the shared menu primitive.
+    - daedalus_ui/menu
+    # The header's close/menu buttons wear the kit's daedalus-ui-icon-button recipe.
+    - daedalus_ui/panel_controls
+    # The panel chrome and the deep-chat shadow-DOM styles consume the
+    # --daedalus-* tokens.
+    - daedalus_ui/variables
+
+layout_context:
+  js:
+    js/daedalus-ai-layout-context.js: {}
+  dependencies:
+    - ai_chatbot/deepchat
+    - daedalus_ui/modes
+
+generate_images_setting:
+  js:
+    js/daedalus-ai-generate-images-setting.js: {}
+  dependencies:
+    - core/drupal
+    - core/once
+    - daedalus_ui/edit_mode

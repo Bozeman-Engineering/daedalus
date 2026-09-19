@@ -1,0 +1,5 @@
+entity.daedalus_skin.add_form:
+  route_name: entity.daedalus_skin.add_form
+  title: 'Add skin'
+  appears_on:
+    - entity.daedalus_skin.collection

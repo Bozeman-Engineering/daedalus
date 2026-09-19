@@ -1,0 +1,6 @@
+# A plugin block shipping declared defaults: the block kind's other
+# refinement has the same need as a bundle.
+defaults:
+  '':
+    default:
+      display: flex

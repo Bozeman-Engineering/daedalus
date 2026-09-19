@@ -1,0 +1,12 @@
+langcode: en
+status: true
+dependencies:
+  module:
+    - daedalus_stylish_design_system_test
+id: aurora
+label: Aurora
+description: 'A test design system: cool light on a dark ground.'
+icon: null
+default_skin: aurora
+package: daedalus_stylish_design_system_test
+enforcement: strict

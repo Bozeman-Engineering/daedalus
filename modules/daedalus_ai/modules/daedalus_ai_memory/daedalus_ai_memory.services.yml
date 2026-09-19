@@ -1,0 +1,23 @@
+services:
+  daedalus_ai_memory.AgentMemoryRunner:
+    class: Drupal\daedalus_ai_memory\Service\AgentMemoryRunner
+    decorates: ai_assistant_api.agent_runner
+    arguments:
+      - '@.inner'
+      - '@ai.provider'
+      - '@tempstore.private'
+      - '@event_dispatcher'
+      - '@config.factory'
+      - '@daedalus_ai_memory.chat_history_trimmer'
+      - '@daedalus_ai_memory.chat_message_file_stripper'
+      - '@entity_type.manager'
+      - '@ai.hostname_filter_service'
+      - '@?plugin.manager.ai_agents'
+
+  daedalus_ai_memory.chat_history_trimmer:
+    class: Drupal\daedalus_ai_memory\Service\ChatHistoryTrimmer
+    arguments:
+      - '@config.factory'
+
+  daedalus_ai_memory.chat_message_file_stripper:
+    class: Drupal\daedalus_ai_memory\Service\ChatMessageFileStripper

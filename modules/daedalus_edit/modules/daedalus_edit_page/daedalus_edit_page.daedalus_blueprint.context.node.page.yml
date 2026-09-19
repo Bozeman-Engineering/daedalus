@@ -1,0 +1,12 @@
+# Bundle DELTA only. The page design doctrine has ONE copy (the design
+# skill daedalus_stylish ships); the block catalog, layouts, and materials are
+# schema data. This file carries only what is true of the page
+# bundle specifically. Never restate doctrine or catalog facts here.
+guidance: |
+  A page is the site's general-purpose standalone page, built as a
+  multi-section composition: the whole page is the page-builder canvas,
+  structure follows the content, and there is no fixed template. Design
+  it through the design skill (eb_skill design) and hold to its chapters
+  when adding sections: a new section is one move added into the arc the
+  page already has. This schema's block catalog and style guide are the
+  vocabulary to compose from.

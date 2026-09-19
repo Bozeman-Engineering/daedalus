@@ -1,0 +1,5 @@
+# A layout that OPTS OUT of the kind's generative model: the layer merge
+# lets a layout-specific declaration override the container kind's
+# `composed: true`, and the composed render path must then refuse to
+# invent markup for it (ComposedLayoutRenderTest locks the loud failure).
+composed: false

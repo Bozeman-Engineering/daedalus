@@ -1,0 +1,9 @@
+services:
+  # The formatted text block's content for the generative composed render:
+  # the declaration renders the tree, this feeds it (the
+  # daedalus_ui.composed_block_content collector pattern).
+  daedalus_edit_formatted_text_block.composed_content:
+    class: Drupal\daedalus_edit_formatted_text_block\FormattedTextComposedContent
+    arguments: ['@entity_type.manager', '@plugin.manager.editor']
+    tags:
+      - { name: daedalus_ui.composed_block_content }

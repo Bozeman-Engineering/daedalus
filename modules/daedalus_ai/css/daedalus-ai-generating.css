@@ -1,0 +1,51 @@
+/**
+ * The pending "generating" shimmer for deferred processing.
+ *
+ * daedalus-ai-trigger-deferred.js stamps .daedalus-ai-generating on the elements a
+ * deferred batch targets (by spine key) and removes it when the batch
+ * completes.
+ */
+
+@keyframes daedalus-ai-shimmer {
+  0% {
+    background-position: -100% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+:is(#extra-specificity-hack, [data-drupal-admin-styles]),
+html {
+  .daedalus-ai-generating {
+    position: relative;
+    border-radius: var(--daedalus-border-radius);
+    outline: 2px dashed color-mix(in srgb, var(--daedalus-ui-highlight-color, #3c50fa) 50%, transparent);
+  }
+
+  .daedalus-ai-generating::after {
+    position: absolute;
+    z-index: 1;
+    content: "";
+    animation: daedalus-ai-shimmer 2.4s ease-in-out infinite;
+    pointer-events: none;
+    background: linear-gradient(105deg, transparent 30%, color-mix(in srgb, var(--daedalus-ui-highlight-color, #3c50fa) 35%, transparent) 50%, transparent 70%);
+    background-repeat: no-repeat;
+    background-size: 50% 100%;
+    inset: 0;
+  }
+
+  /* Replaced elements render no ::before/::after, so the shimmer overlay
+     cannot paint on them — and a composed block's root can BE one (the
+     image block's unlinked root is the img itself). Pulse the element
+     instead. */
+  :is(img, video, iframe, embed, object, canvas, svg).daedalus-ai-generating {
+    animation: daedalus-ai-generating-pulse 2.4s ease-in-out infinite;
+  }
+}
+
+@keyframes daedalus-ai-generating-pulse {
+  50% {
+    opacity: 0.4;
+  }
+}

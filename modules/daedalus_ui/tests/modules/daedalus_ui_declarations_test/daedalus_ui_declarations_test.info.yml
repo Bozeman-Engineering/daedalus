@@ -1,0 +1,6 @@
+name: 'Daedalus UI declarations test'
+type: module
+description: 'Provides base page builder declarations for testing.'
+package: Testing
+core_version_requirement: '*'
+hidden: true

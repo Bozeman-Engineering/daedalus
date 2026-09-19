@@ -1,0 +1,8 @@
+name: 'Daedalus Stylish Olivero Skin'
+type: module
+description: 'Ships the Olivero design system: core''s front-end look translated into daedalus_stylish tokens and site element defaults. No code, no CSS, no templates.'
+package: Daedalus
+core_version_requirement: '>=11.3 <11.5'
+dependencies:
+  - daedalus:daedalus_blueprint
+  - daedalus:daedalus_stylish

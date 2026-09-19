@@ -1,0 +1,91 @@
+/**
+ * @file
+ * Chat chips — the AI chat's rendering of the selection set.
+ */
+
+/* Header color override while a selection rides the chat context. */
+.daedalus-ai-has-context .ai-deepchat--header,
+.daedalus-ai-has-context .ai-deepchat--header:hover,
+.daedalus-ai-has-context .ai-deepchat--header.active {
+  transition: background-color 0.3s ease;
+  border-color: var(--daedalus-ui-highlight-color);
+  background: var(--daedalus-ui-highlight-color);
+}
+
+/* Chip panel between header and chat area. */
+.daedalus-ai-context-panel {
+  position: absolute;
+  z-index: 1;
+  display: flex;
+  flex-wrap: wrap;
+  box-sizing: border-box;
+  width: 100%;
+  padding: 0.5rem 0.5rem 1.5rem 0.5rem;
+  animation: daedalus-ai-context-slide-in 0.2s ease-out;
+  background: linear-gradient(to bottom, color-mix(in sRGB, var(--daedalus-background) 75%, transparent) calc(100% - 1.5rem), transparent);
+  gap: 6px;
+  backdrop-filter: blur(5px);
+  -webkit-mask-image: linear-gradient(to bottom, black calc(100% - 1.5rem), transparent);
+  mask-image: linear-gradient(to bottom, black calc(100% - 1.5rem), transparent);
+}
+
+@keyframes daedalus-ai-context-slide-in {
+  from {
+    max-height: 0;
+    padding-top: 0;
+    padding-bottom: 0;
+    opacity: 0;
+  }
+  to {
+    max-height: 200px;
+    padding-top: 6px;
+    padding-bottom: 6px;
+    opacity: 1;
+  }
+}
+
+/* Individual chip: the kit's tinted meta chip wearing the highlight hue.
+   The asymmetric padding is the numbered badge's geometry — the 22px
+   circle sits nearly flush in the pill's left end cap. */
+.daedalus-ui-chip.daedalus-ai-context-item {
+  --daedalus-ui-chip-color: var(--daedalus-ui-highlight-color);
+
+  padding: 4px 12px 4px 4px;
+}
+
+/* Small numbered circle in the chip. */
+.daedalus-ai-context-number {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  color: #fff;
+  border-radius: 50%;
+  background: var(--daedalus-ui-highlight-color);
+  font-size: var(--daedalus-font-size-small);
+  font-weight: 700;
+}
+
+/* Label text. */
+.daedalus-ai-context-label {
+  overflow: hidden;
+  max-width: 120px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* X dismiss button — dismissing a chip deselects its element. Rides the
+   kit icon-button (hover wash and focus ring included); the round 14px
+   geometry and highlight-tinted resting color are the chip's own. */
+.daedalus-ui-icon-button.daedalus-ai-context-remove {
+  flex: none;
+  padding: 0;
+  color: color-mix(in sRGB, var(--daedalus-ui-highlight-color) 70%, transparent);
+  border-radius: 50%;
+  font-size: var(--daedalus-icon-size-small);
+  line-height: 1;
+  inline-size: 14px;
+  block-size: 14px;
+}

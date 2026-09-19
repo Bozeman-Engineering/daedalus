@@ -1,0 +1,9 @@
+name: Daedalus Blueprint AI
+type: module
+description: Exposes daedalus_blueprint operations as AI agent tools for the Drupal AI module.
+package: Daedalus
+core_version_requirement: '>=11.3 <11.5'
+lifecycle: experimental
+dependencies:
+  - daedalus:daedalus_blueprint
+  - ai:ai

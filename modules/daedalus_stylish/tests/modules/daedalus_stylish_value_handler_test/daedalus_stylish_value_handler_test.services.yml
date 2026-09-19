@@ -1,0 +1,11 @@
+services:
+  daedalus_stylish_value_handler_test.handler:
+    class: Drupal\daedalus_stylish_value_handler_test\TestStyleValueHandler
+    arguments:
+      - '@state'
+    tags:
+      - { name: daedalus_stylish.style_value_handler }
+  daedalus_stylish_value_handler_test.generate_handler:
+    class: Drupal\daedalus_stylish_value_handler_test\TestGenerateStyleValueHandler
+    tags:
+      - { name: daedalus_stylish.style_value_handler }

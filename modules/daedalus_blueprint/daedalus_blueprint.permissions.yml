@@ -1,0 +1,4 @@
+administer design systems:
+  title: 'Administer design systems'
+  description: 'Create, edit, delete and activate design systems. Activating one switches the materials every editor is offered.'
+  restrict access: true

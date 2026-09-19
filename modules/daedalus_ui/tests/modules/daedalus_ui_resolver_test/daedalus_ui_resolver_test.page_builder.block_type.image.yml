@@ -1,0 +1,39 @@
+# The image shape: a multi-form root swapping with entity data plus the
+# multi-form picture part (daedalus_edit_image_block's declaration, mirrored
+# so the resolver's kernel lock does not depend on daedalus_edit). Unlinked
+# media resolves a media form on BOTH lists — root and part — so the
+# coincidence half of the hoisting rule is decided between matched forms
+# (img/img on raster, svg/svg on vector); linked, the anchor form wins
+# first-match and the part nests inside it wearing its matched form's
+# label (Raster on raster, Vector on vector).
+composed: true
+root:
+  forms:
+    - tag: a
+      present:
+        field: field_image_url
+      attributes:
+        href:
+          field: field_image_url
+    - tag: img
+      present:
+        media: raster
+    - tag: svg
+      present:
+        media: vector
+    - tag: div
+      present:
+        empty: true
+elements:
+  '.image-block-image':
+    label: 'Image'
+    contains: 'field:field_image'
+    forms:
+      - tag: img
+        present:
+          media: raster
+        label: 'Raster'
+      - tag: svg
+        present:
+          media: vector
+        label: 'Vector'

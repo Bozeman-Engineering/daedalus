@@ -1,0 +1,27 @@
+/**
+ * @file
+ * Container outlines: the toggle that makes containers visible.
+ *
+ * A container renders no chrome of its own, so an empty or unstyled one is
+ * literally invisible on the canvas. This is the affordance that shows where
+ * they are.
+ *
+ * The target is the element model's own vocabulary — data-selectable=
+ * "container:{uuid}", stamped on every container root at every depth — not
+ * any one layout's CSS class. So multi-region layouts outline on the same
+ * rule, and a layout plugin changing its markup cannot silently un-outline
+ * itself, which is exactly how the previous .layout__region rule died when
+ * containers stopped rendering region wrappers.
+ *
+ * outline, not border: it draws outside the box, so a container's own grid
+ * tracks and its children keep identical geometry with the toggle on or off.
+ *
+ * currentColor, not an admin palette value: these dashes sit on PAGE content,
+ * whose scheme is the theme's, not the chrome's.
+ *
+ * The mode gate is load-bearing, not decoration: live pages can carry
+ * container keys too, because Daedalus Stylish's @scope roots demand them there.
+ */
+html[data-daedalus-ui-mode="edit"][data-container-outlines] [data-main-entity] [data-selectable^="container:"] {
+  outline: 1px dashed color-mix(in sRGB, currentColor 40%, transparent);
+}

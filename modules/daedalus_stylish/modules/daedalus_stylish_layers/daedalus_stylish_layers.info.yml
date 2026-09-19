@@ -1,0 +1,7 @@
+name: 'Daedalus Stylish Layers'
+description: 'Wraps site CSS (core, contrib, theme) in a cascade layer so unlayered Daedalus Stylish styles always win the cascade.'
+type: module
+core_version_requirement: '>=11.3 <11.5'
+package: Daedalus
+dependencies:
+  - daedalus:daedalus

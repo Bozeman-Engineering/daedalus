@@ -1,0 +1,143 @@
+/**
+ * The insertion caret — the one accent line a drag draws.
+ *
+ * All boxes are fixed-position and pointer-events: none, positioned each
+ * frame from live viewport rects (the outline's pattern), so they never
+ * intercept the drag events they visualize.
+ */
+
+.daedalus-ui-caret__line,
+.daedalus-ui-caret__container,
+.daedalus-ui-caret__empty,
+.daedalus-ui-caret__chip,
+.daedalus-ui-caret__element {
+  position: fixed;
+  z-index: 941;
+  top: 0;
+  left: 0;
+  box-sizing: border-box;
+  pointer-events: none;
+}
+
+/* The gap line. The element is zero-sized on its thin axis; the visible
+   bar is drawn around it so the geometry stays centered on the gap. */
+.daedalus-ui-caret__line::before {
+  position: absolute;
+  content: "";
+  /* Clamps to a capsule on the 4px bar. */
+  border-radius: var(--daedalus-border-radius);
+  background: var(--daedalus-selection);
+  box-shadow: 0 0 0 1px rgb(255, 255, 255, 0.65);
+  inset: -2px 0;
+}
+
+.daedalus-ui-caret__line--vertical::before {
+  inset: 0 -2px;
+}
+
+/* Faint highlight on the container the caret is inside. */
+.daedalus-ui-caret__container {
+  border: 1px solid color-mix(in sRGB, var(--daedalus-selection) 55%, transparent);
+  border-radius: var(--daedalus-border-radius);
+  background: color-mix(in sRGB, var(--daedalus-selection) 6%, transparent);
+}
+
+/* Empty container: a centered drop affordance instead of a line. */
+.daedalus-ui-caret__empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.daedalus-ui-caret__empty-label {
+  padding: 0.35rem 0.9rem;
+  white-space: nowrap;
+  color: var(--daedalus-selection);
+  border: 1.5px dashed var(--daedalus-selection);
+  border-radius: var(--daedalus-border-radius);
+  background: rgb(255, 255, 255, 0.85);
+  font-family: var(--daedalus-font);
+  font-size: var(--daedalus-font-size-small);
+  font-weight: 600;
+}
+
+/* The container chip — the depth indicator's at-a-glance face: names the
+   container the drop would land in, floated just above the caret line's
+   start (the JS transform positions the anchor; translate lifts the pill
+   clear of it). Sits above the line's z-index so it never reads as part
+   of the gap. */
+.daedalus-ui-caret__chip {
+  z-index: 942;
+  overflow: hidden;
+  max-width: 18rem;
+  padding: 0.1rem 0.5rem;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: #fff;
+  border-radius: var(--daedalus-border-radius);
+  background: var(--daedalus-selection);
+  box-shadow: 0 1px 4px rgb(0, 0, 0, 0.25);
+  font-family: var(--daedalus-font);
+  font-size: var(--daedalus-font-size-caption);
+  font-weight: 600;
+  line-height: 1.5;
+  translate: 0 calc(-100% - 4px);
+}
+
+/* Element target (kind 'element'): the drop lands ON this element — a
+   solid ring plus tint over the landing element, with the source's
+   optional label centered. Deliberately heavier than the container
+   highlight: the element itself is the destination, not the space
+   inside it. */
+.daedalus-ui-caret__element {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid var(--daedalus-selection);
+  border-radius: var(--daedalus-border-radius);
+  background: color-mix(in sRGB, var(--daedalus-selection) 14%, transparent);
+}
+
+.daedalus-ui-caret__element-label {
+  padding: 0.35rem 0.9rem;
+  white-space: nowrap;
+  color: #fff;
+  border-radius: var(--daedalus-border-radius);
+  background: var(--daedalus-selection);
+  box-shadow: 0 1px 4px rgb(0, 0, 0, 0.25);
+  font-family: var(--daedalus-font);
+  font-size: var(--daedalus-font-size-small);
+  font-weight: 600;
+}
+
+/* A committed drop's caret pulses until the mutation settles. */
+.daedalus-ui-caret--committing .daedalus-ui-caret__line::before,
+.daedalus-ui-caret--committing .daedalus-ui-caret__empty-label,
+.daedalus-ui-caret--committing .daedalus-ui-caret__chip,
+.daedalus-ui-caret--committing .daedalus-ui-caret__element {
+  animation: daedalus-ui-caret-pulse 0.9s ease-in-out infinite;
+}
+
+@keyframes daedalus-ui-caret-pulse {
+  50% {
+    opacity: 0.45;
+  }
+}
+
+/* The placeholder skeleton a materialized drop leaves in the gap until the
+   re-rendered subtree replaces its container. */
+.daedalus-ui-drop-placeholder {
+  min-height: 5rem;
+  margin: 0.5rem 0;
+  animation: daedalus-ui-placeholder-shimmer 1.2s linear infinite;
+  border: 1px solid color-mix(in sRGB, var(--daedalus-selection) 35%, transparent);
+  border-radius: var(--daedalus-border-radius);
+  background: linear-gradient(100deg, rgb(0, 0, 0, 0.05) 40%, rgb(0, 0, 0, 0.11) 50%, rgb(0, 0, 0, 0.05) 60%);
+  background-size: 200% 100%;
+}
+
+@keyframes daedalus-ui-placeholder-shimmer {
+  to {
+    background-position: -200% 0;
+  }
+}

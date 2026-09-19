@@ -1,0 +1,82 @@
+/**
+ * CKEditor bleed neutralizer.
+ *
+ * In and out of the inline CKEditor the canvas CSS must be 1:1 identical:
+ * the page element IS the editor, so everything CKEditor's own stylesheets
+ * paint onto it is bleed. This file neutralizes the two audited bleed
+ * categories, keyed on .daedalus-edit-inline-editing:
+ *   1. lark editable chrome (focus ring, inset shadow, border radius,
+ *      inline padding, overflow, forced text-align, first-child margin)
+ *   2. .ck-content content typography (color, font stack, size,
+ *      line-height, word-break)
+ * The suite's own edit affordance is NOT re-drawn here: the selection
+ * frame's dashed primary stroke (daedalus_ui, tool-based) is the one
+ * dashed selection outline the suite draws.
+ *
+ * Cascade constraints (why the selectors look the way they do):
+ * - CKEditor's stylesheets are injected as runtime \3c style> elements by the
+ *   DLL, after every pipeline <link> and outside daedalus_stylish_layers' reach, so
+ *   they are unlayered. A layered rule can never beat an unlayered one,
+ *   which means this file must be unlayered too (daedalus_stylish_layers_exempt in
+ *   daedalus_edit.libraries.yml) and must win on SPECIFICITY: source order
+ *   always favors the runtime-injected styles.
+ * - Repeating .daedalus-edit-inline-editing escalates specificity without
+ *   leaning on CKEditor's class soup. Each rule uses the minimum force
+ *   needed to beat the exact CKEditor rule it neutralizes, so genuinely
+ *   stronger page styles keep winning during the edit.
+ * - Neutral values are "restore the canvas cascade": `inherit` where the
+ *   canvas value flows down from ancestors (typography), explicit zeros
+ *   where CKEditor adds box chrome the canvas never had.
+ */
+
+/* Neutralizes `.ck.ck-editor__editable_inline` (0,2,0): overflow:auto and
+   a 0.6em inline padding (layout shift). */
+.daedalus-edit-inline-editing.daedalus-edit-inline-editing.ck-editor__editable_inline {
+  overflow: visible;
+  padding: 0;
+}
+
+/* Neutralizes `.ck.ck-editor__editable_inline[dir=ltr|rtl]` (0,3,0),
+   which forces text-align left/right; the canvas answer (start, or a
+   theme/part alignment set on an ancestor) flows back in via inherit. */
+.daedalus-edit-inline-editing.daedalus-edit-inline-editing.ck-editor__editable_inline[dir] {
+  text-align: inherit;
+}
+
+/* Neutralizes `.ck.ck-editor__editable_inline > :first-child
+   { margin-top: var(--ck-spacing-large) }` (0,2,0) — the audited
+   "p margin-top 0 -> 16.2px" bleed. Zero restores the audited canvas
+   value (the suite themes zero flow children's top margins); a theme
+   giving them an intrinsic top margin needs the tag-level styling story
+   instead. The twin `> :last-child` margin-bottom rule is left alone on
+   purpose: CKEditor's 0.9em lands within rounding of the themes' own
+   paragraph bottom margin, and zeroing it would create a bigger diff
+   than it removes. */
+.daedalus-edit-inline-editing.daedalus-edit-inline-editing.ck-editor__editable_inline > :first-child {
+  margin-top: 0;
+}
+
+/* Neutralizes the `.ck-content` root typography rule (0,1,0): color #000,
+   the Helvetica/Arial/Tahoma stack, font-size medium, line-height 1.5,
+   word-break break-word. All inheritable — the canvas values flow back
+   down from the page. */
+.daedalus-edit-inline-editing.ck-content {
+  word-break: inherit;
+  color: inherit;
+  font-family: inherit;
+  font-size: inherit;
+  line-height: inherit;
+}
+
+/* Neutralizes the (0,4,0) tier — lark's focused-editable rule (blue focus
+   ring border, inset box-shadow, outline:none) and the rounded-corners
+   pair (2px radius) — plus the base 1px transparent border (layout
+   shift). (0,5,0) is required: ties go to the runtime-injected styles.
+   outline: none is asserted (not inherited) so lark's focus ring never
+   resurfaces; the selection frame draws the suite's dash. */
+.daedalus-edit-inline-editing.daedalus-edit-inline-editing.daedalus-edit-inline-editing.ck-editor__editable_inline.ck-content {
+  border: 0;
+  border-radius: 0;
+  outline: none;
+  box-shadow: none;
+}

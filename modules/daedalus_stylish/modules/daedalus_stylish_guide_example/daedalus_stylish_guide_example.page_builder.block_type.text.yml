@@ -1,0 +1,161 @@
+# The text block under the Guide Example guide: one line of text
+# rendered as the tag its field picks (h1-h6 or p), optionally wrapping
+# a link.
+#
+# Two things happen here. The block's own type stops narrow to the
+# roles a single-line text actually wears (headings and standalone
+# lines; the in-body ramp lives on the instances lane in
+# daedalus_stylish_guide_example.page_builder.yml). And the link part becomes the
+# site's BUTTON: its grants are narrowed to what a button may do, its
+# constraints curate the button palette, and a second variant axis
+# ("button") carries the button looks so a heading can wear a text look
+# and a button look at once.
+#
+# Per-block-type stops: curation is the second of the role-token
+# doctrine's three mechanisms: element differentiation WITHOUT new
+# grammar and WITHOUT element-scoped token names. Two facts keep it
+# honest: curation shapes the OFFER, never the law (any minted type
+# token still validates on a text block; only the stop rows and the AI's
+# deviation lines narrow), and stop names are the SKIN'S data (a name
+# the active skin does not mint drops from the row with a logged notice,
+# never a build error). A node block replaces the site default WHOLE on
+# its node (site blocks merge across layers, node blocks never key-merge
+# with the site's), so a curated property restates the scale and
+# allowed: literals beside its stops.
+#
+# variant_axes is a list and lists replace, so the universal block axes
+# (daedalus_stylish.page_builder.yml) are re-listed beside the add, descriptions
+# restated. The button axis owns the link part's fill, corners and
+# padding: a button is restyled by swapping its look, and a hand-written
+# fill or padding on the block is answered with a warning naming the
+# axis.
+#
+# The part below merges over the anatomy the Daedalus text block
+# declares (daedalus_edit_text_block: the conditional anchor nested inside
+# the tag root); standalone it is a part with grants and no markup,
+# which is a valid declaration, so the fixture builds with daedalus_stylish and
+# this module alone. The bundle itself is dormant until a `text` block
+# type exists.
+variant_axes:
+  - animation:
+      label: 'Animation'
+      description: 'The entrance a block plays as it enters the view: a block is born still, so reach for an entrance on the few blocks that should arrive (Slide in for items that arrive in sequence, Pop for one badge, stat or button per band), never on body copy.'
+  - hover:
+      label: 'Hover'
+      description: 'The feel a block answers a pointer with: Raise on an image teaser or a linked block that should feel pressable (the variant carries its own hover state, so the wear never carries a condition).'
+  - button:
+      label: 'Button'
+      description: 'The link part as one of the site''s buttons, inert until the block carries a link: one Primary per band at most, a Secondary beside it for the lesser action, Link for a tertiary "Read more" line and for the link under a card''s description, On accent for the one button inside an Accent band, and every button a pill at the caption size, restyled by swapping its look, never by hand-writing its fill, corners or padding.'
+      owns:
+        - background-color
+        - border-radius
+        - padding-top
+        - padding-bottom
+        - padding-left
+        - padding-right
+property_groups:
+  typography:
+    constraints:
+      # A node block replaces the site default whole: restate the scale
+      # beside the curated stops.
+      font-size:
+        scale: text
+        stops: ['display', 'title-1', 'title-2', 'title-3', 'body', 'caption']
+      letter-spacing:
+        scale: tracking
+        stops: ['tight', 'normal', 'wide']
+elements:
+  '.text-block-link':
+    property_groups:
+      # A button's type is its size, weight, tracking, color and
+      # decoration. Family, line height and alignment are the block's.
+      typography:
+        properties:
+          - font-size
+          - font-weight
+          - letter-spacing
+          - color
+          - text-decoration-line
+          - text-transform
+        constraints:
+          font-size:
+            scale: text
+            stops: ['caption', 'body', 'title-3']
+          color:
+            scale: color
+            allowed: ['transparent', 'currentColor', 'inherit']
+            stops: ['accent-contrast', 'accent', 'text', 'inverse-text']
+      # A button is a flat fill: no images, no gradients on buttons. The
+      # fill is bound to the color scale HERE (site-wide it is unbound so
+      # bands may wear the palette), curated to the button roles.
+      background:
+        properties:
+          - background-color
+        constraints:
+          background-color:
+            scale: color
+            allowed: ['transparent']
+            stops: ['accent', 'accent-contrast', 'text', 'surface', 'elevated', 'inverse-bg']
+      border:
+        constraints:
+          border-radius:
+            scale: radius
+            allowed: ['0']
+            stops: ['pill', 'md']
+          border-width:
+            scale: stroke
+            allowed: ['0']
+            stops: ['thin']
+      spacing:
+        constraints:
+          padding-top:
+            scale: space
+            allowed: ['0']
+            stops: ['2', '3', '4']
+          padding-bottom:
+            scale: space
+            allowed: ['0']
+            stops: ['2', '3', '4']
+          padding-left:
+            scale: space
+            allowed: ['0']
+            stops: ['4', '6', '8']
+          padding-right:
+            scale: space
+            allowed: ['0']
+            stops: ['4', '6', '8']
+      # Enough layout to be an inline-flex pill (gap is spacing's,
+      # granted above).
+      layout:
+        properties:
+          - display
+          - align-items
+          - justify-content
+      motion:
+        properties:
+          - transition-property
+          - transition-duration
+          - transition-timing-function
+      effects:
+        properties:
+          - transform
+          - opacity
+# Basic-mode controls over the button part: each widget's owned
+# properties must be covered by the part's grants above.
+controls:
+  button_fill:
+    label: 'Button fill'
+    widget: background
+    element: '.text-block-link'
+  button_text_color:
+    label: 'Button text'
+    widget: text_color
+    element: '.text-block-link'
+  button_corners:
+    label: 'Button corners'
+    widget: corners_border
+    element: '.text-block-link'
+  button_padding:
+    label: 'Button padding'
+    widget: spacing_scale
+    element: '.text-block-link'

@@ -1,0 +1,8 @@
+services:
+  daedalus_blueprint_ai_dev_tools.prompt_capture:
+    class: Drupal\daedalus_blueprint_ai_dev_tools\PromptCapture
+  daedalus_blueprint_ai_dev_tools.tool_input_capture_subscriber:
+    class: Drupal\daedalus_blueprint_ai_dev_tools\EventSubscriber\ToolInputCaptureSubscriber
+    arguments: ['@state', '@file_system', '@stream_wrapper_manager']
+    tags:
+      - { name: event_subscriber }

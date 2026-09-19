@@ -1,0 +1,64 @@
+<?php
+
+/**
+ * @file
+ * Daedalus Stylish Layouts module hooks.
+ */
+
+declare(strict_types=1);
+
+use Drupal\Core\Layout\LayoutDefinition;
+
+/**
+ * Implements hook_library_info_alter().
+ *
+ * The empty-container drop affordance (edit_affordances) rides edit mode:
+ * daedalus_ui's composed render stamps the `data-container-empty-hint`
+ * attribute on empty containers (edit mode only, over the declaration's
+ * own emptiness marker), and this module owns the presentation over that
+ * fact — but daedalus_ui cannot attach a daedalus_stylish library (dependency
+ * direction), so the CSS joins the edit-mode asset bundle here. Live
+ * renders never load it, and a container emptied mid-session is dressed
+ * without a round trip because the CSS is already on the page.
+ */
+function daedalus_stylish_layouts_library_info_alter(array &$libraries, string $extension): void {
+  if ($extension === 'daedalus_ui' && isset($libraries['edit_mode'])) {
+    $libraries['edit_mode']['dependencies'][] = 'daedalus_stylish_layouts/edit_affordances';
+  }
+}
+
+/**
+ * Implements hook_plugin_filter_TYPE__CONSUMER_alter() for layout, layout_builder.
+ *
+ * Layout Builder's own surfaces (and daedalus_blueprint's placement
+ * restrictions, which use the same consumer) offer ONLY this module's
+ * container layout. Core and layout_discovery layouts stay valid plugins
+ * (nothing already rendering with them breaks); they just stop being
+ * offered.
+ */
+function daedalus_stylish_layouts_plugin_filter_layout__layout_builder_alter(array &$definitions, array $extra): void {
+  _daedalus_stylish_layouts_restrict_to_daedalus_stylish($definitions);
+}
+
+/**
+ * Implements hook_plugin_filter_TYPE__CONSUMER_alter() for layout, daedalus_layout.
+ *
+ * The daedalus_layout's default-section configuration form uses its own consumer id; it
+ * gets the same restriction as the layout picker.
+ */
+function daedalus_stylish_layouts_plugin_filter_layout__daedalus_layout_alter(array &$definitions, array $extra): void {
+  _daedalus_stylish_layouts_restrict_to_daedalus_stylish($definitions);
+}
+
+/**
+ * Reduces a layout definition list to this module's layouts.
+ *
+ * @param \Drupal\Core\Layout\LayoutDefinition[] $definitions
+ *   The layout definitions, altered by reference.
+ */
+function _daedalus_stylish_layouts_restrict_to_daedalus_stylish(array &$definitions): void {
+  $definitions = array_filter(
+    $definitions,
+    fn (LayoutDefinition $definition): bool => $definition->getProvider() === 'daedalus_stylish_layouts',
+  );
+}

@@ -1,0 +1,6 @@
+node_modules/**/*
+modules/daedalus_edit/assets/vendor/**/*
+modules/daedalus_stylish/js/dist/**/*
+modules/daedalus_ui/js/edit_mode/dist/**/*
+# A fixture that is malformed on purpose (the importer's error path).
+modules/daedalus_stylish/tests/modules/daedalus_stylish_variants_files_test_malformed/*.yml

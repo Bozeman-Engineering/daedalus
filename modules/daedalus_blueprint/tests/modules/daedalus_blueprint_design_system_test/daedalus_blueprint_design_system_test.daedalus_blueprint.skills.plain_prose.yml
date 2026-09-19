@@ -1,0 +1,6 @@
+label: 'Plain prose'
+description: 'TRIGGER when: writing copy on any site. House rules for plain prose, whatever the design system.'
+type: default
+design_system: ~
+instructions: |
+  Short sentences. Concrete nouns. No filler.

@@ -1,0 +1,12 @@
+langcode: en
+status: true
+dependencies:
+  module:
+    - daedalus_stylish_guide_example
+id: guide_example
+label: 'Guide Example'
+description: 'A warm editorial look on an ink-and-amber palette: paper surfaces, one amber accent, a serif voice for prose and a sans-serif voice for headings. Bands separate by surface, never by rules; type carries the hierarchy (headings bold on a six-role ramp, semibold for the hero title and stats, uppercase for an eyebrow only, text never gradient-filled or shadowed); buttons are pills; imagery is rounded; motion is restrained and worn, never written. Every color is a role token or a published swatch, so the look holds in light and dark.'
+icon: null
+default_skin: guide_example
+package: daedalus_stylish_guide_example
+enforcement: strict

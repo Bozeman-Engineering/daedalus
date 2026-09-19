@@ -1,0 +1,7 @@
+langcode: en
+status: true
+dependencies: {  }
+id: form_block
+label: 'Form Block'
+revision: false
+description: 'The form-edited fixture block: no composed content class, so its fields edit through the sidebar block form.'

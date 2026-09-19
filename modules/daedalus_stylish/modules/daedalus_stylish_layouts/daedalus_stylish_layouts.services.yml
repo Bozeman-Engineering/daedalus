@@ -1,0 +1,63 @@
+services:
+  daedalus_stylish_layouts.container_migration:
+    class: Drupal\daedalus_stylish_layouts\ContainerMigration
+    arguments:
+      - '@plugin.manager.daedalus_stylish_condition_type'
+      - '@entity_type.manager'
+      - '@logger.factory'
+  Drupal\daedalus_stylish_layouts\ContainerMigration: '@daedalus_stylish_layouts.container_migration'
+
+  # The container-model migration rides daedalus_layout's transform spine: the
+  # section transform converts the four retired multi-region layouts, the
+  # host sweep renames the map grammar afterwards. Both stay registered
+  # permanently (the LayoutBlockToSectionTransform posture) so stale
+  # tempstore sessions keep converging. On sites without daedalus_layout the tags
+  # are never collected and the services never instantiate.
+  daedalus_stylish_layouts.multi_region_section_transform:
+    class: Drupal\daedalus_stylish_layouts\MultiRegionSectionTransform
+    arguments:
+      - '@daedalus_stylish_layouts.container_migration'
+      - '@uuid'
+      - '@logger.factory'
+    tags:
+      - { name: daedalus_layout.section_transform }
+
+  daedalus_stylish_layouts.container_grammar_sweep:
+    class: Drupal\daedalus_stylish_layouts\ContainerGrammarSweep
+    arguments:
+      - '@daedalus_stylish_layouts.container_migration'
+    tags:
+      - { name: daedalus_layout.host_transform }
+
+  # The proportions retirement (mode + share) runs AFTER the grammar sweep
+  # (lower priority): by then the map speaks the container grammar and
+  # retiring references have landed on their split_* spellings, so one
+  # host pass converges old data all the way to the row variant.
+  daedalus_stylish_layouts.row_arrangement_sweep:
+    class: Drupal\daedalus_stylish_layouts\RowArrangementSweep
+    arguments:
+      - '@daedalus_stylish_layouts.container_migration'
+      - '@entity_field.manager'
+    tags:
+      - { name: daedalus_layout.host_transform, priority: -10 }
+
+  daedalus_stylish_layouts.container_part_hoist:
+    class: Drupal\daedalus_stylish_layouts\ContainerPartHoist
+    arguments:
+      - '@entity_type.manager'
+      - '@logger.factory'
+  Drupal\daedalus_stylish_layouts\ContainerPartHoist: '@daedalus_stylish_layouts.container_part_hoist'
+
+  # The one-box convergence runs AFTER the row sweep (lower priority): the
+  # row sweep still reads the part key to parse stepper tracks, so the
+  # hoist may only fold what survives it onto the root key. Above the
+  # width-band sweep so the part key stays a container-model concern; the
+  # condition fold is orthogonal either way. Registered permanently (the
+  # ContainerGrammarSweep posture) so stale tempstore sessions keep
+  # converging after the part is gone from the declaration.
+  daedalus_stylish_layouts.container_part_hoist_sweep:
+    class: Drupal\daedalus_stylish_layouts\ContainerPartHoistSweep
+    arguments:
+      - '@daedalus_stylish_layouts.container_part_hoist'
+    tags:
+      - { name: daedalus_layout.host_transform, priority: -15 }

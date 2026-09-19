@@ -1,0 +1,116 @@
+inspector:
+  js:
+    js/dist/inspector.bundle.js: { minified: true, attributes: { type: 'module' } }
+  css:
+    component:
+      # Editor chrome must never lose to page CSS: exempt from the
+      # daedalus_stylish_layers wrapper layer so it competes unlayered.
+      css/inspector.css: { daedalus_stylish_layers_exempt: true }
+  dependencies:
+    - core/drupal
+    - core/drupalSettings
+    # The media pickers open core's media library through daedalus_ui's
+    # modal helper (js/src/media-library.js hands it the server URL); the
+    # helper's library carries the dialog stack.
+    - daedalus_ui/media_library
+    # inspector.css consumes the --daedalus-* tokens.
+    - daedalus_ui/variables
+    # The UI-mode toggle and segmented value rows wear the shared
+    # .daedalus-ui-segments/.daedalus-ui-segment recipe.
+    - daedalus_ui/panel_controls
+    # Palette swatch chips label themselves through the chrome tooltip
+    # spine (data-daedalus-ui-tooltip); the engine must be attached to this document.
+    - daedalus_ui/tooltip
+    # js/src/log.js grabs Drupal.Daedalus.logger at bundle load; the
+    # dependency is what guarantees logging.js is there by then.
+    - daedalus_ui/logging
+    # The layout widget's proportion strip drags through the continuous-drag
+    # spine (Drupal.Daedalus.drag).
+    - daedalus_ui/drag
+    # Confirm/prompt/alert ride the shared modal dialog primitive
+    # (Drupal.Daedalus.dialog); no window.confirm/prompt survives.
+    - daedalus_ui/dialog
+    # Every inspector popup (row and line right-click menus, the chip and
+    # transfer dropdowns, the provenance menu) opens the shared menu
+    # primitive (Drupal.Daedalus.menu) through js/src/menu.js.
+    - daedalus_ui/menu
+    # Every picker (the swatch and choice wells, the color field, the
+    # media grid, the stop palette, the variant picker) floats on the
+    # shared surface (Drupal.Daedalus.popover) through
+    # js/src/popover.js, its Preact content portaled into the surface.
+    - daedalus_ui/popover
+    # Every gesture outcome rides the notification spine
+    # (Drupal.Daedalus.messenger) through js/src/notify.js.
+    - daedalus_ui/messenger
+    # The canvas is a live page: triggered entrances hold (or play natively)
+    # there exactly as on the live site, and the inspector's Replay
+    # affordance calls Drupal.Daedalus.Stylish.motionTriggers.replay(el).
+    - daedalus_stylish/motion_triggers
+
+satellite:
+  js:
+    js/dist/satellite.bundle.js: { minified: true, attributes: { type: 'module' } }
+  css:
+    component:
+      # Editor chrome must never lose to page CSS: exempt from the
+      # daedalus_stylish_layers wrapper layer so it competes unlayered.
+      css/inspector.css: { daedalus_stylish_layers_exempt: true }
+      # The satellite window's own chrome (body-level :has() rules): split
+      # out of inspector.css so the leader page never pays their style
+      # invalidation cost; only this library attaches them.
+      css/satellite.css: { daedalus_stylish_layers_exempt: true }
+  dependencies:
+    - core/drupal
+    - core/drupalSettings
+    # The satellite window renders outside the rail, without the
+    # daedalus_ui chrome libraries — the tokens inspector.css consumes
+    # must ride along explicitly.
+    - daedalus_ui/variables
+    # Same reason: the segmented controls' shared recipe must ride along.
+    - daedalus_ui/panel_controls
+    # The tooltip engine attaches per document; the satellite's swatch
+    # chips need their own copy of tooltip.js watching THIS window.
+    - daedalus_ui/tooltip
+    # Same bundle code, same logger grab (js/src/log.js). The enabled-module
+    # list is localStorage, so switching daedalus_stylish on in either window covers
+    # both.
+    - daedalus_ui/logging
+    # The proportion strip drags through the continuous-drag spine, and the
+    # spine's window-level terminators (blur, Escape, contextmenu) must
+    # watch THIS window: the satellite needs its own copy of drag.js, not
+    # the leader page's.
+    - daedalus_ui/drag
+    # Same bundle code, same dialogs; the primitive appends to whichever
+    # document it runs in, so the satellite needs its own copy too.
+    - daedalus_ui/dialog
+    # Same bundle code, same menus: the menu primitive is one singleton per
+    # window, appended to whichever document runs it and dismissed by that
+    # window's own pointer, scroll, and blur; the satellite needs its own
+    # copy, opened through its own window's facade.
+    - daedalus_ui/menu
+    # Same bundle code, same pickers: the floating surface appends to
+    # whichever document runs it and is dismissed by that window's own
+    # pointer, scroll, and blur; the satellite needs its own copy.
+    - daedalus_ui/popover
+    # The satellite hosts the notification spine itself: gestures run in
+    # this window (a mint fetches directly) and op intents settle back
+    # here, so their outcomes toast where the hand is, in this window's
+    # own [data-drupal-messages] wrapper, and land in the one shared
+    # history. The messenger attaches per document; this is its copy.
+    - daedalus_ui/messenger
+
+# The motion-triggers runtime (js/motion-triggers.js): the Animation
+# Triggers draft (`timeline-trigger` / `animation-trigger`) where the
+# browser lacks it. A plain ES module with one relative import
+# (js/src/motion-triggers-model.js), so it must never be aggregated; it
+# stands down where CSS.supports('animation-trigger', 'none'). Attached
+# wherever a triggered animation can deliver: a dependency of
+# daedalus_stylish/animations and daedalus_stylish/variants (hook_library_info_build) and of
+# the inspector (the canvas).
+motion_triggers:
+  js:
+    js/motion-triggers.js: { preprocess: false, attributes: { type: 'module' } }
+  dependencies:
+    - core/drupal
+    # The root this library attaches Drupal.Daedalus.Stylish.motionTriggers to.
+    - daedalus_ui/daedalus

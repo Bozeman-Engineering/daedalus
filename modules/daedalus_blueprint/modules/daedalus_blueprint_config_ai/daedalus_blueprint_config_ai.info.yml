@@ -1,0 +1,9 @@
+name: 'Daedalus Blueprint Config AI'
+type: module
+description: 'AI agent tools for config entity blueprint operations.'
+package: Daedalus
+core_version_requirement: '>=11.3 <11.5'
+lifecycle: experimental
+dependencies:
+  - daedalus:daedalus_blueprint_config
+  - daedalus:daedalus_blueprint_ai

@@ -1,0 +1,6 @@
+name: 'Daedalus UI Resolver Test'
+type: module
+description: 'Declarations exercising the element resolver: every grammar v2 variation shape.'
+package: Testing
+dependencies:
+  - daedalus:daedalus_ui

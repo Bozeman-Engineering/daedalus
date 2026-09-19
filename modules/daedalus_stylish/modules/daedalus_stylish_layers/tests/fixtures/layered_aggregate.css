@@ -1,0 +1,10 @@
+@charset "UTF-8";
+/* stylelint-disable import-notation -- the three import spellings core's optimizer must hoist are the fixture. */
+@import url("https://example.com/external.css");
+@import url(print-only.css) print;
+@import url(prelayered.css) layer(base);
+@import "inline-me.css";
+
+body {
+  color: red;
+}

@@ -1,0 +1,31 @@
+# The scale-constrained dimension fixture for the browser scenario
+# (GradientBehaviorTest's padding step).
+#
+# The daedalus baseline (daedalus_edit.page_builder.yml) is deliberately
+# curated-but-unconstrained, so the applied recipe carries no
+# scale-constrained dimension property anywhere. This layer merges over it
+# the way a deployment's theme would: it declares the one site token scale
+# (space — token VALUES stay skin data, minted by the scenario's skin
+# fixture) and closes block padding over it, so the scenario can prove a
+# basic spacing chip offers the minted tokens and commits the var()
+# reference the strict validator's scale rule demands.
+site:
+  token_scales:
+    space:
+      label: 'Space'
+      shape: dimension
+  # The offer-vocabulary fixture: border-radius is constrained NOWHERE
+  # per node, so this authored site-wide binding is the only constraint
+  # source a Corners row can derive its chips from — the scenario's
+  # constraint_defaults step proves the defaults channel (payload
+  # constraintDefaults → the client's resolved constraint read →
+  # stopsFor) reaches the widget DOM.
+  constraint_defaults:
+    border-radius:
+      scale: space
+block:
+  property_groups:
+    spacing:
+      constraints:
+        padding:
+          scale: space

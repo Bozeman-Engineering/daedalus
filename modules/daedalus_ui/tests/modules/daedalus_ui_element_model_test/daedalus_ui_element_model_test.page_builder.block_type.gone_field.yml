@@ -1,0 +1,7 @@
+# The existence axis (element: false, meaning nothing answers to the field's key
+# in any view) and the declaration tier of the FIELD presentation decision.
+fields:
+  field_gone:
+    element: false
+  field_unit_declared:
+    presentation: unit

@@ -1,0 +1,33 @@
+{
+  "description": "CSpell configuration for daedalus, layered by drupal.org's prepare-cspell.php like the template default; the webpack bundles are ignored because their third-party code (preact, codemirror, css-tree, regenerator) is not this project's vocabulary.",
+  "language": "en-US",
+  "allowCompoundWords": false,
+  "globRoot": ".",
+  "minWordLength": 4,
+  "ignorePaths": [
+    "modules/daedalus_stylish/js/dist/**",
+    "modules/daedalus_ui/js/edit_mode/dist/**"
+  ],
+  "dictionaries": [],
+  "dictionaryDefinitions": [],
+  "words": [],
+  "flagWords": [
+    "blacklist->blocklist, denylist",
+    "blacklists->blocklists, denylists",
+    "blacklist's->blocklist's, denylist's",
+    "blacklisted->blocklisted, denylisted",
+    "e-mail",
+    "grey",
+    "queuing",
+    "whitelist:allowlist",
+    "whitelists:allowlists",
+    "whitelist's:allowlist's",
+    "whitelisted:allowlisted"
+  ],
+  "overrides": [
+    {
+      "filename": "**/{*.engine,*.inc,*.install,*.module,*.profile,*.theme}",
+      "languageId": "php"
+    }
+  ]
+}

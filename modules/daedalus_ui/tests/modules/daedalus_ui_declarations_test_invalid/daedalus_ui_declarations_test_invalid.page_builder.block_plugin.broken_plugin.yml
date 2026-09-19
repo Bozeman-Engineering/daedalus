@@ -1,0 +1,11 @@
+# Compose rendering keys off block types, so a block plugin cannot honor
+# composed or root; the retired collapsed spelling fails with its
+# corrective in every context.
+collapsed: true
+composed: true
+root:
+  forms:
+    - tag: div
+elements:
+  '.oops':
+    contains: 'regions'

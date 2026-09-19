@@ -1,0 +1,42 @@
+.blank-page-wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 80%;
+  min-height: 50vh;
+  margin: 0 auto;
+  margin-top: 1em;
+  padding: 20px;
+  text-align: center;
+  color: #666;
+  border: 2px dashed #ccc;
+  background-color: #f9f9f9;
+  /* Empty-state display text, off the chrome type ramp. */
+  font-size: 18px;
+}
+
+.blank-page-wrapper i {
+  margin-bottom: 10px;
+  color: #999;
+  /* Display-scale empty-state art: off the icon ramp by design. */
+  font-size: 48px;
+}
+
+.blank-page-wrapper:hover {
+  color: #333;
+  border-color: #999;
+}
+
+.blank-page-wrapper:hover i {
+  color: #666;
+}
+
+@media (max-width: 768px) {
+  .blank-page-wrapper i {
+    font-size: 36px;
+  }
+  .blank-page-wrapper p {
+    font-size: var(--daedalus-font-size-heading);
+  }
+}

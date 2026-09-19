@@ -1,0 +1,7 @@
+daedalus_blueprint_ai.settings:
+  path: '/admin/config/ai/daedalus-blueprint'
+  defaults:
+    _form: '\Drupal\daedalus_blueprint_ai\Form\SettingsForm'
+    _title: 'Daedalus Blueprint AI'
+  requirements:
+    _permission: 'administer site configuration'

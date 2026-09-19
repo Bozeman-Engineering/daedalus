@@ -1,0 +1,12 @@
+.setting-details.file-association-details {
+  .setting-wrapper {
+    grid-template-columns: 1fr 1fr 1fr;
+  }
+  .remove-association {
+    width: 20px;
+    height: 20px;
+    padding: 0 1.5rem;
+    cursor: pointer;
+    background: center no-repeat url(../../../../assets/x.svg);
+  }
+}

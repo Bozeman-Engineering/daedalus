@@ -1,0 +1,57 @@
+daedalus_blueprint_api.read:
+  path: '/daedalus-blueprint/{entity_type}/{entity}'
+  methods: [GET]
+  defaults:
+    _title: 'Daedalus Blueprint'
+    _controller: '\Drupal\daedalus_blueprint_api\Controller\BlueprintApiController::read'
+  options:
+    no_cache: 'TRUE'
+    parameters:
+      entity:
+        type: entity:{entity_type}
+  requirements:
+    _entity_access: 'entity.view'
+
+daedalus_blueprint_api.mutate:
+  path: '/daedalus-blueprint/{entity_type}/{entity}'
+  methods: [POST]
+  defaults:
+    _title: 'Daedalus Blueprint mutation'
+    _controller: '\Drupal\daedalus_blueprint_api\Controller\BlueprintApiController::mutate'
+  options:
+    no_cache: 'TRUE'
+    parameters:
+      entity:
+        type: entity:{entity_type}
+  requirements:
+    _entity_access: 'entity.update'
+    _csrf_request_header_token: 'TRUE'
+
+daedalus_blueprint_api.history:
+  path: '/daedalus-blueprint/{entity_type}/{entity}/history'
+  methods: [GET]
+  defaults:
+    _title: 'Daedalus Blueprint edit history'
+    _controller: '\Drupal\daedalus_blueprint_api\Controller\HistoryApiController::timeline'
+  options:
+    no_cache: 'TRUE'
+    parameters:
+      entity:
+        type: entity:{entity_type}
+  requirements:
+    _entity_access: 'entity.update'
+
+daedalus_blueprint_api.history_restore:
+  path: '/daedalus-blueprint/{entity_type}/{entity}/history/restore'
+  methods: [POST]
+  defaults:
+    _title: 'Daedalus Blueprint edit history restore'
+    _controller: '\Drupal\daedalus_blueprint_api\Controller\HistoryApiController::restore'
+  options:
+    no_cache: 'TRUE'
+    parameters:
+      entity:
+        type: entity:{entity_type}
+  requirements:
+    _entity_access: 'entity.update'
+    _csrf_request_header_token: 'TRUE'

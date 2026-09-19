@@ -1,0 +1,45 @@
+label: 'Call to Action'
+description: 'Two-column card: pinned heading beside a sampled block, with a nested inner section.'
+element:
+  kind: container
+  layout_id: layout_twocol_section
+  label: 'Call to Action'
+  layout_settings:
+    column_widths: 33-67
+  styles:
+    '':
+      variants: [card]
+      default:
+        background-color: aliceblue
+  children:
+    - kind: region
+      region: first
+      children:
+        - kind: block
+          block_type: text
+          block_fields:
+            field_heading: 'Pinned heading'
+          styles:
+            ':field_heading':
+              default:
+                color: tomato
+            '::.inner':
+              default:
+                padding: 2rem
+    - kind: region
+      region: second
+      children:
+        - kind: block
+          block_type: basic
+        - kind: container
+          layout_id: layout_onecol
+          label: 'Inner'
+          styles:
+            '':
+              variants: [panel]
+          children:
+            - kind: region
+              region: content
+              children:
+                - kind: block
+                  block_type: basic

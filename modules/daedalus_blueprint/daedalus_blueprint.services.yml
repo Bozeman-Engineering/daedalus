@@ -1,0 +1,441 @@
+services:
+  _defaults:
+    autowire: true
+    autoconfigure: true
+
+  logger.channel.daedalus_blueprint:
+    parent: logger.channel_base
+    arguments: ['daedalus_blueprint']
+
+  Drupal\daedalus_blueprint\FieldHandler\FieldHandlerManager: '@daedalus_blueprint.field_handler_manager'
+  Drupal\daedalus_blueprint\OperationHandler\OperationHandlerRegistry: '@daedalus_blueprint.operation_handler_registry'
+  Drupal\daedalus_blueprint\Validator\StructuralValidator: '@daedalus_blueprint.structural_validator'
+  Drupal\daedalus_blueprint\BlueprintSchemaBuilder: '@daedalus_blueprint.schema_builder'
+  Drupal\daedalus_blueprint\BlueprintSchemaBuilderInterface: '@daedalus_blueprint.schema_builder'
+  Drupal\daedalus_blueprint\Validator\SemanticValidator: '@daedalus_blueprint.semantic_validator'
+  Drupal\daedalus_blueprint\Access\BlueprintAccessChecker: '@daedalus_blueprint.access_checker'
+  Drupal\daedalus_blueprint\ManagedKeysRegistry: '@daedalus_blueprint.managed_keys_registry'
+  Drupal\daedalus_blueprint\ManagedKeysRegistryInterface: '@daedalus_blueprint.managed_keys_registry'
+  Drupal\daedalus_blueprint\LayoutBuilder\LayoutSerializer: '@daedalus_blueprint.layout_serializer'
+  Drupal\daedalus_blueprint\LayoutBuilder\LayoutDeserializer: '@daedalus_blueprint.layout_deserializer'
+  Drupal\daedalus_blueprint\LayoutBuilder\PlacementRestrictionsInterface: '@daedalus_blueprint.placement_restrictions'
+  Drupal\daedalus_blueprint\LayoutBuilder\PlacementRestrictions: '@daedalus_blueprint.placement_restrictions'
+  Drupal\daedalus_blueprint\LayoutBuilder\DaedalusLayoutAdapter: '@daedalus_blueprint.daedalus_layout_adapter'
+  Drupal\daedalus_blueprint\LayoutBuilder\OpaqueDataMerger: '@daedalus_blueprint.opaque_data_merger'
+  Drupal\daedalus_blueprint\ElementLocator: '@daedalus_blueprint.element_locator'
+  Drupal\daedalus_blueprint\BlueprintSerializerInterface: '@daedalus_blueprint.serializer'
+  Drupal\daedalus_blueprint\BlueprintDeserializerInterface: '@daedalus_blueprint.deserializer'
+  Drupal\daedalus_blueprint\BlueprintOperationsInterface: '@daedalus_blueprint.operations'
+  Drupal\daedalus_blueprint\BlueprintOperations: '@daedalus_blueprint.operations'
+  Drupal\daedalus_blueprint\BlueprintContextResolverInterface: '@daedalus_blueprint.context_resolver'
+  Drupal\daedalus_blueprint\BlueprintContextResolver: '@daedalus_blueprint.context_resolver'
+  Drupal\daedalus_blueprint\SkillsResolverInterface: '@daedalus_blueprint.skills_resolver'
+  Drupal\daedalus_blueprint\SkillsResolver: '@daedalus_blueprint.skills_resolver'
+  Drupal\daedalus_blueprint\BlueprintElementResolverInterface: '@daedalus_blueprint.element_resolver'
+  Drupal\daedalus_blueprint\BlueprintElementResolver: '@daedalus_blueprint.element_resolver'
+  Drupal\daedalus_blueprint\CurrentEntityContext: '@daedalus_blueprint.current_entity_context'
+
+  daedalus_blueprint.backend_resolver:
+    class: Drupal\daedalus_blueprint\Dispatch\BlueprintBackendResolver
+    tags:
+      - { name: service_collector, tag: daedalus_blueprint.backend, call: addBackend }
+
+  # The markup-projection socket (the HTML print format of the element
+  # model): the spine owns the seam, the model owner plugs a projector in
+  # via the daedalus_blueprint.markup_projector tag. See
+  # MarkupProjectorInterface for the contract.
+  daedalus_blueprint.markup_projection:
+    class: Drupal\daedalus_blueprint\Markup\MarkupProjection
+    tags:
+      - { name: service_collector, tag: daedalus_blueprint.markup_projector, call: addProjector }
+  Drupal\daedalus_blueprint\Markup\MarkupProjection: '@daedalus_blueprint.markup_projection'
+
+  # Post-write structural audit over the markup projection: heading-ladder
+  # and dead-link facts as NON-blocking advisory lines on the write echo.
+  # Advisory by decision — saves never fail on structure.
+  daedalus_blueprint.structural_auditor:
+    class: Drupal\daedalus_blueprint\Markup\StructuralAuditor
+  Drupal\daedalus_blueprint\Markup\StructuralAuditor: '@daedalus_blueprint.structural_auditor'
+
+  daedalus_blueprint.backend.content:
+    class: Drupal\daedalus_blueprint\Dispatch\ContentBlueprintBackend
+    arguments:
+      - '@entity_type.manager'
+      - '@daedalus_blueprint.serializer'
+      - '@daedalus_blueprint.deserializer'
+      - '@daedalus_blueprint.schema_builder'
+      - '@daedalus_blueprint.operations'
+      - '@daedalus_blueprint.storage_handler'
+    tags:
+      - { name: daedalus_blueprint.backend, priority: -10 }
+
+  Drupal\daedalus_blueprint\Dispatch\BlueprintBackendResolver: '@daedalus_blueprint.backend_resolver'
+
+  daedalus_blueprint.operations:
+    class: Drupal\daedalus_blueprint\BlueprintOperations
+    arguments:
+      $layoutPluginManager: '@?plugin.manager.core.layout'
+      $sampleValueGenerator: '@?field_sample_value.generator'
+
+  daedalus_blueprint.context_resolver:
+    class: Drupal\daedalus_blueprint\BlueprintContextResolver
+    arguments:
+      $cache: '@cache.default'
+
+  daedalus_blueprint.skills_resolver:
+    class: Drupal\daedalus_blueprint\SkillsResolver
+    arguments:
+      $cache: '@cache.default'
+      # The per-skill permission gate: a definition's `permission` key is
+      # checked against the acting account on every read.
+      $currentUser: '@current_user'
+
+  daedalus_blueprint.bundle_list_builder:
+    class: Drupal\daedalus_blueprint\BundleListBuilder
+
+  daedalus_blueprint.current_entity_context:
+    class: Drupal\daedalus_blueprint\CurrentEntityContext
+
+  daedalus_blueprint.skill_type_manager:
+    class: Drupal\daedalus_blueprint\SkillType\SkillTypeManager
+    tags:
+      - { name: service_collector, tag: daedalus_blueprint.skill_type, call: addType }
+
+  daedalus_blueprint.skill_type.default:
+    class: Drupal\daedalus_blueprint\SkillType\DefaultSkillType
+    tags:
+      - { name: daedalus_blueprint.skill_type, type_id: default }
+
+  daedalus_blueprint.skill_type.create_entity:
+    class: Drupal\daedalus_blueprint\SkillType\CreateEntitySkillType
+    arguments:
+      - '@daedalus_blueprint.bundle_list_builder'
+      - '@daedalus_blueprint.skills_resolver'
+    tags:
+      - { name: daedalus_blueprint.skill_type, type_id: create_entity }
+
+  daedalus_blueprint.element_resolver:
+    class: Drupal\daedalus_blueprint\BlueprintElementResolver
+
+  daedalus_blueprint.element_locator:
+    class: Drupal\daedalus_blueprint\ElementLocator
+
+  daedalus_blueprint.field_handler_manager:
+    class: Drupal\daedalus_blueprint\FieldHandler\FieldHandlerManager
+    arguments:
+      $moduleHandler: '@module_handler'
+    tags:
+      - { name: service_collector, tag: daedalus_blueprint.field_handler, call: addHandler }
+
+  daedalus_blueprint.operation_handler_registry:
+    class: Drupal\daedalus_blueprint\OperationHandler\OperationHandlerRegistry
+    tags:
+      - { name: service_collector, tag: daedalus_blueprint.operation_handler, call: addHandler }
+
+  daedalus_blueprint.structural_validator:
+    class: Drupal\daedalus_blueprint\Validator\StructuralValidator
+    arguments:
+      $layoutPluginManager: '@?plugin.manager.core.layout'
+
+  daedalus_blueprint.semantic_validator:
+    class: Drupal\daedalus_blueprint\Validator\SemanticValidator
+
+  daedalus_blueprint.access_checker:
+    class: Drupal\daedalus_blueprint\Access\BlueprintAccessChecker
+
+  daedalus_blueprint.managed_keys_registry:
+    class: Drupal\daedalus_blueprint\ManagedKeysRegistry
+    arguments:
+      $cache: '@cache.default'
+
+  daedalus_blueprint.opaque_data_merger:
+    class: Drupal\daedalus_blueprint\LayoutBuilder\OpaqueDataMerger
+
+  daedalus_blueprint.placement_restrictions:
+    class: Drupal\daedalus_blueprint\LayoutBuilder\PlacementRestrictions
+    arguments:
+      - '@plugin.manager.block'
+      - '@entity_type.manager'
+      - '@context.repository'
+      - '@?plugin.manager.core.layout'
+      - '@?plugin.manager.layout_builder.section_storage'
+
+  daedalus_blueprint.daedalus_layout_adapter:
+    class: Drupal\daedalus_blueprint\LayoutBuilder\DaedalusLayoutAdapter
+    arguments:
+      - '@module_handler'
+      - '@entity_type.manager'
+      - '@?plugin.manager.layout_builder.section_storage'
+      - '@?layout_builder.tempstore_repository'
+      - '@daedalus_blueprint.placement_restrictions'
+
+  # The lean node tree — the spine's canonical page representation: one
+  # kind-discriminated tree of containers and blocks with styles on the
+  # node, derived from LayoutSerializer's output plus the entity's style
+  # map. The model-facing dialect prints from it and the blueprint mirror
+  # delivers it (`_tree`), so both surfaces project the same nodes.
+  daedalus_blueprint.node_tree_builder:
+    class: Drupal\daedalus_blueprint\NodeTree\NodeTreeBuilder
+  Drupal\daedalus_blueprint\NodeTree\NodeTreeBuilder: '@daedalus_blueprint.node_tree_builder'
+
+  # The model-facing dialect (spec v0.2): the parser reads a document or op
+  # fragment back into the lean node tree with structural errors (line
+  # numbers, correctives), the printer emits the canonical dialect print of
+  # a tree. Both are stateless grammar; the site vocabulary rides in as a
+  # DialectCatalog per call (derived from live config by the catalog
+  # generator, constructed directly in tests).
+  daedalus_blueprint.dialect_parser:
+    class: Drupal\daedalus_blueprint\Dialect\DialectParser
+  Drupal\daedalus_blueprint\Dialect\DialectParser: '@daedalus_blueprint.dialect_parser'
+  daedalus_blueprint.dialect_printer:
+    class: Drupal\daedalus_blueprint\Dialect\DialectPrinter
+  Drupal\daedalus_blueprint\Dialect\DialectPrinter: '@daedalus_blueprint.dialect_printer'
+
+  # The alias layer over minted identity: author-chosen ids resolved to
+  # minted uuids, per entity per conversation, in shared tempstore. Ops
+  # record onto an overlay; BlueprintOperations settles it (persist or
+  # discard) when the outermost batch settles.
+  daedalus_blueprint.dialect_alias_map:
+    class: Drupal\daedalus_blueprint\Dialect\DialectAliasMap
+    arguments:
+      - '@tempstore.shared'
+  Drupal\daedalus_blueprint\Dialect\DialectAliasMap: '@daedalus_blueprint.dialect_alias_map'
+
+  # The material gesture family (save_material / update_material /
+  # remove_material): one page-language op per verb for every material
+  # kind, dispatched by kind to the owning provider's capture / update /
+  # remove. The UI verbs submit the same ops; the admin routes are adapters
+  # over the same provider methods.
+  daedalus_blueprint.material_gesture_operation_handler:
+    class: Drupal\daedalus_blueprint\Materials\MaterialGestureOperationHandler
+    arguments:
+      - '@daedalus_blueprint.materials_roster_builder'
+      - '@daedalus_blueprint.dialect_alias_map'
+    tags:
+      # Below the DOM handler: the page language lists its DOM vocabulary
+      # first, the gestures after.
+      - { name: daedalus_blueprint.operation_handler, priority: -10 }
+  Drupal\daedalus_blueprint\Materials\MaterialGestureOperationHandler: '@daedalus_blueprint.material_gesture_operation_handler'
+
+  # The DOM-vocabulary ops (insert/replace/remove/move/set/style): the
+  # dialect's write grammar, registered on the op spine and translated into
+  # the batch operations that already exist (the stencil handler's
+  # precedent), so the one validation path judges every write.
+  # The catalog generator: derives the site's DialectCatalog from live
+  # config (block types + field attribute contracts + the container layout
+  # from the spine; axes/conditions/parts/tokens contributed by
+  # DialectCatalogBuildEvent subscribers, daedalus_stylish's on a Daedalus site).
+  # One canonical derivation for the page tools, the cached-prompt
+  # renderer, and the current-page print.
+  daedalus_blueprint.dialect_catalog_builder:
+    class: Drupal\daedalus_blueprint\Dialect\DialectCatalogBuilder
+    arguments:
+      - '@entity_type.bundle.info'
+      - '@entity_field.manager'
+      - '@daedalus_blueprint.field_handler_manager'
+      - '@daedalus_blueprint.placement_restrictions'
+      - '@event_dispatcher'
+      - '@daedalus_blueprint.materials_roster_builder'
+  Drupal\daedalus_blueprint\Dialect\DialectCatalogBuilder: '@daedalus_blueprint.dialect_catalog_builder'
+
+  # The dialect door's view of a bundle's schema: the JSON schema
+  # projected into what a page-language writer needs and nothing the
+  # cached catalog already teaches. The schema builder stays the JSON
+  # door's spec; consumers on the dialect door (eb_read_schema) ask for
+  # the projection.
+  daedalus_blueprint.dialect_schema_projector:
+    class: Drupal\daedalus_blueprint\Dialect\DialectSchemaProjector
+  Drupal\daedalus_blueprint\Dialect\DialectSchemaProjector: '@daedalus_blueprint.dialect_schema_projector'
+
+  # The materials roster: one typed roster of the site's materials
+  # (tokens, swatches, variants, stencils) collected from tagged
+  # daedalus_blueprint.materials_provider services (daedalus_stylish's and the stencil
+  # module's), memoized per request and per workspace. Every model-facing
+  # and client-facing material surface projects from it.
+  # The design system unit: the one activation every consumer derives
+  # from (the roster's partition here; the skin pointer and the law
+  # stratum in the consumers). The subscriber resets the roster memo on
+  # any writer of the pointer; the uninstall validator keeps a package
+  # from leaving while its system is active or has members.
+  daedalus_blueprint.active_design_system:
+    class: Drupal\daedalus_blueprint\DesignSystem\ActiveDesignSystem
+    arguments:
+      - '@config.factory'
+      - '@entity_type.manager'
+      - '@module_handler'
+  Drupal\daedalus_blueprint\DesignSystem\ActiveDesignSystem: '@daedalus_blueprint.active_design_system'
+  daedalus_blueprint.active_design_system_subscriber:
+    class: Drupal\daedalus_blueprint\DesignSystem\ActiveDesignSystemSubscriber
+    arguments:
+      - '@daedalus_blueprint.materials_roster_builder'
+    tags:
+      - { name: event_subscriber }
+  daedalus_blueprint.design_system_uninstall_validator:
+    class: Drupal\daedalus_blueprint\DesignSystem\DesignSystemUninstallValidator
+    arguments:
+      - '@daedalus_blueprint.active_design_system'
+      - '@daedalus_blueprint.materials_roster_builder'
+    tags:
+      - { name: module_install.uninstall_validator }
+
+  daedalus_blueprint.materials_roster_builder:
+    class: Drupal\daedalus_blueprint\Materials\MaterialsRosterBuilder
+    arguments:
+      - '@daedalus_blueprint.active_design_system'
+      # Optional: without Workspaces there is one roster per request; with
+      # it the memo keys on the active workspace (staged mints preview
+      # there only) and the roster carries the workspace cache context.
+      - '@?workspaces.manager'
+    tags:
+      - { name: service_collector, tag: daedalus_blueprint.materials_provider, call: addProvider }
+  Drupal\daedalus_blueprint\Materials\MaterialsRosterBuilder: '@daedalus_blueprint.materials_roster_builder'
+
+  # The roster as the blueprint schema's `materials` fragment (guidance,
+  # tokens, swatches, variants, stencils; full text). Landed on every schema
+  # that references materials by Hook\MaterialsSchemaHooks.
+  daedalus_blueprint.materials_schema:
+    class: Drupal\daedalus_blueprint\Materials\MaterialsSchema
+    arguments:
+      - '@daedalus_blueprint.materials_roster_builder'
+      - '@daedalus_blueprint.dialect_catalog_builder'
+      - '@daedalus_blueprint.dialect_printer'
+  Drupal\daedalus_blueprint\Materials\MaterialsSchema: '@daedalus_blueprint.materials_schema'
+
+  # What one element wears and where it was placed from: its style entry's
+  # variant references and its node's stencil stamp resolved to roster
+  # records (the ACTIVE SELECTION block's read).
+  daedalus_blueprint.element_materials:
+    class: Drupal\daedalus_blueprint\Materials\ElementMaterials
+    arguments:
+      - '@daedalus_blueprint.node_tree_builder'
+      - '@daedalus_blueprint.materials_roster_builder'
+  Drupal\daedalus_blueprint\Materials\ElementMaterials: '@daedalus_blueprint.element_materials'
+
+  # The distro lock: shipped materials are read-only on a consuming site
+  # (the package's files are their one author) and writable on a
+  # development site that sets `$settings['daedalus_blueprint_developer'] =
+  # TRUE` (the package author, working from the canvas and shipping back
+  # to disk with drush). Every shipped-material gate on the spine consults
+  # this one fact; see the class doc for the two audiences.
+  daedalus_blueprint.distro_lock:
+    class: Drupal\daedalus_blueprint\Materials\DistroLock
+  Drupal\daedalus_blueprint\Materials\DistroLock: '@daedalus_blueprint.distro_lock'
+
+  # The value grammar: what a string in a slot IS (a material by its
+  # rostered spelling, an inline media/generate/literal value, or unknown)
+  # and how a material spells in a slot. Stateless: the roster is an
+  # argument. Its JS twin is daedalus_ui js/edit_mode/materials/grammar.js.
+  daedalus_blueprint.value_grammar:
+    class: Drupal\daedalus_blueprint\Materials\ValueGrammar
+  Drupal\daedalus_blueprint\Materials\ValueGrammar: '@daedalus_blueprint.value_grammar'
+
+  # The delivery contract, two halves over one record shape. The
+  # change set is the mid-session half: the materials this request changed
+  # (kind + id, recorded by the owning modules' entity hooks), resolved
+  # against the fresh roster into the {upsert, remove} delta every mutation
+  # response and gesture route appends. Request scoped by construction.
+  daedalus_blueprint.materials_change_set:
+    class: Drupal\daedalus_blueprint\Materials\MaterialsChangeSet
+    arguments:
+      - '@daedalus_blueprint.materials_roster_builder'
+  Drupal\daedalus_blueprint\Materials\MaterialsChangeSet: '@daedalus_blueprint.materials_change_set'
+
+  # The page-load half: the whole roster as the JSON string the client
+  # store boots from, attached beside the blueprint mirror on the same
+  # render (daedalus_ui's BlueprintMirror).
+  daedalus_blueprint.materials_delivery:
+    class: Drupal\daedalus_blueprint\Materials\MaterialsDelivery
+    arguments:
+      - '@daedalus_blueprint.materials_roster_builder'
+  Drupal\daedalus_blueprint\Materials\MaterialsDelivery: '@daedalus_blueprint.materials_delivery'
+
+  # The one icon value seam: resolves the icon value grammar
+  # (`media:<uuid>` | root-relative path) to a URL. The grammar and its
+  # contract live on the class; the stencil materials provider resolves
+  # stencil icons through it so the record the client palette paints from
+  # carries a URL.
+  daedalus_blueprint.icon_resolver:
+    class: Drupal\daedalus_blueprint\IconResolver
+    arguments:
+      - '@entity_type.manager'
+      - '@entity.repository'
+      - '@file_url_generator'
+  Drupal\daedalus_blueprint\IconResolver: '@daedalus_blueprint.icon_resolver'
+
+  daedalus_blueprint.dom_operation_handler:
+    class: Drupal\daedalus_blueprint\Dialect\DomOperationHandler
+    arguments:
+      - '@daedalus_blueprint.dialect_parser'
+      - '@daedalus_blueprint.dialect_alias_map'
+      - '@daedalus_blueprint.node_tree_builder'
+      - '@uuid'
+      # A service closure because the dependency is circular by construction:
+      # daedalus_blueprint.operations owns the handler registry that collects
+      # this handler.
+      - !service_closure '@daedalus_blueprint.operations'
+    tags:
+      - { name: daedalus_blueprint.operation_handler }
+  Drupal\daedalus_blueprint\Dialect\DomOperationHandler: '@daedalus_blueprint.dom_operation_handler'
+
+  daedalus_blueprint.layout_serializer:
+    class: Drupal\daedalus_blueprint\LayoutBuilder\LayoutSerializer
+
+  daedalus_blueprint.layout_deserializer:
+    class: Drupal\daedalus_blueprint\LayoutBuilder\LayoutDeserializer
+    arguments:
+      $layoutPluginManager: '@?plugin.manager.core.layout'
+
+  daedalus_blueprint.serializer:
+    class: Drupal\daedalus_blueprint\BlueprintSerializer
+
+  daedalus_blueprint.deserializer:
+    class: Drupal\daedalus_blueprint\BlueprintDeserializer
+    arguments:
+      $logger: '@logger.channel.daedalus_blueprint'
+
+  daedalus_blueprint.schema_builder:
+    class: Drupal\daedalus_blueprint\BlueprintSchemaBuilder
+    arguments:
+      $cache: '@cache.default'
+      $placementRestrictions: '@daedalus_blueprint.placement_restrictions'
+      $layoutPluginManager: '@?plugin.manager.core.layout'
+
+  daedalus_blueprint.field_handler.text:
+    class: Drupal\daedalus_blueprint\FieldHandler\TextFieldHandler
+    tags:
+      - { name: daedalus_blueprint.field_handler, field_types: 'text_long,text_with_summary' }
+
+  daedalus_blueprint.field_handler.entity_reference:
+    class: Drupal\daedalus_blueprint\FieldHandler\EntityReferenceFieldHandler
+    arguments:
+      $logger: '@logger.channel.daedalus_blueprint'
+    tags:
+      - { name: daedalus_blueprint.field_handler, field_types: 'entity_reference' }
+
+  daedalus_blueprint.field_handler.link:
+    class: Drupal\daedalus_blueprint\FieldHandler\LinkFieldHandler
+    tags:
+      - { name: daedalus_blueprint.field_handler, field_types: 'link' }
+
+  daedalus_blueprint.field_handler.file:
+    class: Drupal\daedalus_blueprint\FieldHandler\FileFieldHandler
+    arguments:
+      $logger: '@logger.channel.daedalus_blueprint'
+    tags:
+      - { name: daedalus_blueprint.field_handler, field_types: 'file,image' }
+
+  daedalus_blueprint.field_handler.inline_entity:
+    class: Drupal\daedalus_blueprint\FieldHandler\InlineEntityFieldHandler
+    tags:
+      - { name: daedalus_blueprint.field_handler, field_types: 'entity_reference_revisions' }
+
+  daedalus_blueprint.storage_handler:
+    class: Drupal\daedalus_blueprint\EntityStorageHandler
+    arguments:
+      - '@entity_type.manager'
+      - '@module_handler'
+      - '@?daedalus_tempstore.entity_tempstore_repository'
+      - '@?daedalus_blueprint.layout_tempstore_helper'
+      - '@?workspaces.manager'
+
+  Drupal\daedalus_blueprint\EntityStorageHandler: '@daedalus_blueprint.storage_handler'

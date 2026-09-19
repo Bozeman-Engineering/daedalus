@@ -1,0 +1,7 @@
+name: 'Daedalus Stylish Carbon'
+description: 'Ships IBM''s Carbon Design System as a daedalus_stylish skin: the core color themes (white/g100), spacing scale, type scale, IBM Plex stacks, and motion tokens, translated into skin data as a real-brand dogfood fixture. Installing makes the Carbon skin available at /admin/appearance/skins; it is never activated automatically. Carbon token values (c) IBM Corp., Apache-2.0 (see LICENSE-APACHE-2.0.txt).'
+type: module
+core_version_requirement: '>=11.3 <11.5'
+package: Daedalus
+dependencies:
+  - daedalus:daedalus_stylish

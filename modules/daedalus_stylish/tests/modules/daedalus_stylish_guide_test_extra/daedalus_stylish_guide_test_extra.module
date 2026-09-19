@@ -1,0 +1,22 @@
+<?php
+
+/**
+ * @file
+ * Test module hooks.
+ */
+
+declare(strict_types=1);
+
+use Drupal\daedalus_ui\ElementModel\PageBuilderDeclarations;
+
+/**
+ * Implements hook_page_builder_declarations_alter().
+ */
+function daedalus_stylish_guide_test_extra_page_builder_declarations_alter(array &$declarations, string $theme): void {
+  $declarations['kinds']['region']['property_groups']['layout'] = [];
+  // State-injected kind layers, so failure-shaped declarations can be
+  // exercised per test without YAML that would break every guide build.
+  foreach (\Drupal::state()->get('daedalus_stylish_guide_test_extra.kinds', []) as $kind => $declaration) {
+    $declarations['kinds'][$kind] = PageBuilderDeclarations::merge($declarations['kinds'][$kind] ?? [], $declaration);
+  }
+}

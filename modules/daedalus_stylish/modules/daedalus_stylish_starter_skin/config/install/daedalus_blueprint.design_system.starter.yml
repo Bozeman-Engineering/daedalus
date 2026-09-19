@@ -1,0 +1,12 @@
+langcode: en
+status: true
+dependencies:
+  module:
+    - daedalus_stylish_starter_skin
+id: starter
+label: Starter
+description: 'A blank canvas, not a look: neutral placeholder tokens on every scale (a white page with a light surface, near-black text, a mid-blue accent, system font stacks, a six-role type ramp, a four-step space ladder) and base-tag defaults that only reference them, so the whole site restyles by re-valuing tokens in the skin. Nothing here is a design decision to preserve; every value is the first thing to change.'
+icon: null
+default_skin: starter
+package: daedalus_stylish_starter_skin
+enforcement: open

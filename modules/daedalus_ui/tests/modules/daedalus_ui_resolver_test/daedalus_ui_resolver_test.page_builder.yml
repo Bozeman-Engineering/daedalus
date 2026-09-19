@@ -1,0 +1,50 @@
+# Resolver-exercising declarations, mirroring the shipped variation shapes.
+#
+# The container kind mirrors the one-box container: NO parts, a multi-form
+# root swapping on depth (section as a page band, div nested) and on
+# emptiness (the empty forms compose depth AND empty in one present map —
+# the root-form AND lane — and carry the drop-affordance attribute), so
+# the resolver's depth conditions, the caller-fed emptiness input, and
+# multi-condition root forms are locked against the shape that ships.
+# `composed: true` on the kind makes every layout's effective declaration
+# generative (the shipped shape), which the composed_container render path
+# gates on; declarations-only consumers ignore it.
+container:
+  composed: true
+  root:
+    forms:
+      - tag: section
+        present:
+          depth: root
+          empty: true
+        attributes:
+          data-container-empty: ''
+      - tag: div
+        present:
+          empty: true
+        attributes:
+          data-container-empty: ''
+      - tag: section
+        present:
+          depth: root
+      - tag: div
+
+# The field kind layers OVER daedalus_ui's shipped field shell (the
+# .field__label / .field__items / .field__item chain): an OWNER pattern
+# part, so the resolver's "a pattern names a class namespace, no concrete
+# element" rule is locked alongside the shell resolution.
+field:
+  elements:
+    '.pat-*':
+      label: 'Owner namespace'
+
+# The instance-namespace lane: the '.rt-*' vocabulary the annotator
+# enumerates instance rows from (prefixes and labels both read from this
+# declaration, the one vocabulary truth).
+instances:
+  '.rt-*':
+    label: 'Test namespace'
+    tags:
+      p: 'Paragraph'
+      h2: 'Heading 2'
+      blockquote: 'Block quote'

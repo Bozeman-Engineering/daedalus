@@ -1,0 +1,30 @@
+langcode: en
+status: true
+dependencies:
+  module:
+    - menu_ui
+    - daedalus_ui
+third_party_settings:
+  menu_ui:
+    available_menus:
+      - footer
+      - main
+    parent: 'main:'
+  daedalus_ui:
+    initial_mode: edit
+    status:
+      edit: true
+    modes:
+      edit:
+        # The Selector is the resting state: there is no place_block tool;
+        # adding blocks is the Add panel plus drag/Insert, not a tool.
+        default_tool: selector
+name: 'Page'
+type: page
+description: 'Use <em>pages</em> to build with the page builder.'
+help: null
+new_revision: true
+# Disabled removes the Preview button from node forms: previewing happens
+# in place through the page builder, and core's preview detours out of it.
+preview_mode: 0
+display_submitted: false

@@ -1,0 +1,39 @@
+langcode: en
+status: true
+dependencies:
+  config:
+    - field.storage.node.field_media
+    - media.type.image
+    - node.type.plain
+  module:
+    - daedalus_edit
+    - field_sample_value
+third_party_settings:
+  field_sample_value:
+    id: entity_reference
+    configuration:
+      prevent_save: false
+  daedalus_edit:
+    disable: false
+    handle: wrapper
+id: node.plain.field_media
+field_name: field_media
+entity_type: node
+bundle: plain
+label: Media
+description: 'The form-path media tier: a media_library_widget riding the entity form.'
+required: false
+translatable: false
+default_value: {  }
+default_value_callback: ''
+settings:
+  handler: 'default:media'
+  handler_settings:
+    target_bundles:
+      image: image
+    sort:
+      field: _none
+      direction: ASC
+    auto_create: false
+    auto_create_bundle: ''
+field_type: entity_reference

@@ -1,0 +1,19 @@
+container:
+  property_groups:
+    spacing:
+      constraints:
+        padding:
+          max: '4rem'
+  # The '::>' children pseudo-part: what a container's direct children may
+  # be styled with ("{key}::>"). Layout only, so strict-mode tests can pin
+  # that properties outside the declared groups are rejected on children.
+  children:
+    property_groups:
+      layout: {}
+field:
+  property_groups:
+    typography: {}
+    color: {}
+block:
+  property_groups:
+    spacing: {}

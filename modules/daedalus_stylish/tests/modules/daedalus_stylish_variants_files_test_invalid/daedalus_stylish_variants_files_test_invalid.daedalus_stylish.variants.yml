@@ -1,0 +1,9 @@
+# doubled_section is shipped here AND in the per-id file beside this one:
+# discovery must refuse the module, loudly, before anything imports.
+doubled_section:
+  label: 'Doubled section'
+  scope: 'kind:container'
+  styles:
+    '':
+      default:
+        padding: '1rem'

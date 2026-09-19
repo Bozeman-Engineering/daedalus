@@ -1,0 +1,11 @@
+# The empty-container drop affordance (floor + dashed edge + centered
+# hint). Rides the edit-mode asset bundle (daedalus_stylish_layouts_library_info_alter
+# adds it to daedalus_ui/edit_mode), keyed to the edit-only
+# `data-container-empty-hint` attribute the composed render stamps, so
+# live renders never load it and never match it. Editor chrome must never
+# lose to page CSS: exempt from the daedalus_stylish_layers wrapper layer so it
+# competes unlayered.
+edit_affordances:
+  css:
+    component:
+      css/edit-affordances.css: { daedalus_stylish_layers_exempt: true }

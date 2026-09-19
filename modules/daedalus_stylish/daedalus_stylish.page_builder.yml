@@ -1,0 +1,320 @@
+# Daedalus Stylish's universal page builder declarations.
+#
+# daedalus_stylish_styles (DaedalusStylishFieldManager::FIELD_NAME) is the shared style map
+# field: infrastructure the styling pipeline reads at render time, never
+# rendered as page content itself. Nothing answers to its key in any view —
+# no canvas element, no page-elements row, no edit path — so it is declared
+# nonexistent on the EXISTENCE axis, on every fieldable kind that carries
+# it. The field stays in blueprints (the data model of record): AI
+# reads and writes the style map through blueprint operations; it just
+# never presents as a page element.
+#
+# The declarations below also layer daedalus_stylish's styling vocabulary over the
+# shells other modules ship: the field shell daedalus_ui declares
+# (daedalus_ui.page_builder.yml: core's .field__label / .field__items >
+# .field__item chain) and the entity's layout root daedalus_layout declares
+# (daedalus_layout.page_builder.yml: div.daedalus-layout-layout, the ONE element the root
+# sections render inside). The ANATOMY — labels, tags, nesting, the value
+# slot — is the shell owner's; the property_groups riding the same parts
+# are daedalus_stylish's sections in the shared declaration file, making each shell
+# part a styling surface. Ranges, palettes, and controls belong to higher
+# layers (a distro baseline, the site theme), which merge over this file
+# like any other declaration.
+entity:
+  fields:
+    daedalus_stylish_styles:
+      element: false
+  elements:
+    # The layout root is the box that arranges the root bands (daedalus_layout
+    # renders it and declares its display: grid), so it gets the groups a
+    # list's box gets, the .field__items shape below: spacing for the gap
+    # between bands (the page-level Gap control daedalus_edit binds here, and
+    # the same `gap` the AI writes at entity:{uuid}::.daedalus-layout-layout), and
+    # layout for the arranging facts. Never typography or background: the
+    # page's look is the entity root's; this part is air between bands.
+    # daedalus_layout is not a daedalus_stylish dependency, so on a site without it this
+    # layer alone declares a part no markup ever carries: the part is
+    # presence-gated by its render, so no row, control or write reaches it,
+    # and the roster labels it by its selector until daedalus_layout's anatomy
+    # merges in.
+    '.daedalus-layout-layout':
+      property_groups:
+        spacing: {}
+        layout: {}
+
+field:
+  elements:
+    '.field__label':
+      property_groups:
+        typography: {}
+        spacing: {}
+    '.field__items':
+      property_groups:
+        spacing: {}
+        layout: {}
+      elements:
+        '.field__item':
+          property_groups:
+            spacing: {}
+
+block:
+  fields:
+    daedalus_stylish_styles:
+      element: false
+  # Motion (transition-* and animation-*) is granted on every block by
+  # daedalus_stylish itself, beside the box and type groups daedalus_edit grants:
+  # property_groups maps merge across modules, and the animation material's
+  # wearing surface (the Motion section, the animation axis) has to reach
+  # the elements that compose a page. Containers gain it in
+  # daedalus_stylish_layouts; prose links in base:a below. Effects (transform and
+  # opacity) ride beside it: the hover axis's Lift moves with a transform,
+  # and an entrance override wants opacity, so the two groups a motion
+  # treatment moves through are granted together. Shadow rides with them
+  # for the same reason: Lift's hover state casts a box-shadow, and a
+  # kind must grant every property the material it ships writes (daedalus_edit
+  # grants shadow too; property_groups maps merge, so the two grants are
+  # one).
+  property_groups:
+    motion: {}
+    effects: {}
+    shadow: {}
+  # The animation axis: basic mode's motion control is a wearing row (the
+  # Layout = container_layout precedent), fed by the shipped entrance
+  # variants in daedalus_stylish.daedalus_stylish.variants.yml. The hover axis after it:
+  # hover FEEL as material (block_lift), each variant carrying its own
+  # `hover` block, since a wear never carries a condition. Declared once,
+  # here on the universal block kind, and inherited by every block type:
+  # variant_axes is a LIST, and lists replace across layers, so a block
+  # type authoring its own variant_axes must re-list both to keep the
+  # rows.
+  variant_axes:
+    - animation:
+        label: 'Animation'
+        description: 'The entrance a block plays as it enters the view. A block is born still; reach for an entrance on the few blocks that should arrive, never on every block of a page.'
+    - hover:
+        label: 'Hover'
+        description: 'The feel a block answers a pointer with. The variant carries its own hover state, so the wear never carries a condition.'
+  # The trigger pair's basic-mode control (the Start / Play rows over
+  # timeline-trigger and animation-trigger), bound here on the universal
+  # block kind beside the motion grant that covers it: controls maps
+  # merge across modules like property_groups, so daedalus_edit's kind
+  # controls stay where they are and this one rides after them. No
+  # element key: the trigger pair is the block root's own (a kind control
+  # may bind a part the kind declares, the entity's layout root above).
+  controls:
+    motion_trigger:
+      label: 'Motion trigger'
+      widget: motion_trigger
+
+# The site declaration: vocabulary scoped to the whole site, not any
+# element, layered by daedalus_ui's page builder declarations spine
+# like any other kind (modules lowest, the active theme highest, NULL
+# withdraws a key), so a theme can still trim or extend what ships here.
+#
+# token_scales is the design-token vocabulary's CODE half: each scale
+# declares the value shape every token minted on it validates against,
+# and the CSS custom property prefix its tokens deliver under
+# (--{scale}-{name}). Token NAMES and VALUES are data on daedalus_skin
+# entities; a shipped skin (*.daedalus_stylish.skins.yml) mints the corpus these
+# scales validate, and a theme's CSS only CONSUMES tokens (mechanics with
+# design values as var() references).
+site:
+  token_scales:
+    color:
+      label: Color
+      shape: color
+    # Typeface stacks (font-family values). shape text: a stack is a free
+    # string, not a dimension or keyword. A theme's own CSS typically reads
+    # font.body for everything; a skin's base:code default reads font.mono.
+    font:
+      label: Font family
+      shape: text
+    text:
+      label: Type scale
+      shape: dimension
+    weight:
+      label: Font weight
+      shape: number
+    leading:
+      label: Line height
+      shape: number
+    tracking:
+      label: Letter spacing
+      shape: dimension
+    space:
+      label: Space
+      shape: dimension
+    radius:
+      label: Radius
+      shape: dimension
+    transition:
+      label: Transition
+      shape: text
+    # Site-level layout decisions (the constrained content width). A
+    # theme's non-builder surfaces (header container, breadcrumb/help
+    # regions, plain pages) and the Site width variant read the
+    # same token, so the site width is one fact.
+    layout:
+      label: Layout
+      shape: dimension
+
+  # The suite's own bindings (constraint_defaults: property -> the
+  # constraint block every node granting the property resolves beneath
+  # its own; law on a guarded or strict site, offer-shaping on an open
+  # one). The qualifying rule: a property is bound here iff its scale is
+  # one EVERY shipped skin mints (font, text, weight, leading, space,
+  # radius), because a suite binding is a promise every skin must keep;
+  # a scale some skins skip (tracking) or packages disagree on (color:
+  # one leaves it unbound so swatches stay legal, another binds it with
+  # allowed keywords) is a package binding, not the suite's. These
+  # bindings define the minimum a skin mints: a bound scale minting
+  # nothing is a skin defect the row shows honestly (an empty closed
+  # space, no built-in fallback), closed at the skin. An editor typing
+  # Arial or 13px on a designed site is the drift the guide exists to
+  # prevent; the basic rows over these properties offer the skin's tokens
+  # as var() reference stops instead of the built-in tables, and advanced
+  # mode, the code view's completions and the AI's bindings lines read
+  # the same entries.
+  #
+  # A design-system package (its declarations layer above the suite's
+  # while it is the active system) keeps only its deltas: `stops:`
+  # curation merged over these blocks (`padding: {stops: [sm, md, lg]}`
+  # yields the merged block, the scale and allowed literal kept), its
+  # own color and tracking bindings, extra `allowed:` literals (a site
+  # that wants a literal stack beside the font scale adds it in its own
+  # layer; constraint blocks merge like every map), and `null` to
+  # withdraw a binding whole (`padding: null` reopens the family to the
+  # built-in offer). Shorthands are authored once: padding, gap and
+  # border-radius reach their longhands through the family expansion
+  # (StyleGuide::expandConstraintFamilies()). The literal zero stays
+  # legal beside the dimension scales because no scale mints a zero token
+  # and the widgets' None gesture commits '0'.
+  constraint_defaults:
+    font-family:
+      scale: font
+    font-size:
+      scale: text
+    font-weight:
+      scale: weight
+    line-height:
+      scale: leading
+    padding:
+      scale: space
+      allowed: ['0']
+    gap:
+      scale: space
+      allowed: ['0']
+    border-radius:
+      scale: radius
+      allowed: ['0']
+
+  # The bare-markup styling vocabulary: the ONE declaration of a prose
+  # tag's styleability, feeding both prose lanes. The base:{tag} scope
+  # family (skin site defaults, base stylesheet territory) and the
+  # element-scoped tag tier ({key}::{tag}, one element's paragraphs)
+  # resolve and validate against these groups, so what a skin may set on
+  # a tag site-wide is exactly what an element may override on it. The
+  # legal tag set is code (StyleGuide::BASE_TAGS); declaring a tag here
+  # is what makes it stylable on a STRICT site and a tag-tier target on
+  # any site, so the common prose tags below are stylable by default, a
+  # theme withdraws one by declaring it NULL and adds another by
+  # declaring it. Instance namespaces (daedalus_edit's `instances:` lane)
+  # declare identity only; they never widen or narrow this vocabulary.
+  # Values are skin data (the daedalus_skin defaults field): a shipped
+  # skin carries its typography as base:{tag} defaults; theme CSS keeps
+  # only mechanics.
+  #
+  # Block-level prose tags carry background + border beside typography +
+  # spacing: the tag tier's callout gestures (a tinted paragraph band, a
+  # ruled blockquote) are the same writes a minted instance part makes.
+  # Inline tags keep typography (code adds background for the inline
+  # chip); links carry motion (see the a: entry).
+  base:
+    h1:
+      property_groups:
+        typography: {}
+        spacing: {}
+        background: {}
+        border: {}
+    h2:
+      property_groups:
+        typography: {}
+        spacing: {}
+        background: {}
+        border: {}
+    h3:
+      property_groups:
+        typography: {}
+        spacing: {}
+        background: {}
+        border: {}
+    h4:
+      property_groups:
+        typography: {}
+        spacing: {}
+        background: {}
+        border: {}
+    h5:
+      property_groups:
+        typography: {}
+        spacing: {}
+        background: {}
+        border: {}
+    h6:
+      property_groups:
+        typography: {}
+        spacing: {}
+        background: {}
+        border: {}
+    p:
+      property_groups:
+        typography: {}
+        spacing: {}
+        background: {}
+        border: {}
+    # Links are the one prose tag with a state worth transitioning, so
+    # they alone carry motion; themes widen other tags in their own
+    # layer. Reaches the skin lane (base:a defaults) and the element tag
+    # tier (block:{uuid}::a) alike, since base is the one vocabulary.
+    a:
+      property_groups:
+        typography: {}
+        motion: {}
+    ul:
+      property_groups:
+        typography: {}
+        spacing: {}
+        background: {}
+        border: {}
+    ol:
+      property_groups:
+        typography: {}
+        spacing: {}
+        background: {}
+        border: {}
+    li:
+      property_groups:
+        typography: {}
+        spacing: {}
+        background: {}
+        border: {}
+    blockquote:
+      property_groups:
+        typography: {}
+        spacing: {}
+        background: {}
+        border: {}
+    pre:
+      property_groups:
+        typography: {}
+        spacing: {}
+        background: {}
+        border: {}
+    code:
+      property_groups:
+        typography: {}
+        background: {}
+    img:
+      property_groups:
+        sizing: {}
+        border: {}

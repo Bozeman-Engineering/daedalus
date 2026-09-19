@@ -1,0 +1,7 @@
+services:
+  daedalus_blueprint_markup_test.projector:
+    class: Drupal\daedalus_blueprint_markup_test\StateMarkupProjector
+    arguments:
+      - '@state'
+    tags:
+      - { name: daedalus_blueprint.markup_projector }

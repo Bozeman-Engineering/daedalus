@@ -1,0 +1,44 @@
+# Layers over the shipped field shell (daedalus_ui.page_builder.yml):
+# the same .field__items > .field__item chain restated with a test
+# constraint, which also proves a same-position re-declaration merges
+# instead of tripping the duplicate-class check.
+#
+# The site section withdraws the suite's dimension and type bindings
+# (daedalus_stylish.page_builder.yml constraint_defaults; NULL removes a key
+# across layers, and the family expansion has nothing left to expand):
+# the classes on this fixture prove nesting, tag-tier resolution,
+# instance namespaces and provenance with literal sizes and paddings
+# under law, and the scale law itself has its own coverage
+# (StyleGuideConstraintDefaultsTest, TokenConsumptionTest). What stays
+# bound is the fixture's own: font-family to the font scale (the one
+# suite binding no test here writes against) and the .field__item cap
+# below, so the bindings line these classes assert is the suite's font
+# binding alone and the deviations are the fixture's caps.
+site:
+  constraint_defaults:
+    font-size: null
+    font-weight: null
+    line-height: null
+    padding: null
+    gap: null
+    border-radius: null
+field:
+  property_groups:
+    typography: {}
+  elements:
+    '.field__items':
+      label: 'Items'
+      property_groups:
+        spacing: {}
+      elements:
+        '.field__item':
+          label: 'Item'
+          contains: value
+          property_groups:
+            spacing:
+              constraints:
+                padding:
+                  max: '1rem'
+block:
+  property_groups:
+    spacing: {}

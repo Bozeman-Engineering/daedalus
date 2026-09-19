@@ -1,0 +1,8 @@
+services:
+  # The text block's content for the generative composed render: the
+  # declaration renders the tree, this feeds it (the
+  # daedalus_ui.composed_block_content collector pattern).
+  daedalus_edit_text_block.composed_content:
+    class: Drupal\daedalus_edit_text_block\TextComposedContent
+    tags:
+      - { name: daedalus_ui.composed_block_content }

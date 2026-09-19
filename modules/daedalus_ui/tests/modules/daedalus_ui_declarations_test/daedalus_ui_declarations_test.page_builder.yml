@@ -1,0 +1,46 @@
+entity:
+  fields:
+    field_internal:
+      element: false
+    field_gallery:
+      presentation: unit
+container:
+  elements:
+    '.section__inner':
+      label: 'Section inner'
+block:
+  presentation: open
+  elements:
+    '.block__inner':
+      label: 'Inner'
+field:
+  elements:
+    '.field__label':
+      label: 'Module label'
+      # A foreign key inside a part rides through untouched.
+      annotations:
+        source: module
+
+# The site's own declaration: site-scope foreign sections ride the reserved
+# top-level site key and layer exactly like kind declarations.
+site:
+  branding:
+    slogan: 'Module slogan'
+    logo: 'module.svg'
+  analytics:
+    vendor: acme
+
+# The instance-namespace lane: content-borne identity vocabularies, merged
+# across layers exactly like kind declarations.
+instances:
+  '.in-*':
+    label: 'Module instance'
+    tags:
+      p: 'Module paragraph'
+    # A foreign section inside a namespace rides through untouched.
+    annotations:
+      source: module
+  '.tx-*':
+    label: 'Theme withdraws this'
+    tags:
+      p: 'Paragraph'

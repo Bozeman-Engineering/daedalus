@@ -1,0 +1,336 @@
+<?php
+
+/**
+ * @file
+ * Install and update hooks for Daedalus Stylish.
+ */
+
+declare(strict_types=1);
+
+use Drupal\Core\Cache\Cache;
+
+/**
+ * Implements hook_schema().
+ */
+function daedalus_stylish_schema(): array {
+  $schema['daedalus_variant_usage'] = [
+    'description' => 'Tracks which host entities reference which style variants in their saved default-revision style maps (see \Drupal\daedalus_stylish\VariantUsage).',
+    'fields' => [
+      'variant' => [
+        'description' => 'The variant reference verbatim as the style map stores it: machine name or uuid.',
+        'type' => 'varchar_ascii',
+        'length' => 255,
+        'not null' => TRUE,
+      ],
+      'entity_type' => [
+        'description' => 'The map host entity type id.',
+        'type' => 'varchar_ascii',
+        'length' => 32,
+        'not null' => TRUE,
+      ],
+      'entity_id' => [
+        'description' => 'The map host entity id.',
+        'type' => 'varchar_ascii',
+        'length' => 128,
+        'not null' => TRUE,
+      ],
+    ],
+    'primary key' => ['variant', 'entity_type', 'entity_id'],
+    'indexes' => [
+      // The save chokepoint and delete cleanup address rows by host.
+      'entity' => ['entity_type', 'entity_id'],
+    ],
+  ];
+  $schema['daedalus_swatch_usage'] = [
+    'description' => 'Tracks which source entities reference which swatches inside their saved default-revision CSS values, across the three stores (see \Drupal\daedalus_stylish\SwatchUsage).',
+    'fields' => [
+      'swatch' => [
+        'description' => 'The swatch machine name, verbatim as the var(--swatch-*) reference spells it.',
+        'type' => 'varchar_ascii',
+        'length' => 255,
+        'not null' => TRUE,
+      ],
+      'source' => [
+        'description' => 'The store the reference lives in: map (host style maps), variant (variant styles), or skin (skin tokens and defaults).',
+        'type' => 'varchar_ascii',
+        'length' => 16,
+        'not null' => TRUE,
+      ],
+      'entity_type' => [
+        'description' => 'The source entity type id.',
+        'type' => 'varchar_ascii',
+        'length' => 32,
+        'not null' => TRUE,
+      ],
+      'entity_id' => [
+        'description' => 'The source entity id.',
+        'type' => 'varchar_ascii',
+        'length' => 128,
+        'not null' => TRUE,
+      ],
+    ],
+    'primary key' => ['swatch', 'source', 'entity_type', 'entity_id'],
+    'indexes' => [
+      // The save chokepoint and delete cleanup address rows by source.
+      'entity' => ['entity_type', 'entity_id'],
+    ],
+  ];
+  $schema['daedalus_animation_usage'] = [
+    'description' => 'Tracks which source entities wear which animations inside their saved default-revision CSS values, across the three stores (see \Drupal\daedalus_stylish\AnimationUsage).',
+    'fields' => [
+      'animation' => [
+        'description' => 'The animation machine name, verbatim as the motion-{name} keyframes reference spells it.',
+        'type' => 'varchar_ascii',
+        'length' => 255,
+        'not null' => TRUE,
+      ],
+      'source' => [
+        'description' => 'The store the reference lives in: map (host style maps), variant (variant styles), or skin (skin defaults).',
+        'type' => 'varchar_ascii',
+        'length' => 16,
+        'not null' => TRUE,
+      ],
+      'entity_type' => [
+        'description' => 'The source entity type id.',
+        'type' => 'varchar_ascii',
+        'length' => 32,
+        'not null' => TRUE,
+      ],
+      'entity_id' => [
+        'description' => 'The source entity id.',
+        'type' => 'varchar_ascii',
+        'length' => 128,
+        'not null' => TRUE,
+      ],
+    ],
+    'primary key' => ['animation', 'source', 'entity_type', 'entity_id'],
+    'indexes' => [
+      // The save chokepoint and delete cleanup address rows by source.
+      'entity' => ['entity_type', 'entity_id'],
+    ],
+  ];
+  return $schema;
+}
+
+/**
+ * Implements hook_install().
+ *
+ * Styling defaults ON: a site gaining Daedalus Stylish sweeps every bundle already
+ * passing the Daedalus Layout Edit Mode gate, since their gate-carrier
+ * saves happened before Daedalus Stylish was around to see them. Config sync is
+ * exempt: it must not create config outside the sync set.
+ */
+function daedalus_stylish_install(bool $is_syncing): void {
+  if (!$is_syncing) {
+    \Drupal::service('daedalus_stylish.field_manager')->syncAll();
+  }
+}
+
+/**
+ * Converts DaedalusStylishVariant.styles from string_long to daedalus_variant_styles.
+ */
+function daedalus_stylish_update_10001(): void {
+  // Both types store one JSON text column with an identical schema, so this
+  // is a pure definition swap: no column changes, no data migration. The
+  // code-side definition already carries the new type; installing it just
+  // updates the tracked storage definition.
+  $definition = \Drupal::service('entity_field.manager')->getFieldStorageDefinitions('daedalus_variant')['styles'];
+  \Drupal::entityDefinitionUpdateManager()->updateFieldStorageDefinition($definition);
+}
+
+/**
+ * Adds the shipped-variant identity fields: provider and source_hash.
+ */
+function daedalus_stylish_update_10002(): void {
+  $definitions = \Drupal::service('entity_field.manager')->getFieldStorageDefinitions('daedalus_variant');
+  $update_manager = \Drupal::entityDefinitionUpdateManager();
+  foreach (['provider', 'source_hash'] as $field_name) {
+    $update_manager->installFieldStorageDefinition($field_name, 'daedalus_variant', 'daedalus_stylish', $definitions[$field_name]);
+  }
+}
+
+/**
+ * Opt-out enablement: seed the opt_outs record and default styling ON.
+ *
+ * Enablement is no longer transition-only: styling defaults ON for every
+ * bundle passing the Daedalus Layout Edit Mode gate, and only an explicit
+ * opt-out record (daedalus_stylish.settings opt_outs) keeps it off. No prior release
+ * exposed a way to be deliberately opted out while gated-on (field absence
+ * only ever meant "the transition never fired"), so the sweep enables every
+ * gate-passing bundle with no records to seed. Later data migrations (the
+ * heading block's Daedalus Stylish style writes) rely on this field existing on their
+ * host bundles, and hook_update_N runs before all hook_post_update_NAME.
+ */
+function daedalus_stylish_update_10003(): void {
+  $config = \Drupal::configFactory()->getEditable('daedalus_stylish.settings');
+  if ($config->get('opt_outs') === NULL) {
+    $config->set('opt_outs', [])->save();
+  }
+  \Drupal::service('daedalus_stylish.field_manager')->syncAll();
+}
+
+/**
+ * Installs the skin entity type (daedalus_skin).
+ */
+function daedalus_stylish_update_10004(): void {
+  \Drupal::entityDefinitionUpdateManager()->installEntityType(
+    \Drupal::entityTypeManager()->getDefinition('daedalus_skin')
+  );
+}
+
+/**
+ * Adds the site defaults field to skins (the site defaults tier).
+ */
+function daedalus_stylish_update_10005(): void {
+  $definitions = \Drupal::service('entity_field.manager')->getFieldStorageDefinitions('daedalus_skin');
+  \Drupal::entityDefinitionUpdateManager()->installFieldStorageDefinition('defaults', 'daedalus_skin', 'daedalus_stylish', $definitions['defaults']);
+}
+
+/**
+ * Creates and seeds the daedalus_variant_usage table.
+ *
+ * Usage counting no longer parses content on demand: the table mirrors the
+ * variant references in every saved default-revision style map, maintained
+ * at the host entity save chokepoint from here on. The one-time seed is the
+ * same rebuild `drush daedalus_stylish:variant-usage:rebuild` runs.
+ */
+function daedalus_stylish_update_10006(): void {
+  $schema = \Drupal::database()->schema();
+  if (!$schema->tableExists('daedalus_variant_usage')) {
+    $schema->createTable('daedalus_variant_usage', daedalus_stylish_schema()['daedalus_variant_usage']);
+  }
+  \Drupal::service('daedalus_stylish.variant_usage')->rebuild();
+}
+
+/**
+ * Installs the swatch entity type (daedalus_swatch).
+ */
+function daedalus_stylish_update_10007(): void {
+  \Drupal::entityDefinitionUpdateManager()->installEntityType(
+    \Drupal::entityTypeManager()->getDefinition('daedalus_swatch')
+  );
+}
+
+/**
+ * Creates and seeds the daedalus_swatch_usage table.
+ *
+ * Swatch usage counting mirrors the var(--swatch-*) references in every
+ * saved default-revision value across the three stores (host style maps,
+ * variant styles, skin tokens/defaults), maintained at the entity save
+ * chokepoint from here on. The one-time seed is the same rebuild `drush
+ * daedalus_stylish:swatch-usage:rebuild` runs.
+ */
+function daedalus_stylish_update_10008(): void {
+  $schema = \Drupal::database()->schema();
+  if (!$schema->tableExists('daedalus_swatch_usage')) {
+    $schema->createTable('daedalus_swatch_usage', daedalus_stylish_schema()['daedalus_swatch_usage']);
+  }
+  \Drupal::service('daedalus_stylish.swatch_usage')->rebuild();
+}
+
+/**
+ * Adds the description field to variants: the AI roster's payload.
+ */
+function daedalus_stylish_update_10009(): void {
+  $definitions = \Drupal::service('entity_field.manager')->getFieldStorageDefinitions('daedalus_variant');
+  \Drupal::entityDefinitionUpdateManager()->installFieldStorageDefinition('description', 'daedalus_variant', 'daedalus_stylish', $definitions['description']);
+}
+
+/**
+ * Dissolves daedalus_stylish_skins_ai into daedalus_stylish core.
+ *
+ * The tokens fragment, the skins skill, and the daedalus_skin AI exposure
+ * now live in daedalus_stylish core, gated on the acting account's 'administer
+ * skins' permission instead of module presence. The sub-module's code is
+ * gone, so sites that had it installed cannot run a normal uninstall: drop
+ * its stale extension row and schema entry directly. Harmless where the
+ * module was never installed.
+ */
+function daedalus_stylish_update_10010(): void {
+  \Drupal::configFactory()->getEditable('core.extension')
+    ->clear('module.daedalus_stylish_skins_ai')
+    ->save();
+  \Drupal::keyValue('system.schema')->delete('daedalus_stylish_skins_ai');
+  // The skills catalog discovered the sub-module's YAML by directory;
+  // rebuild it against the dissolved layout (the context and schema caches
+  // rebuild with the deploy's cache rebuild).
+  Cache::invalidateTags(['daedalus_blueprint_skills']);
+}
+
+/**
+ * Adds the weight field to variants: roster order within a family.
+ */
+function daedalus_stylish_update_10011(): void {
+  $definitions = \Drupal::service('entity_field.manager')->getFieldStorageDefinitions('daedalus_variant');
+  \Drupal::entityDefinitionUpdateManager()->installFieldStorageDefinition('weight', 'daedalus_variant', 'daedalus_stylish', $definitions['weight']);
+}
+
+/**
+ * Adds the origin field to swatches and variants: who minted them.
+ *
+ * The mint gate's provenance (shipped | user | ai). Existing rows were
+ * minted by people or shipped by a module (the AI lane stamps its origin
+ * only from this release on), so the initial value "user" is corrected to
+ * "shipped" wherever a provider ships the entity.
+ */
+function daedalus_stylish_update_10012(): void {
+  $update_manager = \Drupal::entityDefinitionUpdateManager();
+  $field_manager = \Drupal::service('entity_field.manager');
+  $database = \Drupal::database();
+  foreach (['daedalus_swatch', 'daedalus_variant'] as $entity_type_id) {
+    if ($update_manager->getFieldStorageDefinition('origin', $entity_type_id) === NULL) {
+      $definitions = $field_manager->getFieldStorageDefinitions($entity_type_id);
+      $update_manager->installFieldStorageDefinition('origin', $entity_type_id, 'daedalus_stylish', $definitions['origin']);
+    }
+    // Identity, not a revisioned fact: the base table alone carries it.
+    $database->update($entity_type_id)
+      ->fields(['origin' => 'shipped'])
+      ->condition('provider', '', '<>')
+      ->isNotNull('provider')
+      ->execute();
+  }
+}
+
+/**
+ * Installs the animation entity type (daedalus_animation).
+ */
+function daedalus_stylish_update_10013(): void {
+  \Drupal::entityDefinitionUpdateManager()->installEntityType(
+    \Drupal::entityTypeManager()->getDefinition('daedalus_animation')
+  );
+}
+
+/**
+ * Creates and seeds the daedalus_animation_usage table.
+ *
+ * Animation usage counting mirrors the motion-{name} keyframes references
+ * in every saved default-revision value across the three stores (host
+ * style maps, variant styles, skin defaults), maintained at the entity
+ * save chokepoint from here on. The one-time seed is the same rebuild
+ * `drush daedalus_stylish:animation-usage:rebuild` runs.
+ */
+function daedalus_stylish_update_10014(): void {
+  $schema = \Drupal::database()->schema();
+  if (!$schema->tableExists('daedalus_animation_usage')) {
+    $schema->createTable('daedalus_animation_usage', daedalus_stylish_schema()['daedalus_animation_usage']);
+  }
+  \Drupal::service('daedalus_stylish.animation_usage')->rebuild();
+}
+
+/**
+ * Installs the AI opt-out (ai_offered) on swatches, variants and animations.
+ *
+ * Every material is offered to the AI unless its author opts it out (the
+ * AI's roster is the design system; hiding by default would empty it), so
+ * the initial value is TRUE for every existing row.
+ */
+function daedalus_stylish_update_10015(): void {
+  $update_manager = \Drupal::entityDefinitionUpdateManager();
+  $field_manager = \Drupal::service('entity_field.manager');
+  foreach (['daedalus_swatch', 'daedalus_variant', 'daedalus_animation'] as $entity_type_id) {
+    if ($update_manager->getFieldStorageDefinition('ai_offered', $entity_type_id) === NULL) {
+      $definitions = $field_manager->getFieldStorageDefinitions($entity_type_id);
+      $update_manager->installFieldStorageDefinition('ai_offered', $entity_type_id, 'daedalus_stylish', $definitions['ai_offered']);
+    }
+  }
+}

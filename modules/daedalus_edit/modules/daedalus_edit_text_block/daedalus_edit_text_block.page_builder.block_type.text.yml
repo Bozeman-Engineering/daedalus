@@ -1,0 +1,111 @@
+# The text block IS one composed element: `composed: true` declares its
+# render as exactly the ONE root element tree this file's markup model
+# describes, with no block sandwich at all — and makes the model
+# GENERATIVE: daedalus_ui's shared composed_block element renders this
+# tree from the element resolver's answer and prints the hoisted
+# attributes on the composed root. No template exists; this module feeds
+# only content and editor attribution (TextComposedContent).
+composed: true
+
+# The markup model. The root is ALWAYS the tag element, and entity data
+# decides which tag: the validated field_text_tag value (h1..h6, span, p),
+# with the residual form carrying the fallback the render has always had —
+# a text whose tag field holds no value renders as a paragraph. The root
+# is the selection target and the primary styling target: the tag element
+# is where the theme's element rules (h2 { font-size... }) land, and
+# linked text nests the anchor INSIDE it (a linked heading's natural HTML
+# shape), so linked and unlinked blocks render with identical typography.
+root:
+  forms:
+    - tag:
+        field: field_text_tag
+      present:
+        field: field_text_tag
+    - tag: p
+
+# Styling (Daedalus Stylish's sections in this same declaration): because the block
+# is collapsed markup, the style target is the root itself and there is no
+# template SHELL to declare. The control below binds by OMITTING its
+# element key, which binds the block root: writes land on the block's plain
+# selectable key (":scope" in the printed CSS), and the panel grows zero
+# new rows because the root's row is the block itself.
+#
+# Guide validation covers root bindings against the block's EFFECTIVE
+# property groups: the universal block kind in daedalus_edit.page_builder.yml
+# carries typography (owns text-align, the widget's only property — the
+# adaptive cross axis moved to the kind-inherited position control), so
+# this binding is sanctioned without declaring anything extra here.
+controls:
+  text_alignment:
+    label: 'Alignment'
+    widget: text_alignment
+
+# The site's minted-identity instance namespace (the `instances:`
+# declaration in daedalus_edit.page_builder.yml) never covers this bundle in
+# practice: field_text_text is a string_long (PLAIN text, no filter
+# format), so nothing ever mints identity classes into it. EntityIdentityMinting
+# only walks values whose storage exposes a "format" property of dataType
+# filter_format, the typing surface is the composite contenteditable rather
+# than CKEditor, and the generative render prints the escaped value inside
+# the one tag element.
+#
+# The block root is the PRIMARY styling target, not the only one. Linked
+# text nests an anchor inside the tag root, where the skin's `base:a`
+# default (link color, underline) lands DIRECT, and a direct rule beats
+# anything the anchor merely inherits from the root. The `contains:` claim
+# below is what defuses that: daedalus_ui stamps the claiming anchor
+# with its content-claim marker, and Daedalus Stylish's printers co-target every
+# root entry's inherited text properties onto marked claimers at zero
+# weight, so root-level text styling (color, size, decoration none)
+# follows the root through the link with no data migration. Button-making
+# styles (background, padding, radius, display) still sit ON the anchor as
+# real part styles: box properties never co-target, and a part style's
+# class specificity beats the zero-weight companion, so the anchor stays
+# the home for anything meant to override what the root hands down. The
+# link is therefore a declared CONDITIONAL part: unlinked text renders no
+# anchor, and part surfaces divide by what they project. Surfaces that
+# project the PAGE each ask their own question: element-bound panel
+# controls and the code-view `.` completion offer gate on DOM presence,
+# markup-view rows gate on placement-as-own-element (a part earns a row
+# only when it resolves as its own element). While the anchor is absent
+# both answers are no, so the part appears on none of them, styled or
+# not. Surfaces that project the STYLE MAP (code-view rows materialized
+# from existing declarations) persist unconditionally; they are the one home where a part style
+# orphaned by unlinking stays findable and deletable, valid and inert
+# until a link exists again.
+# Collapse merges the WRAPPER chain's identity into the root; it is not a
+# claim that the interior is styling-free.
+#
+# The property groups are the button-capable set: background and spacing
+# for the button box, border for the corners_border widget's radius and
+# edge writes, typography for the text_color widget's color plus the
+# decoration that kills the theme underline, layout for display.
+#
+# The `.text-block-link` class has ONE producer grammar: the element
+# resolver resolves this declaration (the part key IS the class), and both
+# the generative render and the live link preview in
+# js/text-composite-editor.js consume its answer — the preview through the
+# resolver's client twin over this same declaration as delivered by the
+# client anatomy payload, morphing the DOM to the resolved tree.
+elements:
+  '.text-block-link':
+    label: 'Link'
+    # The markup model of the conditional wrapper: the anchor renders only
+    # while field_text_url holds a value, nested INSIDE the tag root (a
+    # linked heading's natural HTML shape), carries the URL as href, and
+    # claims the text. Unlinked, the anchor is absent and the unclaimed
+    # text mounts at the root instead: the conditional wrapper falls out of
+    # the mounting rule with no branch spelling.
+    tag: a
+    present:
+      field: field_text_url
+    attributes:
+      href:
+        field: field_text_url
+    contains: 'field:field_text_text'
+    property_groups:
+      background: {}
+      spacing: {}
+      border: {}
+      typography: {}
+      layout: {}

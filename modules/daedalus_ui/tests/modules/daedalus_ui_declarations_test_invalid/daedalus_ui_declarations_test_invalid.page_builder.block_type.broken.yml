@@ -1,0 +1,63 @@
+# Out-of-vocabulary values on every owned section, the retired spellings,
+# and a root.forms list violating order-totality both ways.
+collapsed: 'yes'
+composed: 'maybe'
+tag: 'DIV>'
+root:
+  forms:
+    # Unconditional but not last: first-match-wins never reaches the rest.
+    - tag: a
+      href: something
+    - tag: img
+      present:
+        media: print
+    - tag: span
+      present:
+        depth: root
+    # Last but conditional on something other than the {empty: true}
+    # residual: the forms are not exhaustive.
+    - tag: div
+      present:
+        field: field_image
+presentation: fancy
+fields:
+  field_a:
+    element: 'nope'
+  field_b:
+    presentation: merged
+elements:
+  '.dup':
+    label: 'A'
+    contains: regions
+    elements:
+      '.dup':
+        label: 'B'
+  '.value-part':
+    label: 'Value part'
+    contains: value
+    # The retired part spelling and an unknown present condition.
+    depth: root
+    present:
+      hovered: true
+  '.attrs':
+    label: 'Attrs'
+    tag:
+      field: 'Not A Field'
+    attributes:
+      'BAD NAME': x
+      href: []
+  '.formed':
+    label: 'Formed'
+    # tag and forms on one part: an element has one markup grammar.
+    tag: div
+    forms:
+      # Unconditional but not last, and an unknown form key.
+      - tag: a
+        label: 'Anchor'
+        href: nope
+      # A non-string label; last-but-conditional is LEGAL on a part (no
+      # exhaustiveness rule: a part whose forms all fail is absent).
+      - tag: img
+        present:
+          media: raster
+        label: []

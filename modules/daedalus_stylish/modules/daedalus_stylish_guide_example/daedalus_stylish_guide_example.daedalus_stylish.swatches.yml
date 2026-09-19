@@ -1,0 +1,31 @@
+# The Guide Example palette's disk lane: named CSS values at site scope,
+# skin-independent by design (a skin switch never dangles a
+# var(--swatch-*) reference), delivered as --swatch-{machine_name}.
+# Swatches are where backgrounds reach beyond the role tokens: the guide
+# leaves background-color and background-image UNBOUND precisely so
+# bands and cards may wear these. Each carries a description saying what
+# it is for; the AI reads it in the design system brief. Members of
+# guide_example (the module default), synced when the system is
+# activated and by `drush daedalus_stylish:sync daedalus_stylish_guide_example`,
+# hash-synced with shipped lock and revert.
+guide_amber_glow:
+  label: 'Amber glow'
+  kind: gradient
+  description: 'A faint radial amber glow rising from the top edge into the page background, for the background-image of the hero band (on a Plain surface) and nowhere else.'
+  value:
+    default: 'radial-gradient(120% 80% at 50% 0%, rgb(180 85 45 / 0.14), transparent 60%)'
+    dark: 'radial-gradient(120% 80% at 50% 0%, rgb(224 138 93 / 0.22), transparent 60%)'
+guide_amber_wash:
+  label: 'Amber wash'
+  kind: color
+  description: 'A translucent amber tint for the fill of a single highlight tile or notice that should read as marked without a border or a shadow, never for a band surface.'
+  value:
+    default: 'rgb(180 85 45 / 0.08)'
+    dark: 'rgb(224 138 93 / 0.14)'
+guide_ink_fade:
+  label: 'Ink fade'
+  kind: gradient
+  description: 'Ink falling to black, top to bottom, for the background-image of an Inverse band that should read as a gradient rather than a flat ink (the band keeps its paper text).'
+  value:
+    default: 'linear-gradient(180deg, #26221b 0%, #14120f 100%)'
+    dark: 'linear-gradient(180deg, #3a342a 0%, #14120f 100%)'

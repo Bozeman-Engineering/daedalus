@@ -1,0 +1,8 @@
+# The package's skin: aurora's default_skin, minting the token the shipped
+# variant references as var(--space-gutter). No design_system key: the
+# module packages aurora, so every shipped material is a member of it.
+aurora:
+  label: 'Aurora'
+  tokens:
+    space:
+      gutter: '2rem'

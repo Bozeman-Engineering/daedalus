@@ -1,0 +1,51 @@
+<?php
+
+/**
+ * @file
+ * Primary module hooks for Daedalus AI.
+ */
+
+/**
+ * Implements hook_library_info_alter().
+ */
+function daedalus_ai_library_info_alter(array &$libraries, string $extension): void {
+  if ($extension === 'ai_chatbot' && isset($libraries['deepchat'])) {
+    $module_path = \Drupal::service('extension.list.module')->getPath('daedalus_ai');
+    $libraries['deepchat']['js']["/$module_path/js/daedalus-ai-context-manager.js"] = [];
+    $libraries['deepchat']['js']["/$module_path/js/daedalus-ai-command-processor.js"] = [];
+    $libraries['deepchat']['js']["/$module_path/js/daedalus-ai-step-message-sanitizer.js"] = [];
+    $libraries['deepchat']['js']["/$module_path/js/daedalus-ai-open-link.js"] = [];
+    $libraries['deepchat']['js']["/$module_path/js/daedalus-ai-followup-chat.js"] = [];
+    $libraries['deepchat']['js']["/$module_path/js/daedalus-ai-trigger-deferred.js"] = [];
+    $libraries['deepchat']['dependencies'][] = 'core/once';
+    // The scripts above attach Drupal.Daedalus.AiContext, AiCommands,
+    // AiFollowup and AiDeferred to the root daedalus_ui defines.
+    $libraries['deepchat']['dependencies'][] = 'daedalus_ui/daedalus';
+    $libraries['deepchat']['dependencies'][] = 'daedalus_ui/highlight';
+    // The scripts above log through Drupal.Daedalus.logger('daedalus_ai');
+    // the dependency both loads the spine's logger and guarantees it is
+    // there before they run (see the module's README for the toggle).
+    $libraries['deepchat']['dependencies'][] = 'daedalus_ui/logging';
+  }
+}
+
+/**
+ * Implements hook_help().
+ */
+function daedalus_ai_help(string $route_name): string {
+  if ($route_name === 'help.page.daedalus_ai') {
+    $output = '<h2>' . t('About') . '</h2>';
+    $output .= '<p>' . t('Daedalus AI adds an always-on AI assistant chat panel to the page builder. Users can chat with an AI assistant that understands the current page context and can make changes to Layout Builder content directly.') . '</p>';
+    $output .= '<h2>' . t('Uses') . '</h2>';
+    $output .= '<dl>';
+    $output .= '<dt>' . t('AI chatbot') . '</dt>';
+    $output .= '<dd>' . t('Open the AI assistant panel from its toggle button and type natural language instructions to modify page content.') . '</dd>';
+    $output .= '<dt>' . t('Element selection') . '</dt>';
+    $output .= '<dd>' . t('Select elements on the page (Shift+click adds more) and the chat follows the selection: chips show what the AI will treat as scope, and dismissing a chip deselects the element.') . '</dd>';
+    $output .= '<dt>' . t('Automatic refresh') . '</dt>';
+    $output .= '<dd>' . t('The page refreshes automatically after AI changes, with highlights calling attention to modified components.') . '</dd>';
+    $output .= '</dl>';
+    return $output;
+  }
+  return '';
+}

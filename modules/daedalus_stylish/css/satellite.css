@@ -1,0 +1,63 @@
+/* Satellite-window-only chrome, split out of inspector.css so the leader
+   page never carries it: these rules anchor :has() on the body, and in
+   Blink every DOM insertion beneath the anchor restyles the anchor's
+   subtree. In the leader that meant ~1,250 elements restyled per
+   CodeMirror island construction; in the pop-out the document is tiny,
+   so the "whatever wrappers the theme has" universality stays worth it.
+   Attached only by the daedalus_stylish/satellite library. */
+
+/* The satellite window: the panel is the whole page. In the rail the
+   column layout comes from the sidebar's generic panel-wrapper rule
+   (sidebar.css); the satellite doesn't load rail chrome, so it lays the
+   column out itself (kit sections zero their margins and rely on gap). */
+.daedalus-stylish-inspector-satellite .daedalus-stylish-inspector {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding: 0.75rem;
+}
+
+/* In the rail the surface, text color, and scrollbar come from
+   .daedalus-ui-sidebar (daedalus_ui's sidebar.css); the satellite
+   window has no rail, so the page itself wears the chrome. The body-level
+   :has() reaches past the theme's page wrappers (and its page title,
+   which renders outside the inspector root). */
+body:has(.daedalus-stylish-inspector-satellite) {
+  color: var(--daedalus-text);
+  /* The shorthand, deliberately: Olivero paints its droplet pattern as a
+     body background-image, which a background-color alone leaves showing. */
+  background: var(--daedalus-background);
+  font-family: var(--daedalus-font);
+  scrollbar-color: var(--daedalus-scrollbar-thumb) var(--daedalus-background);
+}
+
+/* A tool window, not a site page: the theme's header and the shortcut
+   module's duplicated page title (the panel carries its own "Styles"
+   heading) stay out of the satellite. */
+body:has(.daedalus-stylish-inspector-satellite) :is(.site-header, .shortcut-wrapper) {
+  display: none;
+}
+
+/* The theme paints its own surfaces on layout wrappers between the body
+   and the inspector (Olivero's .page-wrapper is white), over the body's
+   chrome paint above. Every ancestor wrapper of the inspector goes
+   transparent so the body's surface shows through, whatever the theme
+   names its wrappers. */
+body:has(.daedalus-stylish-inspector-satellite) :has(.daedalus-stylish-inspector-satellite) {
+  background: transparent;
+}
+
+/* Headings would otherwise wear the site theme's heading color; the
+   rail's heading rule, restated for the satellite. */
+body:has(.daedalus-stylish-inspector-satellite) :is(h1, h2, h3, h4, h5, h6) {
+  color: var(--daedalus-text);
+}
+
+/* Warning-tinted like the notifications panel: a translucent wash reads on
+   both schemes where the solid pastel could not. */
+.daedalus-stylish-satellite__banner {
+  padding: 0.5rem 0.75rem;
+  border-block-end: 1px solid color-mix(in sRGB, var(--daedalus-warning) 40%, transparent);
+  background: var(--daedalus-warning-background);
+  font-size: var(--daedalus-font-size);
+}

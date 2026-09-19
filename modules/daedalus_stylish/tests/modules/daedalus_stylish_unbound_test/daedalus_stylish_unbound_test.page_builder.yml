@@ -1,0 +1,27 @@
+# The unbound site: a fixture whose only declaration withdraws the suite's
+# dimension and type bindings (daedalus_stylish.page_builder.yml constraint_defaults
+# binds font-size, font-weight, line-height, padding, gap and border-radius
+# to the text, weight, leading, space and radius scales; NULL removes a key
+# across layers, and the family expansion has nothing left to expand).
+#
+# A kernel class enables it beside its own guide fixture when the class
+# proves something other than scale law with literal paddings, gaps and
+# sizes on a site that mints nothing (scope resolution, the op spine,
+# variant apply and detach, material capture, stylesheet compile, the
+# field handlers): under the suite's bindings every such literal is
+# STYLE_VALUE_NOT_ON_SCALE on a guarded or strict site, a refusal that is
+# the scale's, not the claim's. Scale law has its own coverage
+# (StyleGuideConstraintDefaultsTest, TokenConsumptionTest,
+# StyleMapValidatorTest); a class about the suite's served map
+# (ClientStyleGuideTest, StyleMapFieldHandlerTest) must NOT enable this.
+# What stays bound is the suite's font-family to the font scale, the one
+# binding these classes never write against, so a bindings line read on
+# this fixture is the font binding alone.
+site:
+  constraint_defaults:
+    font-size: null
+    font-weight: null
+    line-height: null
+    padding: null
+    gap: null
+    border-radius: null

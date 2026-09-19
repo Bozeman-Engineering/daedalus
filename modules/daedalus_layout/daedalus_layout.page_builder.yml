@@ -1,0 +1,55 @@
+# Daedalus Layout's own universal declarations.
+#
+# The layout root: the ONE element the root entity's sections render
+# inside, in every view mode and for every host shape (node, block_content,
+# any Layout Builder display). daedalus_layout renders it, once per mode
+# (LayoutBuilderEntityViewDisplay::buildSections() wraps the section list
+# in a div.daedalus-layout-layout for the view render; the layout_builder_plus
+# element's container wears the same class on the edit canvas), so
+# daedalus_layout declares it: shell ownership follows template ownership, and this
+# shell is markup a module renders inside {{ content }}, not anything a
+# theme's entity template guarantees. That is the whole point of it: the
+# page is the top of the container tree, and a gap between root bands needs
+# an arranging box we own. The entity root (the theme's <article>) never
+# was that box, and core's content wrapper has no class and is not ours.
+#
+# Presence: the part is declared with no present: condition, so the
+# blueprint's markup annotation says it is present on every Layout Builder
+# entity in edit mode, and the edit canvas agrees (its container always
+# exists, holding the blank-page affordance when the layout is empty). The
+# view render wraps only while sections exist (an empty section list stays
+# core's bare array so the display renders its fields as it always did),
+# which no model reads; a display without Layout Builder has none in
+# either mode. Not selectable: the
+# regions precedent, a structural level that is not the user's but is
+# addressable as anatomy ("entity:{uuid}::.daedalus-layout-layout"). Styling
+# vocabulary on it (the spacing and layout groups, the page-level gap
+# control) belongs to the styling modules, layered over this part through
+# this same file family.
+#
+# Contents: the part claims the entity's section list (contains: sections,
+# the entity kind's generic bucket beside fields), so every sketch of the
+# entity draws the sections inside it: the markup view mounts the section
+# rows under the Layout row and the AI's read print nests them in the
+# <div class="daedalus-layout-layout">, the way the DOM already does. A wrapper
+# whose declaration cannot say what it holds is drawn empty beside its
+# own children. Without daedalus_layout the token is unclaimed and the sections
+# sit at the entity root in every sketch, as before.
+entity:
+  elements:
+    '.daedalus-layout-layout':
+      label: 'Layout'
+      tag: div
+      contains: sections
+  # The layout root's arranging display is CODE, not skin data: a gap only
+  # acts on a grid or flex box, and declared defaults follow markup
+  # ownership (daedalus_stylish StyleGuide): the entity kind is templated, so it may
+  # default only the anatomy it declares, and this part is exactly that.
+  # A skin carries the look (a page gap value or none), never the
+  # mechanic. Token-free, compiled into the defaults file at the
+  # kind:entity family class, stamped on every host by daedalus_stylish. A grid with
+  # no gap is visually the flush stacking of before.
+  defaults:
+    '::.daedalus-layout-layout':
+      default:
+        display: grid

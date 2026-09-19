@@ -1,0 +1,229 @@
+<?php
+
+/**
+ * @file
+ * The image block type: one composed, blueprint-editable element.
+ *
+ * The block's render is GENERATIVE: the markup model in
+ * daedalus_edit_image_block.page_builder.block_type.image.yml is the render,
+ * printed by daedalus_ui's shared composed_block element. This module
+ * supplies only what the declaration cannot know — the img's derived
+ * source properties, the inline svg, the placeholder, and the editing
+ * attribution — through its ImageComposedContent provider, which consumes
+ * the derivation helpers below.
+ */
+
+use Drupal\Core\Render\Markup;
+use Drupal\Core\Template\Attribute;
+use Drupal\image\Entity\ImageStyle;
+use Drupal\media\MediaInterface;
+use enshrined\svgSanitize\Sanitizer;
+
+/**
+ * Implements hook_library_info_alter().
+ *
+ * The editor rides the edit tooling, not the block's render: it is only
+ * meaningful once daedalus_edit's registry boots, so it loads as a dependency of
+ * daedalus_edit/library (attached by the Edit tool) rather than being attached
+ * for every visitor.
+ */
+function daedalus_edit_image_block_library_info_alter(array &$libraries, string $extension): void {
+  if ($extension === 'daedalus_edit' && isset($libraries['library'])) {
+    $libraries['library']['dependencies'][] = 'daedalus_edit_image_block/image_composite_editor';
+  }
+}
+
+/**
+ * Builds the composed img properties from the referenced media.
+ *
+ * The src is derived server-side, always: the composed render replaces the
+ * old entity_reference_entity_view → media default display → image
+ * formatter chain, so the image style and loading attribute configured on
+ * the media bundle's default display stay honored. A media change commits
+ * target_id and the re-render swap delivers the new src; no client ever
+ * computes it.
+ *
+ * Vector media takes its own branch: an SVG is authored markup, not raster
+ * data. Image styles cannot derive from it (the toolkit does not parse
+ * SVG), its field item carries no width/height columns, and (the point of
+ * the branch) rendering it INLINE is what lets its interior styling
+ * participate in the page: fill="currentColor" resolves against the
+ * inherited CSS color, which a sealed <img> src can never do. Inline SVG is
+ * live DOM, so the markup is sanitized at render time; the upload-time
+ * sanitizer (daedalus_ui) is a separate layer, never trusted alone
+ * (programmatic file writes bypass it, and sanitizers have bypass
+ * histories).
+ *
+ * @param \Drupal\media\MediaInterface $media
+ *   The referenced media entity.
+ *
+ * @return array|null
+ *   For raster media: src, alt, width, height, and loading for the img
+ *   element. For vector media: svg, the inliner's {attributes, inner}
+ *   pair for the modeled svg element (the inline-failure lane folded in).
+ *   NULL when the media has no source file.
+ */
+function _daedalus_edit_image_block_image_properties(MediaInterface $media): ?array {
+  /** @var \Drupal\media\MediaTypeInterface $media_type */
+  $media_type = \Drupal::entityTypeManager()->getStorage('media_type')->load($media->bundle());
+  $source_field = $media->getSource()->getSourceFieldDefinition($media_type)->getName();
+  /** @var \Drupal\image\Plugin\Field\FieldType\ImageItem|\Drupal\svg_image_field\Plugin\Field\FieldType\SvgImageFieldItem|null $item */
+  $item = $media->get($source_field)->first();
+  $file = $item?->entity;
+  if (!$file) {
+    return NULL;
+  }
+
+  $uri = $file->getFileUri();
+  /** @var \Drupal\Core\File\FileUrlGeneratorInterface $file_url_generator */
+  $file_url_generator = \Drupal::service('file_url_generator');
+
+  // The vector lane. Matched on the file, not the media bundle, so an SVG
+  // reaching any media type renders (and fails) safely. Case-insensitive on
+  // either spelling for the same reason the upload sanitizer is: a
+  // mixed-case extension was an actual sanitizer-bypass vector.
+  if (preg_match('/\.svg$/i', $uri) === 1 || strtolower($file->getMimeType() ?? '') === 'image/svg+xml') {
+    return [
+      // No dimensions and no derivative: the SVG's own width/height/viewBox
+      // are its intrinsic size, and page styling owns the rest. The raw
+      // file URL is the inline-failure fallback (see the inliner).
+      'svg' => _daedalus_edit_image_block_inline_svg($uri, $item->alt ?? '', $file_url_generator->generateString($uri)),
+    ];
+  }
+
+  $component = \Drupal::service('entity_display.repository')->getViewDisplay('media', $media->bundle())->getComponent($source_field) ?? [];
+  $dimensions = ['width' => $item->width, 'height' => $item->height];
+  $style_name = $component['settings']['image_style'] ?? '';
+  $style = $style_name ? ImageStyle::load($style_name) : NULL;
+  // The toolkit gate (mirrors daedalus_stylish's MediaValueResolver): a configured
+  // style only applies to files the image toolkit can actually derive from;
+  // anything else serves the original file instead of a broken derivative
+  // URL.
+  if ($style && $style->supportsUri($uri)) {
+    $src = $file_url_generator->transformRelative($style->buildUrl($uri));
+    $style->transformDimensions($dimensions, $uri);
+  }
+  else {
+    $src = $file_url_generator->generateString($uri);
+  }
+
+  return [
+    'src' => $src,
+    'alt' => $item->alt ?? '',
+    'width' => $dimensions['width'],
+    'height' => $dimensions['height'],
+    'loading' => $component['settings']['image_loading']['attribute'] ?? 'lazy',
+  ];
+}
+
+/**
+ * Loads and sanitizes an SVG file for the modeled inline svg element.
+ *
+ * The declaration models the vector picture as an svg ELEMENT the
+ * renderer builds like any other (the root when unlinked, the nested
+ * `.image-block-image` part when linked), so this returns that element's
+ * two provider inputs instead of finished markup: the attribute bag the
+ * provider addresses to the picture element, and the sanitized inner
+ * markup mounted as the claimed field:field_image child.
+ *
+ * The attribute bag passes through only the file's presentational set
+ * (viewBox, width, height, fill, preserveAspectRatio) plus the a11y
+ * attributes stamped here, mirroring the img branch: the alt becomes
+ * role="img" + aria-label, an empty alt marks the svg decorative
+ * (aria-hidden), exactly like alt="". Authored class, id, style, and
+ * everything else are dropped: the svg is the selectable, style-scoped
+ * root when unlinked, and user-controlled attributes landing there would
+ * read as model drift on every surface that verifies markup. An intrinsic
+ * size is guaranteed (width/height from the file, or derived from its
+ * viewBox) so the rendered element never measures 0x0, which geometry
+ * tracking treats as hidden.
+ *
+ * Bespoke rather than reused: svg_image_field's formatter has similar
+ * logic, but it is a protected method on a settings-driven formatter
+ * instance, and the composed render deliberately bypasses the formatter
+ * chain. The sanitize itself matches the suite's upload-time layer
+ * (daedalus_ui SvgSanitizer): remote references stripped (they leak
+ * viewer data and open SSRF), and unparseable XML never enters the page.
+ *
+ * When the file is missing, unreadable, or unparseable, the inner markup
+ * is `<image href>` pointing at the raw file instead: real SVG content
+ * that still renders the file, whose HTTP request also lets Stage File
+ * Proxy fetch a missing file from the origin. The failure bag carries no
+ * authored attributes at all, only the a11y set.
+ *
+ * @param string $uri
+ *   The SVG file URI.
+ * @param string $alt
+ *   The item's alternative text ('' for decorative).
+ * @param string $fallback_url
+ *   The raw file URL the failure lane's <image> references.
+ *
+ * @return array
+ *   'attributes': the svg element's allowlisted attribute bag;
+ *   'inner': the sanitized inner markup (or the <image> fallback).
+ */
+function _daedalus_edit_image_block_inline_svg(string $uri, string $alt, string $fallback_url): array {
+  $attributes = $alt === ''
+    ? ['aria-hidden' => 'true']
+    : ['role' => 'img', 'aria-label' => $alt];
+
+  $dom = NULL;
+  $dirty = is_file($uri) ? @file_get_contents($uri) : FALSE;
+  if ($dirty === FALSE || $dirty === '') {
+    \Drupal::logger('daedalus_edit_image_block')->warning('SVG file %file is missing or unreadable; rendering an image-reference fallback instead of inline SVG.', ['%file' => $uri]);
+  }
+  else {
+    $sanitizer = new Sanitizer();
+    $sanitizer->removeRemoteReferences(TRUE);
+    $clean = $sanitizer->sanitize($dirty);
+    if ($clean === FALSE || $clean === '') {
+      \Drupal::logger('daedalus_edit_image_block')->warning('SVG file %file could not be parsed; rendering an image-reference fallback instead of inline SVG.', ['%file' => $uri]);
+    }
+    else {
+      $candidate = new \DOMDocument();
+      libxml_use_internal_errors(TRUE);
+      if ($candidate->loadXML($clean) && isset($candidate->documentElement)) {
+        $dom = $candidate;
+      }
+    }
+  }
+
+  if ($dom === NULL) {
+    return [
+      'attributes' => $attributes,
+      'inner' => Markup::create('<image' . new Attribute([
+        'href' => $fallback_url,
+        'width' => '100%',
+        'height' => '100%',
+      ]) . '/>'),
+    ];
+  }
+
+  $root = $dom->documentElement;
+  foreach (['viewBox', 'width', 'height', 'fill', 'preserveAspectRatio'] as $name) {
+    if ($root->hasAttribute($name)) {
+      $attributes[$name] = $root->getAttribute($name);
+    }
+  }
+  // The intrinsic-size guarantee: a file declaring a viewBox but no
+  // width/height gets them from the viewBox extent.
+  if (isset($attributes['viewBox']) && (!isset($attributes['width']) || !isset($attributes['height']))) {
+    $extent = preg_split('/[\s,]+/', trim($attributes['viewBox']));
+    if (is_array($extent) && count($extent) === 4) {
+      $attributes['width'] ??= $extent[2];
+      $attributes['height'] ??= $extent[3];
+    }
+  }
+
+  // Serializing the root's children (not the document or the root) drops
+  // both the XML declaration and the authored root attributes; what
+  // remains is exactly the interior the modeled element mounts.
+  $inner = '';
+  foreach ($root->childNodes as $child) {
+    $inner .= $dom->saveXML($child);
+  }
+  return [
+    'attributes' => $attributes,
+    'inner' => Markup::create($inner),
+  ];
+}

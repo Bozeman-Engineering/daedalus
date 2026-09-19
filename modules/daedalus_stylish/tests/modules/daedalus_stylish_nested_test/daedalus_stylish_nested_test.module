@@ -1,0 +1,30 @@
+<?php
+
+/**
+ * @file
+ * Test module hooks.
+ */
+
+declare(strict_types=1);
+
+use Drupal\daedalus_ui\ElementModel\PageBuilderDeclarations;
+
+/**
+ * Implements hook_page_builder_declarations_alter().
+ *
+ * Layers state-injected declarations over the YAML ones so tests can
+ * exercise nested-grammar build validation failure cases (and collapse
+ * declarations) without shipping YAML that would break every other
+ * declarations build.
+ */
+function daedalus_stylish_nested_test_page_builder_declarations_alter(array &$declarations, string $theme): void {
+  foreach (['kinds', 'block_types', 'layouts', 'instances'] as $dimension) {
+    foreach (\Drupal::state()->get("daedalus_stylish_nested_test.$dimension", []) as $key => $declaration) {
+      $declarations[$dimension][$key] = PageBuilderDeclarations::merge($declarations[$dimension][$key] ?? [], $declaration);
+    }
+  }
+  // The site lane is one declaration, not a keyed dimension: state layers
+  // over it whole (a test constraining base.p merges into the shipped
+  // base section).
+  $declarations['site'] = PageBuilderDeclarations::merge($declarations['site'] ?? [], \Drupal::state()->get('daedalus_stylish_nested_test.site', []));
+}

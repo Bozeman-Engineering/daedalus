@@ -1,0 +1,9 @@
+# The animation the shipped variant wears as motion-sync_test_fade.
+sync_test_fade:
+  label: 'Sync test fade'
+  description: 'A soft entrance for the sync test band.'
+  steps:
+    from:
+      opacity: '0'
+    to:
+      opacity: '1'

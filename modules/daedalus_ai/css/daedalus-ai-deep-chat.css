@@ -1,0 +1,54 @@
+/* The chat's 24rem (the conventional chat-drawer width) is a demand on
+   the RAIL, not on the panel: set on the wrapper while the chat is open
+   (the open panel is the one without daedalus-ui-hidden), it sizes
+   slot-mates too, so daedalus_stylish's inspector shares the chat's edge instead
+   of sitting at the 17rem framework default until the first drag. A
+   user-dragged or cookie-stamped width lands as an inline style on the
+   wrapper (sidebar-resize.js / DaedalusUi SSR) and wins over this
+   rule. */
+.daedalus-ui-sidebar-wrapper:has(#daedalus_ai:not(.daedalus-ui-hidden)) {
+  --daedalus-ui-sidebar-width: 24rem;
+}
+
+#daedalus_ai {
+  /* The generic right-sidebar rule puts overflow-y: scroll on the panel,
+     but the chat never overflows -- deep-chat's #messages scrolls
+     internally. With classic (always-visible) scrollbars that reserved an
+     empty track between the chat's scrollbar and the window's. */
+  overflow-y: hidden;
+  padding: 0;
+  /* The rail variable always resolves while the chat is open (the wrapper
+     rule above); the fallback only guards a render outside the rail. */
+  inline-size: var(--daedalus-ui-sidebar-width, 24rem);
+  deep-chat {
+    display: block;
+    padding-left: 0.5rem;
+    user-select: text;
+  }
+}
+
+/* The header is the shared daedalus-ui-panel__header grammar (daedalus_ui
+   panel-controls.css: layout, title type, the action cluster, the close).
+   The chat panel keeps padding: 0 for the flush chat surface, so the
+   header carries its own left inset. */
+#daedalus_ai .daedalus-ui-panel__header {
+  padding-inline-start: 1rem;
+}
+
+/* The options kebab rides the kit icon-button (transparent ground, hover
+   wash, focus ring); only the 1.75rem hit box and glyph size are local,
+   keyed at two-class specificity so it wins over the late-declared base. */
+.daedalus-ui-icon-button.daedalus-ai-chat-menu-button {
+  padding: 0;
+  font-size: var(--daedalus-icon-size-large);
+  line-height: 1;
+  inline-size: 1.75rem;
+  block-size: 1.75rem;
+}
+
+#daedalus_ai .chat-container {
+  flex: 1 1 auto;
+  min-height: 0;
+  margin-bottom: 0;
+  background-color: var(--daedalus-background);
+}

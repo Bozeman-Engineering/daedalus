@@ -1,0 +1,14 @@
+elements:
+  '.media__frame':
+    label: 'Frame'
+    property_groups:
+      layout: {}
+  '.media__caption':
+    label: 'Caption'
+    property_groups:
+      typography: {}
+controls:
+  alignment:
+    label: 'Alignment'
+    widget: test_alignment
+    element: '.media__frame'

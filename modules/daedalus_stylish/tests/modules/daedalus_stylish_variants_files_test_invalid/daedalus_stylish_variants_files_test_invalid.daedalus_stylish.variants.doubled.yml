@@ -1,0 +1,7 @@
+doubled_section:
+  label: 'Doubled section (again)'
+  scope: 'kind:container'
+  styles:
+    '':
+      default:
+        padding: '2rem'

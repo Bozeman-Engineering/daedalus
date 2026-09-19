@@ -1,0 +1,8 @@
+label: 'Exploding'
+description: 'References the spy-detonating variant to prove rollback.'
+element:
+  kind: block
+  block_type: basic
+  styles:
+    '':
+      variants: [explode]

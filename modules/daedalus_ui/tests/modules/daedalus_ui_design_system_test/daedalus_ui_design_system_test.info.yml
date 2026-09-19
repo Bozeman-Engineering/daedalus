@@ -1,0 +1,9 @@
+name: Daedalus UI Design System Test
+type: module
+description: Packages the aurora design system as install config beside a page builder file carrying its law stratum (a site token scale and branding), for declaration layering tests.
+package: Testing
+core_version_requirement: ^11
+hidden: true
+dependencies:
+  - daedalus:daedalus_blueprint
+  - daedalus:daedalus_ui

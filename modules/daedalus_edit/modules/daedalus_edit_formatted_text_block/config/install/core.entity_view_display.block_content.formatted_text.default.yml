@@ -1,0 +1,13 @@
+langcode: en
+status: true
+dependencies:
+  config:
+    - block_content.type.formatted_text
+    - field.field.block_content.formatted_text.field_formatted_text_text
+id: block_content.formatted_text.default
+targetEntityType: block_content
+bundle: formatted_text
+mode: default
+content: {  }
+hidden:
+  field_formatted_text_text: true

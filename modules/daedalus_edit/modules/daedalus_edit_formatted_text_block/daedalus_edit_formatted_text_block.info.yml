@@ -1,0 +1,14 @@
+name: 'Daedalus Edit Formatted Text Block'
+type: module
+description: 'A formatted (rich) text block'
+package: Daedalus
+core_version_requirement: '>=11.3 <11.5'
+dependencies:
+  - drupal:ckeditor5
+  - drupal:editor
+  - drupal:filter
+  - drupal:text
+  - daedalus:daedalus_edit
+  - field_sample_value:field_sample_value
+  - daedalus:daedalus_layout
+  - daedalus:daedalus_ui

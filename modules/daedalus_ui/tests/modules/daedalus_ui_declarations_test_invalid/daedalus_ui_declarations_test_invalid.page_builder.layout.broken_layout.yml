@@ -1,0 +1,15 @@
+collapsed: true
+composed: 'maybe'
+fields: {}
+elements:
+  '.outer':
+    label: 'Outer'
+    # depth is a root-form condition; a part never conditions on it.
+    present:
+      depth: root
+    elements:
+      # Conditions compose (AND) only on root forms.
+      '.deep':
+        present:
+          depth: nested
+          empty: true

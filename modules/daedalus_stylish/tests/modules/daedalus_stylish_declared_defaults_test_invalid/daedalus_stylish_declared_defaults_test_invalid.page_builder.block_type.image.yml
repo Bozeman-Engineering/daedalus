@@ -1,0 +1,7 @@
+# A token reference in a declared default: declared defaults are token-free
+# markup facts, so this fails the build whatever skin is active and
+# whatever enforcement the site runs.
+defaults:
+  '':
+    default:
+      margin: 'var(--space-4)'

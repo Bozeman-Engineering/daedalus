@@ -1,0 +1,35 @@
+# A bespoke (non-composed) declaration exercising the full markup-model
+# vocabulary the client anatomy payload must ship AS AUTHORED: the ordered
+# root forms, a part's data-decided present condition and declared
+# attributes, and a multi-form part's ordered forms with their per-form
+# labels. The element resolver's client twin resolves editing previews
+# against this payload, so a projection that re-strips any of these keys
+# starves the twin — ClientAnatomyTest locks them riding through.
+root:
+  forms:
+    - tag: a
+      present:
+        field: field_banner_url
+      attributes:
+        href:
+          field: field_banner_url
+    - tag: div
+elements:
+  '.banner__media':
+    label: 'Banner media'
+    tag: img
+    present:
+      media: raster
+    attributes:
+      role: presentation
+  '.banner__picture':
+    label: 'Banner picture'
+    forms:
+      - tag: img
+        present:
+          media: raster
+        label: 'Raster'
+      - tag: svg
+        present:
+          media: vector
+        label: 'Vector'

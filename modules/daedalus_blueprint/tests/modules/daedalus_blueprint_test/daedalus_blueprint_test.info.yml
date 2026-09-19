@@ -1,0 +1,7 @@
+name: Daedalus Blueprint Test
+type: module
+description: Test module for daedalus_blueprint managed keys.
+package: Testing
+core_version_requirement: ^11
+dependencies:
+  - daedalus:daedalus_blueprint

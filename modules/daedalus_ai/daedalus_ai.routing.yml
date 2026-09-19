@@ -1,0 +1,27 @@
+daedalus_ai.deferred_processing:
+  path: '/daedalus-ai/deferred/{entity_type}/{entity}/{view_mode}'
+  defaults:
+    _controller: '\Drupal\daedalus_ai\Controller\DeferredProcessingController::process'
+  requirements:
+    _permission: 'use daedalus ui edit mode'
+    _entity_access: 'entity.update'
+  methods: [POST]
+  options:
+    no_cache: TRUE
+    parameters:
+      entity:
+        type: entity:{entity_type}
+
+daedalus_ai.deferred_retry:
+  path: '/daedalus-ai/deferred-retry/{entity_type}/{entity}/{view_mode}'
+  defaults:
+    _controller: '\Drupal\daedalus_ai\Controller\DeferredProcessingController::retry'
+  requirements:
+    _permission: 'use daedalus ui edit mode'
+    _entity_access: 'entity.update'
+  methods: [POST]
+  options:
+    no_cache: TRUE
+    parameters:
+      entity:
+        type: entity:{entity_type}

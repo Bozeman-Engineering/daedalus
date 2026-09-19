@@ -1,0 +1,9 @@
+# The animation the shipped variant wears as motion-aurora_fade.
+aurora_fade:
+  label: 'Aurora fade'
+  description: 'A soft entrance for aurora bands.'
+  steps:
+    from:
+      opacity: '0'
+    to:
+      opacity: '1'

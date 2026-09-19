@@ -1,0 +1,7 @@
+inline_block_configuration:
+  yaml_test_block:
+    yaml_setting:
+      label: 'YAML Setting'
+      description: 'A setting declared via YAML.'
+      schema:
+        type: string

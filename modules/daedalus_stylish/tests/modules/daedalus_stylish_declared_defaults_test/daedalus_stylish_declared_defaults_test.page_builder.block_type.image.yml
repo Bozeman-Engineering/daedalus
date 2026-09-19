@@ -1,0 +1,17 @@
+# A block type shipping its own declared defaults: the literal box facts
+# its markup needs, in the skin defaults grammar for exactly this scope.
+# Mirrors the image block's shape (a linked root shrink-wrapping a picture
+# part) without depending on the image block module.
+elements:
+  '.image-block-image':
+    label: 'Image'
+    property_groups:
+      sizing: {}
+defaults:
+  '':
+    default:
+      display: block
+      width: fit-content
+  '::.image-block-image':
+    default:
+      display: block

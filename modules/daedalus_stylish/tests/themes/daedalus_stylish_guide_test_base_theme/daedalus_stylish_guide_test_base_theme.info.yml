@@ -1,0 +1,6 @@
+name: 'Daedalus Stylish guide test base theme'
+type: theme
+description: 'Base theme layering style guide declarations over modules.'
+core_version_requirement: '*'
+base theme: false
+hidden: true

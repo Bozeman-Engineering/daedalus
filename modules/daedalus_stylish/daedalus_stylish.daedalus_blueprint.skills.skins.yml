@@ -1,0 +1,93 @@
+label: 'Skins'
+description: 'TRIGGER when: about to create or edit a skin, mint or change a design token (var(--space-*), var(--color-*), ...), change site-wide element defaults, or restyle the whole site at once. It returns the live skin catalog (which skins exist and which is active) plus the editing recipes; without it you cannot know the active skin''s entity id.'
+type: skins
+# A skin is a member of a design system and the system's default skin is
+# the active one; changing a skin is access, not vocabulary. The skill
+# exists only for accounts that may administer skins (the same permission
+# skin CRUD enforces); everyone still reads the token vocabulary in the
+# design system brief.
+permission: 'administer skins'
+instructions: |
+  ## The skin model
+  A skin (entity_type daedalus_skin, single bundle daedalus_skin) is a
+  MEMBER of a design system (its design_system field names the system;
+  a skin with none is global) and carries the system's look as data,
+  two tiers on one entity:
+  - tokens: {scale: {name: value}}. Token VALUES for the scales the site
+    declares in code (the catalog above lists them; the style_guide's
+    materials key lists what the active skin has minted, by var() name).
+    A name follows CSS custom-property ident rules and becomes
+    var(--{prefix}-{name}) the moment it exists. A value is a plain CSS
+    value matching the scale's shape, or a condition-keyed map whose
+    required "default" always applies ({"default": "1rem",
+    "narrow": "0.75rem"}); width/scheme/motion condition axes only.
+    Token values may reference other tokens (var(--x)).
+  - defaults: {scope: element-relative styles}. Live site-wide element
+    defaults per scope ("kind:container", "block_type:text",
+    "block_plugin:system_menu_block" — plugin blocks such as menus and
+    site branding, by base plugin id — "base:h2",
+    ...). Element keys are "" for the scope's root or "::.part-class" for
+    a declared anatomy part; values are the same condition-keyed CSS
+    property maps as element styles. Defaults restyle EXISTING placements
+    live; per-element styles and variants override them by cascade.
+  The ACTIVE skin is the active design system's default_skin (the
+  catalog above marks it): its tokens deliver as CSS custom properties
+  and its defaults as scope CSS. Editing the active skin restyles the
+  whole site (workspace-staged when a workspace is active; prefer one for
+  sweeping changes).
+
+  ## Tokens vs the palette
+  Palette swatches (daedalus_swatch entities, referenced as
+  var(--swatch-{machine_name}); the brief's NAMED VALUES list them and its
+  MINT line teaches save_material {kind: swatch})
+  are the OTHER named-value store: editor-minted and skin-independent, they
+  persist across a skin switch while tokens swap with the skin. Mint a
+  TOKEN when the value belongs to the skin's curated design system (a
+  declared scale, consumed by scale-constrained properties); prefer a
+  SWATCH for an editor-owned reusable value that should survive a redesign.
+  The --swatch- namespace is reserved: no scale may claim it, and minting a
+  swatch never extends a scale-constrained property's option set. A token's
+  value may reference a swatch (var(--swatch-x)) and a swatch's value may
+  reference a token, so either can follow the other.
+
+  ## Designing a skin's identity
+  Creating a skin (or reworking one) is designing the site's identity,
+  not filling in token values. Plan the identity compactly first, and
+  present the plan where the user should weigh in:
+  - Palette: 4-6 named values with roles (ground, surface, ink, accent,
+    ...), minted as color-scale tokens; defaults and styles then
+    reference the tokens, never the raw values.
+  - Type: at least two roles, a characterful display face used with
+    restraint and a complementary body face (a utility face for
+    captions or data where the site needs one), with scale, weights,
+    and spacing chosen deliberately. Typography carries the skin's
+    personality: faces and a scale that could belong to any site mean
+    the skin has not been designed yet.
+  - Signature: the one recognizable move this skin owns (a distinctive
+    heading treatment, an unmistakable use of the accent). Spend the
+    skin's boldness there and keep every other default quiet.
+  Derive every token value and element default from this plan; a value
+  with no role in the plan is a value the skin does not need.
+
+  ## Recipes (generic entity ops on daedalus_skin)
+  - Change a token's value or mint a token: read the skin entity first,
+    merge your change into its current tokens map, and write the FULL map
+    back (a field write replaces the whole field value; never send only
+    your addition). Minting is just writing a new name under a declared
+    scale; then reference it from styles as var(). New scales cannot be
+    minted from data: scales are declared in code.
+  - Change site element defaults: same read-merge-write on the defaults
+    field.
+  - Create a skin: create a daedalus_skin with label, tokens, defaults,
+    design_system (the system it joins; omit it for a global skin), and
+    optionally machine_name (defaults from the label; it is IDENTITY:
+    set at create time only, never changed later).
+  - Activation is a design-system act, not a skin write: the active skin
+    is whichever skin the active design system names as its default_skin,
+    and only an administrator changes that (the design system's own form).
+    A skin you create stays inactive until a person makes it its system's
+    default; say so instead of trying.
+  - Validation is precise and unforgiving: undeclared scales, malformed
+    names, shape-mismatched values, and illegal condition axes are
+    rejected with exact errors; read them and correct rather than
+    retrying blind.

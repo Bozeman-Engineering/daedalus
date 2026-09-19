@@ -1,0 +1,14 @@
+name: 'Daedalus Edit'
+type: module
+description: 'Inline editing'
+package: Daedalus
+core_version_requirement: '>=11.3 <11.5'
+dependencies:
+  - daedalus:daedalus
+  - drupal:editor
+  - daedalus:daedalus_tempstore
+  - twig_events:twig_events
+  - field_sample_value:field_sample_value
+  - daedalus:daedalus_ui
+  - daedalus:daedalus_blueprint
+  - daedalus:daedalus_blueprint_api

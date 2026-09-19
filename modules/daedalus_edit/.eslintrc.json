@@ -1,0 +1,41 @@
+{
+  // Layered over core's .eslintrc.passing.json, which drupal.org's eslint job
+  // links into the directory above the project. Each entry below exists
+  // because the editor ships as browser-native ES modules (daedalus_edit.libraries.yml
+  // attaches daedalus-edit.js with type: module and no bundler): the code targets
+  // the ES2022 the browsers that run it already have.
+  "parserOptions": {
+    // Core's parser stops at ES2020; the modules use class fields and logical
+    // assignment.
+    "ecmaVersion": 2022
+  },
+  "rules": {
+    // A browser resolves a relative import only with its extension.
+    "import/extensions": ["error", "ignorePackages", { "js": "always" }],
+    // Modules export named bindings on purpose so importers can bind them
+    // under a namespace beside the same-named instances the code passes
+    // around (an EditableElement instance next to the EditableElement class).
+    "import/prefer-default-export": "off",
+    // The editor plugin base classes declare the hooks a plugin may override;
+    // a default that ignores `this` is the API, not a stray function.
+    "class-methods-use-this": "off",
+    // Core's airbnb rule forbids for...of for the regenerator runtime a
+    // transpiled build would need; native modules need none, and CKEditor's
+    // model hands out iterators that for...of is the language's way through.
+    "no-restricted-syntax": [
+      "error",
+      {
+        "selector": "ForInStatement",
+        "message": "for..in loops iterate over the entire prototype chain; use Object.{keys,values,entries} and iterate the resulting array."
+      },
+      {
+        "selector": "LabeledStatement",
+        "message": "Labels are a form of GOTO; they make code confusing and hard to maintain."
+      },
+      {
+        "selector": "WithStatement",
+        "message": "`with` is disallowed in strict mode because it makes code impossible to predict and optimize."
+      }
+    ]
+  }
+}

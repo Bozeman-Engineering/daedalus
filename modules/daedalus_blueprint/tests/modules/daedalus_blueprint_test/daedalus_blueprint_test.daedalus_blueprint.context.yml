@@ -1,0 +1,9 @@
+block_types:
+  yaml_test_block:
+    guidance: 'YAML-provided block type guidance.'
+layouts:
+  layout_onecol:
+    guidance: 'YAML-provided one-column guidance.'
+    defaults:
+      layout_settings:
+        width: full-width

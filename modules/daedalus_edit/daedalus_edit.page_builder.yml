@@ -1,0 +1,272 @@
+# The Daedalus baseline style guide (Daedalus Stylish's styling sections, riding
+# the shared page builder declaration file).
+#
+# This is the enforcement artifact the strict posture runs on (the
+# style-guide-enforcing deployment): under strict mode only the property
+# groups declared here (and in the per-block-type
+# *.page_builder.block_type.*.yml files, which layer on top of the block
+# kind below) may be styled.
+# The baseline is deliberately curated-but-unconstrained — every
+# inspector widget works out of the box; deployments tighten ranges and
+# palettes by layering constraints in their theme's THEME.page_builder.yml,
+# which merges over this file.
+#
+# The controls maps are the basic-mode defaults for each kind: semantic
+# widgets that every instance of the kind offers unless a higher layer or
+# block type suppresses one with the FALSE tombstone (`spacing: false`). A
+# control binds the kind root unless it names an `element:` key, which must
+# be a part the kind's own declaration declares (module-rendered anatomy,
+# like the entity's layout root); an element-bound control renders only
+# while that part is present on the canvas. Guide-build validation holds
+# each widget's owned properties to the property groups of whatever the
+# control binds (the root's, or the part's), so a layer that withdraws a
+# group a control needs must tombstone the control too.
+entity:
+  property_groups:
+    spacing: {}
+    background: {}
+    sizing: {}
+  controls:
+    # No Spacing control on the page: padding on the entity root pads the
+    # theme's outermost element (title and submitted footer included), a
+    # gesture basic mode does not offer; the spacing grant above stays for
+    # advanced mode and the AI. The page's air is its Gap below.
+    # Swatch row over background-color; a theme's `allowed:` palette on
+    # background-color becomes the swatches. No dynamic gate: any box
+    # can carry a surface color.
+    background:
+      label: 'Background'
+      widget: background
+    # The page's Gap row, bound to the layout root daedalus_layout renders around
+    # the root sections (declared as entity anatomy in
+    # daedalus_layout.page_builder.yml, granted spacing + layout by daedalus_stylish's
+    # layer). The page is the top of the container tree: air between its
+    # bands is the layout root's gap, the same rhythm a container's gap
+    # gives its children. The dedicated gap widget (not spacing_scale,
+    # whose Padding row is meaningless on the root) gates on the bound
+    # part's live child-box count, so a one-section page shows no row.
+    gap:
+      label: 'Gap'
+      widget: gap
+      element: '.daedalus-layout-layout'
+      section: layout
+container:
+  property_groups:
+    spacing: {}
+    # Typography on a section cascades into its children (a section-level
+    # font color). Sections carry the same vocabulary at every depth, so a
+    # nested section styles exactly like a page row: one element, one
+    # vocabulary.
+    typography: {}
+    background: {}
+    border: {}
+    shadow: {}
+    sizing: {}
+    layout: {}
+  controls:
+    # No arrange control here: the whole container-arranges-contents story
+    # (mode, alignment axes, gap) is the layout widget's dedicated Layout
+    # section in daedalus_stylish — one arrangement surface per container, so a
+    # second control cannot shadow the coordinated writes.
+    spacing:
+      label: 'Spacing'
+      widget: spacing_scale
+    background:
+      label: 'Background'
+      widget: background
+    # Corner radius presets plus a simple solid border row; no dynamic
+    # gate (any box can carry corners and a border).
+    corners_border:
+      label: 'Corners and border'
+      widget: corners_border
+    # Box-shadow presets; a theme's `allowed:` list on box-shadow becomes
+    # the elevation scale. No dynamic gate: any box can cast a shadow.
+    elevation:
+      label: 'Shadow'
+      widget: elevation
+# No region kind here: regions are not addressable elements (no region
+# style keys), so styling declarations for them can never fire.
+# The field kind's markup SHELL (.field__label / .field__items /
+# .field__item contains value) is NOT declared here: it describes core's
+# field template, so daedalus_ui ships it
+# (daedalus_ui.page_builder.yml, with daedalus_stylish layering the shell parts'
+# property groups) and this layer merges over it. The rich text INSTANCE
+# namespace is not declared here either: minted identity carriers are
+# content whose ownership varies by render shape (a composed block's
+# carriers ride its own block key, an open render's ride the field key),
+# so the namespace lives on the spine's top-level `instances:` section at
+# the bottom of this file, covering every owner through one resolution
+# rule.
+field:
+  property_groups:
+    spacing: {}
+    typography: {}
+    # Sanctions the text_color control's gradient-text recipe writes:
+    # the widget owns background-image + background-clip alongside color,
+    # and guide-build validation holds a root-bound widget's owned
+    # properties to the kind root's groups (the instance namespace's
+    # declared Background covers instance parts, not the root binding). A
+    # field root carrying a surface color is defensible in its own right.
+    background: {}
+    # Sanctions the position control below (align-self + justify-self are
+    # local layout properties on the field itself).
+    layout: {}
+  controls:
+    text_alignment:
+      label: 'Text alignment'
+      widget: text_alignment
+    # Type scale over font-size / font-weight / line-height; hidden by the
+    # hasText gate on selections carrying no real text.
+    typography:
+      label: 'Typography'
+      widget: typography
+    # Swatch row over color; a theme's `allowed:` palette on color becomes
+    # the swatches. Same hasText gate as typography.
+    text_color:
+      label: 'Text color'
+      widget: text_color
+    # Child-positions-itself: both screen axes as child-local writes
+    # (align-self + justify-self); under a plain block parent a pick rides
+    # in with the parent's display: grid as one compound commit.
+    position:
+      label: 'Position'
+      widget: position
+    spacing:
+      label: 'Spacing'
+      widget: spacing_scale
+# No markup shell here either, for the opposite reason: a block's wrapper
+# markup (.block__content contains fields) belongs to the theme's
+# block.html.twig, so the shell belongs in the theme's THEME.page_builder.yml
+# — the pattern is documented in
+# \Drupal\daedalus_ui\ElementModel\PageBuilderDeclarations. This
+# baseline is theme-agnostic and daedalus_edit's own blocks compose to a
+# single root.
+block:
+  property_groups:
+    spacing: {}
+    typography: {}
+    background: {}
+    border: {}
+    shadow: {}
+    sizing: {}
+    layout: {}
+  controls:
+    # Type scale over font-size / font-weight / line-height; the universal
+    # kind sanctions it on every block, and the hasText gate hides it on
+    # blocks carrying no real text (only the canvas knows).
+    typography:
+      label: 'Typography'
+      widget: typography
+    # Swatch row over color; a theme's `allowed:` palette on color becomes
+    # the swatches. Same hasText gate as typography.
+    text_color:
+      label: 'Text color'
+      widget: text_color
+    # Swatch row over background-color, same palette story as text
+    # color; no dynamic gate (any box can carry a surface color).
+    background:
+      label: 'Background'
+      widget: background
+    # Corner radius presets plus a simple solid border row; no dynamic
+    # gate. Block types whose visible box is a part (the image block)
+    # restate this binding element-bound in their own YAML.
+    corners_border:
+      label: 'Corners and border'
+      widget: corners_border
+    # Box-shadow presets; a theme's `allowed:` list on box-shadow becomes
+    # the elevation scale. No dynamic gate: any box can cast a shadow.
+    elevation:
+      label: 'Shadow'
+      widget: elevation
+    # Child-positions-itself: both screen axes as child-local writes
+    # (align-self + justify-self); under a plain block parent a pick rides
+    # in with the parent's display: grid as one compound commit.
+    position:
+      label: 'Position'
+      widget: position
+    spacing:
+      label: 'Spacing'
+      widget: spacing_scale
+    width:
+      label: 'Width'
+      widget: width
+
+# The minted-identity instance namespace, declared ONCE on the spine's
+# instances lane. A rich text value's semantic elements wear short
+# identity classes minted by daedalus_edit (IdentityMinter server-side, the
+# CKEditor Identity plugin live), each an addressable style target with a
+# live row in the markup view. Carrier ownership is a DOM fact that varies
+# (a composed block's carriers mount on its OWN markup and style at
+# `block:{uuid}::.s-x`; an open render's carriers ride the owning field's
+# key), so the namespace cannot be pinned to one owner kind: every
+# resolver (daedalus_stylish PHP and JS, the annotator, the AI dialect) consults
+# this declaration after the owner's exact and pattern parts.
+#
+# The tags map is the IDENTITY vocabulary: IdentityMinter mints exactly
+# these tags, the CKEditor contract delivers them, and the annotator
+# stamps these labels onto instance rows. It says nothing about what a
+# tag may WEAR: a prose tag's styleability (the skin's base:{tag} scope
+# and the element-scoped tag tier `{key}::{tag}` alike) is declared once,
+# on the site's base section (daedalus_stylish.page_builder.yml), and a tag minted
+# here but undeclared there is no tag-tier target. The property groups
+# govern the minted CLASS parts only (`{key}::.s-x`): any instance part
+# validates against exactly these, cold-loaded or mid-typing.
+instances:
+  '.s-*':
+    label: 'Text element'
+    tags:
+      p: 'Paragraph'
+      h2: 'Heading 2'
+      h3: 'Heading 3'
+      h4: 'Heading 4'
+      blockquote: 'Block quote'
+      # Minting is universal: every declared tag carries identity at any
+      # depth, so nested lists, list items, and the paragraphs inside them
+      # are each their own addressable element (the client's li identity
+      # rides CKEditor's item-scope attribute; wrappers ride list-scope).
+      ul: 'Bulleted list'
+      ol: 'Numbered list'
+      li: 'List item'
+    property_groups:
+      typography: {}
+      spacing: {}
+      background: {}
+      border: {}
+    # A minted element's direct children as ONE addressable
+    # ("{key}::.s-x::>"): the style-every-item-of-one-list gesture, and
+    # the same shape for any other minted root. Items also mint their own
+    # identity (li is a declared tag), so this is the live rule beside
+    # per-item parts. Declaring it here is what lets STRICT sites speak
+    # the write; the groups mirror the namespace's own (items are text).
+    children:
+      property_groups:
+        typography: {}
+        spacing: {}
+        background: {}
+        border: {}
+    # Basic mode's curated surface for a selected text part. Instance
+    # controls are root-bound by definition (an instance is content
+    # carrying its own markup, no parts to bind), so each widget styles
+    # the selected paragraph/heading itself — never its owning block.
+    # The set spans the four property groups above: text (typography,
+    # alignment, color) plus the callout treatment (spacing, background,
+    # corners/border).
+    controls:
+      typography:
+        label: 'Typography'
+        widget: typography
+      text_color:
+        label: 'Text color'
+        widget: text_color
+      text_alignment:
+        label: 'Text alignment'
+        widget: text_alignment
+      spacing:
+        label: 'Spacing'
+        widget: spacing_scale
+      background:
+        label: 'Background'
+        widget: background
+      corners_border:
+        label: 'Corners and border'
+        widget: corners_border

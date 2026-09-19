@@ -1,0 +1,27 @@
+# Shipped default skins; the token values validate against the scales the
+# test injects as the site declaration (daedalus_stylish_control_test.site state) and
+# the defaults against its base: vocabulary. The defaults deliberately
+# reference a token THIS skin mints (var(--text-hero)): a shipped skin is
+# self-contained, so strict sites validate its defaults against its own
+# tokens, not the active skin's.
+aurora:
+  label: 'Aurora'
+  tokens:
+    space:
+      gutter:
+        default: '2rem'
+        narrow: '1rem'
+    color:
+      accent:
+        default: '#111111'
+        dark: '#eeeeee'
+    text:
+      hero: '3rem'
+  defaults:
+    'base:h2':
+      '':
+        default:
+          font-size: 'var(--text-hero)'
+# A tier-less skin: label only, both data tiers empty.
+bare:
+  label: 'Bare'

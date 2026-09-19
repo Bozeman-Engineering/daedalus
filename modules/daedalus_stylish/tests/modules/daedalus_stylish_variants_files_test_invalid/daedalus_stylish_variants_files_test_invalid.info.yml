@@ -1,0 +1,8 @@
+name: 'Daedalus Stylish variants files test (invalid)'
+type: module
+description: 'Ships one machine name in two files to prove duplicate discovery fails loudly.'
+package: Testing
+core_version_requirement: '*'
+hidden: true
+dependencies:
+  - daedalus:daedalus_stylish

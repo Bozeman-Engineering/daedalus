@@ -1,0 +1,8 @@
+name: 'Daedalus Stylish shipped sync test'
+type: module
+description: 'Ships one self-referencing package of all four kinds (an animation, a swatch, a skin token, and a variant wearing the three) for testing the orchestrated sync order.'
+package: Testing
+core_version_requirement: '*'
+hidden: true
+dependencies:
+  - daedalus:daedalus_stylish

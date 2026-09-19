@@ -1,0 +1,3 @@
+enabled_agents: []
+max_history_messages: 100
+keep_recent_turns: 5

@@ -1,0 +1,225 @@
+:is(#extra-specificity-hack, [data-drupal-admin-styles]),
+html {
+  #edit-mode-top-bar {
+    --admin-toolbar-font-family: var(--daedalus-font);
+    --toolbar-button-color: var(--daedalus-text);
+    --toolbar-button-hover-color: var(--daedalus-text);
+    --toolbar-button-hover-bg: var(--daedalus-selection-background);
+    /* The z-index needs to be higher than &.ck-toolbar-container in Daedalus Edit's ckeditor.css */
+    z-index: 1261;
+    height: var(--daedalus-top-bar-height);
+    user-select: none;
+    /* Buttons read core's toolbar-button custom properties; repoint them at
+       the scheme-aware palette so labels, icons (fill: currentColor), and
+       hover states follow the active color scheme. The font var covers
+       core components (tooltips, buttons) that read it directly. */
+    color: var(--daedalus-text);
+    font-family: var(--daedalus-font);
+    .active {
+      color: var(--daedalus-selection-text);
+      background-color: var(--daedalus-ui-main-color);
+      &::before {
+        background-color: var(--daedalus-selection-text);
+      }
+    }
+    .daedalus-ui-mode-button.active {
+      background-color: var(--daedalus-ui-secondary-color);
+    }
+    /* Three zones: panel toggles pinned to the edges, document actions
+       spaced evenly across the middle. The tool cluster is not here — it
+       floats in the bottom-center pill below. Each zone overrides core's
+       .top-bar__content (display: grid; width: 100%) — with flex-basis auto,
+       that width would blow every zone up to the full bar. */
+    .top-bar__left-toggles {
+      display: flex;
+      flex: 0 0 auto;
+      align-items: center;
+      justify-content: flex-start;
+      width: auto;
+    }
+    /* The document actions spread across the remaining middle space. */
+    .top-bar__global {
+      display: flex;
+      flex: 1 1 auto;
+      align-items: center;
+      width: auto;
+    }
+    .top-bar__right-toggles {
+      display: flex;
+      flex: 0 0 auto;
+      align-items: center;
+      justify-content: flex-end;
+      width: auto;
+    }
+    .toolbar-button {
+      white-space: nowrap;
+    }
+    /* Core rounds at --admin-toolbar-space-8; the chrome rounds on its own
+       token. The split button's main half keeps its directional corners
+       (split-button.css) — this higher-specificity rule must not flatten
+       them. */
+    .toolbar-button:not(.daedalus-ui-split-button__main) {
+      border-radius: var(--daedalus-border-radius);
+    }
+
+    /* Icon-only by default: the label hides and rides the chrome tooltip
+       spine (data-daedalus-ui-tooltip) on hover/focus instead, like IDE toolbars. */
+    .toolbar-button__label {
+      display: none;
+    }
+    .top-bar__left {
+      justify-content: flex-start;
+    }
+    &.top-bar {
+      /* Hidden unless this mode is active; the sidebar-width inset is gone
+         with the navigation sidebar takeover. */
+      display: none;
+      padding-inline: var(--admin-toolbar-space-16, 1rem);
+      justify-content: flex-start;
+      gap: var(--admin-toolbar-space-16, 1rem);
+      /* The reveal must nest HERE: `&` inherits the parent list's HIGHEST
+         specificity (the #extra-specificity-hack ID), so the hide above is
+         ID×2 — a top-level html[...] #id.class reveal (ID×1) can never win. */
+      html[data-daedalus-ui-mode="edit"] & {
+        display: flex;
+        /* Core sizes the fixed bar with width: 100vw, which includes the
+           document scrollbar — the bar's right edge (and anything measured
+           from it, like the ::after divider below) overhangs the rail by
+           the scrollbar's width. Both edges pinned spans the visible
+           viewport instead. */
+        width: auto;
+        background-color: var(--daedalus-background);
+        box-shadow: none;
+        inset-inline: 0;
+      }
+      /* The bar's divider spans only the canvas, not the sidebars: the bar
+         and the rails read as one continuous chrome frame around the page.
+         The displace offsets aggregate the open rails' widths (panels
+         register data-offset-*, and every open/close/resize re-runs
+         Drupal.displace()), collapsing to the full width when no rail is
+         open. Not a border: that would run the bar's whole width. */
+    }
+    /* Full density ("show everything") puts the labels inline — but only
+       where the bar can afford them: labeled, the three zones outgrow a
+       laptop-width viewport and the overflow silently pushes the right
+       toggles (Save, the mode exit) off-screen. Below the breakpoint the
+       bar stays icon-only at every density, and the tooltip engine keeps
+       serving the labels on its own (it shows the pill exactly while the
+       inline label is hidden, whatever hid it). */
+    @media (min-width: 90rem) {
+      html:not([data-daedalus-ui-chrome-density="minimal"], [data-daedalus-ui-chrome-density="clean"]) & .toolbar-button__label {
+        display: inline;
+      }
+    }
+  }
+
+  .top-bar::after {
+    position: absolute;
+    right: calc(var(--drupal-displace-offset-right, 0px) - 1px);
+    bottom: 0;
+    left: calc(var(--drupal-displace-offset-left, 0px) - 1px);
+    height: 1px;
+    content: "";
+    background: var(--daedalus-border, #b4bdd1);
+  }
+
+  /* The floating tool pill: the tool cluster floats bottom-center over the
+     canvas instead of docking in a bar — tools sit near where the mouse
+     works. Icon-only buttons, labels ride the tooltip. It carries no
+     data-offset-* attribute, so it never displaces the canvas and needs no
+     out-of-mode zero-box rule (display: none is enough — displace.js never
+     measures it). */
+  #edit-mode-toolbar {
+    --admin-toolbar-font-family: var(--daedalus-font);
+    --toolbar-button-color: var(--daedalus-text);
+    --toolbar-button-hover-color: var(--daedalus-text);
+    --toolbar-button-hover-bg: var(--daedalus-selection-background);
+
+    position: fixed;
+    /* Above the canvas and sidebars, same layer as the top bar. */
+    z-index: 1261;
+    bottom: 2.5rem;
+    left: 50%;
+    display: none;
+    align-items: center;
+    padding: 0.375rem 0.5rem;
+    user-select: none;
+    transform: translateX(-50%);
+    /* Same palette repointing as the top bar above. */
+    color: var(--daedalus-text);
+    border: 1px solid var(--daedalus-lines);
+    border-radius: var(--daedalus-border-radius);
+    box-shadow: 0 4px 16px rgb(0, 0, 0, 0.12);
+    font-family: var(--daedalus-font);
+    gap: 0.25rem;
+    /* The reveal must nest HERE: `&` inherits the parent list's HIGHEST
+       specificity (the #extra-specificity-hack ID), so the hide above is
+       ID×2 — a top-level reveal (ID×1) can never win. Same trap as the
+       top bar. */
+    html[data-daedalus-ui-mode="edit"] & {
+      display: flex;
+      background-color: var(--daedalus-background);
+    }
+    .toolbar-button {
+      white-space: nowrap;
+      /* Concentric with the pill: its radius minus the 0.375rem inset. */
+      border-radius: calc(var(--daedalus-border-radius) - 0.375rem);
+    }
+    .active {
+      color: var(--daedalus-selection-text);
+      background-color: var(--daedalus-ui-main-color);
+      &::before {
+        background-color: var(--daedalus-selection-text);
+      }
+    }
+    .daedalus-ui-mode-button.active {
+      background-color: var(--daedalus-ui-secondary-color);
+    }
+  }
+
+  /* Core's toolbar-button paints a 2px blue outline on hover; the chrome's
+     hover treatment is the selection wash and nothing else (variables.css).
+     Keyboard focus keeps its ring (:focus-visible). */
+  :is(#edit-mode-top-bar, #edit-mode-toolbar) .toolbar-button:hover:not(:focus-visible) {
+    outline: none;
+  }
+}
+
+/* Out of mode the bar must also MEASURE as nothing: it carries
+   data-offset-top, and displace.js's jQuery measurement un-hides
+   display:none elements (same trap as core chrome — see navigation.css). */
+html:not([data-daedalus-ui-mode="edit"]) #edit-mode-top-bar {
+  height: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+}
+
+.top-bar-icon {
+  width: 30px;
+  /* Sized to the bar (--daedalus-top-bar-height), a density choice:
+     off the icon ramp by design. */
+  height: 30px;
+  cursor: pointer;
+  background-repeat: no-repeat;
+  background-position: center center;
+}
+/* Core pushes the page canvas down by --admin-toolbar-top-bar-height for
+   its own top bar (top-bar.css: .top-bar:has(…) ~ .dialog-off-canvas-main-
+   canvas). Hiding that bar in-mode doesn't stop :has()/~ matching, so the
+   canvas would keep wearing CORE's 4rem offset under OUR 2rem bar — and any
+   extra margin added inside the canvas just collapses into it. Repointing
+   the variable reuses core's own offset rule: in-mode the canvas clears our
+   bar's height, out of mode the :root default returns untouched. */
+html[data-daedalus-ui-mode="edit"] {
+  --admin-toolbar-top-bar-height: var(--daedalus-top-bar-height);
+}
+
+/* An open panel's toggle stays visible at clean density: the lit switch is
+   orientation for what's on screen, not clutter. reveal.css wraps its
+   concealment in :where() precisely so an ordinary exception like this
+   outranks it. */
+#edit-mode-top-bar .active[data-daedalus-ui-conceal] {
+  visibility: visible;
+  pointer-events: auto;
+  opacity: 1;
+}

@@ -1,0 +1,201 @@
+# The STARTER skin: a blank canvas to build a design system off.
+#
+# A skin is the site's look as data: token values on the scales the
+# site declares, and the default styles bare elements wear. This one
+# has no look of its own. It mints one neutral placeholder token on
+# every scale the suite declares (daedalus_stylish.page_builder.yml
+# site.token_scales), because the suite's bindings define the minimum
+# a skin mints: font-family, font-size, font-weight, line-height,
+# padding, gap and border-radius are bound to the font, text, weight,
+# leading, space and radius scales on every site, a bound scale
+# minting nothing is an empty row with no fallback, and the rows offer
+# whatever is minted here. tracking, transition and layout are minted
+# too so every declared scale has a first token to re-value.
+#
+# The base-tag defaults reference tokens only (plus the zero literal
+# the None gesture commits and the CSS keywords a value needs), so the
+# whole site restyles by changing the values above them and no default
+# has to be rewritten when the palette or the type ramp changes.
+#
+# Build a system off it: copy this module under a new name (the info
+# file, this skin and config/install's design system), rename the
+# system and the skin, re-value the tokens, keep the names the defaults
+# speak (or rename both sides), then decide the posture: stay open
+# while the look is being found, add a MODULE.page_builder.yml with
+# `stops:` curation and the package's own bindings (color, tracking)
+# as the look settles, and switch enforcement to guarded or strict once
+# every value on the site is a token. daedalus_stylish_guide_example is the
+# finished strict shape of exactly that. Skins are content: after
+# editing this file, `drush daedalus_stylish:sync daedalus_stylish_starter_skin` lands
+# the change on the site.
+starter:
+  label: 'Starter'
+  tokens:
+    # Five roles, each with its dark pair. The accent is the only hue.
+    color:
+      bg:
+        default: '#ffffff'
+        dark: '#121212'
+      surface:
+        default: '#f4f4f5'
+        dark: '#1e1e20'
+      text:
+        default: '#18181b'
+        dark: '#f4f4f5'
+      border:
+        default: '#d4d4d8'
+        dark: '#3f3f46'
+      accent:
+        default: '#2563eb'
+        dark: '#60a5fa'
+    # System stacks: no webfont to load, one voice per family.
+    font:
+      sans-serif: 'system-ui, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif'
+      serif: 'Georgia, "Times New Roman", Times, serif'
+      mono: 'ui-monospace, "SFMono-Regular", Menlo, Consolas, "Courier New", monospace'
+    # Six roles, caption through display; the two largest step down on
+    # narrow viewports (a banded value: default plus a width condition).
+    text:
+      caption: '0.875rem'
+      body: '1rem'
+      lead: '1.25rem'
+      title: '1.5rem'
+      headline:
+        default: '2rem'
+        narrow: '1.75rem'
+      display:
+        default: '3rem'
+        narrow: '2.25rem'
+    weight:
+      regular: '400'
+      medium: '500'
+      bold: '700'
+    leading:
+      tight: '1.2'
+      normal: '1.5'
+      relaxed: '1.75'
+    tracking:
+      tight: '-0.02em'
+      normal: '0'
+      wide: '0.05em'
+    # Four steps on a doubling ladder, plus the page band's inline inset.
+    space:
+      sm: '0.5rem'
+      md: '1rem'
+      lg: '2rem'
+      xl: '4rem'
+      gutter:
+        default: '2rem'
+        narrow: '1rem'
+    radius:
+      sm: '0.25rem'
+      md: '0.5rem'
+      lg: '1rem'
+      full: '9999px'
+    transition:
+      fast: '150ms ease'
+      normal: '250ms ease'
+    layout:
+      max-width: '80rem'
+
+  # DEFAULT STYLES bare elements wear. Every value is a token reference,
+  # the zero literal, or a CSS keyword; never a raw dimension or color.
+  defaults:
+    'base:h1':
+      '':
+        default:
+          margin-top: '0'
+          margin-bottom: 'var(--space-md)'
+          font-family: 'var(--font-sans-serif)'
+          font-weight: 'var(--weight-bold)'
+          line-height: 'var(--leading-tight)'
+          letter-spacing: 'var(--tracking-tight)'
+          font-size: 'var(--text-display)'
+    'base:h2':
+      '':
+        default:
+          margin-top: '0'
+          margin-bottom: 'var(--space-md)'
+          font-family: 'var(--font-sans-serif)'
+          font-weight: 'var(--weight-bold)'
+          line-height: 'var(--leading-tight)'
+          letter-spacing: 'var(--tracking-tight)'
+          font-size: 'var(--text-headline)'
+    'base:h3':
+      '':
+        default:
+          margin-top: '0'
+          margin-bottom: 'var(--space-sm)'
+          font-family: 'var(--font-sans-serif)'
+          font-weight: 'var(--weight-bold)'
+          line-height: 'var(--leading-normal)'
+          font-size: 'var(--text-title)'
+    'base:h4':
+      '':
+        default:
+          margin-top: '0'
+          margin-bottom: 'var(--space-sm)'
+          font-family: 'var(--font-sans-serif)'
+          font-weight: 'var(--weight-medium)'
+          line-height: 'var(--leading-normal)'
+          font-size: 'var(--text-lead)'
+    'base:h5':
+      '':
+        default:
+          margin-top: '0'
+          margin-bottom: 'var(--space-sm)'
+          font-family: 'var(--font-sans-serif)'
+          font-weight: 'var(--weight-medium)'
+          line-height: 'var(--leading-normal)'
+          font-size: 'var(--text-body)'
+    'base:h6':
+      '':
+        default:
+          margin-top: '0'
+          margin-bottom: 'var(--space-sm)'
+          font-family: 'var(--font-sans-serif)'
+          font-weight: 'var(--weight-medium)'
+          line-height: 'var(--leading-normal)'
+          letter-spacing: 'var(--tracking-wide)'
+          font-size: 'var(--text-caption)'
+    'base:p':
+      '':
+        default:
+          margin-top: '0'
+          margin-bottom: 'var(--space-md)'
+          font-family: 'var(--font-sans-serif)'
+          font-size: 'var(--text-body)'
+          line-height: 'var(--leading-relaxed)'
+    'base:li':
+      '':
+        default:
+          font-size: 'var(--text-body)'
+          line-height: 'var(--leading-relaxed)'
+    'base:a':
+      '':
+        default:
+          color: 'var(--color-accent)'
+          text-decoration-line: 'underline'
+        hover:
+          text-decoration-line: 'none'
+    # A tinted band on the surface role (no rule: the suite declares no
+    # stroke scale, and a rule's width would be a literal).
+    'base:blockquote':
+      '':
+        default:
+          margin-top: 'var(--space-lg)'
+          margin-bottom: 'var(--space-lg)'
+          margin-left: '0'
+          margin-right: '0'
+          padding: 'var(--space-md)'
+          background-color: 'var(--color-surface)'
+          border-radius: 'var(--radius-md)'
+          font-family: 'var(--font-serif)'
+          font-size: 'var(--text-lead)'
+          line-height: 'var(--leading-normal)'
+    'base:code':
+      '':
+        default:
+          font-family: 'var(--font-mono)'
+          font-size: 'var(--text-caption)'
+          background-color: 'var(--color-surface)'

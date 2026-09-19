@@ -1,0 +1,29 @@
+langcode: en
+status: true
+dependencies:
+  config:
+    - block_content.type.text
+    - field.storage.block_content.field_text_tag
+  module:
+    - daedalus_edit
+    - field_sample_value
+    - options
+third_party_settings:
+  field_sample_value:
+    id: null
+    configuration: {  }
+  daedalus_edit:
+    disable: false
+    handle: form_item
+id: block_content.text.field_text_tag
+field_name: field_text_tag
+entity_type: block_content
+bundle: text
+label: Tag
+description: ''
+required: false
+translatable: false
+default_value: {  }
+default_value_callback: ''
+settings: {  }
+field_type: list_string

@@ -1,0 +1,7 @@
+name: Daedalus AI Test
+type: module
+description: 'Test support for daedalus_ai behavior tests: a stub deferred-operation processor and a batch-stashing route, so the deferred pipeline can be driven end-to-end without an AI provider.'
+package: Testing
+core_version_requirement: ^11
+dependencies:
+  - daedalus:daedalus_ai

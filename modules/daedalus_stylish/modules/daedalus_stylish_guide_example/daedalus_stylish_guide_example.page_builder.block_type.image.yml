@@ -1,0 +1,29 @@
+# The image block under the Guide Example guide.
+#
+# Imagery is rounded by default (the card radius), so a placed image is
+# born wearing guide_image_rounded on the style axis (the palette door
+# only; a blueprint-authored image wears what it says). The image part's
+# width is a percentage of its column, never an absolute length, and
+# never below a tenth of it. The part merges over the anatomy the Plus
+# Suite image block declares (daedalus_edit_image_block: the picture in both
+# link states and both media kinds); standalone it is a part with grants
+# and no markup, so the fixture builds with daedalus_stylish and this module
+# alone.
+default_variants:
+  style: guide_image_rounded
+elements:
+  '.image-block-image':
+    property_groups:
+      sizing:
+        constraints:
+          width:
+            units: ['%']
+            min: '10%'
+            max: '100%'
+      border:
+        constraints:
+          border-radius:
+            scale: radius
+            allowed: ['0']
+            stops: ['sm', 'md', 'lg', 'pill']
+      shadow: {}

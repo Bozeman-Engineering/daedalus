@@ -1,0 +1,29 @@
+# The empty block's edit-mode placeholder root: attached by the composed
+# content provider (ImageComposedContent) only on the renders that emit
+# the placeholder markup it styles.
+placeholder:
+  css:
+    component:
+      css/placeholder.css: {}
+
+# The vector lane's modeled svg picture: attached by the composed content
+# provider on every vector render, live included. The rule is hit-testing
+# (whole-box pointer events), not editing chrome, so visitors need it
+# exactly like editors do; the svg's box itself is a declared default on
+# the block type declaration.
+vector:
+  css:
+    component:
+      css/vector.css: {}
+
+# The image block's blueprint editor. Registered through the DaedalusEditQueue
+# push-queue seam, so load order against daedalus_edit/library does not matter.
+# The widget-popover grammar and link control ship their CSS on daedalus_edit/library;
+# the media library opens through daedalus_ui's modal helper, which
+# carries the dialog AJAX command handlers.
+image_composite_editor:
+  js:
+    js/image-composite-editor.js: {}
+  dependencies:
+    - core/drupal
+    - daedalus_ui/media_library

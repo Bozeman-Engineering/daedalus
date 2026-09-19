@@ -1,0 +1,14 @@
+# The aurora package's law stratum: in force only while aurora is the active
+# design system, layered above every module that packages no system and
+# below the themes. The scale is the kind of law a package ships (a token
+# vocabulary its skin mints on); the branding keys collide on purpose with
+# the fixture modules' and the fixture themes' so the tests can see where the
+# stratum sits.
+site:
+  token_scales:
+    glow:
+      label: Glow
+      shape: dimension
+  branding:
+    slogan: 'Aurora slogan'
+    logo: 'aurora.svg'

@@ -1,0 +1,512 @@
+# The Guide Example component library: reusable looks as DATA, the
+# materials a strict site's editors and the AI reach for before any raw
+# value. Every style here references role tokens only, so the looks
+# follow the skin, and every value obeys the guide's bindings (no
+# literal lengths on bound properties, no transition shorthand,
+# box-shadow on the shadow scale, timing on the duration and easing
+# scales), so the whole file validates on the strict site it ships for.
+# Members of guide_example (the module default, no key in any entry),
+# synced when the system is activated and by `drush daedalus_stylish:sync
+# daedalus_stylish_guide_example`, hash-synced and revertable.
+#
+# The file is organized by scope and axis:
+#   kind:container   surface (root)   guide_band_*       the band's paint
+#   kind:container   rhythm (root)    guide_rhythm_*     the band's air
+#   kind:container   style            guide_card / panel / tile / cluster
+#   kind:container   animation/hover  guide_slide_in_band, guide_raise_band
+#   kind:block       style / animation / hover
+#   block_type:text  style            text looks (eyebrow, lead, hero...)
+#   block_type:text  button           the site's buttons
+#   block_type:image style            image framing
+#
+# Under this system the suite's own entrance and hover variants
+# (block_fade_in and kin, container_fade_in and kin) are withheld from
+# the roster: they carry literal timings so they resolve on any skin,
+# and a strict site whose durations and easings are law refuses a
+# literal. The on-guide twins below are what this system offers in
+# their place; an axis variant spells as an attribute value derived
+# from its LABEL and two variants on one axis may not spell the same
+# word, so the twins are "Slide in", "Pop" and "Raise", never a second
+# "Fade in" or "Lift".
+
+# ---------------------------------------------------------------------
+# Page bands: surface axis (root-only). A band always wears one; the
+# layout's default is plain. Each sets background AND text color so the
+# inverse and accent bands carry their own legible text.
+guide_band_plain:
+  label: 'Plain'
+  scope: 'kind:container'
+  axis: 'surface'
+  weight: 10
+  description: 'The page background: paper in light, ink in dark. The default band surface; alternate it with Tint to give a page its rhythm.'
+  styles:
+    '':
+      default:
+        background-color: 'var(--color-bg)'
+        color: 'var(--color-text)'
+guide_band_tint:
+  label: 'Tint'
+  scope: 'kind:container'
+  axis: 'surface'
+  weight: 20
+  description: 'The faintly darker surface. Reach for it on every other band so consecutive sections read as distinct without a rule between them.'
+  styles:
+    '':
+      default:
+        background-color: 'var(--color-surface)'
+        color: 'var(--color-text)'
+guide_band_elevated:
+  label: 'Elevated'
+  scope: 'kind:container'
+  axis: 'surface'
+  weight: 30
+  description: 'The deeper surface the card rows sit on. Reach for it behind a row of cards or tiles so paper cards lift off it.'
+  styles:
+    '':
+      default:
+        background-color: 'var(--color-elevated)'
+        color: 'var(--color-text)'
+guide_band_inverse:
+  label: 'Inverse'
+  scope: 'kind:container'
+  axis: 'surface'
+  weight: 40
+  description: 'An ink band with paper text on a light page (and the reverse in dark mode). Reach for it once per page at most, for a closing statement or a feature spotlight.'
+  styles:
+    '':
+      default:
+        background-color: 'var(--color-inverse-bg)'
+        color: 'var(--color-inverse-text)'
+guide_band_accent:
+  label: 'Accent'
+  scope: 'kind:container'
+  axis: 'surface'
+  weight: 50
+  description: 'A solid amber band with contrast text. Loud; reach for it only for a single call-to-action band, never for content. Its title and copy inherit the contrast color, so it carries no Eyebrow, Lead or Muted (their colors belong to the light page), and its one button wears On accent.'
+  styles:
+    '':
+      default:
+        background-color: 'var(--color-accent)'
+        color: 'var(--color-accent-contrast)'
+
+# Page bands: rhythm axis (root-only). Vertical padding on the banded
+# space tokens, so bands tighten on narrow screens by data.
+guide_rhythm_compact:
+  label: 'Compact'
+  scope: 'kind:container'
+  axis: 'rhythm'
+  weight: 10
+  description: 'Tight vertical padding (3rem, 2rem when narrow). Reach for it on utility bands, breadcrumb-like strips, and bands that directly continue the one above.'
+  styles:
+    '':
+      default:
+        padding-top: 'var(--space-band-compact)'
+        padding-bottom: 'var(--space-band-compact)'
+guide_rhythm_standard:
+  label: 'Standard'
+  scope: 'kind:container'
+  axis: 'rhythm'
+  weight: 20
+  description: 'The everyday band padding (5rem, stepping down to 3rem when narrow). The default every new band is born with.'
+  styles:
+    '':
+      default:
+        padding-top: 'var(--space-band)'
+        padding-bottom: 'var(--space-band)'
+guide_rhythm_spacious:
+  label: 'Spacious'
+  scope: 'kind:container'
+  axis: 'rhythm'
+  weight: 30
+  description: 'Generous padding (8rem, down to 4rem when narrow). Reach for it on the hero and on a single statement band that should breathe.'
+  styles:
+    '':
+      default:
+        padding-top: 'var(--space-band-spacious)'
+        padding-bottom: 'var(--space-band-spacious)'
+
+# Nested groupings: style axis. These are for containers INSIDE a band
+# (a column in a row, a grouping), where the spacing grant is whole.
+# Their children stack with the skin's container gap (kind:container in
+# daedalus_stylish_guide_example.daedalus_stylish.skins.yml), so none of them writes a
+# display or a gap; Cluster is the one that does, because an inline row
+# is its point. padding-inline is the inline inset the width variants
+# also write; it is unbound (a scale binding would reject their max()
+# spelling), so reference variants still speak a space token there.
+guide_card:
+  label: 'Card'
+  scope: 'kind:container'
+  axis: 'style'
+  weight: 10
+  description: 'A paper card: page-background fill and text color, padding on four sides, the large radius, the small shadow, its children stacked with the site gap. Reach for it on each column of a Columns container inside an Elevated or Tint band (one card per column, never a Card in a Card) or on one featured grouping; the Card stencil wears it, and Raise on hover makes a linked card pressable.'
+  styles:
+    '':
+      default:
+        background-color: 'var(--color-bg)'
+        color: 'var(--color-text)'
+        padding-top: 'var(--space-6)'
+        padding-bottom: 'var(--space-6)'
+        padding-inline: 'var(--space-6)'
+        border-radius: 'var(--radius-lg)'
+        box-shadow: 'var(--shadow-sm)'
+guide_panel:
+  label: 'Panel'
+  scope: 'kind:container'
+  axis: 'style'
+  weight: 20
+  description: 'A large rounded panel: elevated fill, generous padding, the large radius, no shadow. Reach for it to frame one featured grouping inside a band.'
+  styles:
+    '':
+      default:
+        background-color: 'var(--color-elevated)'
+        color: 'var(--color-text)'
+        padding-top: 'var(--space-8)'
+        padding-bottom: 'var(--space-8)'
+        padding-inline: 'var(--space-8)'
+        border-radius: 'var(--radius-lg)'
+guide_tile:
+  label: 'Tile'
+  scope: 'kind:container'
+  axis: 'style'
+  weight: 30
+  description: 'A small tile: surface fill, tight padding, the medium radius, a hairline border. Reach for it on compact link lists and stat grids where a card would be too heavy.'
+  styles:
+    '':
+      default:
+        background-color: 'var(--color-surface)'
+        color: 'var(--color-text)'
+        padding-top: 'var(--space-4)'
+        padding-bottom: 'var(--space-4)'
+        padding-inline: 'var(--space-4)'
+        border-radius: 'var(--radius-md)'
+        border-width: 'var(--stroke-hairline)'
+        border-style: 'solid'
+        border-color: 'var(--color-border)'
+guide_cluster:
+  label: 'Cluster'
+  scope: 'kind:container'
+  axis: 'style'
+  weight: 40
+  description: 'An inline row: the children sit side by side on one line, centered on each other, a small gap between them, wrapping onto the next line when the room runs out. Reach for it on a row of buttons (a Primary beside a Link) under a title or at the end of a card, never for content columns, which is what Columns is for.'
+  styles:
+    '':
+      default:
+        display: 'flex'
+        flex-wrap: 'wrap'
+        align-items: 'center'
+        gap: 'var(--space-3)'
+
+# Container motion, on the guide's timing scales.
+guide_slide_in_band:
+  label: 'Slide in'
+  scope: 'kind:container'
+  axis: 'animation'
+  description: 'Fade the band in while it slides 1rem in from the left over the entrance duration when it scrolls into view. Reach for it on a band whose content reads left to right (a heading and its columns); off under a reduced-motion preference.'
+  styles:
+    '':
+      default:
+        animation-name: 'motion-guide_slide_in'
+        animation-duration: 'var(--duration-entrance)'
+        animation-timing-function: 'var(--easing-out)'
+        animation-fill-mode: 'both'
+        timeline-trigger: '--in-view view() entry 20% exit 100%'
+        animation-trigger: '--in-view play-once'
+      reduced-motion:
+        animation: 'none'
+guide_raise_band:
+  label: 'Raise'
+  scope: 'kind:container'
+  axis: 'hover'
+  description: 'Raise a card-like container 4px with the large shadow while the pointer hovers it, on the fast duration. Reach for it on a Card that links somewhere; still under a reduced-motion preference.'
+  styles:
+    '':
+      default:
+        transition-property: 'transform, box-shadow'
+        transition-duration: 'var(--duration-fast)'
+        transition-timing-function: 'var(--easing-out)'
+      hover:
+        transform: 'translateY(-4px)'
+        box-shadow: 'var(--shadow-lg)'
+      reduced-motion:
+        transform: 'none'
+
+# ---------------------------------------------------------------------
+# Blocks of any type.
+guide_notice:
+  label: 'Notice'
+  scope: 'kind:block'
+  axis: 'style'
+  description: 'Mark a block as a callout: elevated fill, padding, the medium radius, and a thick accent bar on the left edge (the one place the thick stroke appears besides a blockquote''s rule). Reach for it for asides, tips, and notes that should interrupt the reading flow.'
+  styles:
+    '':
+      default:
+        background-color: 'var(--color-elevated)'
+        padding-top: 'var(--space-4)'
+        padding-bottom: 'var(--space-4)'
+        padding-left: 'var(--space-6)'
+        padding-right: 'var(--space-6)'
+        border-radius: 'var(--radius-md)'
+        border-left-width: 'var(--stroke-thick)'
+        border-left-style: 'solid'
+        border-left-color: 'var(--color-accent)'
+guide_slide_in:
+  label: 'Slide in'
+  scope: 'kind:block'
+  axis: 'animation'
+  description: 'Fade the block in while it slides 1rem in from the left over the entrance duration when it scrolls into view. Reach for it on list items and stacked teasers that should arrive in sequence; off under a reduced-motion preference.'
+  styles:
+    '':
+      default:
+        animation-name: 'motion-guide_slide_in'
+        animation-duration: 'var(--duration-entrance)'
+        animation-timing-function: 'var(--easing-out)'
+        animation-fill-mode: 'both'
+        timeline-trigger: '--in-view view() entry 20% exit 100%'
+        animation-trigger: '--in-view play-once'
+      reduced-motion:
+        animation: 'none'
+guide_pop:
+  label: 'Pop'
+  scope: 'kind:block'
+  axis: 'animation'
+  description: 'Fade the block in while it springs from 90% through a slight overshoot to full size over the slow duration when it scrolls into view. Reach for it on a single badge, stat, or button that should catch the eye; off under a reduced-motion preference.'
+  styles:
+    '':
+      default:
+        animation-name: 'motion-guide_pop'
+        animation-duration: 'var(--duration-slow)'
+        animation-timing-function: 'var(--easing-spring)'
+        animation-fill-mode: 'both'
+        timeline-trigger: '--in-view view() entry 20% exit 100%'
+        animation-trigger: '--in-view play-once'
+      reduced-motion:
+        animation: 'none'
+guide_raise:
+  label: 'Raise'
+  scope: 'kind:block'
+  axis: 'hover'
+  description: 'Raise the block 4px with the medium shadow while the pointer hovers it, on the fast duration. Reach for it on image teasers and linked blocks that should feel pressable; still under a reduced-motion preference.'
+  styles:
+    '':
+      default:
+        transition-property: 'transform, box-shadow'
+        transition-duration: 'var(--duration-fast)'
+        transition-timing-function: 'var(--easing-out)'
+      hover:
+        transform: 'translateY(-4px)'
+        box-shadow: 'var(--shadow-md)'
+      reduced-motion:
+        transform: 'none'
+
+# ---------------------------------------------------------------------
+# Text blocks: the style axis carries text LOOKS, the button axis
+# carries the link part's BUTTON looks; a block wears one of each.
+guide_eyebrow:
+  label: 'Eyebrow'
+  scope: 'block_type:text'
+  axis: 'style'
+  weight: 10
+  description: 'A small uppercase accent label with wide tracking, one gap above the heading it introduces. Reach for it as the kicker above a band''s title ("Overview", "New this season"), at most one per band.'
+  styles:
+    '':
+      default:
+        font-family: 'var(--font-heading)'
+        font-size: 'var(--text-caption)'
+        font-weight: 'var(--weight-semibold)'
+        letter-spacing: 'var(--tracking-wide)'
+        text-transform: 'uppercase'
+        color: 'var(--color-accent)'
+guide_hero_title:
+  label: 'Hero title'
+  scope: 'block_type:text'
+  axis: 'style'
+  weight: 20
+  description: 'The display size at semibold with tight leading and tracking: the one headline on the page. Reach for it on the hero heading only; every other heading uses its tag''s size.'
+  styles:
+    '':
+      default:
+        font-family: 'var(--font-heading)'
+        font-size: 'var(--text-display)'
+        font-weight: 'var(--weight-semibold)'
+        line-height: 'var(--leading-tight)'
+        letter-spacing: 'var(--tracking-tight)'
+guide_lead:
+  label: 'Lead'
+  scope: 'block_type:text'
+  axis: 'style'
+  weight: 30
+  description: 'A larger, muted paragraph with relaxed leading. Reach for it on the one-sentence summary under a hero title or a band title, at most one per band.'
+  styles:
+    '':
+      default:
+        font-size: 'var(--text-title-3)'
+        line-height: 'var(--leading-relaxed)'
+        color: 'var(--color-muted)'
+guide_muted:
+  label: 'Muted'
+  scope: 'block_type:text'
+  axis: 'style'
+  weight: 40
+  description: 'Body text in the muted tone. Reach for it on supporting lines, dates, and metadata that should sit back from the main copy.'
+  styles:
+    '':
+      default:
+        color: 'var(--color-muted)'
+guide_stat:
+  label: 'Stat'
+  scope: 'block_type:text'
+  axis: 'style'
+  weight: 50
+  description: 'A big number: the title-1 size at semibold with tight leading. Reach for it on a metric in a tile or a stat row, with a Muted caption line under it.'
+  styles:
+    '':
+      default:
+        font-family: 'var(--font-heading)'
+        font-size: 'var(--text-title-1)'
+        font-weight: 'var(--weight-semibold)'
+        line-height: 'var(--leading-tight)'
+        letter-spacing: 'var(--tracking-tight)'
+
+# The site's buttons: the text block's link part as a pill. Primary is
+# the solid accent pill, Secondary the outlined twin, Link the bare
+# accent link with an underline on hover. Inert until the block has a
+# link. Labels are short because an axis variant spells as
+# button="{label}" in the page language.
+guide_button_primary:
+  label: 'Primary'
+  scope: 'block_type:text'
+  axis: 'button'
+  weight: 10
+  description: 'The solid accent pill with contrast text: the one primary action in a band. Reach for it on the main call to action; never place two primaries side by side.'
+  styles:
+    '::.text-block-link':
+      default:
+        display: 'inline-block'
+        background-color: 'var(--color-accent)'
+        color: 'var(--color-accent-contrast)'
+        padding-top: 'var(--space-3)'
+        padding-bottom: 'var(--space-3)'
+        padding-left: 'var(--space-6)'
+        padding-right: 'var(--space-6)'
+        border-radius: 'var(--radius-pill)'
+        font-size: 'var(--text-caption)'
+        font-weight: 'var(--weight-semibold)'
+        letter-spacing: 'var(--tracking-normal)'
+        text-decoration-line: 'none'
+        transition-property: 'background-color'
+        transition-duration: 'var(--duration-fast)'
+        transition-timing-function: 'var(--easing-out)'
+      hover:
+        background-color: 'var(--color-accent-hover)'
+        text-decoration-line: 'none'
+guide_button_secondary:
+  label: 'Secondary'
+  scope: 'block_type:text'
+  axis: 'button'
+  weight: 20
+  description: 'The outlined pill: transparent fill, a thin accent stroke and accent text, filling with the accent on hover. Reach for it beside a Primary for the lesser of two actions, or alone for a low-key action.'
+  styles:
+    '::.text-block-link':
+      default:
+        display: 'inline-block'
+        background-color: 'transparent'
+        color: 'var(--color-accent)'
+        padding-top: 'var(--space-3)'
+        padding-bottom: 'var(--space-3)'
+        padding-left: 'var(--space-6)'
+        padding-right: 'var(--space-6)'
+        border-radius: 'var(--radius-pill)'
+        border-width: 'var(--stroke-thin)'
+        border-style: 'solid'
+        border-color: 'var(--color-accent)'
+        font-size: 'var(--text-caption)'
+        font-weight: 'var(--weight-semibold)'
+        letter-spacing: 'var(--tracking-normal)'
+        text-decoration-line: 'none'
+        transition-property: 'background-color, color'
+        transition-duration: 'var(--duration-fast)'
+        transition-timing-function: 'var(--easing-out)'
+      hover:
+        background-color: 'var(--color-accent)'
+        color: 'var(--color-accent-contrast)'
+        text-decoration-line: 'none'
+guide_button_on_accent:
+  label: 'On accent'
+  scope: 'block_type:text'
+  axis: 'button'
+  weight: 25
+  description: 'The contrast pill with accent text: the one button on an Accent band, where Primary and Secondary both vanish into the amber. Reach for it only inside an Accent band, never on a light or Inverse band.'
+  styles:
+    '::.text-block-link':
+      default:
+        display: 'inline-block'
+        background-color: 'var(--color-accent-contrast)'
+        color: 'var(--color-accent)'
+        padding-top: 'var(--space-3)'
+        padding-bottom: 'var(--space-3)'
+        padding-left: 'var(--space-6)'
+        padding-right: 'var(--space-6)'
+        border-radius: 'var(--radius-pill)'
+        font-size: 'var(--text-caption)'
+        font-weight: 'var(--weight-semibold)'
+        letter-spacing: 'var(--tracking-normal)'
+        text-decoration-line: 'none'
+        transition-property: 'color'
+        transition-duration: 'var(--duration-fast)'
+        transition-timing-function: 'var(--easing-out)'
+      hover:
+        color: 'var(--color-accent-hover)'
+        text-decoration-line: 'none'
+guide_button_link:
+  label: 'Link'
+  scope: 'block_type:text'
+  axis: 'button'
+  weight: 30
+  description: 'A bare accent text link at semibold, underlined on hover: the "Read more" style. Reach for it on tertiary links and on the link that follows a card''s description.'
+  styles:
+    '::.text-block-link':
+      default:
+        color: 'var(--color-accent)'
+        font-weight: 'var(--weight-semibold)'
+        text-decoration-line: 'none'
+        transition-property: 'color'
+        transition-duration: 'var(--duration-fast)'
+        transition-timing-function: 'var(--easing-out)'
+      hover:
+        color: 'var(--color-accent-hover)'
+        text-decoration-line: 'underline'
+
+# ---------------------------------------------------------------------
+# Images: framing on the style axis. Rounded is the birth default.
+guide_image_rounded:
+  label: 'Rounded'
+  scope: 'block_type:image'
+  axis: 'style'
+  weight: 10
+  description: 'The medium radius on the image. The default every placed image wears; reach for it whenever an image sits in content. An image fills its column: its width is a share of the column, never an absolute length.'
+  styles:
+    '::.image-block-image':
+      default:
+        border-radius: 'var(--radius-md)'
+guide_image_panel:
+  label: 'Panel'
+  scope: 'block_type:image'
+  axis: 'style'
+  weight: 20
+  description: 'The large radius with the medium shadow: a featured-shot treatment. Reach for it on a hero image or a single featured photograph.'
+  styles:
+    '::.image-block-image':
+      default:
+        border-radius: 'var(--radius-lg)'
+        box-shadow: 'var(--shadow-md)'
+guide_image_plain:
+  label: 'Plain'
+  scope: 'block_type:image'
+  axis: 'style'
+  weight: 30
+  description: 'Square corners, no shadow. Reach for it on logos, icons, and full-bleed photography where a radius would read wrong.'
+  styles:
+    '::.image-block-image':
+      default:
+        border-radius: '0'
+        box-shadow: 'none'

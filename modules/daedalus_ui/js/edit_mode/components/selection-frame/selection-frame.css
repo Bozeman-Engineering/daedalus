@@ -1,0 +1,224 @@
+/**
+ * The selection frame: strokes and chips around the selection
+ * (selection-frame.js; placement and face rules in
+ * selection-frame-model.js).
+ *
+ * Everything is document-positioned (absolute in #daedalus-root,
+ * painted at documentPosition coordinates) so it scrolls with the
+ * selection on the compositor instead of trailing by a frame. Strokes
+ * never take pointer events; only the primary's chip does.
+ */
+
+.daedalus-ui-frame__stroke {
+  position: absolute;
+  z-index: 940;
+  top: 0;
+  left: 0;
+  box-sizing: border-box;
+  pointer-events: none;
+}
+
+/* Hover wears the muted selection solid, selected the full selection
+   color: state is told by COLOR, not just stroke weight. Solid, not the
+   wash; a translucent stroke disappears on busy content. */
+.daedalus-ui-frame__stroke--hover {
+  outline: 2px solid var(--daedalus-selection-muted);
+  outline-offset: 1px;
+}
+
+.daedalus-ui-frame__stroke--primary {
+  outline: 2px solid var(--daedalus-selection);
+}
+
+/* Secondary members of the multi-select set: same weight as the
+   primary so the set reads as one selection, dimmed so the primary (the
+   chipped anchor of traversal and drill) still reads as the anchor. */
+.daedalus-ui-frame__stroke--secondary {
+  opacity: 0.55;
+  outline: 2px solid var(--daedalus-selection);
+}
+
+/* The armed edit session: the dash means "the Edit tool is on this", a
+   fact of the current tool. This is the ONE dashed selection outline
+   the suite draws. */
+.daedalus-ui-frame--editing .daedalus-ui-frame__stroke--primary {
+  outline-style: dashed;
+}
+
+/**
+ * A chip's anchor: one document-positioned box per member, placed above
+ * the member's top-left corner (or below its bottom edge when there is
+ * no room above; never inside).
+ */
+.daedalus-ui-frame__anchor {
+  position: absolute;
+  z-index: 941;
+  top: 0;
+  left: 0;
+  display: flex;
+  align-items: flex-end;
+}
+
+/* Anchored to a panel row (a zero-render-seam selection): the sidebar is
+   viewport-fixed chrome, so the anchor pins to the viewport with it. */
+.daedalus-ui-frame__anchor--viewport {
+  position: fixed;
+}
+
+.daedalus-ui-frame__chip {
+  display: flex;
+  align-items: center;
+  height: 1.4rem;
+  padding: 0 2px 0 0;
+  user-select: none;
+  white-space: nowrap;
+  /* Secondary chips are read-only labels; the canvas beneath stays
+     clickable. The primary's chip carries buttons and re-enables. */
+  pointer-events: none;
+  color: var(--daedalus-selection-text);
+  border-radius: 2px 2px 0 0;
+  background: var(--daedalus-selection);
+  font-family: var(--daedalus-font);
+  font-size: var(--daedalus-font-size-caption);
+  font-weight: 500;
+  line-height: 1;
+  gap: 2px;
+}
+
+.daedalus-ui-frame__chip--primary {
+  pointer-events: auto;
+}
+
+/* The portal chip (components/portal): a HOVER chip carrying a control, so
+   it takes pointer events, and its anchor grows an invisible hit zone
+   bridging the stroke gap between the chip and the portal. The pointer
+   crossing that gap on its way to the Edit link would otherwise leave the
+   portal and hide the very chip it is reaching for. The zone hangs off the
+   side facing the portal: below the chip above it, above the chip flipped
+   below. */
+.daedalus-ui-frame__chip--portal {
+  pointer-events: auto;
+}
+
+.daedalus-ui-frame__anchor--portal::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  right: 0;
+  left: 0;
+  height: 4px;
+}
+
+.daedalus-ui-frame__anchor--below.daedalus-ui-frame__anchor--portal::after {
+  top: auto;
+  bottom: 100%;
+}
+
+.daedalus-ui-frame__anchor--below .daedalus-ui-frame__chip {
+  border-radius: 0 0 2px 2px;
+}
+
+.daedalus-ui-frame__number {
+  padding-inline-start: 0.45rem;
+  opacity: 0.75;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The name is the chip's one non-interactive part: semibold so identity
+   reads apart from the verb buttons beside it. */
+.daedalus-ui-frame__name {
+  padding: 0 0.45rem;
+  font-weight: 600;
+}
+
+.daedalus-ui-frame__number + .daedalus-ui-frame__name {
+  padding-inline-start: 0.25rem;
+}
+
+.daedalus-ui-frame__verb {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.4rem;
+  height: 1.15rem;
+  margin: 0;
+  padding: 0 0.3rem;
+  cursor: pointer;
+  text-decoration: none;
+  color: inherit;
+  border: 0;
+  border-radius: 2px;
+  background: transparent;
+  font: inherit;
+  gap: 0.25rem;
+}
+
+.daedalus-ui-frame__verb:hover,
+.daedalus-ui-frame__verb:focus-visible {
+  background: rgb(255, 255, 255, 0.22);
+}
+
+.daedalus-ui-frame__icon {
+  display: inline-flex;
+  width: 14px;
+  height: 14px;
+}
+
+.daedalus-ui-frame__icon svg {
+  width: 100%;
+  height: 100%;
+}
+
+/* The verb segment: the face buttons and the chevron as one group. */
+.daedalus-ui-frame__verbs {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+/* A verb's text label: rendered beside the icon at full density,
+   dropped at minimal and clean (chipFace's labels flag). */
+.daedalus-ui-frame__label {
+  white-space: nowrap;
+}
+
+/* A widget verb's slot (a stepper, a popover control, a small control
+   cluster): divided from the buttons so custom chrome reads as its own
+   group in the one chip. position: relative anchors a widget's popover
+   to its own entry. */
+.daedalus-ui-frame__widget {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0 0.35rem;
+  border-inline-start: 1px solid rgb(255, 255, 255, 0.4);
+}
+
+.daedalus-ui-frame__widget:empty {
+  display: none;
+}
+
+/**
+ * The mutation-failure flash rides the reverted element itself,
+ * so it points at the block that just snapped back regardless of what
+ * the frame is tracking. The class is transient; failure-report removes
+ * it after the animation.
+ */
+@keyframes daedalus-ui-mutation-failed-flash {
+  0%,
+  100% {
+    outline-color: transparent;
+  }
+  15%,
+  45%,
+  75% {
+    outline-color: var(--daedalus-ui-error-color, #e34f4f);
+  }
+}
+
+.daedalus-ui-mutation-failed {
+  animation: daedalus-ui-mutation-failed-flash 1.5s ease-in-out;
+  outline: 3px solid transparent;
+  outline-offset: -3px;
+}

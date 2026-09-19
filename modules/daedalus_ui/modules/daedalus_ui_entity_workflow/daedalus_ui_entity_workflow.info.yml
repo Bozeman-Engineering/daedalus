@@ -1,0 +1,7 @@
+name: 'Daedalus UI Entity Workflow'
+type: module
+description: 'Deprecated. This functionality has been moved into the main module so Daedalus UI Entity Workflow will be deleted soon.'
+package: Daedalus
+core_version_requirement: '>=11.3 <11.5'
+dependencies:
+  - daedalus:daedalus_ui

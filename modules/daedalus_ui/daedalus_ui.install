@@ -1,0 +1,102 @@
+<?php
+
+/**
+ * @file
+ * Install, update and uninstall functions for the daedalus_ui module.
+ */
+
+use Drupal\Core\Field\BaseFieldDefinition;
+use Drupal\user\Entity\Role;
+use Drupal\user\Entity\User;
+
+/**
+ * Seeds an empty daedalus_ui_settings value on every user.
+ */
+function _np_ensure_settings_not_null() {
+  $users = User::loadMultiple();
+  foreach ($users as $user) {
+    $user->daedalus_ui_settings->setValue([]);
+    $user->save();
+  }
+}
+
+/**
+ * Implements hook_install().
+ */
+function daedalus_ui_install($is_syncing) {
+  _daedalus_ui_add_settings_field();
+  _np_ensure_settings_not_null();
+}
+
+/**
+ * Implements hook_update_N().
+ */
+function daedalus_ui_update_10000(&$sandbox) {
+  _daedalus_ui_add_settings_field();
+}
+
+/**
+ * Ensure daedalus_ui_settings is not null.
+ */
+function daedalus_ui_update_10400(&$sandbox) {
+  _np_ensure_settings_not_null();
+}
+
+/**
+ * Installs the daedalus_ui_settings base field on the user entity.
+ */
+function _daedalus_ui_add_settings_field() {
+  $definition_update_manager = \Drupal::entityDefinitionUpdateManager();
+
+  if ($definition_update_manager->getFieldStorageDefinition('daedalus_ui_settings', 'user')) {
+    return;
+  }
+
+  $field_storage_definition = BaseFieldDefinition::create('map')
+    ->setLabel(t('Daedalus UI Settings'))
+    ->setDescription(t('Settings for Daedalus UI Edit Mode.'));
+
+  $definition_update_manager->installFieldStorageDefinition('daedalus_ui_settings', 'user', 'daedalus_ui', $field_storage_definition);
+}
+
+/**
+ * Implements hook_update_N().
+ */
+function daedalus_ui_update_10001(&$sandbox) {
+  _daedalus_ui_add_settings_field();
+}
+
+/**
+ * Rename the toolbar_plus-era permissions to their daedalus ui names.
+ */
+function daedalus_ui_update_10401(&$sandbox) {
+  $renames = [
+    'use toolbar plus edit mode' => 'use daedalus ui edit mode',
+    'configure toolbar plus modes' => 'configure daedalus ui modes',
+  ];
+  foreach (Role::loadMultiple() as $role) {
+    $changed = FALSE;
+    foreach ($renames as $old => $new) {
+      if ($role->hasPermission($old)) {
+        $role->revokePermission($old);
+        $role->grantPermission($new);
+        $changed = TRUE;
+      }
+    }
+    if ($changed) {
+      $role->save();
+    }
+  }
+}
+
+/**
+ * Revoke the removed 'view full page structure' permission from every role.
+ */
+function daedalus_ui_update_10402(&$sandbox) {
+  foreach (Role::loadMultiple() as $role) {
+    if ($role->hasPermission('view full page structure')) {
+      $role->revokePermission('view full page structure');
+      $role->save();
+    }
+  }
+}

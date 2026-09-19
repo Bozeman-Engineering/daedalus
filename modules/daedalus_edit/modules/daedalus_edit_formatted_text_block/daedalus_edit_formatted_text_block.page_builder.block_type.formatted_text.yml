@@ -1,0 +1,35 @@
+# The formatted text block IS one composed element: `composed: true`
+# declares its render as the ONE root element this file's markup model
+# describes, with no block sandwich at all — and makes the model
+# GENERATIVE: daedalus_ui's shared composed_block element renders the
+# root and prints the hoisted attributes on it. No template exists; this
+# module feeds only the filtered content and the CKEditor binding
+# (FormattedTextComposedContent).
+composed: true
+
+# The markup model: one plain div root; the rich text value mounts inside
+# it (children no part claims mount at the element root).
+tag: div
+
+# Styling (Daedalus Stylish's sections in this same declaration): because the block
+# is collapsed markup, the style target is the root itself and there is no
+# template SHELL to declare. The control below binds by OMITTING its
+# element key, which binds the block root: writes land on the block's plain
+# selectable key (":scope" in the printed CSS), and the panel grows zero
+# new rows because the root's row is the block itself.
+#
+# Guide validation covers root bindings against the block's EFFECTIVE
+# property groups: the universal block kind in daedalus_edit.page_builder.yml
+# carries typography (owns text-align, the widget's only property), so this
+# binding is sanctioned without declaring anything extra here.
+controls:
+  text_alignment:
+    label: 'Alignment'
+    widget: text_alignment
+
+# No instance parts here: the minted identity classes resolve through the
+# spine's `instances:` declaration (daedalus_edit.page_builder.yml), which
+# covers every owner shape through one resolution rule — this composed
+# block's carriers mount on its OWN markup, so they style at
+# `block:{uuid}::.s-x` and resolve to that site namespace without this
+# bundle declaring anything.

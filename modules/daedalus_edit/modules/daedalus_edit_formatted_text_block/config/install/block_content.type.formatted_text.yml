@@ -1,0 +1,15 @@
+langcode: en
+status: true
+dependencies:
+  module:
+    - daedalus_layout
+    - daedalus_ui
+third_party_settings:
+  daedalus_layout:
+    icon: /modules/contrib/daedalus/modules/daedalus_edit/modules/daedalus_edit_formatted_text_block/assets/formatted-text.svg
+  daedalus_ui:
+    presentation: merged
+id: formatted_text
+label: 'Formatted text'
+revision: false
+description: 'Rich text rendered through a text format.'

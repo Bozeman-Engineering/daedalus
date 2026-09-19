@@ -1,0 +1,6 @@
+name: 'Daedalus Stylish media guide test'
+type: module
+description: 'Declares an image_style constraint on a media-capable property for testing.'
+package: Testing
+core_version_requirement: '*'
+hidden: true

@@ -1,0 +1,131 @@
+daedalus_ui.settings:
+  path: '/admin/config/content/daedalus'
+  defaults:
+    _title: 'Daedalus Settings'
+    _form: 'Drupal\daedalus_ui\Form\SettingsForm'
+  requirements:
+    _permission: 'administer Daedalus UI configuration'
+
+daedalus_ui.load_editable_page:
+  path: '/daedalus-ui/load-editable-page/{entity_type}/{entity}/{view_mode}'
+  defaults:
+    _title: 'Load Editable Page'
+    _controller: '\Drupal\daedalus_ui\Controller\LoadEditablePage'
+  options:
+    parameters:
+      entity:
+        type: entity:{entity_type}
+  requirements:
+    _permission: 'use daedalus ui edit mode'
+
+daedalus_ui.mode.enable:
+  path: '/daedalus-ui/mode/enable/{plugin_id}/{entity_type_id}/{entity_bundle_id}'
+  defaults:
+    _controller: '\Drupal\daedalus_ui\Controller\ModeController::enable'
+  requirements:
+    _permission: 'configure daedalus ui modes'
+
+daedalus_ui.mode.disable:
+  path: '/daedalus-ui/mode/disable/{plugin_id}/{entity_type_id}/{entity_bundle_id}'
+  defaults:
+    _controller: '\Drupal\daedalus_ui\Controller\ModeController::disable'
+  requirements:
+    _permission: 'configure daedalus ui modes'
+
+daedalus_ui.mode.configure:
+  path: '/daedalus-ui/mode/configure/{plugin_id}/{entity_type_id}/{entity_bundle_id}'
+  defaults:
+    _form: '\Drupal\daedalus_ui\Form\ModeConfigureForm'
+  requirements:
+    _permission: 'configure daedalus ui modes'
+
+daedalus_ui.settings.save_user_hotkey:
+  path: '/daedalus-ui/save-user-hotkey/{tool_id}/{hotkey}'
+  defaults:
+    _title: 'Save User Hotkey'
+    _controller: '\Drupal\daedalus_ui\Controller\Settings::saveHotkey'
+  requirements:
+    _permission: 'use daedalus ui edit mode'
+    tool_id: '[a-z0-9_.]+'
+    hotkey: '[a-z0-9+]+'
+
+daedalus_ui.settings.remove_media_file_association:
+  path: '/daedalus-ui/remove-media-file-association/{file_extension}'
+  defaults:
+    _title: 'Remove media file association'
+    _controller: '\Drupal\daedalus_ui\Controller\Settings::removeMediaFileAssociation'
+  requirements:
+    _permission: 'use daedalus ui edit mode'
+
+# Scalar values ride the {value} path segment; structured values (lists,
+# maps) cannot fit a path segment, so they arrive as an application/json
+# POST body with {value} omitted. One route, one controller, one
+# EditorSettings write path for both shapes.
+daedalus_ui.settings.save_setting:
+  path: '/daedalus-ui/setting/{namespace}/{key}/{value}'
+  defaults:
+    _title: 'Save editor setting'
+    _controller: '\Drupal\daedalus_ui\Controller\Settings::saveSetting'
+    value: ''
+  requirements:
+    _permission: 'use daedalus ui edit mode'
+    namespace: '[a-z0-9_]+'
+    key: '[a-z0-9_]+'
+    value: '[A-Za-z0-9_.-]*'
+
+daedalus_ui.replace_media:
+  path: '/daedalus-ui/replace-media/{entity_type}/{entity}/{view_mode}/{media_reference}/{media_bundle}'
+  defaults:
+    _title: 'Media upload'
+    _controller: '\Drupal\daedalus_ui\Controller\MediaUpload::replaceMedia'
+  requirements:
+    _entity_access: entity.update
+  options:
+    parameters:
+      entity:
+        type: entity:{entity_type}
+
+daedalus_ui.new_media:
+  path: '/daedalus-ui/new-media/{entity_type}/{entity}/{view_mode}'
+  defaults:
+    _title: 'Media upload'
+    _controller: '\Drupal\daedalus_ui\Controller\MediaUpload::newMedia'
+  requirements:
+    _entity_access: entity.update
+  options:
+    parameters:
+      entity:
+        type: entity:{entity_type}
+
+# The responsive preview pop-out: a device-sized iframe shell. The window
+# renders no entity data of its own (the iframe loads the edited page's own
+# URL, where entity access applies as always), so the edit-mode permission
+# is the only gate it needs.
+daedalus_ui.responsive_preview:
+  path: '/daedalus-ui/responsive-preview'
+  defaults:
+    _title: 'Responsive preview'
+    _controller: '\Drupal\daedalus_ui\Controller\ResponsivePreview::build'
+  requirements:
+    _permission: 'use daedalus ui edit mode'
+  options:
+    _daedalus_ui.popout: true
+
+# The standalone editing surface for a block_content entity whose display is
+# managed by Layout Builder (e.g. a footer placed in a theme region). The
+# canvas is the entity view itself, the same shape as node editing: param
+# conversion applies (tempstore hydration, so staging and preview work),
+# access gates on the content entity, and mutation-response markup matches
+# the page shape. The bare-label title is the inline label editing target.
+daedalus_ui.block_content.edit:
+  path: '/block-content/{block_content}/{view_mode}'
+  defaults:
+    _controller: '\Drupal\daedalus_ui\Controller\BlockContentEdit::render'
+    _title_callback: '\Drupal\daedalus_ui\Controller\BlockContentEdit::title'
+    view_mode: 'full'
+  requirements:
+    _entity_access: block_content.update
+  options:
+    parameters:
+      block_content:
+        type: entity:block_content

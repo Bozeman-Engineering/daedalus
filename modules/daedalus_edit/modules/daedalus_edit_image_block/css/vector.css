@@ -1,0 +1,19 @@
+/**
+ * The vector lane's modeled svg picture: hit-testing only.
+ *
+ * The one selector covers both link states: unlinked the svg IS the root
+ * (the hoisted part class rides it), linked it nests in the anchor with
+ * the class stamped literally. pointer-events: all makes the whole box
+ * hit-testable like an img: selection, drag, and a linked block's anchor
+ * hit area would otherwise register only on painted shapes. It is a
+ * mechanic, not a box fact, which is why it stays here: the svg's box
+ * itself (a block box, like the raster img's) is a declared default on
+ * the block type declaration, delivered by the compiled defaults
+ * stylesheet where Daedalus Stylish's layers lens can show it. The inliner
+ * guarantees an intrinsic size (width/height from the file, or derived
+ * from its viewBox), so geometry tracking never measures the element 0x0
+ * and treats it as hidden.
+ */
+svg.image-block-image {
+  pointer-events: all;
+}

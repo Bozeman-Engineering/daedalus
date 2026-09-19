@@ -1,0 +1,42 @@
+# The Guide Example motion material: keyframes as data, delivered as
+# @keyframes motion-{machine_name}. Each is paired with an
+# animation-axis variant in daedalus_stylish_guide_example.daedalus_stylish.variants.yml
+# so basic mode can wear it; the timing (duration, easing) lives on the
+# wearer, on the guide's scales, never in the steps: steps validate
+# against the site's constraint defaults too, and a literal easing in a
+# step is refused once animation-timing-function is bound to the easing
+# scale. Members of guide_example (the module default), synced when the
+# system is activated and by `drush daedalus_stylish:sync daedalus_stylish_guide_example`.
+guide_slide_in:
+  label: 'Slide in'
+  description: 'Fade in while sliding 1rem in from the left, easing out. Reach for it on bands and stacked items whose content reads left to right.'
+  steps:
+    from:
+      opacity: '0'
+      transform: 'translateX(-1rem)'
+    to:
+      opacity: '1'
+      transform: 'none'
+guide_pop:
+  label: 'Pop'
+  description: 'Fade in while springing from 90% through a 2% overshoot to full size. Reach for it on one badge, stat, or button per band that should catch the eye; pair it with the spring easing.'
+  steps:
+    '0%':
+      opacity: '0'
+      transform: 'scale(0.9)'
+    '70%':
+      opacity: '1'
+      transform: 'scale(1.02)'
+    '100%':
+      opacity: '1'
+      transform: 'none'
+guide_float:
+  label: 'Float'
+  description: 'Drift up 4px and back, slowly, forever: a resting breath. Reach for it with an infinite iteration count and the in-out easing on a single decorative image or icon; never on text.'
+  steps:
+    '0%':
+      transform: 'translateY(0)'
+    '50%':
+      transform: 'translateY(-4px)'
+    '100%':
+      transform: 'translateY(0)'

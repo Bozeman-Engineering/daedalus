@@ -1,0 +1,6 @@
+name: 'Daedalus Stylish declared defaults test theme'
+type: theme
+description: 'Restates one property of a module-declared default: the theme owns the markup model.'
+core_version_requirement: '*'
+base theme: false
+hidden: true

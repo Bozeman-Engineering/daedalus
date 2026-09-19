@@ -1,0 +1,5 @@
+# The swatch the shipped variant references as var(--swatch-sync_test_accent).
+sync_test_accent:
+  label: 'Sync test accent'
+  kind: color
+  value: '#e94560'

@@ -1,0 +1,197 @@
+.daedalus-ui-tree,
+.daedalus-ui-tree__children {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* The row's radius, type size, and line-height come from the shared
+   disclosure grammar (panel-controls.css), which names .daedalus-ui-tree__row as
+   a carrier. Here: the tree-only structure and behavior. */
+.daedalus-ui-tree__row {
+  display: flex;
+  overflow: hidden;
+  align-items: center;
+  padding-inline-end: 0.5rem;
+  cursor: pointer;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  gap: 0.25rem;
+}
+
+.daedalus-ui-tree__row--hovered {
+  background-color: var(--daedalus-selection-background);
+}
+
+.daedalus-ui-tree__row--selected {
+  background-color: var(--daedalus-selection-background);
+}
+
+.daedalus-ui-tree__row--selected > .daedalus-ui-tree__label {
+  color: var(--daedalus-selection);
+  font-weight: 600;
+}
+
+/**
+ * The PRIMARY of the multi-select set: every member row highlights
+ * via --selected; the primary additionally carries the inset ring so it
+ * reads as the anchor, mirroring the canvas outline's primary/secondary
+ * split.
+ */
+.daedalus-ui-tree__row--primary {
+  border: 1px solid var(--daedalus-selection);
+}
+
+.daedalus-ui-tree__row--unselectable {
+  cursor: default;
+  color: var(--daedalus-text-muted);
+}
+
+/**
+ * A row mark (app.tree.setRowMarks): another module's coverage outline in
+ * the shared focus treatment — the same wash-plus-stripe carrier the
+ * focused wear-bar row wears, so "outlined" reads as one treatment on the
+ * canvas and in this tree.
+ */
+.daedalus-ui-tree__row--marked {
+  background-color: var(--daedalus-focus-background);
+  box-shadow: inset 2px 0 0 var(--daedalus-focus);
+}
+
+/**
+ * Rows are REAL focusable treeitems: keyboard traversal moves DOM
+ * focus row to row while the panel holds it, so the focus ring must be
+ * visible against the selection highlight it usually coincides with.
+ */
+.daedalus-ui-tree__row:focus-visible {
+  outline: 2px solid var(--daedalus-selection);
+  outline-offset: -2px;
+}
+
+/* The disclosure button. The triangle inside it
+   (.daedalus-ui-tree__disclosure-marker, an inner span) and its open rotation are
+   the shared disclosure grammar's (panel-controls.css). Centered in the
+   1rem hit target, the button's trailing quarter plus the row's 0.25rem
+   flex gap add up to the disclosure-gap distance — keep that sum in
+   step with the token. */
+.daedalus-ui-tree__disclosure {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 1rem;
+  padding: 0;
+  cursor: pointer;
+  border: 0;
+  background: none;
+}
+
+/* Rows without children keep their labels aligned with sibling rows. */
+.daedalus-ui-tree__row > .daedalus-ui-tree__label:first-child {
+  margin-inline-start: 1.25rem;
+}
+
+/* The root row has no disclosure and no siblings to align with: its label
+   anchors the tree at the panel's left edge. */
+.daedalus-ui-tree__row--root > .daedalus-ui-tree__label:first-child {
+  margin-inline-start: 0;
+}
+
+.daedalus-ui-tree__label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* The inline rename input (sections): sized like the label it replaces so
+   the row doesn't jump while editing. */
+.daedalus-ui-tree__rename {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 0 2px;
+  color: inherit;
+  border: 1px solid var(--daedalus-border, #8888);
+  border-radius: 2px;
+  background: var(--daedalus-bg, transparent);
+  font: inherit;
+}
+
+/* A provider's secondary identity for a model row (view-registry.js
+   sublabel) — e.g. the markup class a field row's element wears in the
+   markup view. Muted and smaller, yielding to the label when space runs
+   out. */
+.daedalus-ui-tree__sublabel {
+  overflow: hidden;
+  flex: 0 1 auto;
+  text-overflow: ellipsis;
+  color: var(--daedalus-text-muted);
+  font-size: var(--daedalus-font-size-caption);
+}
+
+/* The markup view's tag chip: the element tag a row rendered as (`<img>`,
+   `<a>`, `<div>`), resolved from the markup annotation with the declared
+   tag as the degrade path. Dim monospace, upright even on italic part
+   rows, and never truncated: the chip is short and carries the row's
+   markup story (a linked image reads "Image <a>" over "Image <img>"). */
+.daedalus-ui-tree__tag {
+  flex: 0 0 auto;
+  opacity: 0.8;
+  color: var(--daedalus-text-muted);
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: var(--daedalus-font-size-caption);
+  font-style: normal;
+}
+
+.daedalus-ui-tree__row--section > .daedalus-ui-tree__label,
+.daedalus-ui-tree__row--entity > .daedalus-ui-tree__label {
+  font-weight: 600;
+}
+
+.daedalus-ui-tree__row--field > .daedalus-ui-tree__label,
+.daedalus-ui-tree__row--region > .daedalus-ui-tree__label {
+  color: var(--daedalus-text-muted);
+}
+
+/* Part rows: pseudo-selection entries a provider contributed — no verb
+   menu, visually apart from model rows. No margin of their own: part rows
+   fold now, so the generic :first-child rule aligns leaf rows and the
+   disclosure button occupies the column otherwise. */
+.daedalus-ui-tree__row--part > .daedalus-ui-tree__label {
+  color: var(--daedalus-text-muted);
+  font-style: italic;
+}
+
+/* The provider says canvas markup under the pointer matches this part. */
+.daedalus-ui-tree__row--part-hot {
+  border-color: var(--daedalus-selection);
+  background-color: var(--daedalus-selection-background);
+}
+
+/* The provider's current drill target (inspector breadcrumb). */
+.daedalus-ui-tree__row--part-active {
+  background-color: rgb(0, 113, 227, 0.22);
+}
+
+.daedalus-ui-tree__row--part-active > .daedalus-ui-tree__label {
+  color: var(--daedalus-selection);
+  font-weight: 600;
+}
+
+/* The title's header anatomy comes from the shared .daedalus-ui-panel__header
+   recipe in sidebar.css; the Show kebab sits in the header's action
+   cluster (the #page-elements-show-menu slot, show-menu.js) and rides the
+   kit icon button (transparent ground, hover wash, focus ring). Only the
+   1.75rem hit box and the glyph size are local, keyed at two-class
+   specificity so they win over the kit by specificity, not load order. */
+.daedalus-ui-icon-button.daedalus-ui-show-menu__button {
+  padding: 0;
+  font-size: var(--daedalus-icon-size-large);
+  line-height: 1;
+  inline-size: 1.75rem;
+  block-size: 1.75rem;
+}
+
+/* The kebab's menu is the shared menu primitive (daedalus_ui/menu),
+   anchored to the button; while it is open the kebab keeps the hover wash. */
+.daedalus-ui-icon-button.daedalus-ui-show-menu__button[aria-expanded="true"] {
+  background-color: var(--daedalus-selection-background);
+}

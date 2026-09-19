@@ -1,0 +1,6 @@
+name: 'Daedalus UI declarations test invalid'
+type: module
+description: 'Declares every page builder grammar violation for testing.'
+package: Testing
+core_version_requirement: '*'
+hidden: true

@@ -1,0 +1,5 @@
+label: 'Aurora voice'
+description: 'TRIGGER when: writing copy on an aurora site. The brand voice of the aurora design system.'
+type: default
+instructions: |
+  Write in the aurora voice: cool, brief, luminous.

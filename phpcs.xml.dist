@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ruleset name="daedalus">
+  <description>PHP CodeSniffer configuration for Daedalus.</description>
+  <file>.</file>
+
+  <arg name="extensions" value="php,module,install,inc,test,profile,theme,css,info,txt,md,yml"/>
+  <arg name="colors"/>
+  <arg value="sp"/>
+
+  <rule ref="Drupal"/>
+  <rule ref="DrupalPractice"/>
+
+  <!-- Ignore third-party code and the webpack bundles. -->
+  <exclude-pattern>vendor/</exclude-pattern>
+  <exclude-pattern>node_modules/</exclude-pattern>
+  <exclude-pattern>modules/daedalus_stylish/js/dist/</exclude-pattern>
+  <exclude-pattern>modules/daedalus_ui/js/edit_mode/dist/</exclude-pattern>
+</ruleset>

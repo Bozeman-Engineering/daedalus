@@ -1,0 +1,3 @@
+block_types:
+  formatted_text:
+    guidance: 'Rich text rendered through a text format: multi-paragraph prose, lists, emphasis, and inline links. The default body-copy block; use it wherever a section carries more than a single line of text. The body is field_formatted_text_text, rendered through one of the text formats the field schema lists. For headings and single-line copy use the text block instead.'

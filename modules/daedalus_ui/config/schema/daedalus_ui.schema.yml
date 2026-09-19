@@ -1,0 +1,66 @@
+daedalus_ui.settings:
+  type: config_object
+  label: 'Daedalus UI settings'
+  mapping:
+    colors:
+      type: sequence
+      label: 'Colors'
+      sequence:
+        type: string
+        label: 'Color'
+
+node.type.*.third_party.daedalus_ui:
+  type: daedalus_ui.bundle.options
+  label: 'Daedalus UI Mode plugin configuration'
+block_content.type.*.third_party.daedalus_ui:
+  type: daedalus_ui.bundle.options
+  label: 'Daedalus UI Mode plugin configuration'
+field.field.*.*.*.third_party.daedalus_ui:
+  type: mapping
+  label: 'Daedalus UI field presentation'
+  mapping:
+    presentation:
+      type: string
+      label: 'Presentation (unit / open) — overrides the field-type default'
+daedalus_ui.bundle.options:
+  type: mapping
+  label: 'Daedalus UI Options'
+  mapping:
+    initial_mode:
+      type: string
+      label: 'Initial mode'
+    presentation:
+      type: string
+      label: 'Presentation (auto / unit / open / merged) — how the page builder presents blocks of this type'
+    status:
+      type: sequence
+      label: 'Enabled modes'
+      orderby: key
+      sequence:
+        type: boolean
+        label: 'Mode status'
+    modes:
+      type: sequence
+      label: 'Mode configurations'
+      orderby: key
+      sequence:
+        type: daedalus_ui.mode.[%key]
+        label: 'Mode configuration'
+daedalus_ui.mode.plugin:
+  type: mapping
+  label: 'Mode'
+  mapping:
+    id:
+      type: string
+      label: 'ID'
+      constraints:
+        PluginExists:
+          manager: plugin.manager.modes
+          interface: '\Drupal\daedalus_ui\ModeInterface'
+daedalus_ui.mode.edit:
+  type: daedalus_ui.mode.plugin
+  label: 'Edit Mode'
+  mapping:
+    default_tool:
+      type: string
+      label: 'Default tool'

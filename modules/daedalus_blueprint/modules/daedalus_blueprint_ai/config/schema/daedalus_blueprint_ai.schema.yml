@@ -1,0 +1,22 @@
+daedalus_blueprint_ai.settings:
+  type: config_object
+  label: 'Daedalus Blueprint AI settings'
+  mapping:
+    hidden_entity_types:
+      type: sequence
+      label: 'Hidden entity types'
+      sequence:
+        type: string
+        label: 'Entity type ID'
+    hidden_bundles:
+      # A sequence, not a mapping: the keys are arbitrary entity type IDs,
+      # which config schema mappings cannot express ('*' mapping keys are
+      # not a schema construct and left every entry schema-less).
+      type: sequence
+      label: 'Hidden bundles'
+      sequence:
+        type: sequence
+        label: 'Bundles to hide for this entity type'
+        sequence:
+          type: string
+          label: 'Bundle ID'

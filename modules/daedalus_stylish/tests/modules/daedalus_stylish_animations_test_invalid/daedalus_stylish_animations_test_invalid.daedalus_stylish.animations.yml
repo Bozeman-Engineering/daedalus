@@ -1,0 +1,9 @@
+# An animation whose step re-times the animation running it: spine
+# validation (StyleMapValidator::validateAnimationSteps through the
+# animation steps field handler) must fail the import loudly.
+broken:
+  label: 'Broken'
+  steps:
+    '0%':
+      opacity: '0'
+      animation-duration: '1s'

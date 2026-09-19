@@ -1,0 +1,7 @@
+label: 'Create Entity'
+description: 'TRIGGER when: about to create a new page or any other entity. Discovers available entity types and bundles, and provides the creation workflow; its checklist names the skills a page needs, so load it first.'
+type: create_entity
+instructions: |
+  General principles:
+  - Match the structure to the entity type's purpose.
+  - Prefer concrete, specific content over generic placeholder text.

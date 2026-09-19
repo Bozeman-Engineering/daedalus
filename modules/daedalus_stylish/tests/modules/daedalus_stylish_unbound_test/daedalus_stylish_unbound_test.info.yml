@@ -1,0 +1,6 @@
+name: 'Daedalus Stylish unbound site test'
+type: module
+description: 'Withdraws the suite''s dimension and type bindings so a kernel class can write literals under law.'
+package: Testing
+core_version_requirement: '*'
+hidden: true

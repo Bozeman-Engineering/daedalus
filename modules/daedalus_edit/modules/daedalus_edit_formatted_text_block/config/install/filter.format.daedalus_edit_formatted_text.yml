@@ -1,0 +1,16 @@
+langcode: en
+status: true
+dependencies: {  }
+name: 'Formatted text'
+format: daedalus_edit_formatted_text
+weight: 0
+filters:
+  filter_html:
+    id: filter_html
+    provider: filter
+    status: true
+    weight: -10
+    settings:
+      allowed_html: '<br> <p class> <h2 id class> <h3 id class> <h4 id class> <h5 id> <h6 id> <cite> <dl> <dt> <dd> <a hreflang href> <blockquote cite class> <ul type class> <ol start type class> <strong> <em> <code> <li class> <table> <caption> <thead> <tbody> <tfoot> <tr> <th rowspan colspan> <td rowspan colspan> <hr>'
+      filter_html_help: false
+      filter_html_nofollow: false

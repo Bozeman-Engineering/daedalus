@@ -1,0 +1,17 @@
+# A layout refinement: a multi-form root swapping on depth (the one-box
+# container's section/div swap) plus a genuinely NAMED slot part. The
+# slot's tag is distinct on purpose: an unconditional div part would
+# coincide with the residual div root form at nested depth and hoist
+# (the coincidence rule reads "same present condition, same tag"), which
+# is why generic wrapper parts have no place under a multi-form root.
+root:
+  forms:
+    - tag: section
+      present:
+        depth: root
+    - tag: div
+elements:
+  '.layout__aside':
+    label: 'Aside'
+    tag: aside
+    contains: 'region:aside'

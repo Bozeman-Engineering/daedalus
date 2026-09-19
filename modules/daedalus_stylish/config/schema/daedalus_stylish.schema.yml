@@ -1,0 +1,77 @@
+daedalus_stylish.settings:
+  type: config_object
+  label: 'Daedalus Stylish settings'
+  mapping:
+    ai_minting:
+      type: boolean
+      label: 'Whether AI may mint new palette swatches and animations through the blueprint create lane. Its own governance axis, never derived from how the active design system enforces its law: humans stay governed by the "create swatches" / "create animations" permissions, disk-shipped materials by the importers. Only an explicit false closes the gate (fail-open for sites predating the key).'
+    container_roots:
+      type: boolean
+      label: 'Emit the page-level width-band query container rule (container-type: inline-size on the page canvas) wherever container breakpoint conditions are styled (turn off when the theme manages its own query container)'
+    media_image_style:
+      type: string
+      label: 'Image style media referenced from style values resolves through when no style guide constraint names one; empty serves the original file'
+    opt_outs:
+      type: sequence
+      label: 'Bundles ("entity_type_id.bundle") that deliberately opted out of styling; auto-enablement never re-defaults these'
+      sequence:
+        type: string
+        label: 'Bundle key'
+    breakpoints:
+      type: mapping
+      label: 'Condition breakpoint thresholds, in px'
+      mapping:
+        narrow:
+          type: integer
+          label: 'Container width at or below which "narrow" styles apply'
+        medium:
+          type: integer
+          label: 'Container width at or below which "medium" styles apply; the band starts at narrow + 1, so the bands tile exactly'
+
+field.storage_settings.daedalus_stylish_style_map:
+  type: mapping
+  label: 'Style map storage settings'
+
+field.field_settings.daedalus_stylish_style_map:
+  type: mapping
+  label: 'Style map settings'
+
+field.value.daedalus_stylish_style_map:
+  type: mapping
+  label: 'Default value'
+  mapping:
+    value:
+      type: string
+      label: 'Style map JSON'
+
+field.storage_settings.daedalus_skin_tokens:
+  type: mapping
+  label: 'Skin tokens storage settings'
+
+field.field_settings.daedalus_skin_tokens:
+  type: mapping
+  label: 'Skin tokens settings'
+
+field.value.daedalus_skin_tokens:
+  type: mapping
+  label: 'Default value'
+  mapping:
+    value:
+      type: string
+      label: 'Skin tokens JSON'
+
+field.storage_settings.daedalus_variant_styles:
+  type: mapping
+  label: 'Variant styles storage settings'
+
+field.field_settings.daedalus_variant_styles:
+  type: mapping
+  label: 'Variant styles settings'
+
+field.value.daedalus_variant_styles:
+  type: mapping
+  label: 'Default value'
+  mapping:
+    value:
+      type: string
+      label: 'Variant styles JSON'

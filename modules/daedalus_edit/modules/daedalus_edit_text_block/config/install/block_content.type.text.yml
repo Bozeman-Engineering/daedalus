@@ -1,0 +1,15 @@
+langcode: en
+status: true
+dependencies:
+  module:
+    - daedalus_layout
+    - daedalus_ui
+third_party_settings:
+  daedalus_layout:
+    icon: /modules/contrib/daedalus/modules/daedalus_edit/modules/daedalus_edit_text_block/assets/text.svg
+  daedalus_ui:
+    presentation: merged
+id: text
+label: Text
+revision: false
+description: 'A simple unformatted string.'

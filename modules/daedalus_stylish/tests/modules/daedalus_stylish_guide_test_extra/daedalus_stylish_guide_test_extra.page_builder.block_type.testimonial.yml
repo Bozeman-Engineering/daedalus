@@ -1,0 +1,6 @@
+property_groups:
+  typography:
+    constraints:
+      font-family:
+        allowed:
+          - 'Arial'

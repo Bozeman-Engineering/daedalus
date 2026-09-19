@@ -1,0 +1,13 @@
+# The variant wearing all three of this module's other shipped
+# materials. On a strict site each reference must name a published
+# material, so this variant lands only after the animation, the swatch,
+# and the skin did: the orchestrator's order, and the proof of it.
+sync_test_band:
+  label: 'Sync test band'
+  scope: 'kind:container'
+  styles:
+    '':
+      default:
+        padding: 'var(--space-gutter)'
+        background-color: 'var(--swatch-sync_test_accent)'
+        animation-name: 'motion-sync_test_fade'

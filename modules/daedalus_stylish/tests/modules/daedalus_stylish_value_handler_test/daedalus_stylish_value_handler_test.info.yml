@@ -1,0 +1,8 @@
+name: 'Daedalus Stylish value handler test'
+type: module
+description: 'Registers a test style-value handler on the input-tier seam.'
+package: Testing
+core_version_requirement: '*'
+hidden: true
+dependencies:
+  - daedalus:daedalus_stylish

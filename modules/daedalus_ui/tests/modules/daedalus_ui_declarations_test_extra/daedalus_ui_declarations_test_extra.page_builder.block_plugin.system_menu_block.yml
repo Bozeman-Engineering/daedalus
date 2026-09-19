@@ -1,0 +1,6 @@
+elements:
+  '.menu':
+    elements:
+      '.menu-item':
+        # Deep map merge: the relabel lands, the base tree survives.
+        label: 'Menu link'

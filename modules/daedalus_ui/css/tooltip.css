@@ -1,0 +1,59 @@
+/* The chrome's tooltip pattern: an inverse pill — the text and background
+   tokens swapped, so it flips with the scheme. One look, two placements:
+   the floating variant is positioned by the tooltip engine (js/tooltip.js,
+   any [data-daedalus-ui-tooltip] trigger), and the anchored variant hangs under an
+   .daedalus-ui-tooltip-host wrapper with no JS at all (panel clusters, preact
+   chrome that owns its markup — e.g. daedalus_stylish's IconButton, which also
+   forces it visible for transient gesture feedback like "Styles
+   copied."). */
+.daedalus-ui-tooltip {
+  z-index: 10;
+  display: none;
+  padding: 0.375rem 0.75rem;
+  white-space: nowrap;
+  pointer-events: none;
+  color: var(--daedalus-background);
+  border-radius: var(--daedalus-border-radius);
+  background: var(--daedalus-text);
+  font-family: var(--daedalus-font);
+  font-size: var(--daedalus-font-size-small);
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+/* The engine's singleton: viewport-positioned (top/left inline styles),
+   above the top bar and rails (their z-index is 1261). */
+.daedalus-ui-tooltip--floating {
+  position: fixed;
+  z-index: 1300;
+}
+
+.daedalus-ui-tooltip--floating.daedalus-ui-tooltip--visible {
+  display: block;
+}
+
+/* The anchored pattern. The host: any control growing a tooltip wears
+   this wrapper (position anchor + atomic inline box). */
+.daedalus-ui-tooltip-host {
+  position: relative;
+  display: inline-flex;
+}
+
+/* Right-aligned because panel clusters hug the rail's edge, where a
+   centered pill would clip. */
+.daedalus-ui-tooltip-host .daedalus-ui-tooltip {
+  position: absolute;
+  top: calc(100% + 0.375rem);
+  right: 0;
+}
+
+/* Keyboard focus shows the tooltip like hover does, but via
+   :focus-visible, not :focus-within: a mouse click leaves the control
+   focused, and plain focus would pin the tooltip to the screen after the
+   pointer moved on. --show forces it during transient gesture feedback
+   ("Styles copied."). */
+.daedalus-ui-tooltip-host:hover .daedalus-ui-tooltip,
+.daedalus-ui-tooltip-host:has(:focus-visible) .daedalus-ui-tooltip,
+.daedalus-ui-tooltip-host--show .daedalus-ui-tooltip {
+  display: block;
+}

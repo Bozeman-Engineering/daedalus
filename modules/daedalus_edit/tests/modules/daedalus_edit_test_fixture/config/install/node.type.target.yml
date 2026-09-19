@@ -1,0 +1,10 @@
+langcode: en
+status: true
+dependencies: {  }
+name: Target
+type: target
+description: 'A plain reference target that cannot self-reference: it carries no reference fields at all (the teaser-block lesson).'
+help: null
+new_revision: false
+preview_mode: 1
+display_submitted: false

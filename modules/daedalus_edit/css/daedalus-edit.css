@@ -1,0 +1,108 @@
+/* Form-swap hidden wrappers: out of flow so a revealed widget renders in
+   place without reflowing its hidden siblings. They position against the
+   rail's fixed sidebar WRAPPER (the panels are deliberately unpositioned,
+   see daedalus_ui css/sidebar.css), which also means they escape the
+   panel body's scroll clip and float over the panel chrome near the
+   header. Visibility alone proved leaky there: a site theme's cascade can
+   re-show a descendant (the floating clipped "Title" wrapper), so the pin
+   and the clip make a hidden wrapper unpaintable regardless — clip-path
+   clips every descendant even if something restores its visibility (and
+   removes it from hit testing), and the top pin parks the box at the
+   wrapper's corner instead of mid-chrome. */
+.daedalus-edit-hidden,
+input.daedalus-edit-hidden,
+div.daedalus-edit-hidden,
+.daedalus-edit-hidden input {
+  position: absolute;
+  right: 0;
+  visibility: hidden !important;
+  inset-block-start: 0;
+  clip-path: inset(100%);
+}
+
+#daedalus_edit {
+  position: fixed;
+  z-index: 10;
+  top: 32px;
+  margin-left: 50%;
+  padding: 1em;
+  cursor: pointer;
+  user-select: none;
+  color: #000;
+}
+
+/* Honest-panel gesture: while a widget is revealed in-flow in the form
+   panel, its page element stays visible as the selection — slightly dimmed
+   rather than hidden (the selection frame draws the stroke). Clicking it
+   commits and re-opens the edit. */
+.daedalus-edit-panel-editing {
+  opacity: 0.65;
+}
+
+.ck-powered-by-balloon *,
+#daedalus-ui-right-sidebar [data-media-library-widget-update].button {
+  display: none;
+}
+
+/* Inline Element update AJAX throbber. A SIBLING of the updating element's
+   wrapper (an svg root cannot host HTML children), overlaying it from its
+   rect: entity-form.js sets top/left/width/height inline. */
+.ajax-progress.daedalus-edit-element-throbber {
+  position: fixed;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  user-select: none;
+  transition: opacity 0.15s ease-out;
+  opacity: 0;
+  font-size: var(--daedalus-font-size-heading);
+  font-weight: 600;
+
+  .throbber,
+  .message {
+    display: block;
+  }
+}
+.element-ajax-throbbing {
+  /* Disable the forms submit handlers throbber when element throbber is active. */
+  .ajax-progress {
+    display: none;
+  }
+  /* Still show the element throbber though. */
+  .ajax-progress.daedalus-edit-element-throbber {
+    display: flex;
+  }
+}
+
+.daedalus-edit-validation-message {
+  position: absolute;
+  z-index: calc(var(--daedalus-ui-right-sidebar-z-index, 10) + 2);
+  min-width: 190px;
+  margin-top: 10px;
+  padding: 10px;
+  user-select: none;
+  letter-spacing: 0.32px;
+  pointer-events: none;
+  color: var(--daedalus-selection-text);
+  border: 1px solid #ddd;
+  border-radius: var(--daedalus-border-radius);
+  background-color: var(--daedalus-selection);
+  box-shadow: 0 4px 6px rgb(0, 0, 0, 0.1);
+  /* A chrome tooltip over the canvas: the chrome typeface, not the site
+     theme's. */
+  font-family: var(--daedalus-font);
+  font-size: var(--daedalus-font-size-large);
+  font-weight: 500;
+  line-height: 21px;
+
+  &::after {
+    position: absolute;
+    z-index: calc(var(--daedalus-ui-right-sidebar-z-index, 10) + 1);
+    bottom: 100%;
+    left: 20px;
+    content: "";
+    border-width: 10px;
+    border-style: solid;
+    border-color: transparent transparent var(--daedalus-selection) transparent;
+  }
+}

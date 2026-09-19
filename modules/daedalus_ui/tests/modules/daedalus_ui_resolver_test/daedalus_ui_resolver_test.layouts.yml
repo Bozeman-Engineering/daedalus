@@ -1,0 +1,15 @@
+# A composed layout wired the way the shipped container layout wires:
+# `class: ComposedLayout` and NO template — the effective declaration (the
+# container kind above, layered) is generative and the section renders
+# through the composed_container element. The single region is a storage
+# vestige (core's SectionComponent requires a region name) and renders no
+# wrapper: children mount by the declaration's slot claims, at the root
+# when nothing claims them.
+resolver_test_container:
+  label: 'Test container'
+  category: 'Testing'
+  class: Drupal\daedalus_ui\Plugin\Layout\ComposedLayout
+  default_region: content
+  regions:
+    content:
+      label: Content

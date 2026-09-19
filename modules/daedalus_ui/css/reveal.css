@@ -1,0 +1,38 @@
+/**
+ * Shared concealment for chrome opting into the reveal engine.
+ *
+ * Elements declare the density tier they hide from with
+ * data-daedalus-ui-conceal="minimal" (hidden at minimal and clean) or "clean"
+ * (hidden only at clean); the engine toggles data-daedalus-ui-revealed on pointer
+ * approach. Hiding is opacity plus delayed visibility, never display: none:
+ * the element keeps its space (no reflow on reveal) and stays measurable
+ * for the engine (visibility: hidden preserves the rect), and the
+ * visibility flip makes the compositor drop the hidden layer entirely —
+ * an opacity-0 fixed-position layer can leave stale first-commit paint
+ * on page load (a phantom sliver of chrome at the panel edge).
+ *
+ * The fade still works both ways: concealing fades opacity for 0.2s, then
+ * visibility flips (the 0.2s visibility delay below); revealing flips
+ * visibility immediately (the base rule transitions only opacity, so the
+ * visibility change is instant) and fades opacity in.
+ *
+ * The hiding rules wrap the subject in :where() to keep their specificity
+ * at just the html[...] qualifier, so a registrant's exception (e.g. the
+ * canvas handles staying visible while a width is posed) outranks them
+ * with any ordinary two-part selector, no !important. Exceptions must
+ * restore visibility and pointer-events along with opacity.
+ */
+
+[data-daedalus-ui-conceal] {
+  transition: opacity 0.2s ease;
+}
+
+html[data-daedalus-ui-chrome-density="minimal"] :where([data-daedalus-ui-conceal="minimal"]:not([data-daedalus-ui-revealed])),
+html[data-daedalus-ui-chrome-density="clean"] :where([data-daedalus-ui-conceal]:not([data-daedalus-ui-revealed])) {
+  visibility: hidden;
+  transition:
+    opacity 0.2s ease,
+    visibility 0s 0.2s;
+  pointer-events: none;
+  opacity: 0;
+}

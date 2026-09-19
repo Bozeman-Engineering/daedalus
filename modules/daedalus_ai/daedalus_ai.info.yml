@@ -1,0 +1,18 @@
+name: 'Daedalus AI'
+type: module
+description: 'Adds an AI assistant chat panel to the page builder.'
+package: Daedalus
+core_version_requirement: '>=11.3 <11.5'
+php: 8.1
+lifecycle: experimental
+configure: daedalus_ui.settings
+dependencies:
+  - daedalus:daedalus
+  - daedalus:daedalus_ui
+  - ai:ai_chatbot
+  - ai_agents:ai_agents
+  - daedalus:daedalus_blueprint
+  - daedalus:daedalus_blueprint_ai
+  # AI edits answer the same mutation-response contract as the editing
+  # endpoint (MutationResponseBuilder, TargetKeyMapper spine keys).
+  - daedalus:daedalus_blueprint_api

@@ -1,0 +1,7 @@
+name: Daedalus Blueprint
+type: module
+description: Bidirectional JSON entity serialization for AI workflows.
+core_version_requirement: '>=11.3 <11.5'
+package: Daedalus
+dependencies:
+  - daedalus:daedalus

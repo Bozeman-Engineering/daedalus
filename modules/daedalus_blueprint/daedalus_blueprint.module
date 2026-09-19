@@ -1,0 +1,56 @@
+<?php
+
+/**
+ * @file
+ * Hooks and functions for the Daedalus Blueprint module.
+ */
+
+use Drupal\Core\Cache\Cache;
+use Drupal\daedalus_blueprint\SkillsResolver;
+
+/**
+ * Implements hook_help().
+ */
+function daedalus_blueprint_help(string $route_name): string {
+  if ($route_name === 'help.page.daedalus_blueprint') {
+    $output = '<h2>' . t('About') . '</h2>';
+    $output .= '<p>' . t('Daedalus Blueprint provides bidirectional JSON entity serialization for Drupal. It serializes any fieldable entity to a clean JSON format and deserializes JSON back into valid Drupal entities with two-phase validation.') . '</p>';
+    $output .= '<h2>' . t('Uses') . '</h2>';
+    $output .= '<dl>';
+    $output .= '<dt>' . t('Serialization') . '</dt>';
+    $output .= '<dd>' . t('Convert any fieldable entity (including Layout Builder pages with nested paragraphs and inline blocks) to JSON. Three modes are available: full, summary (tree structure only), and component (single UUID with context).') . '</dd>';
+    $output .= '<dt>' . t('Deserialization') . '</dt>';
+    $output .= '<dd>' . t('Convert JSON back to unsaved Drupal entities with structural and semantic validation. The caller decides whether to save, tempstore, or discard the result.') . '</dd>';
+    $output .= '<dt>' . t('Targeted operations') . '</dt>';
+    $output .= '<dd>' . t('Perform surgical edits (add, update, remove components; update fields; restructure layout) without full entity round-trips.') . '</dd>';
+    $output .= '<dt>' . t('Schema generation') . '</dt>';
+    $output .= '<dd>' . t('Generate JSON schemas for entity type and bundle combinations so AI agents can learn entity structures before acting.') . '</dd>';
+    $output .= '</dl>';
+    return $output;
+  }
+  return '';
+}
+
+/**
+ * Implements hook_modules_installed().
+ *
+ * Skills are discovered from module directories
+ * (MODULE.daedalus_blueprint.skills.*.yml) and merged/altered across modules,
+ * so the roster changes whenever the module set does. A full cache flush is
+ * not guaranteed to help: the skills cache can be primed again during the
+ * install request itself (any getSkills() call), leaving a roster without
+ * the new module's skills and alters. Invalidate the tag explicitly.
+ */
+function daedalus_blueprint_modules_installed(array $modules, bool $is_syncing): void {
+  Cache::invalidateTags([SkillsResolver::CACHE_TAG]);
+}
+
+/**
+ * Implements hook_modules_uninstalled().
+ *
+ * The uninstall twin of daedalus_blueprint_modules_installed(): a departed
+ * module's skills and skill alters must leave the roster.
+ */
+function daedalus_blueprint_modules_uninstalled(array $modules, bool $is_syncing): void {
+  Cache::invalidateTags([SkillsResolver::CACHE_TAG]);
+}

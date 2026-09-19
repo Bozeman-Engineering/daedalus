@@ -1,0 +1,11 @@
+name: Daedalus Blueprint Stencil
+type: module
+description: Reusable composed sections and blocks (stencils) as per-file YAML palette entries and user-saved content.
+core_version_requirement: '>=11.3 <11.5'
+package: Daedalus
+dependencies:
+  # The stencil entity's icon field is a media reference (the icon value
+  # grammar's user lane).
+  - drupal:media
+  - drupal:user
+  - daedalus:daedalus_blueprint

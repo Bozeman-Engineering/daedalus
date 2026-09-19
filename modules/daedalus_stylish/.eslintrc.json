@@ -1,0 +1,87 @@
+{
+  // Layered over core's .eslintrc.passing.json, which drupal.org's eslint job
+  // links into the directory above the project. The js tree is the inspector
+  // app (js/src, preact JSX bundled by webpack into js/dist) plus a few
+  // classic scripts under js/ that the theme layer attaches directly. Each
+  // entry below exists because of one of them.
+  "parserOptions": {
+    // Core's parser stops at ES2020 and has no JSX; the app is JSX with
+    // class fields and logical assignment.
+    "ecmaVersion": 2022,
+    "ecmaFeatures": { "jsx": true }
+  },
+  "globals": {
+    // Core's env is es6, which predates globalThis; the app reads it to run
+    // on hosts with no window (the node suites, the satellite iframe).
+    "globalThis": "readonly"
+  },
+  "rules": {
+    // Every relative import carries its .js: the node suites import js/src
+    // modules directly, and node resolves nothing without the extension.
+    "import/extensions": ["error", "ignorePackages", { "js": "always" }],
+    // js/src/package.json exists only to mark the tree as ES modules for
+    // node; the dependency manifest is the module's own package.json.
+    "import/no-extraneous-dependencies": ["error", { "packageDir": "." }],
+    // Modules export named bindings on purpose so an importer binds a
+    // component or factory under its own name beside the ones it composes.
+    "import/prefer-default-export": "off",
+    // The inspector's render trees express their branches as ternary
+    // chains inside JSX (a ? <A /> : b ? <B /> : null); unrolling every
+    // chain into if-chains around JSX is a rewrite of the components, not
+    // lint. Revisable.
+    "no-nested-ternary": "off",
+    // Core's airbnb rule forbids for...of for the regenerator runtime a
+    // transpiled build would need; the bundle's preset-env compiles for...of
+    // without it (regenerator serves generators and async), and the classic
+    // scripts run natively.
+    "no-restricted-syntax": [
+      "error",
+      {
+        "selector": "ForInStatement",
+        "message": "for..in loops iterate over the entire prototype chain; use Object.{keys,values,entries} and iterate the resulting array."
+      },
+      {
+        "selector": "LabeledStatement",
+        "message": "Labels are a form of GOTO; they make code confusing and hard to maintain."
+      },
+      {
+        "selector": "WithStatement",
+        "message": "`with` is disallowed in strict mode because it makes code impossible to predict and optimize."
+      }
+    ]
+  },
+  "overrides": [
+    {
+      "files": [
+        "js/src/broadcast/popout-leader.js",
+        "js/src/code/element-view.js",
+        "js/src/code/validate-value.js",
+        "js/src/highlight-claims.js",
+        "js/src/inspector.js",
+        "js/src/material-gestures.js",
+        "js/src/pending.js",
+        "js/src/sources/leader-source.js",
+        "js/src/style-guide.js",
+        "js/src/variant-scope.js",
+        "js/src/widget-gradients.js",
+        "js/src/widget-values.js",
+        "js/src/widgets/lib/box-model-diagram.js",
+        "js/src/widgets/lib/choice-row.js",
+        "js/src/widgets/lib/dimension-value.js",
+        "js/src/widgets/lib/stroke-row.js"
+      ],
+      "rules": {
+        // These modules are written as const arrow functions that call one
+        // another only from callbacks (event handlers, hooks, the mutual
+        // recursion of a tree walk or the dimension expression parser), so
+        // a binding resolves at call time, after the module body ran, and
+        // no textual order satisfies the cycle. Same-scope use before
+        // definition stays an error.
+        "no-use-before-define": [
+          "error",
+          { "functions": false, "classes": true, "variables": false }
+        ]
+      }
+    }
+  ]
+}

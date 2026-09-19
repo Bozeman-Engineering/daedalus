@@ -1,0 +1,16 @@
+/* Panel anatomy (header pin + body scroll + sizing) comes from the shared
+   .daedalus-ui-panel__header/.daedalus-ui-panel__body recipe in sidebar.css; the header row
+   itself (title, the Undo/Redo pills in the .daedalus-ui-panel__actions cluster, the
+   close) is the shared header grammar (SidebarPluginBase::buildPanelHeader,
+   panel-controls.css). The timeline column and empty state wear the shared
+   .daedalus-ui-panel-list / .daedalus-ui-panel-empty recipes. */
+
+.history-item--future {
+  opacity: 0.55;
+}
+
+.history-item--current {
+  cursor: default;
+  border-color: var(--daedalus-selection);
+  background-color: var(--daedalus-selection-background);
+}

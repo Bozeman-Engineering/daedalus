@@ -1,0 +1,21 @@
+# Violates daedalus_stylish_guide_test's section declaration (padding max 4rem): the
+# importer must refuse the whole entry, loudly, through the same scope-only
+# validation seam every other variant write path rides.
+overflowing_section:
+  label: 'Overflowing section'
+  scope: 'kind:container'
+  styles:
+    '':
+      default:
+        padding: '6rem'
+
+# The definition AFTER the refused one: a tolerant sync records the failure
+# and still lands this entry, so one bad value never hides the rest of the
+# file.
+fitting_section:
+  label: 'Fitting section'
+  scope: 'kind:container'
+  styles:
+    '':
+      default:
+        padding: '1rem'

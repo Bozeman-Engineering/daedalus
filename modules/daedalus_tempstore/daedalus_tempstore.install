@@ -1,0 +1,28 @@
+<?php
+
+/**
+ * @file
+ * Install, update and uninstall functions for the daedalus_tempstore module.
+ */
+
+/**
+ * Implements hook_install().
+ *
+ * Sets module weight to ensure daedalus_tempstore service provider runs after
+ * workspaces service provider. This allows daedalus_tempstore to properly detect
+ * and extend workspaces' modifications to layout_builder.tempstore_repository.
+ */
+function daedalus_tempstore_install(): void {
+  // Set module weight to 1 (workspaces has default weight of 0).
+  // This ensures daedalus_tempstore's service provider alter() method runs after
+  // workspaces', allowing us to apply the strategy pattern on top of
+  // workspaces' workspace-aware repository.
+  module_set_weight('daedalus_tempstore', 1);
+}
+
+/**
+ * Sets module weight for existing installations where weight wasn't set.
+ */
+function daedalus_tempstore_update_11001(): void {
+  module_set_weight('daedalus_tempstore', 1);
+}

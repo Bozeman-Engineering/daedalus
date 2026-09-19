@@ -1,0 +1,7 @@
+services:
+  daedalus_blueprint_stencil_instantiate_test.style_op_spy:
+    class: Drupal\daedalus_blueprint_stencil_instantiate_test\StyleOpSpy
+    arguments:
+      - '@state'
+    tags:
+      - { name: daedalus_blueprint.operation_handler }

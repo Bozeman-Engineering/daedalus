@@ -1,0 +1,8 @@
+name: 'Daedalus Stylish Layouts'
+description: 'The page builder''s container layout: stylable one-box containers whose root carries the constrained width and arrangement. The only layout the page builder offers.'
+type: module
+core_version_requirement: '>=11.3 <11.5'
+package: Daedalus
+dependencies:
+  - drupal:layout_builder
+  - daedalus:daedalus_stylish

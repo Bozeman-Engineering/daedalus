@@ -1,0 +1,37 @@
+# A nested declaration tree: the card's markup shell between the block root
+# and where its fields mount. The generic fields bucket takes the residual
+# after the specific field claims.
+property_groups:
+  typography: {}
+elements:
+  '.block__content':
+    label: 'Content'
+    contains: fields
+    property_groups:
+      layout: {}
+    elements:
+      '.card__header':
+        label: 'Header'
+        contains: 'field:field_title'
+        property_groups:
+          sizing: {}
+          typography:
+            constraints:
+              font-size:
+                max: '2rem'
+        elements:
+          '.card__kicker':
+            label: 'Kicker'
+            property_groups:
+              typography: {}
+      '.card__body':
+        label: 'Body'
+        contains:
+          - 'field:field_summary'
+        property_groups:
+          spacing: {}
+controls:
+  header_width:
+    label: 'Header width'
+    widget: width
+    element: '.card__header'

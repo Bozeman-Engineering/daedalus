@@ -1,0 +1,30 @@
+# Shipped default variants for the text block type.
+#
+# Button is data, not code: the button look lives here as a variant on the
+# built-in style axis (axis omitted), not in a template or stylesheet. Its
+# styles sit entirely on the conditional link part (.text-block-link, the
+# anchor inside the tag root), because theme `a` element rules beat anything
+# inherited from the block root regardless of cascade layers; a button needs
+# background, padding, radius, and display ON the anchor. Unlinked text has
+# no anchor, so the worn variant is valid and inert until a link exists.
+#
+# Validated against daedalus_edit_text_block.page_builder.block_type.text.yml
+# (the link part's groups: background, spacing, border, typography, layout)
+# via the same blueprint spine every variant write path rides; imported by
+# daedalus_stylish.variant_importer on install, on every cache rebuild, and by
+# `drush daedalus_stylish:sync daedalus_edit_text_block`, hash-synced and revertable
+# like any other shipped variant.
+button:
+  label: 'Button'
+  description: 'Dress the text block''s link as a solid button: dark background, white text, padding, and rounded corners on the anchor. Reach for it when a link should read as a call-to-action button rather than inline text; inert until the block has a link.'
+  scope: 'block_type:text'
+  styles:
+    '::.text-block-link':
+      default:
+        display: 'inline-block'
+        background-color: '#1a1a2e'
+        color: '#ffffff'
+        padding: '0.75em 1.5em'
+        border-radius: '0.5em'
+        text-decoration-line: 'none'
+        font-weight: '600'

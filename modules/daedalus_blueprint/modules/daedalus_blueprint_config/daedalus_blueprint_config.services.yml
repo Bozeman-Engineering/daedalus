@@ -1,0 +1,61 @@
+services:
+  _defaults:
+    autowire: true
+    autoconfigure: true
+
+  Drupal\daedalus_blueprint_config\PropertyHandler\PropertyHandlerManager: '@daedalus_blueprint_config.property_handler_manager'
+  Drupal\daedalus_blueprint_config\ConfigSerializer: '@daedalus_blueprint_config.serializer'
+  Drupal\daedalus_blueprint_config\ConfigDeserializer: '@daedalus_blueprint_config.deserializer'
+  Drupal\daedalus_blueprint_config\ConfigSchemaBuilder: '@daedalus_blueprint_config.schema_builder'
+  Drupal\daedalus_blueprint_config\ConfigOperations: '@daedalus_blueprint_config.operations'
+  Drupal\daedalus_blueprint_config\Validator\ConfigStructuralValidator: '@daedalus_blueprint_config.structural_validator'
+  Drupal\daedalus_blueprint_config\Validator\ConfigSemanticValidator: '@daedalus_blueprint_config.semantic_validator'
+  Drupal\daedalus_blueprint_config\PropertyHandler\PluginCollectionPropertyHandler: '@daedalus_blueprint_config.property_handler.plugin_collection'
+
+  daedalus_blueprint_config.serializer:
+    class: Drupal\daedalus_blueprint_config\ConfigSerializer
+
+  daedalus_blueprint_config.deserializer:
+    class: Drupal\daedalus_blueprint_config\ConfigDeserializer
+
+  daedalus_blueprint_config.schema_builder:
+    class: Drupal\daedalus_blueprint_config\ConfigSchemaBuilder
+
+  daedalus_blueprint_config.operations:
+    class: Drupal\daedalus_blueprint_config\ConfigOperations
+
+  daedalus_blueprint_config.structural_validator:
+    class: Drupal\daedalus_blueprint_config\Validator\ConfigStructuralValidator
+
+  daedalus_blueprint_config.semantic_validator:
+    class: Drupal\daedalus_blueprint_config\Validator\ConfigSemanticValidator
+
+  daedalus_blueprint_config.property_handler_manager:
+    class: Drupal\daedalus_blueprint_config\PropertyHandler\PropertyHandlerManager
+    tags:
+      - { name: service_collector, tag: daedalus_blueprint_config.property_handler, call: addHandler }
+
+  daedalus_blueprint_config.property_handler.scalar:
+    class: Drupal\daedalus_blueprint_config\PropertyHandler\ScalarPropertyHandler
+    tags:
+      - { name: daedalus_blueprint_config.property_handler }
+
+  daedalus_blueprint_config.property_handler.mapping:
+    class: Drupal\daedalus_blueprint_config\PropertyHandler\MappingPropertyHandler
+    tags:
+      - { name: daedalus_blueprint_config.property_handler }
+
+  daedalus_blueprint_config.property_handler.sequence:
+    class: Drupal\daedalus_blueprint_config\PropertyHandler\SequencePropertyHandler
+    tags:
+      - { name: daedalus_blueprint_config.property_handler }
+
+  daedalus_blueprint_config.property_handler.plugin_collection:
+    class: Drupal\daedalus_blueprint_config\PropertyHandler\PluginCollectionPropertyHandler
+    tags:
+      - { name: daedalus_blueprint_config.property_handler }
+
+  daedalus_blueprint_config.backend:
+    class: Drupal\daedalus_blueprint_config\ConfigBlueprintBackend
+    tags:
+      - { name: daedalus_blueprint.backend, priority: 0 }

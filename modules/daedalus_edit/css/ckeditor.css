@@ -1,0 +1,66 @@
+.daedalus-edit-form-item .ck-content {
+  min-height: auto;
+}
+
+.ck-body-wrapper .ck {
+  /*
+   These layers are complex. Let's aggregate a list of requirements here.
+   - When using the configure tool (regular ckeditor in a modal) when you focus
+     on an image there should be image alignment buttons visible.
+   */
+  &.ck-toolbar-container {
+    --ck-z-panel: 1260;
+  }
+  &.ck-balloon-panel:not(.ck-toolbar-container) {
+    --ck-z-panel: 10000;
+  }
+}
+
+/**
+ * The canvas inline-editing balloon toolbar wears the selection frame's
+ * vocabulary (daedalus-ui-frame__chip: the selection pill, its text color, the
+ * 2px radius, the verb hover wash, the inverted on-state the balloon
+ * toggles set the precedent for). Colors ride the daedalus tokens, so
+ * dark mode flips with the rest of the chrome. Scoped by
+ * body:has(.daedalus-edit-inline-editing) so only a live canvas edit is
+ * themed; the configure-tool modal's CKEditor (and its z-index rules
+ * above) keeps stock lark and stays out of scope.
+ *
+ * Where the toolbar overlaps the primary chip (both anchor to the
+ * element's top edge) the TOOLBAR stays on top, deliberately: while
+ * typing, the active editing surface outranks the name-only chip, and
+ * in the shared palette the covered chip reads as the toolbar's own
+ * root rather than a collision. Dropdown panels opening from the
+ * toolbar inherit the same vocabulary (panel props), one surface with
+ * their bar.
+ *
+ * Lark has no --ck-font-family custom property in this build, so the
+ * font is a direct rule on the container.
+ */
+body:has(.daedalus-edit-inline-editing) .ck.ck-balloon-panel.ck-toolbar-container {
+  --ck-color-toolbar-background: var(--daedalus-selection);
+  --ck-color-toolbar-border: transparent;
+  --ck-color-panel-background: var(--daedalus-selection);
+  --ck-color-panel-border: transparent;
+  --ck-color-text: var(--daedalus-selection-text);
+  --ck-color-button-default-hover-background: rgb(255, 255, 255, 0.22);
+  --ck-color-button-on-background: var(--daedalus-selection-text);
+  --ck-color-button-on-color: var(--daedalus-selection);
+  --ck-border-radius: 2px;
+  --ck-drop-shadow: none;
+  /* Dropdowns hanging from the bar are the same surface: lark paints
+     their panel, list, and on-state from these props (all defaulting to
+     white, which with the white --ck-color-text above turned the
+     heading list white-on-white). */
+  --ck-color-dropdown-panel-background: var(--daedalus-selection);
+  --ck-color-dropdown-panel-border: transparent;
+  --ck-color-list-background: var(--daedalus-selection);
+  --ck-color-list-button-hover-background: rgb(255, 255, 255, 0.22);
+  --ck-color-list-button-on-background: var(--daedalus-selection-text);
+  --ck-color-list-button-on-text: var(--daedalus-selection);
+  /* CKEditor pins the balloon to the editable's rect.left; the frame's
+     chips sit on the stroke's OUTER edge, 2px further left. Nudge the
+     bar onto the stroke so both toolbars share one left edge. */
+  margin-left: -2px;
+  font-family: var(--daedalus-font);
+}

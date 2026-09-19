@@ -1,0 +1,404 @@
+# The Daedalus JS root (Drupal.Daedalus): the one namespace every module's
+# browser code registers with (js/daedalus.js). daedalus_edit attaches
+# Drupal.Daedalus.Edit and daedalus_ai Drupal.Daedalus.AiContext and its
+# siblings; a library that assigns into the root declares this dependency
+# so the root exists before its script runs.
+daedalus:
+  js:
+    js/daedalus.js: {}
+  dependencies:
+    - core/drupal
+
+# The Daedalus chrome palette and shared tokens. A standalone library so
+# chrome that renders without the full modes stack (always-on sidebars, the
+# Daedalus Stylish satellite window) can pull in the tokens on their own.
+variables:
+  css:
+    theme:
+      css/variables.css: {}
+      css/fonts.css: {}
+
+# The cosmetic tier over core Navigation: maps core's --drupal-admin-*
+# color hooks onto the chrome tokens so the rail, top bar, and flyouts
+# wear the palette. Attached to navigation/internal.navigation through
+# hook_library_info_alter() so it rides on every route. Sites re-skin by
+# overriding the daedalus_ui/variables tokens, not by dropping this.
+navigation_theme:
+  css:
+    theme:
+      css/theme/navigation_theme.css: {}
+  dependencies:
+    - daedalus_ui/variables
+
+# The cosmetic tier over core's jQuery UI dialogs and the media library
+# inside them. The functional floors (css/modal.css, css/media-library.css)
+# ride in edit_mode; this skin is attached to core/drupal.dialog through
+# hook_library_info_alter() so any dialog on any route wears it.
+dialog-skin:
+  css:
+    theme:
+      css/theme/dialog-skin.css: {}
+      css/theme/media-library-skin.css: {}
+  dependencies:
+    - daedalus_ui/variables
+
+# Per-module debug logging (Drupal.Daedalus.logger). Standalone on
+# purpose: consumers include libraries that load outside edit mode, and a
+# declared dependency on this gives them load ordering for free.
+logging:
+  js:
+    js/logging.js: {}
+  dependencies:
+    - core/drupal
+
+# The notification spine (Drupal.Daedalus.messenger): one message
+# display any window hosts. Every gesture outcome rides messenger.message():
+# a transient toast in the document's [data-drupal-messages] wrapper (claimed
+# and styled here, so a window that never rendered status_messages still
+# shows styled toasts), a persistent history in one localStorage key every
+# same-origin window shares, and replace-and-pulse for a repeated message.
+# Standalone on purpose: the edit-mode plugin's message() is a facade over
+# this, the notifications sidebar a consumer of its history, and daedalus_stylish's
+# satellite window hosts it without edit mode.
+messenger:
+  js:
+    # A native ES module: it imports its pure model relative to its own
+    # URL, so it must be served standalone (aggregation would break the
+    # relative import resolution).
+    js/messenger.js: { attributes: { type: 'module' }, preprocess: false }
+  css:
+    component:
+      css/messenger.css: {}
+  dependencies:
+    - core/drupal
+    - core/drupal.message
+    - daedalus_ui/variables
+
+# The chrome tooltip spine (Drupal.Daedalus.tooltip): a delegated
+# engine per document driving one singleton inverse pill; any chrome
+# control opts in by declaring data-daedalus-ui-tooltip="label". The CSS also
+# carries the anchored .daedalus-ui-tooltip-host pattern (no JS) for chrome that
+# owns its markup. Standalone on purpose: any chrome library declares this
+# as a dependency instead of rolling its own tooltip or leaning on core
+# navigation's per-trigger behavior (which can't serve preact-reconciled
+# markup and is scoped to [data-drupal-admin-styles]).
+tooltip:
+  js:
+    js/tooltip.js: {}
+  css:
+    component:
+      css/tooltip.css: {}
+  dependencies:
+    - core/drupal
+    - daedalus_ui/variables
+
+# The shared panel control kit (.daedalus-ui-pill-button, .daedalus-ui-segments/.daedalus-ui-segment):
+# small controls the panels reuse. Standalone on purpose: chrome that renders
+# outside the rail (daedalus_stylish's satellite window) attaches this without the
+# sidebar stack.
+panel_controls:
+  css:
+    component:
+      css/panel-controls.css: {}
+  dependencies:
+    - daedalus_ui/variables
+    # The panels' icon clusters wear the anchored .daedalus-ui-tooltip-host pattern.
+    - daedalus_ui/tooltip
+
+# The chrome reveal engine (Drupal.Daedalus.reveal): one rAF-throttled
+# pointermove loop toggling data-daedalus-ui-revealed on registered elements by
+# pointer proximity; inert unless html[data-daedalus-ui-chrome-density="clean"].
+# Standalone on purpose: any module's chrome library declares this as a
+# dependency and calls reveal.register(el, { near: radius }) instead of
+# rolling its own mousemove.
+reveal:
+  css:
+    component:
+      css/reveal.css: {}
+  js:
+    js/reveal.js: {}
+  dependencies:
+    - core/drupal
+    - core/once
+
+# The shared modal dialog primitive (Drupal.Daedalus.dialog):
+# promise-based confirm/prompt/alert on the native <dialog> top layer,
+# skinned in the chrome palette. Standalone on purpose: any chrome library
+# declares this as a dependency and awaits dialog.confirm(...) instead of
+# calling window.confirm, which blocks, ignores the palette, and lets the
+# browser suppress it after repeated dismissals.
+dialog:
+  css:
+    component:
+      css/dialog.css: {}
+  js:
+    js/dialog.js: {}
+  dependencies:
+    - core/drupal
+    - daedalus_ui/variables
+
+# The shared floating-surface primitive (Drupal.Daedalus.popover):
+# one surface per window that owns placement (fixed; under or above an
+# anchor, start or end edges aligned, clamped into the viewport; or at a
+# pointer), dismissal, and Escape, and hosts whatever content a rider
+# fills it with (the menu is its first rider). Standalone on purpose: any
+# chrome library (a separate window's included; daedalus_stylish's satellite gets
+# its own copy) declares this as a dependency and calls popover.open().
+popover:
+  js:
+    # A native ES module: it imports its placement math relative to its
+    # own URL, so it must be served standalone (aggregation would break
+    # the relative import resolution).
+    js/popover/popover.js: { attributes: { type: 'module' }, preprocess: false }
+  css:
+    component:
+      js/popover/popover.css: {}
+  dependencies:
+    - core/drupal
+    - daedalus_ui/variables
+
+# The shared popup menu primitive (Drupal.Daedalus.menu): one
+# singleton per window with one item grammar and one keyboard contract,
+# opened imperatively at a pointer or under an anchor (with an explicit
+# align). The first rider of the floating surface above: the menu is the
+# list, the surface places and dismisses it. Standalone on purpose: any
+# chrome library (a separate window's included; daedalus_stylish's satellite gets
+# its own copy) declares this as a dependency and calls
+# menu.open({ items, ... }) instead of rolling its own popover.
+menu:
+  js:
+    # A native ES module: it imports its state machine relative to its own
+    # URL, so it must be served standalone (aggregation would break the
+    # relative import resolution). The surface is reached through the
+    # Drupal.Daedalus facade at call time, never a relative import
+    # (the cache-busting query string would make that a second instance).
+    js/menu/menu.js: { attributes: { type: 'module' }, preprocess: false }
+  css:
+    component:
+      js/menu/menu.css: {}
+  dependencies:
+    - core/drupal
+    - daedalus_ui/variables
+    - daedalus_ui/popover
+
+# The pointer-drag lifecycle primitive (Drupal.Daedalus.drag): capture,
+# guards, and termination for anything the user drags. Standalone on purpose:
+# any chrome library declares this as a dependency and calls
+# drag.begin(handle, event, { onMove, onEnd }) instead of rolling its own
+# pointer loop — a hand-rolled one ends on pointerup alone and strands
+# whatever the caller marked for the drag's duration.
+drag:
+  js:
+    js/drag.js: {}
+  dependencies:
+    - core/drupal
+
+# The cookie spine (Drupal.Daedalus.getCookieValue / setCookieValue /
+# deleteCookieValue): the one place a cookie string is built, so the path
+# convention lives once. Standalone on purpose: the sidebar and the AJAX
+# set-cookie command write cookies on pages that never load the modes
+# library, and a declared dependency on this gives them the helpers.
+cookie:
+  js:
+    js/cookie.js: {}
+  dependencies:
+    - core/drupal
+
+# The media library modal spine (Drupal.Daedalus.openMediaLibraryModal):
+# the one place core's media library is opened as an AJAX modal, so the
+# dialog shape lives once. Standalone on purpose: any picker whose server
+# half is a MediaLibraryOpener (daedalus_edit's image block editor, daedalus_stylish's
+# inspector pickers) declares this as a dependency and hands the helper the
+# server-built URL; the dialog AJAX stack rides along.
+media_library:
+  js:
+    js/media-library.js: {}
+  dependencies:
+    - core/drupal
+    - core/drupal.ajax
+    - core/drupal.dialog.ajax
+
+modes:
+  js:
+    js/daedalus-ui.js: { attributes: { type: 'module' }}
+    js/behaviors/split-button.js: {}
+  css:
+    theme:
+      css/navigation.css: {}
+      css/top-bar.css: {}
+      css/split-button.css: {}
+      css/tool-bar-button.css: {}
+  dependencies:
+    - daedalus_ui/cookie
+    - daedalus_ui/variables
+    # Top bar and tool pill buttons are icon-only below full density; their
+    # labels ride the tooltip spine.
+    - daedalus_ui/tooltip
+    # Our top bar markup is built from core navigation's component classes,
+    # CSS variables, and font (top-bar, toolbar-button, --admin-toolbar-*).
+    # Core attaches these libraries on its own top_bar render element, which
+    # renders behind a BigPipe placeholder — without declaring them here, our
+    # server-rendered bar paints unstyled until that placeholder's chunk
+    # streams in (visible as a FOUC on cold caches). Core marks
+    # internal.navigation as internal-only; we accept that coupling because
+    # our markup already hard-depends on its class vocabulary.
+    - navigation/internal.navigation
+    - core/components.navigation--toolbar-button
+
+set_cookie:
+  js:
+    js/set-cookie.js: {}
+  dependencies:
+    - daedalus_ui/cookie
+    - core/drupal
+    - core/drupal.ajax
+
+update_element:
+  js:
+    js/update-element.js: {}
+  dependencies:
+    - core/jquery
+    - core/drupal
+    - core/drupal.ajax
+    - daedalus_ui/highlight
+
+highlight:
+  js:
+    js/highlight.js: {}
+  css:
+    theme:
+      css/highlight.css: {}
+  dependencies:
+    - core/jquery
+    - core/drupal
+    - core/drupal.ajax
+
+edit_mode:
+  js:
+    js/edit_mode/callbacks/clear-messages.js: {}
+    js/edit_mode/callbacks/edit-mode-message.js: {}
+    js/edit_mode/dist/edit-mode-app.bundle.js: { attributes: { type: 'module' }}
+    js/edit_mode/behaviors/clear-notifications.js: {}
+    js/edit_mode/ajax/edit-mode-ajax.js: {}
+    js/edit_mode/behaviors/initial-messages.js: {}
+    js/edit_mode/not-tools/file_upload/file-drag.js: { attributes: { type: 'module' }}
+    js/edit_mode/settings/hotkey/hotkey-settings.js: {}
+    js/edit_mode/settings/save-setting.js: {}
+    js/edit_mode/settings/chrome-density-setting.js: {}
+    js/edit_mode/settings/media-file-associations/media-file-association.js: {}
+  css:
+    component:
+      js/edit_mode/settings/hotkey/hotkey-settings.css: {}
+      js/edit_mode/not-tools/file_upload/file-upload.css: {}
+      js/edit_mode/components/selection-frame/selection-frame.css: {}
+      js/edit_mode/components/insertion-caret/insertion-caret.css: {}
+      js/edit_mode/components/selection-indicator/selection-indicator.css: {}
+      js/edit_mode/components/page-elements/page-elements-tree.css: {}
+      js/edit_mode/settings/media-file-associations/media-file-association-settings.css: {}
+    theme:
+      css/edit-mode.css: {}
+      css/modal.css: {}
+      css/media-library.css: {}
+      css/notifications.css: {}
+      css/history-sidebar.css: {}
+  dependencies:
+    - core/drupal.dialog.ajax
+    - core/drupal.ajax
+    # The keyboard model announces traversal, lift, and drop through
+    # core's live region.
+    - core/drupal.announce
+    - core/internal.jquery.form
+    # The markup verification observer logs through the suite's debug
+    # channel; the dependency also guarantees load order.
+    - daedalus_ui/logging
+    # The plugin's message() and the clearMessages command are facades
+    # over the notification spine.
+    - daedalus_ui/messenger
+    - daedalus_ui/modes
+    - daedalus_ui/highlight
+    # The page-elements show menu registers with the reveal engine; the
+    # bundle must not rely on Edit.php attaching reveal for it.
+    - daedalus_ui/reveal
+    # The tree rows' right-click, the frame chip's chevron, and the Show
+    # kebab all open the shared menu primitive.
+    - daedalus_ui/menu
+    - daedalus_ui/sidebar
+#    - daedalus_ui/debug_cursor
+
+# The canvas state vector spine (width / scheme / motion): the addressable
+# store (Drupal.Daedalus.CanvasVector), the resizable stage with drag
+# handles and band ruler, the scheme/motion media emulation, and the
+# ?canvas* boot params. Headless — the posing UI is the daedalus_stylish inspector's
+# chip row, which drives the facade.
+canvas_vector:
+  js:
+    # A native ES module: it imports its state and emulation modules
+    # relative to its own URL, so it must be served standalone (aggregation
+    # would break the relative import resolution).
+    js/canvas_vector/canvas-vector.js: { attributes: { type: 'module' }, preprocess: false }
+  css:
+    component:
+      js/canvas_vector/canvas-vector.css: {}
+  dependencies:
+    - core/drupal
+    - core/once
+    - daedalus_ui/reveal
+    - daedalus_ui/variables
+    # The stage resize handles.
+    - daedalus_ui/drag
+
+# The pop-out window's shell: device selector + device-sized iframe.
+responsive_preview:
+  js:
+    # A native ES module: it imports the shared broadcast wire relative to
+    # its own URL, so it must be served standalone (aggregation would break
+    # the relative import resolution).
+    js/responsive_preview/preview.js: { attributes: { type: 'module' }, preprocess: false }
+  css:
+    component:
+      js/responsive_preview/preview.css: {}
+  dependencies:
+    - core/drupal
+    - core/drupalSettings
+    - core/once
+
+debug_cursor:
+  js:
+    js/edit_mode/utilities/debug-mouse-cursor/debug-mouse-cursor.js: {}
+  css:
+    theme:
+      js/edit_mode/utilities/debug-mouse-cursor/debug-mouse-cursor.css: {}
+
+sidebar:
+  js:
+    js/sidebar/plugins/sidebar-plugin-base.js: {}
+    js/sidebar/sidebar-manager.js: {}
+    js/sidebar/plugins/default-sidebar.js: {}
+    js/sidebar/plugins/notifications-sidebar.js: {}
+    js/sidebar/plugins/history-sidebar.js: {}
+    js/behaviors/sidebar-buttons.js: {}
+    js/behaviors/sidebar-close.js: {}
+    js/behaviors/sidebar-resize.js: {}
+  css:
+    theme:
+      css/navigation.css: {}
+      css/sidebar.css: {}
+      css/form.css: {}
+      css/sidebar-fab.css: {}
+  dependencies:
+    - core/jquery
+    - core/drupal
+    - core/drupal.displace
+    - core/once
+    # The panels and FAB consume the --daedalus-* tokens; always-on
+    # panels render without the modes library, so the palette must ride
+    # along here too.
+    - daedalus_ui/variables
+    # The History/Notifications pill buttons wear .daedalus-ui-pill-button.
+    - daedalus_ui/panel_controls
+    # The rail resize handles.
+    - daedalus_ui/drag
+    # The open-panel and rail-width cookies.
+    - daedalus_ui/cookie
+    # The notifications panel renders the messenger's history.
+    - daedalus_ui/messenger

@@ -1,0 +1,8 @@
+services:
+  daedalus_ai_test.deferred_processor.test:
+    class: Drupal\daedalus_ai_test\DeferredProcessor\TestDeferredProcessor
+    arguments:
+      - '@entity_type.manager'
+      - '@file.repository'
+    tags:
+      - { name: daedalus_ai.deferred_processor }

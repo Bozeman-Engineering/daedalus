@@ -1,0 +1,37 @@
+# Unknown kind: universal declarations key by element kind.
+widget:
+  elements: {}
+container:
+  # A section has no fields and no presentation of its own.
+  fields: {}
+  presentation: open
+  elements:
+    # depth takes root or nested.
+    '.band':
+      present:
+        depth: sideways
+field:
+  presentation: unit
+  elements:
+    # A field tree has no present vocabulary at all.
+    '.flourish':
+      present:
+        empty: true
+instances:
+  # A namespace keys by a pattern selector, never a concrete class.
+  '.bad':
+    tags:
+      p: 'Paragraph'
+  '.n-*':
+    # The label must be a non-empty string.
+    label: ''
+    tags:
+      # Tag names are lowercase literals; labels are non-empty strings.
+      'P!': 'Bad tag'
+      h2: ''
+    # The shell vocabulary is impossible on a namespace.
+    contains: fields
+  # The tags map is required: a namespace without a vocabulary is
+  # unspeakable.
+  '.no-tags-*':
+    label: 'No vocabulary'

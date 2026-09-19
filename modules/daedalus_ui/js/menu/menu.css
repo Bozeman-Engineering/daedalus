@@ -1,0 +1,130 @@
+/**
+ * The shared popup menu primitive (daedalus_ui/menu).
+ *
+ * The list the menu mounts inside the shared floating surface
+ * (daedalus_ui/popover, whose popover.css owns the chrome: palette,
+ * radius, shadow, typeface, position, z-index): an optional caption,
+ * item rows with an optional check gutter, icon, label, and muted hint,
+ * and rules between groups. Nothing here positions; the surface places
+ * the list.
+ */
+
+.daedalus-ui-menu {
+  display: flex;
+  flex-direction: column;
+  min-width: 11rem;
+  /* A menu is a list, never a panel: its width follows the widest item
+     row (nowrap), and the caption wraps inside that instead of stretching
+     the menu across the viewport (a wearing row's caption carries the
+     variant's whole description). */
+  max-width: min(24rem, calc(100vw - 2rem));
+  padding: 0.25rem;
+}
+
+.daedalus-ui-menu__header {
+  padding: 0.25rem 0.6rem;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--daedalus-text-muted);
+  font-size: var(--daedalus-font-size-caption);
+  overflow-wrap: anywhere;
+}
+
+.daedalus-ui-menu__item {
+  display: flex;
+  align-items: center;
+  margin: 0;
+  padding: 0.3rem 0.6rem;
+  cursor: pointer;
+  text-align: start;
+  white-space: nowrap;
+  color: var(--daedalus-text);
+  border: 0;
+  /* Concentric with the container: its radius minus the padding inset. */
+  border-radius: calc(var(--daedalus-border-radius) - 0.25rem);
+  background: transparent;
+  font-family: inherit;
+  font-size: 0.8125rem;
+  line-height: 1.2rem;
+  gap: 0.4rem;
+}
+
+/* The shared hover affordance is the selection wash; roving focus IS the
+   active item, so it takes the same treatment (no native focus ring; the
+   wash is the indicator, matching the tree rows). */
+.daedalus-ui-menu__item:hover,
+.daedalus-ui-menu__item:focus-visible {
+  outline: none;
+  background: var(--daedalus-selection-background);
+}
+
+.daedalus-ui-menu__item[aria-disabled="true"] {
+  cursor: default;
+  color: var(--daedalus-text-muted);
+}
+
+.daedalus-ui-menu__item[aria-disabled="true"]:hover,
+.daedalus-ui-menu__item[aria-disabled="true"]:focus-visible {
+  background: transparent;
+}
+
+/* Focus must stay visible on a disabled item (its reason is the point of
+   reaching it) without claiming the selection wash. */
+.daedalus-ui-menu__item[aria-disabled="true"]:focus-visible {
+  outline: 1px solid var(--daedalus-lines);
+  outline-offset: -1px;
+}
+
+.daedalus-ui-menu__item--danger {
+  color: var(--daedalus-danger);
+}
+
+.daedalus-ui-menu__item--danger:hover,
+.daedalus-ui-menu__item--danger:focus-visible {
+  background: var(--daedalus-danger-background);
+}
+
+/* The armed half of the in-menu two-step confirm: the destructive intent
+   goes solid before it commits. */
+.daedalus-ui-menu__item--armed,
+.daedalus-ui-menu__item--armed:hover,
+.daedalus-ui-menu__item--armed:focus-visible {
+  color: #fff;
+  background: var(--daedalus-danger);
+}
+
+/* The check gutter: present on every row of a menu with any checkable
+   item, so labels align; only the checked rows draw the mark. */
+.daedalus-ui-menu__check,
+.daedalus-ui-menu__icon {
+  display: inline-flex;
+  flex-shrink: 0;
+  width: 1rem;
+  height: 1rem;
+}
+
+.daedalus-ui-menu__check svg,
+.daedalus-ui-menu__icon svg {
+  width: 100%;
+  height: 100%;
+}
+
+.daedalus-ui-menu__label {
+  flex: 1 1 auto;
+}
+
+.daedalus-ui-menu__hint {
+  margin-inline-start: 1rem;
+  color: var(--daedalus-text-muted);
+  font-size: var(--daedalus-font-size-caption);
+}
+
+.daedalus-ui-menu__item--armed .daedalus-ui-menu__hint {
+  color: inherit;
+}
+
+.daedalus-ui-menu__separator {
+  height: 1px;
+  margin: 0.25rem 0.35rem;
+  background: var(--daedalus-lines);
+}

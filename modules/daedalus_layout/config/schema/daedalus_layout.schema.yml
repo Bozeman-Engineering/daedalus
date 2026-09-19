@@ -1,0 +1,60 @@
+daedalus_layout.settings:
+  type: config_object
+  label: 'Daedalus Layout settings'
+  mapping:
+    contextual_links:
+      type: boolean
+      label: 'Show Block Contextual links'
+
+# The nested-section container component. The `section` key embeds exactly
+# ONE section; core's layout_builder.section named type resolves its dynamic
+# references at arbitrary depth, so nesting recurses through this same type.
+block.settings.daedalus_layout_section:
+  type: block_settings
+  label: 'Nested container'
+  mapping:
+    section:
+      type: layout_builder.section
+      label: 'Embedded container'
+
+# The block type's icon, in the icon value grammar (`media:<uuid>` or a
+# root-relative path) resolved by daedalus_blueprint's IconResolver. A property
+# of the block TYPE: every page-builder surface that represents the type
+# (the Add panel's promoted items today) reads it from here.
+block_content.type.*.third_party.daedalus_layout:
+  type: mapping
+  label: 'Daedalus Layout block type settings'
+  mapping:
+    icon:
+      type: string
+      label: 'Block icon'
+
+layout_builder.section.third_party.daedalus_layout:
+  type: mapping
+  mapping:
+    uuid:
+      type: string
+      label: 'The UUID of the Daedalus Layout entity'
+
+core.entity_view_display.*.*.*.third_party.daedalus_layout:
+  type: sequence
+  label: 'Daedalus Layout plugin configuration'
+  sequence:
+    type: daedalus_layout.[%key]
+
+daedalus_layout.preserved_fields:
+  type: sequence
+  label: 'Preserved fields'
+  sequence:
+    type: string
+    label: 'Field name'
+
+daedalus_layout.default_section:
+  type: ignore
+  label: 'Per-view-mode Daedalus Layout settings'
+
+daedalus_layout.promoted_blocks:
+  type: sequence
+  label: 'Per-view-mode Daedalus Layout promoted blocks'
+  sequence:
+    type: string

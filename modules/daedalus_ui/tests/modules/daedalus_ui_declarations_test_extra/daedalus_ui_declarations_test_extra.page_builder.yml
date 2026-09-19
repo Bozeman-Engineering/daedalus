@@ -1,0 +1,19 @@
+block:
+  # Scalars replace across module layers.
+  presentation: unit
+entity:
+  fields:
+    field_internal:
+      # Booleans replace too: the later module re-declares existence.
+      element: true
+site:
+  branding:
+    # Scalars replace across module layers in the site lane too.
+    slogan: 'Extra slogan'
+instances:
+  '.in-*':
+    # Maps merge across module layers in the instances lane too: the tag
+    # relabel replaces, the new tag joins.
+    tags:
+      p: 'Extra paragraph'
+      h2: 'Heading 2'

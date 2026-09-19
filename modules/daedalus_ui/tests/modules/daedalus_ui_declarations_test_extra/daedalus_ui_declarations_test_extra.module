@@ -1,0 +1,15 @@
+<?php
+
+/**
+ * @file
+ * Alters the layered page builder declarations for testing.
+ */
+
+declare(strict_types=1);
+
+/**
+ * Implements hook_page_builder_declarations_alter().
+ */
+function daedalus_ui_declarations_test_extra_page_builder_declarations_alter(array &$declarations, string $theme): void {
+  $declarations['kinds']['region']['elements']['.region__inner'] = ['label' => 'Region inner'];
+}

@@ -1,0 +1,6 @@
+name: 'Daedalus UI Collapse Test'
+type: module
+description: 'A composed block-type declaration for annotation tests.'
+package: Testing
+dependencies:
+  - daedalus:daedalus_ui

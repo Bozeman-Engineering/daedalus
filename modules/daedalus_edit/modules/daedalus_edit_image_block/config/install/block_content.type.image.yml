@@ -1,0 +1,15 @@
+langcode: en
+status: true
+dependencies:
+  module:
+    - daedalus_layout
+    - daedalus_ui
+third_party_settings:
+  daedalus_layout:
+    icon: /modules/contrib/daedalus/modules/daedalus_layout/assets/image.svg
+  daedalus_ui:
+    presentation: merged
+id: image
+label: Image
+revision: false
+description: 'A media library image field.'

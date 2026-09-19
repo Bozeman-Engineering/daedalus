@@ -1,0 +1,6 @@
+name: 'Daedalus Stylish basic styling test'
+type: module
+description: 'Binds width to a scale no skin mints beside the suite''s own bindings, the value-space fixture for the basic styling behavior scenario.'
+package: Testing
+core_version_requirement: '*'
+hidden: true

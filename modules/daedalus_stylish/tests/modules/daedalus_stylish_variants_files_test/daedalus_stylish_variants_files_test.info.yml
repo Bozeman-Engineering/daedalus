@@ -1,0 +1,8 @@
+name: 'Daedalus Stylish variants files test'
+type: module
+description: 'Ships style variants in both file forms (the single file and a per-id file) for testing the disk-lane discovery.'
+package: Testing
+core_version_requirement: '*'
+hidden: true
+dependencies:
+  - daedalus:daedalus_stylish

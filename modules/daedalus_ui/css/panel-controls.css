@@ -1,0 +1,551 @@
+/**
+ * @file
+ * The shared panel control kit.
+ *
+ * Small interactive controls the chrome reuses across panels: the panel
+ * header, the pill button, the segmented control, the disclosure grammar,
+ * the meta chip, the dot, the icon button and its tooltip, the popover
+ * menu, and the recessed input.
+ * Consumers wear these classes alongside their own identity classes and
+ * keep only genuine specifics in their local CSS, keyed at two-class
+ * specificity (e.g. .daedalus-stylish-inspector__segment.daedalus-ui-segment) so overrides
+ * win by specificity, not load order.
+ *
+ * Unscoped on purpose: daedalus_stylish's satellite window renders chrome outside
+ * .daedalus-ui-sidebar, so an ancestor-scoped selector would go dead
+ * there. The recipes reset the button box themselves (background, border,
+ * font), so they read identically on <button> and on styled divs.
+ */
+
+/* The panel header's LOOK (the "Styles"/"Blocks" title row with its action
+   cluster). The rail anatomy — flex-shrink, the moat padding, the fixed-
+   header/scrolling-body height chain — stays rail-scoped in sidebar.css;
+   this visual half is unscoped so the satellite window's header is the
+   same recipe, not a local copy. */
+.daedalus-ui-panel__header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+/* The shared header type: a 1rem title, whether the heading IS the header
+   or sits inside a header wrapper. */
+.daedalus-ui-panel__header:is(h3, h4),
+.daedalus-ui-panel__header :is(h3, h4) {
+  margin: 0;
+  color: var(--daedalus-text);
+  font-size: var(--daedalus-font-size-heading);
+  font-weight: 600;
+  line-height: 1;
+}
+
+/* The header's action cluster (SidebarPluginBase::buildPanelHeader): the
+   panel's own actions (pills, segments, a kebab) in one 0.5rem rhythm,
+   the close control always last. */
+.daedalus-ui-panel__actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* A slot the header lends to client-rendered chrome (the Page Elements
+   Show kebab mounts into one). Empty, it takes no room and no gap. */
+.daedalus-ui-panel__slot:empty {
+  display: none;
+}
+
+/* The close control: the kit icon button at the 1.75rem hit box, the pack
+   glyph (daedalus_ui:minus) painted in the button's current color so
+   the muted variant and the hover wash color it. Unscoped like the rest of
+   the kit: the same recipe wherever a panel header renders. Keyed at
+   two-class specificity like every kit consumer: the .daedalus-ui-icon-button base
+   (padding, height: auto) is declared later in this file and would win
+   the box otherwise. */
+.daedalus-ui-icon-button.daedalus-ui-panel__close {
+  inline-size: 1.75rem;
+  block-size: 1.75rem;
+  padding: 0;
+  line-height: 1;
+}
+
+.daedalus-ui-panel__close-icon {
+  inline-size: var(--daedalus-icon-size-small);
+  block-size: var(--daedalus-icon-size-small);
+  fill: currentColor;
+}
+
+/* Header pill buttons (History's Undo/Redo, Notifications' Clear All):
+   sized to the segmented control's tabs, killing the UA and site theme
+   button box (height/line-height). */
+.daedalus-ui-pill-button {
+  height: auto;
+  min-height: 0;
+  margin: 0;
+  padding: 0.125rem 0.5rem;
+  cursor: pointer;
+  color: var(--daedalus-text);
+  border: 1px solid var(--daedalus-lines);
+  border-radius: var(--daedalus-border-radius);
+  background-color: var(--daedalus-toggle-active);
+  font-family: inherit;
+  font-size: var(--daedalus-font-size-caption);
+  font-weight: 600;
+  line-height: 1.15;
+}
+
+/* The shared hover affordance: the selection wash. */
+.daedalus-ui-pill-button:hover:not(:disabled) {
+  background-color: var(--daedalus-selection-background);
+}
+
+/* Site themes (Olivero) paint a button focus ring that lingers after a
+   click until focus moves on. Keep keyboard focus (the chrome's selection
+   ring) but not the click ring. */
+.daedalus-ui-pill-button:focus {
+  outline: none;
+}
+
+.daedalus-ui-pill-button:focus-visible {
+  outline: 2px solid var(--daedalus-selection);
+  outline-offset: -1px;
+}
+
+.daedalus-ui-pill-button:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+/* Drupal form buttons wearing the pill (input.button / .form-submit):
+   site themes skin .button at single-class specificity but load after
+   module CSS, so the recipe's contested properties are restated at
+   joined specificity — the same defense as the olivero-details block
+   below. Never matches JS-built consumers. */
+.daedalus-ui-pill-button.button {
+  width: auto;
+  height: auto;
+  min-height: 0;
+  margin: 0;
+  padding: 0.125rem 0.5rem;
+  color: var(--daedalus-text);
+  border: 1px solid var(--daedalus-lines);
+  border-radius: var(--daedalus-border-radius);
+  background-color: var(--daedalus-toggle-active);
+  background-image: none;
+  box-shadow: none;
+  font-family: inherit;
+  font-size: var(--daedalus-font-size-caption);
+  font-weight: 600;
+  line-height: 1.15;
+}
+
+.daedalus-ui-pill-button.button:hover:not(:disabled) {
+  color: var(--daedalus-text);
+  background-color: var(--daedalus-selection-background);
+}
+
+/* The segmented control (the Blocks panel's Promoted/Other tabs, the
+   Daedalus Stylish inspector's Basic/Advanced toggle and its segmented value rows):
+   a recessed track holding quiet segments, the active one raised. The
+   active state is the shared modifier — consumer JS toggles
+   .daedalus-ui-segment--active alongside whatever internal state class it keeps. */
+.daedalus-ui-segments {
+  display: inline-flex;
+  padding: 0.125rem;
+  border-radius: var(--daedalus-border-radius);
+  background: var(--daedalus-toggle-background);
+  gap: 0.2rem;
+}
+
+.daedalus-ui-segment {
+  margin: 0;
+  padding: 0.125rem 0.5rem;
+  cursor: pointer;
+  color: var(--daedalus-text-muted);
+  border: none;
+  /* Concentric with the track: its radius minus the 0.125rem inset. */
+  border-radius: calc(var(--daedalus-border-radius) - 0.125rem);
+  background: transparent;
+  font-family: inherit;
+  font-size: var(--daedalus-font-size-caption);
+  font-weight: 600;
+}
+
+/* The shared hover wash; the raised active segment stays quiet, as do
+   disabled segments and static ones (.daedalus-ui-segment--static: a non-interactive
+   segment riding the track for its look, e.g. the inspector's "Custom"
+   value pill — a span, so :disabled can never express it). */
+.daedalus-ui-segment:hover:not(.daedalus-ui-segment--active, .daedalus-ui-segment--static, :disabled) {
+  color: inherit;
+  background: var(--daedalus-selection-background);
+}
+
+.daedalus-ui-segment--static {
+  cursor: default;
+}
+
+.daedalus-ui-segment--active {
+  color: inherit;
+  background: var(--daedalus-toggle-active);
+  box-shadow: 0 1px 2px rgb(0, 0, 0, 0.15);
+}
+
+/* Same lingering-ring treatment as the pill button. */
+.daedalus-ui-segment:focus {
+  outline: none;
+}
+
+.daedalus-ui-segment:focus-visible {
+  outline: 2px solid var(--daedalus-selection);
+  outline-offset: -1px;
+}
+
+/* ——— The disclosure grammar ——— */
+
+/* One grammar, two carriers: native <details class="daedalus-ui-details">
+   (drop-downs — the whole summary toggles) and the Page Elements tree
+   (rows select, so disclosure is its own button; behavior in
+   page-elements-tree.css). Shared rules name both carriers in flat
+   lists; looks are shared, behavior stays per-carrier. */
+
+/* The row core both carriers wear. */
+.daedalus-ui-details > summary,
+.daedalus-ui-details__item,
+.daedalus-ui-tree__row {
+  border-radius: var(--daedalus-border-radius);
+  font-size: var(--daedalus-font-size);
+  /* Pinned: a site theme's fixed line-height oversizes the line box. */
+  line-height: 1.6;
+}
+
+/* The disclosure triangle. The static position, zeroed border/margin,
+   and base transform matter: in Olivero this pseudo-element is its
+   absolutely-positioned right-edge chevron. */
+.daedalus-ui-details > summary::before,
+.daedalus-ui-tree__disclosure-marker {
+  position: static;
+  flex: 0 0 auto;
+  width: var(--daedalus-disclosure-size);
+  height: var(--daedalus-disclosure-size);
+  margin: 0;
+  content: "";
+  transform: none;
+  border: 0;
+  background: var(--daedalus-disclosure-color);
+  clip-path: polygon(0 0, 100% 50%, 0 100%);
+}
+
+/* The open rotation, keyed off each carrier's own open state. */
+.daedalus-ui-details[open] > summary::before,
+.daedalus-ui-tree__disclosure[aria-expanded="true"] .daedalus-ui-tree__disclosure-marker {
+  transform: rotate(90deg);
+}
+
+/* The hover wash (the tree's is class-driven and lives with the tree). */
+.daedalus-ui-details > summary:is(:hover, :focus-visible),
+.daedalus-ui-details__item:hover {
+  background-color: var(--daedalus-selection-background);
+}
+
+/* ——— The details carrier ——— */
+
+.daedalus-ui-details {
+  margin: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.daedalus-ui-details > summary {
+  display: flex;
+  align-items: center;
+  padding: 0 0 0 0.5rem;
+  list-style: none;
+  cursor: pointer;
+  user-select: none;
+  color: var(--daedalus-text);
+  background-color: transparent;
+  font-weight: 600;
+
+  /* The tree's label gap comes from its button box instead. */
+  &::before {
+    margin-inline-end: var(--daedalus-disclosure-gap);
+  }
+}
+
+/* Zero Drupal's details-wrapper padding; consumers choose their own
+   indent (.daedalus-ui-details__body). */
+.daedalus-ui-details > .details-wrapper {
+  margin: 0;
+  padding: 0;
+}
+
+/* The standard body indent, opt-in: one child-step per level (the
+   inspector's bodies deliberately sit flush). */
+.daedalus-ui-details__body {
+  padding-inline-start: var(--daedalus-indent);
+}
+
+/* Plain (non-toggling) rows riding a drop-down body: hotkey rows, the
+   Other tab's palette items. */
+.daedalus-ui-details__item {
+  padding: 0 0 0 0.5rem;
+}
+
+/* The at-a-glance line core paints into a Drupal details summary
+   (drupalSetSummary / details-summarized-content.js) arrives as a flex
+   item hard against the label text. It reads as meta: muted, regular
+   weight, one line that truncates instead of wrapping into the label. */
+.daedalus-ui-details > summary .summary {
+  overflow: hidden;
+  flex: 0 1 auto;
+  min-width: 0;
+  margin-inline-start: 0.35em;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--daedalus-text-muted);
+  font-weight: 400;
+}
+
+/* With a meta line aboard, the label holds one line too — the meta line
+   shrinks away first (min-width: 0 above) instead of wrapping the label
+   word by word beside it. */
+.daedalus-ui-details > summary:has(.summary) {
+  white-space: nowrap;
+}
+
+/* Olivero's card skin and right-edge chevron out-rank the natural
+   recipe (its [open] chevron rule is 0-3-1, and theme CSS loads after
+   module CSS). Restate only the contested properties at olivero-joined
+   specificity; these selectors never match JS-built consumers. */
+.daedalus-ui-details.olivero-details {
+  margin: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.daedalus-ui-details > summary.olivero-details__summary {
+  padding: 0 0 0 0.5rem;
+  background-color: transparent;
+  font-size: var(--daedalus-font-size);
+  font-weight: 600;
+}
+
+.daedalus-ui-details > summary.olivero-details__summary::before {
+  position: static;
+  flex: 0 0 auto;
+  width: var(--daedalus-disclosure-size);
+  height: var(--daedalus-disclosure-size);
+  margin: 0;
+  margin-inline-end: var(--daedalus-disclosure-gap);
+  content: "";
+  transform: none;
+  border: 0;
+  background: var(--daedalus-disclosure-color);
+  clip-path: polygon(0 0, 100% 50%, 0 100%);
+}
+
+.daedalus-ui-details[open] > summary.olivero-details__summary::before {
+  transform: rotate(90deg);
+}
+
+/*
+The main consumers of daedalus-ui-panel-item are the lb block panel and the history panel.
+ */
+
+.daedalus-ui-panel-item {
+  display: flex;
+  align-items: center;
+  min-height: 2.5rem;
+  padding: 0.25rem 0.5rem;
+  cursor: pointer;
+  border: 1px solid var(--daedalus-lines);
+  border-radius: var(--daedalus-border-radius);
+  background-color: var(--daedalus-toggle-active);
+  line-height: 1.4;
+  gap: 1rem;
+
+  &:hover {
+    background-color: var(--daedalus-selection-background);
+  }
+
+  .daedalus-ui-panel-item__image {
+    width: var(--daedalus-icon-size-large);
+    height: var(--daedalus-icon-size-large);
+    background-size: contain;
+  }
+
+  .daedalus-ui-panel-item__label {
+    color: var(--daedalus-text);
+    font-size: var(--daedalus-font-size);
+    font-variation-settings: "wght" 700;
+  }
+
+  .daedalus-ui-panel-item__subtitle {
+    color: var(--daedalus-text-muted);
+    font-size: var(--daedalus-font-size-caption);
+  }
+}
+
+/* ——— The meta chip ——— */
+
+/* The small annotation pill riding a row or bar: condition tags, state
+   chips, "has more" hints, worn-variant chips. Full-pill radius on
+   purpose — the one shape for every chip. The button-box reset makes
+   interactive chips (buttons) read identically to passive spans;
+   inline-flex keeps a chip atomic (an ancestor's line-through never draws
+   through it) and seats a leading dot. */
+.daedalus-ui-chip {
+  display: inline-flex;
+  align-items: center;
+  margin: 0;
+  padding: 0 0.375rem;
+  white-space: nowrap;
+  color: inherit;
+  border: none;
+  border-radius: 999px;
+  background: var(--daedalus-toggle-background);
+  font-family: inherit;
+  font-size: var(--daedalus-font-size-caption);
+  font-weight: 600;
+  line-height: 1.6;
+  gap: 0.25rem;
+}
+
+.daedalus-ui-chip--muted {
+  color: var(--daedalus-text-muted);
+}
+
+/* A chip carrying an accent hue (a provenance layer, a lens color): the
+   consumer sets --daedalus-ui-chip-color and the chip wears it as a translucent
+   tint — never a solid, so the token text color stays readable in both
+   schemes. */
+.daedalus-ui-chip--tinted {
+  border: 1px solid color-mix(in sRGB, var(--daedalus-ui-chip-color) 45%, transparent);
+  background: color-mix(in sRGB, var(--daedalus-ui-chip-color) 10%, transparent);
+}
+
+/* Only genuinely interactive chips take the shared hover wash. */
+button.daedalus-ui-chip {
+  cursor: pointer;
+}
+
+button.daedalus-ui-chip:hover:not(:disabled) {
+  background: var(--daedalus-selection-background);
+}
+
+/* Same lingering-ring treatment as the pill button. */
+button.daedalus-ui-chip:focus {
+  outline: none;
+}
+
+button.daedalus-ui-chip:focus-visible {
+  outline: 2px solid var(--daedalus-selection);
+  outline-offset: -1px;
+}
+
+/* ——— The dot ——— */
+
+/* The round color swatch: WHO supplies a value (a layer's stable hue), a
+   status accent. The color arrives from the consumer (inline style or a
+   local rule); the size knob covers the chrome's few deliberate
+   densities. flex: none — a dot never squishes in a tight row. */
+.daedalus-ui-dot {
+  flex: none;
+  inline-size: var(--daedalus-ui-dot-size, 0.5rem);
+  block-size: var(--daedalus-ui-dot-size, 0.5rem);
+  border-radius: 50%;
+}
+
+/* ——— The icon button and its tooltip ——— */
+
+/* The chrome's icon-button recipe (panel header actions, pop-out, the
+   inspector's gesture cluster): text color on a transparent ground, the
+   selection wash on hover — the same treatment the edit-mode chrome gives
+   its toolbar buttons. The reset kills the UA and site theme button box. */
+.daedalus-ui-icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: auto;
+  min-height: 0;
+  margin: 0;
+  padding: 0.25rem;
+  cursor: pointer;
+  color: var(--daedalus-text);
+  border: none;
+  border-radius: var(--daedalus-border-radius);
+  background: transparent;
+  font-family: inherit;
+}
+
+/* The quiet variant: micro-controls riding a row (steppers, unit selects,
+   reveal toggles) sit muted until engaged. */
+.daedalus-ui-icon-button--muted {
+  color: var(--daedalus-text-muted);
+}
+
+.daedalus-ui-icon-button:hover:not(:disabled) {
+  color: var(--daedalus-text);
+  background: var(--daedalus-selection-background);
+}
+
+.daedalus-ui-icon-button:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+/* Same lingering-ring treatment as the pill button. */
+.daedalus-ui-icon-button:focus {
+  outline: none;
+}
+
+.daedalus-ui-icon-button:focus-visible {
+  outline: 2px solid var(--daedalus-selection);
+  outline-offset: -1px;
+}
+
+/* The tooltip pattern (.daedalus-ui-tooltip-host/.daedalus-ui-tooltip) lives in
+   css/tooltip.css (daedalus_ui/tooltip, a dependency of this
+   library). */
+
+/* Dropdown menus (the page tree's Show kebab) are the shared menu
+   primitive (daedalus_ui/menu, js/menu/menu.css), not a kit recipe. */
+
+/* ——— The recessed input ——— */
+
+/* The recessed text input/select skin (property values, filters). The
+   self-joined selector is the baked-in theme defense: site themes style
+   inputs at element+attribute specificity (input[type="text"], 0-1-1),
+   which beats an unscoped single class — (0-2-0) outranks them all
+   without consumers double-classing. The height/line-height reset kills
+   the site theme's tall input box. */
+.daedalus-ui-input.daedalus-ui-input {
+  min-width: 0;
+  height: auto;
+  min-height: 0;
+  margin: 0;
+  padding: 0.125rem 0.375rem;
+  /* text, not auto: auto resolves through the rail's user-select: none. */
+  user-select: text;
+  color: var(--daedalus-text);
+  border: 1px solid transparent;
+  border-radius: var(--daedalus-border-radius);
+  background: var(--daedalus-toggle-background);
+  font-family: inherit;
+  font-size: var(--daedalus-font-size);
+  line-height: 1.6;
+}
+
+.daedalus-ui-input.daedalus-ui-input:focus {
+  outline: 2px solid var(--daedalus-selection);
+  outline-offset: -1px;
+}
+
+/* Selects keep the recessed skin; room for the native arrow. */
+.daedalus-ui-input.daedalus-ui-input--select {
+  width: auto;
+  padding-inline-end: 1.25rem;
+}

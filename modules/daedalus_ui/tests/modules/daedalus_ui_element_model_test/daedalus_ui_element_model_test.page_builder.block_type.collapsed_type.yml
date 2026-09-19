@@ -1,0 +1,2 @@
+# The compose axis: this bundle's render composes to ONE root element.
+composed: true

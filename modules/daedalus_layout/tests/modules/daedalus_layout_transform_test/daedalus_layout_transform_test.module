@@ -1,0 +1,20 @@
+<?php
+
+/**
+ * @file
+ * Records entity saves so kernel tests can assert what the walkers re-saved.
+ */
+
+declare(strict_types=1);
+
+use Drupal\Core\Entity\EntityInterface;
+use Drupal\Core\Entity\RevisionableInterface;
+use Drupal\daedalus_layout_transform_test\TransformLog;
+
+/**
+ * Implements hook_entity_presave().
+ */
+function daedalus_layout_transform_test_entity_presave(EntityInterface $entity): void {
+  $revision_id = $entity instanceof RevisionableInterface ? $entity->getRevisionId() : NULL;
+  TransformLog::$saves[] = $entity->getEntityTypeId() . ':' . $entity->id() . ':' . $revision_id;
+}

@@ -1,0 +1,12 @@
+services:
+  _defaults:
+    autowire: true
+    autoconfigure: true
+
+  daedalus_blueprint_ai_anthropic.skill_list_subscriber:
+    class: Drupal\daedalus_blueprint_ai_anthropic\EventSubscriber\SkillListSubscriber
+
+  # The runtime contract: the generated page-language catalog on the
+  # cached system prompt, and the conversation id into the tool layer.
+  daedalus_blueprint_ai_anthropic.page_language_subscriber:
+    class: Drupal\daedalus_blueprint_ai_anthropic\EventSubscriber\PageLanguageSubscriber

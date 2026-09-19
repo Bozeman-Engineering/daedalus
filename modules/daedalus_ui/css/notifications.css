@@ -1,0 +1,72 @@
+/* Panel anatomy (header pin + body scroll + sizing) comes from the shared
+   .daedalus-ui-panel__header/.daedalus-ui-panel__body recipe in sidebar.css; the Clear All
+   button, list column, and empty state wear the shared .daedalus-ui-pill-button /
+   .daedalus-ui-panel-list / .daedalus-ui-panel-empty recipes there. */
+
+/**
+ * Notification items: the History entry's compact card, keeping the
+ * status-colored left accent.
+ */
+.notification-item {
+  padding: 0.25rem 0.5rem;
+  border-left: 4px solid;
+  border-radius: var(--daedalus-border-radius);
+  background-color: var(--daedalus-toggle-active);
+  line-height: 1.4;
+}
+
+/* A notification with an element target scrolls back to it on click, so
+   only linked items wear the shared hover (the selection wash); the
+   status accent on the left border stays untouched. */
+.notification-item--linked {
+  cursor: pointer;
+}
+
+.notification-item--linked:hover {
+  background-color: var(--daedalus-selection-background);
+}
+
+/* Status message (green) */
+.notification-item--status {
+  border-left-color: var(--daedalus-success);
+  background-color: var(--daedalus-success-background);
+}
+
+/* Warning message (yellow/orange) */
+.notification-item--warning {
+  border-left-color: var(--daedalus-warning);
+  background-color: var(--daedalus-warning-background);
+}
+
+/* Error message (red) */
+.notification-item--error {
+  border-left-color: var(--daedalus-danger);
+  background-color: var(--daedalus-danger-background);
+}
+
+/* Info message (blue) */
+.notification-item--info {
+  border-left-color: var(--daedalus-info);
+  background-color: var(--daedalus-info-background);
+}
+
+/**
+ * Notification item content
+ */
+.notification-item__content {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.notification-item__message {
+  word-wrap: break-word;
+  color: var(--daedalus-text);
+  font-size: var(--daedalus-font-size);
+  line-height: 1.4;
+}
+
+.notification-item__time {
+  color: var(--daedalus-text-muted);
+  font-size: var(--daedalus-font-size-caption);
+}

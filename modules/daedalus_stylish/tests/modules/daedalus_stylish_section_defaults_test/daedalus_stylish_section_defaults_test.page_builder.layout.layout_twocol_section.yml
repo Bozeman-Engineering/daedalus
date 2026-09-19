@@ -1,0 +1,11 @@
+# The explicit-birth-layout target: a section born with this layout (an
+# add_section naming it) wears these defaults from birth. The width axis
+# composes a second default beside the built-in style axis; tests that
+# create no twocol_wide variant exercise the silent per-axis skip.
+# Root-only qualified: at nested depth the width axis resolves no default.
+variant_axes:
+  - width:
+      depth: root
+default_variants:
+  style: twocol_default
+  width: twocol_wide

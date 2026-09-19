@@ -1,0 +1,7 @@
+# A gradient-kind swatch whose value is not a gradient: spine validation
+# (StyleMapValidator::validateSwatchValue through the swatch value field
+# handler) must fail the import loudly.
+broken:
+  label: 'Broken'
+  kind: gradient
+  value: '#e94560'

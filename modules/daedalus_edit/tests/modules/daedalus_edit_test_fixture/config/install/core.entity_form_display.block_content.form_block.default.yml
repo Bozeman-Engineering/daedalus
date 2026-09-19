@@ -1,0 +1,49 @@
+langcode: en
+status: true
+dependencies:
+  config:
+    - block_content.type.form_block
+    - field.field.block_content.form_block.field_fb_media
+    - field.field.block_content.form_block.field_fb_related
+    - field.field.block_content.form_block.field_fb_text
+  module:
+    - media_library
+id: block_content.form_block.default
+targetEntityType: block_content
+bundle: form_block
+mode: default
+content:
+  field_fb_media:
+    type: media_library_widget
+    weight: 3
+    region: content
+    settings:
+      media_types: {  }
+    third_party_settings: {  }
+  field_fb_related:
+    type: entity_reference_autocomplete
+    weight: 2
+    region: content
+    settings:
+      match_operator: CONTAINS
+      match_limit: 10
+      size: 60
+      placeholder: ''
+    third_party_settings: {  }
+  field_fb_text:
+    type: string_textfield
+    weight: 1
+    region: content
+    settings:
+      size: 60
+      placeholder: ''
+    third_party_settings: {  }
+  info:
+    type: string_textfield
+    weight: -5
+    region: content
+    settings:
+      size: 60
+      placeholder: ''
+    third_party_settings: {  }
+hidden: {  }

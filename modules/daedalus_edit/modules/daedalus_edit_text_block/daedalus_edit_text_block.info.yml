@@ -1,0 +1,10 @@
+name: 'Daedalus Edit Text Block'
+type: module
+description: 'A simple text block'
+package: Daedalus
+core_version_requirement: '>=11.3 <11.5'
+dependencies:
+  - drupal:options
+  - daedalus:daedalus_edit
+  - daedalus:daedalus_layout
+  - daedalus:daedalus_ui

@@ -1,0 +1,8 @@
+# Design systems live under Appearance beside the theme list: the active
+# design system decides which skin, materials and law the site wears.
+entity.design_system.collection:
+  title: 'Design systems'
+  description: 'Manage the site''s design systems and activate one.'
+  route_name: entity.design_system.collection
+  parent: system.themes_page
+  weight: 10

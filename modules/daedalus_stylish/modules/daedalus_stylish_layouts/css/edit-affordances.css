@@ -1,0 +1,56 @@
+/**
+ * @file
+ * The empty-container drop affordance.
+ *
+ * An empty container is a zero-height sliver: nothing invites the drop that
+ * would fill it. This gives it a floor, a dashed edge, and a centered hint.
+ *
+ * The target is `data-container-empty-hint`, stamped by the composed render
+ * (daedalus_ui's ComposedLayoutRenderer, edit mode only) over the
+ * declaration's own `data-container-empty` marker — the element model's
+ * one emptiness fact, never layout markup (region-era selectors have died
+ * silently twice that way). ONE attribute selector serves every depth
+ * because the container is one box: the hint rides the container root,
+ * <section> page band and nested <div> alike.
+ *
+ * The hint text rides the attribute (`content: attr()`): a stylesheet cannot
+ * carry a translatable string, and a real hint element would be matched by
+ * `::>` children styles — the row variant would flex it. The ::before is
+ * invisible to those styles' child combinators.
+ *
+ * Edit mode only by construction: the hint attribute exists only where the
+ * edit-mode render stamped it, so live renders never match (the bare
+ * `data-container-empty` marker prints in every mode and styles nothing).
+ * currentColor, not an admin palette value: the affordance sits on PAGE
+ * content, whose scheme is the theme's.
+ */
+
+/* The dashed box is the CONTENT box, never the border box: a page band is
+   full-bleed by design, so its border box says nothing, while the content
+   box (what padding-inline leaves between the insets) is exactly what a
+   width variant moves. The ::before fills the content area and carries
+   the edge and the hint; the dashed edge alone is the affordance (no
+   tint: it would fight the band's own background). Once children exist
+   they draw the inset themselves and this retires. */
+[data-container-empty-hint] {
+  /* Centers the hint vertically even at the block-layout default; in a
+     flex/grid arrangement (e.g. the row variant) the ::before's own
+     margin: auto takes over. */
+  align-content: center;
+  min-height: 4em;
+}
+
+[data-container-empty-hint]::before {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 4em;
+  margin: auto;
+  content: attr(data-container-empty-hint);
+  color: color-mix(in sRGB, currentColor 60%, transparent);
+  outline: 2px dashed color-mix(in sRGB, currentColor 40%, transparent);
+  outline-offset: -2px;
+  font-style: italic;
+}

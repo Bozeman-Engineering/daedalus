@@ -1,0 +1,93 @@
+/* The Insert verb armed a pending anchor: panel items read as
+   click-to-place targets, not just drag handles. */
+.daedalus-layout-insert-pending .tabbed-content .draggable-block,
+.daedalus-layout-insert-pending .tabbed-content .draggable-section {
+  cursor: copy;
+}
+
+/* The keyboard cursor over the panel items (arrows move it, Enter
+   places). */
+.insert-highlight {
+  outline: 2px solid var(--daedalus-selection);
+}
+
+/* The promoted tab's type-to-filter box. */
+#promoted-block-content .js-form-item {
+  margin: 0;
+}
+#promoted-block-content [type="search"] {
+  width: 100%;
+}
+
+/* Both tabs' filter boxes wear the panel palette instead of the site
+   theme's input skin, so they follow the active color scheme. A RECESSED
+   pill with a magnifier glyph, against the RAISED bordered item cards —
+   inputs are wells, blocks are grabbable objects. The glyph is a fixed
+   mid-gray (#8e8e93): a data-URI SVG has no CSS cascade to inherit from,
+   and that tone reads on both schemes' surfaces. */
+#place_block [type="search"] {
+  /* As tight as the item rows: kill the site theme's input height and
+     line-height so the pill hugs the text. */
+  height: auto;
+  min-height: 0;
+  padding: 0.125rem 0.5rem 0.125rem 1.5rem;
+  color: var(--daedalus-text);
+  border: 1px solid transparent;
+  border-radius: var(--daedalus-border-radius);
+  background-color: var(--daedalus-toggle-background);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 256 256' fill='%238e8e93'%3E%3Cpath d='M229.66,218.34l-50.07-50.06a88.11,88.11,0,1,0-11.31,11.31l50.06,50.07a8,8,0,0,0,11.32-11.32ZM40,112a72,72,0,1,1,72,72A72.08,72.08,0,0,1,40,112Z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: 0.4rem center;
+  background-size: 0.75rem;
+  font-size: var(--daedalus-font-size);
+  line-height: 1.6;
+}
+
+#place_block [type="search"]::placeholder {
+  color: var(--daedalus-text-muted);
+}
+
+/* The header is the shared grammar (SidebarPluginBase::buildPanelHeader;
+   the .daedalus-ui-panel__header recipe in daedalus_ui's sidebar.css and
+   panel-controls.css): the Promoted/Other tabs sit in its action cluster
+   wearing the shared segmented-control recipe (.daedalus-ui-segments/.daedalus-ui-segment),
+   the close control after them. */
+
+/* The panes wear the shared .daedalus-ui-panel-list (sidebar.css), whose
+   two-class display: flex out-ranks a plain one-class hide and would show
+   both tabs at once. Both states restate their display with the shared
+   class joined into the selector, winning by specificity rather than load
+   order — the convention shared-recipe overrides follow. */
+.tabbed-content,
+.tabbed-content.daedalus-ui-panel-list:not(.active) {
+  display: none;
+}
+
+.tabbed-content.active,
+.tabbed-content.daedalus-ui-panel-list.active {
+  display: grid;
+  /* The tab is also the panel's flex-grown scroll body: without this, the
+     grid's default align-content: stretch inflates the item rows to fill
+     whatever height the rail hands it. */
+  align-content: start;
+}
+
+/* The category drop-downs wear the shared .daedalus-ui-details recipe
+   (panel-controls.css); only the tab's own layout stays local. */
+#other-block-content {
+  grid-template-columns: 1fr;
+
+  .js-form-item {
+    margin: 0;
+  }
+
+  .block-categories {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    padding-top: 0.25rem;
+  }
+  [type="search"] {
+    width: 100%;
+  }
+}

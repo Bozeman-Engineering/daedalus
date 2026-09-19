@@ -1,0 +1,8 @@
+# The sound per-id file beside the malformed single file: it lands.
+sound_section:
+  label: 'Sound section'
+  scope: 'kind:container'
+  styles:
+    '':
+      default:
+        padding: '1rem'

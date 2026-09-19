@@ -1,0 +1,9 @@
+# The universal block kind constrains background-image to the "large" image
+# style: media tokens on block-keyed entries must resolve through it, beating
+# the daedalus_stylish.settings media_image_style site default.
+block:
+  property_groups:
+    background:
+      constraints:
+        background-image:
+          image_style: large

@@ -1,0 +1,6 @@
+# The compose declaration the kernel tests read through the element model:
+# BlueprintElementAnnotatorTest expects `_element.composed: true` on its
+# text_block component nodes. The generative render itself is covered by
+# ComposedBlockRenderTest against daedalus_ui_resolver_test's
+# declarations.
+composed: true

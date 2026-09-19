@@ -1,0 +1,56 @@
+:is(#extra-specificity-hack, [data-drupal-admin-styles]),
+html {
+  .daedalus-ui-split-button {
+    position: relative;
+    display: flex;
+    align-items: stretch;
+  }
+
+  .daedalus-ui-split-button__main {
+    cursor: pointer;
+    border-radius: var(--daedalus-border-radius) 0 0 var(--daedalus-border-radius);
+  }
+
+  .daedalus-ui-split-button__caret {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 4px;
+    cursor: pointer;
+    border-left: 1px solid rgb(255, 255, 255, 0.2);
+    border-radius: 0 var(--daedalus-border-radius) var(--daedalus-border-radius) 0;
+  }
+
+  .daedalus-ui-split-button__caret:hover {
+    background-color: rgb(255, 255, 255, 0.1);
+  }
+
+  .daedalus-ui-split-button__chevron {
+    font-size: var(--daedalus-icon-size);
+    line-height: 1;
+  }
+
+  .daedalus-ui-split-button__dropdown {
+    position: absolute;
+    z-index: 1262;
+    top: 100%;
+    right: 0;
+    visibility: hidden;
+    transition:
+      opacity 0.3s ease,
+      transform 0.3s ease,
+      visibility 0.3s ease;
+    transform: translateY(-10px);
+    opacity: 0;
+    border: 1px solid var(--daedalus-lines);
+    border-radius: var(--daedalus-border-radius);
+    background: var(--daedalus-background);
+    box-shadow: 0 4px 12px rgb(0, 0, 0, 0.15);
+  }
+
+  .daedalus-ui-split-button__dropdown--open {
+    visibility: visible;
+    transform: translateY(0);
+    opacity: 1;
+  }
+}

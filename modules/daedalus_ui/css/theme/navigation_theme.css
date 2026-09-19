@@ -1,0 +1,261 @@
+/**
+ * @file
+ * Skins core Navigation (left rail + top bar) with Daedalus chrome tokens.
+ *
+ * Core routes every Navigation color through a var(--drupal-admin-*,
+ * fallback) hook (core/modules/navigation/css/base/variables.css), so
+ * mapping those hooks onto the chrome tokens re-skins the rail, the top
+ * bar, and their flyouts with no template or selector overrides. The
+ * light/dark scheme follows the chrome's prefers-color-scheme switch in
+ * daedalus_ui/variables for free.
+ *
+ * Only the ramp steps Navigation actually consumes are mapped, and each
+ * step's mapping follows the single role it plays across the components.
+ * The orange, red, and green ramps are left alone:
+ * they carry status semantics (the Workspaces indicator button), not
+ * chrome. The shadow-* values are left alone for the same reason shadows
+ * work on any surface.
+ */
+
+:root {
+  /* Surfaces. "white" is the chrome surface everywhere it appears: the
+     rail, its sticky header and footer, popovers, and the scroll-shadow
+     gradients. Its one text use is tooltip text over a gray-990 bubble,
+     so the tooltip stays a correctly inverted surface in both schemes. */
+  --drupal-admin-color-white: var(--daedalus-background);
+
+  /* Text. 990/950/900 are the primary shades. gray-800 is core's
+     resting label color (toolbar buttons, flyout links, dropdowns) that
+     brightens to 990 on hover — the chrome's labels are full-strength
+     always, so 800 maps to text, which also stops labels flashing
+     between weights of gray around hover. 700/600 stay secondary. */
+  --drupal-admin-color-gray-990: var(--daedalus-text);
+  --drupal-admin-color-gray-950: var(--daedalus-text);
+  --drupal-admin-color-gray-900: var(--daedalus-text);
+  --drupal-admin-color-gray-800: var(--daedalus-text);
+  --drupal-admin-color-gray-700: var(--daedalus-text-muted);
+  --drupal-admin-color-gray-600: var(--daedalus-text-muted);
+
+  /* The hover/open wash (dropdown hover, expanded menu item, messages)
+     becomes the chrome's universal hover treatment. */
+  --drupal-admin-color-gray-050: var(--daedalus-selection-background);
+
+  /* Dividers. gray-100 is every 1px line (rail edge, control bar,
+     submenu rail, link connectors); 200/300 are the stronger borders. */
+  --drupal-admin-color-gray-100: var(--daedalus-lines);
+  --drupal-admin-color-gray-200: var(--daedalus-border);
+  --drupal-admin-color-gray-300: var(--daedalus-border);
+
+  /* Accent: focus text, current-page markers, and the logo/primary
+     button (blue-450) collapse onto the chrome's single selection
+     accent. */
+  --drupal-admin-color-blue-450: var(--daedalus-selection);
+  --drupal-admin-color-blue-600: var(--daedalus-selection);
+  --drupal-admin-color-blue-700: var(--daedalus-selection);
+  --drupal-admin-color-focus: var(--daedalus-selection);
+
+  /* blue-200/300 are hover-only outline rings (toolbar buttons,
+     dropdown items). The chrome's hover language is the wash alone —
+     no ring — so they go transparent. Keyboard focus keeps its ring
+     via the focus hook above (and only keyboard focus — see the
+     :focus-visible carve-out at the end of this file). */
+  --drupal-admin-color-blue-200: transparent;
+  --drupal-admin-color-blue-300: transparent;
+}
+
+/* Some --admin-toolbar-* values core sets directly instead of routing
+   through a --drupal-admin-* hook. Overriding them at :root is not
+   enough: variables.css re-declares every variable a second time
+   directly on the [data-drupal-admin-styles] wrapper elements, and an
+   element's own declaration shadows anything inherited from :root (the
+   color hooks above survive that because core's re-declarations still
+   read the inherited --drupal-admin-* values). So each direct override
+   targets both scopes, doubled to outrank core's (0,1,0) from this
+   file's earlier position in the aggregate. */
+:root:root,
+[data-drupal-admin-styles][data-drupal-admin-styles] {
+  /* The popover open-state surface: a slightly recessed chrome panel. */
+  --admin-toolbar-color-expanded: var(--daedalus-toggle-background);
+  /* The chrome typeface instead of Inter; daedalus_ui already sets
+     this on the top bar at element scope with the same token. With the
+     chrome's static Open Sans, core's font-variation-settings "wght"
+     labels also fall back to regular weight, matching the chrome. */
+  --admin-toolbar-font-family: var(--daedalus-font);
+  /* The rail's info text (tooltips, dropdown labels, toolbar messages)
+     is secondary text in the chrome's vocabulary: the small ramp step
+     (12px, vs 12.25px core would derive from the 14px rem below). */
+  --admin-toolbar-font-size-info-sm: var(--daedalus-font-size-small);
+  /* The density lever: every Navigation space and type size derives
+     from this one value. 14px (from core's 16px) tightens the rail
+     toward the chrome's density without fighting core's layout math.
+     max() preserves core's guard against 10px-base themes, and the
+     chrome's font-scale knob multiplies the guarded result so the rail
+     resizes with the rest of the chrome type. */
+  --admin-toolbar-rem: calc(max(0.875rem, 14px) * var(--daedalus-font-scale));
+  /* The top bar wears the page builder bar's height (daedalus_ui
+     sizes Edit Mode's bar with the same token), so view and edit pages
+     read as one chrome. Core sizes the bar AND the canvas offset from
+     this one variable, so both follow. */
+  --admin-toolbar-top-bar-height: var(--daedalus-top-bar-height);
+}
+
+/* Claro draws the chevron as content: url(data:svg) with
+   fill='currentColor' — but an SVG loaded as an image cannot read the
+   document cascade, so currentColor resolves to black no matter what
+   color the pseudo-element wears. Repaint it as a mask instead: the
+   background-color shows through the same glyph. Claro's padding is
+   traded for margin — the mask paints across the whole box, padding
+   included. The doubled class outranks Claro's rule, which aggregates
+   after this file. */
+.breadcrumb__item + .breadcrumb__item.breadcrumb__item::before {
+  width: 0.3125rem;
+  height: 0.5rem;
+  margin: 0 0.75rem;
+  padding: 0;
+  content: "";
+  background-color: var(--daedalus-text);
+  mask-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' height='8' width='5'%3e%3cpath d='M1.207.647L.5 1.354 3.146 4 .5 6.647l.707.707L4.561 4z'/%3e%3c/svg%3e");
+  mask-repeat: no-repeat;
+  mask-position: center;
+}
+
+/* The three places core writes a literal `white` instead of the hooked
+   var: the top bar, the mobile control bar, and the dropdown flyout.
+   Core wraps every component in
+   :is(#extra-specificity-hack, [data-drupal-admin-styles]) — (1,1,0) —
+   and this file aggregates before core's, so each override doubles a
+   class to reach (1,2,0) and win from any position in the cascade. */
+:is(#extra-specificity-hack, [data-drupal-admin-styles]) {
+  &.top-bar.top-bar,
+  &.admin-toolbar-control-bar.admin-toolbar-control-bar {
+    background-color: var(--admin-toolbar-color-white);
+  }
+
+  html[data-daedalus-ui-mode] &.top-bar.top-bar {
+    border-bottom: none;
+  }
+
+  /* The rail's right edge, drawn as one line that starts below the top bar
+     instead of running behind it. Core splits the edge across two borders
+     (the scrolling content region and the sticky footer), which cannot stop
+     short of the top; a single pseudo-element on the rail itself can.
+
+     The rail is already position: fixed and overflow: visible, so it is the
+     containing block and nothing clips the line. Drawing on __content
+     instead would put the line inside an overflow-y: auto box and depend on
+     abs-pos escaping a non-containing-block ancestor's clip — true, but far
+     too subtle to rest on.
+
+     The top offset needs no edit-mode gating, unlike the top bar's own
+     border: the displace offset is 0 when there is no top bar, so the line
+     runs the full height on its own. */
+  &.admin-toolbar::after {
+    position: absolute;
+    top: var(--drupal-displace-offset-top, 0);
+    bottom: 0;
+    width: 1px;
+    content: "";
+    transition: top 0.2s ease;
+    background: var(--daedalus-border, #b4bdd1);
+    inset-inline-end: 0;
+  }
+
+  /* Doubled classes: core's own rules match at (1,1,0) and this file
+     aggregates first, so a single class ties and loses on document order. */
+  .admin-toolbar__content.admin-toolbar__content,
+  .admin-toolbar__footer.admin-toolbar__footer {
+    border-inline-end: none;
+  }
+
+  .top-bar__actions {
+    .toolbar-button {
+      --toolbar-button-color: var(--daedalus-selection-text);
+      --toolbar-button-hover-color: var(--daedalus-selection-text);
+      --toolbar-button-focus-color: var(--daedalus-selection-text);
+    }
+
+    .toolbar-button__icon {
+      fill: var(--daedalus-selection-text);
+    }
+  }
+
+  .toolbar-dropdown__menu.toolbar-dropdown__menu {
+    background: var(--admin-toolbar-color-white);
+  }
+
+  /* Native scrollbars and form controls inside the rail and top bar
+     follow the OS scheme like the chrome palette does; without this the
+     rail scrolls against a white scrollbar track in dark mode. */
+  &.admin-toolbar,
+  &.top-bar {
+    color-scheme: light dark;
+  }
+
+  /* The rest of the page builder bar's language: a 1px bottom border in
+     place of core's floating drop shadow, and no block padding — the
+     slim height (see the height hook above) leaves no room for core's
+     12px, so the content grid centers in the full bar height instead. */
+  &.top-bar.top-bar {
+    box-shadow: none;
+
+    @media (min-width: 64rem) {
+      padding-block: 0;
+    }
+  }
+
+  .top-bar__content {
+    height: 100%;
+
+    .toolbar-title__icon {
+      display: none;
+    }
+
+    .toolbar-title__label {
+      line-height: 2;
+    }
+  }
+
+  /* Core styles focus with :focus and never :focus-visible (grep the
+     module — it appears nowhere), so a mouse click parks a ring on the
+     clicked element and leaves it there until focus moves on. That reads
+     as a stuck selection, and it desyncs visibly on the buttons that open
+     a sidebar on hover: the sidebar closes on mouse-out, the ring stays.
+
+     Carve out the non-keyboard case rather than dropping the ring. Since
+     :focus-visible is a strict subset of :focus, core's own rules still
+     paint the keyboard ring once mouse focus is excluded — this file only
+     subtracts. Same treatment daedalus_ui gives Olivero's summary ring
+     (css/sidebar.css) and core's toolbar-button hover ring (css/top-bar.css).
+
+     Core's blanket ring sits behind a :where(), which contributes no
+     specificity, so it lands at (0,1,0) — the wrapper alone outranks it.
+     This one rule covers everything that inherits that ring, which is
+     most of the chrome (.toolbar-menu__link's :focus, for instance, sets
+     an outline-offset but never an outline of its own). */
+  *:focus:not(:focus-visible) {
+    outline: none;
+  }
+
+  /* Two components draw their own ring instead of inheriting the blanket
+     one, and both sit at (1,2,0) — the same wrapper this block uses, plus
+     a class, plus :focus. That exactly TIES the rule above, and core wins
+     the tie on document order, so each needs a doubled class to clear it.
+
+     Both also swap the label color on focus (blue-700 and blue-600, which
+     the accent mapping above collapses onto the selection color), so a
+     clicked control stays accent-colored after mouse-out independently of
+     its ring — the resting shade has to come back with the outline. The
+     button's resting color is read back from its own component variable
+     so the top bar's inverted override (see .top-bar__actions) still
+     applies; the dropdown link has no such variable and names the ramp
+     step its resting rule uses. */
+  .toolbar-button.toolbar-button:focus:not(:focus-visible) {
+    color: var(--toolbar-button-color);
+    outline: none;
+  }
+
+  .toolbar-dropdown__link.toolbar-dropdown__link:focus:not(:focus-visible) {
+    color: var(--admin-toolbar-color-gray-800);
+    outline: none;
+  }
+}

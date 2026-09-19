@@ -1,0 +1,9 @@
+daedalus_layout.settings.configure_default_section:
+  title: 'Default Layout'
+  route_name: daedalus_layout.settings.configure_default_section
+  base_route: daedalus_layout.settings.configure_default_section
+
+daedalus_layout.settings.promoted_blocks:
+  title: 'Promoted Blocks'
+  route_name: daedalus_layout.settings.promoted_blocks
+  base_route: daedalus_layout.settings.configure_default_section

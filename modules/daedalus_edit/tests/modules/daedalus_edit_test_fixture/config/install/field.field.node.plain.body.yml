@@ -1,0 +1,35 @@
+langcode: en
+status: true
+dependencies:
+  config:
+    - field.storage.node.body
+    - node.type.plain
+  module:
+    - daedalus_edit
+    - field_sample_value
+    - text
+third_party_settings:
+  field_sample_value:
+    id: random_text
+    configuration:
+      prevent_save: false
+      count: '1'
+      filter_format: daedalus_edit_formatted_text
+  daedalus_edit:
+    disable: false
+    handle: form_item
+id: node.plain.body
+field_name: body
+entity_type: node
+bundle: plain
+label: Body
+description: ''
+required: false
+translatable: true
+default_value: {  }
+default_value_callback: ''
+settings:
+  display_summary: true
+  required_summary: false
+  allowed_formats: {  }
+field_type: text_with_summary

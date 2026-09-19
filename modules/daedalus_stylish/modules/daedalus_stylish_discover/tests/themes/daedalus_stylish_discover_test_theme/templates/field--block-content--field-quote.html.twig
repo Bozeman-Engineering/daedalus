@@ -1,0 +1,32 @@
+{#
+/**
+ * @file
+ * Classed markup exercising every structural rule of element discovery.
+ *
+ * - Nesting: .discover-card > .discover-quote, retained as a tree.
+ * - Classless skip-through: the unclassed <div> inside the blockquote must
+ *   hoist its classed child to the quote part.
+ * - Shallowest-first collapse: .discover-attribution occurs deep inside the
+ *   quote AND as a direct card child; the part must land under the card.
+ * - Same-element multi-class: the deep span also wears .discover-cite,
+ *   which becomes a sibling part at the element's position (under quote).
+ * - Field-wrapper chain: the field--name-field-author element is a FIELD's
+ *   markup — none of its classes become parts, and the card gains a
+ *   "contains: field:field_author" slot instead.
+ * - Filtering: js-discover-hook (behavior hook) and bad:class (charset
+ *   violation) never surface.
+ */
+#}
+<div class="discover-card">
+  <blockquote class="discover-quote js-discover-hook bad:class">
+    <div>
+      {% for item in items %}
+        <span class="discover-attribution discover-cite">{{ item.content }}</span>
+      {% endfor %}
+    </div>
+  </blockquote>
+  <span class="discover-attribution">Sample attribution</span>
+  <div class="field field--name-field-author field--type-string field--label-hidden">
+    <div class="field__item">Sample author</div>
+  </div>
+</div>

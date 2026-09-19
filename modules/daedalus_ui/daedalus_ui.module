@@ -1,0 +1,400 @@
+<?php
+
+/**
+ * @file
+ * Hooks for the Daedalus UI module.
+ */
+
+use Drupal\Core\Entity\EntityInterface;
+use Drupal\Core\Form\FormStateInterface;
+use Drupal\Core\Field\BaseFieldDefinition;
+use Drupal\Core\Entity\EntityTypeInterface;
+use Drupal\Core\Entity\Display\EntityViewDisplayInterface;
+use Drupal\Core\Render\Markup;
+
+/**
+ * Implements hook_preprocess_HOOK().
+ */
+function daedalus_ui_preprocess_field(&$variables) {
+  Drupal::service('daedalus_ui.ui')->wrapAndAttributeFieldsForEditing($variables);
+}
+
+/**
+ * Implements hook_preprocess_HOOK().
+ *
+ * Stamps the active mode on the html element. All mode-dependent chrome
+ * visibility hangs off this one attribute: CSS hides the core navigation
+ * sidebar and top bar and reveals the mode's own top bar when it is present.
+ * The server stamps it from the (path-scoped) cookie so the initial render is
+ * flicker-free; the client-side mode toggle flips the same attribute.
+ *
+ * The chrome density preference rides the html element too, as
+ * data-daedalus-ui-chrome-density, and for the same reason: CSS and the reveal engine
+ * read only this attribute, so stamping it SSR means clean mode never
+ * flashes its hidden chrome before JS boots. It is stamped whenever the Edit
+ * mode is AVAILABLE on the request, the same predicate under which the edit
+ * chrome itself renders (present but hidden until the mode is active, see
+ * DaedalusUi::buildPageTop), not only while the mode is active: the
+ * client-side toggle flips the mode stamp alone, so a density stamp tied to
+ * the active mode is missing after an AJAX entry and every consumer reads
+ * the absence as full density until a reload. The preference is per-user
+ * (EditorSettings), hence the user cache context; the response already
+ * varies per user wherever the chrome renders (every sidebar panel carries
+ * that context), so the stamp adds no new cache variation.
+ */
+function daedalus_ui_preprocess_html(&$variables) {
+  $variables['#cache']['contexts'][] = 'daedalus_ui_mode';
+  $mode = \Drupal::service('daedalus_ui.mode_state')->getMode();
+  if ($mode !== 'none') {
+    $variables['html_attributes']->setAttribute('data-daedalus-ui-mode', $mode);
+    // In a mode the page is the user's own editing session (staged tempstore
+    // content), so it varies per user regardless of any preference.
+    $variables['#cache']['contexts'][] = 'user';
+    if ($mode === 'edit') {
+      // Seed the displace offsets the open rails will produce so first paint
+      // agrees with the SSR-rendered panels: consumers of
+      // --drupal-displace-offset-left/right otherwise pay the 0px fallback
+      // until displace.js first runs and flash full-width. displace.js writes
+      // measured values over these same inline properties, correcting drift.
+      $rails = \Drupal::service('daedalus_ui.ui')->getRailWidths();
+      array_push($variables['#cache']['contexts'], ...$rails['cache_contexts']);
+      $seed = '';
+      foreach ($rails['widths'] as $side => $width) {
+        if ($width !== NULL) {
+          $seed .= "--drupal-displace-offset-$side: $width;";
+        }
+      }
+      if ($seed !== '') {
+        $variables['html_attributes']->setAttribute('style', $seed);
+      }
+    }
+  }
+
+  // The mode plugins are memoized; hook_page_top already resolved them for
+  // this request when it built the chrome.
+  $modes = \Drupal::service('plugin.manager.modes')->getModePlugins();
+  if (isset($modes['edit'])) {
+    $variables['#cache']['contexts'][] = 'user';
+    $density = \Drupal::service('daedalus_ui.editor_settings')->getChromeDensity();
+    $variables['html_attributes']->setAttribute('data-daedalus-ui-chrome-density', $density);
+  }
+
+  $variables['#cache']['contexts'][] = 'user.permissions';
+}
+
+/**
+ * Implements hook_preprocess_HOOK().
+ *
+ * The stage: one wrapper around the page (page_top chrome stays outside),
+ * rendered whenever a mode could activate here so entering a mode client-side
+ * needs no re-render. In-mode CSS makes it a query container, which is what
+ * lets the canvas state vector narrow the whole page and have
+ * container-breakpoint conditions re-evaluate live (canvas-vector.js owns the
+ * width; the wrapper is inert without it).
+ *
+ * It is deliberately NOT .dialog-off-canvas-main-canvas, which is the box
+ * core keeps answering "how much room does chrome leave the page" on (displace
+ * margins from CSS, off-canvas tray padding written inline by off-canvas.js).
+ * The stage answers "how wide is the page pretending to be", and the two
+ * cannot share a box: centering a posed stage is margin-inline auto, the very
+ * property core's displacement occupies.
+ *
+ * It wraps the off-canvas wrapper's CHILDREN, so the stage lands INSIDE that
+ * canvas. That position is load-bearing twice over.
+ * Core's navigation chrome displaces the page through sibling combinators
+ * (`.admin-toolbar ~ .dialog-off-canvas-main-canvas` for the sidebar width,
+ * the same shape on .top-bar for its height), so a wrapper AROUND the canvas
+ * silently unmatches them and the page slides under the toolbar — in every
+ * mode and out of mode alike. And the query container must measure the real
+ * editing area: outside the canvas it would span the displaced rails too, so
+ * container conditions would answer for space the page never occupies.
+ *
+ * Why not #prefix/#suffix on $variables['page'] (which reads like the natural
+ * home): the renderer applies prefix/suffix AFTER #theme_wrappers, and the
+ * off-canvas wrapper IS a theme wrapper on the page element, so that door can
+ * only ever produce the outer position.
+ */
+function daedalus_ui_preprocess_off_canvas_page_wrapper(&$variables) {
+  if (empty($variables['children'])) {
+    return;
+  }
+  if (empty(\Drupal::service('plugin.manager.modes')->getModePlugins())) {
+    return;
+  }
+  $variables['children'] = Markup::create(
+    '<div id="daedalus-ui-stage">' . $variables['children'] . '</div>'
+  );
+}
+
+/**
+ * Implements hook_preprocess_HOOK().
+ *
+ * On pages where a daedalus_ui mode is available, the mode entry button
+ * (the ModeEntry top bar item) is the primary page action, so core's featured
+ * Edit local task returns to the More-actions dropdown it would otherwise be
+ * promoted out of.
+ */
+function daedalus_ui_preprocess_top_bar_page_actions(&$variables) {
+  $variables['#cache']['contexts'][] = 'user.permissions';
+  if (empty(\Drupal::service('plugin.manager.modes')->getModePlugins())) {
+    return;
+  }
+  $defeatured = [];
+  foreach ($variables['featured_page_actions'] as $route => $featured) {
+    $defeatured[$route] = $featured['page_action'];
+  }
+  // First in the dropdown: Edit was core's featured action for a reason.
+  $variables['page_actions'] = $defeatured + $variables['page_actions'];
+  $variables['featured_page_actions'] = [];
+}
+
+/**
+ * Implements hook_entity_view_alter().
+ */
+function daedalus_ui_entity_view_alter(array &$build, EntityInterface $entity, EntityViewDisplayInterface $display) {
+  \Drupal::service('daedalus_ui.entity_view_alter')->alter($build, $entity, $display);
+}
+
+/**
+ * Implements hook_form_alter().
+ */
+function daedalus_ui_form_alter(&$form, FormStateInterface $form_state, $form_id) {
+  \Drupal::service('daedalus_ui.form_alter.bundle_edit')->formAlter($form, $form_state);
+
+  if (in_array($form_id, ['wse_workspace_switcher_form', 'workspace_switcher_form'])) {
+    $form['#submit'][] = 'daedalus_ui_form_workspace_switcher_form_submit';
+  }
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter() for 'field_config_edit_form'.
+ */
+function daedalus_ui_form_field_config_edit_form_alter(&$form, FormStateInterface $form_state, $form_id): void {
+  \Drupal::service('daedalus_ui.form_alter.field_config')->formAlter($form, $form_state);
+}
+
+/**
+ * Workspace switcher submission handler.
+ */
+function daedalus_ui_form_workspace_switcher_form_submit(&$form, FormStateInterface $form_state) {
+  $redirect_destination = \Drupal::destination()->get();
+  // Change the redirect destination back to the canonical page when the
+  // destination was daedalus_ui.load_editable_page (our AJAX re-loader).
+  if (str_contains($redirect_destination, '/daedalus-ui/load-editable-page/')) {
+    $pieces = explode('/', $redirect_destination);
+    $entity = \Drupal::entityTypeManager()->getStorage($pieces[3])->load($pieces[4]);
+    $form_state->setRedirectUrl($entity->toUrl());
+  }
+}
+
+/**
+ * Implements hook_entity_insert().
+ */
+function daedalus_ui_entity_insert(EntityInterface $entity) {
+  \Drupal::service('daedalus_ui.event_subscriber.initial_mode')->prepare($entity);
+}
+
+/**
+ * Implements hook_element_info_alter().
+ */
+function daedalus_ui_element_info_alter(array &$types) {
+  if (isset($types['status_messages'])) {
+    // Replace the default pre_render callback with our own.
+    // This allows us to intercept status messages when in Edit Mode.
+    $types['status_messages']['#pre_render'] = [
+      'Drupal\daedalus_ui\Message\EditModeHtmlMessages::preRender',
+    ];
+  }
+}
+
+/**
+ * Implements hook_entity_build_defaults_alter().
+ */
+function daedalus_ui_entity_build_defaults_alter(array &$build, EntityInterface $entity, $view_mode) {
+  // Flag that the entity needs a wrapper. This wrapper is used to update the
+  // page once an action happens. e.g. changing a value, adding a new field to
+  // the page, switching to a new tool...
+  // @see EntityTemplate->onTwigRenderTemplate()
+  // @see DaedalusEditFormTrait->addEmptyField()
+  $id = daedalus_ui_entity_identifier($entity);
+  $build['#daedalus_ui_entity'] = [
+    'entity_type' => $entity->getEntityTypeId(),
+    'entity_id' => $id,
+    'uuid' => $entity->uuid(),
+    'bundle' => $entity->bundle(),
+    // Record what the actual view mode was when this item was built.
+    'view_mode' => $view_mode,
+  ];
+  \Drupal::service('daedalus_ui.view_mode_tracker')->setViewMode($entity->getEntityTypeId(), $id, $view_mode);
+}
+
+/**
+ * Returns the identifier the client keys an entity by: its id, else its UUID.
+ */
+function daedalus_ui_entity_identifier(EntityInterface $entity) {
+  // @todo Can we just use uuid for everything?
+  return $entity->id() ?? $entity->uuid();
+}
+
+/**
+ * Builds the Edit Mode wrapper id for an entity.
+ *
+ * The value placed in the data-daedalus-ui-entity-wrapper attribute, and
+ * the canonical identifier for targeting an entity's editable wrapper in AJAX
+ * refreshes. Single source for the format so producers and consumers agree.
+ *
+ * @param \Drupal\Core\Entity\EntityInterface $entity
+ *   The entity.
+ *
+ * @return string
+ *   The wrapper id (entity_type::identifier::bundle).
+ */
+function daedalus_ui_entity_wrapper_id(EntityInterface $entity): string {
+  return sprintf('%s::%s::%s', $entity->getEntityTypeId(), daedalus_ui_entity_identifier($entity), $entity->bundle());
+}
+
+/**
+ * Daedalus UI get view mode.
+ *
+ * Falls back to a view mode that exists for this entity.
+ *
+ * @param \Drupal\Core\Entity\EntityInterface $entity
+ *   The entity.
+ * @param string $view_mode
+ *   The perspective view mode.
+ *
+ * @return string
+ *   The view mode.
+ *
+ * @throws \Drupal\Component\Plugin\Exception\InvalidPluginDefinitionException
+ * @throws \Drupal\Component\Plugin\Exception\PluginNotFoundException
+ */
+function _daedalus_ui_get_view_mode(EntityInterface $entity, string $view_mode = 'full'): string {
+  static $cached_view_modes;
+  $original_id = $entity->getEntityTypeId() . "." . $entity->bundle() . "." . $view_mode;
+
+  if (!empty($cached_view_modes[$original_id])) {
+    return $cached_view_modes[$original_id];
+  }
+
+  $view_display = _daedalus_ui_get_entity_view_display($entity, $view_mode);
+  $cached_view_modes[$original_id] = !empty($view_display) ? $view_display->getMode() : 'default';
+  return $cached_view_modes[$original_id];
+}
+
+/**
+ * Get entity view display.
+ *
+ * Loads the actual entity view display since
+ * $this->entityDisplayRepository->getViewDisplay($entity->getEntityTypeId(),
+ * $entity->bundle(), $view_mode) will always return a display.
+ *
+ * @param \Drupal\Core\Entity\EntityInterface $entity
+ *   The entity.
+ * @param string $view_mode
+ *   The view mode.
+ *
+ * @return \Drupal\Core\Entity\Display\EntityViewDisplayInterface|null
+ *   The entity view display for this entity and view mode, the default
+ *   display, or NULL if neither exists (e.g. for config entities, which have
+ *   no view displays). Callers must handle NULL.
+ *
+ * @throws \Drupal\Component\Plugin\Exception\InvalidPluginDefinitionException
+ * @throws \Drupal\Component\Plugin\Exception\PluginNotFoundException
+ */
+function _daedalus_ui_get_entity_view_display(EntityInterface $entity, string $view_mode = 'full'): ?EntityViewDisplayInterface {
+  $original_id = $entity->getEntityTypeId() . "." . $entity->bundle() . "." . $view_mode;
+  $storage = \Drupal::entityTypeManager()->getStorage('entity_view_display');
+  $view_display = $storage->load($original_id);
+  if (empty($view_display)) {
+    $default_id = $entity->getEntityTypeId() . "." . $entity->bundle() . ".default";
+    $view_display = $storage->load($default_id);
+  }
+  return $view_display;
+}
+
+/**
+ * Implements hook_entity_base_field_info().
+ */
+function daedalus_ui_entity_base_field_info(EntityTypeInterface $entity_type) {
+  if ($entity_type->id() === 'user') {
+    $fields['daedalus_ui_settings'] = BaseFieldDefinition::create('map')
+      ->setLabel(t('Daedalus UI Settings'))
+      ->setDescription(t('Settings for Daedalus UI hotkeys.'))
+      ->setDefaultValue([]);
+    return $fields;
+  }
+}
+
+/**
+ * Implements hook_theme_registry_alter().
+ */
+function daedalus_ui_theme_registry_alter(&$theme_registry) {
+  // Re-typing a hook to 'theme_engine' is only legal when the active theme
+  // actually has an engine: ThemeManager passes getEngine() to
+  // getThemeEngine() unguarded for any non-'module' type, which fatals on an
+  // engineless theme (kernel tests' 'core' theme). Without an engine there is
+  // nothing to route the render through, so plain twig is already correct.
+  if (\Drupal::theme()->getActiveTheme()->getEngine() === NULL) {
+    return;
+  }
+  // As a workaround, let's let users flag that module defined templates are
+  // okay.
+  // @see https://www.drupal.org/project/daedalus/issues/3548969
+  foreach ($theme_registry as &$hook_info) {
+    if (!empty($hook_info['use_twig_events'])) {
+      $hook_info['type'] = 'theme_engine';
+    }
+  }
+  // The inline-block field-key rewrite (InlineBlockFieldKeys) listens at the
+  // block template boundary through twig_events, which only sees templates
+  // rendered by the active theme's engine. When no theme in the chain
+  // overrides block.html.twig the registry types the hook 'module' (core
+  // block's copy) and core renders it with plain twig, so the event never
+  // fires and an open inline block's field keys keep the entity-uuid form
+  // the projection cannot resolve. Re-type the hook so the engine renders
+  // core's template too.
+  if (isset($theme_registry['block'])) {
+    $theme_registry['block']['type'] = 'theme_engine';
+  }
+}
+
+/**
+ * Implode an array with a separator and a final separator.
+ *
+ * @param array $pieces
+ *   The pieces to implode together.
+ * @param string $separator
+ *   The separator used on all but the last pieces.
+ * @param string $final_separator
+ *   The separator used on the final two pieces.
+ *
+ * @return string
+ *   The imploded string.
+ */
+function daedalus_ui_implode(array $pieces, $separator = ', ', $final_separator = ' and '): string {
+  $last = array_pop($pieces);
+  $first = implode($separator, $pieces);
+  $both = array_filter([$first, $last]);
+  return implode($final_separator, $both);
+}
+
+/**
+ * Saves an entity outside the active workspace, if any.
+ *
+ * Bundle config and user settings are not workspace-aware, so a save made
+ * while a workspace is active would be deferred to its publish.
+ */
+function daedalus_ui_save_outside_workspace(EntityInterface $entity) {
+  $callback = function () use ($entity) {
+    $entity->save();
+  };
+  if (\Drupal::moduleHandler()->moduleExists('workspaces')) {
+    $manager = \Drupal::service('workspaces.manager');
+    if ($manager->hasActiveWorkspace()) {
+      $manager->executeOutsideWorkspace($callback);
+      return;
+    }
+  }
+  $callback();
+}

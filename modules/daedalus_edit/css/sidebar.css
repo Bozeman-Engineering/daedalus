@@ -1,0 +1,88 @@
+/* The entity-form panel's form cache: fetched forms stay cached in the
+   mount and exactly the SUBJECT's form is shown (the subject model in
+   daedalus-edit-sidebar.js toggles the class). The mount is the panel's
+   daedalus-ui-panel__body (scroll, right/bottom padding, the pinned-header contract
+   come from daedalus_ui's shared recipe); the flex sizing here makes it
+   fill the panel under the pinned daedalus-ui-panel__header. */
+#daedalus-edit-form-cache {
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+
+  > .daedalus-edit-form {
+    display: none;
+  }
+  > .daedalus-edit-form--subject {
+    display: block;
+  }
+}
+
+/* The panel-hosted form's look. Controls wear the shared panel kit
+   (daedalus-ui-details / daedalus-ui-input / daedalus-ui-pill-button, applied server-side by
+   DaedalusEditFormTrait::applyPanelGrammar; checkboxes and selects ride the
+   edit-mode form grammar in daedalus_ui css/form.css). These rules
+   keep only the entity-form specifics — sizing, spacing, the text
+   hierarchy — and cover panel-edited fields and revealed honest-panel
+   widgets alike. */
+#daedalus-ui-right-sidebar .daedalus-edit-form {
+  /* Kit inputs fill the rail: a widget's size/cols attribute would gauge
+     them past 500px and overflow the clipped panel. */
+  input.daedalus-ui-input,
+  textarea.daedalus-ui-input {
+    width: 100%;
+  }
+
+  .form-item {
+    margin-block: 0.375rem;
+  }
+
+  /* The text hierarchy: muted caption labels over regular-size values,
+     for real widgets and the status pane's static items alike. */
+  .form-item > label {
+    display: block;
+    margin-block-end: 0.125rem;
+    color: var(--daedalus-text-muted);
+    font-size: var(--daedalus-font-size-caption);
+    font-weight: 600;
+  }
+
+  /* Checkbox and select rows lay label and control on one line (the
+     shared row recipe in daedalus_ui css/form.css); their labels
+     read as row text, not captions. */
+  :is(.form-type-checkbox, .form-type-select) > label {
+    display: initial;
+    margin: 0;
+    color: var(--daedalus-text);
+    font-size: var(--daedalus-font-size);
+    font-weight: 400;
+  }
+
+  /* Static items (the status pane's Published / Last saved / Author). */
+  .form-type-item {
+    color: var(--daedalus-text);
+    font-size: var(--daedalus-font-size);
+  }
+
+  .description {
+    margin-block-start: 0.25rem;
+    color: var(--daedalus-text-muted);
+    font-size: var(--daedalus-font-size-caption);
+
+    ul {
+      margin: 0.25rem 0 0;
+      padding-inline-start: 1rem;
+    }
+  }
+
+  /* Stacked panes: the shared body indent plus a little breathing room
+     (the daedalus-ui-details recipe zeroes the wrapper so consumers choose). */
+  .daedalus-ui-details > .details-wrapper {
+    padding-block: 0.125rem 0.375rem;
+    padding-inline-start: var(--daedalus-indent);
+  }
+}
+
+#daedalus-ui-right-sidebar .text-format-filter-wrapper {
+  display: flex;
+  flex-direction: column-reverse;
+}

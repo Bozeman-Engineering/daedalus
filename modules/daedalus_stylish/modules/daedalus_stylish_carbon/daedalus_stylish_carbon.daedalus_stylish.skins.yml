@@ -1,0 +1,623 @@
+# The Carbon skin: IBM's Carbon Design System translated into daedalus_stylish skin
+# data, as a dogfood fixture: a REAL brand design system exercising the
+# skin model (tokens + site element defaults) rather than a toy palette.
+#
+# Source: the Carbon Design System token packages, (c) IBM Corp. 2018-2026,
+# licensed under the Apache License, Version 2.0 (see LICENSE-APACHE-2.0.txt
+# in this module; https://www.apache.org/licenses/LICENSE-2.0). Values were
+# extracted from @carbon/themes 11.79.0, @carbon/layout 11.57.0,
+# @carbon/type 11.65.0, and @carbon/motion 11.50.0. This file is a
+# translated derivative (Carbon token values re-expressed in the daedalus_stylish
+# skins grammar), not a redistribution of the packages themselves.
+#
+# The translation, and what it exercises:
+# - color: the full core theme token set (104 tokens; the syntax-*
+#   code-highlighting family and component token sets are out of scope).
+#   Carbon ships FOUR theme maps (white, g10, g90, g100); a skin's scheme
+#   axis holds exactly one light/dark pair, so this skin wears the
+#   canonical white <-> g100 pairing. The g10 <-> g90 pairing would be a
+#   SECOND skin; the model's answer to a multi-theme system is multiple
+#   skins, one active.
+# - space: the 13-step spacing scale, Carbon's 01..13 ordinals.
+# - text: the 15-step type SIZE scale. Carbon's type tokens proper
+#   (heading-01..07, body-01/02, code-01/02, ...) are COMPOUND (each
+#   bundles font-size + weight + line-height + letter-spacing), and the
+#   token tier has per-property scales only, so the compound roles live
+#   below as site element defaults on base tags instead.
+# - font / weight / leading / transition / layout: IBM Plex stacks,
+#   Carbon's three weights, the six line-heights its compound type tokens
+#   carry (minted because the suite binds line-height to the leading
+#   scale), motion duration+easing pairs, and the grid's max width.
+#
+# Bridge tokens: the site chrome's CSS consumes a fixed vocabulary of token
+# names (--color-text, --space-gutter, --font-body, --layout-max-width, ...)
+# that Carbon does not mint. Each scale below ends with a commented bridge
+# section aliasing that de-facto chrome contract onto Carbon values via
+# token-to-token var() references, so the site chrome keeps resolving when
+# this skin is worn. Nothing in the model declares or checks that contract;
+# without the bridge, wearing this skin silently unstyles the theme chrome.
+#
+# Shipping makes the skin AVAILABLE (synced on module install, on every
+# cache rebuild, and by `drush daedalus_stylish:sync daedalus_stylish_carbon`); wearing it
+# is the site's call at /admin/appearance/skins. This fixture is never
+# auto-activated.
+carbon:
+  label: 'Carbon'
+  tokens:
+    # The core theme tokens: white theme as the default, g100 ("Gray 100")
+    # as dark. Names are Carbon's own custom-property spellings
+    # (--cds-border-subtle-01 -> border-subtle-01), so they deliver here as
+    # --color-border-subtle-01. Tokens whose white and g100 values agree
+    # collapse to an unconditional value.
+    color:
+      # Backgrounds: the page ground and its interaction states.
+      background:
+        default: '#ffffff'
+        dark: '#161616'
+      background-active:
+        default: 'rgba(141, 141, 141, 0.5)'
+        dark: 'rgba(141, 141, 141, 0.4)'
+      background-brand: '#0f62fe'
+      background-hover:
+        default: 'rgba(141, 141, 141, 0.12)'
+        dark: 'rgba(141, 141, 141, 0.16)'
+      background-inverse:
+        default: '#393939'
+        dark: '#f4f4f4'
+      background-inverse-hover:
+        default: '#474747'
+        dark: '#e8e8e8'
+      background-selected:
+        default: 'rgba(141, 141, 141, 0.2)'
+        dark: 'rgba(141, 141, 141, 0.24)'
+      background-selected-hover: 'rgba(141, 141, 141, 0.32)'
+      # Borders: subtle 00-03 follow the layer levels; strong carries emphasis.
+      border-disabled:
+        default: '#c6c6c6'
+        dark: 'rgba(141, 141, 141, 0.5)'
+      border-interactive:
+        default: '#0f62fe'
+        dark: '#4589ff'
+      border-inverse:
+        default: '#161616'
+        dark: '#f4f4f4'
+      border-strong-01:
+        default: '#8d8d8d'
+        dark: '#6f6f6f'
+      border-strong-02: '#8d8d8d'
+      border-strong-03:
+        default: '#8d8d8d'
+        dark: '#a8a8a8'
+      border-subtle-00:
+        default: '#e0e0e0'
+        dark: '#393939'
+      border-subtle-01:
+        default: '#c6c6c6'
+        dark: '#525252'
+      border-subtle-02:
+        default: '#e0e0e0'
+        dark: '#6f6f6f'
+      border-subtle-03:
+        default: '#c6c6c6'
+        dark: '#6f6f6f'
+      border-subtle-selected-01:
+        default: '#c6c6c6'
+        dark: '#6f6f6f'
+      border-subtle-selected-02:
+        default: '#c6c6c6'
+        dark: '#8d8d8d'
+      border-subtle-selected-03:
+        default: '#c6c6c6'
+        dark: '#8d8d8d'
+      border-tile-01:
+        default: '#c6c6c6'
+        dark: '#525252'
+      border-tile-02:
+        default: '#a8a8a8'
+        dark: '#6f6f6f'
+      border-tile-03:
+        default: '#c6c6c6'
+        dark: '#8d8d8d'
+      # Fields: form input surfaces per layer level.
+      field-01:
+        default: '#f4f4f4'
+        dark: '#262626'
+      field-02:
+        default: '#ffffff'
+        dark: '#393939'
+      field-03:
+        default: '#f4f4f4'
+        dark: '#525252'
+      field-hover-01:
+        default: '#e8e8e8'
+        dark: '#333333'
+      field-hover-02:
+        default: '#e8e8e8'
+        dark: '#474747'
+      field-hover-03:
+        default: '#e8e8e8'
+        dark: '#636363'
+      # Focus: the focus ring family.
+      focus:
+        default: '#0f62fe'
+        dark: '#ffffff'
+      focus-inset:
+        default: '#ffffff'
+        dark: '#161616'
+      focus-inverse:
+        default: '#ffffff'
+        dark: '#0f62fe'
+      # Highlight: selected-text / highlight surface.
+      highlight:
+        default: '#d0e2ff'
+        dark: '#001d6c'
+      # Icons.
+      icon-disabled:
+        default: 'rgba(22, 22, 22, 0.25)'
+        dark: 'rgba(244, 244, 244, 0.25)'
+      icon-interactive:
+        default: '#0f62fe'
+        dark: '#ffffff'
+      icon-inverse:
+        default: '#ffffff'
+        dark: '#161616'
+      icon-on-color: '#ffffff'
+      icon-on-color-disabled:
+        default: '#8d8d8d'
+        dark: 'rgba(255, 255, 255, 0.25)'
+      icon-primary:
+        default: '#161616'
+        dark: '#f4f4f4'
+      icon-secondary:
+        default: '#525252'
+        dark: '#c6c6c6'
+      # Interactive: the action color (Blue 60 / Blue 50).
+      interactive:
+        default: '#0f62fe'
+        dark: '#4589ff'
+      # Layers: Carbon's stacked-surface system, one token set per level 01-03.
+      layer-01:
+        default: '#f4f4f4'
+        dark: '#262626'
+      layer-02:
+        default: '#ffffff'
+        dark: '#393939'
+      layer-03:
+        default: '#f4f4f4'
+        dark: '#525252'
+      layer-accent-01:
+        default: '#e0e0e0'
+        dark: '#393939'
+      layer-accent-02:
+        default: '#e0e0e0'
+        dark: '#525252'
+      layer-accent-03:
+        default: '#e0e0e0'
+        dark: '#6f6f6f'
+      layer-accent-active-01:
+        default: '#a8a8a8'
+        dark: '#6f6f6f'
+      layer-accent-active-02:
+        default: '#a8a8a8'
+        dark: '#8d8d8d'
+      layer-accent-active-03:
+        default: '#a8a8a8'
+        dark: '#393939'
+      layer-accent-hover-01:
+        default: '#d1d1d1'
+        dark: '#474747'
+      layer-accent-hover-02:
+        default: '#d1d1d1'
+        dark: '#636363'
+      layer-accent-hover-03:
+        default: '#d1d1d1'
+        dark: '#5e5e5e'
+      layer-active-01:
+        default: '#c6c6c6'
+        dark: '#525252'
+      layer-active-02:
+        default: '#c6c6c6'
+        dark: '#6f6f6f'
+      layer-active-03:
+        default: '#c6c6c6'
+        dark: '#8d8d8d'
+      layer-background-01:
+        default: '#ffffff'
+        dark: '#161616'
+      layer-background-02:
+        default: '#f4f4f4'
+        dark: '#262626'
+      layer-background-03:
+        default: '#ffffff'
+        dark: '#393939'
+      layer-hover-01:
+        default: '#e8e8e8'
+        dark: '#333333'
+      layer-hover-02:
+        default: '#e8e8e8'
+        dark: '#474747'
+      layer-hover-03:
+        default: '#e8e8e8'
+        dark: '#636363'
+      layer-selected-01:
+        default: '#e0e0e0'
+        dark: '#393939'
+      layer-selected-02:
+        default: '#e0e0e0'
+        dark: '#525252'
+      layer-selected-03:
+        default: '#e0e0e0'
+        dark: '#6f6f6f'
+      layer-selected-disabled:
+        default: '#8d8d8d'
+        dark: '#a8a8a8'
+      layer-selected-hover-01:
+        default: '#d1d1d1'
+        dark: '#474747'
+      layer-selected-hover-02:
+        default: '#d1d1d1'
+        dark: '#636363'
+      layer-selected-hover-03:
+        default: '#d1d1d1'
+        dark: '#5e5e5e'
+      layer-selected-inverse:
+        default: '#161616'
+        dark: '#f4f4f4'
+      # Links.
+      link-inverse:
+        default: '#78a9ff'
+        dark: '#0f62fe'
+      link-inverse-active:
+        default: '#f4f4f4'
+        dark: '#161616'
+      link-inverse-hover:
+        default: '#a6c8ff'
+        dark: '#0043ce'
+      link-inverse-visited:
+        default: '#be95ff'
+        dark: '#8a3ffc'
+      link-primary:
+        default: '#0f62fe'
+        dark: '#78a9ff'
+      link-primary-hover:
+        default: '#0043ce'
+        dark: '#a6c8ff'
+      link-secondary:
+        default: '#0043ce'
+        dark: '#a6c8ff'
+      link-visited:
+        default: '#8a3ffc'
+        dark: '#be95ff'
+      # Overlay, shadow, and skeleton surfaces.
+      overlay: 'rgba(0, 0, 0, 0.6)'
+      shadow:
+        default: 'rgba(0, 0, 0, 0.3)'
+        dark: 'rgba(0, 0, 0, 0.8)'
+      skeleton-background:
+        default: '#e8e8e8'
+        dark: '#292929'
+      skeleton-element:
+        default: '#c6c6c6'
+        dark: '#393939'
+      # Support: status colors (error, success, warning, info, caution).
+      support-caution-major: '#ff832b'
+      support-caution-minor: '#f1c21b'
+      support-caution-undefined:
+        default: '#8a3ffc'
+        dark: '#a56eff'
+      support-error:
+        default: '#da1e28'
+        dark: '#fa4d56'
+      support-error-inverse:
+        default: '#fa4d56'
+        dark: '#da1e28'
+      support-info:
+        default: '#0043ce'
+        dark: '#4589ff'
+      support-info-inverse:
+        default: '#4589ff'
+        dark: '#0043ce'
+      support-success:
+        default: '#24a148'
+        dark: '#42be65'
+      support-success-inverse:
+        default: '#42be65'
+        dark: '#24a148'
+      support-warning: '#f1c21b'
+      support-warning-inverse: '#f1c21b'
+      # Text.
+      text-disabled:
+        default: 'rgba(22, 22, 22, 0.25)'
+        dark: 'rgba(244, 244, 244, 0.25)'
+      text-error:
+        default: '#da1e28'
+        dark: '#ff8389'
+      text-helper:
+        default: '#6f6f6f'
+        dark: '#a8a8a8'
+      text-inverse:
+        default: '#ffffff'
+        dark: '#161616'
+      text-on-color: '#ffffff'
+      text-on-color-disabled:
+        default: '#8d8d8d'
+        dark: 'rgba(255, 255, 255, 0.25)'
+      text-placeholder:
+        default: 'rgba(22, 22, 22, 0.4)'
+        dark: 'rgba(244, 244, 244, 0.4)'
+      text-primary:
+        default: '#161616'
+        dark: '#f4f4f4'
+      text-secondary:
+        default: '#525252'
+        dark: '#c6c6c6'
+      # Toggle.
+      toggle-off:
+        default: '#8d8d8d'
+        dark: '#6f6f6f'
+      # Bridge: the theme chrome contract, aliased onto Carbon.
+      bg: 'var(--color-background)'
+      surface: 'var(--color-layer-01)'
+      elevated: 'var(--color-layer-02)'
+      text: 'var(--color-text-primary)'
+      muted: 'var(--color-text-secondary)'
+      border: 'var(--color-border-subtle-01)'
+      accent: 'var(--color-interactive)'
+      accent-hover: 'var(--color-link-primary-hover)'
+      error: 'var(--color-support-error)'
+      warning: 'var(--color-support-warning)'
+    # The IBM Plex superfamily. The skin can only mint the STACKS: the model
+    # has no way to ship or load the font files themselves, so Plex renders
+    # only where it is installed or loaded by other means; everywhere else
+    # these resolve to the system fallbacks.
+    font:
+      sans: "'IBM Plex Sans', system-ui, -apple-system, BlinkMacSystemFont, '.SFNSText-Regular', sans-serif"
+      serif: "'IBM Plex Serif', 'Georgia', Times, serif"
+      mono: "'IBM Plex Mono', 'Menlo', 'DejaVu Sans Mono', 'Bitstream Vera Sans Mono', Courier, monospace"
+      # Bridge: the theme reads font.body for everything.
+      body: 'var(--font-sans)'
+    # The type SIZE scale: @carbon/type's 15 steps (12px..76px), Carbon's
+    # ordinal names. The compound type tokens select from these in the
+    # defaults tier below.
+    text:
+      '01': '0.75rem'
+      '02': '0.875rem'
+      '03': '1rem'
+      '04': '1.125rem'
+      '05': '1.25rem'
+      '06': '1.5rem'
+      '07': '1.75rem'
+      '08': '2rem'
+      '09': '2.25rem'
+      '10': '2.625rem'
+      '11': '3rem'
+      '12': '3.375rem'
+      '13': '3.75rem'
+      '14': '4.25rem'
+      '15': '4.75rem'
+      # Bridge: the theme's own size names.
+      xs: 'var(--text-01)'
+      sm: 'var(--text-02)'
+      lg: 'var(--text-04)'
+      '2xl': 'var(--text-06)'
+    # Carbon uses exactly three weights.
+    weight:
+      light: '300'
+      regular: '400'
+      semibold: '600'
+      # Bridge: Carbon has no 500; the chrome's "medium" wears semibold.
+      medium: 'var(--weight-semibold)'
+    # Carbon names no standalone line-height or letter-spacing tokens
+    # (both exist only INSIDE its compound type tokens). The suite binds
+    # line-height to this scale (a skin's defaults are judged by the
+    # site's bindings like any style map, so a literal line-height fails
+    # on a law site), so leading mints the six distinct line-heights the
+    # compound tokens this skin's defaults wear carry, as ordinals in
+    # ascending order the way the space and text scales are named; the
+    # defaults below reference them. Tracking stays unbound by the suite,
+    # so it carries only the bridge names the theme chrome consumes and
+    # the defaults keep the compound tokens' literal letter-spacing.
+    leading:
+      # heading-06.
+      '01': '1.199'
+      # heading-05, quotation-02.
+      '02': '1.25'
+      # heading-04.
+      '03': '1.28572'
+      # heading-03.
+      '04': '1.4'
+      # heading-01, code-02.
+      '05': '1.42857'
+      # heading-02, body-02.
+      '06': '1.5'
+      # Bridge: the theme chrome's own name.
+      snug: '1.3'
+    tracking:
+      tight: '0'
+      wide: '0.32px'
+    # The 13-step spacing scale, Carbon's 01..13 ordinals.
+    space:
+      '01': '0.125rem'
+      '02': '0.25rem'
+      '03': '0.5rem'
+      '04': '0.75rem'
+      '05': '1rem'
+      '06': '1.5rem'
+      '07': '2rem'
+      '08': '2.5rem'
+      '09': '3rem'
+      '10': '4rem'
+      '11': '5rem'
+      '12': '6rem'
+      '13': '10rem'
+      # Bridge: the theme's spacing names, mapped to the nearest Carbon
+      # step (same rem values as the chrome originals). gutter is
+      # Carbon's grid margin; the grid's 1.5rem margin at its "max"
+      # breakpoint and 0 at "sm" have no width-band equivalents here.
+      # NOTE the collision the model cannot see: the chrome name "12"
+      # (chrome 3rem) IS Carbon's step name "12" (6rem): one flat
+      # namespace per scale, so Carbon's meaning wins and the chrome's
+      # var(--space-12) reads 6rem under this skin.
+      '1': 'var(--space-02)'
+      '2': 'var(--space-03)'
+      '3': 'var(--space-04)'
+      '4': 'var(--space-05)'
+      '6': 'var(--space-06)'
+      '8': 'var(--space-07)'
+      gutter: '1rem'
+    # Carbon has no radius tokens: sharp corners are the brand. sm goes to
+    # 0 accordingly; full stays a circle primitive (avatars, pills) rather
+    # than a corner aesthetic.
+    radius:
+      sm: '0'
+      full: '9999px'
+    # Carbon motion: duration + easing pairs (fast-02 and moderate-02 with
+    # the standard productive easing).
+    transition:
+      fast: '110ms cubic-bezier(0.2, 0, 0.38, 0.9)'
+      normal: '240ms cubic-bezier(0.2, 0, 0.38, 0.9)'
+    # The grid's widest breakpoint: content constrains at 99rem (1584px).
+    layout:
+      max-width: '99rem'
+  # Site element defaults: Carbon's compound type tokens re-expressed as
+  # per-property styles on bare markup, the only tier that can hold them.
+  # The heading-to-tag mapping is this fixture's editorial choice (Carbon
+  # deliberately does not bind type tokens to HTML tags): h1..h6 wear
+  # heading-06..01, body copy wears body-02. Margins are composition
+  # hygiene, not Carbon canon (Carbon type tokens carry no spacing).
+  defaults:
+    # heading-06: 2.625rem, light, 1.199, the expressive page title.
+    'base:h1':
+      '':
+        default:
+          margin-top: '0'
+          margin-bottom: 'var(--space-05)'
+          font-size: 'var(--text-10)'
+          font-weight: 'var(--weight-light)'
+          line-height: 'var(--leading-01)'
+          letter-spacing: '0'
+          color: 'var(--color-text-primary)'
+    # heading-05: 2rem, regular, 1.25.
+    'base:h2':
+      '':
+        default:
+          margin-top: '0'
+          margin-bottom: 'var(--space-05)'
+          font-size: 'var(--text-08)'
+          font-weight: 'var(--weight-regular)'
+          line-height: 'var(--leading-02)'
+          letter-spacing: '0'
+          color: 'var(--color-text-primary)'
+    # heading-04: 1.75rem, regular, 1.28572.
+    'base:h3':
+      '':
+        default:
+          margin-top: '0'
+          margin-bottom: 'var(--space-05)'
+          font-size: 'var(--text-07)'
+          font-weight: 'var(--weight-regular)'
+          line-height: 'var(--leading-03)'
+          letter-spacing: '0'
+          color: 'var(--color-text-primary)'
+    # heading-03: 1.25rem, regular, 1.4.
+    'base:h4':
+      '':
+        default:
+          margin-top: '0'
+          margin-bottom: 'var(--space-05)'
+          font-size: 'var(--text-05)'
+          font-weight: 'var(--weight-regular)'
+          line-height: 'var(--leading-04)'
+          letter-spacing: '0'
+          color: 'var(--color-text-primary)'
+    # heading-02: 1rem, semibold, 1.5.
+    'base:h5':
+      '':
+        default:
+          margin-top: '0'
+          margin-bottom: 'var(--space-05)'
+          font-size: 'var(--text-03)'
+          font-weight: 'var(--weight-semibold)'
+          line-height: 'var(--leading-06)'
+          letter-spacing: '0'
+          color: 'var(--color-text-primary)'
+    # heading-01: 0.875rem, semibold, 1.42857, 0.16px.
+    'base:h6':
+      '':
+        default:
+          margin-top: '0'
+          margin-bottom: 'var(--space-05)'
+          font-size: 'var(--text-02)'
+          font-weight: 'var(--weight-semibold)'
+          line-height: 'var(--leading-05)'
+          letter-spacing: '0.16px'
+          color: 'var(--color-text-primary)'
+    # body-02: 1rem, regular, 1.5, long-form body copy.
+    'base:p':
+      '':
+        default:
+          margin-top: '0'
+          margin-bottom: 'var(--space-05)'
+          font-size: 'var(--text-03)'
+          font-weight: 'var(--weight-regular)'
+          line-height: 'var(--leading-06)'
+          letter-spacing: '0'
+          color: 'var(--color-text-primary)'
+    'base:li':
+      '':
+        default:
+          font-size: 'var(--text-03)'
+          line-height: 'var(--leading-06)'
+          color: 'var(--color-text-primary)'
+    # Inline links: link-primary, underlined per Carbon's inline link.
+    'base:a':
+      '':
+        default:
+          color: 'var(--color-link-primary)'
+          text-decoration-line: 'underline'
+        hover:
+          color: 'var(--color-link-primary-hover)'
+    # quotation-02: IBM Plex Serif, 2rem, light, 1.25. Carbon quotations
+    # carry no border; the serif + light pairing IS the treatment.
+    'base:blockquote':
+      '':
+        default:
+          margin-top: 'var(--space-09)'
+          margin-bottom: 'var(--space-09)'
+          margin-left: '0'
+          margin-right: '0'
+          font-family: 'var(--font-serif)'
+          font-size: 'var(--text-08)'
+          font-weight: 'var(--weight-light)'
+          line-height: 'var(--leading-02)'
+    # code-02: Plex Mono, 0.875rem, 1.42857, 0.32px.
+    'base:code':
+      '':
+        default:
+          font-family: 'var(--font-mono)'
+          font-size: 'var(--text-02)'
+          letter-spacing: '0.32px'
+          color: 'var(--color-text-primary)'
+    'base:pre':
+      '':
+        default:
+          margin-top: '0'
+          margin-bottom: 'var(--space-05)'
+          padding: 'var(--space-05)'
+          font-family: 'var(--font-mono)'
+          font-size: 'var(--text-02)'
+          line-height: 'var(--leading-05)'
+          background-color: 'var(--color-layer-01)'
+    # Media hygiene, as the shipped skins carry it.
+    'base:img':
+      '':
+        default:
+          max-width: '100%'
+          height: 'auto'
+    # Containers carry only the children gap; the grid's max width reaches
+    # page bands through the root-only Site width variant, so nested
+    # containers get no inset (see the Olivero skin's note).
+    'kind:container':
+      '':
+        default:
+          gap: 'var(--space-gutter)'

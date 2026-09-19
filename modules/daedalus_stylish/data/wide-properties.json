@@ -1,0 +1,4573 @@
+{
+  "mdnData": "2.27.1",
+  "properties": {
+    "accent-color": {
+      "label": "Accent color",
+      "type": "color",
+      "keywords": [
+        "auto"
+      ],
+      "area": "Basic User Interface"
+    },
+    "align-content": {
+      "label": "Align content",
+      "type": "keyword",
+      "keywords": [
+        "normal",
+        "first",
+        "last",
+        "baseline",
+        "space-between",
+        "space-around",
+        "space-evenly",
+        "stretch",
+        "unsafe",
+        "safe",
+        "center",
+        "start",
+        "end",
+        "flex-start",
+        "flex-end"
+      ],
+      "list": true,
+      "area": "Box Alignment"
+    },
+    "align-items": {
+      "label": "Align items",
+      "type": "keyword",
+      "keywords": [
+        "normal",
+        "stretch",
+        "first",
+        "last",
+        "baseline",
+        "unsafe",
+        "safe",
+        "center",
+        "start",
+        "end",
+        "self-start",
+        "self-end",
+        "flex-start",
+        "flex-end",
+        "anchor-center"
+      ],
+      "list": true,
+      "area": "Box Alignment"
+    },
+    "align-self": {
+      "label": "Align self",
+      "type": "keyword",
+      "keywords": [
+        "auto",
+        "normal",
+        "stretch",
+        "first",
+        "last",
+        "baseline",
+        "unsafe",
+        "safe",
+        "center",
+        "start",
+        "end",
+        "self-start",
+        "self-end",
+        "flex-start",
+        "flex-end",
+        "anchor-center"
+      ],
+      "list": true,
+      "area": "Box Alignment"
+    },
+    "alignment-baseline": {
+      "label": "Alignment baseline",
+      "type": "keyword",
+      "keywords": [
+        "baseline",
+        "alphabetic",
+        "ideographic",
+        "middle",
+        "central",
+        "mathematical",
+        "text-before-edge",
+        "text-after-edge"
+      ],
+      "area": "Inline"
+    },
+    "all": {
+      "label": "All",
+      "type": "keyword",
+      "keywords": [
+        "initial",
+        "inherit",
+        "unset",
+        "revert",
+        "revert-layer"
+      ],
+      "area": "Cascading and Inheritance"
+    },
+    "animation": {
+      "label": "Animation",
+      "type": "any",
+      "syntax": "<single-animation>#",
+      "area": "Animations"
+    },
+    "animation-composition": {
+      "label": "Animation composition",
+      "type": "keyword",
+      "keywords": [
+        "replace",
+        "add",
+        "accumulate"
+      ],
+      "list": true,
+      "area": "Animations"
+    },
+    "animation-delay": {
+      "label": "Animation delay",
+      "type": "dimension",
+      "negative": true,
+      "list": true,
+      "area": "Animations"
+    },
+    "animation-direction": {
+      "label": "Animation direction",
+      "type": "keyword",
+      "keywords": [
+        "normal",
+        "reverse",
+        "alternate",
+        "alternate-reverse"
+      ],
+      "list": true,
+      "area": "Animations"
+    },
+    "animation-duration": {
+      "label": "Animation duration",
+      "type": "dimension",
+      "keywords": [
+        "auto"
+      ],
+      "negative": true,
+      "list": true,
+      "area": "Animations"
+    },
+    "animation-fill-mode": {
+      "label": "Animation fill mode",
+      "type": "keyword",
+      "keywords": [
+        "none",
+        "forwards",
+        "backwards",
+        "both"
+      ],
+      "list": true,
+      "area": "Animations"
+    },
+    "animation-iteration-count": {
+      "label": "Animation iteration count",
+      "type": "number",
+      "keywords": [
+        "infinite"
+      ],
+      "negative": true,
+      "list": true,
+      "area": "Animations"
+    },
+    "animation-name": {
+      "label": "Animation name",
+      "type": "any",
+      "syntax": "[ none | <keyframes-name> ]#",
+      "area": "Animations"
+    },
+    "animation-play-state": {
+      "label": "Animation play state",
+      "type": "keyword",
+      "keywords": [
+        "running",
+        "paused"
+      ],
+      "list": true,
+      "area": "Animations"
+    },
+    "animation-timing-function": {
+      "label": "Animation timing function",
+      "type": "any",
+      "syntax": "<easing-function>#",
+      "area": "Animations"
+    },
+    "animation-trigger": {
+      "label": "Animation trigger",
+      "type": "any",
+      "syntax": "[ none | [ <dashed-ident> <animation-action>+ ]+ ]#",
+      "area": "Animations"
+    },
+    "appearance": {
+      "label": "Appearance",
+      "type": "keyword",
+      "keywords": [
+        "none",
+        "auto",
+        "searchfield",
+        "textarea",
+        "checkbox",
+        "radio",
+        "menulist",
+        "listbox",
+        "meter",
+        "progress-bar",
+        "button",
+        "textfield",
+        "menulist-button"
+      ],
+      "area": "Basic User Interface"
+    },
+    "aspect-ratio": {
+      "label": "Aspect ratio",
+      "type": "any",
+      "syntax": "auto || <ratio>",
+      "area": "Box Sizing"
+    },
+    "backdrop-filter": {
+      "label": "Backdrop filter",
+      "type": "any",
+      "syntax": "none | <filter-value-list>",
+      "area": "Filter Effects"
+    },
+    "backface-visibility": {
+      "label": "Backface visibility",
+      "type": "keyword",
+      "keywords": [
+        "visible",
+        "hidden"
+      ],
+      "area": "Transforms"
+    },
+    "background": {
+      "label": "Background",
+      "type": "any",
+      "syntax": "<bg-layer>#? , <final-bg-layer>",
+      "area": "Backgrounds and Borders"
+    },
+    "background-attachment": {
+      "label": "Background attachment",
+      "type": "keyword",
+      "keywords": [
+        "scroll",
+        "fixed",
+        "local"
+      ],
+      "list": true,
+      "area": "Backgrounds and Borders"
+    },
+    "background-blend-mode": {
+      "label": "Background blend mode",
+      "type": "keyword",
+      "keywords": [
+        "normal",
+        "multiply",
+        "screen",
+        "overlay",
+        "darken",
+        "lighten",
+        "color-dodge",
+        "color-burn",
+        "hard-light",
+        "soft-light",
+        "difference",
+        "exclusion",
+        "hue",
+        "saturation",
+        "color",
+        "luminosity"
+      ],
+      "list": true,
+      "area": "Compositing and Blending"
+    },
+    "background-clip": {
+      "label": "Background clip",
+      "type": "keyword",
+      "keywords": [
+        "content-box",
+        "padding-box",
+        "border-box",
+        "border-area",
+        "text"
+      ],
+      "list": true,
+      "area": "Backgrounds and Borders"
+    },
+    "background-color": {
+      "label": "Background color",
+      "type": "color",
+      "area": "Backgrounds and Borders"
+    },
+    "background-image": {
+      "label": "Background image",
+      "type": "any",
+      "syntax": "<bg-image>#",
+      "area": "Backgrounds and Borders"
+    },
+    "background-origin": {
+      "label": "Background origin",
+      "type": "keyword",
+      "keywords": [
+        "content-box",
+        "padding-box",
+        "border-box"
+      ],
+      "list": true,
+      "area": "Backgrounds and Borders"
+    },
+    "background-position": {
+      "label": "Background position",
+      "type": "dimension",
+      "keywords": [
+        "left",
+        "center",
+        "right",
+        "top",
+        "bottom"
+      ],
+      "negative": true,
+      "list": true,
+      "area": "Backgrounds and Borders"
+    },
+    "background-position-x": {
+      "label": "Background position x",
+      "type": "dimension",
+      "keywords": [
+        "center",
+        "left",
+        "right",
+        "x-start",
+        "x-end"
+      ],
+      "negative": true,
+      "list": true,
+      "area": "Backgrounds and Borders"
+    },
+    "background-position-y": {
+      "label": "Background position y",
+      "type": "dimension",
+      "keywords": [
+        "center",
+        "top",
+        "bottom",
+        "y-start",
+        "y-end"
+      ],
+      "negative": true,
+      "list": true,
+      "area": "Backgrounds and Borders"
+    },
+    "background-repeat": {
+      "label": "Background repeat",
+      "type": "keyword",
+      "keywords": [
+        "repeat-x",
+        "repeat-y",
+        "repeat",
+        "space",
+        "round",
+        "no-repeat"
+      ],
+      "list": true,
+      "area": "Backgrounds and Borders"
+    },
+    "background-size": {
+      "label": "Background size",
+      "type": "dimension",
+      "keywords": [
+        "auto",
+        "cover",
+        "contain"
+      ],
+      "list": true,
+      "area": "Backgrounds and Borders"
+    },
+    "baseline-shift": {
+      "label": "Baseline shift",
+      "type": "dimension",
+      "keywords": [
+        "sub",
+        "super",
+        "baseline"
+      ],
+      "negative": true,
+      "area": "Inline"
+    },
+    "baseline-source": {
+      "label": "Baseline source",
+      "type": "keyword",
+      "keywords": [
+        "auto",
+        "first",
+        "last"
+      ],
+      "area": "Inline"
+    },
+    "block-size": {
+      "label": "Block size",
+      "type": "any",
+      "syntax": "<'width'>",
+      "area": "Logical Properties and Values"
+    },
+    "border": {
+      "label": "Border",
+      "type": "any",
+      "syntax": "<line-width> || <line-style> || <color>",
+      "area": "Backgrounds and Borders"
+    },
+    "border-block": {
+      "label": "Border block",
+      "type": "any",
+      "syntax": "<'border-block-start'>",
+      "area": "Logical Properties and Values"
+    },
+    "border-block-color": {
+      "label": "Border block color",
+      "type": "color",
+      "list": true,
+      "area": "Logical Properties and Values"
+    },
+    "border-block-end": {
+      "label": "Border block end",
+      "type": "any",
+      "syntax": "<'border-top-width'> || <'border-top-style'> || <color>",
+      "area": "Logical Properties and Values"
+    },
+    "border-block-end-color": {
+      "label": "Border block end color",
+      "type": "color",
+      "area": "Logical Properties and Values"
+    },
+    "border-block-end-style": {
+      "label": "Border block end style",
+      "type": "keyword",
+      "keywords": [
+        "none",
+        "hidden",
+        "dotted",
+        "dashed",
+        "solid",
+        "double",
+        "groove",
+        "ridge",
+        "inset",
+        "outset"
+      ],
+      "area": "Logical Properties and Values"
+    },
+    "border-block-end-width": {
+      "label": "Border block end width",
+      "type": "dimension",
+      "keywords": [
+        "thin",
+        "medium",
+        "thick"
+      ],
+      "negative": true,
+      "area": "Logical Properties and Values"
+    },
+    "border-block-start": {
+      "label": "Border block start",
+      "type": "any",
+      "syntax": "<'border-top-width'> || <'border-top-style'> || <color>",
+      "area": "Logical Properties and Values"
+    },
+    "border-block-start-color": {
+      "label": "Border block start color",
+      "type": "color",
+      "area": "Logical Properties and Values"
+    },
+    "border-block-start-style": {
+      "label": "Border block start style",
+      "type": "keyword",
+      "keywords": [
+        "none",
+        "hidden",
+        "dotted",
+        "dashed",
+        "solid",
+        "double",
+        "groove",
+        "ridge",
+        "inset",
+        "outset"
+      ],
+      "area": "Logical Properties and Values"
+    },
+    "border-block-start-width": {
+      "label": "Border block start width",
+      "type": "dimension",
+      "keywords": [
+        "thin",
+        "medium",
+        "thick"
+      ],
+      "negative": true,
+      "area": "Logical Properties and Values"
+    },
+    "border-block-style": {
+      "label": "Border block style",
+      "type": "keyword",
+      "keywords": [
+        "none",
+        "hidden",
+        "dotted",
+        "dashed",
+        "solid",
+        "double",
+        "groove",
+        "ridge",
+        "inset",
+        "outset"
+      ],
+      "list": true,
+      "area": "Logical Properties and Values"
+    },
+    "border-block-width": {
+      "label": "Border block width",
+      "type": "dimension",
+      "keywords": [
+        "thin",
+        "medium",
+        "thick"
+      ],
+      "negative": true,
+      "list": true,
+      "area": "Logical Properties and Values"
+    },
+    "border-bottom": {
+      "label": "Border bottom",
+      "type": "any",
+      "syntax": "<line-width> || <line-style> || <color>",
+      "area": "Backgrounds and Borders"
+    },
+    "border-bottom-color": {
+      "label": "Border bottom color",
+      "type": "color",
+      "area": "Backgrounds and Borders"
+    },
+    "border-bottom-left-radius": {
+      "label": "Border bottom left radius",
+      "type": "dimension",
+      "list": true,
+      "area": "Backgrounds and Borders"
+    },
+    "border-bottom-right-radius": {
+      "label": "Border bottom right radius",
+      "type": "dimension",
+      "list": true,
+      "area": "Backgrounds and Borders"
+    },
+    "border-bottom-style": {
+      "label": "Border bottom style",
+      "type": "keyword",
+      "keywords": [
+        "none",
+        "hidden",
+        "dotted",
+        "dashed",
+        "solid",
+        "double",
+        "groove",
+        "ridge",
+        "inset",
+        "outset"
+      ],
+      "area": "Backgrounds and Borders"
+    },
+    "border-bottom-width": {
+      "label": "Border bottom width",
+      "type": "dimension",
+      "keywords": [
+        "thin",
+        "medium",
+        "thick"
+      ],
+      "negative": true,
+      "area": "Backgrounds and Borders"
+    },
+    "border-collapse": {
+      "label": "Border collapse",
+      "type": "keyword",
+      "keywords": [
+        "separate",
+        "collapse"
+      ],
+      "area": "Table"
+    },
+    "border-color": {
+      "label": "Border color",
+      "type": "color",
+      "list": true,
+      "area": "Backgrounds and Borders"
+    },
+    "border-end-end-radius": {
+      "label": "Border end end radius",
+      "type": "dimension",
+      "list": true,
+      "area": "Logical Properties and Values"
+    },
+    "border-end-start-radius": {
+      "label": "Border end start radius",
+      "type": "dimension",
+      "list": true,
+      "area": "Logical Properties and Values"
+    },
+    "border-image": {
+      "label": "Border image",
+      "type": "any",
+      "syntax": "<'border-image-source'> || <'border-image-slice'> [ / <'border-image-width'> | / <'border-image-width'>? / <'border-image-outset'> ]? || <'border-image-repeat'>",
+      "area": "Backgrounds and Borders"
+    },
+    "border-image-outset": {
+      "label": "Border image outset",
+      "type": "dimension",
+      "number": true,
+      "list": true,
+      "area": "Backgrounds and Borders"
+    },
+    "border-image-repeat": {
+      "label": "Border image repeat",
+      "type": "keyword",
+      "keywords": [
+        "stretch",
+        "repeat",
+        "round",
+        "space"
+      ],
+      "list": true,
+      "area": "Backgrounds and Borders"
+    },
+    "border-image-slice": {
+      "label": "Border image slice",
+      "type": "dimension",
+      "keywords": [
+        "fill"
+      ],
+      "number": true,
+      "list": true,
+      "area": "Backgrounds and Borders"
+    },
+    "border-image-source": {
+      "label": "Border image source",
+      "type": "any",
+      "syntax": "none | <image>",
+      "area": "Backgrounds and Borders"
+    },
+    "border-image-width": {
+      "label": "Border image width",
+      "type": "dimension",
+      "keywords": [
+        "auto"
+      ],
+      "number": true,
+      "list": true,
+      "area": "Backgrounds and Borders"
+    },
+    "border-inline": {
+      "label": "Border inline",
+      "type": "any",
+      "syntax": "<'border-block-start'>",
+      "area": "Logical Properties and Values"
+    },
+    "border-inline-color": {
+      "label": "Border inline color",
+      "type": "color",
+      "list": true,
+      "area": "Logical Properties and Values"
+    },
+    "border-inline-end": {
+      "label": "Border inline end",
+      "type": "any",
+      "syntax": "<'border-top-width'> || <'border-top-style'> || <color>",
+      "area": "Logical Properties and Values"
+    },
+    "border-inline-end-color": {
+      "label": "Border inline end color",
+      "type": "color",
+      "area": "Logical Properties and Values"
+    },
+    "border-inline-end-style": {
+      "label": "Border inline end style",
+      "type": "keyword",
+      "keywords": [
+        "none",
+        "hidden",
+        "dotted",
+        "dashed",
+        "solid",
+        "double",
+        "groove",
+        "ridge",
+        "inset",
+        "outset"
+      ],
+      "area": "Logical Properties and Values"
+    },
+    "border-inline-end-width": {
+      "label": "Border inline end width",
+      "type": "dimension",
+      "keywords": [
+        "thin",
+        "medium",
+        "thick"
+      ],
+      "negative": true,
+      "area": "Logical Properties and Values"
+    },
+    "border-inline-start": {
+      "label": "Border inline start",
+      "type": "any",
+      "syntax": "<'border-top-width'> || <'border-top-style'> || <color>",
+      "area": "Logical Properties and Values"
+    },
+    "border-inline-start-color": {
+      "label": "Border inline start color",
+      "type": "color",
+      "area": "Logical Properties and Values"
+    },
+    "border-inline-start-style": {
+      "label": "Border inline start style",
+      "type": "keyword",
+      "keywords": [
+        "none",
+        "hidden",
+        "dotted",
+        "dashed",
+        "solid",
+        "double",
+        "groove",
+        "ridge",
+        "inset",
+        "outset"
+      ],
+      "area": "Logical Properties and Values"
+    },
+    "border-inline-start-width": {
+      "label": "Border inline start width",
+      "type": "dimension",
+      "keywords": [
+        "thin",
+        "medium",
+        "thick"
+      ],
+      "negative": true,
+      "area": "Logical Properties and Values"
+    },
+    "border-inline-style": {
+      "label": "Border inline style",
+      "type": "keyword",
+      "keywords": [
+        "none",
+        "hidden",
+        "dotted",
+        "dashed",
+        "solid",
+        "double",
+        "groove",
+        "ridge",
+        "inset",
+        "outset"
+      ],
+      "list": true,
+      "area": "Logical Properties and Values"
+    },
+    "border-inline-width": {
+      "label": "Border inline width",
+      "type": "dimension",
+      "keywords": [
+        "thin",
+        "medium",
+        "thick"
+      ],
+      "negative": true,
+      "list": true,
+      "area": "Logical Properties and Values"
+    },
+    "border-left": {
+      "label": "Border left",
+      "type": "any",
+      "syntax": "<line-width> || <line-style> || <color>",
+      "area": "Backgrounds and Borders"
+    },
+    "border-left-color": {
+      "label": "Border left color",
+      "type": "color",
+      "area": "Backgrounds and Borders"
+    },
+    "border-left-style": {
+      "label": "Border left style",
+      "type": "keyword",
+      "keywords": [
+        "none",
+        "hidden",
+        "dotted",
+        "dashed",
+        "solid",
+        "double",
+        "groove",
+        "ridge",
+        "inset",
+        "outset"
+      ],
+      "area": "Backgrounds and Borders"
+    },
+    "border-left-width": {
+      "label": "Border left width",
+      "type": "dimension",
+      "keywords": [
+        "thin",
+        "medium",
+        "thick"
+      ],
+      "negative": true,
+      "area": "Backgrounds and Borders"
+    },
+    "border-radius": {
+      "label": "Border radius",
+      "type": "any",
+      "syntax": "<length-percentage [0,∞]>{1,4} [ / <length-percentage [0,∞]>{1,4} ]?",
+      "area": "Backgrounds and Borders"
+    },
+    "border-right": {
+      "label": "Border right",
+      "type": "any",
+      "syntax": "<line-width> || <line-style> || <color>",
+      "area": "Backgrounds and Borders"
+    },
+    "border-right-color": {
+      "label": "Border right color",
+      "type": "color",
+      "area": "Backgrounds and Borders"
+    },
+    "border-right-style": {
+      "label": "Border right style",
+      "type": "keyword",
+      "keywords": [
+        "none",
+        "hidden",
+        "dotted",
+        "dashed",
+        "solid",
+        "double",
+        "groove",
+        "ridge",
+        "inset",
+        "outset"
+      ],
+      "area": "Backgrounds and Borders"
+    },
+    "border-right-width": {
+      "label": "Border right width",
+      "type": "dimension",
+      "keywords": [
+        "thin",
+        "medium",
+        "thick"
+      ],
+      "negative": true,
+      "area": "Backgrounds and Borders"
+    },
+    "border-spacing": {
+      "label": "Border spacing",
+      "type": "dimension",
+      "negative": true,
+      "list": true,
+      "area": "Table"
+    },
+    "border-start-end-radius": {
+      "label": "Border start end radius",
+      "type": "dimension",
+      "list": true,
+      "area": "Logical Properties and Values"
+    },
+    "border-start-start-radius": {
+      "label": "Border start start radius",
+      "type": "dimension",
+      "list": true,
+      "area": "Logical Properties and Values"
+    },
+    "border-style": {
+      "label": "Border style",
+      "type": "keyword",
+      "keywords": [
+        "none",
+        "hidden",
+        "dotted",
+        "dashed",
+        "solid",
+        "double",
+        "groove",
+        "ridge",
+        "inset",
+        "outset"
+      ],
+      "list": true,
+      "area": "Backgrounds and Borders"
+    },
+    "border-top": {
+      "label": "Border top",
+      "type": "any",
+      "syntax": "<line-width> || <line-style> || <color>",
+      "area": "Backgrounds and Borders"
+    },
+    "border-top-color": {
+      "label": "Border top color",
+      "type": "color",
+      "area": "Backgrounds and Borders"
+    },
+    "border-top-left-radius": {
+      "label": "Border top left radius",
+      "type": "dimension",
+      "list": true,
+      "area": "Backgrounds and Borders"
+    },
+    "border-top-right-radius": {
+      "label": "Border top right radius",
+      "type": "dimension",
+      "list": true,
+      "area": "Backgrounds and Borders"
+    },
+    "border-top-style": {
+      "label": "Border top style",
+      "type": "keyword",
+      "keywords": [
+        "none",
+        "hidden",
+        "dotted",
+        "dashed",
+        "solid",
+        "double",
+        "groove",
+        "ridge",
+        "inset",
+        "outset"
+      ],
+      "area": "Backgrounds and Borders"
+    },
+    "border-top-width": {
+      "label": "Border top width",
+      "type": "dimension",
+      "keywords": [
+        "thin",
+        "medium",
+        "thick"
+      ],
+      "negative": true,
+      "area": "Backgrounds and Borders"
+    },
+    "border-width": {
+      "label": "Border width",
+      "type": "dimension",
+      "keywords": [
+        "thin",
+        "medium",
+        "thick"
+      ],
+      "negative": true,
+      "list": true,
+      "area": "Backgrounds and Borders"
+    },
+    "bottom": {
+      "label": "Bottom",
+      "type": "any",
+      "syntax": "auto | <length-percentage> | <anchor()> | <anchor-size()>",
+      "area": "Anchor Positioning"
+    },
+    "box-decoration-break": {
+      "label": "Box decoration break",
+      "type": "keyword",
+      "keywords": [
+        "slice",
+        "clone"
+      ],
+      "area": "Fragmentation"
+    },
+    "box-shadow": {
+      "label": "Box shadow",
+      "type": "any",
+      "syntax": "none | <shadow>#",
+      "area": "Backgrounds and Borders"
+    },
+    "box-sizing": {
+      "label": "Box sizing",
+      "type": "keyword",
+      "keywords": [
+        "content-box",
+        "border-box"
+      ],
+      "area": "Box Sizing"
+    },
+    "break-after": {
+      "label": "Break after",
+      "type": "keyword",
+      "keywords": [
+        "auto",
+        "avoid",
+        "always",
+        "all",
+        "avoid-page",
+        "page",
+        "left",
+        "right",
+        "recto",
+        "verso",
+        "avoid-column",
+        "column",
+        "avoid-region",
+        "region"
+      ],
+      "area": "Fragmentation"
+    },
+    "break-before": {
+      "label": "Break before",
+      "type": "keyword",
+      "keywords": [
+        "auto",
+        "avoid",
+        "always",
+        "all",
+        "avoid-page",
+        "page",
+        "left",
+        "right",
+        "recto",
+        "verso",
+        "avoid-column",
+        "column",
+        "avoid-region",
+        "region"
+      ],
+      "area": "Fragmentation"
+    },
+    "break-inside": {
+      "label": "Break inside",
+      "type": "keyword",
+      "keywords": [
+        "auto",
+        "avoid",
+        "avoid-page",
+        "avoid-column",
+        "avoid-region"
+      ],
+      "area": "Fragmentation"
+    },
+    "caption-side": {
+      "label": "Caption side",
+      "type": "keyword",
+      "keywords": [
+        "top",
+        "bottom"
+      ],
+      "area": "Table"
+    },
+    "caret": {
+      "label": "Caret",
+      "type": "color",
+      "keywords": [
+        "auto",
+        "manual",
+        "bar",
+        "block",
+        "underscore"
+      ],
+      "list": true,
+      "area": "Basic User Interface"
+    },
+    "caret-animation": {
+      "label": "Caret animation",
+      "type": "keyword",
+      "keywords": [
+        "auto",
+        "manual"
+      ],
+      "area": "Basic User Interface"
+    },
+    "caret-color": {
+      "label": "Caret color",
+      "type": "color",
+      "keywords": [
+        "auto"
+      ],
+      "area": "Basic User Interface"
+    },
+    "caret-shape": {
+      "label": "Caret shape",
+      "type": "keyword",
+      "keywords": [
+        "auto",
+        "bar",
+        "block",
+        "underscore"
+      ],
+      "area": "Basic User Interface"
+    },
+    "clear": {
+      "label": "Clear",
+      "type": "keyword",
+      "keywords": [
+        "none",
+        "left",
+        "right",
+        "both",
+        "inline-start",
+        "inline-end"
+      ],
+      "area": "Positioned Layout"
+    },
+    "clip-path": {
+      "label": "Clip path",
+      "type": "any",
+      "syntax": "<clip-source> | [ <basic-shape> || <geometry-box> ] | none",
+      "area": "Masking"
+    },
+    "clip-rule": {
+      "label": "Clip rule",
+      "type": "keyword",
+      "keywords": [
+        "nonzero",
+        "evenodd"
+      ],
+      "area": "Masking"
+    },
+    "color": {
+      "label": "Color",
+      "type": "color",
+      "area": "Color"
+    },
+    "color-interpolation-filters": {
+      "label": "Color interpolation filters",
+      "type": "keyword",
+      "keywords": [
+        "auto",
+        "srgb",
+        "linearrgb"
+      ],
+      "area": "Filter Effects"
+    },
+    "color-scheme": {
+      "label": "Color scheme",
+      "type": "ident",
+      "keywords": [
+        "normal",
+        "light",
+        "dark",
+        "only"
+      ],
+      "list": true,
+      "area": "Color"
+    },
+    "column-count": {
+      "label": "Column count",
+      "type": "number",
+      "keywords": [
+        "auto"
+      ],
+      "negative": true,
+      "area": "Multi-column Layout"
+    },
+    "column-fill": {
+      "label": "Column fill",
+      "type": "keyword",
+      "keywords": [
+        "auto",
+        "balance"
+      ],
+      "area": "Multi-column Layout"
+    },
+    "column-gap": {
+      "label": "Column gap",
+      "type": "dimension",
+      "keywords": [
+        "normal"
+      ],
+      "negative": true,
+      "area": "Box Alignment"
+    },
+    "column-height": {
+      "label": "Column height",
+      "type": "dimension",
+      "keywords": [
+        "auto"
+      ],
+      "area": "Box Sizing"
+    },
+    "column-rule": {
+      "label": "Column rule",
+      "type": "any",
+      "syntax": "<'column-rule-width'> || <'column-rule-style'> || <'column-rule-color'>",
+      "area": "Multi-column Layout"
+    },
+    "column-rule-color": {
+      "label": "Column rule color",
+      "type": "color",
+      "area": "Multi-column Layout"
+    },
+    "column-rule-style": {
+      "label": "Column rule style",
+      "type": "keyword",
+      "keywords": [
+        "none",
+        "hidden",
+        "dotted",
+        "dashed",
+        "solid",
+        "double",
+        "groove",
+        "ridge",
+        "inset",
+        "outset"
+      ],
+      "list": true,
+      "area": "Multi-column Layout"
+    },
+    "column-rule-width": {
+      "label": "Column rule width",
+      "type": "dimension",
+      "keywords": [
+        "thin",
+        "medium",
+        "thick"
+      ],
+      "negative": true,
+      "list": true,
+      "area": "Multi-column Layout"
+    },
+    "column-span": {
+      "label": "Column span",
+      "type": "keyword",
+      "keywords": [
+        "none",
+        "all"
+      ],
+      "area": "Multi-column Layout"
+    },
+    "column-width": {
+      "label": "Column width",
+      "type": "dimension",
+      "keywords": [
+        "auto"
+      ],
+      "area": "Box Sizing"
+    },
+    "column-wrap": {
+      "label": "Column wrap",
+      "type": "keyword",
+      "keywords": [
+        "auto",
+        "nowrap",
+        "wrap"
+      ],
+      "area": "Box Sizing"
+    },
+    "columns": {
+      "label": "Columns",
+      "type": "any",
+      "syntax": "[ <'column-width'> || <'column-count'> ] [ / <'column-height'> ]?",
+      "area": "Multi-column Layout"
+    },
+    "contain": {
+      "label": "Contain",
+      "type": "keyword",
+      "keywords": [
+        "none",
+        "strict",
+        "content",
+        "size",
+        "inline-size",
+        "layout",
+        "style",
+        "paint"
+      ],
+      "list": true,
+      "area": "Containment"
+    },
+    "contain-intrinsic-block-size": {
+      "label": "Contain intrinsic block size",
+      "type": "dimension",
+      "keywords": [
+        "auto",
+        "none"
+      ],
+      "negative": true,
+      "list": true,
+      "area": "Box Sizing"
+    },
+    "contain-intrinsic-height": {
+      "label": "Contain intrinsic height",
+      "type": "dimension",
+      "keywords": [
+        "auto",
+        "none"
+      ],
+      "negative": true,
+      "list": true,
+      "area": "Box Sizing"
+    },
+    "contain-intrinsic-inline-size": {
+      "label": "Contain intrinsic inline size",
+      "type": "dimension",
+      "keywords": [
+        "auto",
+        "none"
+      ],
+      "negative": true,
+      "list": true,
+      "area": "Box Sizing"
+    },
+    "contain-intrinsic-size": {
+      "label": "Contain intrinsic size",
+      "type": "dimension",
+      "keywords": [
+        "auto",
+        "none"
+      ],
+      "negative": true,
+      "list": true,
+      "area": "Box Sizing"
+    },
+    "contain-intrinsic-width": {
+      "label": "Contain intrinsic width",
+      "type": "dimension",
+      "keywords": [
+        "auto",
+        "none"
+      ],
+      "negative": true,
+      "list": true,
+      "area": "Box Sizing"
+    },
+    "container": {
+      "label": "Container",
+      "type": "any",
+      "syntax": "<'container-name'> [ / <'container-type'> ]?",
+      "area": "Conditional Rules"
+    },
+    "container-name": {
+      "label": "Container name",
+      "type": "ident",
+      "keywords": [
+        "none"
+      ],
+      "list": true,
+      "area": "Conditional Rules"
+    },
+    "container-type": {
+      "label": "Container type",
+      "type": "keyword",
+      "keywords": [
+        "normal",
+        "size",
+        "inline-size",
+        "scroll-state"
+      ],
+      "list": true,
+      "area": "Conditional Rules"
+    },
+    "content": {
+      "label": "Content",
+      "type": "any",
+      "syntax": "normal | none | [ <content-replacement> | <content-list> ] [ / [ <string> | <counter> | <attr()> ]+ ]?",
+      "area": "Generated Content"
+    },
+    "content-visibility": {
+      "label": "Content visibility",
+      "type": "keyword",
+      "keywords": [
+        "visible",
+        "auto",
+        "hidden"
+      ],
+      "area": "Containment"
+    },
+    "corner-block-end-shape": {
+      "label": "Corner block end shape",
+      "type": "any",
+      "syntax": "<corner-shape-value>{1,2}",
+      "area": "Backgrounds and Borders"
+    },
+    "corner-block-start-shape": {
+      "label": "Corner block start shape",
+      "type": "any",
+      "syntax": "<corner-shape-value>{1,2}",
+      "area": "Backgrounds and Borders"
+    },
+    "corner-bottom-left-shape": {
+      "label": "Corner bottom left shape",
+      "type": "any",
+      "syntax": "<corner-shape-value>",
+      "area": "Backgrounds and Borders"
+    },
+    "corner-bottom-right-shape": {
+      "label": "Corner bottom right shape",
+      "type": "any",
+      "syntax": "<corner-shape-value>",
+      "area": "Backgrounds and Borders"
+    },
+    "corner-bottom-shape": {
+      "label": "Corner bottom shape",
+      "type": "any",
+      "syntax": "<corner-shape-value>{1,2}",
+      "area": "Backgrounds and Borders"
+    },
+    "corner-end-end-shape": {
+      "label": "Corner end end shape",
+      "type": "any",
+      "syntax": "<corner-shape-value>",
+      "area": "Backgrounds and Borders"
+    },
+    "corner-end-start-shape": {
+      "label": "Corner end start shape",
+      "type": "any",
+      "syntax": "<corner-shape-value>",
+      "area": "Backgrounds and Borders"
+    },
+    "corner-inline-end-shape": {
+      "label": "Corner inline end shape",
+      "type": "any",
+      "syntax": "<corner-shape-value>{1,2}",
+      "area": "Backgrounds and Borders"
+    },
+    "corner-inline-start-shape": {
+      "label": "Corner inline start shape",
+      "type": "any",
+      "syntax": "<corner-shape-value>{1,2}",
+      "area": "Backgrounds and Borders"
+    },
+    "corner-left-shape": {
+      "label": "Corner left shape",
+      "type": "any",
+      "syntax": "<corner-shape-value>{1,2}",
+      "area": "Backgrounds and Borders"
+    },
+    "corner-right-shape": {
+      "label": "Corner right shape",
+      "type": "any",
+      "syntax": "<corner-shape-value>{1,2}",
+      "area": "Backgrounds and Borders"
+    },
+    "corner-shape": {
+      "label": "Corner shape",
+      "type": "any",
+      "syntax": "<corner-shape-value>{1,4}",
+      "area": "Backgrounds and Borders"
+    },
+    "corner-start-end-shape": {
+      "label": "Corner start end shape",
+      "type": "any",
+      "syntax": "<corner-shape-value>",
+      "area": "Backgrounds and Borders"
+    },
+    "corner-start-start-shape": {
+      "label": "Corner start start shape",
+      "type": "any",
+      "syntax": "<corner-shape-value>",
+      "area": "Backgrounds and Borders"
+    },
+    "corner-top-left-shape": {
+      "label": "Corner top left shape",
+      "type": "any",
+      "syntax": "<corner-shape-value>",
+      "area": "Backgrounds and Borders"
+    },
+    "corner-top-right-shape": {
+      "label": "Corner top right shape",
+      "type": "any",
+      "syntax": "<corner-shape-value>",
+      "area": "Backgrounds and Borders"
+    },
+    "corner-top-shape": {
+      "label": "Corner top shape",
+      "type": "any",
+      "syntax": "<corner-shape-value>{1,2}",
+      "area": "Backgrounds and Borders"
+    },
+    "counter-increment": {
+      "label": "Counter increment",
+      "type": "any",
+      "syntax": "[ <counter-name> <integer>? ]+ | none",
+      "area": "Lists and Counters"
+    },
+    "counter-reset": {
+      "label": "Counter reset",
+      "type": "any",
+      "syntax": "[ <counter-name> <integer>? | <reversed-counter-name> <integer>? ]+ | none",
+      "area": "Lists and Counters"
+    },
+    "counter-set": {
+      "label": "Counter set",
+      "type": "any",
+      "syntax": "[ <counter-name> <integer>? ]+ | none",
+      "area": "Lists and Counters"
+    },
+    "cursor": {
+      "label": "Cursor",
+      "type": "any",
+      "syntax": "[ [ <url> [ <x> <y> ]? , ]* <cursor-predefined> ]",
+      "area": "Basic User Interface"
+    },
+    "cx": {
+      "label": "Cx",
+      "type": "dimension",
+      "negative": true,
+      "area": "Scalable Vector Graphics"
+    },
+    "cy": {
+      "label": "Cy",
+      "type": "dimension",
+      "negative": true,
+      "area": "Scalable Vector Graphics"
+    },
+    "d": {
+      "label": "D",
+      "type": "any",
+      "syntax": "none | path(<string>)",
+      "area": "Scalable Vector Graphics"
+    },
+    "direction": {
+      "label": "Direction",
+      "type": "keyword",
+      "keywords": [
+        "ltr",
+        "rtl"
+      ],
+      "area": "Writing Modes"
+    },
+    "display": {
+      "label": "Display",
+      "type": "keyword",
+      "keywords": [
+        "block",
+        "inline",
+        "run-in",
+        "flow",
+        "flow-root",
+        "table",
+        "flex",
+        "grid",
+        "ruby",
+        "list-item",
+        "table-row-group",
+        "table-header-group",
+        "table-footer-group",
+        "table-row",
+        "table-cell",
+        "table-column-group",
+        "table-column",
+        "table-caption",
+        "ruby-base",
+        "ruby-text",
+        "ruby-base-container",
+        "ruby-text-container",
+        "contents",
+        "none",
+        "inline-block",
+        "inline-list-item",
+        "inline-table",
+        "inline-flex",
+        "inline-grid"
+      ],
+      "list": true,
+      "area": "Display"
+    },
+    "dominant-baseline": {
+      "label": "Dominant baseline",
+      "type": "keyword",
+      "keywords": [
+        "auto",
+        "text-bottom",
+        "alphabetic",
+        "ideographic",
+        "middle",
+        "central",
+        "mathematical",
+        "hanging",
+        "text-top"
+      ],
+      "area": "Inline"
+    },
+    "dynamic-range-limit": {
+      "label": "Dynamic range limit",
+      "type": "any",
+      "syntax": "standard | no-limit | constrained | <dynamic-range-limit-mix()>",
+      "area": "Color"
+    },
+    "empty-cells": {
+      "label": "Empty cells",
+      "type": "keyword",
+      "keywords": [
+        "show",
+        "hide"
+      ],
+      "area": "Table"
+    },
+    "fill": {
+      "label": "Fill",
+      "type": "any",
+      "syntax": "<paint>",
+      "area": "Scalable Vector Graphics"
+    },
+    "fill-opacity": {
+      "label": "Fill opacity",
+      "type": "dimension",
+      "negative": true,
+      "number": true,
+      "area": "Scalable Vector Graphics"
+    },
+    "fill-rule": {
+      "label": "Fill rule",
+      "type": "keyword",
+      "keywords": [
+        "nonzero",
+        "evenodd"
+      ],
+      "area": "Scalable Vector Graphics"
+    },
+    "filter": {
+      "label": "Filter",
+      "type": "any",
+      "syntax": "none | <filter-value-list>",
+      "area": "Filter Effects"
+    },
+    "flex": {
+      "label": "Flex",
+      "type": "any",
+      "syntax": "none | [ <'flex-grow'> <'flex-shrink'>? || <'flex-basis'> ]",
+      "area": "Flexible Box Layout"
+    },
+    "flex-basis": {
+      "label": "Flex basis",
+      "type": "any",
+      "syntax": "content | <'width'>",
+      "area": "Flexible Box Layout"
+    },
+    "flex-direction": {
+      "label": "Flex direction",
+      "type": "keyword",
+      "keywords": [
+        "row",
+        "row-reverse",
+        "column",
+        "column-reverse"
+      ],
+      "area": "Flexible Box Layout"
+    },
+    "flex-flow": {
+      "label": "Flex flow",
+      "type": "keyword",
+      "keywords": [
+        "row",
+        "row-reverse",
+        "column",
+        "column-reverse",
+        "nowrap",
+        "wrap",
+        "wrap-reverse"
+      ],
+      "list": true,
+      "area": "Flexible Box Layout"
+    },
+    "flex-grow": {
+      "label": "Flex grow",
+      "type": "number",
+      "negative": true,
+      "area": "Flexible Box Layout"
+    },
+    "flex-shrink": {
+      "label": "Flex shrink",
+      "type": "number",
+      "negative": true,
+      "area": "Flexible Box Layout"
+    },
+    "flex-wrap": {
+      "label": "Flex wrap",
+      "type": "keyword",
+      "keywords": [
+        "nowrap",
+        "wrap",
+        "wrap-reverse"
+      ],
+      "area": "Flexible Box Layout"
+    },
+    "float": {
+      "label": "Float",
+      "type": "keyword",
+      "keywords": [
+        "left",
+        "right",
+        "none",
+        "inline-start",
+        "inline-end"
+      ],
+      "area": "Positioned Layout"
+    },
+    "flood-color": {
+      "label": "Flood color",
+      "type": "color",
+      "area": "Filter Effects"
+    },
+    "flood-opacity": {
+      "label": "Flood opacity",
+      "type": "dimension",
+      "negative": true,
+      "number": true,
+      "area": "Filter Effects"
+    },
+    "font": {
+      "label": "Font",
+      "type": "any",
+      "syntax": "[ [ <'font-style'> || <font-variant-css2> || <'font-weight'> || <font-width-css3> ]? <'font-size'> [ / <'line-height'> ]? <'font-family'># ] | <system-family-name>",
+      "area": "Fonts"
+    },
+    "font-family": {
+      "label": "Font family",
+      "type": "any",
+      "syntax": "[ <family-name> | <generic-family> ]#",
+      "area": "Fonts"
+    },
+    "font-feature-settings": {
+      "label": "Font feature settings",
+      "type": "any",
+      "syntax": "normal | <feature-tag-value>#",
+      "area": "Fonts"
+    },
+    "font-kerning": {
+      "label": "Font kerning",
+      "type": "keyword",
+      "keywords": [
+        "auto",
+        "normal",
+        "none"
+      ],
+      "area": "Fonts"
+    },
+    "font-language-override": {
+      "label": "Font language override",
+      "type": "any",
+      "syntax": "normal | <string>",
+      "area": "Fonts"
+    },
+    "font-optical-sizing": {
+      "label": "Font optical sizing",
+      "type": "keyword",
+      "keywords": [
+        "auto",
+        "none"
+      ],
+      "area": "Fonts"
+    },
+    "font-palette": {
+      "label": "Font palette",
+      "type": "any",
+      "syntax": "normal | light | dark | <palette-identifier> | <palette-mix()>",
+      "area": "Fonts"
+    },
+    "font-size": {
+      "label": "Font size",
+      "type": "dimension",
+      "keywords": [
+        "xx-small",
+        "x-small",
+        "small",
+        "medium",
+        "large",
+        "x-large",
+        "xx-large",
+        "xxx-large",
+        "larger",
+        "smaller",
+        "math"
+      ],
+      "area": "Fonts"
+    },
+    "font-size-adjust": {
+      "label": "Font size adjust",
+      "type": "number",
+      "keywords": [
+        "none",
+        "ex-height",
+        "cap-height",
+        "ch-width",
+        "ic-width",
+        "ic-height",
+        "from-font"
+      ],
+      "negative": true,
+      "list": true,
+      "area": "Fonts"
+    },
+    "font-style": {
+      "label": "Font style",
+      "type": "dimension",
+      "keywords": [
+        "normal",
+        "italic",
+        "oblique"
+      ],
+      "negative": true,
+      "list": true,
+      "area": "Fonts"
+    },
+    "font-synthesis": {
+      "label": "Font synthesis",
+      "type": "keyword",
+      "keywords": [
+        "none",
+        "weight",
+        "style",
+        "small-caps",
+        "position"
+      ],
+      "list": true,
+      "area": "Fonts"
+    },
+    "font-synthesis-small-caps": {
+      "label": "Font synthesis small caps",
+      "type": "keyword",
+      "keywords": [
+        "auto",
+        "none"
+      ],
+      "area": "Fonts"
+    },
+    "font-synthesis-style": {
+      "label": "Font synthesis style",
+      "type": "keyword",
+      "keywords": [
+        "auto",
+        "none"
+      ],
+      "area": "Fonts"
+    },
+    "font-synthesis-weight": {
+      "label": "Font synthesis weight",
+      "type": "keyword",
+      "keywords": [
+        "auto",
+        "none"
+      ],
+      "area": "Fonts"
+    },
+    "font-variant": {
+      "label": "Font variant",
+      "type": "any",
+      "syntax": "normal | none | [ <common-lig-values> || <discretionary-lig-values> || <historical-lig-values> || <contextual-alt-values> || stylistic( <feature-value-name> ) || historical-forms || styleset( <feature-value-name># ) || character-variant( <feature-value-name># ) || swash( <feature-value-name> ) || ornaments( <feature-value-name> ) || annotation( <feature-value-name> ) || [ small-caps | all-small-caps | petite-caps | all-petite-caps | unicase | titling-caps ] || <numeric-figure-values> || <numeric-spacing-values> || <numeric-fraction-values> || ordinal || slashed-zero || <east-asian-variant-values> || <east-asian-width-values> || ruby ]",
+      "area": "Fonts"
+    },
+    "font-variant-alternates": {
+      "label": "Font variant alternates",
+      "type": "any",
+      "syntax": "normal | [ stylistic( <feature-value-name> ) || historical-forms || styleset( <feature-value-name># ) || character-variant( <feature-value-name># ) || swash( <feature-value-name> ) || ornaments( <feature-value-name> ) || annotation( <feature-value-name> ) ]",
+      "area": "Fonts"
+    },
+    "font-variant-caps": {
+      "label": "Font variant caps",
+      "type": "keyword",
+      "keywords": [
+        "normal",
+        "small-caps",
+        "all-small-caps",
+        "petite-caps",
+        "all-petite-caps",
+        "unicase",
+        "titling-caps"
+      ],
+      "area": "Fonts"
+    },
+    "font-variant-east-asian": {
+      "label": "Font variant east asian",
+      "type": "keyword",
+      "keywords": [
+        "normal",
+        "jis78",
+        "jis83",
+        "jis90",
+        "jis04",
+        "simplified",
+        "traditional",
+        "full-width",
+        "proportional-width",
+        "ruby"
+      ],
+      "list": true,
+      "area": "Fonts"
+    },
+    "font-variant-emoji": {
+      "label": "Font variant emoji",
+      "type": "keyword",
+      "keywords": [
+        "normal",
+        "text",
+        "emoji",
+        "unicode"
+      ],
+      "area": "Fonts"
+    },
+    "font-variant-ligatures": {
+      "label": "Font variant ligatures",
+      "type": "keyword",
+      "keywords": [
+        "normal",
+        "none",
+        "common-ligatures",
+        "no-common-ligatures",
+        "discretionary-ligatures",
+        "no-discretionary-ligatures",
+        "historical-ligatures",
+        "no-historical-ligatures",
+        "contextual",
+        "no-contextual"
+      ],
+      "list": true,
+      "area": "Fonts"
+    },
+    "font-variant-numeric": {
+      "label": "Font variant numeric",
+      "type": "keyword",
+      "keywords": [
+        "normal",
+        "lining-nums",
+        "oldstyle-nums",
+        "proportional-nums",
+        "tabular-nums",
+        "diagonal-fractions",
+        "stacked-fractions",
+        "ordinal",
+        "slashed-zero"
+      ],
+      "list": true,
+      "area": "Fonts"
+    },
+    "font-variant-position": {
+      "label": "Font variant position",
+      "type": "keyword",
+      "keywords": [
+        "normal",
+        "sub",
+        "super"
+      ],
+      "area": "Fonts"
+    },
+    "font-variation-settings": {
+      "label": "Font variation settings",
+      "type": "any",
+      "syntax": "normal | [ <string> <number> ]#",
+      "area": "Fonts"
+    },
+    "font-weight": {
+      "label": "Font weight",
+      "type": "number",
+      "keywords": [
+        "normal",
+        "bold",
+        "bolder",
+        "lighter"
+      ],
+      "area": "Fonts"
+    },
+    "forced-color-adjust": {
+      "label": "Forced color adjust",
+      "type": "keyword",
+      "keywords": [
+        "auto",
+        "none",
+        "preserve-parent-color"
+      ],
+      "area": "Color"
+    },
+    "gap": {
+      "label": "Gap",
+      "type": "dimension",
+      "keywords": [
+        "normal"
+      ],
+      "negative": true,
+      "list": true,
+      "area": "Box Alignment"
+    },
+    "grid": {
+      "label": "Grid",
+      "type": "any",
+      "syntax": "<'grid-template'> | <'grid-template-rows'> / [ auto-flow && dense? ] <'grid-auto-columns'>? | [ auto-flow && dense? ] <'grid-auto-rows'>? / <'grid-template-columns'>",
+      "area": "Grid Layout"
+    },
+    "grid-area": {
+      "label": "Grid area",
+      "type": "any",
+      "syntax": "<grid-line> [ / <grid-line> ]{0,3}",
+      "area": "Grid Layout"
+    },
+    "grid-auto-columns": {
+      "label": "Grid auto columns",
+      "type": "any",
+      "syntax": "<track-size>+",
+      "area": "Grid Layout"
+    },
+    "grid-auto-flow": {
+      "label": "Grid auto flow",
+      "type": "keyword",
+      "keywords": [
+        "row",
+        "column",
+        "dense"
+      ],
+      "list": true,
+      "area": "Grid Layout"
+    },
+    "grid-auto-rows": {
+      "label": "Grid auto rows",
+      "type": "any",
+      "syntax": "<track-size>+",
+      "area": "Grid Layout"
+    },
+    "grid-column": {
+      "label": "Grid column",
+      "type": "any",
+      "syntax": "<grid-line> [ / <grid-line> ]?",
+      "area": "Grid Layout"
+    },
+    "grid-column-end": {
+      "label": "Grid column end",
+      "type": "any",
+      "syntax": "<grid-line>",
+      "area": "Grid Layout"
+    },
+    "grid-column-start": {
+      "label": "Grid column start",
+      "type": "any",
+      "syntax": "<grid-line>",
+      "area": "Grid Layout"
+    },
+    "grid-row": {
+      "label": "Grid row",
+      "type": "any",
+      "syntax": "<grid-line> [ / <grid-line> ]?",
+      "area": "Grid Layout"
+    },
+    "grid-row-end": {
+      "label": "Grid row end",
+      "type": "any",
+      "syntax": "<grid-line>",
+      "area": "Grid Layout"
+    },
+    "grid-row-start": {
+      "label": "Grid row start",
+      "type": "any",
+      "syntax": "<grid-line>",
+      "area": "Grid Layout"
+    },
+    "grid-template": {
+      "label": "Grid template",
+      "type": "any",
+      "syntax": "none | [ <'grid-template-rows'> / <'grid-template-columns'> ] | [ <line-names>? <string> <track-size>? <line-names>? ]+ [ / <explicit-track-list> ]?",
+      "area": "Grid Layout"
+    },
+    "grid-template-areas": {
+      "label": "Grid template areas",
+      "type": "any",
+      "syntax": "none | <string>+",
+      "area": "Grid Layout"
+    },
+    "grid-template-columns": {
+      "label": "Grid template columns",
+      "type": "any",
+      "syntax": "none | <track-list> | <auto-track-list> | subgrid <line-name-list>?",
+      "area": "Grid Layout"
+    },
+    "grid-template-rows": {
+      "label": "Grid template rows",
+      "type": "any",
+      "syntax": "none | <track-list> | <auto-track-list> | subgrid <line-name-list>?",
+      "area": "Grid Layout"
+    },
+    "hanging-punctuation": {
+      "label": "Hanging punctuation",
+      "type": "keyword",
+      "keywords": [
+        "none",
+        "first",
+        "force-end",
+        "allow-end",
+        "last"
+      ],
+      "list": true,
+      "area": "Text"
+    },
+    "height": {
+      "label": "Height",
+      "type": "any",
+      "syntax": "auto | <length-percentage [0,∞]> | min-content | max-content | fit-content | fit-content(<length-percentage [0,∞]>) | <calc-size()> | <anchor-size()>",
+      "area": "Box Sizing"
+    },
+    "hyphenate-character": {
+      "label": "Hyphenate character",
+      "type": "any",
+      "syntax": "auto | <string>",
+      "area": "Text"
+    },
+    "hyphenate-limit-chars": {
+      "label": "Hyphenate limit chars",
+      "type": "number",
+      "keywords": [
+        "auto"
+      ],
+      "negative": true,
+      "list": true,
+      "area": "Text"
+    },
+    "hyphens": {
+      "label": "Hyphens",
+      "type": "keyword",
+      "keywords": [
+        "none",
+        "manual",
+        "auto"
+      ],
+      "area": "Text"
+    },
+    "image-orientation": {
+      "label": "Image orientation",
+      "type": "dimension",
+      "keywords": [
+        "from-image",
+        "flip"
+      ],
+      "negative": true,
+      "list": true,
+      "area": "Images"
+    },
+    "image-rendering": {
+      "label": "Image rendering",
+      "type": "keyword",
+      "keywords": [
+        "auto",
+        "crisp-edges",
+        "pixelated",
+        "smooth"
+      ],
+      "area": "Images"
+    },
+    "initial-letter": {
+      "label": "Initial letter",
+      "type": "number",
+      "keywords": [
+        "normal"
+      ],
+      "negative": true,
+      "list": true,
+      "area": "Inline"
+    },
+    "inline-size": {
+      "label": "Inline size",
+      "type": "any",
+      "syntax": "<'width'>",
+      "area": "Logical Properties and Values"
+    },
+    "inset": {
+      "label": "Inset",
+      "type": "any",
+      "syntax": "<'top'>{1,4}",
+      "area": "Logical Properties and Values"
+    },
+    "inset-block": {
+      "label": "Inset block",
+      "type": "any",
+      "syntax": "<'top'>{1,2}",
+      "area": "Logical Properties and Values"
+    },
+    "inset-block-end": {
+      "label": "Inset block end",
+      "type": "any",
+      "syntax": "<'top'>",
+      "area": "Logical Properties and Values"
+    },
+    "inset-block-start": {
+      "label": "Inset block start",
+      "type": "any",
+      "syntax": "<'top'>",
+      "area": "Logical Properties and Values"
+    },
+    "inset-inline": {
+      "label": "Inset inline",
+      "type": "any",
+      "syntax": "<'top'>{1,2}",
+      "area": "Logical Properties and Values"
+    },
+    "inset-inline-end": {
+      "label": "Inset inline end",
+      "type": "any",
+      "syntax": "<'top'>",
+      "area": "Logical Properties and Values"
+    },
+    "inset-inline-start": {
+      "label": "Inset inline start",
+      "type": "any",
+      "syntax": "<'top'>",
+      "area": "Logical Properties and Values"
+    },
+    "interactivity": {
+      "label": "Interactivity",
+      "type": "keyword",
+      "keywords": [
+        "auto",
+        "inert"
+      ],
+      "area": "Basic User Interface"
+    },
+    "interest-delay": {
+      "label": "Interest delay",
+      "type": "dimension",
+      "keywords": [
+        "normal"
+      ],
+      "negative": true,
+      "list": true,
+      "area": "Basic User Interface"
+    },
+    "interest-delay-end": {
+      "label": "Interest delay end",
+      "type": "dimension",
+      "keywords": [
+        "normal"
+      ],
+      "negative": true,
+      "area": "Basic User Interface"
+    },
+    "interest-delay-start": {
+      "label": "Interest delay start",
+      "type": "dimension",
+      "keywords": [
+        "normal"
+      ],
+      "negative": true,
+      "area": "Basic User Interface"
+    },
+    "isolation": {
+      "label": "Isolation",
+      "type": "keyword",
+      "keywords": [
+        "auto",
+        "isolate"
+      ],
+      "area": "Compositing and Blending"
+    },
+    "justify-content": {
+      "label": "Justify content",
+      "type": "keyword",
+      "keywords": [
+        "normal",
+        "space-between",
+        "space-around",
+        "space-evenly",
+        "stretch",
+        "unsafe",
+        "safe",
+        "center",
+        "start",
+        "end",
+        "flex-start",
+        "flex-end",
+        "left",
+        "right"
+      ],
+      "list": true,
+      "area": "Box Alignment"
+    },
+    "justify-items": {
+      "label": "Justify items",
+      "type": "keyword",
+      "keywords": [
+        "normal",
+        "stretch",
+        "first",
+        "last",
+        "baseline",
+        "unsafe",
+        "safe",
+        "center",
+        "start",
+        "end",
+        "self-start",
+        "self-end",
+        "flex-start",
+        "flex-end",
+        "left",
+        "right",
+        "legacy",
+        "anchor-center"
+      ],
+      "list": true,
+      "area": "Box Alignment"
+    },
+    "justify-self": {
+      "label": "Justify self",
+      "type": "keyword",
+      "keywords": [
+        "auto",
+        "normal",
+        "stretch",
+        "first",
+        "last",
+        "baseline",
+        "unsafe",
+        "safe",
+        "center",
+        "start",
+        "end",
+        "self-start",
+        "self-end",
+        "flex-start",
+        "flex-end",
+        "left",
+        "right",
+        "anchor-center"
+      ],
+      "list": true,
+      "area": "Box Alignment"
+    },
+    "left": {
+      "label": "Left",
+      "type": "any",
+      "syntax": "auto | <length-percentage> | <anchor()> | <anchor-size()>",
+      "area": "Anchor Positioning"
+    },
+    "letter-spacing": {
+      "label": "Letter spacing",
+      "type": "dimension",
+      "keywords": [
+        "normal"
+      ],
+      "negative": true,
+      "area": "Text"
+    },
+    "lighting-color": {
+      "label": "Lighting color",
+      "type": "color",
+      "area": "Filter Effects"
+    },
+    "line-break": {
+      "label": "Line break",
+      "type": "keyword",
+      "keywords": [
+        "auto",
+        "loose",
+        "normal",
+        "strict",
+        "anywhere"
+      ],
+      "area": "Text"
+    },
+    "line-clamp": {
+      "label": "Line clamp",
+      "type": "number",
+      "keywords": [
+        "none"
+      ],
+      "negative": true,
+      "area": "Overflow"
+    },
+    "line-height": {
+      "label": "Line height",
+      "type": "dimension",
+      "keywords": [
+        "normal"
+      ],
+      "negative": true,
+      "number": true,
+      "area": "Inline"
+    },
+    "list-style": {
+      "label": "List style",
+      "type": "any",
+      "syntax": "<'list-style-type'> || <'list-style-position'> || <'list-style-image'>",
+      "area": "Lists and Counters"
+    },
+    "list-style-image": {
+      "label": "List style image",
+      "type": "any",
+      "syntax": "<image> | none",
+      "area": "Lists and Counters"
+    },
+    "list-style-position": {
+      "label": "List style position",
+      "type": "keyword",
+      "keywords": [
+        "inside",
+        "outside"
+      ],
+      "area": "Lists and Counters"
+    },
+    "list-style-type": {
+      "label": "List style type",
+      "type": "any",
+      "syntax": "<counter-style> | <string> | none",
+      "area": "Lists and Counters"
+    },
+    "margin": {
+      "label": "Margin",
+      "type": "any",
+      "syntax": "<'margin-top'>{1,4}",
+      "area": "Box Model"
+    },
+    "margin-block": {
+      "label": "Margin block",
+      "type": "any",
+      "syntax": "<'margin-top'>{1,2}",
+      "area": "Logical Properties and Values"
+    },
+    "margin-block-end": {
+      "label": "Margin block end",
+      "type": "any",
+      "syntax": "<'margin-top'>",
+      "area": "Logical Properties and Values"
+    },
+    "margin-block-start": {
+      "label": "Margin block start",
+      "type": "any",
+      "syntax": "<'margin-top'>",
+      "area": "Logical Properties and Values"
+    },
+    "margin-bottom": {
+      "label": "Margin bottom",
+      "type": "any",
+      "syntax": "<length-percentage> | auto | <anchor-size()>",
+      "area": "Anchor Positioning"
+    },
+    "margin-inline": {
+      "label": "Margin inline",
+      "type": "any",
+      "syntax": "<'margin-top'>{1,2}",
+      "area": "Logical Properties and Values"
+    },
+    "margin-inline-end": {
+      "label": "Margin inline end",
+      "type": "any",
+      "syntax": "<'margin-top'>",
+      "area": "Logical Properties and Values"
+    },
+    "margin-inline-start": {
+      "label": "Margin inline start",
+      "type": "any",
+      "syntax": "<'margin-top'>",
+      "area": "Logical Properties and Values"
+    },
+    "margin-left": {
+      "label": "Margin left",
+      "type": "any",
+      "syntax": "<length-percentage> | auto | <anchor-size()>",
+      "area": "Anchor Positioning"
+    },
+    "margin-right": {
+      "label": "Margin right",
+      "type": "any",
+      "syntax": "<length-percentage> | auto | <anchor-size()>",
+      "area": "Anchor Positioning"
+    },
+    "margin-top": {
+      "label": "Margin top",
+      "type": "any",
+      "syntax": "<length-percentage> | auto | <anchor-size()>",
+      "area": "Anchor Positioning"
+    },
+    "marker": {
+      "label": "Marker",
+      "type": "any",
+      "syntax": "none | <url>",
+      "area": "Scalable Vector Graphics"
+    },
+    "marker-end": {
+      "label": "Marker end",
+      "type": "any",
+      "syntax": "none | <url>",
+      "area": "Scalable Vector Graphics"
+    },
+    "marker-mid": {
+      "label": "Marker mid",
+      "type": "any",
+      "syntax": "none | <url>",
+      "area": "Scalable Vector Graphics"
+    },
+    "marker-start": {
+      "label": "Marker start",
+      "type": "any",
+      "syntax": "none | <url>",
+      "area": "Scalable Vector Graphics"
+    },
+    "mask": {
+      "label": "Mask",
+      "type": "any",
+      "syntax": "<mask-layer>#",
+      "area": "Masking"
+    },
+    "mask-border": {
+      "label": "Mask border",
+      "type": "any",
+      "syntax": "<'mask-border-source'> || <'mask-border-slice'> [ / <'mask-border-width'>? [ / <'mask-border-outset'> ]? ]? || <'mask-border-repeat'> || <'mask-border-mode'>",
+      "area": "Masking"
+    },
+    "mask-border-mode": {
+      "label": "Mask border mode",
+      "type": "keyword",
+      "keywords": [
+        "luminance",
+        "alpha"
+      ],
+      "area": "Masking"
+    },
+    "mask-border-outset": {
+      "label": "Mask border outset",
+      "type": "dimension",
+      "negative": true,
+      "number": true,
+      "list": true,
+      "area": "Masking"
+    },
+    "mask-border-repeat": {
+      "label": "Mask border repeat",
+      "type": "keyword",
+      "keywords": [
+        "stretch",
+        "repeat",
+        "round",
+        "space"
+      ],
+      "list": true,
+      "area": "Masking"
+    },
+    "mask-border-slice": {
+      "label": "Mask border slice",
+      "type": "dimension",
+      "keywords": [
+        "fill"
+      ],
+      "negative": true,
+      "number": true,
+      "list": true,
+      "area": "Masking"
+    },
+    "mask-border-source": {
+      "label": "Mask border source",
+      "type": "any",
+      "syntax": "none | <image>",
+      "area": "Masking"
+    },
+    "mask-border-width": {
+      "label": "Mask border width",
+      "type": "dimension",
+      "keywords": [
+        "auto"
+      ],
+      "negative": true,
+      "number": true,
+      "list": true,
+      "area": "Masking"
+    },
+    "mask-clip": {
+      "label": "Mask clip",
+      "type": "keyword",
+      "keywords": [
+        "content-box",
+        "padding-box",
+        "border-box",
+        "fill-box",
+        "stroke-box",
+        "view-box",
+        "no-clip"
+      ],
+      "list": true,
+      "area": "Masking"
+    },
+    "mask-composite": {
+      "label": "Mask composite",
+      "type": "keyword",
+      "keywords": [
+        "add",
+        "subtract",
+        "intersect",
+        "exclude"
+      ],
+      "list": true,
+      "area": "Masking"
+    },
+    "mask-image": {
+      "label": "Mask image",
+      "type": "any",
+      "syntax": "<mask-reference>#",
+      "area": "Masking"
+    },
+    "mask-mode": {
+      "label": "Mask mode",
+      "type": "keyword",
+      "keywords": [
+        "alpha",
+        "luminance",
+        "match-source"
+      ],
+      "list": true,
+      "area": "Masking"
+    },
+    "mask-origin": {
+      "label": "Mask origin",
+      "type": "keyword",
+      "keywords": [
+        "content-box",
+        "padding-box",
+        "border-box",
+        "fill-box",
+        "stroke-box",
+        "view-box"
+      ],
+      "list": true,
+      "area": "Masking"
+    },
+    "mask-position": {
+      "label": "Mask position",
+      "type": "dimension",
+      "keywords": [
+        "left",
+        "center",
+        "right",
+        "top",
+        "bottom"
+      ],
+      "negative": true,
+      "list": true,
+      "area": "Masking"
+    },
+    "mask-repeat": {
+      "label": "Mask repeat",
+      "type": "keyword",
+      "keywords": [
+        "repeat-x",
+        "repeat-y",
+        "repeat",
+        "space",
+        "round",
+        "no-repeat"
+      ],
+      "list": true,
+      "area": "Masking"
+    },
+    "mask-size": {
+      "label": "Mask size",
+      "type": "dimension",
+      "keywords": [
+        "auto",
+        "cover",
+        "contain"
+      ],
+      "list": true,
+      "area": "Masking"
+    },
+    "mask-type": {
+      "label": "Mask type",
+      "type": "keyword",
+      "keywords": [
+        "luminance",
+        "alpha"
+      ],
+      "area": "Masking"
+    },
+    "math-depth": {
+      "label": "Math depth",
+      "type": "any",
+      "syntax": "auto-add | add(<integer>) | <integer>",
+      "area": "MathML"
+    },
+    "math-style": {
+      "label": "Math style",
+      "type": "keyword",
+      "keywords": [
+        "normal",
+        "compact"
+      ],
+      "area": "MathML"
+    },
+    "max-block-size": {
+      "label": "Max block size",
+      "type": "any",
+      "syntax": "<'max-width'>",
+      "area": "Logical Properties and Values"
+    },
+    "max-height": {
+      "label": "Max height",
+      "type": "any",
+      "syntax": "none | <length-percentage [0,∞]> | min-content | max-content | fit-content | fit-content(<length-percentage [0,∞]>) | <calc-size()> | <anchor-size()>",
+      "area": "Box Sizing"
+    },
+    "max-inline-size": {
+      "label": "Max inline size",
+      "type": "any",
+      "syntax": "<'max-width'>",
+      "area": "Logical Properties and Values"
+    },
+    "max-width": {
+      "label": "Max width",
+      "type": "any",
+      "syntax": "none | <length-percentage [0,∞]> | min-content | max-content | fit-content | fit-content(<length-percentage [0,∞]>) | <calc-size()> | <anchor-size()>",
+      "area": "Box Sizing"
+    },
+    "min-block-size": {
+      "label": "Min block size",
+      "type": "any",
+      "syntax": "<'min-width'>",
+      "area": "Logical Properties and Values"
+    },
+    "min-height": {
+      "label": "Min height",
+      "type": "any",
+      "syntax": "auto | <length-percentage [0,∞]> | min-content | max-content | fit-content | fit-content(<length-percentage [0,∞]>) | <calc-size()> | <anchor-size()>",
+      "area": "Box Sizing"
+    },
+    "min-inline-size": {
+      "label": "Min inline size",
+      "type": "any",
+      "syntax": "<'min-width'>",
+      "area": "Logical Properties and Values"
+    },
+    "min-width": {
+      "label": "Min width",
+      "type": "any",
+      "syntax": "auto | <length-percentage [0,∞]> | min-content | max-content | fit-content | fit-content(<length-percentage [0,∞]>) | <calc-size()> | <anchor-size()>",
+      "area": "Box Sizing"
+    },
+    "mix-blend-mode": {
+      "label": "Mix blend mode",
+      "type": "keyword",
+      "keywords": [
+        "normal",
+        "multiply",
+        "screen",
+        "overlay",
+        "darken",
+        "lighten",
+        "color-dodge",
+        "color-burn",
+        "hard-light",
+        "soft-light",
+        "difference",
+        "exclusion",
+        "hue",
+        "saturation",
+        "color",
+        "luminosity",
+        "plus-darker",
+        "plus-lighter"
+      ],
+      "area": "Compositing and Blending"
+    },
+    "object-fit": {
+      "label": "Object fit",
+      "type": "keyword",
+      "keywords": [
+        "fill",
+        "contain",
+        "cover",
+        "none",
+        "scale-down"
+      ],
+      "area": "Images"
+    },
+    "object-position": {
+      "label": "Object position",
+      "type": "dimension",
+      "keywords": [
+        "left",
+        "center",
+        "right",
+        "top",
+        "bottom"
+      ],
+      "negative": true,
+      "list": true,
+      "area": "Images"
+    },
+    "offset": {
+      "label": "Offset",
+      "type": "any",
+      "syntax": "[ <'offset-position'>? [ <'offset-path'> [ <'offset-distance'> || <'offset-rotate'> ]? ]? ]! [ / <'offset-anchor'> ]?",
+      "area": "Motion Path"
+    },
+    "offset-anchor": {
+      "label": "Offset anchor",
+      "type": "dimension",
+      "keywords": [
+        "auto",
+        "left",
+        "center",
+        "right",
+        "top",
+        "bottom"
+      ],
+      "negative": true,
+      "list": true,
+      "area": "Motion Path"
+    },
+    "offset-distance": {
+      "label": "Offset distance",
+      "type": "dimension",
+      "negative": true,
+      "area": "Motion Path"
+    },
+    "offset-path": {
+      "label": "Offset path",
+      "type": "any",
+      "syntax": "none | <offset-path> || <coord-box>",
+      "area": "Motion Path"
+    },
+    "offset-position": {
+      "label": "Offset position",
+      "type": "dimension",
+      "keywords": [
+        "normal",
+        "auto",
+        "left",
+        "center",
+        "right",
+        "top",
+        "bottom"
+      ],
+      "negative": true,
+      "list": true,
+      "area": "Motion Path"
+    },
+    "offset-rotate": {
+      "label": "Offset rotate",
+      "type": "dimension",
+      "keywords": [
+        "auto",
+        "reverse"
+      ],
+      "negative": true,
+      "list": true,
+      "area": "Motion Path"
+    },
+    "opacity": {
+      "label": "Opacity",
+      "type": "dimension",
+      "negative": true,
+      "number": true,
+      "area": "Color"
+    },
+    "order": {
+      "label": "Order",
+      "type": "number",
+      "negative": true,
+      "area": "Display"
+    },
+    "orphans": {
+      "label": "Orphans",
+      "type": "number",
+      "negative": true,
+      "area": "Fragmentation"
+    },
+    "outline": {
+      "label": "Outline",
+      "type": "any",
+      "syntax": "<'outline-width'> || <'outline-style'> || <'outline-color'>",
+      "area": "Basic User Interface"
+    },
+    "outline-color": {
+      "label": "Outline color",
+      "type": "color",
+      "keywords": [
+        "auto"
+      ],
+      "area": "Basic User Interface"
+    },
+    "outline-offset": {
+      "label": "Outline offset",
+      "type": "dimension",
+      "negative": true,
+      "area": "Basic User Interface"
+    },
+    "outline-style": {
+      "label": "Outline style",
+      "type": "keyword",
+      "keywords": [
+        "auto",
+        "none",
+        "dotted",
+        "dashed",
+        "solid",
+        "double",
+        "groove",
+        "ridge",
+        "inset",
+        "outset"
+      ],
+      "area": "Basic User Interface"
+    },
+    "outline-width": {
+      "label": "Outline width",
+      "type": "dimension",
+      "keywords": [
+        "thin",
+        "medium",
+        "thick"
+      ],
+      "negative": true,
+      "area": "Basic User Interface"
+    },
+    "overflow": {
+      "label": "Overflow",
+      "type": "keyword",
+      "keywords": [
+        "visible",
+        "hidden",
+        "clip",
+        "scroll",
+        "auto"
+      ],
+      "list": true,
+      "area": "Overflow"
+    },
+    "overflow-anchor": {
+      "label": "Overflow anchor",
+      "type": "keyword",
+      "keywords": [
+        "auto",
+        "none"
+      ],
+      "area": "Scroll Anchoring"
+    },
+    "overflow-block": {
+      "label": "Overflow block",
+      "type": "keyword",
+      "keywords": [
+        "visible",
+        "hidden",
+        "clip",
+        "scroll",
+        "auto"
+      ],
+      "area": "Overflow"
+    },
+    "overflow-clip-margin": {
+      "label": "Overflow clip margin",
+      "type": "dimension",
+      "keywords": [
+        "content-box",
+        "padding-box",
+        "border-box"
+      ],
+      "list": true,
+      "area": "Overflow"
+    },
+    "overflow-inline": {
+      "label": "Overflow inline",
+      "type": "keyword",
+      "keywords": [
+        "visible",
+        "hidden",
+        "clip",
+        "scroll",
+        "auto"
+      ],
+      "area": "Overflow"
+    },
+    "overflow-wrap": {
+      "label": "Overflow wrap",
+      "type": "keyword",
+      "keywords": [
+        "normal",
+        "break-word",
+        "anywhere"
+      ],
+      "area": "Text"
+    },
+    "overflow-x": {
+      "label": "Overflow x",
+      "type": "keyword",
+      "keywords": [
+        "visible",
+        "hidden",
+        "clip",
+        "scroll",
+        "auto"
+      ],
+      "area": "Overflow"
+    },
+    "overflow-y": {
+      "label": "Overflow y",
+      "type": "keyword",
+      "keywords": [
+        "visible",
+        "hidden",
+        "clip",
+        "scroll",
+        "auto"
+      ],
+      "area": "Overflow"
+    },
+    "overscroll-behavior": {
+      "label": "Overscroll behavior",
+      "type": "keyword",
+      "keywords": [
+        "contain",
+        "none",
+        "auto"
+      ],
+      "list": true,
+      "area": "Overscroll Behavior"
+    },
+    "overscroll-behavior-block": {
+      "label": "Overscroll behavior block",
+      "type": "keyword",
+      "keywords": [
+        "contain",
+        "none",
+        "auto"
+      ],
+      "area": "Overscroll Behavior"
+    },
+    "overscroll-behavior-inline": {
+      "label": "Overscroll behavior inline",
+      "type": "keyword",
+      "keywords": [
+        "contain",
+        "none",
+        "auto"
+      ],
+      "area": "Overscroll Behavior"
+    },
+    "overscroll-behavior-x": {
+      "label": "Overscroll behavior x",
+      "type": "keyword",
+      "keywords": [
+        "contain",
+        "none",
+        "auto"
+      ],
+      "area": "Overscroll Behavior"
+    },
+    "overscroll-behavior-y": {
+      "label": "Overscroll behavior y",
+      "type": "keyword",
+      "keywords": [
+        "contain",
+        "none",
+        "auto"
+      ],
+      "area": "Overscroll Behavior"
+    },
+    "padding": {
+      "label": "Padding",
+      "type": "dimension",
+      "list": true,
+      "area": "Box Model"
+    },
+    "padding-block": {
+      "label": "Padding block",
+      "type": "dimension",
+      "list": true,
+      "area": "Logical Properties and Values"
+    },
+    "padding-block-end": {
+      "label": "Padding block end",
+      "type": "dimension",
+      "area": "Logical Properties and Values"
+    },
+    "padding-block-start": {
+      "label": "Padding block start",
+      "type": "dimension",
+      "area": "Logical Properties and Values"
+    },
+    "padding-bottom": {
+      "label": "Padding bottom",
+      "type": "dimension",
+      "area": "Box Model"
+    },
+    "padding-inline": {
+      "label": "Padding inline",
+      "type": "dimension",
+      "list": true,
+      "area": "Logical Properties and Values"
+    },
+    "padding-inline-end": {
+      "label": "Padding inline end",
+      "type": "dimension",
+      "area": "Logical Properties and Values"
+    },
+    "padding-inline-start": {
+      "label": "Padding inline start",
+      "type": "dimension",
+      "area": "Logical Properties and Values"
+    },
+    "padding-left": {
+      "label": "Padding left",
+      "type": "dimension",
+      "area": "Box Model"
+    },
+    "padding-right": {
+      "label": "Padding right",
+      "type": "dimension",
+      "area": "Box Model"
+    },
+    "padding-top": {
+      "label": "Padding top",
+      "type": "dimension",
+      "area": "Box Model"
+    },
+    "page": {
+      "label": "Page",
+      "type": "ident",
+      "keywords": [
+        "auto"
+      ],
+      "area": "Paged Media"
+    },
+    "paint-order": {
+      "label": "Paint order",
+      "type": "keyword",
+      "keywords": [
+        "normal",
+        "fill",
+        "stroke",
+        "markers"
+      ],
+      "list": true,
+      "area": "Scalable Vector Graphics"
+    },
+    "perspective": {
+      "label": "Perspective",
+      "type": "dimension",
+      "keywords": [
+        "none"
+      ],
+      "negative": true,
+      "area": "Transforms"
+    },
+    "perspective-origin": {
+      "label": "Perspective origin",
+      "type": "dimension",
+      "keywords": [
+        "left",
+        "center",
+        "right",
+        "top",
+        "bottom"
+      ],
+      "negative": true,
+      "list": true,
+      "area": "Transforms"
+    },
+    "place-content": {
+      "label": "Place content",
+      "type": "keyword",
+      "keywords": [
+        "normal",
+        "first",
+        "last",
+        "baseline",
+        "space-between",
+        "space-around",
+        "space-evenly",
+        "stretch",
+        "unsafe",
+        "safe",
+        "center",
+        "start",
+        "end",
+        "flex-start",
+        "flex-end",
+        "left",
+        "right"
+      ],
+      "list": true,
+      "area": "Box Alignment"
+    },
+    "place-items": {
+      "label": "Place items",
+      "type": "keyword",
+      "keywords": [
+        "normal",
+        "stretch",
+        "first",
+        "last",
+        "baseline",
+        "unsafe",
+        "safe",
+        "center",
+        "start",
+        "end",
+        "self-start",
+        "self-end",
+        "flex-start",
+        "flex-end",
+        "anchor-center",
+        "left",
+        "right",
+        "legacy"
+      ],
+      "list": true,
+      "area": "Box Alignment"
+    },
+    "place-self": {
+      "label": "Place self",
+      "type": "keyword",
+      "keywords": [
+        "auto",
+        "normal",
+        "stretch",
+        "first",
+        "last",
+        "baseline",
+        "unsafe",
+        "safe",
+        "center",
+        "start",
+        "end",
+        "self-start",
+        "self-end",
+        "flex-start",
+        "flex-end",
+        "anchor-center",
+        "left",
+        "right"
+      ],
+      "list": true,
+      "area": "Box Alignment"
+    },
+    "pointer-events": {
+      "label": "Pointer events",
+      "type": "keyword",
+      "keywords": [
+        "auto",
+        "none",
+        "visiblepainted",
+        "visiblefill",
+        "visiblestroke",
+        "visible",
+        "painted",
+        "fill",
+        "stroke",
+        "all",
+        "inherit"
+      ],
+      "area": "Basic User Interface"
+    },
+    "position": {
+      "label": "Position",
+      "type": "keyword",
+      "keywords": [
+        "static",
+        "relative",
+        "absolute",
+        "sticky",
+        "fixed"
+      ],
+      "area": "Positioned Layout"
+    },
+    "print-color-adjust": {
+      "label": "Print color adjust",
+      "type": "keyword",
+      "keywords": [
+        "economy",
+        "exact"
+      ],
+      "area": "Color"
+    },
+    "quotes": {
+      "label": "Quotes",
+      "type": "any",
+      "syntax": "none | auto | [ <string> <string> ]+",
+      "area": "Generated Content"
+    },
+    "r": {
+      "label": "R",
+      "type": "dimension",
+      "negative": true,
+      "area": "Scalable Vector Graphics"
+    },
+    "reading-flow": {
+      "label": "Reading flow",
+      "type": "keyword",
+      "keywords": [
+        "normal",
+        "source-order",
+        "flex-visual",
+        "flex-flow",
+        "grid-rows",
+        "grid-columns",
+        "grid-order"
+      ],
+      "area": "Display"
+    },
+    "reading-order": {
+      "label": "Reading order",
+      "type": "number",
+      "negative": true,
+      "area": "Display"
+    },
+    "resize": {
+      "label": "Resize",
+      "type": "keyword",
+      "keywords": [
+        "none",
+        "both",
+        "horizontal",
+        "vertical",
+        "block",
+        "inline"
+      ],
+      "area": "Basic User Interface"
+    },
+    "right": {
+      "label": "Right",
+      "type": "any",
+      "syntax": "auto | <length-percentage> | <anchor()> | <anchor-size()>",
+      "area": "Anchor Positioning"
+    },
+    "rotate": {
+      "label": "Rotate",
+      "type": "dimension",
+      "keywords": [
+        "none",
+        "x",
+        "y",
+        "z"
+      ],
+      "negative": true,
+      "number": true,
+      "list": true,
+      "area": "Transforms"
+    },
+    "row-gap": {
+      "label": "Row gap",
+      "type": "dimension",
+      "keywords": [
+        "normal"
+      ],
+      "negative": true,
+      "area": "Box Alignment"
+    },
+    "ruby-align": {
+      "label": "Ruby align",
+      "type": "keyword",
+      "keywords": [
+        "start",
+        "center",
+        "space-between",
+        "space-around"
+      ],
+      "area": "Ruby"
+    },
+    "ruby-overhang": {
+      "label": "Ruby overhang",
+      "type": "keyword",
+      "keywords": [
+        "auto",
+        "none"
+      ],
+      "area": "Ruby"
+    },
+    "ruby-position": {
+      "label": "Ruby position",
+      "type": "keyword",
+      "keywords": [
+        "alternate",
+        "over",
+        "under",
+        "inter-character"
+      ],
+      "list": true,
+      "area": "Ruby"
+    },
+    "rx": {
+      "label": "Rx",
+      "type": "dimension",
+      "negative": true,
+      "area": "Scalable Vector Graphics"
+    },
+    "ry": {
+      "label": "Ry",
+      "type": "dimension",
+      "negative": true,
+      "area": "Scalable Vector Graphics"
+    },
+    "scale": {
+      "label": "Scale",
+      "type": "dimension",
+      "keywords": [
+        "none"
+      ],
+      "negative": true,
+      "number": true,
+      "list": true,
+      "area": "Transforms"
+    },
+    "scroll-behavior": {
+      "label": "Scroll behavior",
+      "type": "keyword",
+      "keywords": [
+        "auto",
+        "smooth"
+      ],
+      "area": "Overflow"
+    },
+    "scroll-margin": {
+      "label": "Scroll margin",
+      "type": "dimension",
+      "negative": true,
+      "list": true,
+      "area": "Scroll Snap"
+    },
+    "scroll-margin-block": {
+      "label": "Scroll margin block",
+      "type": "dimension",
+      "negative": true,
+      "list": true,
+      "area": "Scroll Snap"
+    },
+    "scroll-margin-block-end": {
+      "label": "Scroll margin block end",
+      "type": "dimension",
+      "negative": true,
+      "area": "Scroll Snap"
+    },
+    "scroll-margin-block-start": {
+      "label": "Scroll margin block start",
+      "type": "dimension",
+      "negative": true,
+      "area": "Scroll Snap"
+    },
+    "scroll-margin-bottom": {
+      "label": "Scroll margin bottom",
+      "type": "dimension",
+      "negative": true,
+      "area": "Scroll Snap"
+    },
+    "scroll-margin-inline": {
+      "label": "Scroll margin inline",
+      "type": "dimension",
+      "negative": true,
+      "list": true,
+      "area": "Scroll Snap"
+    },
+    "scroll-margin-inline-end": {
+      "label": "Scroll margin inline end",
+      "type": "dimension",
+      "negative": true,
+      "area": "Scroll Snap"
+    },
+    "scroll-margin-inline-start": {
+      "label": "Scroll margin inline start",
+      "type": "dimension",
+      "negative": true,
+      "area": "Scroll Snap"
+    },
+    "scroll-margin-left": {
+      "label": "Scroll margin left",
+      "type": "dimension",
+      "negative": true,
+      "area": "Scroll Snap"
+    },
+    "scroll-margin-right": {
+      "label": "Scroll margin right",
+      "type": "dimension",
+      "negative": true,
+      "area": "Scroll Snap"
+    },
+    "scroll-margin-top": {
+      "label": "Scroll margin top",
+      "type": "dimension",
+      "negative": true,
+      "area": "Scroll Snap"
+    },
+    "scroll-marker-group": {
+      "label": "Scroll marker group",
+      "type": "keyword",
+      "keywords": [
+        "none",
+        "before",
+        "after"
+      ],
+      "area": "Overflow"
+    },
+    "scroll-padding": {
+      "label": "Scroll padding",
+      "type": "dimension",
+      "keywords": [
+        "auto"
+      ],
+      "negative": true,
+      "list": true,
+      "area": "Scroll Snap"
+    },
+    "scroll-padding-block": {
+      "label": "Scroll padding block",
+      "type": "dimension",
+      "keywords": [
+        "auto"
+      ],
+      "negative": true,
+      "list": true,
+      "area": "Scroll Snap"
+    },
+    "scroll-padding-block-end": {
+      "label": "Scroll padding block end",
+      "type": "dimension",
+      "keywords": [
+        "auto"
+      ],
+      "negative": true,
+      "area": "Scroll Snap"
+    },
+    "scroll-padding-block-start": {
+      "label": "Scroll padding block start",
+      "type": "dimension",
+      "keywords": [
+        "auto"
+      ],
+      "negative": true,
+      "area": "Scroll Snap"
+    },
+    "scroll-padding-bottom": {
+      "label": "Scroll padding bottom",
+      "type": "dimension",
+      "keywords": [
+        "auto"
+      ],
+      "negative": true,
+      "area": "Scroll Snap"
+    },
+    "scroll-padding-inline": {
+      "label": "Scroll padding inline",
+      "type": "dimension",
+      "keywords": [
+        "auto"
+      ],
+      "negative": true,
+      "list": true,
+      "area": "Scroll Snap"
+    },
+    "scroll-padding-inline-end": {
+      "label": "Scroll padding inline end",
+      "type": "dimension",
+      "keywords": [
+        "auto"
+      ],
+      "negative": true,
+      "area": "Scroll Snap"
+    },
+    "scroll-padding-inline-start": {
+      "label": "Scroll padding inline start",
+      "type": "dimension",
+      "keywords": [
+        "auto"
+      ],
+      "negative": true,
+      "area": "Scroll Snap"
+    },
+    "scroll-padding-left": {
+      "label": "Scroll padding left",
+      "type": "dimension",
+      "keywords": [
+        "auto"
+      ],
+      "negative": true,
+      "area": "Scroll Snap"
+    },
+    "scroll-padding-right": {
+      "label": "Scroll padding right",
+      "type": "dimension",
+      "keywords": [
+        "auto"
+      ],
+      "negative": true,
+      "area": "Scroll Snap"
+    },
+    "scroll-padding-top": {
+      "label": "Scroll padding top",
+      "type": "dimension",
+      "keywords": [
+        "auto"
+      ],
+      "negative": true,
+      "area": "Scroll Snap"
+    },
+    "scroll-snap-align": {
+      "label": "Scroll snap align",
+      "type": "keyword",
+      "keywords": [
+        "none",
+        "start",
+        "end",
+        "center"
+      ],
+      "list": true,
+      "area": "Scroll Snap"
+    },
+    "scroll-snap-stop": {
+      "label": "Scroll snap stop",
+      "type": "keyword",
+      "keywords": [
+        "normal",
+        "always"
+      ],
+      "area": "Scroll Snap"
+    },
+    "scroll-snap-type": {
+      "label": "Scroll snap type",
+      "type": "keyword",
+      "keywords": [
+        "none",
+        "x",
+        "y",
+        "block",
+        "inline",
+        "both",
+        "mandatory",
+        "proximity"
+      ],
+      "list": true,
+      "area": "Scroll Snap"
+    },
+    "scroll-target-group": {
+      "label": "Scroll target group",
+      "type": "keyword",
+      "keywords": [
+        "none",
+        "auto"
+      ],
+      "area": "Overflow"
+    },
+    "scrollbar-color": {
+      "label": "Scrollbar color",
+      "type": "color",
+      "keywords": [
+        "auto"
+      ],
+      "list": true,
+      "area": "Scrollbars Styling"
+    },
+    "scrollbar-gutter": {
+      "label": "Scrollbar gutter",
+      "type": "keyword",
+      "keywords": [
+        "auto",
+        "stable",
+        "both-edges"
+      ],
+      "list": true,
+      "area": "Overflow"
+    },
+    "scrollbar-width": {
+      "label": "Scrollbar width",
+      "type": "keyword",
+      "keywords": [
+        "auto",
+        "thin",
+        "none"
+      ],
+      "area": "Scrollbars Styling"
+    },
+    "shape-image-threshold": {
+      "label": "Shape image threshold",
+      "type": "dimension",
+      "negative": true,
+      "number": true,
+      "area": "Shapes"
+    },
+    "shape-margin": {
+      "label": "Shape margin",
+      "type": "dimension",
+      "negative": true,
+      "area": "Shapes"
+    },
+    "shape-outside": {
+      "label": "Shape outside",
+      "type": "any",
+      "syntax": "none | [ <shape-box> || <basic-shape> ] | <image>",
+      "area": "Shapes"
+    },
+    "shape-rendering": {
+      "label": "Shape rendering",
+      "type": "keyword",
+      "keywords": [
+        "auto",
+        "optimizespeed",
+        "crispedges",
+        "geometricprecision"
+      ],
+      "area": "Scalable Vector Graphics"
+    },
+    "stop-color": {
+      "label": "Stop color",
+      "type": "color",
+      "area": "Scalable Vector Graphics"
+    },
+    "stop-opacity": {
+      "label": "Stop opacity",
+      "type": "dimension",
+      "negative": true,
+      "number": true,
+      "area": "Scalable Vector Graphics"
+    },
+    "stroke": {
+      "label": "Stroke",
+      "type": "any",
+      "syntax": "<paint>",
+      "area": "Scalable Vector Graphics"
+    },
+    "stroke-dasharray": {
+      "label": "Stroke dasharray",
+      "type": "dimension",
+      "keywords": [
+        "none"
+      ],
+      "negative": true,
+      "number": true,
+      "list": true,
+      "area": "Scalable Vector Graphics"
+    },
+    "stroke-dashoffset": {
+      "label": "Stroke dashoffset",
+      "type": "dimension",
+      "negative": true,
+      "number": true,
+      "area": "Scalable Vector Graphics"
+    },
+    "stroke-linecap": {
+      "label": "Stroke linecap",
+      "type": "keyword",
+      "keywords": [
+        "butt",
+        "round",
+        "square"
+      ],
+      "area": "Scalable Vector Graphics"
+    },
+    "stroke-linejoin": {
+      "label": "Stroke linejoin",
+      "type": "keyword",
+      "keywords": [
+        "miter",
+        "miter-clip",
+        "round",
+        "bevel",
+        "arcs"
+      ],
+      "area": "Scalable Vector Graphics"
+    },
+    "stroke-miterlimit": {
+      "label": "Stroke miterlimit",
+      "type": "number",
+      "negative": true,
+      "area": "Scalable Vector Graphics"
+    },
+    "stroke-opacity": {
+      "label": "Stroke opacity",
+      "type": "dimension",
+      "negative": true,
+      "number": true,
+      "area": "Scalable Vector Graphics"
+    },
+    "stroke-width": {
+      "label": "Stroke width",
+      "type": "dimension",
+      "negative": true,
+      "number": true,
+      "area": "Scalable Vector Graphics"
+    },
+    "tab-size": {
+      "label": "Tab size",
+      "type": "dimension",
+      "negative": true,
+      "number": true,
+      "area": "Text"
+    },
+    "table-layout": {
+      "label": "Table layout",
+      "type": "keyword",
+      "keywords": [
+        "auto",
+        "fixed"
+      ],
+      "area": "Table"
+    },
+    "text-align": {
+      "label": "Text align",
+      "type": "keyword",
+      "keywords": [
+        "start",
+        "end",
+        "left",
+        "right",
+        "center",
+        "justify",
+        "match-parent"
+      ],
+      "area": "Text"
+    },
+    "text-align-last": {
+      "label": "Text align last",
+      "type": "keyword",
+      "keywords": [
+        "auto",
+        "start",
+        "end",
+        "left",
+        "right",
+        "center",
+        "justify"
+      ],
+      "area": "Text"
+    },
+    "text-anchor": {
+      "label": "Text anchor",
+      "type": "keyword",
+      "keywords": [
+        "start",
+        "middle",
+        "end"
+      ],
+      "area": "Scalable Vector Graphics"
+    },
+    "text-autospace": {
+      "label": "Text autospace",
+      "type": "any",
+      "syntax": "normal | <autospace> | auto",
+      "area": "Text"
+    },
+    "text-box": {
+      "label": "Text box",
+      "type": "keyword",
+      "keywords": [
+        "normal",
+        "none",
+        "trim-start",
+        "trim-end",
+        "trim-both",
+        "auto",
+        "text",
+        "cap",
+        "ex",
+        "ideographic",
+        "ideographic-ink",
+        "alphabetic"
+      ],
+      "list": true,
+      "area": "Inline"
+    },
+    "text-box-edge": {
+      "label": "Text box edge",
+      "type": "keyword",
+      "keywords": [
+        "auto",
+        "text",
+        "cap",
+        "ex",
+        "ideographic",
+        "ideographic-ink",
+        "alphabetic"
+      ],
+      "list": true,
+      "area": "Inline"
+    },
+    "text-box-trim": {
+      "label": "Text box trim",
+      "type": "keyword",
+      "keywords": [
+        "none",
+        "trim-start",
+        "trim-end",
+        "trim-both"
+      ],
+      "area": "Inline"
+    },
+    "text-combine-upright": {
+      "label": "Text combine upright",
+      "type": "number",
+      "keywords": [
+        "none",
+        "all",
+        "digits"
+      ],
+      "negative": true,
+      "list": true,
+      "area": "Writing Modes"
+    },
+    "text-decoration": {
+      "label": "Text decoration",
+      "type": "any",
+      "syntax": "<'text-decoration-line'> || <'text-decoration-style'> || <'text-decoration-color'> || <'text-decoration-thickness'>",
+      "area": "Text Decoration"
+    },
+    "text-decoration-color": {
+      "label": "Text decoration color",
+      "type": "color",
+      "area": "Text Decoration"
+    },
+    "text-decoration-inset": {
+      "label": "Text decoration inset",
+      "type": "dimension",
+      "keywords": [
+        "auto"
+      ],
+      "negative": true,
+      "list": true,
+      "area": "Text Decoration"
+    },
+    "text-decoration-line": {
+      "label": "Text decoration line",
+      "type": "keyword",
+      "keywords": [
+        "none",
+        "underline",
+        "overline",
+        "line-through",
+        "blink",
+        "spelling-error",
+        "grammar-error"
+      ],
+      "list": true,
+      "area": "Text Decoration"
+    },
+    "text-decoration-skip-ink": {
+      "label": "Text decoration skip ink",
+      "type": "keyword",
+      "keywords": [
+        "auto",
+        "all",
+        "none"
+      ],
+      "area": "Text Decoration"
+    },
+    "text-decoration-style": {
+      "label": "Text decoration style",
+      "type": "keyword",
+      "keywords": [
+        "solid",
+        "double",
+        "dotted",
+        "dashed",
+        "wavy"
+      ],
+      "area": "Text Decoration"
+    },
+    "text-decoration-thickness": {
+      "label": "Text decoration thickness",
+      "type": "dimension",
+      "keywords": [
+        "auto",
+        "from-font"
+      ],
+      "negative": true,
+      "area": "Text Decoration"
+    },
+    "text-emphasis": {
+      "label": "Text emphasis",
+      "type": "any",
+      "syntax": "<'text-emphasis-style'> || <'text-emphasis-color'>",
+      "area": "Text Decoration"
+    },
+    "text-emphasis-color": {
+      "label": "Text emphasis color",
+      "type": "color",
+      "area": "Text Decoration"
+    },
+    "text-emphasis-position": {
+      "label": "Text emphasis position",
+      "type": "keyword",
+      "keywords": [
+        "auto",
+        "over",
+        "under",
+        "right",
+        "left"
+      ],
+      "list": true,
+      "area": "Text Decoration"
+    },
+    "text-emphasis-style": {
+      "label": "Text emphasis style",
+      "type": "any",
+      "syntax": "none | [ [ filled | open ] || [ dot | circle | double-circle | triangle | sesame ] ] | <string>",
+      "area": "Text Decoration"
+    },
+    "text-indent": {
+      "label": "Text indent",
+      "type": "dimension",
+      "keywords": [
+        "hanging",
+        "each-line"
+      ],
+      "negative": true,
+      "list": true,
+      "area": "Text"
+    },
+    "text-justify": {
+      "label": "Text justify",
+      "type": "keyword",
+      "keywords": [
+        "auto",
+        "inter-character",
+        "inter-word",
+        "none"
+      ],
+      "area": "Text"
+    },
+    "text-orientation": {
+      "label": "Text orientation",
+      "type": "keyword",
+      "keywords": [
+        "mixed",
+        "upright",
+        "sideways"
+      ],
+      "area": "Writing Modes"
+    },
+    "text-overflow": {
+      "label": "Text overflow",
+      "type": "any",
+      "syntax": "[ clip | ellipsis | <string> ]{1,2}",
+      "area": "Overflow"
+    },
+    "text-rendering": {
+      "label": "Text rendering",
+      "type": "keyword",
+      "keywords": [
+        "auto",
+        "optimizespeed",
+        "optimizelegibility",
+        "geometricprecision"
+      ],
+      "area": "Scalable Vector Graphics"
+    },
+    "text-shadow": {
+      "label": "Text shadow",
+      "type": "any",
+      "syntax": "none | <shadow-t>#",
+      "area": "Text Decoration"
+    },
+    "text-transform": {
+      "label": "Text transform",
+      "type": "keyword",
+      "keywords": [
+        "none",
+        "capitalize",
+        "uppercase",
+        "lowercase",
+        "full-width",
+        "full-size-kana",
+        "math-auto"
+      ],
+      "list": true,
+      "area": "Text"
+    },
+    "text-underline-offset": {
+      "label": "Text underline offset",
+      "type": "dimension",
+      "keywords": [
+        "auto"
+      ],
+      "negative": true,
+      "area": "Text Decoration"
+    },
+    "text-underline-position": {
+      "label": "Text underline position",
+      "type": "keyword",
+      "keywords": [
+        "auto",
+        "from-font",
+        "under",
+        "left",
+        "right"
+      ],
+      "list": true,
+      "area": "Text Decoration"
+    },
+    "text-wrap": {
+      "label": "Text wrap",
+      "type": "keyword",
+      "keywords": [
+        "wrap",
+        "nowrap",
+        "auto",
+        "balance",
+        "stable",
+        "pretty"
+      ],
+      "list": true,
+      "area": "Text"
+    },
+    "text-wrap-mode": {
+      "label": "Text wrap mode",
+      "type": "keyword",
+      "keywords": [
+        "wrap",
+        "nowrap"
+      ],
+      "area": "Text"
+    },
+    "text-wrap-style": {
+      "label": "Text wrap style",
+      "type": "keyword",
+      "keywords": [
+        "auto",
+        "balance",
+        "stable",
+        "pretty"
+      ],
+      "area": "Text"
+    },
+    "timeline-trigger": {
+      "label": "Timeline trigger",
+      "type": "any",
+      "syntax": "none | [ <'timeline-trigger-name'> <'timeline-trigger-source'> <'timeline-trigger-range'> [ '/' <'timeline-trigger-exit-range'> ]? ]#",
+      "area": "Animations"
+    },
+    "timeline-trigger-exit-range": {
+      "label": "Timeline trigger exit range",
+      "type": "dimension",
+      "keywords": [
+        "auto",
+        "normal",
+        "cover",
+        "contain",
+        "entry",
+        "exit",
+        "entry-crossing",
+        "exit-crossing"
+      ],
+      "negative": true,
+      "list": true,
+      "area": "Animations"
+    },
+    "timeline-trigger-exit-range-end": {
+      "label": "Timeline trigger exit range end",
+      "type": "dimension",
+      "keywords": [
+        "auto",
+        "normal",
+        "cover",
+        "contain",
+        "entry",
+        "exit",
+        "entry-crossing",
+        "exit-crossing"
+      ],
+      "negative": true,
+      "list": true,
+      "area": "Animations"
+    },
+    "timeline-trigger-exit-range-start": {
+      "label": "Timeline trigger exit range start",
+      "type": "dimension",
+      "keywords": [
+        "auto",
+        "normal",
+        "cover",
+        "contain",
+        "entry",
+        "exit",
+        "entry-crossing",
+        "exit-crossing"
+      ],
+      "negative": true,
+      "list": true,
+      "area": "Animations"
+    },
+    "timeline-trigger-name": {
+      "label": "Timeline trigger name",
+      "type": "any",
+      "syntax": "none | <dashed-ident>#",
+      "area": "Animations"
+    },
+    "timeline-trigger-range": {
+      "label": "Timeline trigger range",
+      "type": "dimension",
+      "keywords": [
+        "normal",
+        "cover",
+        "contain",
+        "entry",
+        "exit",
+        "entry-crossing",
+        "exit-crossing"
+      ],
+      "negative": true,
+      "list": true,
+      "area": "Animations"
+    },
+    "timeline-trigger-range-end": {
+      "label": "Timeline trigger range end",
+      "type": "dimension",
+      "keywords": [
+        "normal",
+        "cover",
+        "contain",
+        "entry",
+        "exit",
+        "entry-crossing",
+        "exit-crossing"
+      ],
+      "negative": true,
+      "list": true,
+      "area": "Animations"
+    },
+    "timeline-trigger-range-start": {
+      "label": "Timeline trigger range start",
+      "type": "dimension",
+      "keywords": [
+        "normal",
+        "cover",
+        "contain",
+        "entry",
+        "exit",
+        "entry-crossing",
+        "exit-crossing"
+      ],
+      "negative": true,
+      "list": true,
+      "area": "Animations"
+    },
+    "timeline-trigger-source": {
+      "label": "Timeline trigger source",
+      "type": "any",
+      "syntax": "<single-animation-timeline>#",
+      "area": "Animations"
+    },
+    "top": {
+      "label": "Top",
+      "type": "any",
+      "syntax": "auto | <length-percentage> | <anchor()> | <anchor-size()>",
+      "area": "Anchor Positioning"
+    },
+    "touch-action": {
+      "label": "Touch action",
+      "type": "keyword",
+      "keywords": [
+        "auto",
+        "none",
+        "pan-x",
+        "pan-left",
+        "pan-right",
+        "pan-y",
+        "pan-up",
+        "pan-down",
+        "pinch-zoom",
+        "manipulation"
+      ],
+      "list": true,
+      "area": "Pointer Events"
+    },
+    "transform": {
+      "label": "Transform",
+      "type": "any",
+      "syntax": "none | <transform-list>",
+      "area": "Transforms"
+    },
+    "transform-box": {
+      "label": "Transform box",
+      "type": "keyword",
+      "keywords": [
+        "content-box",
+        "border-box",
+        "fill-box",
+        "stroke-box",
+        "view-box"
+      ],
+      "area": "Transforms"
+    },
+    "transform-origin": {
+      "label": "Transform origin",
+      "type": "dimension",
+      "keywords": [
+        "left",
+        "center",
+        "right",
+        "top",
+        "bottom"
+      ],
+      "negative": true,
+      "list": true,
+      "area": "Transforms"
+    },
+    "transform-style": {
+      "label": "Transform style",
+      "type": "keyword",
+      "keywords": [
+        "flat",
+        "preserve-3d"
+      ],
+      "area": "Transforms"
+    },
+    "transition": {
+      "label": "Transition",
+      "type": "any",
+      "syntax": "<single-transition>#",
+      "area": "Transitions"
+    },
+    "transition-behavior": {
+      "label": "Transition behavior",
+      "type": "keyword",
+      "keywords": [
+        "normal",
+        "allow-discrete"
+      ],
+      "list": true,
+      "area": "Transitions"
+    },
+    "transition-delay": {
+      "label": "Transition delay",
+      "type": "dimension",
+      "negative": true,
+      "list": true,
+      "area": "Transitions"
+    },
+    "transition-duration": {
+      "label": "Transition duration",
+      "type": "dimension",
+      "negative": true,
+      "list": true,
+      "area": "Transitions"
+    },
+    "transition-property": {
+      "label": "Transition property",
+      "type": "ident",
+      "keywords": [
+        "none",
+        "all"
+      ],
+      "list": true,
+      "area": "Transitions"
+    },
+    "transition-timing-function": {
+      "label": "Transition timing function",
+      "type": "any",
+      "syntax": "<easing-function>#",
+      "area": "Transitions"
+    },
+    "translate": {
+      "label": "Translate",
+      "type": "dimension",
+      "keywords": [
+        "none"
+      ],
+      "negative": true,
+      "list": true,
+      "area": "Transforms"
+    },
+    "trigger-scope": {
+      "label": "Trigger scope",
+      "type": "any",
+      "syntax": "none | all | <dashed-ident>#",
+      "area": "Animations"
+    },
+    "unicode-bidi": {
+      "label": "Unicode bidi",
+      "type": "keyword",
+      "keywords": [
+        "normal",
+        "embed",
+        "isolate",
+        "bidi-override",
+        "isolate-override",
+        "plaintext"
+      ],
+      "area": "Writing Modes"
+    },
+    "user-select": {
+      "label": "User select",
+      "type": "keyword",
+      "keywords": [
+        "auto",
+        "text",
+        "none",
+        "all"
+      ],
+      "area": "Basic User Interface"
+    },
+    "vector-effect": {
+      "label": "Vector effect",
+      "type": "keyword",
+      "keywords": [
+        "none",
+        "non-scaling-stroke",
+        "non-scaling-size",
+        "non-rotation",
+        "fixed-position"
+      ],
+      "area": "Scalable Vector Graphics"
+    },
+    "vertical-align": {
+      "label": "Vertical align",
+      "type": "dimension",
+      "keywords": [
+        "baseline",
+        "sub",
+        "super",
+        "text-top",
+        "text-bottom",
+        "middle",
+        "top",
+        "bottom"
+      ],
+      "negative": true,
+      "area": "Inline"
+    },
+    "view-transition-class": {
+      "label": "View transition class",
+      "type": "ident",
+      "keywords": [
+        "none"
+      ],
+      "list": true,
+      "area": "View Transitions"
+    },
+    "view-transition-name": {
+      "label": "View transition name",
+      "type": "ident",
+      "keywords": [
+        "none",
+        "match-element"
+      ],
+      "area": "View Transitions"
+    },
+    "visibility": {
+      "label": "Visibility",
+      "type": "keyword",
+      "keywords": [
+        "visible",
+        "hidden",
+        "collapse"
+      ],
+      "area": "Display"
+    },
+    "white-space": {
+      "label": "White space",
+      "type": "keyword",
+      "keywords": [
+        "normal",
+        "pre",
+        "pre-wrap",
+        "pre-line",
+        "collapse",
+        "preserve",
+        "preserve-breaks",
+        "preserve-spaces",
+        "break-spaces",
+        "wrap",
+        "nowrap"
+      ],
+      "list": true,
+      "area": "Text"
+    },
+    "white-space-collapse": {
+      "label": "White space collapse",
+      "type": "keyword",
+      "keywords": [
+        "collapse",
+        "preserve",
+        "preserve-breaks",
+        "preserve-spaces",
+        "break-spaces"
+      ],
+      "area": "Text"
+    },
+    "widows": {
+      "label": "Widows",
+      "type": "number",
+      "negative": true,
+      "area": "Fragmentation"
+    },
+    "width": {
+      "label": "Width",
+      "type": "any",
+      "syntax": "auto | <length-percentage [0,∞]> | min-content | max-content | fit-content | fit-content(<length-percentage [0,∞]>) | <calc-size()> | <anchor-size()>",
+      "area": "Box Sizing"
+    },
+    "will-change": {
+      "label": "Will change",
+      "type": "ident",
+      "keywords": [
+        "auto",
+        "scroll-position",
+        "contents"
+      ],
+      "list": true,
+      "area": "Will Change"
+    },
+    "word-break": {
+      "label": "Word break",
+      "type": "keyword",
+      "keywords": [
+        "normal",
+        "break-all",
+        "keep-all",
+        "break-word",
+        "auto-phrase"
+      ],
+      "area": "Text"
+    },
+    "word-spacing": {
+      "label": "Word spacing",
+      "type": "dimension",
+      "keywords": [
+        "normal"
+      ],
+      "negative": true,
+      "area": "Text"
+    },
+    "word-wrap": {
+      "label": "Word wrap",
+      "type": "keyword",
+      "keywords": [
+        "normal",
+        "break-word"
+      ],
+      "area": "Text"
+    },
+    "writing-mode": {
+      "label": "Writing mode",
+      "type": "keyword",
+      "keywords": [
+        "horizontal-tb",
+        "vertical-rl",
+        "vertical-lr",
+        "sideways-rl",
+        "sideways-lr"
+      ],
+      "area": "Writing Modes"
+    },
+    "x": {
+      "label": "X",
+      "type": "dimension",
+      "negative": true,
+      "area": "Scalable Vector Graphics"
+    },
+    "y": {
+      "label": "Y",
+      "type": "dimension",
+      "negative": true,
+      "area": "Scalable Vector Graphics"
+    },
+    "z-index": {
+      "label": "Z index",
+      "type": "number",
+      "keywords": [
+        "auto"
+      ],
+      "negative": true,
+      "area": "Positioned Layout"
+    },
+    "zoom": {
+      "label": "Zoom",
+      "type": "dimension",
+      "keywords": [
+        "normal",
+        "reset"
+      ],
+      "number": true,
+      "list": true,
+      "area": "Viewport"
+    }
+  }
+}

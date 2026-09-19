@@ -1,0 +1,39 @@
+langcode: en
+status: true
+dependencies:
+  config:
+    - field.storage.node.field_related
+    - node.type.plain
+    - node.type.target
+  module:
+    - daedalus_edit
+    - field_sample_value
+third_party_settings:
+  field_sample_value:
+    id: entity_reference
+    configuration:
+      prevent_save: false
+  daedalus_edit:
+    disable: false
+    handle: wrapper
+id: node.plain.field_related
+field_name: field_related
+entity_type: node
+bundle: plain
+label: Related
+description: 'The form-swap tier: an autocomplete widget revealing in the form panel. Targets ONLY the target bundle, which cannot reference back (the teaser-block lesson).'
+required: false
+translatable: false
+default_value: {  }
+default_value_callback: ''
+settings:
+  handler: 'default:node'
+  handler_settings:
+    target_bundles:
+      target: target
+    sort:
+      field: _none
+      direction: ASC
+    auto_create: false
+    auto_create_bundle: ''
+field_type: entity_reference

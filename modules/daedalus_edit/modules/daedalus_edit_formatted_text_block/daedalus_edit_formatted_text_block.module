@@ -1,0 +1,27 @@
+<?php
+
+/**
+ * @file
+ * The formatted text block type: one blueprint-editable element.
+ *
+ * The block's render is GENERATIVE: the markup model in
+ * daedalus_edit_formatted_text_block.page_builder.block_type.formatted_text.yml
+ * is the render, printed by daedalus_ui's shared composed_block
+ * element. This module supplies only what the declaration cannot know —
+ * the filtered text content and the CKEditor binding — through its
+ * FormattedTextComposedContent provider.
+ */
+
+/**
+ * Implements hook_library_info_alter().
+ *
+ * The editor rides the edit tooling, not the block's render: it is only
+ * meaningful once daedalus_edit's registry boots, so it loads as a dependency of
+ * daedalus_edit/library (attached by the Edit tool) rather than being attached
+ * for every visitor.
+ */
+function daedalus_edit_formatted_text_block_library_info_alter(array &$libraries, string $extension): void {
+  if ($extension === 'daedalus_edit' && isset($libraries['library'])) {
+    $libraries['library']['dependencies'][] = 'daedalus_edit_formatted_text_block/formatted_text_editor';
+  }
+}

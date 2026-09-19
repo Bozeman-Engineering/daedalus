@@ -1,0 +1,473 @@
+# The Guide Example style guide: the site-wide declarations of the
+# strict reference design system.
+#
+# This file is the LAW half of the design system (the skin in
+# daedalus_stylish_guide_example.daedalus_stylish.skins.yml is the DATA half): which token
+# scales exist, which CSS properties bind to which scale site-wide, which
+# prose tags are stylable beyond the suite's, and what each element kind
+# may do beyond the Daedalus baseline. The law travels with the unit:
+# this module is the package of the guide_example design system
+# (config/install/daedalus_blueprint.design_system.guide_example.yml), and
+# daedalus_ui layers a package's declarations only while its system
+# is active, above every plain module's and below the theme's. So maps
+# here merge into the suite's declarations and lists here replace the
+# suite's lists wholesale while Guide Example is active, and none of it
+# is in force while another design system (olivero, the recipe's open
+# reference) is.
+#
+# The file is three things at once: the contrib authoring REFERENCE for
+# a fully constrained site (each section models the recommended shape),
+# the TEST FIXTURE strict-posture scenarios activate (they activate this
+# system rather than forcing a mode onto a guide not written for it),
+# and the live vehicle for feeling the strict editing UX when activated
+# on a development site. The guide itself is mode-agnostic; the system
+# ships enforcement: strict, and a site that copies this package may
+# ship any mode.
+#
+# Three facts govern how this file is read:
+# - On a strict site every binding below is law: a bound property
+#   accepts only the scale's minted tokens plus its allowed: literals,
+#   an undeclared property is rejected, and every var() must name a
+#   minted token or a published swatch. On a guarded site the
+#   constraints stay law but undeclared properties pass with grammar
+#   checks; on an open site everything here only shapes the offer.
+# - stops: curate the OFFER, never legality. A stop row shows the named
+#   tokens in list order; the whole scale still validates. Stop names
+#   are the skin's data: a name the active skin does not mint is dropped
+#   from the row with a logged notice, never a build error.
+# - A node's own constraint block for a property replaces the site
+#   default WHOLE on that node (site blocks merge across layers, node
+#   blocks never key-merge with the site's), so a curated node restates
+#   the scale and allowed: literals beside its stops.
+#
+# The growth model this package teaches (the role-token doctrine): token
+# names are site-wide ROLES (a type ramp of display / title-1 / body,
+# color roles like surface / accent), never element-scoped names
+# (--h2-size is wrong). Element differentiation comes from three
+# mechanisms, none of which add grammar:
+#   - skin defaults answer "what does an unstyled h2 look like"
+#     (daedalus_stylish_guide_example.daedalus_stylish.skins.yml),
+#   - per-node stops: curation answers "what may you change it to"
+#     (the block type files beside this one; absence of curation offers
+#     the whole scale),
+#   - minted tokens answer "which values exist" (the skin's data).
+site:
+  # Scales are the code half of the token vocabulary; names and values
+  # are the skin's. Scale ids double as the CSS variable prefix
+  # (--text-*, --shadow-*) and as the AI's applicability signal (a
+  # SEMANTIC id lets a model infer where a scale's tokens apply with no
+  # property enumeration in the schema), so they are named for what they
+  # mean. Prefixes must not equal or hyphen-extend one another (token
+  # names may contain hyphens).
+  #
+  # The first ten restate daedalus_stylish's own site declaration (site
+  # declarations merge, identical shapes are a re-statement for the
+  # reader, never a fork); the last four are this package's additions,
+  # each the home of a property family the guide binds below.
+  token_scales:
+    color:
+      label: Color
+      shape: color
+    font:
+      label: Font family
+      shape: text
+    text:
+      label: Type scale
+      shape: dimension
+    weight:
+      label: Font weight
+      shape: number
+    leading:
+      label: Line height
+      shape: number
+    tracking:
+      label: Letter spacing
+      shape: dimension
+    space:
+      label: Space
+      shape: dimension
+    radius:
+      label: Radius
+      shape: dimension
+    transition:
+      label: Transition
+      shape: text
+    layout:
+      label: Layout
+      shape: dimension
+    # Elevation as material: box-shadow binds here, so every shadow on
+    # the site is one of the skin's three levels (light and dark tuned).
+    shadow:
+      label: Shadow
+      shape: text
+    # Motion timing as material: transition-duration and
+    # animation-duration bind here, so nothing on the site moves at a
+    # speed the skin did not name.
+    duration:
+      label: Duration
+      shape: dimension
+    # Easing curves as material: the timing-function properties bind
+    # here.
+    easing:
+      label: Easing
+      shape: text
+    # Border widths as material: hairline, thin, thick. The name is
+    # "stroke" rather than "border" so the prefix cannot collide with a
+    # future border-* token family.
+    stroke:
+      label: Stroke
+      shape: dimension
+
+  # The package's DELTAS over the suite's bindings. daedalus_stylish's own site
+  # declaration (daedalus_stylish.page_builder.yml site.constraint_defaults)
+  # already binds font-family, font-size, font-weight, line-height,
+  # padding, gap and border-radius to the scales every shipped skin
+  # mints, with the zero literal on the dimension blocks, and the family
+  # expansion (StyleGuide::expandConstraintFamilies()) carries each
+  # shorthand's block to its longhands. A package never restates a block
+  # the suite authors; constraint blocks merge like every map, so a
+  # block carrying only `stops:` lands as the merged block (scale and
+  # allowed literal kept, stops added). What a package DOES author is
+  # what the suite cannot promise for every skin (color, tracking), what
+  # only this package's scales can bind (strokes, shadows, timing), the
+  # margin binding, and the closed lists and ranges a designed site
+  # closes. Every block here is one of those.
+  constraint_defaults:
+    # The type ramp is role-named; the stop row offers it top-down so
+    # the row reads as the ladder the skin's defaults walk.
+    font-size:
+      stops: ['display', 'title-1', 'title-2', 'title-3', 'body', 'caption']
+    # Tracking is a package binding (not every shipped skin mints it):
+    # three generic steps, wide for an eyebrow, tight for a display line.
+    letter-spacing:
+      scale: tracking
+      stops: ['tight', 'normal', 'wide']
+    # Text and border colors are role tokens, never ad hoc, so they bind
+    # to the color scale (the suite leaves color to the package: another
+    # package keeps it unbound so swatches stay legal there). Backgrounds
+    # are deliberately NOT bound (see the unbound list below).
+    # border-color is authored on the shorthand; the expansion carries
+    # it to the four sides.
+    color:
+      scale: color
+      allowed: ['transparent', 'currentColor', 'inherit']
+    border-color:
+      scale: color
+      allowed: ['transparent', 'currentColor']
+    # Spacing: the suite binds padding and gap to space with the zero
+    # literal; this package curates the everyday six of the nine minted
+    # steps. The band tokens (band-compact, band, band-spacious) are worn
+    # through the container rhythm axis, never picked by hand, and the
+    # gutter is the page band's inline inset, not a padding step.
+    padding:
+      stops: ['2', '4', '6', '8', '12', '16']
+    gap:
+      stops: ['2', '4', '6', '8', '12', '16']
+    # Margins: the ladder, zero, and auto (centering). The suite leaves
+    # margin unbound because auto and negatives are legal there on an
+    # open site; a designed site outlaws negative margins by construction
+    # (nothing on the scale is negative) and keeps auto for centering.
+    margin:
+      scale: space
+      allowed: ['0', 'auto']
+      stops: ['2', '4', '6', '8', '12', '16']
+    # Strokes: hairline / thin / thick, or none. Authored on the
+    # shorthand; the expansion reaches the four sides.
+    border-width:
+      scale: stroke
+      allowed: ['0']
+    # Elevation: one of three levels, or none.
+    box-shadow:
+      scale: shadow
+      allowed: ['none']
+    # Motion timing: named durations and curves only. The transition
+    # shorthand is withdrawn from the container and block grants below
+    # so this cannot be bypassed by spelling the whole transition in one
+    # value.
+    transition-duration:
+      scale: duration
+    animation-duration:
+      scale: duration
+    transition-timing-function:
+      scale: easing
+    animation-timing-function:
+      scale: easing
+    # NOT bound: opacity. Keyframe steps validate against these same
+    # defaults, and every fade entrance starts at opacity 0, so a floor
+    # here would refuse the site's own animations. The property's
+    # grammar already caps it at 1.
+    # Looping motion is a deliberate act: once, a few times, or forever.
+    # A bare allowed: list (no scale) is a CLOSED value space.
+    animation-iteration-count:
+      allowed: ['1', '2', '3', 'infinite']
+    # Case is never changed by CSS except for an eyebrow.
+    text-transform:
+      allowed: ['none', 'uppercase']
+    # Stacking is a small, positive world.
+    z-index:
+      min: '0'
+      max: '10'
+    # Content widths come from the layout scale (max-width, narrow,
+    # measure) or the two structural literals.
+    max-width:
+      scale: layout
+      allowed: ['none', '100%']
+  # Deliberately UNBOUND, and why:
+  # - background-color and background-image: the palette (published
+  #   swatches, var(--swatch-*)) and gradients live here. A color-scale
+  #   binding would reject every swatch reference, and page bands and
+  #   cards are exactly where an editor reaches for the palette. On a
+  #   strict site the published-swatch and minted-token checks still
+  #   gate every var(); literals stay legal. The surface axis (the
+  #   guide_band_* variants) is the on-guide default for bands.
+  # - padding-inline: the suite's width variants spell the content inset
+  #   as max(gutter, calc(...)); a scale binding would reject them.
+  # - width, height, min-*: structural mechanics; the image part
+  #   (daedalus_stylish_guide_example.page_builder.block_type.image.yml) narrows
+  #   width by unit and range instead.
+  # - opacity: see the note above the iteration-count block.
+
+  # The prose vocabulary beyond daedalus_stylish's own (h1-h6, p, a, ul, ol, li,
+  # blockquote, pre, code, img): editorial pages carry emphasis, small
+  # print, rules and figures. Declaring a tag here is what makes it
+  # stylable on a strict site and lets the skin carry defaults for it;
+  # a site that needs tables or definition lists adds them the same way.
+  base:
+    strong:
+      property_groups:
+        typography: {}
+    em:
+      property_groups:
+        typography: {}
+    small:
+      property_groups:
+        typography: {}
+    hr:
+      property_groups:
+        spacing: {}
+        border: {}
+        sizing: {}
+    figure:
+      property_groups:
+        spacing: {}
+        sizing: {}
+        background: {}
+        border: {}
+    figcaption:
+      property_groups:
+        typography: {}
+        spacing: {}
+
+# The kind vocabulary: which property groups each element kind may
+# style, plus the basic-mode controls over them. On a Daedalus site
+# these merge identically over the daedalus_edit baseline; standalone (the
+# fixture posture: daedalus_stylish, daedalus_stylish_layouts and this module) they are
+# the whole guide. Note what is ABSENT compared to older theme guides:
+# no per-kind constraint blocks. The suite's and this package's
+# constraint_defaults bind the properties everywhere they are granted;
+# kinds only say WHAT is stylable.
+entity:
+  property_groups:
+    spacing: {}
+    background: {}
+    sizing: {}
+  controls:
+    spacing:
+      label: 'Spacing'
+      widget: spacing_scale
+    background:
+      label: 'Background'
+      widget: background
+
+# Containers: the page-band vocabulary.
+#
+# variant_axes is a LIST, and lists replace across layers, so the suite's
+# four axes (daedalus_stylish_layouts.page_builder.yml) are re-listed here beside
+# the two this package adds, each with its description and owns restated
+# (a list entry the suite qualified is unqualified here unless this file
+# says so). Both adds are root-only: a page band has a surface and a
+# rhythm; a nested container inherits both from its band. An axis
+# description is what the AI reads about the axis in the design system
+# brief: the sequence rules and cardinalities no single value can say.
+# owns names the properties the axis's values write; a hand-written
+# owned property is answered with a warning that names the axis.
+container:
+  variant_axes:
+    - width:
+        depth: root
+        description: 'How wide a page band lets its content run: Site width on every band, a hero or color-blocked band included (a band''s background spans the screen at every width, so Full width is never the way to get a full-bleed background); Full width only when the content itself should reach the edges, such as a photographic band; Medium for a long prose band. A nested container inherits its band and never wears it.'
+        owns:
+          - padding-left
+          - padding-right
+          - max-width
+    - container_layout:
+        label: 'Layout'
+        description: 'How a container arranges its children: stacked with the site gap between them (the skin''s container default, so a stacked container never writes a display or a gap) unless it wears columns, and then every direct child is an equal column (unequal shares are per-child flex-grow overrides). Nested rows are ordinary rows; an inline row of buttons is the Cluster look, not columns.'
+    # The band's paint: plain, tint, elevated, inverse, accent (the
+    # guide_band_* variants). Alternating tint and plain bands is the
+    # page rhythm.
+    - surface:
+        depth: root
+        label: 'Surface'
+        description: 'The band''s paint, and with it the page''s rhythm: alternate Plain and Tint so consecutive bands separate without a rule between them, never two Tint or two Inverse bands back to back, Elevated behind a row of cards, Inverse at most once per page as the closing statement or one spotlight, and Accent exactly once, for the single call-to-action band (a title, one line of copy, one button wearing On accent), never for content.'
+    # The band's vertical breathing room: compact, standard, spacious
+    # (the guide_rhythm_* variants, on banded space tokens).
+    - rhythm:
+        depth: root
+        label: 'Rhythm'
+        description: 'The band''s vertical breathing room: Standard on every band, Spacious on the hero and on one statement band, Compact only on a strip that continues the band above.'
+        owns:
+          - padding-top
+          - padding-bottom
+    - animation:
+        label: 'Animation'
+        description: 'The entrance a band plays as it scrolls into view: a band is born still, at most one entrance per band, on the band or on its cards, never on body copy.'
+    - hover:
+        label: 'Hover'
+        description: 'The feel a container answers a pointer with: Raise on a card that links somewhere, nothing on a band (the variant carries its own hover state, so the wear never carries a condition).'
+  property_groups:
+    spacing: {}
+    typography: {}
+    background: {}
+    border: {}
+    shadow: {}
+    sizing: {}
+    layout: {}
+    effects: {}
+    # The transition shorthand is withdrawn: timing is law on the
+    # longhands (constraint_defaults) and a shorthand would bypass it.
+    # The animation shorthand stays: the shipped entrance variants unset
+    # it under reduced-motion, the one honest way to honor the
+    # preference.
+    motion:
+      properties:
+        - transition-property
+        - transition-duration
+        - transition-delay
+        - transition-timing-function
+        - transition-behavior
+        - animation
+        - animation-name
+        - animation-duration
+        - animation-delay
+        - animation-timing-function
+        - animation-iteration-count
+        - animation-direction
+        - animation-fill-mode
+        - animation-play-state
+        - animation-composition
+        - timeline-trigger
+        - animation-trigger
+  controls:
+    spacing:
+      label: 'Spacing'
+      widget: spacing_scale
+    background:
+      label: 'Background'
+      widget: background
+    corners_border:
+      label: 'Corners and border'
+      widget: corners_border
+    elevation:
+      label: 'Shadow'
+      widget: elevation
+
+field:
+  property_groups:
+    spacing: {}
+    typography: {}
+    background: {}
+    layout: {}
+  controls:
+    text_alignment:
+      label: 'Text alignment'
+      widget: text_alignment
+    typography:
+      label: 'Typography'
+      widget: typography
+    text_color:
+      label: 'Text color'
+      widget: text_color
+    spacing:
+      label: 'Spacing'
+      widget: spacing_scale
+
+# Blocks: the same motion posture as containers.
+block:
+  property_groups:
+    spacing: {}
+    typography: {}
+    background: {}
+    border: {}
+    shadow: {}
+    sizing: {}
+    layout: {}
+    effects: {}
+    motion:
+      properties:
+        - transition-property
+        - transition-duration
+        - transition-delay
+        - transition-timing-function
+        - transition-behavior
+        - animation
+        - animation-name
+        - animation-duration
+        - animation-delay
+        - animation-timing-function
+        - animation-iteration-count
+        - animation-direction
+        - animation-fill-mode
+        - animation-play-state
+        - animation-composition
+        - timeline-trigger
+        - animation-trigger
+  controls:
+    typography:
+      label: 'Typography'
+      widget: typography
+    text_color:
+      label: 'Text color'
+      widget: text_color
+    background:
+      label: 'Background'
+      widget: background
+    corners_border:
+      label: 'Corners and border'
+      widget: corners_border
+    elevation:
+      label: 'Shadow'
+      widget: elevation
+    spacing:
+      label: 'Spacing'
+      widget: spacing_scale
+    width:
+      label: 'Width'
+      widget: width
+
+# Rich-text elements (the identity-classed paragraphs, headings and
+# lists inside a formatted text body, the spine's `instances:` lane):
+# body copy never wears the display or title-1 roles, which belong to
+# page headings. Offer the in-body ramp. The label and tags restate the
+# suite's namespace (daedalus_edit.page_builder.yml; maps merge, identical
+# shapes are a re-statement) so the fixture builds standalone: a
+# namespace's tags are the one tag-vocabulary truth its consumers read,
+# and a namespace without them is a vocabulary nothing can speak.
+instances:
+  '.s-*':
+    label: 'Text element'
+    tags:
+      p: 'Paragraph'
+      h2: 'Heading 2'
+      h3: 'Heading 3'
+      h4: 'Heading 4'
+      blockquote: 'Block quote'
+      ul: 'Bulleted list'
+      ol: 'Numbered list'
+      li: 'List item'
+    property_groups:
+      typography:
+        constraints:
+          font-size:
+            scale: text
+            stops: ['title-2', 'title-3', 'body', 'caption']

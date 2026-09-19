@@ -1,0 +1,6 @@
+name: 'Daedalus Stylish wide guide test'
+type: module
+description: 'Declares generated wide-tier property groups for testing.'
+package: Testing
+core_version_requirement: '*'
+hidden: true

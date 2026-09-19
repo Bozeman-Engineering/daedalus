@@ -1,0 +1,8 @@
+name: 'Daedalus Tempstore'
+type: module
+description: 'Provides a clean, maintainable architecture for tempstore management.'
+package: Daedalus
+core_version_requirement: '>=11.3 <11.5'
+dependencies:
+  - daedalus:daedalus
+  - drupal:layout_builder

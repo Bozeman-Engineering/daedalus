@@ -1,0 +1,9 @@
+# The per-id form (MODULE.daedalus_stylish.variants.ID.yml): a machine-written
+# package beside the hand-authored single file.
+card_section:
+  label: 'Card section'
+  scope: 'kind:container'
+  styles:
+    '':
+      default:
+        padding: '3rem'

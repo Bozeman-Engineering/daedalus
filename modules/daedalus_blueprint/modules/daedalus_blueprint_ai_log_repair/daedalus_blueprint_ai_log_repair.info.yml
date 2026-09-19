@@ -1,0 +1,9 @@
+name: Daedalus Blueprint AI Log Repair
+type: module
+description: 'Rebuilds unserializable AI chat raw output before it is logged. Core render fibers force OpenAI-based providers onto streamed transport, whose raw output is a consumed stream object that logs as an empty {}. Enable alongside ai_logging.'
+package: Daedalus
+core_version_requirement: '>=11.3 <11.5'
+lifecycle: experimental
+dependencies:
+  - daedalus:daedalus_blueprint_ai
+  - ai:ai

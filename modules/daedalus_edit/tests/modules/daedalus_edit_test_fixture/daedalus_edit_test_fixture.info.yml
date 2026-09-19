@@ -1,0 +1,17 @@
+name: 'Daedalus Edit Test Fixture'
+type: module
+description: 'Tailor-made fixture bundles for the entity-form editing path: a non-Layout-Builder node bundle (plain), a reference target bundle that cannot self-reference (target), and a form-edited block_content type (form_block) with no composed content class. Derived from the machinery inventory, not from what earlier fixtures happened to cover.'
+package: Testing
+core_version_requirement: ^11
+hidden: true
+dependencies:
+  - drupal:node
+  - drupal:block_content
+  - drupal:text
+  - drupal:media
+  - drupal:media_library
+  - daedalus:daedalus_edit
+  # The plain bundle's body stamps the suite's formatted text format.
+  - daedalus:daedalus_edit_formatted_text_block
+  - field_sample_value:field_sample_value
+  - daedalus:daedalus_ui

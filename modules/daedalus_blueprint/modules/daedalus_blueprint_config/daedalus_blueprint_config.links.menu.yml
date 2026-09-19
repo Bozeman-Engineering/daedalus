@@ -1,0 +1,5 @@
+daedalus_blueprint_config.settings:
+  title: 'Daedalus Blueprint Config'
+  route_name: daedalus_blueprint_config.settings
+  description: 'Allow-list config entity types that blueprint operations (and AI agents) may create.'
+  parent: system.admin_config_development

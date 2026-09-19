@@ -1,0 +1,7 @@
+name: Daedalus Blueprint Markup Test
+type: module
+description: State-driven markup projector fixture for markup-socket tests.
+package: Testing
+core_version_requirement: ^11
+dependencies:
+  - daedalus:daedalus_blueprint

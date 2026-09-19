@@ -1,0 +1,8 @@
+name: Daedalus Blueprint Restriction Test
+type: module
+description: State-driven placement restriction provider mirroring layout_builder_restrictions' filter-alter contract.
+package: Testing
+core_version_requirement: ^11
+dependencies:
+  - daedalus:daedalus_blueprint
+  - drupal:layout_builder

@@ -1,0 +1,12 @@
+# The activate confirm form: an adapter over ActiveDesignSystem::activate(),
+# the same act the drush command performs. The collection, add, edit and
+# delete routes come from the entity type's admin route provider.
+entity.design_system.activate_form:
+  path: '/admin/appearance/design-systems/{design_system}/activate'
+  defaults:
+    _entity_form: 'design_system.activate'
+    _title: 'Activate design system'
+  requirements:
+    _entity_access: 'design_system.update'
+  options:
+    _admin_route: TRUE

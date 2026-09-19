@@ -1,0 +1,180 @@
+# A skin inspired by OLIVERO.
+
+# A skin is the site's look as data. It has a set of design token values
+# and default styles that bare elements wear. The styling panel and AI all
+# read the same tokens, so changing the skin restyles the whole site. Skins
+# are treated as content, so editing the skin here requires a re-import
+# `drush daedalus_stylish:sync` to get the changes onto the site. You can have
+# multiple skins, and you can switch between them on the Appearance > skins
+# page.
+
+olivero:
+  label: 'Olivero'
+  tokens:
+    color:
+      bg:
+        default: '#ffffff'
+        dark: '#0b0d0f'
+      surface:
+        default: '#f6f8f8'
+        dark: '#181d20'
+      text:
+        default: '#2b353b'
+        dark: '#eaeef0'
+      border:
+        default: '#dce2e5'
+        dark: '#2b353b'
+      accent:
+        default: '#1475ad'
+        dark: '#52b3eb'
+      accent-hover:
+        default: '#116392'
+        dark: '#1b9ae4'
+    font:
+      sans-serif: '"Metropolis", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif'
+      serif: 'Georgia, "Times New Roman", Times, serif'
+      mono: '"Courier New", Courier, monospace'
+    text:
+      caption: '0.85rem'
+      body: '1rem'
+      lead: '1.25rem'
+      title:
+        default: '1.5rem'
+        narrow: '1.25rem'
+      headline:
+        default: '2.25rem'
+        narrow: '1.5rem'
+      display:
+        default: '3.75rem'
+        narrow: '1.75rem'
+    weight:
+      thin: '200'
+      regular: '400'
+      bold: '700'
+    leading:
+      tight: '1'
+      normal: '1.5'
+      relaxed: '2'
+    space:
+      sm: '0.5rem'
+      md: '1rem'
+      lg: '2rem'
+      xl: '4rem'
+      gutter:
+        default: '2rem'
+        narrow: '1rem'
+    radius:
+      sm: '0.5rem'
+      md: '1rem'
+      lg: '2rem'
+      full: '9999px'
+    transition:
+      fast: '150ms ease'
+      normal: '250ms ease'
+    layout:
+      max-width: '84rem'
+
+  # DEFAULT STYLES that get applied to bare elements.
+  # Every font-size is a bare token reference, never a clamp().
+  defaults:
+    'base:h1':
+      '':
+        default:
+          margin-top: '0'
+          margin-bottom: 'var(--space-sm)'
+          font-family: 'var(--font-sans-serif)'
+          font-weight: 'var(--weight-bold)'
+          line-height: 'var(--leading-tight)'
+          font-size: 'var(--text-display)'
+    'base:h2':
+      '':
+        default:
+          margin-top: '0'
+          margin-bottom: 'var(--space-sm)'
+          font-family: 'var(--font-sans-serif)'
+          font-weight: 'var(--weight-bold)'
+          line-height: 'var(--leading-tight)'
+          font-size: 'var(--text-headline)'
+    'base:h3':
+      '':
+        default:
+          margin-top: '0'
+          margin-bottom: 'var(--space-sm)'
+          font-family: 'var(--font-sans-serif)'
+          font-weight: 'var(--weight-bold)'
+          line-height: 'var(--leading-normal)'
+          font-size: 'var(--text-title)'
+    'base:h4':
+      '':
+        default:
+          margin-top: '0'
+          margin-bottom: 'var(--space-sm)'
+          font-family: 'var(--font-sans-serif)'
+          font-weight: 'var(--weight-bold)'
+          line-height: 'var(--leading-normal)'
+          font-size: 'var(--text-lead)'
+    'base:h5':
+      '':
+        default:
+          margin-top: '0'
+          margin-bottom: 'var(--space-sm)'
+          font-family: 'var(--font-sans-serif)'
+          font-weight: 'var(--weight-bold)'
+          line-height: 'var(--leading-normal)'
+          font-size: 'var(--text-body)'
+    'base:h6':
+      '':
+        default:
+          margin-top: '0'
+          margin-bottom: 'var(--space-sm)'
+          font-family: 'var(--font-sans-serif)'
+          font-weight: 'var(--weight-bold)'
+          line-height: 'var(--leading-normal)'
+          font-size: 'var(--text-caption)'
+    'base:p':
+      '':
+        default:
+          margin-top: '0'
+          margin-bottom: 'var(--space-sm)'
+          font-size: 'var(--text-body)'
+          line-height: 'var(--leading-relaxed)'
+    'base:li':
+      '':
+        default:
+          font-size: 'var(--text-body)'
+          line-height: 'var(--leading-relaxed)'
+    'base:a':
+      '':
+        default:
+          color: 'var(--color-accent)'
+          text-decoration-line: 'underline'
+        hover:
+          color: 'var(--color-accent-hover)'
+    'base:blockquote':
+      '':
+        default:
+          margin-top: 'var(--space-lg)'
+          margin-bottom: 'var(--space-lg)'
+          margin-left: '0'
+          margin-right: '0'
+          padding-left: 'var(--space-md)'
+          border-left-width: '0.1875rem'
+          border-left-style: 'solid'
+          border-left-color: 'var(--color-accent)'
+          font-size: 'var(--text-title)'
+          line-height: 'var(--leading-normal)'
+    'base:code':
+      '':
+        default:
+          font-family: 'var(--font-mono)'
+          font-size: 'var(--text-caption)'
+          background-color: 'var(--color-surface)'
+    'base:img':
+      '':
+        default:
+          max-width: '100%'
+          height: 'auto'
+    'kind:container':
+      '':
+        default:
+          gap: 'var(--space-gutter)'

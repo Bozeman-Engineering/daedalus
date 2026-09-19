@@ -1,0 +1,7 @@
+composed: true
+elements:
+  '.card':
+    elements:
+      '.card__body':
+        # Deep map merge: the relabel lands, the base contains survives.
+        label: 'Body copy'

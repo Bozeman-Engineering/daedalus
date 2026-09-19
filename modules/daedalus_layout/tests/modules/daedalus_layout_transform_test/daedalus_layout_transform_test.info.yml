@@ -1,0 +1,7 @@
+name: 'Daedalus Layout Component Transform Test'
+type: module
+description: 'Registers component transforms for kernel tests.'
+package: Testing
+core_version_requirement: ^11
+dependencies:
+  - daedalus:daedalus_layout

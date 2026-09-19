@@ -1,0 +1,141 @@
+# The image block IS one composed element: `composed: true` declares its
+# render as exactly the ONE root element tree this file's markup model
+# describes, with no block sandwich at all — and makes the model
+# GENERATIVE: daedalus_ui's shared composed_block element renders this
+# tree from the element resolver's answer and prints the hoisted
+# attributes on the composed root. No template exists; this module feeds
+# only content and editor attribution (ImageComposedContent).
+composed: true
+
+# The markup model: the block's root ELEMENT swaps with entity data, so it
+# is declared as ordered first-match-wins root forms rather than one tag.
+# Linked, the anchor is the root (whatever the media kind renders nests
+# inside it, per the mounting rule); unlinked, the picture itself is the
+# root: the img on raster media, the inline svg on vector media (the
+# inliner hands the renderer the svg root's allowlisted attributes plus
+# its inner markup, so the svg is an element the renderer builds like any
+# other, hoisted attribute bag included); and an empty block renders the
+# placeholder div (edit-capable renders only; live renders nothing, which
+# the {empty: true} residual form still models: SOME form always matches).
+root:
+  forms:
+    - tag: a
+      present:
+        field: field_image_url
+      attributes:
+        href:
+          field: field_image_url
+    - tag: img
+      present:
+        media: raster
+    - tag: svg
+      present:
+        media: vector
+    - tag: div
+      present:
+        empty: true
+
+# Styling (Daedalus Stylish's sections in this same declaration): the collapsed root
+# is the styling target for the OUTER box, but it is not the only target
+# and its element identity is not stable. Linked, the anchor is the root
+# and the picture nests inside it; unlinked, the picture IS the root. "The
+# picture" therefore lives on the declared `.image-block-image` part, the
+# stable target in both link states and both media kinds: the part printer
+# targets ':scope.cls, .cls', so part styles land on a part-classed root
+# the same as on a descendant. Root-key styles mean the outer box;
+# image-part styles mean the picture. Collapse merges the wrapper chain's
+# identity into the root; it is not a claim that the interior is
+# styling-free.
+#
+# The part's property groups are the picture set: sizing for the width
+# control, border because a corner radius must clip the picture's own
+# pixels (rounding a linked block's anchor root clips nothing), shadow so
+# elevation follows that radius instead of casting a square shadow behind
+# a rounded picture.
+#
+# The `.image-block-image` class has ONE producer grammar: the element
+# resolver resolves this declaration (the part key IS the class, hoisting
+# included), and both the generative render and the live link preview in
+# js/image-composite-editor.js consume its answer — the preview through
+# the resolver's client twin over this same declaration as delivered by
+# the client anatomy payload, morphing the DOM to the resolved tree.
+elements:
+  '.image-block-image':
+    label: 'Image'
+    # The markup model: the picture's element mirrors the root's media
+    # split as ordered part forms, the img on raster media (Raster) and
+    # the inline svg on vector media (Vector); each form's label is the name
+    # the part wears while that form is matched. Unlinked, the matched
+    # part form coincides with the matched root form and the class hoists
+    # onto the root (the general hoisting rule); linked, the picture nests
+    # inside the anchor root and the class is stamped on it directly. The
+    # svg's own attributes (viewBox and friends) ride the inliner's
+    # provider overrides, never this file: camelCase attribute names are
+    # illegal in declarations, and the file owns those values anyway.
+    contains: 'field:field_image'
+    forms:
+      - tag: img
+        present:
+          media: raster
+        label: 'Raster'
+      - tag: svg
+        present:
+          media: vector
+        label: 'Vector'
+    property_groups:
+      sizing: {}
+      border: {}
+      shadow: {}
+
+# Declared defaults: the literal box facts this markup model needs, shipped
+# as spine data in the skin defaults grammar for exactly this scope (never
+# as module CSS, which Daedalus Stylish's layers lens cannot show and which, at any
+# specificity above zero, would beat what the lens does show). The root
+# entry makes the outer box a block box that shrink-wraps its content: an
+# anchor root is otherwise display: inline, whose own border box is a font
+# strip at the baseline, so the selection frame, hover, drag targets and
+# the anchor's hit area (all measuring the root's own rect) collapse to a
+# sliver under the picture the moment a link is added. A defaults entry
+# cannot vary by matched root form, so the same entry lands on the
+# unlinked img and svg roots too; harmless, since fit-content on a
+# replaced element is its intrinsic width under the skin's max-width. The
+# part entry makes the picture a block box in both link states and both
+# media kinds (an inline img or svg sits on the text baseline and picks up
+# phantom line height). Both validate at guide build in the empty minted
+# universe (token-free by construction), print beneath the active skin's
+# defaults at equal specificity (a skin's block_type:image default for the
+# same property wins), stamp this bundle's scope class on the root, and
+# read in the inspector as "from the image block type declaration" with no
+# edit doorway.
+defaults:
+  '':
+    default:
+      display: block
+      width: fit-content
+  '::.image-block-image':
+    default:
+      display: block
+
+# The kind-inherited root controls keep their outer-box meaning: position
+# moves the block inside its parent, spacing pads it, background colors
+# it. typography and text_color hide via the hasText canvas gate; no
+# tombstones needed. The three controls whose subject is the picture are
+# restated element-bound onto the part (the pattern the universal block
+# kind's corners_border comment anticipates), so they mean the picture in
+# both link states and both media kinds instead of silently retargeting
+# from the picture to the anchor when a link is added.
+controls:
+  # Also renamed: the kind's generic 'Width' reads wrong on a block whose
+  # visible box is the image.
+  width:
+    label: 'Image width'
+    widget: width
+    element: '.image-block-image'
+  corners_border:
+    label: 'Corners and border'
+    widget: corners_border
+    element: '.image-block-image'
+  elevation:
+    label: 'Shadow'
+    widget: elevation
+    element: '.image-block-image'

@@ -1,0 +1,6 @@
+label: 'Aurora named voice'
+description: 'TRIGGER when: writing headlines on an aurora site. Names the aurora design system explicitly.'
+type: default
+design_system: aurora
+instructions: |
+  Headlines in the aurora voice: one line, cool, lit from behind.

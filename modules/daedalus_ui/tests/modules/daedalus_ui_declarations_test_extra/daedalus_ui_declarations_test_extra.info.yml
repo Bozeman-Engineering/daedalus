@@ -1,0 +1,6 @@
+name: 'Daedalus UI declarations test extra'
+type: module
+description: 'Layers page builder declarations over the base test module.'
+package: Testing
+core_version_requirement: '*'
+hidden: true

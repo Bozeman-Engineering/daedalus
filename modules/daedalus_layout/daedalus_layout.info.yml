@@ -1,0 +1,14 @@
+name: "Daedalus Layout"
+description: "A drop in replacement for the Layout Builder UI."
+type: module
+core_version_requirement: '>=11.3 <11.5'
+package: Daedalus
+configure: daedalus_ui.settings
+dependencies:
+  - daedalus:daedalus
+  - drupal:layout_builder
+  - daedalus:daedalus_tempstore
+  - daedalus:daedalus_ui
+  - drupal:block
+  - daedalus:daedalus_blueprint
+  - daedalus:daedalus_blueprint_api

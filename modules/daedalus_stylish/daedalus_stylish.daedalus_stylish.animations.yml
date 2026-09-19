@@ -1,0 +1,68 @@
+# Shipped default animations: the site's motion materials, minted as
+# daedalus_animation entities on install, on every cache rebuild, and by
+# `drush daedalus_stylish:sync`, hash-synced and revertable like every other
+# shipped material. The machine name is the keyframes ident tail: a value
+# references an animation as `motion-{name}` (StyleGuide::animationName()),
+# the one spelling the compiled keyframes file, validation, the roster and
+# the completions all derive from.
+#
+# Steps are a plain map of offset (from | to | N%) to declarations, the
+# same universal vocabulary a style map speaks (media and re-timing
+# animation-* properties refused; animation-timing-function is allowed per
+# step). Every value here is a literal: a shipped animation must resolve
+# on any skin, so no step references a token.
+#
+# Two families. Entrances (fade_in, rise, scale_in) run once and settle;
+# the shipped animation-axis variants (daedalus_stylish.daedalus_stylish.variants.yml) wear
+# them with literal timings and their own reduced-motion unset. Attention
+# (pulse) and continuous (spin) animations ship as materials only: they
+# want an iteration count and a purpose the advanced Motion section or the
+# AI supplies per element.
+fade_in:
+  label: 'Fade in'
+  description: 'Opacity from 0 to 1: the quietest entrance. Reach for it on page bands and content that should simply appear.'
+  steps:
+    from:
+      opacity: '0'
+    to:
+      opacity: '1'
+rise:
+  label: 'Rise'
+  description: 'Fade in while drifting up 1rem into place, easing out. Reach for it on cards, teasers and bands that should arrive with a little lift.'
+  steps:
+    from:
+      opacity: '0'
+      transform: 'translateY(1rem)'
+      animation-timing-function: 'ease-out'
+    to:
+      opacity: '1'
+      transform: 'none'
+scale_in:
+  label: 'Scale in'
+  description: 'Fade in while growing from 96% to full size, easing out. Reach for it on media, callouts and buttons that should pop into place.'
+  steps:
+    from:
+      opacity: '0'
+      transform: 'scale(0.96)'
+      animation-timing-function: 'ease-out'
+    to:
+      opacity: '1'
+      transform: 'none'
+pulse:
+  label: 'Pulse'
+  description: 'Grow to 105% and back, a heartbeat. Reach for it with an infinite iteration count on a call to action that should draw the eye; use sparingly.'
+  steps:
+    '0%':
+      transform: 'scale(1)'
+    '50%':
+      transform: 'scale(1.05)'
+    '100%':
+      transform: 'scale(1)'
+spin:
+  label: 'Spin'
+  description: 'One full clockwise rotation. Reach for it with a linear easing and an infinite iteration count on loaders and decorative icons.'
+  steps:
+    from:
+      transform: 'rotate(0deg)'
+    to:
+      transform: 'rotate(360deg)'

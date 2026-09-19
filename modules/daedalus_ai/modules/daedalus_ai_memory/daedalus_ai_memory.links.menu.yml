@@ -1,0 +1,5 @@
+daedalus_ai_memory.settings:
+  title: 'Daedalus AI Memory'
+  description: 'Configure persistent agent state across conversation turns.'
+  route_name: daedalus_ai_memory.settings
+  parent: ai.admin_config_tools

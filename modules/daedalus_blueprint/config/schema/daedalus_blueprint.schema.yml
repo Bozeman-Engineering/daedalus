@@ -1,0 +1,42 @@
+daedalus_blueprint.settings:
+  type: config_object
+  label: 'Daedalus Blueprint settings'
+  mapping:
+    active_design_system:
+      type: string
+      label: 'The active design system'
+      nullable: true
+
+daedalus_blueprint.design_system.*:
+  type: config_entity
+  label: 'Design system'
+  mapping:
+    id:
+      type: machine_name
+      label: 'Machine name'
+    label:
+      type: required_label
+      label: 'Label'
+    description:
+      type: text
+      label: 'What the AI is told this design system is: its identity in one paragraph written for a designer, the head of the design system brief on every turn'
+    icon:
+      type: string
+      label: 'Icon'
+      nullable: true
+    default_skin:
+      type: string
+      label: 'Default skin'
+      nullable: true
+    package:
+      type: string
+      label: 'Package module'
+      nullable: true
+    enforcement:
+      type: string
+      label: 'How the law is enforced while this system is active. open: the law shapes offers only, any recognized property with a grammatical value is accepted. guarded (the default, and what a site with no active system runs): authored constraints are law, everything undeclared stays open with grammar checks. strict: a closed world, only declared properties may be styled and declared-namespace var() references must name minted tokens.'
+      constraints:
+        Choice:
+          - open
+          - guarded
+          - strict

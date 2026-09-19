@@ -1,0 +1,11 @@
+name: Daedalus Blueprint AI Dev Tools
+type: module
+description: Developer diagnostics that capture the fully-assembled AI prompt surface (system prompt, messages, tools) at the provider boundary without calling an LLM.
+package: Daedalus
+core_version_requirement: '>=11.3 <11.5'
+lifecycle: experimental
+dependencies:
+  - daedalus:daedalus_blueprint_ai
+  - ai:ai_assistant_api
+  - ai_agents:ai_agents
+  - ai:ai

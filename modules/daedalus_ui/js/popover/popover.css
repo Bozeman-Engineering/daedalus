@@ -1,0 +1,42 @@
+/**
+ * The shared floating-surface primitive (daedalus_ui/popover).
+ *
+ * The chrome's one pop-up surface: the chrome palette, the pill radius,
+ * the soft shadow, the chrome typeface, and the pop-up z-index. Position and
+ * visibility are inline (the host places the surface after a measurement
+ * pass); the content inside styles itself (a menu's list, a picker's
+ * grid) and owns its own padding.
+ */
+
+.daedalus-ui-popover {
+  position: fixed;
+  /* A pop-up is the transient top of whatever it opens from, so it stacks
+     above every surface that can anchor one: the canvas chrome (selection
+     frame 940, caret 941), the sidebars (100), the canvas width handles
+     (1259, which run along the stage edge exactly where a sidebar row's
+     menu hangs), the modal floor (1260) and the top bar with its split
+     dropdown (1261, 1262). Below the messenger (1265) and tooltips (1300),
+     which must read over an open menu. Dismissal on any outside
+     pointerdown keeps it from lingering over a dialog it did not open
+     from. */
+  z-index: 1263;
+  overflow: auto;
+  box-sizing: border-box;
+  /* Never wider or taller than the viewport minus the host's 4px gutter
+     each side; an oversized rider scrolls inside the surface instead of
+     running off the screen. */
+  max-width: calc(100vw - 0.5rem);
+  max-height: calc(100vh - 0.5rem);
+  border: 1px solid var(--daedalus-lines);
+  border-radius: var(--daedalus-border-radius);
+  background: var(--daedalus-background);
+  box-shadow: 0 8px 24px rgb(0, 0, 0, 0.14);
+  /* A chrome surface: the chrome typeface, never the site theme's. */
+  font-family: var(--daedalus-font);
+}
+
+/* A rider that fills the root after open() (a portal's first render)
+   must not flash an empty frame first: no content, no surface. */
+.daedalus-ui-popover:empty {
+  display: none;
+}

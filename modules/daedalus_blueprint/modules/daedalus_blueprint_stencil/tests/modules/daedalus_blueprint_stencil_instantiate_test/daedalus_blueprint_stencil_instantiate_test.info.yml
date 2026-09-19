@@ -1,0 +1,8 @@
+name: Daedalus Blueprint Stencil Instantiate Test
+type: module
+description: Fixtures for stencil instantiate tests.
+package: Testing
+core_version_requirement: ^10.3 || ^11
+hidden: true
+dependencies:
+  - daedalus:daedalus_blueprint_stencil

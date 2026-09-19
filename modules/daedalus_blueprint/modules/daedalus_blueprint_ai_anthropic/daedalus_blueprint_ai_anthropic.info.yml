@@ -1,0 +1,9 @@
+name: Daedalus Blueprint AI Anthropic
+type: module
+description: Provides Anthropic/Claude-specific formatting for the Daedalus Blueprint AI skill system.
+package: Daedalus
+core_version_requirement: '>=11.3 <11.5'
+lifecycle: experimental
+dependencies:
+  - daedalus:daedalus_blueprint_ai
+  - ai_agents:ai_agents

@@ -1,0 +1,25 @@
+# The container kind the shipped variant is scoped to: the groups its
+# three properties live in (spacing: padding, background: background-color,
+# motion: animation-name), unconstrained, so under strict enforcement the
+# only thing that can refuse the variant is a reference to a material that
+# is not published yet.
+#
+# The site section withdraws the suite's padding binding
+# (daedalus_stylish.page_builder.yml constraint_defaults binds padding to the space
+# scale; NULL removes the key across layers). The classes on this fixture
+# prove the sync lane on sites with NO active design system (an install
+# batch, a rebuild, the command), where the suite's binding would refuse
+# every padding the shipped and dropped files write (a literal, or
+# var(--space-gutter) with no skin active to mint it) for a reason that is
+# not the lane's; scale law has its own coverage
+# (StyleGuideConstraintDefaultsTest, TokenConsumptionTest). The strict
+# claim these classes make about var(--space-gutter) rides the
+# token-reference check (STYLE_TOKEN_NOT_MINTED), which needs no binding.
+site:
+  constraint_defaults:
+    padding: null
+container:
+  property_groups:
+    spacing: {}
+    background: {}
+    motion: {}

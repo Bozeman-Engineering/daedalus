@@ -1,0 +1,229 @@
+:root {
+  /* The right side bar z-index needs to be ABOVE the main content in order for the editable elements to remain clickable
+ while being edited. Unlike ckeditor related z-indexes, this does not need to be above the modal floor of 1260. */
+  --daedalus-ui-right-sidebar-z-index: 100;
+  /* Above the page content and the right sidebar stack. */
+  --daedalus-ui-left-sidebar-z-index: 100;
+}
+
+/* Both wrappers are positioned boxes whose panels stack inside them as flex
+   children grouped by slot: top panels first, bottom panels last (order).
+   A hidden panel is display: none, so an empty slot costs nothing and the
+   other slot's open panel takes the full height (flex-grow). */
+
+#daedalus-ui-left-sidebar,
+#daedalus-ui-right-sidebar {
+  position: fixed;
+  top: var(--daedalus-top-bar-height);
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - var(--daedalus-top-bar-height));
+}
+
+#daedalus-ui-right-sidebar {
+  z-index: var(--daedalus-ui-right-sidebar-z-index);
+  right: 0;
+  align-items: flex-end;
+}
+
+#daedalus-ui-left-sidebar {
+  z-index: var(--daedalus-ui-left-sidebar-z-index);
+  left: 0;
+}
+
+/* When panels from both slots are open at once, a hairline separates the
+   slot groups: the visible bottom panel carries a border-top. Both
+   "visible" checks ride the panels themselves (hidden panels wear
+   .daedalus-ui-hidden), and the condition lives on the wrapper via
+   :has() because the panels are siblings — neither can see the other. */
+.daedalus-ui-sidebar-wrapper:has(> [data-sidebar-slot="top"]:not(.daedalus-ui-hidden)):has(> [data-sidebar-slot="bottom"]:not(.daedalus-ui-hidden)) {
+  > [data-sidebar-slot="bottom"]:not(.daedalus-ui-hidden) {
+    border-top: 1px solid var(--daedalus-border, #b4bdd1);
+  }
+}
+
+.daedalus-ui-sidebar {
+  display: flex;
+  overflow-x: hidden;
+  overflow-y: hidden;
+  flex-direction: column;
+  height: calc(100vh - var(--drupal-displace-offset-top, 0px));
+  user-select: none;
+  color: var(--daedalus-text);
+  background-color: var(--daedalus-background);
+  font-family: var(--daedalus-font);
+  scrollbar-color: var(--daedalus-scrollbar-thumb) var(--daedalus-background);
+  inline-size: var(--daedalus-ui-sidebar-width, 17rem);
+  gap: 1rem;
+
+  /* Olivero paints its own summary focus ring (an ::after box-shadow) that
+     lingers after a click until focus moves on. Keep it for keyboard focus
+     (:focus-visible) but not for mouse clicks. */
+  summary:is(:focus, :active):not(:focus-visible)::after {
+    opacity: 0;
+  }
+  .notification-item__message {
+    user-select: text;
+  }
+  /* Site themes may style ::selection globally (a skin typically pairs a
+     token background with white text; outside the skin's token scope the
+     token collapses and selected text turns invisible). Panels own their
+     selection appearance: the shared translucent wash, with the text
+     keeping its own color, readable in both schemes under any theme. */
+  &::selection,
+  & *::selection {
+    color: currentColor;
+    background-color: var(--daedalus-selection-background);
+  }
+
+  &[data-sidebar-slot="bottom"] {
+    order: 10;
+  }
+
+  .form-item .error {
+    outline: 2px solid var(--daedalus-danger, #e30000ff);
+  }
+
+  .daedalus-ui-panel__header {
+    padding-block-start: 1rem;
+    padding-inline-end: 1rem;
+  }
+
+  .daedalus-ui-panel__body {
+    overflow-y: auto;
+    padding-block-end: 1rem;
+    padding-inline-end: 1rem;
+    /* Mirror the panel's left padding so content is inset equally on both
+       sides; the scrollbar rides in the padding at the panel edge. Thin
+       keeps classic (non-overlay) scrollbars from adding a wide extra
+       gutter when content overflows. */
+    scrollbar-width: thin;
+  }
+
+  /* The pill button and segmented control recipes live in panel-controls.css
+   (the panel_controls library) — standalone so chrome outside the rail
+   (daedalus_stylish's satellite window) can attach them without the sidebar stack. */
+
+  /* A panel body used as a feed (History's timeline, the notifications
+     list): a column of compact entries. */
+  .daedalus-ui-panel-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  /* The shared feed empty state ("No changes yet."). */
+  .daedalus-ui-panel-empty {
+    padding: 2rem 1rem;
+    text-align: center;
+    color: var(--daedalus-text-muted);
+    font-size: var(--daedalus-font-size);
+  }
+}
+
+/* Fixed header, scrolling body — the shared panel anatomy (Notifications,
+   History, Page Elements, Blocks, Settings, Styles). A panel opts in by
+   wearing .daedalus-ui-panel__header on its pinned chrome and .daedalus-ui-panel__body on its
+   scroll region: the panel's own scroll retires in favor of the body's, so
+   the header never scrolls away. The panel keeps only its left padding; the
+   top padding moves onto the header and the body keeps a slim right padding
+   so content clears the scrollbar. These rules must stay AFTER the
+   .daedalus-ui-sidebar block above — they out-cascade its equal-
+   specificity padding/overflow by order. */
+.daedalus-ui-sidebar:has(.daedalus-ui-panel__body) {
+  padding-inline: 1rem 0;
+}
+
+/* Any wrapper between the panel and the body — a content root, a client-
+   side mount node — must pass the height chain through, or the body's flex
+   sizing resolves against an auto-height parent and its scroll never
+   engages. */
+.daedalus-ui-sidebar :has(.daedalus-ui-panel__body) {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  height: 100%;
+  min-height: 0;
+}
+
+/* Rail resize handle (one per wrapper, injected by sidebar-resize.js). The
+   wrapper is the positioned ancestor (position: fixed), so the handle overlays
+   the rail's page-facing edge for its full height without the panels needing
+   position: relative (their absolute descendants, e.g. daedalus_edit's hidden
+   field wrappers, resolve against the wrapper and must keep doing so). */
+.daedalus-ui-sidebar-resize-handle {
+  position: absolute;
+  z-index: 2;
+  width: 8px;
+  height: 100%;
+  cursor: col-resize;
+
+  &::after {
+    position: absolute;
+    width: 1px;
+    content: "";
+    background: var(--daedalus-border, #b4bdd1);
+    inset-block: 0;
+  }
+}
+#daedalus-ui-right-sidebar .daedalus-ui-sidebar-resize-handle {
+  left: 0;
+
+  &::after {
+    left: 0;
+  }
+}
+#daedalus-ui-left-sidebar .daedalus-ui-sidebar-resize-handle {
+  right: 0;
+  height: calc(100% - var(--daedalus-breadcrumb-height) + 1px);
+
+  &::after {
+    right: 0;
+  }
+}
+
+/* The chrome's accent, not --daedalus-border: painting the seam its own
+   color over itself would be an invisible hover.
+
+   Exactly one seam lights at a time. The dragged handle carries its own
+   --dragging class (sidebar-resize.js) rather than reading the document-level
+   .daedalus-ui-sidebar-resizing, which is global and would light both rails; and hover
+   stands down for the duration of a drag, so a pointer that travels over the
+   opposite rail can't light a second seam. */
+html:not(.daedalus-ui-sidebar-resizing) .daedalus-ui-sidebar-resize-handle:hover::after,
+.daedalus-ui-sidebar-resize-handle--dragging::after {
+  background: var(--daedalus-selection);
+}
+/* No open panel means no visible edge to grab. */
+.daedalus-ui-sidebar-wrapper:not(:has(.daedalus-ui-sidebar:not(.daedalus-ui-hidden))) .daedalus-ui-sidebar-resize-handle {
+  display: none;
+}
+/* Keep the resize cursor and suppress text selection for the whole drag, even
+   when the pointer outruns the 8px handle. */
+html.daedalus-ui-sidebar-resizing,
+html.daedalus-ui-sidebar-resizing * {
+  cursor: col-resize !important;
+  user-select: none !important;
+}
+
+/* Nothing eases while the pointer drives the width: an eased follower
+   chases a target that already moved again — suppress any transition on
+   anything following the displace offsets rewritten per frame. The
+   pseudo-element selectors are load-bearing: `*` matches elements only,
+   and a follower may be an ::after (the top bar's divider is). */
+html.daedalus-ui-sidebar-resizing,
+html.daedalus-ui-sidebar-resizing *,
+html.daedalus-ui-sidebar-resizing *::before,
+html.daedalus-ui-sidebar-resizing *::after {
+  transition: none !important;
+}
+
+@media (min-width: 64rem) {
+  /* Move the off canvas over via displace.js */
+  .dialog-off-canvas-main-canvas {
+    margin-inline-end: var(--drupal-displace-offset-right);
+  }
+  #admin-toolbar {
+    block-size: 100vh;
+  }
+}

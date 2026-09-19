@@ -1,0 +1,86 @@
+{
+  // Layered over core's .eslintrc.passing.json, which drupal.org's eslint job
+  // links into the directory above the project. The js tree holds two
+  // populations: the edit-mode app (js/edit_mode, preact JSX bundled by
+  // webpack into js/edit_mode/dist) and browser-native ES modules attached
+  // with type: module (daedalus-ui.js, messenger, popover, menu,
+  // canvas_vector, responsive_preview, file_upload). Each entry below exists
+  // because of one of them.
+  "parserOptions": {
+    // Core's parser stops at ES2020 and has no JSX; the app is JSX with
+    // class fields and logical assignment.
+    "ecmaVersion": 2022,
+    "ecmaFeatures": { "jsx": true }
+  },
+  "rules": {
+    // A browser resolves a relative import only with its extension, while
+    // the bundled app's bare specifiers are what webpack resolves; one tree
+    // carries both, so neither "always" nor "never" fits.
+    "import/extensions": "off",
+    // Modules export named bindings on purpose so an importer binds the
+    // registration function under its own name beside the app it registers
+    // into.
+    "import/prefer-default-export": "off",
+    // The store, history, hotkeys and drag modules form a cycle by design
+    // (slices register into the store that the reducers read); every
+    // binding is used at call time, after all module bodies ran.
+    "import/no-cycle": "off",
+    // The plugin base classes (mode, tool, sidebar) declare the hooks a
+    // plugin may override; a default that ignores `this` is the API.
+    "class-methods-use-this": "off",
+    // The plain scripts (cookie, drag, dialog, tooltip and friends) are
+    // classic scripts wrapped in an IIFE, so their 'use strict' is
+    // load-bearing; the parser reads every file as a module and would call
+    // it redundant.
+    "strict": "off",
+    // Core's airbnb rule forbids for...of for the regenerator runtime a
+    // transpiled build would need; the bundle's preset-env compiles for...of
+    // without it (regenerator serves generators and async), and the native
+    // modules need none.
+    "no-restricted-syntax": [
+      "error",
+      {
+        "selector": "ForInStatement",
+        "message": "for..in loops iterate over the entire prototype chain; use Object.{keys,values,entries} and iterate the resulting array."
+      },
+      {
+        "selector": "LabeledStatement",
+        "message": "Labels are a form of GOTO; they make code confusing and hard to maintain."
+      },
+      {
+        "selector": "WithStatement",
+        "message": "`with` is disallowed in strict mode because it makes code impossible to predict and optimize."
+      }
+    ]
+  },
+  "overrides": [
+    {
+      "files": [
+        "js/canvas_vector/canvas-vector.js",
+        "js/canvas_vector/emulate-media.js",
+        "js/edit_mode/components/page-elements/compose.js",
+        "js/edit_mode/components/page-elements/projection.js",
+        "js/edit_mode/drag/drag-controller.js",
+        "js/edit_mode/drag/gaps.js",
+        "js/edit_mode/drag/keyboard-lift.js",
+        "js/edit_mode/hotkeys/hotkeys.js",
+        "js/edit_mode/selection/resolver.js",
+        "js/edit_mode/settings/hotkey/hotkey-settings.js",
+        "js/edit_mode/settings/media-file-associations/media-file-association.js",
+        "js/menu/menu-state.js"
+      ],
+      "rules": {
+        // These modules are written as const arrow functions that call one
+        // another only from callbacks (event handlers, store subscriptions,
+        // the mutual recursion of a tree walk), so a binding resolves at
+        // call time, after the module body ran, and no textual order
+        // satisfies the cycle. Same-scope use before definition stays an
+        // error.
+        "no-use-before-define": [
+          "error",
+          { "functions": false, "classes": true, "variables": false }
+        ]
+      }
+    }
+  ]
+}

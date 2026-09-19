@@ -1,0 +1,20 @@
+<?php
+
+/**
+ * @file
+ * Observes the mutation-render flag from inside an entity render.
+ */
+
+use Drupal\Core\Entity\Display\EntityViewDisplayInterface;
+use Drupal\Core\Entity\EntityInterface;
+use Drupal\daedalus_blueprint_api_render_test\RenderProbe;
+
+/**
+ * Implements hook_entity_view_alter().
+ *
+ * Fires inside the view builder's lazy build, exactly where a module's
+ * render-time delivery (daedalus_ui's mirror envelope) reads the flag.
+ */
+function daedalus_blueprint_api_render_test_entity_view_alter(array &$build, EntityInterface $entity, EntityViewDisplayInterface $display): void {
+  RenderProbe::observe();
+}

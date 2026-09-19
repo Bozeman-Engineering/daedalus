@@ -1,0 +1,14 @@
+name: 'Daedalus Edit Image Block'
+type: module
+description: 'A Daedalus example image block.'
+core_version_requirement: '>=11.3 <11.5'
+package: Daedalus
+dependencies:
+  - drupal:block_content
+  - drupal:link
+  - drupal:media
+  - drupal:media_library
+  - daedalus:daedalus_edit
+  - field_sample_value:field_sample_value
+  - daedalus:daedalus_layout
+  - daedalus:daedalus_ui

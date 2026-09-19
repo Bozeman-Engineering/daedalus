@@ -1,0 +1,11 @@
+name: 'Daedalus UI'
+type: module
+description: 'A standardized UI for a suite of tool based modules.'
+package: Daedalus
+core_version_requirement: '>=11.3 <11.5'
+dependencies:
+  - daedalus:daedalus
+  - drupal:navigation
+  - twig_events:twig_events
+  - daedalus:daedalus_tempstore
+  - daedalus:daedalus_blueprint_api

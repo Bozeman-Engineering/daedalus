@@ -1,0 +1,8 @@
+name: 'Daedalus Stylish swatches test invalid'
+type: module
+description: 'Ships a constraint-violating swatch for testing loud import failure.'
+package: Testing
+core_version_requirement: '*'
+hidden: true
+dependencies:
+  - daedalus:daedalus_stylish

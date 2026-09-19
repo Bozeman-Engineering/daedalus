@@ -1,0 +1,7 @@
+daedalus_blueprint_config.settings:
+  path: '/admin/config/development/daedalus-blueprint-config'
+  defaults:
+    _form: '\Drupal\daedalus_blueprint_config\Form\ConfigCreateAccessForm'
+    _title: 'Daedalus Blueprint Config'
+  requirements:
+    _permission: 'administer site configuration'

@@ -1,0 +1,14 @@
+# Block wrapper markup belongs to the theme's block.html.twig, so the
+# theme declares its shell.
+block:
+  elements:
+    '.block__content':
+      label: 'Content'
+      contains: fields
+field:
+  elements:
+    '.field__label':
+      label: 'Base label'
+site:
+  branding:
+    logo: 'base.svg'

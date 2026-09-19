@@ -1,0 +1,189 @@
+label: 'Design'
+description: 'TRIGGER when: about to design, build, restyle or rework a page (or any entity with a layout), plan or add a page section, or change a page''s structure, flow, or overall look. Carries the page design doctrine (think and commit, the two postures, distinctiveness inside the design system, the composition principles, the generic page to avoid), the generation workflow and the few recipes that need a worked example. Also re-invoke it in a long conversation before returning to page work.'
+type: default
+# Invoking this skill is a blocking step of the create-entity workflow.
+# CreateEntitySkillType (daedalus_blueprint) renders every discovered skill
+# that declares a step here into its BLOCKING REQUIREMENT checklist. The
+# key is a map of workflow id to the checklist step text.
+#
+# The one page skill: a thinking step, the two postures, distinctiveness
+# inside the system, composition principles, the anti-patterns and the
+# workflow. It carries no section recipe and no page shape: the shape
+# of a page is decided fresh per page from its subject, so nothing here
+# repeats page to page. It names no material and restates no grammar:
+# the design system brief in the cached instructions carries the
+# system's identity, its axes with their descriptions, its looks, its
+# stencils and named values; the Page language section carries every
+# write mechanic (ops, selectors, wrappers, class wear, stencil
+# placement, the motion trigger pair); the schema carries the entity's
+# fields, the full material descriptions and every stencil printed as a
+# fragment. A fact about one material lives on its record, never here.
+# Type and color are the design system's business (the identity, the
+# skin, the tokens), so the doctrine says nothing about them.
+blocking_step_of:
+  create_entity: 'Invoke the design skill (eb_skill design) and hold to it: it carries the design doctrine (think and commit, the two postures, distinctiveness inside the design system, the composition principles, the generic page to avoid) and the generation workflow your plan and your build must follow.'
+instructions: |
+  This skill is process and taste: how to design a page that reads as one
+  designed thing instead of an assembly of parts. The FACTS live
+  elsewhere and win on conflict: the design system brief in your
+  instructions carries the system you design inside (its identity, its
+  axes and what each value is for, its saved looks, its stencils and
+  named values), the Page language section carries every write mechanic,
+  and the schema (eb_read_schema) carries the block catalog with each
+  type's anatomy and field guidance, the entity's fields, the materials
+  in full and every stencil printed as a fragment. This doctrine names
+  no block types and no materials on purpose, and it carries no section
+  recipe: the brief and the catalog say what exists on this site, and
+  what THIS page is made of is decided fresh from its subject.
+
+  ## Think, then commit
+  Before you touch structure, answer five questions in a sentence each:
+  what is the subject; who arrives at this page and in what state; what
+  is the ONE job the page must do (a page people come to for outages
+  opens on status, not on a mission statement); what should someone
+  remember an hour later, the one thing; and which direction you commit
+  to for the whole page. Commit to one direction and let it decide
+  everything after it: what opens the page, how much the page says,
+  what gets the most room, where the picture sits, what the copy sounds
+  like. Two directions blended, or none chosen, is how a page turns into
+  a template. The current page in your context is where the user is
+  standing, not a model for a new one: plan a new page from its own
+  subject and job, never from that page's bands.
+
+  ## The two postures: on brand and workshopping
+  Every design session runs in one of two postures. The posture is the
+  user's call, declared by their intent in the conversation, never read
+  from site config (validation governs what SAVES, not what you
+  should design). Default to on brand; workshop only when the user asks
+  to explore, experiment, or step outside the brand ("workshop
+  something", "try a different direction", "ignore the materials"). If
+  a whole-page request is genuinely ambiguous between them, ask.
+
+  - ON BRAND (the default): the design system is the design, and on
+    brand is a boundary, not a look to copy. A page is on brand when it
+    is a legal arrangement of the system's materials; inside that
+    boundary you have full creative liberty, and the wow comes from what
+    you arrange, not from restyling the brushes. Spend your thinking on
+    an arrangement that fits THIS subject. A page that could be any
+    other page on the site with the copy swapped is a template, not a
+    design; a page that reads as the system's character applied to its
+    own subject is the goal. Propose promoting anything genuinely new
+    rather than minting it.
+  - WORKSHOPPING: the user wants a distinctive take, so the materials
+    are reference, not boundary, and new styling is on the table. Commit
+    to one direction and take ONE real aesthetic risk you can justify;
+    spend that boldness in the page's signature element, the one thing
+    this page will be remembered by, and keep everything around it
+    quiet and disciplined. Before building, critique the plan: work out
+    what you would produce for ANY similar brief, and revise every part
+    of your plan that matches it. Workshopped styling still stays on
+    this page; when a result earns keeping, graduate it deliberately
+    (propose the variant, token, or skin change) and let the user decide
+    what joins the brand.
+
+  ## Distinctive inside the system
+  The system is not a template. The same brushes make many different
+  pages, and the difference is arrangement: what the page leads with,
+  how much room each part takes, where the one picture sits, what is
+  spare and what is dense, what stands alone and what clusters. Every
+  axis offers its values so you can pick the ones this page needs and
+  leave the rest; a material is a choice, never a checklist.
+  Stencils are the system's pre-approved blocks and its worked examples,
+  never anchors. Per page, decide for each one: fill it with this page's
+  content when it fits, build beside it in the same spirit, or skip it
+  for a better idea. Hand-rolled work from the same materials is as on
+  brand as a placement, and it is where a page gets its own shape. Save
+  a section as a stencil (save_material with kind stencil, a page_edit
+  op) only when the user asks; never volunteer it.
+  Materials first: wear a saved look when one expresses the intent,
+  compose from the named values next, write raw values last. Novel
+  styling stays on this page; propose promoting it to the materials
+  rather than minting silently.
+
+  ## Composition
+  Principles, not moves: there is no list of sections to pick from.
+  - Hierarchy: one thing dominates the page and one thing dominates
+    each band. Decide what the eye lands on first, second, third, and
+    give the rest less: less room, less weight, less copy. Keep the
+    outline clean: at most one h1 (the page's headline, when the page
+    owns it), h2 for sections, h3 within them, never skipping levels.
+  - Rhythm: vary the shape and the density down the page. A wide
+    spacious band, then a tight dense one, then a single line, then
+    columns reads as rhythm; three same-shaped bands back to back read
+    as a template. Arrangement is styling: stacked containers for
+    reading and for statements, columns for parallel things, nesting to
+    group what must read and move as one, no deeper than the content
+    needs. Air between bands is the page's Layout gap, set once on the
+    page and never as a band's margin; air inside a band is that band's
+    own padding.
+  - Contrast: put the emphasis in one place per band. Not everything
+    can be big, not every item can be a card, not every band needs a
+    heading and a button. Negative space is a material; so is density.
+  - One signature: name the one section that could only exist for this
+    page and build the page around it; everything else supports it.
+    Motion is seasoning: where the brief lists animations, give the
+    page's one signature move an entrance (the opening band arriving)
+    and leave the rest still; never animate every section, never body
+    copy, and never loop motion beside reading. Reduced motion is the
+    worn stop's own business, not a reason to hold back.
+  - Copy and images are design material, not filler. Copy is specific
+    to the subject, concrete over clever, the reader's vocabulary over
+    the system's, and a call to action names the action it triggers;
+    never "Lorem ipsum". Every image is a real image in one treatment
+    held across the page (generate one where the page language lets
+    you); never empty, never a placeholder.
+  - One purpose per section. More focused sections beat fewer
+    overloaded ones.
+
+  ## The generic page
+  This is what you would produce for any brief, and it is what to
+  revise out of your plan. A hero, then a grid of equal cards, then a
+  call to action: the silhouette every generated page shares. Cards of
+  the same size for things of different importance. Every band the same
+  shape: a heading, a paragraph, three items. A section that exists
+  because pages usually have one, not because this page needs it. Copy
+  that could introduce any organization ("Welcome to our site", "We are
+  passionate about"). A stencil with the sample copy swapped and nothing
+  else changed. Emphasis spread evenly so nothing leads. If your plan
+  matches any of these, that part was a formula, not a decision; decide
+  it again from the subject.
+
+  ## The generation workflow
+  One loop, whether creating a page or reworking one:
+  1. READ. The current page already rides every turn as its
+     page-language print, and your instructions carry the design system
+     brief and the element vocabulary. eb_read_schema adds what those do
+     not carry (the entity's fields, the block catalog's anatomy and
+     field guidance, every material's full description, every stencil
+     in full): read it before designing a NEW page.
+  2. SKILLS. Invoke the skins skill only if you are about to change
+     site-wide vocabulary (a token, a skin, the site's element
+     defaults); composition and styling need no other skill, their
+     mechanics are cached.
+  3. PLAN. Think, then commit (above): the subject, its audience, the
+     page's single job, the one thing to remember, the direction. Then
+     name the one section that could only exist for this page, sketch
+     the sequence of bands in the order the job wants them, and name
+     what each will wear from the brief (which axis values, which
+     looks, which stencils filled, built beside, or placed as is). In
+     the workshopping posture, critique the plan before building (see
+     the postures). When the workflow requires approval (creating a
+     whole entity), present this plan and wait.
+  4. COMPOSE AND STYLE IN ONE MOTION. Never build bare structure to
+     style later. A NEW page is ONE page_create document: the full
+     nested layout with its styles inline (style="" on the elements, a
+     trailing <style> block for conditions and parts). A new section or
+     block on an EXISTING page is ONE atomic page_edit batch: insert
+     fragments carrying their styles, with sibling style/set ops in the
+     same batch. EDITS to what exists are targeted ops, never rebuilds.
+     Centering is the one recipe worth spelling: the container arranges
+     its contents and is one box, so the write lands on the container
+     itself: `#hero { display: grid; justify-items: center }` centers
+     its children horizontally, `align-content: center` plus a
+     min-height centers them vertically (display grid is the canonical
+     container upgrade, a near-no-op on stacked children that unlocks
+     both axes), and `align-items: center` on a columns container
+     vertically aligns its columns.
+  5. ITERATE. Verify each result against the updated page print it
+     echoes, fix what is off with targeted ops, and stop when the page
+     reads as one designed thing.

@@ -1,0 +1,18 @@
+# The text shape: a data-decided root tag and a conditional link wrapper
+# claiming the text (daedalus_edit_text_block's variation lanes, mirrored so
+# the resolver's kernel lock does not depend on daedalus_edit; the shipped
+# declaration spells the tag as root.forms to carry its p fallback — the
+# top-level tag-from-field lane locked here is its own grammar lane).
+composed: true
+tag:
+  field: field_text_tag
+elements:
+  '.text-block-link':
+    label: 'Link'
+    tag: a
+    present:
+      field: field_text_url
+    attributes:
+      href:
+        field: field_text_url
+    contains: 'field:field_text_text'

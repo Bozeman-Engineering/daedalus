@@ -1,0 +1,36 @@
+services:
+  _defaults:
+    autowire: true
+    autoconfigure: true
+
+  daedalus_blueprint_api.target_key_mapper:
+    class: Drupal\daedalus_blueprint_api\Render\TargetKeyMapper
+    arguments:
+      - '@daedalus_blueprint.element_locator'
+      - '@daedalus_blueprint.daedalus_layout_adapter'
+
+  Drupal\daedalus_blueprint_api\Render\TargetKeyMapper: '@daedalus_blueprint_api.target_key_mapper'
+
+  daedalus_blueprint_api.subtree_renderer:
+    class: Drupal\daedalus_blueprint_api\Render\SubtreeRenderer
+    arguments:
+      - '@entity_type.manager'
+      - '@renderer'
+      - '@daedalus_blueprint_api.target_key_mapper'
+      - '@ajax_response.attachments_processor'
+      - '@request_stack'
+
+  Drupal\daedalus_blueprint_api\Render\SubtreeRenderer: '@daedalus_blueprint_api.subtree_renderer'
+
+  daedalus_blueprint_api.mutation_response_builder:
+    class: Drupal\daedalus_blueprint_api\MutationResponseBuilder
+    arguments:
+      - '@daedalus_blueprint.backend_resolver'
+      - '@event_dispatcher'
+      - '@daedalus_blueprint_api.subtree_renderer'
+      - '@logger.channel.daedalus_blueprint'
+      # The materials delta: every payload carries what this request
+      # changed, whichever lane changed it.
+      - '@daedalus_blueprint.materials_change_set'
+
+  Drupal\daedalus_blueprint_api\MutationResponseBuilder: '@daedalus_blueprint_api.mutation_response_builder'

@@ -1,0 +1,160 @@
+/**
+ * @file
+ * The Daedalus chrome palette.
+ *
+ * Two color schemes over one set of tokens. Light is the default; the dark
+ * palette follows the OS via prefers-color-scheme. Both ramps draw from
+ * the same system palette as the chrome's existing hardcoded colors, so
+ * unmigrated pieces continue to harmonize.
+ */
+/* cspell:ignore blinkmacsystemfont */
+:root {
+  /* Surfaces. */
+  --daedalus-background: #fafafa;
+  --daedalus-toggle-background: #eaeaea;
+  --daedalus-toggle-active: #fff;
+
+  /* Text. */
+  --daedalus-text: #1d1d1f;
+  --daedalus-text-muted: #6e6e73;
+
+  /* Dividers. Border is the stronger of the two. */
+  --daedalus-lines: #8f8f8f;
+  --daedalus-border: #777;
+  --daedalus-scrollbar-thumb: #afafaf;
+
+  /* The disclosure grammar's child-step: the page-elements tree indents
+     each row one step per level (rowIndent in page-elements-tree.js) and
+     drop-down bodies (.daedalus-ui-details__body) indent one step per nesting
+     level, so both carriers deepen at the same rate. */
+  --daedalus-indent: 0.875rem;
+  --daedalus-indent-block-padding: 0.1rem;
+
+  /* Raised by selection-indicator.css while the indicator is mounted.
+     Unit required: this feeds calc() in sidebar.css, where a unitless 0
+     invalidates the whole expression. */
+  --daedalus-breadcrumb-height: 0px;
+
+  /* Selection: a selected/active button or row. The solid pair carries
+     fully selected controls; the wash is the lighter treatment for
+     selected rows and hover states. */
+  --daedalus-selection: #0071e3;
+  --daedalus-selection-text: #fff;
+  /* Doubles as the shared hover treatment: every interactive target —
+     rows, cards, pills, icon buttons — takes this wash on hover, and
+     nothing else. */
+  --daedalus-selection-background: rgb(0, 113, 227, 0.12);
+  /* The SOLID counterpart of the wash, for strokes: a translucent wash
+     painted as a thin outline all but disappears on busy content, so
+     line-work that must stay legible (the canvas hover outline) takes
+     this instead — the selection color stepped toward the scheme's
+     background, opaque. Both inputs flip in dark scheme, so one
+     definition serves both. */
+  --daedalus-selection-muted: color-mix(in sRGB, var(--daedalus-selection) 60%, var(--daedalus-background));
+
+  /* The focus/lens treatment: the chrome marking the current WRITE TARGET
+     (a focused wear-bar row, a lensed panel frame, pending-push marks,
+     Outline Variant paint on canvas and in the page elements tree). One
+     token pair on purpose: a lens has exactly one write target, so focus
+     is a single configurable treatment; per-variant provenance hues keep
+     identity duty and never carry focus. Defaults to the selection
+     accent; retune here to restyle every focus carrier at once. */
+  --daedalus-focus: var(--daedalus-selection);
+  --daedalus-focus-background: var(--daedalus-selection-background);
+
+  /* Destructive actions: the context menu's danger items, and any other
+     chrome that must read as "this deletes something". The wash mirrors
+     the selection wash's treatment. */
+  --daedalus-danger: #d70015;
+  --daedalus-danger-background: rgb(215, 0, 21, 0.12);
+
+  /* Status accents and their washes (the notifications panel, the
+     inspector's shipped/orphaned and save-result states). The light
+     values keep the hues the chrome already wore as hand literals; the
+     dark scheme lifts them like the selection/danger accents. Invalid/
+     error states wear the danger pair above, not a separate red. */
+  --daedalus-success: #28a745;
+  --daedalus-success-background: rgb(40, 167, 69, 0.12);
+  --daedalus-warning: #ffc107;
+  --daedalus-warning-background: rgb(255, 193, 7, 0.15);
+  --daedalus-info: #17a2b8;
+  --daedalus-info-background: rgb(23, 162, 184, 0.12);
+  --daedalus-top-bar-height: 2.25rem;
+  --daedalus-border-radius: 0.5rem;
+  /* The disclosure triangles across the chrome: one clip-path recipe,
+     these tokens governing its size, distance to the label, and color. */
+  --daedalus-disclosure-size: 0.35rem;
+  --daedalus-disclosure-gap: 0.5rem;
+  --daedalus-disclosure-color: var(--daedalus-text-muted);
+  /* The chrome typeface (@font-face in fonts.css). */
+  --daedalus-font: "Open Sans", -apple-system, blinkmacsystemfont, "Segoe UI", sans-serif;
+  /* The chrome type ramp: every chrome font-size wears the token for
+     the role it plays, so a role retunes in one place. Icon and glyph
+     sizes live on the icon ramp below, not here — they size icons,
+     not text. The scale knob multiplies every step of both ramps,
+     resizing the whole chrome at once; at 1 the type steps are exact
+     pixel values (13/14/16/12/11/10px). */
+  --daedalus-font-scale: 1.1;
+  /* Default UI text. */
+  --daedalus-font-size: calc(0.8125rem * var(--daedalus-font-scale));
+  /* Emphasized UI text. */
+  --daedalus-font-size-large: calc(0.875rem * var(--daedalus-font-scale));
+  /* Panel and section headings. */
+  --daedalus-font-size-heading: calc(1rem * var(--daedalus-font-scale));
+  /* Secondary text. */
+  --daedalus-font-size-small: calc(0.75rem * var(--daedalus-font-scale));
+  /* Meta text: hints, timestamps, key chips, badges-with-words. */
+  --daedalus-font-size-caption: calc(0.6875rem * var(--daedalus-font-scale));
+  /* The smallest legible tier: counts. */
+  --daedalus-font-size-tiny: calc(0.625rem * var(--daedalus-font-scale));
+  /* The chrome icon ramp: icon and action-glyph sizes by role, on the
+     same scale knob. Hit-target boxes around icons stay bespoke, as do
+     the deliberately off-ramp icons: the top bar's 30px (sized to the
+     bar, a density choice), display-scale empty-state art, and one-off
+     micro-controls. */
+  /* Inline action icons: verb menu, chevrons. */
+  --daedalus-icon-size: calc(1rem * var(--daedalus-font-scale));
+  /* Object and prominent icons: palette items, FABs, the tree and chat
+     action glyphs. */
+  --daedalus-icon-size-large: calc(1.5rem * var(--daedalus-font-scale));
+  /* Dismiss controls: the modal and chip x glyphs. */
+  --daedalus-icon-size-small: calc(0.875rem * var(--daedalus-font-scale));
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    /* Surfaces. */
+    --daedalus-background: #1c1c1e;
+    --daedalus-toggle-background: #2c2c2e;
+    --daedalus-toggle-active: #3a3a3c;
+
+    /* Text. */
+    --daedalus-text: #f5f5f7;
+    --daedalus-text-muted: #98989d;
+
+    /* Dividers. Stronger means lighter against dark surfaces. */
+    --daedalus-lines: #48484a;
+    --daedalus-border: #6e6e73;
+    --daedalus-scrollbar-thumb: #636366;
+
+    /* Selection: the dark-scheme accent needs the extra luminance to hold
+       contrast on dark surfaces; the wash runs stronger for the same
+       reason. */
+    --daedalus-selection: #0a84ff;
+    --daedalus-selection-text: #fff;
+    --daedalus-selection-background: rgb(10, 132, 255, 0.28);
+
+    /* Danger: same luminance lift as the selection accent. */
+    --daedalus-danger: #ff453a;
+    --daedalus-danger-background: rgb(255, 69, 58, 0.28);
+
+    /* Status accents: the same luminance lift, washes running stronger
+       like the selection wash. */
+    --daedalus-success: #32d74b;
+    --daedalus-success-background: rgb(50, 215, 75, 0.24);
+    --daedalus-warning: #ffd60a;
+    --daedalus-warning-background: rgb(255, 214, 10, 0.22);
+    --daedalus-info: #40c8e0;
+    --daedalus-info-background: rgb(64, 200, 224, 0.24);
+  }
+}

@@ -1,0 +1,7 @@
+name: 'Daedalus Stylish discover test theme'
+type: theme
+description: 'Emits classed markup for a block_content field so element discovery has something to find.'
+package: Testing
+core_version_requirement: ^11
+base theme: false
+hidden: true

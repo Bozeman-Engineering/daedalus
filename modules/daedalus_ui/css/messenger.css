@@ -1,0 +1,126 @@
+/**
+ * The messenger's toasts: position, motion and face.
+ *
+ * Scoped to the wrapper the messenger has claimed (js/messenger.js stamps
+ * .daedalus-ui-messenger on first use), so a page whose status_messages wrapper
+ * stays theme-rendered keeps the theme's styling. The face is owned here
+ * rather than borrowed from the site theme: a window that never rendered
+ * status_messages (daedalus_stylish's satellite) has no theme messages CSS at all,
+ * and the toast is chrome, not page content.
+ */
+
+@keyframes daedalus-ui-messenger-slide-in {
+  from {
+    transform: translateX(100px);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes daedalus-ui-messenger-slide-out {
+  from {
+    transform: translateX(0);
+    opacity: 1;
+  }
+  to {
+    transform: translateX(100px);
+    opacity: 0;
+  }
+}
+
+@keyframes daedalus-ui-messenger-pulse {
+  from {
+    opacity: 0.45;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+[data-drupal-messages].daedalus-ui-messenger {
+  position: fixed;
+  /* Above modals */
+  z-index: 1265;
+  right: var(--drupal-displace-offset-right, 0);
+  bottom: var(--drupal-displace-offset-bottom, 0);
+  max-width: calc(98.5vw - (var(--drupal-displace-offset-left, 0px) + var(--drupal-displace-offset-right, 0px)));
+  /* Chrome toasts, not page content: the chrome typeface, not the site
+     theme's. */
+  font-family: var(--daedalus-font);
+}
+
+[data-drupal-messages].daedalus-ui-messenger .messages__wrapper {
+  overflow-x: hidden;
+  /* auto, not scroll: scroll reserves a permanent track, which classic
+     (non-overlay) scrollbars paint as a white bar beside the toast even
+     with nothing to scroll. */
+  overflow-y: auto;
+  max-height: calc(99vh - var(--drupal-displace-offset-top, 0px));
+  scrollbar-width: thin;
+  scrollbar-color: var(--daedalus-scrollbar-thumb) transparent;
+}
+
+[data-drupal-messages].daedalus-ui-messenger .messages {
+  /* The accent per type: the left bar and the pulse. */
+  --daedalus-ui-messenger-accent: var(--daedalus-info);
+  --daedalus-ui-messenger-tint: var(--daedalus-info-background);
+
+  position: relative;
+  margin: 0 0 0.5rem;
+  padding: 0.75rem 1rem;
+  animation: daedalus-ui-messenger-slide-in 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  color: var(--daedalus-text);
+  border: 0;
+  border-left: 4px solid var(--daedalus-ui-messenger-accent);
+  border-radius: var(--daedalus-border-radius);
+  /* The tint tokens are translucent washes for chrome surfaces; a toast
+     floats over arbitrary page content, so the wash layers over the
+     chrome surface to stay opaque and readable. */
+  background: linear-gradient(var(--daedalus-ui-messenger-tint), var(--daedalus-ui-messenger-tint)), var(--daedalus-background);
+  box-shadow:
+    0 0 72px rgb(0, 0, 0, 0.2),
+    0 0 8px rgb(0, 0, 0, 0.04),
+    0 0 40px rgb(0, 0, 0, 0.06);
+  font-size: var(--daedalus-font-size);
+  line-height: 1.4;
+}
+
+[data-drupal-messages].daedalus-ui-messenger .messages--status {
+  --daedalus-ui-messenger-accent: var(--daedalus-success);
+  --daedalus-ui-messenger-tint: var(--daedalus-success-background);
+}
+
+[data-drupal-messages].daedalus-ui-messenger .messages--warning {
+  --daedalus-ui-messenger-accent: var(--daedalus-warning);
+  --daedalus-ui-messenger-tint: var(--daedalus-warning-background);
+}
+
+[data-drupal-messages].daedalus-ui-messenger .messages--error {
+  --daedalus-ui-messenger-accent: var(--daedalus-danger);
+  --daedalus-ui-messenger-tint: var(--daedalus-danger-background);
+}
+
+[data-drupal-messages].daedalus-ui-messenger .messages a {
+  color: inherit;
+}
+
+[data-drupal-messages].daedalus-ui-messenger .messages.is-exiting {
+  animation: daedalus-ui-messenger-slide-out 0.2s cubic-bezier(0.4, 0, 1, 1) forwards;
+}
+
+/* A repeated message (the same text while the first still shows) pulses
+   instead of stacking a twin: an accent-colored flash over the toast. The
+   flash lives on a pseudo-element the class creates so replaying it never
+   restarts the toast's own entrance. */
+[data-drupal-messages].daedalus-ui-messenger .messages.is-repeated::after {
+  position: absolute;
+  content: "";
+  animation: daedalus-ui-messenger-pulse 0.4s ease-out forwards;
+  pointer-events: none;
+  border-radius: inherit;
+  background: var(--daedalus-ui-messenger-accent);
+  inset: 0;
+}

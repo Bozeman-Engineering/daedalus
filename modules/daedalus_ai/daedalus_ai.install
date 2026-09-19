@@ -1,0 +1,20 @@
+<?php
+
+/**
+ * @file
+ * Install, update and uninstall functions for Daedalus AI.
+ */
+
+/**
+ * Replace placeholder_media_id with placeholder_image in daedalus_ai.settings.
+ *
+ * Image generation is identity-first: minted media carry a placeholder FILE
+ * (ensured from this setting, the shipped module asset by default) instead of
+ * every surface sharing one placeholder media entity.
+ */
+function daedalus_ai_update_11101(): void {
+  \Drupal::configFactory()->getEditable('daedalus_ai.settings')
+    ->clear('placeholder_media_id')
+    ->set('placeholder_image', '')
+    ->save(TRUE);
+}

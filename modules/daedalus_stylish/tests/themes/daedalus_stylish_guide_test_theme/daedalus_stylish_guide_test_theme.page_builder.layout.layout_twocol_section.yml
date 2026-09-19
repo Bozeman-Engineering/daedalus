@@ -1,0 +1,3 @@
+elements:
+  '.band-content':
+    label: 'Content container'

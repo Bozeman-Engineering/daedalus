@@ -1,0 +1,381 @@
+# The Guide Example skin: the DATA half of the strict reference design
+# system, shipped through the skins disk lane (synced when the
+# guide_example system is activated, on every cache rebuild while it is
+# active, and by `drush daedalus_stylish:sync daedalus_stylish_guide_example`). Token
+# VALUES and site element defaults live here; the scales they validate
+# against are the guide's token_scales
+# (daedalus_stylish_guide_example.page_builder.yml, the suite's ten plus this
+# package's four). No design_system key: the module packages
+# guide_example, so the skin is a member of it and the system's
+# default_skin.
+#
+# The token names model the role-token doctrine: every name is a
+# site-wide ROLE. The type ramp is display / title-1 / title-2 /
+# title-3 / body / caption (what a size MEANS in the design, never
+# which element wears it); color roles are surface relationships (bg,
+# surface, elevated, text, muted, border, accent, the inverse trio).
+# Element differentiation lives in the defaults below and in per-node
+# stops: curation, never in per-element token namespaces.
+#
+# The skin mints EVERY scale the guide declares, because the suite's
+# bindings and this package's deltas make each scale's tokens the whole
+# offer, and the law, for its property: a bound scale minting nothing is
+# a closed empty row on a strict site, with no fallback by design. A
+# skin's own defaults validate against ITS OWN minted tokens (a shipped
+# skin must be self-contained) and against the site's bindings, which is
+# why every bound property below is a bare var() of its scale: never a
+# clamp(), never a raw length. Fluidity lives on the banded tokens.
+guide_example:
+  label: 'Guide Example'
+  tokens:
+    # An ink-and-amber palette, dark scheme included. Roles, not hues:
+    # a rebrand edits these values and every reference follows. The
+    # inverse trio is what a band wears to flip its scheme on purpose
+    # (near-black on a light page, paper on a dark one); the dark:
+    # values follow the visitor's OS preference and never give a light
+    # page a dark band.
+    color:
+      bg:
+        default: '#faf8f5'
+        dark: '#14120f'
+      surface:
+        default: '#f1ede6'
+        dark: '#1e1b16'
+      elevated:
+        default: '#e6dfd3'
+        dark: '#2b261e'
+      text:
+        default: '#26221b'
+        dark: '#ece7dd'
+      muted:
+        default: '#6e6656'
+        dark: '#a39c8d'
+      border:
+        default: '#d8d1c4'
+        dark: '#3a342a'
+      accent:
+        default: '#b4552d'
+        dark: '#e08a5d'
+      accent-hover:
+        default: '#933f1f'
+        dark: '#f0a57c'
+      # The text that sits ON the accent (button labels).
+      accent-contrast:
+        default: '#ffffff'
+        dark: '#14120f'
+      inverse-bg:
+        default: '#26221b'
+        dark: '#ece7dd'
+      inverse-text:
+        default: '#ece7dd'
+        dark: '#26221b'
+      inverse-muted:
+        default: '#a39c8d'
+        dark: '#6e6656'
+    # Three stacks, system faces only: no font files ship and no loader
+    # is attached. font-family is BOUND to this scale by the suite, so
+    # these are the only families.
+    font:
+      body: 'Georgia, "Times New Roman", serif'
+      heading: 'system-ui, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif'
+      mono: 'ui-monospace, "Cascadia Code", Consolas, "Courier New", monospace'
+    # The type ramp: six roles cover the whole site. display is the
+    # hero voice, title-1..3 are the heading ladder, body is prose,
+    # caption is fine print. The big end is width-banded (the banded
+    # width-conditioned grammar; no clamp(), fluidity stays data):
+    # display and title-1 step down through the medium and narrow
+    # bands, the small sizes are one value at every width.
+    text:
+      display:
+        default: '3.25rem'
+        medium: '2.75rem'
+        narrow: '2.25rem'
+      title-1:
+        default: '2.25rem'
+        medium: '2rem'
+        narrow: '1.75rem'
+      title-2: '1.5rem'
+      title-3: '1.1875rem'
+      body: '1rem'
+      caption: '0.8125rem'
+    weight:
+      regular: '400'
+      medium: '500'
+      semibold: '600'
+      bold: '700'
+    leading:
+      tight: '1.1'
+      snug: '1.3'
+      normal: '1.5'
+      relaxed: '1.65'
+    # Three tracking steps: tight for a display line, wide for an
+    # eyebrow, normal everywhere else.
+    tracking:
+      tight: '-0.02em'
+      normal: '0'
+      wide: '0.08em'
+    # A geometric step ladder on a 0.25rem unit, plus the gutter and the
+    # three banded band-rhythm tokens.
+    space:
+      '1': '0.25rem'
+      '2': '0.5rem'
+      '3': '0.75rem'
+      '4': '1rem'
+      '6': '1.5rem'
+      '8': '2rem'
+      '12': '3rem'
+      '16': '4rem'
+      '24': '6rem'
+      # The site gutter: the width variants' inset floor and the
+      # container defaults' gap (--space-gutter, one gutter fact for
+      # the whole site).
+      gutter:
+        default: '1.5rem'
+        narrow: '1rem'
+      # Band rhythm: the vertical padding a page band wears, worn
+      # through the container rhythm axis (guide_rhythm_compact /
+      # standard / spacious), banded so bands tighten on narrow screens.
+      band-compact:
+        default: '3rem'
+        narrow: '2rem'
+      band:
+        default: '5rem'
+        medium: '4rem'
+        narrow: '3rem'
+      band-spacious:
+        default: '8rem'
+        medium: '6rem'
+        narrow: '4rem'
+    radius:
+      sm: '0.25rem'
+      md: '0.5rem'
+      lg: '1rem'
+      pill: '9999px'
+    # Border widths: the hairline rule, the thin outline of a secondary
+    # button, the thick accent bar of a notice or a blockquote.
+    stroke:
+      hairline: '1px'
+      thin: '2px'
+      thick: '3px'
+    # Elevation, three levels; the dark values are heavier because a
+    # shadow on near-black needs it.
+    shadow:
+      sm:
+        default: '0 1px 3px rgb(0 0 0 / 0.10)'
+        dark: '0 1px 3px rgb(0 0 0 / 0.5)'
+      md:
+        default: '0 4px 12px rgb(0 0 0 / 0.12)'
+        dark: '0 4px 12px rgb(0 0 0 / 0.55)'
+      lg:
+        default: '0 12px 32px rgb(0 0 0 / 0.16)'
+        dark: '0 12px 32px rgb(0 0 0 / 0.6)'
+    # Motion timing. transition-duration and animation-duration are
+    # bound to this scale: nothing moves at a speed the skin did not
+    # name.
+    duration:
+      fast: '150ms'
+      normal: '250ms'
+      slow: '400ms'
+      entrance: '600ms'
+    # Easing curves. `standard` is the material ease, `out` the arrival
+    # curve entrances use, `spring` the one playful overshoot.
+    easing:
+      standard: 'cubic-bezier(0.4, 0, 0.2, 1)'
+      out: 'ease-out'
+      in-out: 'ease-in-out'
+      spring: 'cubic-bezier(0.34, 1.56, 0.64, 1)'
+    # Whole transitions for a theme's chrome. Composed from the duration
+    # and easing tokens (a token value may reference another token of
+    # the same skin) so the three scales agree by construction.
+    transition:
+      fast: 'var(--duration-fast) var(--easing-out)'
+      normal: 'var(--duration-normal) var(--easing-standard)'
+    # The site column every band shares, a narrower column for prose
+    # bands, and a reading measure for body copy. max-width is bound to
+    # this scale.
+    layout:
+      max-width: '75rem'
+      narrow: '60rem'
+      measure: '40rem'
+  # Site element defaults: what an UNSTYLED element looks like, the
+  # first of the role-token doctrine's three mechanisms. Headings walk
+  # down the ramp; nothing here names an element-scoped token.
+  defaults:
+    'base:h1':
+      '':
+        default:
+          margin-top: '0'
+          margin-bottom: 'var(--space-4)'
+          font-family: 'var(--font-heading)'
+          font-size: 'var(--text-display)'
+          font-weight: 'var(--weight-bold)'
+          line-height: 'var(--leading-tight)'
+          letter-spacing: 'var(--tracking-tight)'
+    'base:h2':
+      '':
+        default:
+          margin-top: '0'
+          margin-bottom: 'var(--space-4)'
+          font-family: 'var(--font-heading)'
+          font-size: 'var(--text-title-1)'
+          font-weight: 'var(--weight-bold)'
+          line-height: 'var(--leading-tight)'
+          letter-spacing: 'var(--tracking-tight)'
+    'base:h3':
+      '':
+        default:
+          margin-top: '0'
+          margin-bottom: 'var(--space-3)'
+          font-family: 'var(--font-heading)'
+          font-size: 'var(--text-title-2)'
+          font-weight: 'var(--weight-semibold)'
+          line-height: 'var(--leading-snug)'
+    'base:h4':
+      '':
+        default:
+          margin-top: '0'
+          margin-bottom: 'var(--space-3)'
+          font-family: 'var(--font-heading)'
+          font-size: 'var(--text-title-3)'
+          font-weight: 'var(--weight-semibold)'
+          line-height: 'var(--leading-snug)'
+    'base:h5':
+      '':
+        default:
+          margin-top: '0'
+          margin-bottom: 'var(--space-2)'
+          font-family: 'var(--font-heading)'
+          font-size: 'var(--text-body)'
+          font-weight: 'var(--weight-semibold)'
+          line-height: 'var(--leading-snug)'
+    'base:h6':
+      '':
+        default:
+          margin-top: '0'
+          margin-bottom: 'var(--space-2)'
+          font-family: 'var(--font-heading)'
+          font-size: 'var(--text-caption)'
+          font-weight: 'var(--weight-semibold)'
+          line-height: 'var(--leading-snug)'
+          letter-spacing: 'var(--tracking-wide)'
+          text-transform: 'uppercase'
+    'base:p':
+      '':
+        default:
+          margin-top: '0'
+          margin-bottom: 'var(--space-4)'
+          font-family: 'var(--font-body)'
+          font-size: 'var(--text-body)'
+          line-height: 'var(--leading-relaxed)'
+    'base:li':
+      '':
+        default:
+          font-family: 'var(--font-body)'
+          font-size: 'var(--text-body)'
+          line-height: 'var(--leading-relaxed)'
+    # Links: the accent, easing to its hover shade on the duration
+    # scale. base:a accepts typography and motion only, so no margins.
+    'base:a':
+      '':
+        default:
+          color: 'var(--color-accent)'
+          text-decoration-line: 'underline'
+          transition-property: 'color'
+          transition-duration: 'var(--duration-fast)'
+          transition-timing-function: 'var(--easing-out)'
+        hover:
+          color: 'var(--color-accent-hover)'
+    # A thick accent rule in the stroke scale; the title-2 size.
+    'base:blockquote':
+      '':
+        default:
+          margin-top: 'var(--space-8)'
+          margin-bottom: 'var(--space-8)'
+          margin-left: '0'
+          margin-right: '0'
+          padding-left: 'var(--space-6)'
+          border-left-width: 'var(--stroke-thick)'
+          border-left-style: 'solid'
+          border-left-color: 'var(--color-accent)'
+          font-size: 'var(--text-title-2)'
+          line-height: 'var(--leading-snug)'
+    'base:code':
+      '':
+        default:
+          font-family: 'var(--font-mono)'
+          font-size: 'var(--text-caption)'
+          background-color: 'var(--color-surface)'
+    'base:pre':
+      '':
+        default:
+          font-family: 'var(--font-mono)'
+          font-size: 'var(--text-caption)'
+          line-height: 'var(--leading-normal)'
+          padding-top: 'var(--space-4)'
+          padding-bottom: 'var(--space-4)'
+          padding-left: 'var(--space-4)'
+          padding-right: 'var(--space-4)'
+          background-color: 'var(--color-surface)'
+          border-radius: 'var(--radius-md)'
+    'base:img':
+      '':
+        default:
+          max-width: '100%'
+          height: 'auto'
+    # The tags the guide opens beyond daedalus_stylish's own. Small print sits on
+    # the caption step in muted; the rule is a hairline in the border
+    # tone with band air around it; figures carry no inset of their own
+    # (the image inside wears the radius).
+    'base:strong':
+      '':
+        default:
+          font-weight: 'var(--weight-semibold)'
+    'base:small':
+      '':
+        default:
+          font-size: 'var(--text-caption)'
+          color: 'var(--color-muted)'
+    'base:hr':
+      '':
+        default:
+          margin-top: 'var(--space-12)'
+          margin-bottom: 'var(--space-12)'
+          border-width: '0'
+          border-top-width: 'var(--stroke-hairline)'
+          border-top-style: 'solid'
+          border-top-color: 'var(--color-border)'
+    'base:figure':
+      '':
+        default:
+          margin-top: 'var(--space-8)'
+          margin-bottom: 'var(--space-8)'
+          margin-left: '0'
+          margin-right: '0'
+    'base:figcaption':
+      '':
+        default:
+          margin-top: 'var(--space-2)'
+          font-size: 'var(--text-caption)'
+          line-height: 'var(--leading-normal)'
+          color: 'var(--color-muted)'
+    # Stacked spacing is the container's, not the children's: every
+    # container is a single-column grid (the layout's declared default
+    # display) whose children sit the gutter apart, so a stacked
+    # container never writes a display or a gap of its own, and Columns
+    # (the row variant) and Cluster only swap the display for flex. The
+    # site width reaches page bands through the root-only Site width
+    # variant, so nested containers get no inset here.
+    'kind:container':
+      '':
+        default:
+          gap: 'var(--space-gutter)'
+    # A block carries no outer margin: the container's gap is the one
+    # rhythm between stacked children, at every depth. This outranks the
+    # prose margins above on a text block's tag root (kind scopes print
+    # after the zero-specificity base tier), and leaves them in force
+    # inside a formatted text body, where prose still flows.
+    'kind:block':
+      '':
+        default:
+          margin-top: '0'
+          margin-bottom: '0'

@@ -1,0 +1,268 @@
+<?php
+
+/**
+ * @file
+ * Hooks for the Daedalus Edit module.
+ */
+
+use Drupal\Core\Cache\Cache;
+use Drupal\Core\Entity\EntityInterface;
+use Drupal\Core\Entity\FieldableEntityInterface;
+use Drupal\Core\Form\FormPreprocess;
+use Drupal\Core\Form\FormStateInterface;
+use Drupal\Core\Hook\Attribute\LegacyModuleImplementsAlter;
+use Drupal\daedalus_blueprint_api\Render\SelectableKey;
+
+/**
+ * Implements hook_preprocess_HOOK().
+ */
+function daedalus_edit_preprocess_block(&$variables) {
+  $variables['#cache']['contexts'][] = 'user.permissions';
+  if ($variables['base_plugin_id'] !== 'inline_block') {
+    return;
+  }
+  $entity = $variables['elements']['content']['#block_content'] ?? NULL;
+  if ($entity === NULL) {
+    return;
+  }
+  // Only a permitted user's output depends on the mode cookie: without the
+  // permission both stamping branches resolve from the style map alone.
+  $permitted = \Drupal::currentUser()->hasPermission('access inline editing');
+  if ($permitted) {
+    $variables['#cache']['contexts'][] = 'daedalus_ui_mode';
+  }
+  $editing = $permitted && \Drupal::service('daedalus_ui.ui')->getMode() === 'edit';
+
+  // When the block label renders as page content (heading-style blocks force
+  // label_display visible), it is a selectable element: the `label` property
+  // of the placement. The key rides title_attributes — the title element
+  // itself, not the editing wrapper div — because live renders have no
+  // wrapper, and the @scope root must be the text element so Daedalus Stylish's
+  // declarations compete with the theme's own h2/.block__title rules
+  // directly instead of losing to them by inheritance. It is stamped as
+  // field:{block_content_uuid}:label because the component UUID is not
+  // visible at this point; daedalus_ui's InlineBlockFieldKeys rewrites
+  // it to block:{component_uuid}:label at the block template boundary, the
+  // same as inline-block field keys. Edit mode stamps unconditionally; a
+  // live render stamps only when a provider demands the key (a styled
+  // label), mirroring SelectableFieldDelivery.
+  if (!empty($variables['label'])) {
+    $selectable_key = SelectableKey::field($entity->uuid(), 'label');
+    if ($editing || \Drupal::service('daedalus_ui.live_attribution_demand')->demandsKey($selectable_key, $entity)) {
+      $variables['title_attributes'][SelectableKey::ATTRIBUTE] = $selectable_key;
+    }
+  }
+
+  if (!$editing) {
+    return;
+  }
+  // Allow block labels to be edited inline.
+  // @see UpdateBlockForm
+  $id = daedalus_ui_entity_identifier($entity);
+  $view_mode = _daedalus_ui_get_view_mode($entity, $variables['content']['#view_mode']);
+  $variables['daedalus_edit'] = [
+    'id' => $id,
+    'type' => $entity->getEntityTypeId(),
+    'language' => $entity->language()->getId(),
+    'view_mode' => $view_mode,
+  ];
+  $variables['title_prefix']['#markup'] = sprintf('<div data-daedalus-edit-field-value-wrapper="%s::%s::label::block_property">', $entity->getEntityTypeId(), $id);
+  $variables['title_suffix']['#markup'] = '</div>';
+  $variables['title_attributes']['class'][] = 'daedalus-edit-field-value';
+  $variables['title_attributes']['data-daedalus-edit-id'] = sprintf('%s::%s::%s::%s::%s::%s::%s::%s::%s', $entity->getEntityTypeId(), $entity->bundle(), $id, 'label', 0, $entity->language()->getId(), 'string', 'string', 'block_property');
+  $variables['title_attributes']['data-daedalus-edit-page-element-id'] = sprintf('%s::%s::%s::%s::%s', $entity->getEntityTypeId(), $id, 'label', 0, 'block_property');
+}
+
+/**
+ * Implements hook_preprocess_HOOK() for page_title.
+ *
+ * The root row's edit target (the entity's label field, per the element
+ * model's derived rule) often renders OUTSIDE the entity: the H1 is the
+ * theme's page-title block. Stamp that render as the label field's editable
+ * leaf so the root's edit route has something to open: the page-title twin
+ * of the inline-block label attribution above.
+ *
+ * @see \Drupal\daedalus_edit\PageTitleEditing
+ */
+function daedalus_edit_preprocess_page_title(&$variables) {
+  \Drupal::service('daedalus_edit.page_title_editing')->preprocessPageTitle($variables);
+}
+
+/**
+ * Builds the cache tag invalidated when an entity's Daedalus Edit rendering changes.
+ *
+ * @param \Drupal\Core\Entity\EntityInterface $entity
+ *   The entity.
+ *
+ * @return string
+ *   The cache tag.
+ */
+function daedalus_edit_cache_tag(EntityInterface $entity) {
+  return sprintf('daedalus_edit:%s.%s', $entity->getEntityTypeId(), daedalus_ui_entity_identifier($entity));
+}
+
+/**
+ * Implements hook_daedalus_blueprint_entity_persisted().
+ *
+ * Blueprint mutations (the endpoint verbs, AI tools) stage into the same
+ * tempstore entry as inline form edits, but only the form path invalidated
+ * the daedalus_edit render tag — so a full page load after a blueprint mutation
+ * served the pre-mutation cached markup. Every editable render carries this
+ * tag, so invalidating it here keeps reloads truthful for every persistence
+ * path. The tag is daedalus_edit's own vocabulary, which is why the invalidation
+ * lives here and not in daedalus_blueprint: the generic alternative would be
+ * invalidating the entity's real cache tags, churning live-site caches for a
+ * change that only exists in tempstore.
+ */
+function daedalus_edit_daedalus_blueprint_entity_persisted(EntityInterface $entity, bool $saved, array $component_uuids): void {
+  Cache::invalidateTags([daedalus_edit_cache_tag($entity)]);
+}
+
+/**
+ * Implements hook_entity_presave().
+ *
+ * Eager identity's universal backstop: whatever the write path (forms, REST,
+ * migrations, blueprint persists), stored formatted text leaves this hook
+ * with every vocabulary element carrying an s-* identity class. The
+ * stage-time seam (IdentityMintingTextFieldHandler) covers blueprint
+ * mutations that stage into tempstore without a save; this hook is the
+ * guarantee for everything that does save. A format that allows a vocabulary
+ * tag but strips its class attribute fails the save loudly (IdentityMinter's
+ * LogicException): silent identity loss at render is the one outcome eager
+ * identity cannot absorb.
+ */
+function daedalus_edit_entity_presave(EntityInterface $entity): void {
+  if ($entity instanceof FieldableEntityInterface) {
+    \Drupal::service('daedalus_edit.entity_identity_minting')->mintEntity($entity);
+  }
+}
+
+/**
+ * Implements hook_form_alter().
+ */
+function daedalus_edit_form_alter(&$form, FormStateInterface $form_state, $form_id) {
+  if (\Drupal::service('daedalus_ui.ui')->getMode() !== 'edit') {
+    return;
+  }
+  if ($form_state->get('daedalus_edit_form')) {
+    \Drupal::service('daedalus_edit.form_alter.inline_entity_form')->formAlter($form, $form_state);
+  }
+  else {
+    \Drupal::service('daedalus_edit.form_alter.entity_edit')->formAlter($form, $form_state);
+    if (\Drupal::hasService('daedalus_edit.form_alter.lb_block')) {
+      \Drupal::service('daedalus_edit.form_alter.lb_block')->formAlter($form, $form_state, $form_id);
+    }
+  }
+}
+
+/**
+ * Implements hook_form_BASE_FORM_ID_alter().
+ */
+function daedalus_edit_form_views_form_media_library_widget_table_alter(&$form, FormStateInterface $form_state) {
+  \Drupal::service('daedalus_edit.form_alter.views_form_media_library_widget')->viewsFormMediaLibraryAlter($form, $form_state);
+}
+
+/**
+ * Implements hook_form_BASE_FORM_ID_alter().
+ */
+function daedalus_edit_form_views_form_media_library_widget_alter(&$form, FormStateInterface $form_state) {
+  \Drupal::service('daedalus_edit.form_alter.views_form_media_library_widget')->viewsFormMediaLibraryAlter($form, $form_state);
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ */
+function daedalus_edit_form_media_library_add_form_dropzonejs_alter(&$form, FormStateInterface $form_state) {
+  \Drupal::service('daedalus_edit.form_alter.views_form_media_library_widget')->mediaLibraryAddFormUpload($form, $form_state);
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ */
+function daedalus_edit_form_media_library_add_form_upload_alter(&$form, FormStateInterface $form_state) {
+  \Drupal::service('daedalus_edit.form_alter.views_form_media_library_widget')->mediaLibraryAddFormUpload($form, $form_state);
+}
+
+/**
+ * Implements hook_module_implements_alter().
+ */
+#[LegacyModuleImplementsAlter]
+function daedalus_edit_module_implements_alter(&$implementations, $hook) {
+  if ($hook === 'form_alter' && isset($implementations['daedalus_edit'])) {
+    unset($implementations['daedalus_edit']);
+    $implementations['daedalus_edit'] = FALSE;
+  }
+}
+
+/**
+ * Implements hook_theme().
+ */
+function daedalus_edit_theme($existing, $type, $theme, $path) {
+  return [
+    'inline_textarea' => [
+      'render element' => 'element',
+      'initial preprocess' => '_daedalus_edit_preprocess_inline_textarea',
+    ],
+  ];
+}
+
+/**
+ * Prepares variables for the inline textarea template.
+ *
+ * Default template: inline-textarea.html.twig.
+ *
+ * @param array $variables
+ *   An associative array containing:
+ *   - element: An associative array containing the properties of the element.
+ *    Properties used: #title, #value, #description, #rows, #cols, #maxlength,
+ *    #placeholder, #required, #attributes, #resizable.
+ */
+function _daedalus_edit_preprocess_inline_textarea(&$variables) {
+  \Drupal::service(FormPreprocess::class)->preprocessTextarea($variables);
+  $attributes = $variables['attributes'];
+  $attributes->addClass('daedalus-edit-hidden');
+}
+
+/**
+ * Active tempstore entities.
+ *
+ * Flags that we have swapped this entity with a tempstore version.
+ *
+ * @param \Drupal\Core\Entity\EntityInterface|null $entity
+ *   The entity that has been swapped or NULL to only retrieve the swapped
+ *   entities.
+ *
+ * @return array|mixed
+ *   An array of entities active in the tempstore.
+ */
+function daedalus_edit_active_tempstore_entities(?EntityInterface $entity = NULL) {
+  $swapped_entities = &drupal_static(__FUNCTION__);
+  if (empty($swapped_entities)) {
+    $swapped_entities = [];
+  }
+  if (!empty($entity)) {
+    $key = $entity->getEntityTypeId() . '.' . $entity->id();
+    $swapped_entities[$key] = $entity;
+  }
+  return $swapped_entities;
+}
+
+/**
+ * Implements hook_element_info_alter().
+ *
+ * Extends the functionality of text_format elements (provided by Filter
+ * module), so that selecting a text format notifies a client-side text editor
+ * when it should be enabled or disabled.
+ *
+ * @see \Drupal\filter\Element\TextFormat
+ */
+function daedalus_edit_element_info_alter(&$types) {
+  $types['inline_textarea']['#pre_render'][] = 'element.daedalus_edit:preRenderTextFormat';
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter() for the 'field_config_edit' form ID.
+ */
+function daedalus_edit_form_field_config_edit_form_alter(&$form, FormStateInterface $form_state, $form_id): void {
+  \Drupal::service('daedalus_edit.field_config_form_alter')->formAlter($form, $form_state);
+}

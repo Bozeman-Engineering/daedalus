@@ -1,0 +1,7 @@
+# The theme restates ONE property of the module's declared default: maps
+# merge per key through the spine's layering, so width: fit-content
+# survives and only display changes.
+defaults:
+  '':
+    default:
+      display: inline-block

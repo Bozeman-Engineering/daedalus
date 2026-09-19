@@ -1,0 +1,6 @@
+name: 'Daedalus Stylish declared defaults test'
+type: module
+description: 'Provides block type, block plugin, and layout declarations shipping their own declared defaults.'
+package: Testing
+core_version_requirement: '*'
+hidden: true

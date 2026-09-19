@@ -1,0 +1,6 @@
+name: 'Daedalus UI Element Model Test'
+type: module
+description: 'Block type declarations exercising the element model tiers.'
+package: Testing
+dependencies:
+  - daedalus:daedalus_ui

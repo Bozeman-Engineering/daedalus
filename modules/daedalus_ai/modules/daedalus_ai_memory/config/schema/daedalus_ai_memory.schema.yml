@@ -1,0 +1,16 @@
+daedalus_ai_memory.settings:
+  type: config_object
+  label: 'Daedalus AI Memory settings'
+  mapping:
+    enabled_agents:
+      type: sequence
+      label: 'Agent IDs with persistent memory'
+      sequence:
+        type: string
+        label: 'Agent ID'
+    max_history_messages:
+      type: integer
+      label: 'Maximum chat history messages to persist'
+    keep_recent_turns:
+      type: integer
+      label: 'Number of recent turns to always keep'

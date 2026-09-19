@@ -1,0 +1,3 @@
+# The declaration tier of the node presentation decision: outranked only by
+# the bundle's third-party setting, outranks the derived default.
+presentation: unit

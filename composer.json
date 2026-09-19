@@ -1,54 +1,48 @@
 {
-  "name": "drupal/daedalus",
-  "description": ".",
-  "homepage": "https://www.drupal.org/project/daedalus",
-  "type": "drupal-recipe",
-  "license": "GPL-2.0-or-later",
-  "authors": [
-    {
-      "name": "Tim Bozeman",
-      "homepage": "https://bozeman.engineering",
-      "role": "Maintainer"
-    },
-    {
-      "name": "Lillian Bozeman",
-      "homepage": "https://lilybozeman.com",
-      "role": "Maintainer"
-    }
-  ],
-  "support": {
-    "issues": "https://www.drupal.org/project/issues/daedalus",
-    "source": "http://cgit.drupalcode.org/daedalus"
-  },
-  "require": {
-    "drupal/core": "11.3.3",
-    "drupal/navigation_plus": "2.3.x-dev",
-    "drupal/lb_plus": "3.6.x-dev",
-    "drupal/edit_plus": "2.3.x-dev",
-    "drupal/field_sample_value": "1.0.x-dev",
-    "drupal/twig_events": "1.0.x-dev",
-    "drupal/tempstore_plus": "1.0.x-dev",
-    "drupal/dropzonejs": "2.11.0",
-    "drupal/section_library": "1.2.2",
-    "enyo/dropzone": "6.0.0-beta.2"
-  },
-  "require-dev": {
-    "drupal/core-dev": "^11.3"
-  },
-  "minimum-stability": "dev",
-  "prefer-stable": true,
-  "repositories": {
-    "dropzone": {
-      "type": "package",
-      "package": {
-        "name": "enyo/dropzone",
-        "version": "6.0.0-beta.2",
-        "type": "drupal-library",
-        "dist": {
-          "type": "zip",
-          "url": "https://github.com/dropzone/dropzone/releases/download/v6.0.0-beta.2/dist.zip"
+    "name": "drupal/daedalus",
+    "description": "The Daedalus page builder: its UI, layout, inline editing, tempstore, JSON blueprints, AI assistant and styling ship as sub-modules of one project.",
+    "type": "drupal-module",
+    "license": "GPL-2.0-or-later",
+    "homepage": "https://www.drupal.org/project/daedalus",
+    "authors": [
+        {
+            "name": "Tim Bozeman",
+            "homepage": "https://bozeman.engineering",
+            "role": "Maintainer"
         }
-      }
+    ],
+    "support": {
+        "issues": "https://www.drupal.org/project/issues/daedalus",
+        "source": "https://git.drupalcode.org/project/daedalus"
+    },
+    "require": {
+        "drupal/core": ">=11.3 <11.5",
+        "drupal/field_sample_value": "^1.0",
+        "drupal/twig_events": "^1.0",
+        "enshrined/svg-sanitize": "^0.22"
+    },
+    "require-dev": {
+        "drupal/daedalus_recipe": "^1.0"
+    },
+    "suggest": {
+        "drupal/ai": "Required by daedalus_ai, daedalus_ai_memory and daedalus_blueprint_ai for the AI assistant and agent tools.",
+        "drupal/ai_agents": "Required by daedalus_ai and daedalus_ai_memory for the page-building agents.",
+        "drupal/ai_provider_anthropic": "An LLM provider for the AI assistant; daedalus_ai_anthropic adds Claude-specific context.",
+        "drupal/gemini_provider": "An LLM provider for the AI assistant; daedalus_ai_gemini adds Gemini-specific vocabulary.",
+        "drupal/key": "Stores the LLM provider API keys.",
+        "league/commonmark": "Renders the AI assistant's markdown replies in daedalus_ai's chat sidebar.",
+        "drush/drush": "Provides the daedalus_blueprint and daedalus_edit Drush commands."
+    },
+    "conflict": {
+        "drupal/navigation_plus": "*",
+        "drupal/lb_plus": "*",
+        "drupal/edit_plus": "*",
+        "drupal/tempstore_plus": "*",
+        "drupal/entity_blueprint": "*",
+        "drupal/ai_plus": "*",
+        "drupal/ai_agent_memory": "*",
+        "drupal/stylish": "*",
+        "drupal/plus_suite": "*",
+        "drupal/plus_suite_ai": "*"
     }
-  }
 }

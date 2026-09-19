@@ -1,0 +1,24 @@
+/**
+ * The icon picker (daedalus_layout_icon_picker form element).
+ */
+.daedalus-layout-icon-picker {
+  display: flex;
+  align-items: center;
+  gap: 0.75em;
+}
+
+.daedalus-layout-icon-picker__preview {
+  box-sizing: content-box;
+  width: 32px;
+  height: 32px;
+  padding: 6px;
+  object-fit: contain;
+  border: 1px solid #d3d4d9;
+  border-radius: 4px;
+  background: #fff;
+}
+
+/* Remove only makes sense once an icon is set; its visibility is inline
+   style (server render + icon-picker.js), not a cascade rule: the admin
+   theme layers module CSS (@layer), so its own unlayered .button display
+   rules would always win over one here. */

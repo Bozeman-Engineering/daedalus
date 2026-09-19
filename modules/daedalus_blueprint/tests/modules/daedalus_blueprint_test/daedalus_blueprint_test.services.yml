@@ -1,0 +1,5 @@
+services:
+  daedalus_blueprint_test.operation_handler:
+    class: Drupal\daedalus_blueprint_test\TestOperationHandler
+    tags:
+      - { name: daedalus_blueprint.operation_handler }

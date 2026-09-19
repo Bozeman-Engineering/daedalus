@@ -1,0 +1,37 @@
+services:
+  daedalus_stylish_layers.layers:
+    class: Drupal\daedalus_stylish_layers\Layers
+    arguments: ['@config.factory']
+  # Autowiring alias for the OOP hook classes.
+  Drupal\daedalus_stylish_layers\Layers: '@daedalus_stylish_layers.layers'
+
+  daedalus_stylish_layers.css.collection_grouper:
+    class: Drupal\daedalus_stylish_layers\Asset\LayeredCssCollectionGrouper
+    decorates: asset.css.collection_grouper
+    arguments: ['@daedalus_stylish_layers.css.collection_grouper.inner']
+
+  daedalus_stylish_layers.css.collection_optimizer:
+    class: Drupal\daedalus_stylish_layers\Asset\LayeredCssCollectionOptimizer
+    decorates: asset.css.collection_optimizer
+    arguments: ['@daedalus_stylish_layers.css.collection_optimizer.inner']
+
+  daedalus_stylish_layers.css.collection_renderer:
+    class: Drupal\daedalus_stylish_layers\Asset\LayeredCssCollectionRenderer
+    decorates: asset.css.collection_renderer
+    arguments: ['@daedalus_stylish_layers.css.collection_renderer.inner', '@daedalus_stylish_layers.layers']
+
+  # AJAX responses can only deliver attribute-bearing <link> elements through
+  # the add_css command, so the link → layered @import rewrite is suppressed
+  # while AJAX attachments are processed (a dropped <style> loses the
+  # stylesheet; an all-layered response hangs the client's command queue on an
+  # empty add_css command).
+  daedalus_stylish_layers.ajax_response.attachments_processor:
+    class: Drupal\daedalus_stylish_layers\Asset\UnlayeredAjaxAttachmentsProcessor
+    decorates: ajax_response.attachments_processor
+    arguments: ['@daedalus_stylish_layers.ajax_response.attachments_processor.inner', '@daedalus_stylish_layers.layers']
+
+  daedalus_stylish_layers.config_subscriber:
+    class: Drupal\daedalus_stylish_layers\EventSubscriber\ConfigSubscriber
+    arguments: ['@cache_tags.invalidator']
+    tags:
+      - { name: event_subscriber }

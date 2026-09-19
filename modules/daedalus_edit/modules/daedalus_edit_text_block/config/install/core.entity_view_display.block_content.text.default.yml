@@ -1,0 +1,17 @@
+langcode: en
+status: true
+dependencies:
+  config:
+    - block_content.type.text
+    - field.field.block_content.text.field_text_tag
+    - field.field.block_content.text.field_text_text
+    - field.field.block_content.text.field_text_url
+id: block_content.text.default
+targetEntityType: block_content
+bundle: text
+mode: default
+content: {  }
+hidden:
+  field_text_tag: true
+  field_text_text: true
+  field_text_url: true

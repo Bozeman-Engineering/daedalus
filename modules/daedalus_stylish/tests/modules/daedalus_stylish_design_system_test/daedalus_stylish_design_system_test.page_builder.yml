@@ -1,0 +1,18 @@
+# The container kind the shipped variants are scoped to: the groups their
+# properties live in (spacing: padding, background: background-color,
+# motion: animation-name), unconstrained, so under strict enforcement the
+# only things that can refuse a variant are a reference to a material
+# outside its design system's universe and an axis outside the site's
+# law. The rhythm axis is that law: a package's declarations layer only
+# while its system is active (the design-system stratum), so the variant
+# on it (aurora_rhythm) is refused while aurora is inactive and lands
+# when aurora is activated. variant_axes is a list and lists replace
+# across layers; no other provider in the tests declares container axes.
+container:
+  variant_axes:
+    - rhythm:
+        label: 'Rhythm'
+  property_groups:
+    spacing: {}
+    background: {}
+    motion: {}

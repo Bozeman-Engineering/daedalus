@@ -1,0 +1,31 @@
+@keyframes call-attention-to {
+  0% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 color-mix(in sRGB, var(--daedalus-ui-highlight-color) 0%, transparent);
+  }
+  20% {
+    transform: scale(1.06);
+    box-shadow: 0 0 12px 4px color-mix(in sRGB, var(--daedalus-ui-highlight-color) 60%, transparent);
+  }
+  40% {
+    transform: scale(0.98);
+    box-shadow: 0 0 8px 2px color-mix(in sRGB, var(--daedalus-ui-highlight-color) 40%, transparent);
+  }
+  60% {
+    transform: scale(1.02);
+    box-shadow: 0 0 6px 2px color-mix(in sRGB, var(--daedalus-ui-highlight-color) 20%, transparent);
+  }
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 color-mix(in sRGB, var(--daedalus-ui-highlight-color) 0%, transparent);
+  }
+}
+
+.call-attention-to,
+:is(#extra-specificity-hack, [data-drupal-admin-styles]) .call-attention-to {
+  animation: call-attention-to 0.8s ease-out;
+}
+
+.daedalus-ui-highlight {
+  background-color: var(--daedalus-ui-highlight-color) !important;
+}

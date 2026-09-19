@@ -1,0 +1,126 @@
+services:
+  _defaults:
+    autoconfigure: true
+    autowire: true
+
+  daedalus_edit.form_alter.inline_entity_form:
+    class: Drupal\daedalus_edit\Form\InlineEntityFormAlter
+    arguments: ['@entity_display.repository', '@field_sample_value.generator', '@daedalus_tempstore.entity_tempstore_repository', '@entity_type.manager', '@event_dispatcher', '@renderer', '@request_stack']
+
+  daedalus_edit.form_alter.entity_edit:
+    class: Drupal\daedalus_edit\Form\EntityEditFormAlter
+    arguments: ['@?daedalus_tempstore.entity_tempstore_repository', '@current_route_match']
+
+  daedalus_edit.form_alter.views_form_media_library_widget:
+    class: Drupal\daedalus_edit\Form\ViewsFormMediaLibraryWidgetAlter
+
+  daedalus_edit.field_config_form_alter:
+    class: Drupal\daedalus_edit\Form\FieldConfigFormAlter
+
+  # Stamps the theme's page-title render as the root label's editable leaf
+  # when the label renders outside the entity (the root row's edit target).
+  daedalus_edit.page_title_editing:
+    class: Drupal\daedalus_edit\PageTitleEditing
+    arguments:
+      - '@daedalus_ui.element_model'
+      - '@daedalus_ui.ui'
+      - '@daedalus_tempstore.entity_tempstore_repository'
+      - '@current_user'
+  Drupal\daedalus_edit\PageTitleEditing: '@daedalus_edit.page_title_editing'
+
+  # Eager identity's server-side canonical guarantee: every semantic text
+  # element in stored field HTML carries a short s-* id class.
+  daedalus_edit.identity_minter:
+    class: Drupal\daedalus_edit\IdentityMinter
+    arguments:
+      # The tag vocabulary is read from the spine's instances declaration
+      # (the one vocabulary truth), never carried here.
+      - '@daedalus_ui.page_builder_declarations'
+  Drupal\daedalus_edit\IdentityMinter: '@daedalus_edit.identity_minter'
+
+  # The entity-level walker over the minter: the hook_entity_presave()
+  # backstop and the backfill both run through this one service.
+  daedalus_edit.entity_identity_minting:
+    class: Drupal\daedalus_edit\EntityIdentityMinting
+    arguments:
+      - '@daedalus_edit.identity_minter'
+      - '@entity_type.manager'
+  Drupal\daedalus_edit\EntityIdentityMinting: '@daedalus_edit.entity_identity_minting'
+
+  # One-time backfill over existing content (daedalus_edit:mint-identities drush
+  # command and the mint_identity_classes post-update batch).
+  daedalus_edit.identity_backfill:
+    class: Drupal\daedalus_edit\IdentityBackfill
+    arguments:
+      - '@entity_type.manager'
+      - '@entity_field.manager'
+      - '@daedalus_edit.entity_identity_minting'
+  Drupal\daedalus_edit\IdentityBackfill: '@daedalus_edit.identity_backfill'
+
+  # Stage-time seam: outranks daedalus_blueprint's text handler so blueprint
+  # mutations (AI tools, endpoint verbs) stage minted HTML into tempstore;
+  # content staged without a save never renders identity-less.
+  daedalus_edit.field_handler.text_identity:
+    class: Drupal\daedalus_edit\FieldHandler\IdentityMintingTextFieldHandler
+    arguments:
+      - '@entity_type.manager'
+      - '@daedalus_edit.identity_minter'
+    tags:
+      - { name: daedalus_blueprint.field_handler, field_types: 'text_long,text_with_summary', priority: 10 }
+
+  # Placement-time seam: sample-populated blocks are filled outside the
+  # field-handler pipeline and staged without a save, so neither other seam
+  # mints them. Low priority so it mints the final serialized block, after
+  # daedalus_layout's PlaceBlockEvent bridge and block-type sample subscribers.
+  daedalus_edit.event_subscriber.element_created_mint_identity:
+    class: Drupal\daedalus_edit\EventSubscriber\ElementCreatedMintIdentity
+    arguments:
+      - '@daedalus_edit.entity_identity_minting'
+
+  # Composed-block link autocomplete: mints core entity_autocomplete
+  # endpoint keys for every composed link field's configured target types
+  # and shapes the drupalSettings payload the link widget fans out over.
+  daedalus_edit.link_autocomplete:
+    class: Drupal\daedalus_edit\LinkAutocomplete
+    arguments:
+      - '@entity_type.manager'
+      - '@keyvalue'
+      - '@daedalus_ui.page_builder_declarations'
+  Drupal\daedalus_edit\LinkAutocomplete: '@daedalus_edit.link_autocomplete'
+
+  daedalus_edit.activation_voter:
+    class: Drupal\daedalus_edit\ParamConverter\DaedalusEditActivationVoter
+    arguments:
+      - '@current_user'
+    tags:
+      - { name: tempstore_activation_voter }
+
+  element.daedalus_edit:
+    class: Drupal\daedalus_edit\InlineEditorElement
+    arguments: [ '@plugin.manager.editor' ]
+
+  daedalus_edit.event_subscriber.daedalus_ui_editable_field_attributes:
+    class: Drupal\daedalus_edit\EventSubscriber\RenderEditableFieldAttributes
+
+  daedalus_edit.event_subscriber.default_field_attributes:
+    class: Drupal\daedalus_edit\EventSubscriber\FormDefaultFieldAttributes
+
+  daedalus_edit.event_subscriber.handle_field_attribute:
+    class: Drupal\daedalus_edit\EventSubscriber\FormHandleFieldAttribute
+
+  daedalus_edit.event_subscriber.inline_editor_field_attributes:
+    class: Drupal\daedalus_edit\EventSubscriber\FormInlineEditorFieldAttributes
+
+  daedalus_edit.event_subscriber.media_field_attributes:
+    class: Drupal\daedalus_edit\EventSubscriber\FormMediaFieldAttributes
+
+  daedalus_edit.event_subscriber.suppress_inline_editing:
+    class: Drupal\daedalus_edit\EventSubscriber\SuppressInlineEditing
+
+  daedalus_edit.event_subscriber.navigation_replace_media:
+    class: Drupal\daedalus_edit\EventSubscriber\DaedalusUiReplaceMediaClearForm
+
+  # Rides the mutation-response contract: value-changing mutations clear
+  # the owning entities' cached edit forms so the next edit fetches fresh.
+  daedalus_edit.event_subscriber.blueprint_mutation_clear_forms:
+    class: Drupal\daedalus_edit\EventSubscriber\BlueprintMutationClearForms

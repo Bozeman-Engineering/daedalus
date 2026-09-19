@@ -1,0 +1,17 @@
+# Sections declare two generated wide-tier groups: an open one (Filter
+# Effects carries the any-typed backdrop-filter) and a constrained one
+# (Scroll Snap, with scroll-margin palette-locked), proving a strict site
+# opens wide-tier properties exactly like curated ones (by declaring the
+# group) and that guide constraints bind on generated definitions. Scroll
+# Snap because no curated group shadows it: Motion curates the Animations
+# and Transitions areas away from the wide tier (WidePropertyGroupTest
+# pins that precedence).
+container:
+  property_groups:
+    'wide:filter_effects': { }
+    'wide:scroll_snap':
+      constraints:
+        scroll-margin:
+          allowed:
+            - '0'
+            - '1rem'

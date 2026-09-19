@@ -1,0 +1,77 @@
+services:
+  daedalus_tempstore.strategy_selector:
+    class: Drupal\daedalus_tempstore\StrategySelector
+    # Strategy IDs are populated dynamically by DaedalusTempstoreServiceProvider.
+    arguments: ['@service_container', []]
+
+  daedalus_tempstore.strategy.entity:
+    class: Drupal\daedalus_tempstore\Strategy\EntityTempstoreStrategy
+    # Optional workspace manager dependency (won't break if workspaces is disabled).
+    arguments:
+      [
+        '@tempstore.shared',
+        '@?workspaces.manager',
+        '@daedalus_tempstore.history_recorder',
+      ]
+    tags:
+      - { name: tempstore_strategy, priority: 0 }
+
+  daedalus_tempstore.history_store:
+    class: Drupal\daedalus_tempstore\History\HistoryStore
+    arguments: ['@keyvalue.expirable', '@datetime.time']
+
+  daedalus_tempstore.history_recorder:
+    class: Drupal\daedalus_tempstore\History\HistoryRecorder
+    arguments:
+      [
+        '@daedalus_tempstore.history_store',
+        '@tempstore.shared',
+        '@current_user',
+        '@datetime.time',
+        '@string_translation',
+      ]
+
+  daedalus_tempstore.history_manager:
+    class: Drupal\daedalus_tempstore\History\HistoryManager
+    arguments:
+      [
+        '@daedalus_tempstore.history_store',
+        '@daedalus_tempstore.history_recorder',
+        '@daedalus_tempstore.strategy_selector',
+        '@tempstore.shared',
+        '@current_user',
+      ]
+
+  daedalus_tempstore.history_response_subscriber:
+    class: Drupal\daedalus_tempstore\EventSubscriber\HistoryResponseSubscriber
+    arguments: ['@daedalus_tempstore.history_recorder']
+    tags:
+      - { name: event_subscriber }
+
+  daedalus_tempstore.section_storage_helper:
+    class: Drupal\daedalus_tempstore\SectionStorageHelper
+    arguments: ['@plugin.manager.layout_builder.section_storage']
+
+  daedalus_tempstore.entity_tempstore_repository:
+    class: Drupal\daedalus_tempstore\EntityTempstoreRepository
+    arguments: ['@daedalus_tempstore.strategy_selector']
+
+  daedalus_tempstore.activation_voters:
+    class: Drupal\daedalus_tempstore\ParamConverter\ActivationVoters
+    tags:
+      - {
+          name: service_collector,
+          tag: tempstore_activation_voter,
+          call: addVoter,
+        }
+
+  daedalus_tempstore.param_converter.entity:
+    class: Drupal\daedalus_tempstore\ParamConverter\EntityConverter
+    decorates: paramconverter.entity
+    arguments:
+      - '@daedalus_tempstore.param_converter.entity.inner'
+      - '@entity_type.manager'
+      - '@entity.repository'
+      - '@?daedalus_tempstore.entity_tempstore_repository'
+      - '@daedalus_tempstore.activation_voters'
+  Drupal\daedalus_tempstore\ParamConverter\EntityConverter: '@daedalus_tempstore.param_converter.entity'

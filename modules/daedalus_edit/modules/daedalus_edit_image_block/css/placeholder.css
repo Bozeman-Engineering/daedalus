@@ -1,0 +1,20 @@
+/**
+ * The empty image block's edit-mode placeholder root.
+ *
+ * An img with no src is broken markup, and collapsed blocks are excluded
+ * from daedalus_layout's content-preview placeholder, so an empty image block
+ * renders this div root in edit mode: it carries the block's hoisted
+ * identity attributes and hosts the file-drag drop target until the first
+ * media selection swaps it for the real img. Live renders of an empty
+ * block emit nothing at all.
+ */
+.daedalus-edit-image-block-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 6rem;
+  cursor: pointer;
+  opacity: 0.75;
+  border: 2px dashed color-mix(in sRGB, currentColor 35%, transparent);
+  border-radius: 4px;
+}

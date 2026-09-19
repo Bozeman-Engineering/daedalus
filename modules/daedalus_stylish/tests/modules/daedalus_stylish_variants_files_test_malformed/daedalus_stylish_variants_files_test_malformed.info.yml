@@ -1,0 +1,8 @@
+name: 'Daedalus Stylish variants files test (malformed)'
+type: module
+description: 'Ships a single file that does not parse beside a sound per-id file, to prove a malformed file fails under its own name without blocking the module.'
+package: Testing
+core_version_requirement: '*'
+hidden: true
+dependencies:
+  - daedalus:daedalus_stylish

@@ -1,0 +1,8 @@
+name: 'Daedalus Stylish variants test (invalid)'
+type: module
+description: 'Ships one constraint-violating variant followed by a sound one, to prove a failing definition is reported without hiding the next.'
+package: Testing
+core_version_requirement: '*'
+hidden: true
+dependencies:
+  - daedalus:daedalus_stylish

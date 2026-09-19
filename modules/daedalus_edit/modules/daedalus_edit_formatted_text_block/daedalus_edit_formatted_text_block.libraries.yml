@@ -1,0 +1,9 @@
+# The formatted text block's blueprint editor assets. Registered through the
+# DaedalusEditQueue push-queue seam, so load order against daedalus_edit/library does
+# not matter.
+formatted_text_editor:
+  js:
+    js/formatted-text-editor.js: {}
+  css:
+    component:
+      css/formatted-text-editor.css: {}

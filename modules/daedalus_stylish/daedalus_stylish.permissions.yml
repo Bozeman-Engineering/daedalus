@@ -1,0 +1,49 @@
+create variants:
+  title: 'Create style variants'
+  description: "Save an element's styles as a named, reusable style variant."
+update variants:
+  title: 'Update style variants'
+  description: 'Push an element''s styles back into a variant, updating every use of it site-wide (workspace-staged on workspace sites).'
+delete variants:
+  title: 'Delete style variants'
+  description: 'Delete style variants nothing currently wears. Deleting a variant content wears additionally requires "Delete style variants in use".'
+delete variants in use:
+  title: 'Delete style variants in use'
+  description: 'Delete style variants content currently wears: every wearer is detached first (each keeps the variant''s delivered look as its own styles), then the variant is deleted.'
+administer variants:
+  title: 'Administer style variants'
+  description: 'Edit, delete, and manage all style variants, including unpublished ones.'
+create swatches:
+  title: 'Create swatches'
+  description: 'Mint new palette swatches — named colors and gradients the whole site may reference. On strict style-guide sites this extends the curated vocabulary, so it is part of style-guide enforcement, not convenience.'
+update swatches:
+  title: 'Update swatches'
+  description: 'Edit a swatch''s value, rename it, or restore a revision — restyling every element that references it site-wide (workspace-staged on workspace sites).'
+delete swatches:
+  title: 'Delete swatches'
+  description: 'Delete swatches nothing currently references. Deleting a swatch content references additionally requires "Delete swatches in use".'
+delete swatches in use:
+  title: 'Delete swatches in use'
+  description: 'Delete swatches content currently references: every var() reference is rewritten to the swatch''s literal value first, then the swatch is deleted.'
+administer swatches:
+  title: 'Administer swatches'
+  description: 'Edit, delete, and manage all swatches, including unpublished ones.'
+administer skins:
+  title: 'Administer skins'
+  description: 'Create, edit, delete, and activate skins — the site''s design tokens as data. Editing the active skin restyles the whole site.'
+  restrict access: true
+create animations:
+  title: 'Create animations'
+  description: 'Mint new animations — named keyframes the whole site may wear. On strict style-guide sites this extends the curated vocabulary, so it is part of style-guide enforcement, not convenience.'
+update animations:
+  title: 'Update animations'
+  description: 'Edit an animation''s steps, rename it, or restore a revision — restyling every element wearing it site-wide (workspace-staged on workspace sites).'
+delete animations:
+  title: 'Delete animations'
+  description: 'Delete animations nothing currently wears. Deleting an animation content wears additionally requires "Delete animations in use".'
+delete animations in use:
+  title: 'Delete animations in use'
+  description: 'Delete animations content currently wears: every reference is rewritten to "none" first, then the animation is deleted.'
+administer animations:
+  title: 'Administer animations'
+  description: 'Edit, delete, and manage all animations, including unpublished ones.'

@@ -1,0 +1,289 @@
+services:
+  _defaults:
+    autoconfigure: true
+    autowire: true
+
+  daedalus_ui.ui:
+    class: Drupal\daedalus_ui\DaedalusUi
+  Drupal\daedalus_ui\DaedalusUi: '@daedalus_ui.ui'
+
+  daedalus_ui.mode_state:
+    class: Drupal\daedalus_ui\ModeState
+  Drupal\daedalus_ui\ModeState: '@daedalus_ui.mode_state'
+
+  # Preview-mode requests render staged tempstore state; they must neither
+  # read from nor write to the shared render cache (see the class docblock).
+  daedalus_ui.preview_render_cache_bypass:
+    class: Drupal\daedalus_ui\Render\PreviewRenderCacheBypass
+    decorates: render_cache
+    arguments:
+      - '@daedalus_ui.preview_render_cache_bypass.inner'
+      - '@daedalus_ui.mode_state'
+
+  daedalus_ui.editor_settings:
+    class: Drupal\daedalus_ui\EditorSettings
+  Drupal\daedalus_ui\EditorSettings: '@daedalus_ui.editor_settings'
+
+  # Names the BroadcastChannel wire (js/broadcast/channel.js) that pairs
+  # secondary windows with the editing page; optional workspaces dependency
+  # because the scope must still derive on sites without workspaces.
+  daedalus_ui.edit_session_scope:
+    class: Drupal\daedalus_ui\EditSessionScope
+    arguments: ['@?workspaces.manager']
+  Drupal\daedalus_ui\EditSessionScope: '@daedalus_ui.edit_session_scope'
+
+  plugin.manager.modes:
+    class: Drupal\daedalus_ui\ModePluginManager
+    parent: default_plugin_manager
+  Drupal\daedalus_ui\ModePluginManager: '@plugin.manager.modes'
+
+  plugin.manager.tools:
+    class: Drupal\daedalus_ui\ToolPluginManager
+    parent: default_plugin_manager
+  Drupal\daedalus_ui\ToolPluginManager: '@plugin.manager.tools'
+
+  plugin.manager.daedalus_ui_sidebars:
+    class: Drupal\daedalus_ui\SidebarPluginManager
+    parent: default_plugin_manager
+  Drupal\daedalus_ui\SidebarPluginManager: '@plugin.manager.daedalus_ui_sidebars'
+
+  daedalus_ui.messenger.edit_mode:
+    class: Drupal\daedalus_ui\Message\EditModeMessenger
+    decorates: messenger
+    decoration_priority: 100
+  Drupal\daedalus_ui\Message\EditModeMessenger: '@daedalus_ui.messenger.edit_mode'
+
+  daedalus_ui.messages.ajax:
+    class: Drupal\daedalus_ui\Message\EditModeAjaxMessages
+  Drupal\daedalus_ui\Message\EditModeAjaxMessages: '@daedalus_ui.messages.ajax'
+
+  daedalus_ui.messages.html:
+    class: Drupal\daedalus_ui\Message\EditModeHtmlMessages
+  Drupal\daedalus_ui\Message\EditModeHtmlMessages: '@daedalus_ui.messages.html'
+
+  daedalus_ui.entity_view_alter:
+    class: Drupal\daedalus_ui\Hooks\EntityViewAlter
+
+  # One envelope builder for the blueprint mirror's settings-borne delivery
+  # seams: the boot render and form-pipeline AJAX responses. Spine mutation
+  # responses carry the blueprint in the response body instead; under
+  # daedalus_blueprint_api's mutation-render flag the mirror skips it.
+  daedalus_ui.blueprint_mirror:
+    class: Drupal\daedalus_ui\BlueprintMirror
+  Drupal\daedalus_ui\BlueprintMirror: '@daedalus_ui.blueprint_mirror'
+
+  # Live-attribution demand: outside edit mode, selectable keys are stamped
+  # only where a registered provider demands them (e.g. Daedalus Stylish's CSS needs
+  # its @scope roots on the live page). No providers = editor-only stamping.
+  daedalus_ui.live_attribution_demand:
+    class: Drupal\daedalus_ui\Render\LiveAttributionDemand
+    tags:
+      - { name: service_collector, tag: daedalus_ui.live_attribution_provider, call: addProvider }
+  Drupal\daedalus_ui\Render\LiveAttributionDemand: '@daedalus_ui.live_attribution_demand'
+
+  logger.channel.daedalus_ui:
+    parent: logger.channel_base
+    arguments: ['daedalus_ui']
+
+  daedalus_ui.event_subscriber.entity_ui_wrapper:
+    class: Drupal\daedalus_ui\EventSubscriber\EntityUiWrapper
+    arguments:
+      - '@daedalus_ui.ui'
+      - '@plugin.manager.modes'
+      - '@logger.channel.daedalus_ui'
+
+  daedalus_ui.event_subscriber.selectable_field_delivery:
+    class: Drupal\daedalus_ui\EventSubscriber\SelectableFieldDelivery
+
+  daedalus_ui.event_subscriber.inline_block_field_keys:
+    class: Drupal\daedalus_ui\EventSubscriber\InlineBlockFieldKeys
+
+  daedalus_ui.event_subscriber.should_not_edit_mode:
+    class: Drupal\daedalus_ui\EventSubscriber\ShouldNotEditMode
+
+  daedalus_ui.event_subscriber.new_media_file_association:
+    class: Drupal\daedalus_ui\EventSubscriber\NewMediaFileAssociationSettings
+
+  # Upload-time SVG sanitizer: rewrites SVG uploads in place during file
+  # validation (one layer of the layered SVG security stack, see the class).
+  daedalus_ui.event_subscriber.svg_sanitizer:
+    class: Drupal\daedalus_ui\EventSubscriber\SvgSanitizer
+
+  daedalus_ui.event_subscriber.hotkey_settings:
+    class: Drupal\daedalus_ui\EventSubscriber\HotkeySettings
+
+  daedalus_ui.event_subscriber.initial_mode:
+    class: Drupal\daedalus_ui\EventSubscriber\InitialMode
+
+  # Renders pop-out routes (the _daedalus_ui.popout option) without
+  # block chrome.
+  daedalus_ui.event_subscriber.popout_page_variant:
+    class: Drupal\daedalus_ui\EventSubscriber\PopoutPageVariant
+
+  daedalus_ui.form_alter.bundle_edit:
+    class: Drupal\daedalus_ui\Form\BundleEditFormAlter
+
+  # The site-builder tier of the field presentation decision, in the shared
+  # "Page builder" field-config section that other page-builder modules
+  # co-locate their field settings into.
+  daedalus_ui.form_alter.field_config:
+    class: Drupal\daedalus_ui\Form\FieldConfigFormAlter
+
+  # The page builder declaration spine: layered PROVIDER.page_builder.yml
+  # discovery (modules packaging no design system, the active design
+  # system's package, base themes, active theme, then the alter hook),
+  # validated once at build. Anatomy (elements/contains shells), existence
+  # (fields: element), presentation, and collapse declarations live here;
+  # foreign sections (styling vocabulary) ride the same files untouched for
+  # their own consumers. The design-system stratum asks daedalus_blueprint
+  # which modules are packages and which system is active; the switch
+  # subscriber below rebuilds the set when the activation changes.
+  daedalus_ui.page_builder_declarations:
+    class: Drupal\daedalus_ui\ElementModel\PageBuilderDeclarations
+    arguments:
+      - '@module_handler'
+      - '@theme_handler'
+      - '@theme.manager'
+      - '@cache.discovery'
+      - '@daedalus_blueprint.active_design_system'
+  Drupal\daedalus_ui\ElementModel\PageBuilderDeclarations: '@daedalus_ui.page_builder_declarations'
+
+  daedalus_ui.event_subscriber.design_system_switch:
+    class: Drupal\daedalus_ui\EventSubscriber\DesignSystemSwitch
+    arguments:
+      - '@daedalus_ui.page_builder_declarations'
+
+  # The anatomy client payload: the declarations' elements trees (labels and
+  # contains: slots only) projected for the page-elements markup view as
+  # drupalSettings.daedalusUi.anatomy. Existence/presentation/collapse
+  # reach the client as `_element` annotations instead, and foreign styling
+  # sections never ride it.
+  daedalus_ui.client_anatomy:
+    class: Drupal\daedalus_ui\ElementModel\ClientAnatomy
+  Drupal\daedalus_ui\ElementModel\ClientAnatomy: '@daedalus_ui.client_anatomy'
+
+  # THE element model: existence, presentation, and collapse answered
+  # through one precedence: site-builder third-party settings, then
+  # page_builder declarations, then inference (derived defaults plus the
+  # tagged existence feeders). Every consumer (render-time collapse,
+  # attribution, blueprint annotation, forms) is a thin adapter over this
+  # one service.
+  daedalus_ui.element_model:
+    class: Drupal\daedalus_ui\ElementModel\ElementModel
+    tags:
+      - { name: service_collector, tag: daedalus_ui.existence_feeder, call: addFeeder }
+  Drupal\daedalus_ui\ElementModel\ElementModel: '@daedalus_ui.element_model'
+
+  # The existence inference daedalus_ui owns: an inline block's
+  # display-hidden fields never render, so nothing answers to their keys.
+  daedalus_ui.element_model.display_hidden_fields:
+    class: Drupal\daedalus_ui\ElementModel\DisplayHiddenFields
+    tags:
+      - { name: daedalus_ui.existence_feeder }
+
+  # The instance tier of the page-elements model: resolves a declaration
+  # against entity data (and nesting depth) into the concrete element tree
+  # this instance renders — matched root form, present parts, hoisted
+  # classes, slot claims. Pure and deterministic: no DOM, no Twig, no
+  # queries; every consumer of instance markup (the generative renderer,
+  # blueprint annotation, the AI projection) resolves through here.
+  daedalus_ui.element_resolver:
+    class: Drupal\daedalus_ui\ElementModel\ElementResolver
+  Drupal\daedalus_ui\ElementModel\ElementResolver: '@daedalus_ui.element_resolver'
+
+  # THE shared tree builder under every composed render: composed blocks
+  # and composed containers both print the resolver's tree through this
+  # one computation (extract, don't drift).
+  daedalus_ui.composed_tree:
+    class: Drupal\daedalus_ui\Render\ComposedTree
+  Drupal\daedalus_ui\Render\ComposedTree: '@daedalus_ui.composed_tree'
+
+  # The generative renderer for composed block types: prints the tree the
+  # resolver computes — declarations as the render, not a description of
+  # one. Block type owners plug their content in through the
+  # daedalus_ui.composed_block_content tag (ComposedBlockContentInterface).
+  daedalus_ui.composed_block_renderer:
+    class: Drupal\daedalus_ui\Render\ComposedBlockRenderer
+    arguments: ['@daedalus_ui.page_builder_declarations', '@daedalus_ui.element_resolver', '@daedalus_ui.composed_tree']
+    tags:
+      - { name: service_collector, tag: daedalus_ui.composed_block_content, call: addContentProvider }
+  Drupal\daedalus_ui\Render\ComposedBlockRenderer: '@daedalus_ui.composed_block_renderer'
+
+  # The generative renderer for composed layouts: the container-family
+  # half of the composed model. Sections have no build event, so the swap
+  # enters at the layout plugin class (ComposedLayout) and lands here via
+  # the composed_container element once daedalus_layout has stamped the section's
+  # identity on the build.
+  daedalus_ui.composed_layout_renderer:
+    class: Drupal\daedalus_ui\Render\ComposedLayoutRenderer
+    arguments:
+      - '@daedalus_ui.page_builder_declarations'
+      - '@daedalus_ui.element_resolver'
+      - '@daedalus_ui.composed_tree'
+      - '@daedalus_ui.mode_state'
+      - '@current_user'
+  Drupal\daedalus_ui\Render\ComposedLayoutRenderer: '@daedalus_ui.composed_layout_renderer'
+
+  # Annotates DELIVERED blueprints with the element model's decisions, the
+  # uniform `_element` annotation on every owning node, root included:
+  # the drupalSettings boot payload and the mutation response both walk
+  # through here, never the stored data model.
+  daedalus_ui.element_annotator:
+    class: Drupal\daedalus_ui\ElementModel\BlueprintElementAnnotator
+  Drupal\daedalus_ui\ElementModel\BlueprintElementAnnotator: '@daedalus_ui.element_annotator'
+
+  daedalus_ui.event_subscriber.blueprint_element_annotations:
+    class: Drupal\daedalus_ui\EventSubscriber\BlueprintElementAnnotations
+
+  # The HTML print format of the element model, plugged into
+  # daedalus_blueprint's markup-projection socket: the annotated blueprint's
+  # `_element.markup` trees printed as key-annotated HTML for the AI read
+  # boundary. The spine owns the seam; this module owns the model, so the
+  # dependency points here → daedalus_blueprint, never back.
+  daedalus_ui.html_projector:
+    class: Drupal\daedalus_ui\ElementModel\HtmlProjector
+    tags:
+      - { name: daedalus_blueprint.markup_projector }
+  Drupal\daedalus_ui\ElementModel\HtmlProjector: '@daedalus_ui.html_projector'
+
+  # The schema anatomy's auto-rendered example markup (the readers are
+  # small models, which follow concrete examples over abstract grammar):
+  # sample data
+  # (field_sample_value when installed, bare entities otherwise) through
+  # the element resolver, printed by the HTML projector. Never
+  # hand-written, so the examples cannot drift from the render.
+  daedalus_ui.anatomy_examples:
+    class: Drupal\daedalus_ui\ElementModel\AnatomyExamples
+    arguments:
+      - '@daedalus_ui.page_builder_declarations'
+      - '@daedalus_ui.element_resolver'
+      - '@daedalus_ui.element_model'
+      - '@daedalus_ui.html_projector'
+      - '@entity_type.manager'
+      - '@entity_type.bundle.info'
+      - '@?field_sample_value.generator'
+  Drupal\daedalus_ui\ElementModel\AnatomyExamples: '@daedalus_ui.anatomy_examples'
+
+  daedalus_ui.outbound_path_processor:
+    class: Drupal\daedalus_ui\PathProcessor\DaedalusUiOutboundPathProcessor
+    tags:
+      - { name: path_processor_outbound, priority: 350 }
+
+  daedalus_ui.view_mode_tracker:
+    class: Drupal\daedalus_ui\ViewModeTracker
+  Drupal\daedalus_ui\ViewModeTracker: '@daedalus_ui.view_mode_tracker'
+
+  cache_context.daedalus_ui_mode:
+    class: Drupal\daedalus_ui\Cache\DaedalusUiModeCacheContext
+    arguments:
+      - '@daedalus_ui.mode_state'
+    tags:
+      - { name: cache.context }
+
+  daedalus_ui.activation_voter:
+    class: Drupal\daedalus_ui\ParamConverter\DaedalusUiActivationVoter
+    arguments:
+      - '@daedalus_ui.mode_state'
+      - '@current_user'
+    tags:
+      - { name: tempstore_activation_voter }

@@ -1,0 +1,73 @@
+<?php
+
+/**
+ * @file
+ * Test module hooks.
+ */
+
+declare(strict_types=1);
+
+use Drupal\daedalus_ui\ElementModel\PageBuilderDeclarations;
+
+/**
+ * Implements hook_page_builder_declarations_alter().
+ *
+ * Layers state-injected kind and block type declarations over the YAML ones
+ * so tests can exercise guide validation failure cases without shipping
+ * YAML that would break every other declarations build.
+ */
+function daedalus_stylish_control_test_page_builder_declarations_alter(array &$declarations, string $theme): void {
+  foreach (\Drupal::state()->get('daedalus_stylish_control_test.kinds', []) as $kind => $declaration) {
+    $declarations['kinds'][$kind] = PageBuilderDeclarations::merge($declarations['kinds'][$kind] ?? [], $declaration);
+  }
+  foreach (\Drupal::state()->get('daedalus_stylish_control_test.block_types', []) as $bundle => $declaration) {
+    $declarations['block_types'][$bundle] = PageBuilderDeclarations::merge($declarations['block_types'][$bundle] ?? [], $declaration);
+  }
+  foreach (\Drupal::state()->get('daedalus_stylish_control_test.instances', []) as $pattern => $declaration) {
+    $declarations['instances'][$pattern] = PageBuilderDeclarations::merge($declarations['instances'][$pattern] ?? [], $declaration);
+  }
+  // The injected site declaration IS the site under test: it replaces the
+  // layered lane (daedalus_stylish ships a module-level site: with ten token scales
+  // and the base tag vocabulary) rather than merging over it, so grammar
+  // tests control the whole vocabulary, including "no scales at all".
+  // Layering across providers is the spine's contract, covered by
+  // daedalus_ui's declaration tests.
+  $site = \Drupal::state()->get('daedalus_stylish_control_test.site');
+  if ($site !== NULL) {
+    $declarations[PageBuilderDeclarations::SITE] = $site;
+  }
+  // The injected site LAYER merges over the layered lane the way a
+  // theme's or a package's site section does (maps merge, NULL withdraws
+  // a key), so a test can prove a delta over the suite's shipped
+  // bindings (a package's stops: over a suite scale:, a `null`
+  // withdrawal) without owning the whole vocabulary.
+  $layer = \Drupal::state()->get('daedalus_stylish_control_test.site_layer');
+  if ($layer !== NULL) {
+    $declarations[PageBuilderDeclarations::SITE] = PageBuilderDeclarations::merge($declarations[PageBuilderDeclarations::SITE] ?? [], $layer);
+  }
+}
+
+/**
+ * Implements hook_ENTITY_TYPE_load() for daedalus_variant.
+ *
+ * Two state-driven interruptions of a variant load, each consumed by the
+ * load that fires it, so a test can stage what a real page does to the
+ * conformance judge mid-judgement:
+ * - park_variant_load: suspends the loading fiber once, the way core
+ *   yields any fiber it runs in from inside an entity load (the alias
+ *   manager, views data, the theme registry), so a second fiber can ask
+ *   the judge while the first's judgement is parked.
+ * - rejudge_in_variant_load: asks the judge again from inside the load,
+ *   the same flow re-entering, which is the recursion the guard refuses.
+ */
+function daedalus_stylish_control_test_daedalus_variant_load(array $variants): void {
+  $state = \Drupal::state();
+  if (\Fiber::getCurrent() !== NULL && $state->get('daedalus_stylish_control_test.park_variant_load', FALSE)) {
+    $state->set('daedalus_stylish_control_test.park_variant_load', FALSE);
+    \Fiber::suspend();
+  }
+  if ($state->get('daedalus_stylish_control_test.rejudge_in_variant_load', FALSE)) {
+    $state->set('daedalus_stylish_control_test.rejudge_in_variant_load', FALSE);
+    \Drupal::service('daedalus_stylish.variant_conformance')->withheld();
+  }
+}

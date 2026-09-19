@@ -1,0 +1,5 @@
+services:
+  daedalus_blueprint_ai_log_repair.streamed_raw_output_repair:
+    class: Drupal\daedalus_blueprint_ai_log_repair\EventSubscriber\StreamedRawOutputRepairSubscriber
+    tags:
+      - { name: event_subscriber }

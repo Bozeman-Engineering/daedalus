@@ -1,0 +1,8 @@
+name: 'Daedalus Stylish variants test'
+type: module
+description: 'Ships style variants for testing the disk-lane importer.'
+package: Testing
+core_version_requirement: '*'
+hidden: true
+dependencies:
+  - daedalus:daedalus_stylish

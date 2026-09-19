@@ -1,0 +1,34 @@
+# Shipped default variants; validated against daedalus_stylish_guide_test's guide:
+# the testimonial block type declares typography (font-size max 2rem, quote
+# sub-element max 1.75rem) and inherits the universal block spacing, and the
+# section kind declares spacing with padding max 4rem.
+testimonial_bold:
+  label: 'Testimonial bold'
+  scope: 'block_type:testimonial'
+  # The testimonial block type declares the emphasis axis; wide_section
+  # below omits axis and lands on the built-in style axis. The optional
+  # description is the AI roster's payload; wide_section omits it.
+  axis: 'emphasis'
+  description: 'A bold pull-quote treatment for testimonials that anchor a section.'
+  # The optional weight orders rosters within a family (weight-then-label);
+  # wide_section omits it and lands on the default 0.
+  weight: 7
+  styles:
+    '':
+      default:
+        font-size: '1.5rem'
+        padding: '1rem'
+    '::.testimonial__quote':
+      default:
+        font-size: '1.25rem'
+wide_section:
+  label: 'Wide section'
+  scope: 'kind:container'
+  # The AI opt-out's one spelling: ai: false keeps the variant out of the
+  # AI's roster (it still applies everywhere); testimonial_bold omits the
+  # key and is offered, the default.
+  ai: false
+  styles:
+    '':
+      default:
+        padding: '2rem'

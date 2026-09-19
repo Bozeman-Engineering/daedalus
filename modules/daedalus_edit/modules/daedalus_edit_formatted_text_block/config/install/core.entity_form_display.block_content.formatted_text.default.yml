@@ -1,0 +1,30 @@
+langcode: en
+status: true
+dependencies:
+  config:
+    - block_content.type.formatted_text
+    - field.field.block_content.formatted_text.field_formatted_text_text
+  module:
+    - text
+id: block_content.formatted_text.default
+targetEntityType: block_content
+bundle: formatted_text
+mode: default
+content:
+  field_formatted_text_text:
+    type: text_textarea
+    weight: 26
+    region: content
+    settings:
+      rows: 5
+      placeholder: ''
+    third_party_settings: {  }
+  info:
+    type: string_textfield
+    weight: -5
+    region: content
+    settings:
+      size: 60
+      placeholder: ''
+    third_party_settings: {  }
+hidden: {  }

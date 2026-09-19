@@ -1,0 +1,16 @@
+# The container layout's Guide Example birth defaults.
+#
+# default_variants maps merge per key across layers, so the suite's
+# width default (container_site, in daedalus_stylish_layouts) stands and the two
+# axes this package adds get theirs beside it. Both are depth-qualified:
+# a page band is born plain and standard; a nested container is never
+# stamped a surface or a rhythm (its band already has both). Stamped at
+# the add_section door only; a section authored inside a create-entity
+# blueprint is a total statement and wears exactly what it says.
+default_variants:
+  surface:
+    variant: guide_band_plain
+    depth: root
+  rhythm:
+    variant: guide_rhythm_standard
+    depth: root

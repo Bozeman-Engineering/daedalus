@@ -1,0 +1,23 @@
+daedalus_ai_test.stash_deferred_batch:
+  path: '/daedalus-ai-test/stash-deferred-batch'
+  defaults:
+    _controller: '\Drupal\daedalus_ai_test\Controller\StashDeferredBatch::stash'
+  requirements:
+    _permission: 'use daedalus ui edit mode'
+  methods: [POST]
+  options:
+    no_cache: TRUE
+
+daedalus_ai_test.simulate_chat_turn:
+  path: '/daedalus-ai-test/simulate-chat-turn/{entity_type}/{entity}'
+  defaults:
+    _controller: '\Drupal\daedalus_ai_test\Controller\SimulateChatTurn::simulate'
+  requirements:
+    _permission: 'use daedalus ui edit mode'
+    _entity_access: 'entity.update'
+  methods: [POST]
+  options:
+    no_cache: TRUE
+    parameters:
+      entity:
+        type: entity:{entity_type}

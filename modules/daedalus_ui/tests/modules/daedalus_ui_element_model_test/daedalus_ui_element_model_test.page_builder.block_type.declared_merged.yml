@@ -1,0 +1,6 @@
+# A declared merge in map form: the label ships with the declaration, the
+# edit target is left for the model to derive (the bundle's single
+# plain-text field).
+presentation:
+  mode: merged
+  label: 'Declared'

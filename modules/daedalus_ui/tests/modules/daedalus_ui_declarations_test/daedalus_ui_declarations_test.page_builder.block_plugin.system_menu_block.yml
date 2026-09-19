@@ -1,0 +1,9 @@
+elements:
+  '.menu':
+    label: 'Menu'
+    elements:
+      '.menu-item':
+        label: 'Menu item'
+# Foreign sections (another module's vocabulary in the same file family).
+property_groups:
+  typography: {}

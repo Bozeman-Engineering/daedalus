@@ -1,0 +1,8 @@
+name: Daedalus Blueprint Materials Test
+type: module
+description: Registers a hand-built materials provider for roster tests.
+package: Testing
+core_version_requirement: ^11
+hidden: true
+dependencies:
+  - daedalus:daedalus_blueprint

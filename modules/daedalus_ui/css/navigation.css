@@ -1,0 +1,56 @@
+/* Mode chrome takeover: while a mode is active the window belongs to the
+   mode — the core navigation sidebar and top bar hide, and the mode's own
+   top bar shows (see top-bar.css). The html attribute is stamped server-side
+   from the path-scoped navigationMode cookie and flipped client-side by the
+   mode toggle, so both paths share one mechanism.
+
+   !important because core escalates these components' display rules to
+   ID-level specificity (:is(#extra-specificity-hack, [data-drupal-admin-styles])
+   plus a :has(...:not(:empty)) reveal on the top bar) — unbeatable by any
+   sane selector, and nothing in-mode ever needs to re-show core chrome. */
+html[data-daedalus-ui-mode] .admin-toolbar,
+html[data-daedalus-ui-mode] .admin-toolbar-control-bar,
+html[data-daedalus-ui-mode] aside.top-bar,
+/* The sidebar's displace placeholder keeps its 72px CSS width even inside
+   the hidden aside, so it needs zeroing in its own right. */
+html[data-daedalus-ui-mode] .admin-toolbar__displace-placeholder {
+  display: none !important;
+  /* displace.js measures with jQuery outerWidth/Height, which temporarily
+     un-hides display:none elements — without a zero box the hidden core
+     chrome would keep displacing the canvas (the phantom left gap). */
+  width: 0 !important;
+  height: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+}
+
+/* Core gives the canvas margin-inline-start:
+   var(--drupal-displace-offset-left, var(--admin-toolbar-sidebar-width)) —
+   until displace.js first runs the var is UNSET, so an in-mode initial load
+   briefly pays the fallback for a sidebar that is hidden. Same var, zero
+   fallback; the :is() mirrors core's specificity so this wins as the later
+   equal-ID rule. */
+@media (min-width: 64rem) {
+  html[data-daedalus-ui-mode] :is(#extra-specificity-hack, [data-drupal-admin-styles]).admin-toolbar ~ .dialog-off-canvas-main-canvas {
+    margin-inline-start: var(--drupal-displace-offset-left, 0);
+  }
+}
+
+:is(#extra-specificity-hack, [data-drupal-admin-styles]),
+html {
+  .daedalus-ui-button,
+  .daedalus-ui-mode-button,
+  .daedalus-ui-mode-link {
+    &.toolbar-button {
+      &.active,
+      &.active:hover:focus {
+        color: var(--admin-toolbar-color-white);
+        background-color: var(--daedalus-ui-main-color);
+      }
+    }
+  }
+}
+
+.daedalus-ui-hidden {
+  display: none !important;
+}

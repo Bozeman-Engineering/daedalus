@@ -1,0 +1,23 @@
+# Additional variant axes for this layout's sections (the built-in "style"
+# axis always exists): proportions and width are orthogonal treatments, one
+# variant each, composed on the section.
+variant_axes:
+  - proportions
+  - width
+property_groups:
+  sizing:
+    constraints:
+      max-width:
+        max: '90rem'
+elements:
+  '.band-content':
+    label: 'Container'
+    property_groups:
+      sizing:
+        constraints:
+          max-width:
+            max: '80rem'
+    # The part's children pseudo-part ("{key}::.band-content::>").
+    children:
+      property_groups:
+        layout: {}

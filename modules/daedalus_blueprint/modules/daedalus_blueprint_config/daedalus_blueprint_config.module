@@ -1,0 +1,51 @@
+<?php
+
+/**
+ * @file
+ * Hooks and functions for the Daedalus Blueprint Config module.
+ */
+
+use Drupal\Core\Access\AccessResult;
+use Drupal\Core\Session\AccountInterface;
+
+/**
+ * Implements hook_help().
+ */
+function daedalus_blueprint_config_help(string $route_name): string {
+  if ($route_name === 'help.page.daedalus_blueprint_config') {
+    $output = '<h2>' . t('About') . '</h2>';
+    $output .= '<p>' . t('Daedalus Blueprint Config extends Daedalus Blueprint to serialize, deserialize, validate, and manipulate config entities (views, image styles, displays, fields) as JSON.') . '</p>';
+    $output .= '<h2>' . t('Config creation access') . '</h2>';
+    $output .= '<p>' . t('Creating a config entity through a blueprint is denied unless access is granted. Many config entity types (entity displays, field config) do not define their own access permission, so an administrator must explicitly allow-list which of them blueprint operations may create on the <a href=":url">settings form</a>, and grant the trusted role the "Create config entities via Daedalus Blueprint" permission.', [':url' => '/admin/config/development/daedalus-blueprint-config']) . '</p>';
+    return $output;
+  }
+  return '';
+}
+
+/**
+ * Implements hook_entity_create_access().
+ *
+ * Grants create access for config entity types an administrator has
+ * allow-listed, but only to accounts holding the "create config entities via
+ * daedalus_blueprint" permission. This is a grant-only check: it never returns
+ * forbidden, so it can only widen access for the allow-listed types and never
+ * blocks creates other modules or core already permit.
+ *
+ * The grant exists because many config entity types (entity displays, field
+ * config) define no admin permission and so return neutral create access for
+ * everyone — including uid 1. Blueprint creation is fail-closed, so without
+ * this opt-in those types could not be created via a blueprint at all. The
+ * allow-list bounds which types are reachable; the permission bounds who can
+ * reach them.
+ */
+function daedalus_blueprint_config_entity_create_access(AccountInterface $account, array $context, ?string $entity_bundle): AccessResult {
+  $config = \Drupal::config('daedalus_blueprint_config.settings');
+  $allowed_types = $config->get('allowed_create_types') ?? [];
+
+  if (!in_array($context['entity_type_id'], $allowed_types, TRUE)) {
+    return AccessResult::neutral()->addCacheableDependency($config);
+  }
+
+  return AccessResult::allowedIfHasPermission($account, 'create config entities via daedalus_blueprint')
+    ->addCacheableDependency($config);
+}

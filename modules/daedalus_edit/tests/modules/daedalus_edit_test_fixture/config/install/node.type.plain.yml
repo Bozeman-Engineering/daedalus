@@ -1,0 +1,17 @@
+langcode: en
+status: true
+dependencies:
+  module:
+    - daedalus_ui
+third_party_settings:
+  daedalus_ui:
+    initial_mode: none
+    status:
+      edit: true
+name: Plain
+type: plain
+description: 'The non-Layout-Builder fixture bundle: inline field editing through the entity form path.'
+help: null
+new_revision: true
+preview_mode: 1
+display_submitted: false

@@ -1,0 +1,8 @@
+name: Daedalus Blueprint Stencil Owned Variant Test
+type: module
+description: Ships a stencil-owned style variant for the variants disk lane tests.
+package: Testing
+core_version_requirement: ^10.3 || ^11
+dependencies:
+  - daedalus:daedalus_blueprint_stencil
+  - daedalus:daedalus_stylish

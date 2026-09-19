@@ -1,0 +1,11 @@
+# The hand-authored single file; its sibling
+# daedalus_stylish_variants_files_test.daedalus_stylish.variants.card.yml is the per-id form
+# the machine lane writes. Both validate against daedalus_stylish_guide_test's guide
+# (the section kind declares spacing with padding max 4rem).
+narrow_section:
+  label: 'Narrow section'
+  scope: 'kind:container'
+  styles:
+    '':
+      default:
+        padding: '1rem'

@@ -1,0 +1,51 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Drupal\daedalus_stylish\Drush\Commands;
+
+use Drupal\daedalus_stylish\VariantUsage;
+use Drush\Commands\AutowireTrait;
+use Symfony\Component\Console\Attribute\AsCommand;
+use Symfony\Component\Console\Command\Command;
+use Symfony\Component\Console\Input\InputInterface;
+use Symfony\Component\Console\Output\OutputInterface;
+use Symfony\Component\DependencyInjection\Attribute\Autowire;
+
+/**
+ * Rebuilds the variant usage table from the saved style maps.
+ *
+ * The repair path for the tracking chokepoint's accepted staleness edges
+ * (workspace publish fires no per-entity update hooks; writes bypassing the
+ * entity save API are invisible to any hook). The semantics live in
+ * VariantUsage::rebuild(); this is a thin CLI adapter.
+ */
+#[AsCommand(
+  name: 'daedalus_stylish:variant-usage:rebuild',
+  description: 'Rebuilds the daedalus_variant_usage table from the saved default-revision style maps.',
+)]
+final class VariantUsageRebuildCommand extends Command {
+
+  use AutowireTrait;
+
+  public function __construct(
+    #[Autowire(service: 'daedalus_stylish.variant_usage')]
+    protected VariantUsage $usage,
+  ) {
+    parent::__construct();
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  protected function execute(InputInterface $input, OutputInterface $output): int {
+    $tracked = $this->usage->rebuild();
+    $output->writeln(sprintf(
+      'Rebuilt the variant usage table: %d variant-wearing host %s tracked.',
+      $tracked,
+      $tracked === 1 ? 'entity' : 'entities',
+    ));
+    return self::SUCCESS;
+  }
+
+}

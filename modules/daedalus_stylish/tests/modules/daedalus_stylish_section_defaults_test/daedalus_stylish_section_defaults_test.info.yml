@@ -1,0 +1,6 @@
+name: 'Daedalus Stylish section defaults test'
+type: module
+description: 'Declares per-layout default variants for testing.'
+package: Testing
+core_version_requirement: '*'
+hidden: true

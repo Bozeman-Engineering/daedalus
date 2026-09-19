@@ -1,0 +1,9 @@
+name: 'Daedalus AI Memory'
+type: module
+description: 'Persists AI agent state across conversation turns so agents retain tool call history and context.'
+package: Daedalus
+core_version_requirement: '>=11.3 <11.5'
+dependencies:
+  - daedalus:daedalus
+  - ai_agents:ai_agents
+  - ai:ai_assistant_api

@@ -1,0 +1,10 @@
+# A site base declaration referencing a property group (shadow) that no
+# kind, block type, or layout declaration in the test guide references:
+# the factored catalog must count base:{tag} scopes among a set's
+# referencing declarations, or bare-markup styling vocabulary would be
+# unresolvable against it.
+site:
+  base:
+    h2:
+      property_groups:
+        shadow: {}

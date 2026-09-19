@@ -1,0 +1,5 @@
+# Deliberately malformed YAML: the sync must report this FILE as failed
+# (SHIPPED_FILE_MALFORMED) and still land the per-id file beside it.
+broken_section:
+  label: 'Broken section
+  scope: [kind:container

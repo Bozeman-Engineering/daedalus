@@ -1,0 +1,24 @@
+composed: false
+presentation:
+  mode: merged
+  label: 'Card'
+  edit_target: field_title
+fields:
+  field_admin:
+    element: false
+elements:
+  '.card':
+    label: 'Card'
+    tag: div
+    contains:
+      - 'field:field_title'
+    elements:
+      '.card__body':
+        label: 'Body'
+        tag: div
+        contains: 'field:field_body'
+# Foreign sections (another module's vocabulary in the same file family).
+default_variants:
+  style: card_default
+property_groups:
+  spacing: {}

@@ -1,0 +1,16 @@
+# A plugin-block declaration: the block kind's other refinement, keyed by
+# BASE plugin id (derivatives share one template, so one declaration
+# covers them).
+property_groups:
+  typography:
+    constraints:
+      font-size:
+        max: '1.5rem'
+elements:
+  '.menu-item':
+    label: 'Menu item'
+    property_groups:
+      typography:
+        constraints:
+          font-size:
+            max: '1.25rem'

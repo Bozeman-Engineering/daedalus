@@ -1,0 +1,13 @@
+services:
+  daedalus_stylish_discover.element_discovery:
+    class: Drupal\daedalus_stylish_discover\ElementDiscovery
+    arguments:
+      - '@entity_type.manager'
+      - '@field_sample_value.generator'
+      - '@renderer'
+      - '@cache.default'
+      - '@theme.manager'
+      - '@theme.initialization'
+      - '@config.factory'
+      - '@logger.factory'
+      - '@daedalus_ui.page_builder_declarations'

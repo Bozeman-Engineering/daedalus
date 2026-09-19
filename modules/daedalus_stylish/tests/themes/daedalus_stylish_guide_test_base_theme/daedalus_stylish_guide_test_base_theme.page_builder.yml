@@ -1,0 +1,8 @@
+container:
+  property_groups:
+    spacing:
+      constraints:
+        padding:
+          units:
+            - 'rem'
+            - 'px'

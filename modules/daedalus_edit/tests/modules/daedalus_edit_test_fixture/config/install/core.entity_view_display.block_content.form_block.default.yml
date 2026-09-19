@@ -1,0 +1,39 @@
+langcode: en
+status: true
+dependencies:
+  config:
+    - block_content.type.form_block
+    - field.field.block_content.form_block.field_fb_media
+    - field.field.block_content.form_block.field_fb_related
+    - field.field.block_content.form_block.field_fb_text
+id: block_content.form_block.default
+targetEntityType: block_content
+bundle: form_block
+mode: default
+content:
+  field_fb_media:
+    type: entity_reference_entity_view
+    label: hidden
+    settings:
+      view_mode: default
+      link: false
+    third_party_settings: {  }
+    weight: 3
+    region: content
+  field_fb_related:
+    type: entity_reference_label
+    label: above
+    settings:
+      link: true
+    third_party_settings: {  }
+    weight: 2
+    region: content
+  field_fb_text:
+    type: string
+    label: hidden
+    settings:
+      link_to_entity: false
+    third_party_settings: {  }
+    weight: 1
+    region: content
+hidden: {  }

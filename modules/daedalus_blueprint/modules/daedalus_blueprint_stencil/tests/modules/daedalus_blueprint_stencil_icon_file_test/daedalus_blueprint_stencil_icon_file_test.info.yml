@@ -1,0 +1,8 @@
+name: Daedalus Blueprint Stencil Icon File Test
+type: module
+description: Ships a stencil fixture whose icon file does not exist for daedalus_blueprint_stencil kernel tests.
+package: Testing
+core_version_requirement: ^10.3 || ^11
+hidden: true
+dependencies:
+  - daedalus:daedalus_blueprint_stencil

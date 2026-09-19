@@ -1,0 +1,157 @@
+# The universal container declaration: the container model's shared shape.
+#
+# A container is ONE element at every depth (the one-box model). The old
+# full-bleed-root-plus-constrained-part split is a rendering trick one box
+# does alone: the root paints its own background edge to edge, constrains
+# its content with `padding-inline: max(gutter, calc((100% - W) / 2))`
+# (the width variants), and arranges its children with flex on itself (the
+# row variant, the '::>' children pseudo-part). Width and Layout therefore
+# act on the element the editor selected, in every mode and at every depth.
+#
+# The treatment axes live here, on the universal container kind, rather
+# than being re-declared per layout. Each carries its description (what
+# the axis means, written for a designer; the AI reads it in the design
+# system brief) and, where its values write properties, the properties it
+# owns (a document wears the axis instead of writing them; the validator
+# answers such a write with a warning, never an error):
+#
+# - width: the constrained content width, spelled as a padding-inline stop
+#   (a gutter for free below the max). Root-only (depth: root) for OFFER
+#   and BIRTH: full width vs constrained middle is page-band business, so
+#   a nested section (always constrained by its parent container) gets
+#   neither the axis's offer nor its birth default. Placement curates
+#   offers and birth, never legality: the grant below is the same at
+#   every depth. Owns the inline inset and the content cap its variants
+#   write (padding-left, padding-right, max-width).
+# - container_layout (label "Layout"): the mode half of mode + share. ONE
+#   count-independent shipped variant (row, labeled "Columns") makes the
+#   root a flex row with equal-fill children (the children pseudo-part
+#   below); unequal ratios are per-child flex-grow overrides (the share
+#   half), so no track string exists anywhere and nothing goes stale as
+#   children come and go. Offered at every depth (nested rows are
+#   ordinary rows).
+# - animation: the entrance a container wears (the block kind's twin,
+#   declared in daedalus_stylish.page_builder.yml), fed by the shipped entrance
+#   variants below in daedalus_stylish_layouts.daedalus_stylish.variants.yml. A page band
+#   fading in at load is the canonical motion demo. Offered at every
+#   depth, no birth default: a container is born still. An axis variant
+#   spells as an attribute value in the SCOPE's own slot
+#   (attr:kind:container:animation), so this family and the block family
+#   share their look names (`animation="fade_in"` on either tag).
+# - hover: the hover feel a container wears (the block kind's twin), fed
+#   by container_lift below in daedalus_stylish_layouts.daedalus_stylish.variants.yml. A
+#   wear never carries a condition: the variant's own styles carry the
+#   `hover` block, so the axis is a treatment, not a state.
+#
+# This is what makes the kind-scoped variants in
+# daedalus_stylish_layouts.daedalus_stylish.variants.yml validate: a variant scoped to the
+# container KIND resolves its axis vocabulary and its element declarations
+# from this universal declaration.
+container:
+  # The declaration is generative: no template exists. A layout of this
+  # kind wires daedalus_ui's ComposedLayout plugin class and its
+  # sections render the resolved root form through the composed_container
+  # element (see ComposedLayoutRenderer) — the markup model IS the render.
+  composed: true
+  # The root's arranging display is CODE, not skin data: a gap only acts
+  # on a grid or flex box, and this declaration grants `spacing` (gap) on
+  # the root and `layout` on the '::>' children pseudo-part below, so the
+  # box fact those grants need must ship with the markup they address.
+  # Declared defaults follow markup ownership (StyleGuide): the kind is
+  # composed, it renders its own root, so it may default it; a skin
+  # carries look (the gap value), never the mechanic. Before this line
+  # three of five shipped skins forgot the display and a stacked
+  # container's Gap row was a visible no-op on them. Token-free (the
+  # declared tier validates in the empty minted universe), compiled into
+  # the defaults file at the kind:container family class with the
+  # container donut, ranked before every layout refinement, stamped on
+  # every section root by ContainerDefaultsStamp with no skin at all. A
+  # grid with no gap is visually today's flush stacking; the row variant's
+  # flex still wins (a variant beats a default).
+  defaults:
+    '':
+      default:
+        display: grid
+  variant_axes:
+    - width:
+        depth: root
+        description: 'How wide a page band lets its content run: the site column every band shares, a narrower measure for reading, or edge to edge inside the site gutter. A band''s background spans the screen at every width, so Full width is about the content reaching the edges, never the way to get a full-bleed background. A page band states it; a nested container inherits its band and never wears it.'
+        owns:
+          - padding-left
+          - padding-right
+          - max-width
+    - container_layout:
+        label: 'Layout'
+        description: 'How a container arranges its children: stacked unless it wears columns, and then every direct child is an equal column (unequal shares are per-child flex-grow overrides). Nested rows are ordinary rows.'
+    - animation:
+        label: 'Animation'
+        description: 'The entrance a container plays as it enters the view. A container is born still; reach for an entrance on a band that should arrive, not on every band.'
+    - hover:
+        label: 'Hover'
+        description: 'The feel a container answers a pointer with. The variant carries its own hover state, so the wear never carries a condition.'
+  # The root's ordered forms; first match wins, so the empty forms precede
+  # their populated twins. Two facts swap the form: depth (a page band is
+  # a real <section>; nested, a container is a plain grouping <div>) and
+  # emptiness (no components), which carries the declared drop-affordance
+  # marker — the ONE emptiness fact every consumer reads (the render, the
+  # markup view, the caret; the edit-only hint attribute is stamped over
+  # it by the composed render, and the affordance CSS keys on that hint).
+  root:
+    forms:
+      - tag: section
+        present:
+          depth: root
+          empty: true
+        attributes:
+          data-container-empty: ''
+      - tag: div
+        present:
+          empty: true
+        attributes:
+          data-container-empty: ''
+      - tag: section
+        present:
+          depth: root
+      - tag: div
+  property_groups:
+    sizing: {}
+    # Placement curates offers and birth, never legality: a container's
+    # grant is its declaration's grant at every depth, so the whole
+    # spacing group is granted here, the `padding` shorthand and the
+    # inline sides included (a page band padded on four sides, a nested
+    # card likewise). The width variants and the skins' container
+    # defaults spell the band's inline inset as padding-inline; an own
+    # padding write that masks that inset is a layer mask like any other,
+    # surfaced by the inspector's provenance (the worn variant shows what
+    # was overridden, Reset overrides restores it), never prevented by
+    # withholding.
+    spacing: {}
+    background: {}
+    layout: {}
+    # Motion: a page band fading in as it scrolls into view is the
+    # canonical animation demo, and transitions ride the same group.
+    # Effects (transform and opacity) ride beside it, the block kind's
+    # twin: the hover axis's Lift moves with a transform, an entrance
+    # override wants opacity. Shadow rides with them: Lift's hover state
+    # casts a box-shadow, and a kind grants every property the material
+    # it ships writes (daedalus_edit grants shadow too; the maps merge).
+    motion: {}
+    effects: {}
+    shadow: {}
+  # The trigger pair's basic-mode control (the block kind's twin, see
+  # daedalus_stylish.page_builder.yml): Start / Play over timeline-trigger and
+  # animation-trigger, covered by the motion grant above. Root-bound (a
+  # kind control), merged after daedalus_edit's container controls.
+  controls:
+    motion_trigger:
+      label: 'Motion trigger'
+      widget: motion_trigger
+  # The container's direct children (its content flow) as ONE declared
+  # addressable ("{key}::>"), printed as a ':scope > *' extension of the
+  # root's own targets. This is what lets a kind-scoped variant style all
+  # columns with zero per-child map entries (equal flex fill); layout owns
+  # the flex facts, sizing the min-width guard.
+  children:
+    property_groups:
+      layout: {}
+      sizing: {}

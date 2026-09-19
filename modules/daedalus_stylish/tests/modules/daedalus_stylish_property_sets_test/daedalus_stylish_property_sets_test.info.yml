@@ -1,0 +1,6 @@
+name: 'Daedalus Stylish property sets test'
+type: module
+description: 'Declares a site base section referencing a set nothing else does.'
+package: Testing
+core_version_requirement: '*'
+hidden: true

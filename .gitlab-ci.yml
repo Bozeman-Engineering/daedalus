@@ -1,0 +1,39 @@
+include:
+  ################
+  # DrupalCI includes:
+  # As long as you include this, any future includes added by the Drupal Association will be accessible to your pipelines automatically.
+  # View these include files at https://git.drupalcode.org/project/gitlab_templates/
+  ################
+  - project: $_GITLAB_TEMPLATES_REPO
+    ref: $_GITLAB_TEMPLATES_REF
+    file:
+      - '/includes/include.drupalci.main.yml'
+      - '/includes/include.drupalci.variables.yml'
+      - '/includes/include.drupalci.workflows.yml'
+
+variables:
+  # The module is tested on the two core minors composer.json allows
+  # (>=11.3 <11.5). The current-core variant autoruns by default; the
+  # previous-minor variant must be opted in and, since gitlab_templates 1.15,
+  # is a manual job unless _AUTORUN_PREVIOUS_MINOR says otherwise (valid values:
+  # none, push, push-and-mr, push-and-schedule, all). 'push' runs it on every
+  # push to the canonical project, which is where a release is cut from, so
+  # 11.3 stays tested without doubling every merge-request pipeline.
+  OPT_IN_TEST_PREVIOUS_MINOR: '1'
+  _AUTORUN_PREVIOUS_MINOR: 'push'
+
+# CI tests against the sibling tips; composer.json ships stable carets.
+# before_script is the documented contrib hook (gitlab_templates
+# docs/info/customizations.md) and .composer-base covers all variants.
+# Stability flags are root-only in Composer, so the test fixture
+# (daedalus_recipe, which installs the site every Kernel and browser test
+# builds on) and the theme it requires are pinned to their dev branches here,
+# or their carets cannot resolve a dev branch or an alpha tag at the
+# template's default (stable) minimum-stability.
+.composer-base:
+  before_script:
+    - composer require --no-update --no-interaction
+      drupal/daedalus_recipe:1.0.x-dev
+      drupal/daedalus_theme:1.0.x-dev
+      drupal/field_sample_value:1.1.x-dev
+      drupal/twig_events:1.1.x-dev

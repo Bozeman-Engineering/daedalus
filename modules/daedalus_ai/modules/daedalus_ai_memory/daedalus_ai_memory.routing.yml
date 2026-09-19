@@ -1,0 +1,7 @@
+daedalus_ai_memory.settings:
+  path: '/admin/config/ai/agent-memory'
+  defaults:
+    _form: '\Drupal\daedalus_ai_memory\Form\SettingsForm'
+    _title: 'Daedalus AI Memory'
+  requirements:
+    _permission: 'administer site configuration'

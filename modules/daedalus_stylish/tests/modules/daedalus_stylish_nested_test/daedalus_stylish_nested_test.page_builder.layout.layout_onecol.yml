@@ -1,0 +1,13 @@
+# The layouts-axis contains case: the layout's width container re-parents
+# the region rows.
+property_groups:
+  spacing: {}
+elements:
+  '.band-content':
+    label: 'Container'
+    contains: regions
+    property_groups:
+      sizing:
+        constraints:
+          max-width:
+            max: '80rem'

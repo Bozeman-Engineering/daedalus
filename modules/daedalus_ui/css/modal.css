@@ -1,0 +1,44 @@
+/**
+ * @file
+ * The modal floor: where dialogs sit in the chrome layer scheme.
+ *
+ * The chrome layer scheme assumes Drupal dialogs sit at 1260 (the "modal
+ * floor" referenced in sidebar.css and daedalus_edit's ckeditor.css). Admin
+ * themes establish that floor by styling .ui-dialog themselves, but
+ * front-end themes don't, and jQuery UI then derives the dialog's inline
+ * z-index from its visible .ui-front siblings (max + 1 = 101) — landing
+ * modals UNDER the canvas chrome (outline 940, verb menu 941). Establish
+ * the documented floor ourselves whenever a mode is active: above all
+ * canvas chrome, below the top bar (1261) and messages (1265).
+ *
+ * No !important needed: jQuery UI's _moveToTop() only writes an inline
+ * z-index when a visible .ui-front sibling matches or beats the dialog's
+ * own stylesheet value, so with the floor at 1260 and siblings at 100 the
+ * stylesheet value sticks — and a second stacked dialog computes 1261
+ * inline and correctly sits above the first.
+ *
+ * Only layering lives here — it's meaningless without a mode active, so
+ * every rule is mode-gated. The dialog's cosmetic skin (frame, titlebar,
+ * buttonpane, scrim) is the cosmetic tier, not the functional floor, and
+ * lives ungated in css/theme/dialog-skin.css, which a site's own skin may
+ * replace.
+ */
+
+html[data-daedalus-ui-mode] .ui-dialog.ui-front {
+  z-index: 1260;
+}
+
+/* The modal overlay dims the canvas chrome too, just under the dialog. */
+html[data-daedalus-ui-mode] .ui-widget-overlay.ui-front {
+  z-index: 1259;
+}
+
+/* The top bar and floating tool pill sit ABOVE the modal floor by
+   necessity — the layer constraints are circular (top bar above the
+   ck-toolbar-container, which must reach the dialog floor, which must
+   beat the overlay), so the overlay can never outstack them. Mirror the
+   scrim's darkening and blur on the elements themselves while a modal
+   overlay is up. Purely visual: they stay interactive. */
+html[data-daedalus-ui-mode]:has(.ui-widget-overlay.ui-front) :is(#edit-mode-top-bar, #edit-mode-toolbar) {
+  filter: blur(3px) brightness(0.65);
+}

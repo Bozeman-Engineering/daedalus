@@ -1,0 +1,61 @@
+<?php
+
+/**
+ * @file
+ * Test module for daedalus_blueprint hooks.
+ */
+
+/**
+ * Implements hook_daedalus_blueprint_managed_keys_alter().
+ */
+function daedalus_blueprint_test_daedalus_blueprint_managed_keys_alter(array &$managed_keys, string $entity_type, string $bundle): void {
+  $testKeys = \Drupal::state()->get('daedalus_blueprint_test.managed_keys', []);
+  foreach ($testKeys as $scope => $keys) {
+    foreach ($keys as $key => $definition) {
+      $managed_keys[$scope][$key] = $definition;
+    }
+  }
+}
+
+/**
+ * Implements hook_daedalus_blueprint_context_alter().
+ */
+function daedalus_blueprint_test_daedalus_blueprint_context_alter(array &$context, string $entity_type, string $bundle): void {
+  $test_context = \Drupal::state()->get('daedalus_blueprint_test.context', []);
+  foreach ($test_context as $key => $value) {
+    $context[$key] = $value;
+  }
+}
+
+/**
+ * Implements hook_daedalus_blueprint_skills_alter().
+ *
+ * Lets SkillsResolverTest drive add/override of discovered skills from state,
+ * so the alter step and its cache invalidation can be exercised without a real
+ * second module shipping skill YAML.
+ */
+function daedalus_blueprint_test_daedalus_blueprint_skills_alter(array &$skills): void {
+  $test_skills = \Drupal::state()->get('daedalus_blueprint_test.skills', []);
+  foreach ($test_skills as $skill_id => $definition) {
+    $skills[$skill_id] = $definition;
+  }
+}
+
+/**
+ * Implements hook_daedalus_blueprint_entity_persisted().
+ *
+ * Records each persist invocation into state (serializable identity + the saved
+ * flag + the affected element UUIDs) so EntityStorageAndBundleListTest can
+ * assert the storage handler's persist-hook fan-out without holding the entity
+ * object across the hook boundary.
+ */
+function daedalus_blueprint_test_daedalus_blueprint_entity_persisted($entity, bool $saved, array $element_uuids): void {
+  $log = \Drupal::state()->get('daedalus_blueprint_test.persisted', []);
+  $log[] = [
+    'entity_type' => $entity->getEntityTypeId(),
+    'entity_id' => $entity->id(),
+    'saved' => $saved,
+    'element_uuids' => $element_uuids,
+  ];
+  \Drupal::state()->set('daedalus_blueprint_test.persisted', $log);
+}

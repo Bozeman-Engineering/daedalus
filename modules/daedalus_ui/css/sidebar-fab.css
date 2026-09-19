@@ -1,0 +1,59 @@
+/**
+ * @file
+ * Standalone floating toggle buttons for always-on sidebars.
+ *
+ * Mode-bound panels (settings, notifications) toggle from a mode's top bar.
+ * Always-on panels -- e.g. the AI chat, present on every page including
+ * anonymous and non-edit routes -- have no top bar to live in, so their toggle
+ * renders here as a fixed-position floating button. The toolbar-button visuals
+ * live in the edit-mode-only "modes" library, so this file styles the button
+ * itself to stay self-contained wherever a panel is present.
+ */
+
+.daedalus-ui-sidebar-fabs {
+  position: fixed;
+  z-index: 501;
+  right: 1rem;
+  bottom: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+/* In Edit Mode an always-on panel's toggle is collected into the mode's top
+   bar beside the mode-bound toggles (see Edit::buildTopBar) -- so the
+   floating launcher is hidden there. */
+html.edit_mode .daedalus-ui-sidebar-fabs {
+  display: none;
+}
+
+.daedalus-ui-sidebar-fabs .toolbar-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 3rem;
+  height: 3rem;
+  padding: 0;
+  cursor: pointer;
+  color: var(--daedalus-text);
+  border: 1px solid var(--daedalus-lines);
+  border-radius: 50%;
+  background: var(--daedalus-toggle-active);
+  box-shadow: 0 0.125rem 0.5rem rgb(0, 0, 0, 0.3);
+}
+
+/* The FAB is a launcher: while its panel is open it hides, and the open panel
+   provides its own close affordance (a [data-sidebar-close] control). The
+   "active" class is flipped by the sidebar plugin's open()/close(). */
+.daedalus-ui-sidebar-fabs .toolbar-button.active {
+  display: none;
+}
+
+.daedalus-ui-sidebar-fabs .toolbar-button__icon {
+  width: var(--daedalus-icon-size-large);
+  height: var(--daedalus-icon-size-large);
+}
+
+.daedalus-ui-sidebar-fabs .toolbar-button__label {
+  display: none;
+}

@@ -1,0 +1,39 @@
+.setting-details.hotkey-details {
+  /* The binding is a key chip; clicking it starts capture. */
+  .configured-hotkey {
+    margin-left: 0.3rem;
+    padding: 0 0.375rem;
+    cursor: pointer;
+    border-radius: var(--daedalus-border-radius);
+    background: var(--daedalus-toggle-background);
+    font-size: var(--daedalus-font-size-caption);
+    font-weight: 600;
+    line-height: 1.5;
+  }
+
+  .configured-hotkey:hover {
+    background: var(--daedalus-selection-background);
+  }
+
+  /* The capture field ("Press a key…"): the shared recessed input skin. */
+  input {
+    width: 5.5rem;
+    padding: 0 0.375rem;
+    color: var(--daedalus-text);
+    border: 1px solid transparent;
+    border-radius: var(--daedalus-border-radius);
+    background: var(--daedalus-toggle-background);
+    font-size: var(--daedalus-font-size-caption);
+    line-height: 1.5;
+  }
+
+  input:focus {
+    outline: 2px solid var(--daedalus-selection);
+    outline-offset: -1px;
+  }
+
+  .configured-hotkey--locked {
+    cursor: default;
+    opacity: 0.5;
+  }
+}

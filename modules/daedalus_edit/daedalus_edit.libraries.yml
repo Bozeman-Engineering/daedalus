@@ -1,0 +1,37 @@
+library:
+  js:
+    js/daedalus-edit.js: { attributes: { type: 'module' }}
+    # Plain script: it needs nothing from the module graph, only the
+    # DaedalusEditEntityFormAutoSave behavior entity-form.js registers.
+    js/daedalus_edit/panel-widget-visibility.js: {}
+    js/daedalus-edit-tool-plugin.js: { attributes: { type: 'module' }}
+    js/daedalus_edit/sidebars/daedalus-edit-sidebar.js: {}
+  css:
+    component:
+      css/daedalus-edit.css: {}
+      css/verb-widgets.css: {}
+      css/ckeditor.css: {}
+      # The neutralizer competes with CKEditor's runtime-injected (and
+      # therefore unlayered) stylesheets; layered CSS can never beat
+      # unlayered, so it must stay outside the daedalus_stylish_layers wrapper.
+      css/inline-editor-neutralizer.css: { daedalus_stylish_layers_exempt: true }
+      css/sidebar.css: {}
+  dependencies:
+    # The root this library attaches Drupal.Daedalus.Edit to.
+    - daedalus_ui/daedalus
+    - core/jquery
+    - core/once
+    - core/ckeditor5
+    - core/ckeditor5.basic
+    - core/ckeditor5.essentials
+    - core/ckeditor5.autoformat
+    - core/ckeditor5.htmlSupport
+    - core/ckeditor5.sourceEditing
+    - core/ckeditor5.pasteFromOffice
+    - daedalus_ui/modes
+    - daedalus_ui/sidebar
+    - daedalus_ui/edit_mode
+    - daedalus_ui/update_element
+    - ckeditor5/internal.drupal.ckeditor5
+    - ckeditor5/internal.drupal.ckeditor5.emphasis
+    - ckeditor5/internal.drupal.ckeditor5.htmlEngine

@@ -1,0 +1,69 @@
+/**
+ * Upload progress UI (shared by the new-media and replace-media flows).
+ *
+ * A fixed overlay with a percentage label and a fill bar wired to the
+ * uploader's request-body progress. When the upload bytes finish it flips to a
+ * "Processing…" state (.daedalus-ui-upload-progress--processing) so the bar does not sit
+ * at 100% looking stuck while the server creates the media and rebuilds the
+ * layout.
+ */
+.daedalus-ui-upload-progress {
+  position: fixed;
+  z-index: 1000;
+  bottom: 1.5em;
+  left: 50%;
+  min-width: 18em;
+  max-width: 90vw;
+  padding: 0.75em 1em;
+  transform: translateX(-50%);
+  border-radius: var(--daedalus-border-radius);
+  outline: 1px solid color-mix(in sRGB, var(--daedalus-ui-main-color) 50%, transparent);
+  outline-offset: -1px;
+  background: #fff;
+  box-shadow: 0 2px 12px rgb(0, 0, 0, 0.25);
+  /* A chrome toast over the canvas: the chrome typeface, not the site
+     theme's. */
+  font-family: var(--daedalus-font);
+  font-size: var(--daedalus-font-size-large);
+}
+
+.daedalus-ui-upload-progress__label {
+  margin-bottom: 0.5em;
+  color: #000;
+}
+
+.daedalus-ui-upload-progress__track {
+  position: relative;
+  overflow: hidden;
+  height: 0.5em;
+  /* Clamps to a capsule on the 0.5em track. */
+  border-radius: var(--daedalus-border-radius);
+  background: color-mix(in sRGB, var(--daedalus-ui-main-color) 15%, transparent);
+}
+
+.daedalus-ui-upload-progress__fill {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 0%;
+  transition: width 0.15s ease-out;
+  background: var(--daedalus-ui-main-color);
+}
+
+/* Processing state: bytes are sent, server work in progress. The bar is full
+ * and gently pulses to signal indeterminate server-side work. */
+.daedalus-ui-upload-progress--processing .daedalus-ui-upload-progress__fill {
+  width: 100%;
+  animation: daedalus-ui-upload-progress-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes daedalus-ui-upload-progress-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}

@@ -1,0 +1,15 @@
+name: 'Daedalus Edit Page'
+type: module
+description: 'The Daedalus Page content type for the page builder.'
+core_version_requirement: '>=11.3 <11.5'
+package: Daedalus
+dependencies:
+  - drupal:node
+  - drupal:menu_ui
+  - drupal:layout_builder
+  - daedalus:daedalus_ui
+  - daedalus:daedalus_layout
+  - daedalus:daedalus_edit
+  # The shipped display's default section and the AI layout guidance both
+  # name daedalus_stylish layouts (the page builder offers only daedalus_stylish layouts).
+  - daedalus:daedalus_stylish_layouts

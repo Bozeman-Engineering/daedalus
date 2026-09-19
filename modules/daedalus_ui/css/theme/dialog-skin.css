@@ -1,0 +1,231 @@
+/**
+ * @file
+ * Skins jQuery UI dialogs with the Daedalus chrome palette, everywhere.
+ *
+ * Like css/theme/navigation_theme.css extends the chrome look onto core
+ * Navigation, this file extends it onto core's dialogs. It is the
+ * cosmetic tier over the mode-gated modal floor in css/modal.css
+ * (z-index layering): the floor is functional, this skin is the look,
+ * ungated, attached to core/drupal.dialog via hook_library_info_alter()
+ * so any dialog on any route wears it. A site re-skins by overriding
+ * the daedalus_ui/variables tokens, not by removing this file.
+ *
+ * Unlike the Navigation skin there is no variable-hook system to map —
+ * jQuery UI is styled by selectors — so this file competes with admin
+ * themes (Claro, Gin) on specificity and wins deliberately: the product's
+ * premise is you never leave the front end, and dialogs should read as
+ * chrome surfaces on every route. html .ui-dialog.ui-widget:not(…) is
+ * (0,3,1) — above every jQuery UI base rule (≤(0,2,1)) and admin themes'
+ * component rules, without !important.
+ *
+ * The dialog CHROME (frame, titlebar, close, buttonpane, overlay) wears
+ * the daedalus tokens, following the floating-surface idiom from
+ * daedalus_ui's verb menu: chrome background, lines border, shared
+ * radius, soft shadow, selection-wash hovers. The dialog CONTENT (the
+ * hosted form) mostly keeps site/admin form styles, exactly like the
+ * entity forms hosted in the chrome's right sidebar — the bare-element
+ * guards the sidebar carries (heading color, p/li type) travel with the
+ * surface so hosted markup stays readable on the chrome background in
+ * both color schemes, and text-like form controls (by core's
+ * form-text/form-textarea classes) wear the chrome field look.
+ *
+ * Core's off-canvas dialog ships its own skin; leave it alone.
+ */
+html .ui-dialog.ui-widget:not(.ui-dialog-off-canvas) {
+  padding: 0;
+  color: var(--daedalus-text);
+  border: 1px solid var(--daedalus-lines);
+  border-radius: var(--daedalus-border-radius);
+  background: var(--daedalus-background);
+  box-shadow: 0 8px 32px rgb(0, 0, 0, 0.25);
+  font-family: var(--daedalus-font);
+
+  /* The sidebar's bare-element guards (daedalus_ui's sidebar.css):
+     the site theme styles bare elements, and this surface hosts markup
+     it doesn't own. */
+  :is(h1, h2, h3, h4, h5, h6) {
+    color: var(--daedalus-text);
+  }
+  :where(p, li) {
+    color: inherit;
+    font-size: inherit;
+    line-height: inherit;
+  }
+  /* jQuery UI paints .ui-widget-content links #333 — dead on the dark
+     scheme, and (0,1,1) beats any theme's bare `a`. The chrome accent
+     restores affordance in both schemes; real buttons keep their own,
+     and the Grid/Table display links are a segmented control
+     (daedalus_ui's media-library.css) whose muted colors must win. */
+  a:not(.button, .form-submit, .views-display-link) {
+    color: var(--daedalus-selection);
+  }
+
+  /* Form controls wear the chrome field look via core's form-control
+     classes (form-text/form-textarea) — the shared vocabulary real forms
+     already carry; dialogs with inert markup (daedalus_layout's stencil dialogs)
+     opt in by stamping the same classes. Never bare input/textarea:
+     that would catch checkboxes and radios too. */
+  input.form-text,
+  textarea.form-textarea {
+    box-sizing: border-box;
+    width: 100%;
+    padding: 0.5rem;
+    resize: vertical;
+    color: var(--daedalus-text);
+    border: 1px solid var(--daedalus-lines);
+    border-radius: 0.25rem;
+    background-color: var(--daedalus-toggle-background);
+    font: inherit;
+
+    &:is(:hover) {
+      background: var(--daedalus-selection-background);
+    }
+  }
+
+  /* The hosted form's layout, by core's form vocabulary (form-item,
+     form-actions, description, messages) — real forms carry it natively
+     and inert-markup dialogs (daedalus_layout's stencil dialogs) stamp the same
+     classes, so every dialog reads as one surface with no per-dialog
+     stylesheet. */
+  p {
+    margin: 0 0 1rem;
+  }
+  .form-item {
+    margin: 0 0 1rem;
+  }
+  .form-item label {
+    display: block;
+    margin-bottom: 0.25rem;
+    font-weight: 600;
+  }
+  /* A label WRAPPING a checkbox is an inline choice row, not a field
+     caption. */
+  .form-item label:has(input[type="checkbox"]) {
+    display: flex;
+    align-items: center;
+    margin-bottom: 0;
+    border-radius: var(--daedalus-border-radius);
+    font-weight: 400;
+    gap: 0.375rem;
+    padding-block: 0.5rem;
+
+    &:is(:hover, :focus) {
+      color: var(--daedalus-text);
+      border-color: var(--daedalus-lines);
+      background: var(--daedalus-selection-background);
+    }
+  }
+  .description {
+    margin: 0 0 0.25rem;
+    color: var(--daedalus-text-muted);
+    font-size: var(--daedalus-font-size-small);
+  }
+  .form-actions {
+    display: flex;
+    gap: 0.5rem;
+    justify-content: flex-end;
+    margin: 0;
+  }
+  /* The gap carries the spacing; the buttonpane margin below must not. */
+  .form-actions button {
+    margin: 0;
+  }
+
+  .ui-dialog-titlebar {
+    padding: 0.75rem 1rem;
+    color: var(--daedalus-text);
+    border: 0;
+    border-bottom: 1px solid var(--daedalus-lines);
+    border-radius: 0;
+    background: transparent;
+  }
+
+  /* The shared panel-header type (daedalus_ui's .daedalus-ui-panel__header). */
+  .ui-dialog-title {
+    margin: 0;
+    font-size: var(--daedalus-font-size-heading);
+    font-weight: 600;
+    line-height: 1.2;
+  }
+
+  .ui-dialog-titlebar-close {
+    top: 50%;
+    right: 0.625rem;
+    width: 1.5rem;
+    height: 1.5rem;
+    margin: -0.75rem 0 0;
+    padding: 0;
+    border: 0;
+    border-radius: calc(var(--daedalus-border-radius) - 2px);
+    background: transparent;
+  }
+  .ui-dialog-titlebar-close:is(:hover, :focus) {
+    border: 0;
+    background: var(--daedalus-selection-background);
+  }
+  /* Replace the sprite (a dark-gray PNG, invisible on the dark scheme)
+     with the chrome's x glyph, recolorable via mask + background. */
+  .ui-dialog-titlebar-close .ui-icon {
+    background: var(--daedalus-text);
+    -webkit-mask: url(../../assets/x.svg) center / var(--daedalus-icon-size-small) no-repeat;
+    mask: url(../../assets/x.svg) center / var(--daedalus-icon-size-small) no-repeat;
+  }
+
+  /* The content pane itself wears .ui-widget-content, whose DIRECT
+     color: #333 beats the chrome color inherited from the dialog —
+     near-invisible on the dark scheme. */
+  .ui-dialog-content {
+    padding: 1rem;
+    color: var(--daedalus-text);
+  }
+
+  /* Like the content pane, the buttonpane wears .ui-widget-content and
+     its direct #333 (e.g. on the media library's "N selected" text). */
+  .ui-dialog-buttonpane {
+    margin-top: 0;
+    padding: 0.75rem 1rem;
+    color: var(--daedalus-text);
+    border: 0;
+    border-top: 1px solid var(--daedalus-lines);
+    background: transparent;
+  }
+}
+
+/* A neutral scrim in both color schemes (the base skin's #aaa wash reads
+   as a glare on the dark scheme), with a light blur pulling focus into
+   the dialog. The scrim lives in the rgba background, NOT element
+   opacity (jQuery UI's .3 would fade the backdrop blur with it). */
+html .ui-widget-overlay.ui-front {
+  opacity: 1;
+  background: rgb(0, 0, 0, 0.35);
+  -webkit-backdrop-filter: blur(3px);
+  backdrop-filter: blur(3px);
+}
+
+.ui-widget {
+  button,
+  .button,
+  .form-actions:has(.button--primary) .button:not(.button--primary) {
+    margin: 0 0 0 0.5rem;
+    padding: 0.375rem 1rem;
+    color: var(--daedalus-text);
+    border: 1px solid var(--daedalus-lines);
+    border-radius: var(--daedalus-border-radius);
+    background: var(--daedalus-toggle-background);
+    font-family: var(--daedalus-font);
+    font-size: var(--daedalus-font-size);
+    font-weight: 400;
+
+    &:is(:hover, :focus) {
+      color: var(--daedalus-text);
+      border-color: var(--daedalus-lines);
+      background: var(--daedalus-selection-background);
+    }
+  }
+  button.button--primary,
+  input.button {
+    color: var(--daedalus-selection-text);
+    border-color: transparent;
+    background: var(--daedalus-selection);
+  }
+}

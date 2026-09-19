@@ -1,0 +1,61 @@
+daedalus_layout.settings.configure_default_section:
+  path: '/admin/structure/types/manage/{entity}/default-layout-section'
+  defaults:
+    _title: 'Configure default container'
+    _form: 'Drupal\daedalus_layout\Form\ConfigureDefaultSectionForm'
+  options:
+    parameters:
+      entity:
+        type: entity:entity_view_display
+  requirements:
+    _permission: 'administer daedalus layout configuration'
+
+daedalus_layout.settings.promoted_blocks:
+  path: '/admin/structure/types/manage/{entity}/promoted-blocks'
+  defaults:
+    _title: 'Promoted blocks'
+    _form: 'Drupal\daedalus_layout\Form\PromotedBlocksForm'
+  options:
+    parameters:
+      entity:
+        type: entity:entity_view_display
+  requirements:
+    _permission: 'promote daedalus layout blocks'
+
+# The Save as stencil verb's dialog (inert markup; js/verbs/stencil.js owns
+# the interaction and submits a save_material/update_material operation
+# (kind stencil) through Blueprint.mutate). Same permission the operation itself enforces: the
+# dialog is chrome for a gesture the user must be allowed to complete.
+daedalus_layout.stencil_save_dialog:
+  path: '/daedalus-layout/stencil-save-dialog'
+  defaults:
+    _title: 'Save as stencil'
+    _controller: '\Drupal\daedalus_layout\Controller\StencilSaveDialog::build'
+  requirements:
+    _permission: 'save stencils'
+
+# The Update stencil verb's dialog (same inert-markup pattern): the confirm
+# step plus adoption parity with save — the capture's unowned variants render
+# as the same checked adopt checkboxes, and js/verbs/stencil.js folds the
+# picks into the update_material op's adopt_variants.
+daedalus_layout.stencil_update_dialog:
+  path: '/daedalus-layout/stencil-update-dialog'
+  defaults:
+    _title: 'Update stencil'
+    _controller: '\Drupal\daedalus_layout\Controller\StencilSaveDialog::update'
+  requirements:
+    _permission: 'save stencils'
+
+# The Add panel stencil menu's Edit details… dialog (same inert-markup
+# pattern, same fields): js/add-panel/stencil-items.js prefills the current
+# label/description from the stencil's record and POSTs to
+# daedalus_blueprint_stencil's CSRF-protected details route; nothing mutates
+# here. The query's `stencil` reference is
+# read-only chrome too: it prefills the icon picker with the stored icon.
+daedalus_layout.stencil_details_dialog:
+  path: '/daedalus-layout/stencil-details-dialog'
+  defaults:
+    _title: 'Edit stencil details'
+    _controller: '\Drupal\daedalus_layout\Controller\StencilSaveDialog::details'
+  requirements:
+    _permission: 'save stencils'

@@ -1,0 +1,12 @@
+label: 'Stray band'
+description: 'A band claiming membership of a design system the site never shipped.'
+design_system: nowhere
+element:
+  kind: container
+  layout_id: layout_onecol
+  children:
+    - kind: region
+      region: content
+      children:
+        - kind: block
+          block_type: text

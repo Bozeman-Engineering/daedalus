@@ -1,0 +1,32 @@
+# The Olivero design system's guide fragment: the deltas the olivero
+# package layers over the suite's bindings. This file layers only while
+# the olivero design system is active (a packaged module's declarations
+# sit above the suite's and drop out whole when the site switches
+# systems), so nothing here reaches a site running another system.
+#
+# The bindings themselves are the suite's (daedalus_stylish.page_builder.yml
+# site.constraint_defaults: the type trio to text / weight / leading,
+# padding and gap to space, border-radius to radius, each with the zero
+# literal), promised there because every shipped skin mints those
+# scales; this package never restates a block the suite already
+# authors. Constraint blocks merge like every map, so a package block
+# carrying only `stops:` lands as the merged block (scale and allowed
+# literal kept, stops added), and the family expansion carries the
+# merged padding block to its four sides.
+#
+# `stops:` curates the OFFER in order (legality is unaffected in every
+# mode): the basic-mode rows lead with these tokens, and under the
+# olivero system's `enforcement: open` a typed literal still commits. The
+# space stops leave the gutter token off the rows on purpose: it is the
+# page band's inline inset, not a padding step. Type binds to the whole
+# scale, six roles is already a short row, so the trio needs no delta.
+#
+# Grow this the way daedalus_stylish_guide_example.page_builder.yml models:
+# per-block-type curation goes in
+# daedalus_stylish_olivero_skin.page_builder.block_type.BUNDLE.yml files.
+site:
+  constraint_defaults:
+    padding:
+      stops: ['sm', 'md', 'lg', 'xl']
+    gap:
+      stops: ['sm', 'md', 'lg', 'xl']

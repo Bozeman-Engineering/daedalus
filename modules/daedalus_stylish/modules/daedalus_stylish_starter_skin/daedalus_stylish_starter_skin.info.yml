@@ -1,0 +1,8 @@
+name: 'Daedalus Stylish Starter Skin'
+type: module
+description: 'Ships the Starter design system: a blank canvas that mints a neutral placeholder token on every scale the suite declares and base-tag defaults that reference them, for a site to build its own design system off. Open enforcement, no guide fragment, no CSS, no templates. Enabled by a site, not by a recipe.'
+package: Daedalus
+core_version_requirement: '>=11.3 <11.5'
+dependencies:
+  - daedalus:daedalus_blueprint
+  - daedalus:daedalus_stylish

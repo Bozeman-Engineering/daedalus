@@ -1,0 +1,16 @@
+parameters:
+  level: 2
+  paths:
+    - .
+  excludePaths:
+    - '*/node_modules/*'
+    - modules/daedalus_stylish/js/dist/*
+    - modules/daedalus_ui/js/edit_mode/dist/*
+    # Extends entity_workflow_content's WorkspaceSwitcherController, a module
+    # daedalus_ui integrates with only when it is installed (see
+    # DaedalusUiServiceProvider); its class is absent from a plain
+    # checkout and an unknown parent cannot be suppressed by a baseline entry.
+    - modules/daedalus_ui/src/Controller/WorkspaceSwitcher.php
+  reportUnmatchedIgnoredErrors: false
+includes:
+  - phpstan-baseline.neon

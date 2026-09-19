@@ -1,0 +1,9 @@
+name: 'Daedalus AI Gemini'
+type: module
+description: 'Gemini-specific image-dimension vocabulary for the Daedalus AI page builder tool (Gemini aspectRatio configuration).'
+package: Daedalus
+core_version_requirement: '>=11.3 <11.5'
+lifecycle: experimental
+dependencies:
+  - daedalus:daedalus_ai
+  - gemini_provider:gemini_provider

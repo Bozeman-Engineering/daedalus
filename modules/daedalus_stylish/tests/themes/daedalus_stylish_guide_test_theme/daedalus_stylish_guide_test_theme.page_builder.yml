@@ -1,0 +1,10 @@
+container:
+  property_groups:
+    spacing:
+      constraints:
+        padding:
+          units:
+            - 'rem'
+field:
+  property_groups:
+    color: null

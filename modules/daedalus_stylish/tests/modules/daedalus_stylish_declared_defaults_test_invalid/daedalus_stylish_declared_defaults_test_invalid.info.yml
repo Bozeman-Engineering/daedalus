@@ -1,0 +1,6 @@
+name: 'Daedalus Stylish declared defaults test (invalid)'
+type: module
+description: 'Ships declared defaults that fail the guide build: a token reference, a slot-path key, and kind and site attempts.'
+package: Testing
+core_version_requirement: '*'
+hidden: true

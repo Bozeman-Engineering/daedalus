@@ -1,0 +1,31 @@
+langcode: en
+status: true
+dependencies:
+  config:
+    - block_content.type.text
+    - field.storage.block_content.field_text_url
+  module:
+    - daedalus_edit
+    - field_sample_value
+    - link
+third_party_settings:
+  field_sample_value:
+    id: null
+    configuration: {  }
+  daedalus_edit:
+    disable: true
+    handle: form_item
+id: block_content.text.field_text_url
+field_name: field_text_url
+entity_type: block_content
+bundle: text
+label: URL
+description: 'Adding a URL makes the text into a link.'
+required: false
+translatable: false
+default_value: {  }
+default_value_callback: ''
+settings:
+  title: 0
+  link_type: 17
+field_type: link

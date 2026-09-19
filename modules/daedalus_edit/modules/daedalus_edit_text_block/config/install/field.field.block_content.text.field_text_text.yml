@@ -1,0 +1,30 @@
+langcode: en
+status: true
+dependencies:
+  config:
+    - block_content.type.text
+    - field.storage.block_content.field_text_text
+  module:
+    - daedalus_edit
+    - field_sample_value
+third_party_settings:
+  field_sample_value:
+    id: random_string
+    configuration:
+      prevent_save: false
+      count: '5'
+  daedalus_edit:
+    disable: false
+    handle: form_item
+id: block_content.text.field_text_text
+field_name: field_text_text
+entity_type: block_content
+bundle: text
+label: Text
+description: ''
+required: true
+translatable: false
+default_value: {  }
+default_value_callback: ''
+settings: {  }
+field_type: string_long

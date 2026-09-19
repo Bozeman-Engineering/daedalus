@@ -1,0 +1,46 @@
+# The retired multi-region layouts, exactly as daedalus_stylish_layouts shipped them
+# (region lists match ContainerMigration::LAYOUT_REGIONS). Test-only: the
+# real plugins are deleted, but persisting PRE-migration fixture data
+# requires live plugins because core's Section::toArray() resolves
+# layout_settings through the plugin (getLayout()->getConfiguration()).
+# Never rendered, so no templates ship.
+daedalus_stylish_onecol:
+  label: 'One column (retired)'
+  category: 'Testing'
+  default_region: first
+  regions:
+    first:
+      label: First
+daedalus_stylish_twocol:
+  label: 'Two column (retired)'
+  category: 'Testing'
+  default_region: first
+  regions:
+    first:
+      label: First
+    second:
+      label: Second
+daedalus_stylish_threecol:
+  label: 'Three column (retired)'
+  category: 'Testing'
+  default_region: second
+  regions:
+    first:
+      label: First
+    second:
+      label: Second
+    third:
+      label: Third
+daedalus_stylish_fourcol:
+  label: 'Four column (retired)'
+  category: 'Testing'
+  default_region: first
+  regions:
+    first:
+      label: First
+    second:
+      label: Second
+    third:
+      label: Third
+    fourth:
+      label: Fourth

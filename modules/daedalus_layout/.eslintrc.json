@@ -1,0 +1,31 @@
+{
+  // Layered over core's .eslintrc.passing.json, which drupal.org's eslint job
+  // links into the directory above the project. The add panel and the verbs
+  // ship as browser-native ES modules (daedalus_layout.libraries.yml attaches them
+  // with type: module and no bundler), which is why each entry below exists.
+  "rules": {
+    // A browser resolves a relative import only with its extension.
+    "import/extensions": ["error", "ignorePackages", { "js": "always" }],
+    // Modules export named bindings on purpose so an importer binds the
+    // registration function under its own name beside the app it registers
+    // into.
+    "import/prefer-default-export": "off"
+  },
+  "overrides": [
+    {
+      "files": ["js/add-panel/add-panel.js"],
+      "rules": {
+        // The insert session is a small state machine whose arm, disarm and
+        // anchor-advance steps call one another only from callbacks (drag
+        // sources, a mutation observer, the selection subscription), so the
+        // bindings resolve at call time, after the module body ran; no
+        // textual order satisfies the cycle. Same-scope use before definition
+        // stays an error.
+        "no-use-before-define": [
+          "error",
+          { "functions": false, "classes": true, "variables": false }
+        ]
+      }
+    }
+  ]
+}

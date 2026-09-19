@@ -1,0 +1,6 @@
+daedalus_ui.settings:
+  title: Daedalus
+  description: Configure Daedalus settings
+  parent: system.admin_config_content
+  route_name: daedalus_ui.settings
+  weight: 10

@@ -1,0 +1,9 @@
+container:
+  property_groups:
+    spacing:
+      constraints:
+        padding:
+          max: '6rem'
+        padding-left:
+          max: '3rem'
+    background: {}

@@ -1,0 +1,113 @@
+/**
+ * The composed-element editors' widget verbs: popover toggles and their
+ * popovers, riding the selection chip's widget slots.
+ *
+ * The frame renders each widget verb's slot on the primary's chip
+ * (daedalus_ui owns placement; .daedalus-ui-frame__widget is the popover's
+ * positioning context) and the toggles wear the chip's own button
+ * vocabulary (daedalus-ui-frame__verb, daedalus-ui-frame__icon, daedalus-ui-frame__label —
+ * selection-frame.css), so the entries read as part of the one pill and
+ * the density ladder's labels reach them like any other verb. This file
+ * holds only what the chip vocabulary doesn't: the open toggle's
+ * inverted state and the popovers. An editor's own controls (e.g. the
+ * text block's tag picker) ship their CSS with the editor.
+ *
+ * @see js/daedalus_edit/composed/verb-widgets.js
+ * @see js/daedalus_edit/composed/link-control.js
+ */
+
+/* The open toggle inverts against the chip's selection color, so the
+   pressed state reads on the colored pill. */
+.daedalus-edit-widget-toggle[aria-expanded="true"] {
+  color: var(--daedalus-selection);
+  background-color: #fff;
+}
+
+/**
+ * A widget's popover: anchored to its slot (.daedalus-ui-frame__widget is
+ * position: relative), hanging above the chip so it never covers the
+ * editing surface below.
+ */
+.daedalus-edit-widget-popover {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 0;
+  display: flex;
+  align-items: center;
+  padding: 6px;
+  color: #222;
+  border: 1px solid #ddd;
+  border-radius: var(--daedalus-border-radius);
+  background-color: #fff;
+  box-shadow: 0 4px 6px rgb(0, 0, 0, 0.1);
+  font-size: var(--daedalus-font-size-large);
+  font-weight: 400;
+  line-height: 1;
+  gap: 8px;
+}
+
+.daedalus-edit-widget-popover[hidden] {
+  display: none;
+}
+
+/**
+ * The link popover: the input stacked over its suggestion dropdown. The
+ * popover hangs above the chip from a fixed bottom edge, so a growing
+ * dropdown extends the box upward and never covers the editing surface.
+ */
+.daedalus-edit-link-popover {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+}
+
+.daedalus-edit-link-input {
+  min-width: 220px;
+  padding: 6px 8px;
+  color: #222;
+  border: 1px solid #ddd;
+  /* Concentric with the popover: its radius minus the 6px inset. */
+  border-radius: calc(var(--daedalus-border-radius) - 6px);
+  background-color: #fff;
+  font: inherit;
+}
+
+.daedalus-edit-link-suggestions {
+  overflow-y: auto;
+  max-height: 240px;
+}
+
+.daedalus-edit-link-suggestions[hidden] {
+  display: none;
+}
+
+/* A group heading: the entity type label over one fan-out's results,
+   rendered only when the field suggests more than one type. */
+.daedalus-edit-link-group {
+  padding: 4px 8px 2px;
+  color: #666;
+  font-size: var(--daedalus-font-size-small, 0.75rem);
+  font-weight: 600;
+}
+
+.daedalus-edit-link-suggestion {
+  display: block;
+  overflow: hidden;
+  width: 100%;
+  margin: 0;
+  padding: 4px 8px;
+  cursor: pointer;
+  text-align: left;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: #222;
+  border: 0;
+  border-radius: calc(var(--daedalus-border-radius) - 6px);
+  background: transparent;
+  font: inherit;
+}
+
+.daedalus-edit-link-suggestion:hover,
+.daedalus-edit-link-suggestion[aria-selected="true"] {
+  background-color: #f0f0f0;
+}

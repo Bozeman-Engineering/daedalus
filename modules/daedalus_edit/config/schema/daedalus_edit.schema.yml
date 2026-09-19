@@ -1,0 +1,16 @@
+field.field.*.*.*.third_party.daedalus_edit:
+  type: mapping
+  label: 'Daedalus Edit field configuration'
+  mapping:
+    disable:
+      type: boolean
+      label: 'Disable inline editing for this field'
+    handle:
+      type: string
+      label: 'Form Item Handle'
+    link_target_types:
+      type: sequence
+      label: 'Link autocomplete entity types'
+      sequence:
+        type: string
+        label: 'Entity type id'

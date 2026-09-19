@@ -1,0 +1,6 @@
+name: 'Daedalus Stylish nested guide test'
+type: module
+description: 'Provides nested style guide declarations for testing.'
+package: Testing
+core_version_requirement: '*'
+hidden: true

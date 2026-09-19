@@ -1,0 +1,16 @@
+# Test layouts exercising the container-layout serialization shape.
+#
+# eb_test_container declares `container: true` with exactly one region: its
+# section nodes serialize an ordered `children` list instead of the regions
+# map (see ContainerLayout). The region name is deliberately NOT "content"
+# anywhere-special — it is the vestigial storage region children map onto.
+eb_test_container:
+  label: 'Test container'
+  category: 'Test'
+  default_region: content
+  container: true
+  icon_map:
+    - [content]
+  regions:
+    content:
+      label: Content

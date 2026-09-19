@@ -1,0 +1,14 @@
+# Declared defaults outside the ownership law: the block kind's root
+# (templated, so the theme's markup: only a composed kind may default its
+# root) and the site (which renders nothing). Both looks are the skin's.
+block:
+  defaults:
+    '':
+      default:
+        padding: 1rem
+site:
+  defaults:
+    'kind:block':
+      '':
+        default:
+          padding: 1rem

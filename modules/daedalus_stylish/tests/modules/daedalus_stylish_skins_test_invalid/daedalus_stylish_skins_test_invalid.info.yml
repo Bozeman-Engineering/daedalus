@@ -1,0 +1,8 @@
+name: 'Daedalus Stylish skins test invalid'
+type: module
+description: 'Ships a constraint-violating skin for testing loud import failure.'
+package: Testing
+core_version_requirement: '*'
+hidden: true
+dependencies:
+  - daedalus:daedalus_stylish

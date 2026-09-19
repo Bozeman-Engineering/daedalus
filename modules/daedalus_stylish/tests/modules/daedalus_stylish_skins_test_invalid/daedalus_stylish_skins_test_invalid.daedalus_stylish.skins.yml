@@ -1,0 +1,8 @@
+# Mints a token on a scale no site declaration declares: spine validation
+# (StyleMapValidator::validateTokens through the skin tokens field handler)
+# must fail the import loudly.
+broken:
+  label: 'Broken'
+  tokens:
+    undeclared_scale:
+      thing: '1rem'

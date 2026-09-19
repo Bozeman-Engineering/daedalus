@@ -1,0 +1,294 @@
+daedalus_stylish.inspector_popout:
+  path: '/daedalus_stylish/inspector-popout'
+  defaults:
+    _controller: 'Drupal\daedalus_stylish\Controller\InspectorPopout::build'
+    _title: 'Styles'
+  requirements:
+    _permission: 'use daedalus ui edit mode'
+  options:
+    _daedalus_ui.popout: true
+
+# The variant lifecycle routes: the gestures with no page batch to
+# ride (the palette manages the vocabulary from wherever it is open) and
+# the two that drive a core Batch (delete). The WRITES that mint or push a
+# variant are page-language ops (save_material / update_material, kind
+# variant, daedalus_blueprint's material gesture family), submitted by the
+# inspector and the AI alike; the routes that remain are ADAPTERS over the
+# same DaedalusStylishMaterialsProvider methods and answer the same materials
+# delta. Usage is readable by every gesture that needs its loud count: the
+# push prompt AND the delete dialog ("Detach N pieces of content, then
+# delete").
+daedalus_stylish.variant_usage:
+  path: '/daedalus_stylish/variants/{reference}/usage'
+  methods: [GET]
+  defaults:
+    _controller: 'Drupal\daedalus_stylish\Controller\VariantApiController::usage'
+    _title: 'Style variant usage'
+  options:
+    no_cache: 'TRUE'
+  requirements:
+    _permission: 'update variants+delete variants+delete variants in use+administer variants'
+
+# Copy-as-my-variant: the distro lock's fork gesture. A CREATE, not an
+# update — the source is read, never touched — so it rides the create
+# permission like save-as.
+daedalus_stylish.variant_copy:
+  path: '/daedalus_stylish/variants/{reference}/copy'
+  methods: [POST]
+  defaults:
+    _controller: 'Drupal\daedalus_stylish\Controller\VariantApiController::copy'
+    _title: 'Copy a style variant as a site variant'
+  options:
+    no_cache: 'TRUE'
+  requirements:
+    _permission: 'create variants+administer variants'
+    _csrf_request_header_token: 'TRUE'
+
+# Delete: two grades share the route. The route admits either grade;
+# the contextual gate — a WORN variant needs "delete variants in use",
+# because deleting it runs the detach-then-delete batch — lives in
+# VariantManager::deleteVariant(), where the usage table is readable.
+daedalus_stylish.variant_delete:
+  path: '/daedalus_stylish/variants/{reference}'
+  methods: [DELETE]
+  defaults:
+    _controller: 'Drupal\daedalus_stylish\Controller\VariantApiController::delete'
+    _title: 'Delete a style variant'
+  options:
+    no_cache: 'TRUE'
+  requirements:
+    _permission: 'delete variants+delete variants in use+administer variants'
+    _csrf_request_header_token: 'TRUE'
+
+# Details: the face gesture, label and/or description in one revisioned
+# save (machine name and uuid are identity and never change, so every
+# style map reference survives a relabel).
+daedalus_stylish.variant_details:
+  path: '/daedalus_stylish/variants/{reference}/details'
+  methods: [POST]
+  defaults:
+    _controller: 'Drupal\daedalus_stylish\Controller\VariantApiController::details'
+    _title: 'Update the details of a style variant'
+  options:
+    no_cache: 'TRUE'
+  requirements:
+    _permission: 'update variants+administer variants'
+    _csrf_request_header_token: 'TRUE'
+
+# The revision history behind the lifecycle card's restore gesture.
+daedalus_stylish.variant_revisions:
+  path: '/daedalus_stylish/variants/{reference}/revisions'
+  methods: [GET]
+  defaults:
+    _controller: 'Drupal\daedalus_stylish\Controller\VariantApiController::revisions'
+    _title: 'Style variant revisions'
+  options:
+    no_cache: 'TRUE'
+  requirements:
+    _permission: 'update variants+administer variants'
+
+# Restore: an update gesture like push — a NEW default revision carrying an
+# old revision's revisionable fields, so a restore is itself one restore
+# away from undo.
+daedalus_stylish.variant_restore:
+  path: '/daedalus_stylish/variants/{reference}/revisions/{revision_id}/restore'
+  methods: [POST]
+  defaults:
+    _controller: 'Drupal\daedalus_stylish\Controller\VariantApiController::restore'
+    _title: 'Restore a style variant revision'
+  options:
+    no_cache: 'TRUE'
+  requirements:
+    _permission: 'update variants+administer variants'
+    _csrf_request_header_token: 'TRUE'
+    revision_id: '\d+'
+
+# Revert-to-shipped-defaults: an update gesture like push, an
+# ordinary revisioned save whose styles come from the provider's disk file.
+daedalus_stylish.variant_revert:
+  path: '/daedalus_stylish/variants/{reference}/revert'
+  methods: [POST]
+  defaults:
+    _controller: 'Drupal\daedalus_stylish\Controller\VariantApiController::revert'
+    _title: 'Revert a style variant to its shipped defaults'
+  options:
+    no_cache: 'TRUE'
+  requirements:
+    _permission: 'update variants+administer variants'
+    _csrf_request_header_token: 'TRUE'
+
+# The swatch lifecycle routes: the variant route template at value scope.
+# Minting and the value editor are the save_material / update_material ops
+# (kind swatch); the routes that remain adapt onto the same provider.
+# The live reference count behind the palette card's loud prompts, the
+# variant usage endpoint's twin (the count drifts mid-session).
+daedalus_stylish.swatch_usage:
+  path: '/daedalus_stylish/swatches/{reference}/usage'
+  methods: [GET]
+  defaults:
+    _controller: 'Drupal\daedalus_stylish\Controller\SwatchApiController::usage'
+    _title: 'Swatch usage'
+  options:
+    no_cache: 'TRUE'
+  requirements:
+    _permission: 'update swatches+delete swatches+delete swatches in use+administer swatches'
+
+# Rename: a label-only update gesture (machine name and uuid are identity
+# and never change, so every var(--swatch-*) reference survives a rename).
+daedalus_stylish.swatch_rename:
+  path: '/daedalus_stylish/swatches/{reference}/rename'
+  methods: [POST]
+  defaults:
+    _controller: 'Drupal\daedalus_stylish\Controller\SwatchApiController::rename'
+    _title: 'Rename a swatch'
+  options:
+    no_cache: 'TRUE'
+  requirements:
+    _permission: 'update swatches+administer swatches'
+    _csrf_request_header_token: 'TRUE'
+
+# The revision history behind the palette card's restore gesture.
+daedalus_stylish.swatch_revisions:
+  path: '/daedalus_stylish/swatches/{reference}/revisions'
+  methods: [GET]
+  defaults:
+    _controller: 'Drupal\daedalus_stylish\Controller\SwatchApiController::revisions'
+    _title: 'Swatch revisions'
+  options:
+    no_cache: 'TRUE'
+  requirements:
+    _permission: 'update swatches+administer swatches'
+
+# Restore: an update gesture — a NEW default revision carrying an old
+# revision's revisionable fields, so a restore is itself one restore away
+# from undo (and instantly restyles every referencing element).
+daedalus_stylish.swatch_restore:
+  path: '/daedalus_stylish/swatches/{reference}/revisions/{revision_id}/restore'
+  methods: [POST]
+  defaults:
+    _controller: 'Drupal\daedalus_stylish\Controller\SwatchApiController::restore'
+    _title: 'Restore a swatch revision'
+  options:
+    no_cache: 'TRUE'
+  requirements:
+    _permission: 'update swatches+administer swatches'
+    _csrf_request_header_token: 'TRUE'
+    revision_id: '\d+'
+
+# Revert-to-shipped-defaults: an ordinary revisioned save whose payload
+# comes from the provider's disk file.
+daedalus_stylish.swatch_revert:
+  path: '/daedalus_stylish/swatches/{reference}/revert'
+  methods: [POST]
+  defaults:
+    _controller: 'Drupal\daedalus_stylish\Controller\SwatchApiController::revert'
+    _title: 'Revert a swatch to its shipped defaults'
+  options:
+    no_cache: 'TRUE'
+  requirements:
+    _permission: 'update swatches+administer swatches'
+    _csrf_request_header_token: 'TRUE'
+
+# Delete: two grades share the route like variants. The route admits either
+# grade; the contextual gate lives in SwatchManager::deleteSwatch() — a
+# REFERENCED swatch needs "delete swatches in use", because deleting it
+# runs the var()-to-literal rewrite batch over the usage table's work list.
+daedalus_stylish.swatch_delete:
+  path: '/daedalus_stylish/swatches/{reference}'
+  methods: [DELETE]
+  defaults:
+    _controller: 'Drupal\daedalus_stylish\Controller\SwatchApiController::delete'
+    _title: 'Delete a swatch'
+  options:
+    no_cache: 'TRUE'
+  requirements:
+    _permission: 'delete swatches+delete swatches in use+administer swatches'
+    _csrf_request_header_token: 'TRUE'
+
+# The animation lifecycle routes: the swatch route template at structure
+# scope. Minting and the keyframes editor are the save_material /
+# update_material ops (kind animation); the routes that remain adapt onto
+# the same provider. The live wearer count behind the card's loud prompts,
+# the swatch usage endpoint's twin (the count drifts mid-session).
+daedalus_stylish.animation_usage:
+  path: '/daedalus_stylish/animations/{reference}/usage'
+  methods: [GET]
+  defaults:
+    _controller: 'Drupal\daedalus_stylish\Controller\AnimationApiController::usage'
+    _title: 'Animation usage'
+  options:
+    no_cache: 'TRUE'
+  requirements:
+    _permission: 'update animations+delete animations+delete animations in use+administer animations'
+
+# Rename: a label-only update gesture (machine name and uuid are identity
+# and never change, so every motion-{name} reference survives a rename).
+daedalus_stylish.animation_rename:
+  path: '/daedalus_stylish/animations/{reference}/rename'
+  methods: [POST]
+  defaults:
+    _controller: 'Drupal\daedalus_stylish\Controller\AnimationApiController::rename'
+    _title: 'Rename an animation'
+  options:
+    no_cache: 'TRUE'
+  requirements:
+    _permission: 'update animations+administer animations'
+    _csrf_request_header_token: 'TRUE'
+
+# The revision history behind the card's restore gesture.
+daedalus_stylish.animation_revisions:
+  path: '/daedalus_stylish/animations/{reference}/revisions'
+  methods: [GET]
+  defaults:
+    _controller: 'Drupal\daedalus_stylish\Controller\AnimationApiController::revisions'
+    _title: 'Animation revisions'
+  options:
+    no_cache: 'TRUE'
+  requirements:
+    _permission: 'update animations+administer animations'
+
+# Restore: an update gesture, a NEW default revision carrying an old
+# revision's revisionable fields, so a restore is itself one restore away
+# from undo (and re-animates every wearer at once).
+daedalus_stylish.animation_restore:
+  path: '/daedalus_stylish/animations/{reference}/revisions/{revision_id}/restore'
+  methods: [POST]
+  defaults:
+    _controller: 'Drupal\daedalus_stylish\Controller\AnimationApiController::restore'
+    _title: 'Restore an animation revision'
+  options:
+    no_cache: 'TRUE'
+  requirements:
+    _permission: 'update animations+administer animations'
+    _csrf_request_header_token: 'TRUE'
+    revision_id: '\d+'
+
+# Revert-to-shipped-defaults: an ordinary revisioned save whose steps come
+# from the provider's disk file.
+daedalus_stylish.animation_revert:
+  path: '/daedalus_stylish/animations/{reference}/revert'
+  methods: [POST]
+  defaults:
+    _controller: 'Drupal\daedalus_stylish\Controller\AnimationApiController::revert'
+    _title: 'Revert an animation to its shipped defaults'
+  options:
+    no_cache: 'TRUE'
+  requirements:
+    _permission: 'update animations+administer animations'
+    _csrf_request_header_token: 'TRUE'
+
+# Delete: two grades share the route like swatches. The route admits either
+# grade; the contextual gate lives in AnimationManager::deleteAnimation(): a
+# WORN animation needs "delete animations in use", because deleting it runs
+# the reference-to-none rewrite batch over the usage table's work list.
+daedalus_stylish.animation_delete:
+  path: '/daedalus_stylish/animations/{reference}'
+  methods: [DELETE]
+  defaults:
+    _controller: 'Drupal\daedalus_stylish\Controller\AnimationApiController::delete'
+    _title: 'Delete an animation'
+  options:
+    no_cache: 'TRUE'
+  requirements:
+    _permission: 'delete animations+delete animations in use+administer animations'
+    _csrf_request_header_token: 'TRUE'

@@ -1,0 +1,11 @@
+# Universal daedalus_blueprint context: this module ships the page
+# builder's one section layout, so it owns the layout's AI guidance for
+# every bundle. Bundle context files must never carry their own copy
+# (bundle context is a small additive delta; a per-bundle copy of layout
+# guidance is the drift the three-layer model exists to prevent). What a
+# container can wear (its axes and their values, the columns arrangement
+# among them) is the design system brief's and each variant's own
+# description's; this entry states only what the layout IS.
+layouts:
+  daedalus_stylish_container:
+    guidance: 'The one section layout. A container is one ordered flow of children, rendering stacked unless the layout axis it wears says otherwise (whether a new section wears variants at birth depends on how it is created; this entry''s default_variants line states it). A container renders as ONE element at every depth (a real <section> page band at root depth, a plain grouping <div> nested): style the container itself - a background spans the full screen there while the worn width variant constrains the content column on the same box.'

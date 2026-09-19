@@ -1,0 +1,103 @@
+<?php
+
+/**
+ * @file
+ * Hook implementations for daedalus_blueprint_ai.
+ */
+
+declare(strict_types=1);
+
+use Drupal\Core\StringTranslation\TranslatableMarkup;
+use Drupal\daedalus_blueprint_ai\Plugin\AiFunctionCall\Edit;
+
+/**
+ * Implements hook_ai_tools_property_alter().
+ *
+ * Maps the 'map' data type to JSON schema 'object'. The AI module's
+ * normalizer has no mapping for 'map' and falls back to 'string', but map
+ * types represent key-value structures: native objects on the wire, so the
+ * model sends structured arguments instead of hand-serializing JSON into a
+ * string. additionalProperties keeps the object open; the doctrine for what
+ * goes inside lives in each parameter's description. This is deliberately
+ * generic (no parameter-name matching): it fixes the upstream gap for ANY
+ * map param; per-parameter shapes (e.g. eb_edit's operations array) are
+ * plugin-local normalize() overrides.
+ */
+function daedalus_blueprint_ai_ai_tools_property_alter(mixed $property, mixed $definition): void {
+  if ($definition->getDataType() === 'map') {
+    $property->setType('object');
+    $property->setCustomValue('additionalProperties', TRUE);
+  }
+}
+
+/**
+ * Implements hook_ai_function_call_info_alter().
+ *
+ * Appends module-registered batch operations (the operation handler
+ * registry) to the eb_edit tool's operations parameter, ONCE, as
+ * an "op (router line)" roll-call. A router line is tier-one context (see
+ * OperationHandlerInterface::getGuidance()): it names the op's parameters
+ * and routes to the owning module's on-demand skill for doctrine, so the
+ * always-on surface stays lean and the op names are never listed twice on
+ * the same tool. Also tells the mutating tools' descriptions about the
+ * write echo when a markup projector is installed, so the model verifies
+ * from the result instead of opening a read-back loop; with no projector
+ * the sentence is absent, and the surface never advertises an echo the
+ * results do not carry.
+ *
+ * Also composes eb_edit's operations description for the site's shape: on
+ * a page-language site (the dialect catalog declares a container layout)
+ * the layout grammar and the page-only ops leave the surface entirely —
+ * pages are page_edit's, refused by Edit::execute() — and only the config
+ * ops, the root-field update_element, and any genuinely non-page
+ * registered ops remain.
+ */
+function daedalus_blueprint_ai_ai_function_call_info_alter(array &$definitions): void {
+  if (\Drupal::service('daedalus_blueprint.markup_projection')->hasProjector()) {
+    $mutating_tools = [
+      'daedalus_blueprint:edit',
+      'daedalus_blueprint:create_entity',
+    ];
+    foreach ($mutating_tools as $id) {
+      if (isset($definitions[$id])) {
+        $definitions[$id]['description'] = ((string) $definitions[$id]['description'])
+          . ' The result echoes the affected elements as key-annotated markup: verify your change against it instead of re-reading the page.';
+      }
+    }
+  }
+
+  if (!isset($definitions['daedalus_blueprint:edit'])) {
+    return;
+  }
+  $definition = &$definitions['daedalus_blueprint:edit'];
+  $operations_context = $definition['context_definitions']['operations'];
+  $registry = \Drupal::service('daedalus_blueprint.operation_handler_registry');
+  $guidance = $registry->getGuidance();
+
+  // The site-shape predicate, evaluated here because plugin definitions
+  // rebuild with cache clears (which config changes to layouts imply): when
+  // the catalog declares a container layout, the page language speaks for
+  // every layout-bearing entity and Edit::execute() refuses them, so the
+  // operations description composes WITHOUT the layout grammar and the
+  // page-only handler roll-call (DOM, styling, stencil ops), keeping the
+  // config ops and the root-field update_element.
+  if (\Drupal::service('daedalus_blueprint.dialect_catalog_builder')->build()->containerLayoutId() !== '') {
+    $operations_context->setDescription(new TranslatableMarkup(
+      // The description is the tool's grammar, assembled from its constants.
+      // phpcs:ignore Drupal.Semantics.FunctionT.NotLiteralString
+      Edit::OPERATIONS_INTRO . Edit::OPERATIONS_ROOT_GRAMMAR . Edit::OPERATIONS_CONFIG_OPS . Edit::OPERATIONS_ROOT_EXAMPLE
+    ));
+    $guidance = array_diff_key($guidance, array_flip($registry->getPageOnlyOperations()));
+  }
+
+  if (empty($guidance)) {
+    return;
+  }
+
+  $lines = [];
+  foreach ($guidance as $op => $text) {
+    $lines[] = "$op ($text)";
+  }
+  $operations_context->setDescription(((string) $operations_context->getDescription())
+    . ' Module-registered ops: ' . implode(', ', $lines) . '.');
+}

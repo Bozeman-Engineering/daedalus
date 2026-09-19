@@ -1,0 +1,13 @@
+services:
+  # The image block's content for the generative composed render: the
+  # declaration renders the tree, this feeds it (the
+  # daedalus_ui.composed_block_content collector pattern).
+  daedalus_edit_image_block.composed_content:
+    class: Drupal\daedalus_edit_image_block\ImageComposedContent
+    arguments:
+      - '@entity_type.manager'
+      - '@entity_display.repository'
+      - '@daedalus_ui.ui'
+      - '@daedalus_edit.media_library.opener'
+    tags:
+      - { name: daedalus_ui.composed_block_content }

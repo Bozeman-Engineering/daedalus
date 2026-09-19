@@ -1,0 +1,111 @@
+services:
+  _defaults:
+    autoconfigure: true
+    autowire: true
+
+  daedalus_layout.route_subscriber:
+    class: Drupal\daedalus_layout\Routing\LayoutBuilderRouteSubscriber
+
+  daedalus_layout.route_enhancer.nested:
+    class: Drupal\daedalus_layout\Routing\NestedRouteEnhancer
+    tags:
+      # Must run AFTER LayoutTempstoreRouteEnhancer (priority 0)
+      - { name: route_enhancer, priority: -10 }
+
+  daedalus_layout.no_help_block:
+    class: Drupal\daedalus_layout\Config\NoHelpBlock
+    tags:
+      - { name: config.factory.override, priority: 5 }
+
+  daedalus_layout.new_media:
+    class: Drupal\daedalus_layout\NewMedia
+  Drupal\daedalus_layout\NewMedia: '@daedalus_layout.new_media'
+
+  daedalus_layout.navigation_replace_media:
+    class: Drupal\daedalus_layout\EventSubscriber\DaedalusUiReplaceMedia
+
+  daedalus_layout.root_entity_registry:
+    class: Drupal\daedalus_layout\RootEntityRegistry
+  Drupal\daedalus_layout\RootEntityRegistry: '@daedalus_layout.root_entity_registry'
+
+  daedalus_layout.block_component_render_array:
+    class: Drupal\daedalus_layout\EventSubscriber\BlockComponentRenderArray
+
+  daedalus_layout.nested_section_render_array:
+    class: Drupal\daedalus_layout\EventSubscriber\NestedSectionRenderArray
+
+  daedalus_layout.navigation_new_media:
+    class: Drupal\daedalus_layout\EventSubscriber\DaedalusUiNewMedia
+
+  daedalus_layout.ui_build:
+    class: Drupal\daedalus_layout\EventSubscriber\EditableUiBuilder
+
+  # Feeds the element model's existence inference: on a Layout Builder
+  # display, non-preserved root fields never render under their own field
+  # keys (preserved_fields IS the render truth daedalus_layout owns).
+  daedalus_layout.element_model.preserved_fields:
+    class: Drupal\daedalus_layout\ElementModel\PreservedFieldsRootExistence
+    tags:
+      - { name: daedalus_ui.existence_feeder }
+
+  daedalus_layout.blueprint_element_created:
+    class: Drupal\daedalus_layout\EventSubscriber\BlueprintElementCreated
+
+  daedalus_layout.dialog_close_subscriber:
+    class: Drupal\daedalus_layout\EventSubscriber\DialogCloseSubscriber
+
+  daedalus_layout.blueprint_mirror_refresh:
+    class: Drupal\daedalus_layout\EventSubscriber\BlueprintMirrorRefresh
+
+  daedalus_layout.layout_settings:
+    class: Drupal\daedalus_layout\EventSubscriber\LayoutSettings
+
+  # Default-content (recipe) round trip for layouts: supersedes core
+  # layout_builder's field_item:layout_section export callback so inline
+  # blocks ride by uuid + dependency (core only handles reusable
+  # components), resolves them back to freshly imported ids at import, and
+  # flags usage rows for imported hosts (skipped by the syncing presave).
+  daedalus_layout.default_content_subscriber:
+    class: Drupal\daedalus_layout\EventSubscriber\DefaultContentSubscriber
+
+  daedalus_layout.component_transform_registry:
+    class: Drupal\daedalus_layout\ComponentTransform\ComponentTransformRegistry
+    # Transform service IDs (tags: daedalus_layout.component_transform,
+    # daedalus_layout.section_transform, daedalus_layout.host_transform) are collected in
+    # priority order by DaedalusLayoutServiceProvider and injected here.
+    arguments: ['@service_container', [], [], []]
+  Drupal\daedalus_layout\ComponentTransform\ComponentTransformRegistry: '@daedalus_layout.component_transform_registry'
+
+  # Migration spine store walker 1: batched walk of content entity layout
+  # hosts (every revision and translation) applying registered component
+  # transforms.
+  daedalus_layout.host_entity_walker:
+    class: Drupal\daedalus_layout\ComponentTransform\HostEntityWalker
+  Drupal\daedalus_layout\ComponentTransform\HostEntityWalker: '@daedalus_layout.host_entity_walker'
+
+  # Migration spine store walker 2: default layouts in Layout Builder enabled
+  # entity view displays. Any other content entity carrying a layout_section
+  # field needs no walker of its own: the host entity walker keys on the field
+  # type, and block_serialized copies are rewritten by transforms following
+  # the block_serialized contract documented on ComponentTransformInterface.
+  daedalus_layout.entity_view_display_walker:
+    class: Drupal\daedalus_layout\ComponentTransform\EntityViewDisplayWalker
+  Drupal\daedalus_layout\ComponentTransform\EntityViewDisplayWalker: '@daedalus_layout.entity_view_display_walker'
+
+  # Deprecation-window safety net: daedalus_layout_entity_presave() runs registered
+  # component transforms on the layouts of every entity being saved, catching
+  # stale tempstore sessions the batched walkers cannot reach.
+  daedalus_layout.presave_safety_net:
+    class: Drupal\daedalus_layout\ComponentTransform\PresaveSafetyNet
+  Drupal\daedalus_layout\ComponentTransform\PresaveSafetyNet: '@daedalus_layout.presave_safety_net'
+
+  # The legacy layout-block exit path: inline_block:layout_block components
+  # become nested-section containers. Registered here (the container plugin's
+  # home) rather than in the deleted daedalus_edit_layout_block module so the
+  # presave safety net keeps converging stragglers (stale tempstore
+  # sessions, forgotten drafts) after that module is gone. Costs one plugin
+  # id check per component save while registered.
+  daedalus_layout.layout_block_to_section_transform:
+    class: Drupal\daedalus_layout\ComponentTransform\LayoutBlockToSectionTransform
+    tags:
+      - { name: daedalus_layout.component_transform }

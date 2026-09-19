@@ -1,0 +1,64 @@
+<?php
+
+/**
+ * @file
+ * State-driven restriction provider for placement-restriction tests.
+ *
+ * Mirrors layout_builder_restrictions' filter-alter contract precisely so
+ * the spine can be tested against the real provider conventions without the
+ * module: the block hook honors the list/browse gate and requires a section
+ * storage; per-region denials derive the governing layout from
+ * $extra['section_storage']->getSection($extra['delta'])->getLayoutId(),
+ * exactly like the by_region plugin.
+ *
+ * State keys:
+ * - daedalus_blueprint_restriction_test.denied_blocks: block plugin IDs to
+ *   remove display-wide.
+ * - daedalus_blueprint_restriction_test.denied_by_region: map of
+ *   layout_id => region => block plugin IDs to remove in that region.
+ * - daedalus_blueprint_restriction_test.allowed_layouts: when set, the only
+ *   layout IDs kept.
+ */
+
+declare(strict_types=1);
+
+/**
+ * Implements hook_plugin_filter_TYPE__CONSUMER_alter().
+ */
+function daedalus_blueprint_restriction_test_plugin_filter_block__layout_builder_alter(array &$definitions, array $extra): void {
+  if (isset($extra['list']) && !isset($extra['browse'])) {
+    // The layout_builder_restrictions gate: a bare list request is not a
+    // placement question.
+    return;
+  }
+  if (!isset($extra['section_storage'])) {
+    return;
+  }
+  $state = \Drupal::state();
+
+  foreach ($state->get('daedalus_blueprint_restriction_test.denied_blocks', []) as $plugin_id) {
+    unset($definitions[$plugin_id]);
+  }
+
+  // Per-region denials, keyed exactly like by_region derives its answer.
+  if (isset($extra['delta'], $extra['region'])) {
+    $layout_id = $extra['section_storage']->getSection($extra['delta'])->getLayoutId();
+    $map = $state->get('daedalus_blueprint_restriction_test.denied_by_region', []);
+    foreach ($map[$layout_id][$extra['region']] ?? [] as $plugin_id) {
+      unset($definitions[$plugin_id]);
+    }
+  }
+}
+
+/**
+ * Implements hook_plugin_filter_TYPE__CONSUMER_alter().
+ */
+function daedalus_blueprint_restriction_test_plugin_filter_layout__layout_builder_alter(array &$definitions, array $extra): void {
+  if (!isset($extra['section_storage'])) {
+    return;
+  }
+  $allowed = \Drupal::state()->get('daedalus_blueprint_restriction_test.allowed_layouts');
+  if (is_array($allowed)) {
+    $definitions = array_intersect_key($definitions, array_flip($allowed));
+  }
+}

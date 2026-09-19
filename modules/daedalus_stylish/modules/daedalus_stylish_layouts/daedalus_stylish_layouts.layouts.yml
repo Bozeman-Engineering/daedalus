@@ -1,0 +1,34 @@
+# The page builder's ONE section layout: daedalus_stylish_layouts.module filters the
+# layout_builder and daedalus_layout consumers down to this module's definitions, so
+# this is the only layout the page builder offers.
+#
+# daedalus_stylish_container is the container model's layout: arrangement is styling
+# on the container (the row variant + width variants, child grows),
+# grouping is nesting, so column COUNT is never plugin identity.
+#
+# No template and no theme hook: the universal container kind declaration
+# (daedalus_stylish_layouts.page_builder.yml) says `composed: true`, so the
+# declaration is generative — ComposedLayout builds the composed_container
+# element and the resolved root form IS the section markup, one element at
+# every depth (a <section> page band at root, a plain <div> nested).
+#
+# Its single region is a storage vestige (core's SectionComponent requires
+# a region name) and renders no wrapper: children mount directly at the
+# container root (no part claims the regions slot). The retired
+# daedalus_stylish_onecol..fourcol multi-region layouts migrate to containers via
+# ContainerMigration (frozen shapes in LAYOUT_REGIONS, so the transforms
+# outlive the plugins).
+daedalus_stylish_container:
+  label: 'Container'
+  category: 'Container'
+  class: Drupal\daedalus_ui\Plugin\Layout\ComposedLayout
+  # The container-layout marker (read by daedalus_blueprint's ContainerLayout):
+  # the sole region is a storage vestige, so section nodes of this layout
+  # serialize an ordered `children` list instead of the regions map.
+  container: true
+  default_region: content
+  icon_map:
+    - [content]
+  regions:
+    content:
+      label: Content

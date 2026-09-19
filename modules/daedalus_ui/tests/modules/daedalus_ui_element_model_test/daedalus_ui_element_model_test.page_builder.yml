@@ -1,0 +1,7 @@
+# The existence axis at the ENTITY kind: a root field nothing answers to in
+# any view (the pattern styling infrastructure like daedalus_stylish's style map
+# field uses in its own page_builder.yml).
+entity:
+  fields:
+    field_root_gone:
+      element: false

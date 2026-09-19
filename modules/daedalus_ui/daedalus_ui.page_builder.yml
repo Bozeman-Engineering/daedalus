@@ -1,0 +1,65 @@
+# Daedalus UI's own universal declarations.
+#
+# The field shell: the markup chain core's field template puts between a
+# field's root and its value. A shell is a markup model, anatomy rather
+# than styling: labeled parts with contains: slots, so the page-elements
+# tree and the AI schema can compose an accurate DOM sketch from the
+# declarations alone. Styling vocabulary (property groups, constraints,
+# controls) belongs to styling modules and themes, which contribute their
+# own sections over these same parts through this same file family.
+#
+# The chain below is core's field template as classy-descendant themes
+# (Olivero, Claro) render it: .field__label beside the items, .field__items
+# wrapping the deltas, .field__item wrapping each value, every part a
+# declared-tag div (the markup model composes an accurate sketch without
+# running the template). Two honesty notes:
+# core only emits .field__items on multi-value fields, so that row is
+# silent on single-value fields (a silent hover is the diagnostic); and a
+# theme overriding field.html.twig with different classes re-declares the
+# shell (or removes parts with NULL) in its THEME.page_builder.yml.
+#
+# The block counterpart (.block__content contains fields) is deliberately
+# NOT declared here: block wrapper markup belongs to the theme's
+# block.html.twig, so its shell belongs in the theme's declaration file.
+# Shell ownership follows template ownership, see
+# \Drupal\daedalus_ui\ElementModel\PageBuilderDeclarations.
+field:
+  elements:
+    '.field__label':
+      label: 'Label'
+      tag: div
+    '.field__items':
+      label: 'Items'
+      tag: div
+      elements:
+        '.field__item':
+          label: 'Item'
+          tag: div
+          contains: value
+
+block:
+  fields:
+    # info is the block_content admin label: metadata with no canvas
+    # render, so nothing answers to its key in any view and a row for it
+    # would be dead weight. Declared here, on the shared spine, instead of
+    # hardcoded filters in each client consumer.
+    info:
+      element: false
+
+entity:
+  fields:
+    # title earns no row inside the entity: preprocess lifts it out of the
+    # entity render (core's NodeThemeHooks pulls it into the label template
+    # variable, which full canonical pages suppress), so nothing inside the
+    # entity ever answers to its key. Its editing surface is the entity
+    # root row instead: the derived root rule presents the label field AS
+    # the root row and routes editing there (edit_target), and daedalus_edit's
+    # PageTitleEditing covers the theme's page-title H1 when one renders.
+    # Declared rather than inferred on purpose: a DECLARED element: false
+    # does not veto the root's derived edit_target, while feeder inference
+    # would (see ElementModel::rootPresentation). Caveat: the universal
+    # entity kind is not entity-type-scoped, so any root entity type with a
+    # field named "title" is covered; a site layer can restore the row by
+    # overriding with NULL.
+    title:
+      element: false

@@ -1,0 +1,26 @@
+# One additional variant axis beside the built-in "style" axis, so tests
+# can compose two variants on one testimonial block.
+variant_axes:
+  - emphasis
+property_groups:
+  typography:
+    constraints:
+      font-family:
+        allowed:
+          - 'Inter'
+          - 'Georgia'
+      font-size:
+        max: '2rem'
+# One default per axis: tests that create only one of the two variants
+# exercise the per-axis silent skip.
+default_variants:
+  style: testimonial_default
+  emphasis: testimonial_emphatic
+elements:
+  '.testimonial__quote':
+    label: 'Quote text'
+    property_groups:
+      typography:
+        constraints:
+          font-size:
+            max: '1.75rem'

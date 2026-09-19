@@ -1,0 +1,44 @@
+/**
+ * Edit-mode affordances for the formatted text block's composed root.
+ *
+ * The attribute only stamps on edit-capable renders (see the preprocess),
+ * so none of this reaches visitor markup.
+ */
+
+/* An empty block renders an empty div, which would collapse to zero height
+   and be unclickable in edit mode; keep a line's worth of target. */
+[data-daedalus-edit-editor="formatted_text"]:empty {
+  min-height: 1.6em;
+}
+
+/**
+ * This editor's own widget control: the text format picker. The
+ * widget-popover grammar ships its CSS with daedalus_edit
+ * (css/verb-widgets.css); these pieces mirror the text block's tag picker
+ * so the composed editors read as one system.
+ */
+.daedalus-edit-format-picker {
+  gap: 2px;
+}
+
+.daedalus-edit-format-picker__format {
+  margin: 0;
+  padding: 6px 8px;
+  cursor: pointer;
+  white-space: nowrap;
+  color: #222;
+  border: 0;
+  /* Concentric with the popover: its radius minus the 6px inset. */
+  border-radius: calc(var(--daedalus-border-radius) - 6px);
+  background: transparent;
+  font: inherit;
+}
+
+.daedalus-edit-format-picker__format:hover {
+  background-color: #f0f0f0;
+}
+
+.daedalus-edit-format-picker__format[aria-pressed="true"] {
+  color: var(--daedalus-selection-text);
+  background-color: var(--daedalus-selection);
+}

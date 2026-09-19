@@ -1,0 +1,4 @@
+create config entities via daedalus_blueprint:
+  title: 'Create config entities via Daedalus Blueprint'
+  description: 'Allow blueprint operations (including AI agents acting as this user) to create config entity types that have no admin permission of their own, limited to the types an administrator has allow-listed. Grant only to trusted roles.'
+  restrict access: true

@@ -1,0 +1,15 @@
+# Exposes the placement's label_display toggle to the blueprint op spine for
+# the form_block bundle. add_element defaults label_display to '0', and only
+# managed keys may override component configuration through properties; the
+# block-label inline-edit scenario needs a placement whose label RENDERS
+# (label_display 'visible'), because the label leaf only exists on the page
+# when the block title does. Declaring the key here keeps the capability on
+# the shared spine (the managed-keys registry) instead of the test reaching
+# into tempstore by hand.
+inline_block_configuration:
+  form_block:
+    label_display:
+      label: 'Label display'
+      description: "Core's block label_display storage spelling: 'visible' or '0'."
+      schema:
+        type: string

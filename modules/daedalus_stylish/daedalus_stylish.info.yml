@@ -1,0 +1,12 @@
+name: 'Daedalus Stylish'
+description: 'Style anything on the page — browser widgets and AI sharing one style model, validated against your style guide.'
+type: module
+core_version_requirement: '>=11.3 <11.5'
+package: Daedalus
+dependencies:
+  - daedalus:daedalus
+  - drupal:field
+  - drupal:user
+  - daedalus:daedalus_blueprint
+  - daedalus:daedalus_ui
+  - daedalus:daedalus_blueprint_api

@@ -1,0 +1,17 @@
+# Shipped default swatches: one scalar color, one condition-keyed gradient.
+# The machine name is the --swatch-{name} custom property tail; values ride
+# the value seam (StyleMapValidator::validateSwatchValue) through the swatch
+# value field handler during import.
+brand_red:
+  label: 'Brand red'
+  kind: color
+  value: '#e94560'
+  description: 'The one accent: the call to action and nothing else.'
+hero_fade:
+  label: 'Hero fade'
+  kind: gradient
+  # The AI opt-out: kept out of the brief and the schema, still delivered.
+  ai: false
+  value:
+    default: 'linear-gradient(160deg, #1a1a2e, #e94560)'
+    dark: 'linear-gradient(160deg, #0a0a14, #712235)'

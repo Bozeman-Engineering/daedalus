@@ -1,0 +1,6 @@
+services:
+  daedalus_edit.update:
+    class: Drupal\daedalus_edit\Drush\Commands\UpdateInlineEditor
+    arguments: ['@extension.list.module']
+    tags:
+      - { name: drush.command }

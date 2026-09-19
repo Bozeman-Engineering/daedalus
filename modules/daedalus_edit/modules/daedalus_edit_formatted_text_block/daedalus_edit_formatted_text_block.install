@@ -1,0 +1,20 @@
+<?php
+
+/**
+ * @file
+ * Install, update and uninstall functions for the formatted text block.
+ */
+
+use Drupal\Core\Hook\Attribute\LegacyRequirementsHook;
+use Drupal\daedalus_edit\Install\TextFormatRequirement;
+
+/**
+ * Implements hook_requirements().
+ */
+#[LegacyRequirementsHook]
+function daedalus_edit_formatted_text_block_requirements(string $phase): array {
+  if ($phase !== 'runtime') {
+    return [];
+  }
+  return TextFormatRequirement::check('daedalus_edit_formatted_text_block', 'Daedalus Edit Formatted Text Block', 'daedalus_edit_formatted_text');
+}

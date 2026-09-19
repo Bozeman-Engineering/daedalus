@@ -1,0 +1,12 @@
+# The formatted text block under the Guide Example guide.
+#
+# Prose flows; it is never self-positioned inside a column. The Position
+# control the Daedalus block kind binds (daedalus_edit.page_builder.yml) is
+# withdrawn here with a FALSE tombstone (NULL would let a lower layer's
+# version resurface; scalar FALSE survives the merge, and a tombstone
+# for a control no lower layer declares is inert, so the fixture builds
+# standalone). Everything else is the kind's: the in-body tag tiers are
+# governed by the instances lane in daedalus_stylish_guide_example.page_builder.yml
+# and the base:{tag} skin defaults.
+controls:
+  position: false

@@ -1,0 +1,161 @@
+services:
+  _defaults:
+    autowire: true
+    autoconfigure: true
+
+  logger.channel.daedalus_ai:
+    parent: logger.channel_base
+    arguments: ['daedalus_ai']
+
+  daedalus_ai.field_handler.image_generation:
+    class: Drupal\daedalus_ai\FieldHandler\ImageGenerationHandler
+    arguments:
+      $logger: '@logger.channel.daedalus_ai'
+    tags:
+      - {
+          name: daedalus_blueprint.field_handler,
+          field_types: 'entity_reference',
+          priority: 10,
+        }
+
+  daedalus_ai.route_entity_resolver:
+    class: Drupal\daedalus_ai\RouteEntityResolver
+    arguments:
+      # Access-check-free matching is deliberate: the router here only upcasts
+      # parameters, the access gates are path.validator (route access) and the
+      # blueprint access checker (entity view access).
+      $router: '@router.no_access_checks'
+  Drupal\daedalus_ai\RouteEntityResolver: '@daedalus_ai.route_entity_resolver'
+
+  # Drives headless Chrome over the plain WebDriver wire protocol to render
+  # pages posed at a canvas state vector for the AI's render_page tool.
+  daedalus_ai.headless_renderer:
+    class: Drupal\daedalus_ai\Render\HeadlessRenderer
+    arguments:
+      $httpClient: '@http_client'
+  Drupal\daedalus_ai\Render\HeadlessRenderer: '@daedalus_ai.headless_renderer'
+
+  daedalus_ai.image_generation_gate:
+    class: Drupal\daedalus_ai\ImageGenerationGate
+  Drupal\daedalus_ai\ImageGenerationGate: '@daedalus_ai.image_generation_gate'
+
+  # Registry of pending image-generation jobs, keyed by media uuid.
+  daedalus_ai.generation_job_store:
+    class: Drupal\daedalus_ai\PendingMedia\GenerationJobStore
+    arguments:
+      $tempStoreFactory: '@tempstore.private'
+  Drupal\daedalus_ai\PendingMedia\GenerationJobStore: '@daedalus_ai.generation_job_store'
+
+  # The one capability behind every image-generation surface: mints a media
+  # entity with a placeholder file synchronously and queues the generation
+  # job that later fills the file behind its uuid.
+  daedalus_ai.pending_media_minter:
+    class: Drupal\daedalus_ai\PendingMedia\PendingMediaMinter
+    arguments:
+      $appRoot: '%app.root%'
+  Drupal\daedalus_ai\PendingMedia\PendingMediaMinter: '@daedalus_ai.pending_media_minter'
+
+  # The style grammar's generation surface: `_generate` as a first-class
+  # handled value on daedalus_stylish's style-value seam, resolving to the canonical
+  # url('media:<uuid>') token over the same mint+job capability the field
+  # grammar uses. Soft wiring: without daedalus_stylish the tag is never collected
+  # and the service never instantiates, so no hard dependency exists.
+  daedalus_ai.style_value_handler.generate:
+    class: Drupal\daedalus_ai\StyleValue\GenerateStyleValueHandler
+    tags:
+      - { name: daedalus_stylish.style_value_handler }
+
+  # Request-scoped: collects the turn's pending generations ({media uuid,
+  # write target} pairs) and flushes them as ONE TriggerDeferredCommand on
+  # the chat response.
+  daedalus_ai.pending_target_collector:
+    class: Drupal\daedalus_ai\PendingMedia\PendingTargetCollector
+    arguments:
+      $tempStoreFactory: '@tempstore.private'
+      # Lazy on purpose: the mapper's chain leads back to services that
+      # depend on this collector through the field handler manager's
+      # collector pass (see the constructor's comment). A closure defers
+      # resolution to flush time; a reference (or a setter call) would
+      # still resolve it during construction and close the cycle.
+      $targetKeyMapper: !service_closure '@daedalus_blueprint_api.target_key_mapper'
+  Drupal\daedalus_ai\PendingMedia\PendingTargetCollector: '@daedalus_ai.pending_target_collector'
+
+  daedalus_ai.element_selection_resolver:
+    class: Drupal\daedalus_ai\ElementSelectionResolver
+    arguments:
+      $elementResolver: '@?daedalus_blueprint.element_resolver'
+      # What each selected element wears, read from the staged copy.
+      $elementMaterials: '@daedalus_blueprint.element_materials'
+      $storageHandler: '@daedalus_blueprint.storage_handler'
+  Drupal\daedalus_ai\ElementSelectionResolver: '@daedalus_ai.element_selection_resolver'
+
+  daedalus_ai.token_propagation_subscriber:
+    class: Drupal\daedalus_ai\EventSubscriber\TokenPropagationSubscriber
+
+  daedalus_ai.ui_command_queue:
+    class: Drupal\daedalus_ai\UiCommandQueue
+  Drupal\daedalus_ai\UiCommandQueue: '@daedalus_ai.ui_command_queue'
+
+  # Request-scoped: collects AI-tool mutations during a chat turn and builds
+  # the mutation-response payloads the chat response carries.
+  daedalus_ai.mutated_turn:
+    class: Drupal\daedalus_ai\MutatedTurn
+    arguments:
+      - '@daedalus_blueprint_api.mutation_response_builder'
+      - '@current_route_match'
+      - '@daedalus_ui.ui'
+      # The turn's materials delta (a swatch or variant an AI tool minted)
+      # and the history timeline its tempstore writes extended ride every
+      # payload; history is optional the way the blueprint endpoint's is.
+      - '@daedalus_blueprint.materials_change_set'
+      - '@?daedalus_tempstore.history_recorder'
+      - '@?daedalus_tempstore.history_manager'
+  Drupal\daedalus_ai\MutatedTurn: '@daedalus_ai.mutated_turn'
+
+  daedalus_ai.deferred_processor_manager:
+    class: Drupal\daedalus_ai\DeferredProcessor\DeferredProcessorManager
+    tags:
+      - {
+          name: service_collector,
+          tag: daedalus_ai.deferred_processor,
+          call: addProcessor,
+        }
+  Drupal\daedalus_ai\DeferredProcessor\DeferredProcessorManager: '@daedalus_ai.deferred_processor_manager'
+
+  daedalus_ai.image_dimension_adapter_manager:
+    class: Drupal\daedalus_ai\ImageDimension\ImageDimensionAdapterManager
+    arguments:
+      $aiProvider: '@ai.provider'
+    tags:
+      - {
+          name: service_collector,
+          tag: daedalus_ai.image_dimension_adapter,
+          call: addAdapter,
+        }
+  Drupal\daedalus_ai\ImageDimension\ImageDimensionAdapterManager: '@daedalus_ai.image_dimension_adapter_manager'
+
+  daedalus_ai.image_dimension_adapter.aspect_ratio:
+    class: Drupal\daedalus_ai\ImageDimension\AspectRatioDimensionAdapter
+    tags:
+      - { name: daedalus_ai.image_dimension_adapter, priority: -100 }
+
+  daedalus_ai.deferred_processor.image_generation:
+    class: Drupal\daedalus_ai\DeferredProcessor\ImageGenerationProcessor
+    arguments:
+      $aiProvider: '@ai.provider'
+      $logger: '@logger.channel.daedalus_ai'
+    tags:
+      - { name: daedalus_ai.deferred_processor }
+
+  daedalus_ai.ai_tool_action_subscriber:
+    class: Drupal\daedalus_ai\EventSubscriber\AiToolActionSubscriber
+
+  daedalus_ai.deepchat_response_listener:
+    class: Drupal\daedalus_ai\EventSubscriber\DeepChatResponseListener
+    arguments:
+      $hostnameFilter: '@ai.hostname_filter_service'
+
+  daedalus_ai.generate_images_settings:
+    class: Drupal\daedalus_ai\EventSubscriber\GenerateImagesSettings
+    arguments:
+      $imageGenerationGate: '@daedalus_ai.image_generation_gate'

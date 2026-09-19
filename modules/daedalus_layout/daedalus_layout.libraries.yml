@@ -1,0 +1,67 @@
+editing_ui:
+  js:
+    js/behaviors/dialog-close-override.js: { attributes: { type: 'module' }}
+  css:
+    theme:
+      css/blank-page.css: {}
+  dependencies:
+    - core/drupal.message
+    - core/drupal.displace
+    - daedalus_ui/modes
+    - daedalus_ui/edit_mode
+    - daedalus_ui/update_element
+
+# Selection verbs (Duplicate / Remove / Configure). Attached as a dependency
+# of daedalus_ui/edit_mode via daedalus_layout_library_info_alter() so the verbs
+# ride the app wherever Edit Mode loads, without any tool coupling.
+verbs:
+  js:
+    js/verbs/daedalus-layout-verbs.js: { attributes: { type: 'module' }}
+
+# The Add panel (blocks, sections, stencils): drag sources, tabs, the
+# Insert verb's click-to-place. A plain sidebar panel, not a tool, attached
+# by the PlaceBlock Sidebar plugin's build(), so it loads wherever the panel
+# renders (present-but-hidden included).
+add_panel:
+  js:
+    js/add-panel/behaviors/add-panel-tabs.js: {}
+    js/add-panel/behaviors/draggable-new-blocks.js: {}
+    js/add-panel/behaviors/draggable-new-sections.js: {}
+    js/add-panel/add-panel.js: { attributes: { type: 'module' }}
+    js/add-panel/stencil-items.js: { attributes: { type: 'module' }}
+  css:
+    theme:
+      js/add-panel/add-panel.css: {}
+  dependencies:
+    - daedalus_layout/editing_ui
+    # The Promoted/Other tabs wear the shared segmented-control recipe.
+    - daedalus_ui/panel_controls
+    # The stencil items' context menu is the shared menu primitive.
+    - daedalus_ui/menu
+
+# Canvas display preferences (container outlines) plus edit-mode
+# interaction suppression. Contributed to the Edit Mode settings panel by
+# the LayoutSettings subscriber, which attaches this library with its
+# toggles.
+layout_settings:
+  js:
+    js/settings/disable-interactive-elements.js: {}
+    js/settings/container-outlines.js: {}
+  css:
+    theme:
+      js/settings/container-outlines.css: {}
+  dependencies:
+    - daedalus_layout/editing_ui
+
+# The icon picker form element (daedalus_layout_icon_picker): preview refresh on a
+# media library pick, the Remove button. Attached by the element itself.
+icon_picker:
+  js:
+    js/icon-picker/icon-picker.js: {}
+  css:
+    theme:
+      js/icon-picker/icon-picker.css: {}
+  dependencies:
+    - core/jquery
+    - core/drupal
+    - core/once

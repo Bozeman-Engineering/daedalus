@@ -1,0 +1,9 @@
+services:
+  _defaults:
+    autowire: true
+    autoconfigure: true
+
+  daedalus_ai_gemini.image_dimension_adapter:
+    class: Drupal\daedalus_ai_gemini\ImageDimension\GeminiDimensionAdapter
+    tags:
+      - { name: daedalus_ai.image_dimension_adapter, priority: 0 }

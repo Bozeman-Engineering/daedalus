@@ -1,0 +1,22 @@
+# The value-space fixture for the basic styling browser scenario
+# (BasicStylingBehaviorTest).
+#
+# The suite's own site declaration (daedalus_stylish.page_builder.yml) already
+# binds font-size to the text scale the recipe's active Olivero skin
+# MINTS, so under strict enforcement the basic Size row is a closed
+# select over real minted tokens and under open enforcement the same
+# binding shapes a detented row whose typed settles capture token
+# references; the scenario rides that binding without restating it.
+# This layer merges over the suite the way a deployment's theme would,
+# adding the one posture the suite cannot ship: width -> measure, a
+# scale declared here that NO skin mints, so under strict enforcement
+# the Width row's closed vocabulary is honestly empty and the row must
+# be absent (nothing legal to offer).
+site:
+  token_scales:
+    measure:
+      label: 'Measure'
+      shape: dimension
+  constraint_defaults:
+    width:
+      scale: measure

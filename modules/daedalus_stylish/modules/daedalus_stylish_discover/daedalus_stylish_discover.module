@@ -1,0 +1,164 @@
+<?php
+
+/**
+ * @file
+ * Daedalus Stylish Discover module hooks.
+ */
+
+declare(strict_types=1);
+
+use Drupal\Core\Cache\Cache;
+use Drupal\Core\Entity\Display\EntityViewDisplayInterface;
+use Drupal\field\FieldConfigInterface;
+use Drupal\daedalus_stylish_discover\ElementDiscovery;
+
+/**
+ * Implements hook_page_builder_declarations_alter().
+ *
+ * Merges the discovered markup shell into block types with no authored
+ * elements: the nested class tree the block type's sample render emits
+ * becomes the elements: tree — contains: slots included — each part
+ * unlabeled (the label is the class name) but fully functional, declared
+ * for every installed property group. Authored curation wins: a block type
+ * whose YAML declares an "elements" key (even an empty one) chose its
+ * parts, and discovery leaves it alone entirely.
+ *
+ * Note for strict-mode sites: discovered parts are declared UNCONSTRAINED,
+ * so enabling this module opens every rendered class to every property
+ * group. The primary (style-guide-enforcing) deployment should author
+ * its YAML instead — `drush daedalus_stylish:discover BUNDLE` scaffolds it.
+ */
+function daedalus_stylish_discover_page_builder_declarations_alter(array &$declarations, string $theme): void {
+  // A sample render can itself trigger a declarations build; never recurse
+  // into discovery from it (the inner build just lacks discovered elements).
+  if (ElementDiscovery::isDiscovering()) {
+    return;
+  }
+  /** @var \Drupal\daedalus_stylish_discover\ElementDiscovery $discovery */
+  $discovery = \Drupal::service('daedalus_stylish_discover.element_discovery');
+  $groups = array_fill_keys(array_keys(\Drupal::service('plugin.manager.daedalus_stylish_property_group')->getGroups()), []);
+  foreach (array_keys(\Drupal::service('entity_type.bundle.info')->getBundleInfo('block_content')) as $bundle) {
+    if (array_key_exists('elements', $declarations['block_types'][$bundle] ?? [])) {
+      continue;
+    }
+    if ($elements = _daedalus_stylish_discover_declare_elements($discovery->discover($bundle, $theme), $groups)) {
+      $declarations['block_types'][$bundle]['elements'] = $elements;
+    }
+  }
+}
+
+/**
+ * Turns a discovered shell tree into unlabeled guide part declarations.
+ *
+ * @param array $tree
+ *   A discovered tree (\Drupal\daedalus_stylish_discover\ElementDiscovery::discover).
+ * @param array $groups
+ *   Every installed property group, unconstrained, keyed by id.
+ *
+ * @return array
+ *   The same tree in the guide's elements: shape: every node gains its
+ *   class-name label and the full property group set; contains: slots and
+ *   nesting carry through as discovered.
+ */
+function _daedalus_stylish_discover_declare_elements(array $tree, array $groups): array {
+  $elements = [];
+  foreach ($tree as $selector => $part) {
+    $element = [
+      'label' => substr($selector, 1),
+      'property_groups' => $groups,
+    ];
+    if (isset($part['contains'])) {
+      $element['contains'] = $part['contains'];
+    }
+    if (!empty($part['elements'])) {
+      $element['elements'] = _daedalus_stylish_discover_declare_elements($part['elements'], $groups);
+    }
+    $elements[$selector] = $element;
+  }
+  return $elements;
+}
+
+/**
+ * Implements hook_ENTITY_TYPE_insert() for entity_view_display.
+ */
+function daedalus_stylish_discover_entity_view_display_insert(EntityViewDisplayInterface $display): void {
+  _daedalus_stylish_discover_display_changed($display);
+}
+
+/**
+ * Implements hook_ENTITY_TYPE_update() for entity_view_display.
+ */
+function daedalus_stylish_discover_entity_view_display_update(EntityViewDisplayInterface $display): void {
+  _daedalus_stylish_discover_display_changed($display);
+}
+
+/**
+ * Implements hook_ENTITY_TYPE_delete() for entity_view_display.
+ */
+function daedalus_stylish_discover_entity_view_display_delete(EntityViewDisplayInterface $display): void {
+  _daedalus_stylish_discover_display_changed($display);
+}
+
+/**
+ * Invalidates discovery when a block_content view display changes.
+ */
+function _daedalus_stylish_discover_display_changed(EntityViewDisplayInterface $display): void {
+  if ($display->getTargetEntityTypeId() === 'block_content') {
+    _daedalus_stylish_discover_invalidate();
+  }
+}
+
+/**
+ * Implements hook_ENTITY_TYPE_insert() for field_config.
+ */
+function daedalus_stylish_discover_field_config_insert(FieldConfigInterface $field): void {
+  _daedalus_stylish_discover_field_changed($field);
+}
+
+/**
+ * Implements hook_ENTITY_TYPE_update() for field_config.
+ */
+function daedalus_stylish_discover_field_config_update(FieldConfigInterface $field): void {
+  _daedalus_stylish_discover_field_changed($field);
+}
+
+/**
+ * Implements hook_ENTITY_TYPE_delete() for field_config.
+ */
+function daedalus_stylish_discover_field_config_delete(FieldConfigInterface $field): void {
+  _daedalus_stylish_discover_field_changed($field);
+}
+
+/**
+ * Invalidates discovery when a block_content field changes.
+ */
+function _daedalus_stylish_discover_field_changed(FieldConfigInterface $field): void {
+  if ($field->getTargetEntityTypeId() === 'block_content') {
+    _daedalus_stylish_discover_invalidate();
+  }
+}
+
+/**
+ * Implements hook_ENTITY_TYPE_insert() for block_content_type.
+ *
+ * A new bundle must appear in already-built guides (its discovery cache is
+ * simply empty until first build).
+ */
+function daedalus_stylish_discover_block_content_type_insert(): void {
+  _daedalus_stylish_discover_invalidate();
+}
+
+/**
+ * Implements hook_ENTITY_TYPE_delete() for block_content_type.
+ */
+function daedalus_stylish_discover_block_content_type_delete(): void {
+  _daedalus_stylish_discover_invalidate();
+}
+
+/**
+ * Drops discovery results and the built declarations that baked them in.
+ */
+function _daedalus_stylish_discover_invalidate(): void {
+  Cache::invalidateTags([ElementDiscovery::CACHE_TAG]);
+  \Drupal::service('daedalus_ui.page_builder_declarations')->resetCache();
+}

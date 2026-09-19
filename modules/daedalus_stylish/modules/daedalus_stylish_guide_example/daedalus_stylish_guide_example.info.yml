@@ -1,0 +1,9 @@
+name: 'Daedalus Stylish Guide Example'
+type: module
+description: 'The strict reference design system: the guide_example unit as install config plus a role-token skin minting every declared scale, a style guide with bindings, stop curation, controls and axes, per-block-type and per-layout files, variants, swatches, animations and a stencil. The contrib authoring reference for a fully constrained site and the strict-posture test fixture.'
+package: Daedalus
+core_version_requirement: '>=11.3 <11.5'
+dependencies:
+  - daedalus:daedalus_blueprint
+  - daedalus:daedalus_stylish
+  - daedalus:daedalus_stylish_layouts

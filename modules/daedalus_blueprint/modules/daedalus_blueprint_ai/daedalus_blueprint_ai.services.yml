@@ -1,0 +1,22 @@
+services:
+  # The current conversation's stable identity (the runner's job id), set
+  # by the pass-context layer and read by the page tools so the dialect
+  # alias layer keys per entity per conversation.
+  daedalus_blueprint_ai.conversation_context:
+    class: Drupal\daedalus_blueprint_ai\ConversationContext
+  Drupal\daedalus_blueprint_ai\ConversationContext: '@daedalus_blueprint_ai.conversation_context'
+
+  # Renders the generated dialect catalog (component reference + the
+  # design system brief + op set) as the cached system prompt's
+  # page-language section.
+  daedalus_blueprint_ai.dialect_catalog_prompt:
+    class: Drupal\daedalus_blueprint_ai\DialectCatalogPrompt
+    arguments:
+      - '@daedalus_blueprint.dialect_catalog_builder'
+      - '@daedalus_blueprint.operation_handler_registry'
+      # The brief's roster lines and its mint line project from the roster.
+      - '@daedalus_blueprint.materials_roster_builder'
+      # The design system the brief introduces: its label, identity,
+      # law and skin are the entity's.
+      - '@daedalus_blueprint.active_design_system'
+  Drupal\daedalus_blueprint_ai\DialectCatalogPrompt: '@daedalus_blueprint_ai.dialect_catalog_prompt'

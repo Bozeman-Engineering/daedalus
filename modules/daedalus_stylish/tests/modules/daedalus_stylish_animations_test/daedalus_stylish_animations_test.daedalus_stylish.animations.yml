@@ -1,0 +1,28 @@
+# Shipped default animations: a from/to fade with a description, and a
+# percentage-keyed rise with a per-step easing. The machine name is the
+# motion-{name} keyframes ident tail; steps ride the steps seam
+# (StyleMapValidator::validateAnimationSteps) through the animation steps
+# field handler during import, and store canonical (from is 0%). Named
+# test_* because daedalus_stylish itself ships fade_in and rise, and the sweep on
+# daedalus_stylish's own install imports every enabled module's file: machine names
+# are the site-wide vocabulary.
+test_fade:
+  label: 'Fade in'
+  description: 'A soft entrance for page bands.'
+  steps:
+    from:
+      opacity: '0'
+    to:
+      opacity: '1'
+test_rise:
+  label: 'Rise'
+  # The AI opt-out: kept out of the brief and the schema, still compiled.
+  ai: false
+  steps:
+    '0%':
+      opacity: '0'
+      transform: 'translateY(1rem)'
+      animation-timing-function: 'ease-out'
+    '100%':
+      opacity: '1'
+      transform: 'none'

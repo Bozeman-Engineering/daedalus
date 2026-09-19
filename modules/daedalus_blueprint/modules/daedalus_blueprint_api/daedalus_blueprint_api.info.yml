@@ -1,0 +1,8 @@
+name: Daedalus Blueprint API
+type: module
+description: HTTP endpoint exposing entity blueprint operations and re-rendered markup to editing clients.
+package: Daedalus
+core_version_requirement: '>=11.3 <11.5'
+lifecycle: experimental
+dependencies:
+  - daedalus:daedalus_blueprint

@@ -1,0 +1,9 @@
+name: 'Daedalus Stylish Discover'
+description: 'Auto-discovers stylable sub-elements by rendering block types with sample data — functional stylability without authored style guide YAML.'
+type: module
+core_version_requirement: '>=11.3 <11.5'
+package: Daedalus
+dependencies:
+  - daedalus:daedalus_stylish
+  - field_sample_value:field_sample_value
+  - drupal:block_content

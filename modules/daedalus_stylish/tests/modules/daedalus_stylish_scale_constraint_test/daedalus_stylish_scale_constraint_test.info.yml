@@ -1,0 +1,6 @@
+name: 'Daedalus Stylish scale constraint test'
+type: module
+description: 'Declares a site space token scale, scale-constrains block padding, and binds border-radius site-wide via constraint_defaults for testing.'
+package: Testing
+core_version_requirement: '*'
+hidden: true

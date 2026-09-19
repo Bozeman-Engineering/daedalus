@@ -1,0 +1,16 @@
+services:
+  _defaults:
+    autowire: true
+    autoconfigure: true
+
+  daedalus_ai_anthropic.current_entity_context_subscriber:
+    class: Drupal\daedalus_ai_anthropic\EventSubscriber\CurrentEntityContextSubscriber
+
+  daedalus_ai_anthropic.selected_element_context_subscriber:
+    class: Drupal\daedalus_ai_anthropic\EventSubscriber\SelectedElementContextSubscriber
+
+  daedalus_ai_anthropic.current_page_markup_context_subscriber:
+    class: Drupal\daedalus_ai_anthropic\EventSubscriber\CurrentPageMarkupContextSubscriber
+
+  daedalus_ai_anthropic.design_posture_context_subscriber:
+    class: Drupal\daedalus_ai_anthropic\EventSubscriber\DesignPostureContextSubscriber

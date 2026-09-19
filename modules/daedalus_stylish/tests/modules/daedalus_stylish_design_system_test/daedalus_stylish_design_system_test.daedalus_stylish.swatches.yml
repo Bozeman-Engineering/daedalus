@@ -1,0 +1,5 @@
+# The swatch the shipped variant references as var(--swatch-aurora_accent).
+aurora_accent:
+  label: 'Aurora accent'
+  kind: color
+  value: '#6941c6'

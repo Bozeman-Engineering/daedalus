@@ -1,0 +1,113 @@
+/*
+ * The responsive preview shell.
+ *
+ * The root pins itself over the whole popup viewport so the shell owns the
+ * window regardless of what page wrappers the active theme renders around
+ * it: the route uses the simple_page variant, but themes still add their
+ * own scaffolding, and page_top chrome (core navigation's toolbar, sidebar
+ * FABs) renders outside the variant entirely. The z-index lifts the shell
+ * over that chrome. The stage scrolls when the device viewport is larger
+ * than the window; margin auto on the frame centers it while staying
+ * scrollable (unlike align/justify center, which clips overflow).
+ */
+#daedalus-ui-responsive-preview-root {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: flex;
+  flex-direction: column;
+  background: #e8e8e8;
+  font-family: system-ui, sans-serif;
+}
+
+.responsive-preview__header {
+  display: flex;
+  flex: none;
+  align-items: center;
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid #ccc;
+  background: #fff;
+  font-size: var(--daedalus-font-size-large);
+  gap: 0.5rem;
+}
+
+.responsive-preview__device {
+  font-size: var(--daedalus-font-size-large);
+}
+
+.responsive-preview__size {
+  color: #666;
+}
+
+.responsive-preview__button {
+  padding: 0.2rem 0.6rem;
+  cursor: pointer;
+  border: 1px solid #bbb;
+  border-radius: 4px;
+  background: #f5f5f5;
+  font-size: var(--daedalus-font-size);
+}
+
+.responsive-preview__button:first-of-type {
+  margin-left: auto;
+}
+
+.responsive-preview__button:disabled {
+  cursor: default;
+  opacity: 0.4;
+}
+
+.responsive-preview__message {
+  color: #a51b00;
+}
+
+.responsive-preview__message:empty {
+  display: none;
+}
+
+/* display: flex would otherwise beat the UA [hidden] rule. */
+.responsive-preview__form[hidden] {
+  display: none;
+}
+
+.responsive-preview__form {
+  display: flex;
+  flex: none;
+  align-items: center;
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid #ccc;
+  background: #fff;
+  font-size: var(--daedalus-font-size-large);
+  gap: 0.75rem;
+}
+
+.responsive-preview__field {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.responsive-preview__field input {
+  padding: 0.15rem 0.3rem;
+  font-size: var(--daedalus-font-size-large);
+}
+
+.responsive-preview__field input[type="number"] {
+  width: 5.5em;
+}
+
+.responsive-preview__stage {
+  display: flex;
+  overflow: auto;
+  flex: 1;
+  padding: 1rem;
+}
+
+.responsive-preview__frame {
+  flex: none;
+  margin: auto;
+  border: 1px solid #aaa;
+  border-radius: 4px;
+  background: #fff;
+  box-shadow: 0 2px 12px rgb(0, 0, 0, 0.2);
+}

@@ -1,0 +1,5 @@
+daedalus_blueprint_ai.settings:
+  title: 'Daedalus Blueprint AI'
+  route_name: daedalus_blueprint_ai.settings
+  description: 'Configure which entity types and bundles are visible to AI agents.'
+  parent: ai.admin_settings

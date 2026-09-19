@@ -1,0 +1,12 @@
+langcode: en
+status: true
+dependencies:
+  module:
+    - daedalus_stylish_olivero_skin
+id: olivero
+label: Olivero
+description: "Core's front-end look as daedalus_stylish data: the Olivero skin's tokens and site element defaults, so a fresh site looks finished and recognizably Drupal."
+icon: null
+default_skin: olivero
+package: daedalus_stylish_olivero_skin
+enforcement: open

@@ -1,0 +1,921 @@
+services:
+  daedalus_stylish.field_manager:
+    class: Drupal\daedalus_stylish\DaedalusStylishFieldManager
+    arguments: ['@entity_type.manager', '@config.factory']
+  plugin.manager.daedalus_stylish_property_group:
+    class: Drupal\daedalus_stylish\PropertyGroupPluginManager
+    parent: default_plugin_manager
+  plugin.manager.daedalus_stylish_control_widget:
+    class: Drupal\daedalus_stylish\ControlWidgetPluginManager
+    parent: default_plugin_manager
+  plugin.manager.daedalus_swatch_kind:
+    class: Drupal\daedalus_stylish\SwatchKindPluginManager
+    parent: default_plugin_manager
+  plugin.manager.daedalus_stylish_condition_type:
+    class: Drupal\daedalus_stylish\ConditionTypePluginManager
+    arguments:
+      - '@container.namespaces'
+      - '@cache.discovery'
+      - '@module_handler'
+      - '@config.factory'
+  daedalus_stylish.style_guide:
+    class: Drupal\daedalus_stylish\StyleGuide
+    arguments:
+      # Discovery and layering live at the page builder declaration spine;
+      # daedalus_stylish projects the styling sections and validates its own controls.
+      - '@daedalus_ui.page_builder_declarations'
+      - '@theme.manager'
+      # Enforcement is the active design system's: the guide reads the
+      # mode off the entity the pointer names, guarded with none active.
+      - '@daedalus_blueprint.active_design_system'
+      - '@plugin.manager.daedalus_stylish_control_widget'
+      - '@plugin.manager.daedalus_stylish_property_group'
+      # Lazy: the validator injects this guide; the guide's build check of
+      # declared defaults reaches the validator through the closure.
+      - !service_closure '@daedalus_stylish.style_map_validator'
+      # Lazy for the same reason: the roster builder injects this guide,
+      # and resetCache() drops its memo with the declarations.
+      - !service_closure '@daedalus_stylish.vocabulary_roster'
+  # The vocabulary roster: what one address may style, resolved once per
+  # request from the layered declarations and the enforcement mode (the
+  # twin of daedalus_blueprint.materials_roster_builder).
+  daedalus_stylish.vocabulary_roster:
+    class: Drupal\daedalus_stylish\Vocabulary\VocabularyRosterBuilder
+    arguments:
+      - '@daedalus_stylish.style_guide'
+      - '@plugin.manager.daedalus_stylish_property_group'
+      - '@plugin.manager.daedalus_stylish_condition_type'
+      - '@daedalus_ui.page_builder_declarations'
+      - '@theme.manager'
+      # The applicable materials are read from the materials roster at
+      # call time, so this memo needs no workspace key.
+      - '@daedalus_blueprint.materials_roster_builder'
+  # The inspector's gesture gates: one read of the current user's variant,
+  # swatch and animation grants for both hosts (the sidebar and the
+  # satellite window).
+  daedalus_stylish.inspector_gates:
+    class: Drupal\daedalus_stylish\InspectorGates
+    arguments:
+      - '@current_user'
+      - '@module_handler'
+  daedalus_stylish.client_style_guide:
+    class: Drupal\daedalus_stylish\ClientStyleGuide
+    arguments:
+      - '@daedalus_stylish.style_guide'
+      - '@plugin.manager.daedalus_stylish_property_group'
+      - '@plugin.manager.daedalus_stylish_condition_type'
+      # Theme resolution: the declaration spine's one answer (siteTheme()).
+      - '@daedalus_ui.page_builder_declarations'
+      - '@plugin.manager.daedalus_stylish_control_widget'
+      # The active skin's site defaults (skin data the inspector's
+      # provenance reads; its tokens are materials and ride the roster's
+      # delivery payload instead).
+      - '@daedalus_stylish.skin_manager'
+      # The swatch kind vocabulary the palette groups under (a declaration,
+      # like token scales; the swatches themselves ride the roster).
+      - '@plugin.manager.daedalus_swatch_kind'
+      # The roster: the minted token universe the curated stops are checked
+      # against (un-minted names warn at payload build instead of failing
+      # the guide build).
+      - '@daedalus_blueprint.materials_roster_builder'
+      - '@logger.factory'
+      # The conformance verdict: the `withheld` payload (the wear bar's
+      # stale-row reason for a variant the current law refuses).
+      - '@daedalus_stylish.variant_conformance'
+      # The vocabulary roster: every served node is the roster's answers
+      # at its address (grants, value spaces, axes), never a declaration
+      # the client re-derives.
+      - '@daedalus_stylish.vocabulary_roster'
+  daedalus_stylish.style_map_validator:
+    class: Drupal\daedalus_stylish\StyleMapValidator
+    arguments:
+      - '@plugin.manager.daedalus_stylish_property_group'
+      - '@daedalus_stylish.style_guide'
+      - '@theme_handler'
+      # Lazy: the locator's dependency chain leads back to our field handler,
+      # which injects this validator (see the constructor docblock).
+      - !service_closure '@daedalus_blueprint.element_locator'
+      - '@plugin.manager.daedalus_stylish_condition_type'
+      # The material universes: minted tokens, published swatches and
+      # published variants are the roster's, never walked here.
+      - '@daedalus_blueprint.materials_roster_builder'
+      # The identity map variant references load entities through
+      # (delivery resolves from the innermost render loop).
+      - '@daedalus_stylish.variant_repository'
+      # The kind plugins swatch values dispatch to.
+      - '@plugin.manager.daedalus_swatch_kind'
+      # The member seam: a design system's member validates in ITS system's
+      # universe (the system's default skin, loaded through the skin
+      # manager) whether or not it is active.
+      - '@entity_type.manager'
+      - '@daedalus_stylish.skin_manager'
+      # The verdict behind a reference to a withheld variant: the roster
+      # answers "not offered", the judge answers why (the refused values).
+      - '@daedalus_stylish.variant_conformance'
+      # The grant: every entry validates against the vocabulary roster of
+      # the address it styles (the one derivation of "what may this
+      # address style"), never against a declaration resolved here.
+      - '@daedalus_stylish.vocabulary_roster'
+  daedalus_stylish.variant_repository:
+    # Request-lifetime identity map behind loadVariant(): each distinct
+    # variant reference resolves at most once per request and workspace
+    # window (misses included), reset by _daedalus_variant_change() on any
+    # variant save or delete and by VariantWorkspaceSubscriber on publish.
+    class: Drupal\daedalus_stylish\VariantRepository
+    arguments:
+      - '@entity_type.manager'
+      # Optional: the memos key on the active workspace, because a compile
+      # runs outside it right after a staged save previews inside it.
+      - '@?workspaces.manager'
+  daedalus_stylish.swatch_repository:
+    # The variant repository's twin at value scope: swatch references and
+    # the published set resolve at most once per request and workspace
+    # window, reset by _daedalus_swatch_change() on any swatch save or
+    # delete and by SwatchWorkspaceSubscriber on publish.
+    class: Drupal\daedalus_stylish\SwatchRepository
+    arguments:
+      - '@entity_type.manager'
+      - '@?workspaces.manager'
+  daedalus_stylish.animation_repository:
+    # The swatch repository's twin for the motion material: animation
+    # references and the published set resolve at most once per request
+    # and workspace window, reset by the animation entity hooks on any
+    # save or delete and by the workspace subscriber on publish.
+    class: Drupal\daedalus_stylish\AnimationRepository
+    arguments:
+      - '@entity_type.manager'
+      - '@?workspaces.manager'
+  Drupal\daedalus_stylish\Hook\MaterialsGateHooks:
+    # The materials roster and its schema fragment are core's; this hook
+    # only advertises daedalus_stylish's minting gate (daedalus_stylish.settings ai_minting,
+    # swatches and animations) on that fragment's guidance, after core
+    # landed it.
+    class: Drupal\daedalus_stylish\Hook\MaterialsGateHooks
+    arguments:
+      - '@config.factory'
+  Drupal\daedalus_stylish\Hook\LayoutDefaultsSchemaHooks:
+    # Two-door birth semantics as generated schema data: each
+    # available_layouts entry whose layout declares default_variants gains
+    # one line naming what add_section stamps (with top-level-only limits)
+    # and that document-authored sections (page_create, page_edit,
+    # eb_create_entity) are never stamped. Derived from
+    # the same guide projections the stamping subscriber consumes, so the
+    # line cannot drift from what add_section actually writes.
+    class: Drupal\daedalus_stylish\Hook\LayoutDefaultsSchemaHooks
+    arguments:
+      - '@daedalus_stylish.style_guide'
+      # Theme resolution: the declaration spine's one answer (siteTheme()).
+      - '@daedalus_ui.page_builder_declarations'
+  daedalus_stylish.skill_type.skins:
+    # The skins skill: live skin catalog + editing recipes. The skill
+    # definition's permission key ('administer skins') gates who sees and
+    # may invoke it; this type only composes for accounts past that gate.
+    class: Drupal\daedalus_stylish\SkillType\SkinsSkillType
+    arguments:
+      - '@entity_type.manager'
+      - '@daedalus_stylish.skin_manager'
+      - '@daedalus_stylish.style_guide'
+      # Theme resolution: the declaration spine's one answer (siteTheme()).
+      - '@daedalus_ui.page_builder_declarations'
+    tags:
+      - { name: daedalus_blueprint.skill_type, type_id: skins }
+  daedalus_stylish.style_stack:
+    # The stack projection (the code view's layered document, server side): one
+    # key's worn layers in delivery order with winners and losers, and the
+    # defaults floor beneath them, read by the AI's explain_element_styles
+    # tool.
+    class: Drupal\daedalus_stylish\StyleStack
+    arguments:
+      - '@daedalus_stylish.style_map_validator'
+      # Layer facts (label, axis, scope) are the roster record's.
+      - '@daedalus_blueprint.materials_roster_builder'
+      # The floor's two tiers: the declared defaults per theme, and the
+      # active skin's defaults.
+      - '@daedalus_stylish.style_guide'
+      - '@daedalus_stylish.skin_manager'
+  daedalus_stylish.style_value_resolver:
+    class: Drupal\daedalus_stylish\StyleValueResolver
+    arguments:
+      # The handled-value seam: the input tier's object markers. Daedalus Stylish
+      # registers none itself; what a marker means is its handler's business.
+      - !tagged_iterator daedalus_stylish.style_value_handler
+      # The layers gate: the list form is only legal on media-capable
+      # properties (the 'media' flag on the owning group's definition).
+      - '@plugin.manager.daedalus_stylish_property_group'
+  daedalus_stylish.field_handler.style_map:
+    class: Drupal\daedalus_stylish\StyleMapFieldHandler
+    arguments:
+      - '@daedalus_stylish.style_map_validator'
+      - '@daedalus_stylish.style_guide'
+      # Theme resolution: the declaration spine's one answer (siteTheme()).
+      - '@daedalus_ui.page_builder_declarations'
+      - '@plugin.manager.daedalus_stylish_condition_type'
+      # The input tier's write-time resolution (handled values, layers).
+      - '@daedalus_stylish.style_value_resolver'
+      # The guidance names stencils among the materials only while the
+      # roster has some (grows-by-data).
+      - '@daedalus_blueprint.materials_roster_builder'
+      # The rosters the fragment teaches (what each address may style).
+      - '@daedalus_stylish.vocabulary_roster'
+    tags:
+      - { name: daedalus_blueprint.field_handler, field_types: 'daedalus_stylish_style_map' }
+  daedalus_stylish.field_handler.skin_tokens:
+    class: Drupal\daedalus_stylish\SkinTokensFieldHandler
+    arguments:
+      - '@daedalus_stylish.style_map_validator'
+      - '@daedalus_stylish.style_guide'
+      # Theme resolution: the declaration spine's one answer (siteTheme()).
+      - '@daedalus_ui.page_builder_declarations'
+      - '@plugin.manager.daedalus_stylish_condition_type'
+      # The input tier's write-time resolution (handled values, layers).
+      - '@daedalus_stylish.style_value_resolver'
+      # The guidance names stencils among the materials only while the
+      # roster has some (StyleMapFieldHandler::guidanceParagraph()).
+      - '@daedalus_blueprint.materials_roster_builder'
+      # The rosters the fragment teaches (what each address may style).
+      - '@daedalus_stylish.vocabulary_roster'
+    tags:
+      - { name: daedalus_blueprint.field_handler, field_types: 'daedalus_skin_tokens' }
+  daedalus_stylish.field_handler.skin_defaults:
+    class: Drupal\daedalus_stylish\SkinDefaultsFieldHandler
+    arguments:
+      - '@daedalus_stylish.style_map_validator'
+      - '@daedalus_stylish.style_guide'
+      # Theme resolution: the declaration spine's one answer (siteTheme()).
+      - '@daedalus_ui.page_builder_declarations'
+      - '@plugin.manager.daedalus_stylish_condition_type'
+      # The input tier's write-time resolution (handled values, layers).
+      - '@daedalus_stylish.style_value_resolver'
+      # The guidance names stencils among the materials only while the
+      # roster has some (StyleMapFieldHandler::guidanceParagraph()).
+      - '@daedalus_blueprint.materials_roster_builder'
+      # The rosters the fragment teaches (what each address may style).
+      - '@daedalus_stylish.vocabulary_roster'
+    tags:
+      - { name: daedalus_blueprint.field_handler, field_types: 'daedalus_skin_defaults' }
+  daedalus_stylish.skin_manager:
+    class: Drupal\daedalus_stylish\SkinManager
+    arguments:
+      # The active skin is derived: the active design system's default_skin.
+      - '@daedalus_blueprint.active_design_system'
+      - '@entity_type.manager'
+  daedalus_stylish.field_handler.variant_styles:
+    class: Drupal\daedalus_stylish\VariantStylesFieldHandler
+    arguments:
+      - '@daedalus_stylish.style_map_validator'
+      - '@daedalus_stylish.style_guide'
+      # Theme resolution: the declaration spine's one answer (siteTheme()).
+      - '@daedalus_ui.page_builder_declarations'
+      - '@plugin.manager.daedalus_stylish_condition_type'
+      # The input tier's write-time resolution (handled values, layers).
+      - '@daedalus_stylish.style_value_resolver'
+      # The guidance names stencils among the materials only while the
+      # roster has some (StyleMapFieldHandler::guidanceParagraph()).
+      - '@daedalus_blueprint.materials_roster_builder'
+      # The rosters the fragment teaches (what each address may style).
+      - '@daedalus_stylish.vocabulary_roster'
+      # Lazy: the importer injects the deserializer, whose handler manager
+      # instantiates this handler (the validator's component-locator cycle,
+      # again). The distro lock's disk read.
+      - !service_closure '@daedalus_stylish.variant_importer'
+      # The distro lock gates the blueprint-lane write and the guidance's
+      # lock sentence; the developer gate (settings.php) lifts it.
+      - '@daedalus_blueprint.distro_lock'
+    tags:
+      - { name: daedalus_blueprint.field_handler, field_types: 'daedalus_variant_styles' }
+  daedalus_stylish.operation_handler:
+    class: Drupal\daedalus_stylish\DaedalusStylishOperationHandler
+    arguments:
+      - '@daedalus_stylish.style_map_validator'
+      - '@daedalus_blueprint.access_checker'
+      - '@daedalus_stylish.subtree_slot_keys'
+      # Compound condition keys canonicalize (part order) on write.
+      - '@plugin.manager.daedalus_stylish_condition_type'
+      # The input tier's write-time resolution (handled values, layers).
+      - '@daedalus_stylish.style_value_resolver'
+      # The applicability seam: cross-module vetoes on NEW applies (stencil
+      # ownership first among them), consulted by apply_variant before the
+      # write. Daedalus Stylish stays ignorant of what the checkers know.
+      - !tagged_iterator daedalus_stylish.variant_applicability_checker
+    tags:
+      - { name: daedalus_blueprint.operation_handler }
+  # The depth half of the applicability seam (stencil ownership, the other
+  # half, registers from daedalus_blueprint_stencil's service provider): a
+  # NEW wearing of a root-only variant on a nested container is refused at
+  # the gesture; the fact is the roster record's applies.depth stamp.
+  daedalus_stylish.root_only_variant_checker:
+    class: Drupal\daedalus_stylish\RootOnlyVariantChecker
+    arguments:
+      - '@daedalus_stylish.style_map_validator'
+      - '@daedalus_blueprint.materials_roster_builder'
+      - '@daedalus_blueprint.element_locator'
+    tags:
+      - { name: daedalus_stylish.variant_applicability_checker }
+  daedalus_stylish.subtree_slot_keys:
+    class: Drupal\daedalus_stylish\SubtreeSlotKeys
+    # The adapter and layout manager are optional only for kernel tests that
+    # boot without the layout_builder chain; both ship with daedalus_stylish's hard
+    # dependencies on real sites.
+    arguments:
+      - '@?daedalus_blueprint.daedalus_layout_adapter'
+      - '@?plugin.manager.core.layout'
+  daedalus_stylish.live_attribution:
+    class: Drupal\daedalus_stylish\DaedalusStylishLiveAttribution
+    # daedalus_layout is optional: without it there is no nested content to resolve
+    # roots for; the rendered entity is always its own map host.
+    arguments:
+      - '@?daedalus_layout.root_entity_registry'
+    tags:
+      - { name: daedalus_ui.live_attribution_provider }
+  daedalus_stylish.css_printer:
+    class: Drupal\daedalus_stylish\CssPrinter
+    arguments:
+      - '@daedalus_stylish.style_map_validator'
+      - '@plugin.manager.daedalus_stylish_condition_type'
+  daedalus_stylish.variant_usage:
+    # The daedalus_variant_usage table: which host entities wear which
+    # variants, mirrored from the saved default-revision style maps at the
+    # host entity save chokepoint (daedalus_stylish_entity_insert/update/delete).
+    # Every usage consumer reads it; nothing parses content on demand.
+    class: Drupal\daedalus_stylish\VariantUsage
+    arguments:
+      - '@database'
+      - '@entity_type.manager'
+      - '@entity_field.manager'
+  daedalus_stylish.variant_manager:
+    class: Drupal\daedalus_stylish\VariantManager
+    arguments:
+      - '@daedalus_stylish.style_map_validator'
+      - '@entity_type.manager'
+      # Usage counts read the daedalus_variant_usage table.
+      - '@daedalus_stylish.variant_usage'
+      - '@current_user'
+      - '@datetime.time'
+      # The disk lane: the shipped-state comparisons and the revert gesture
+      # read "what does the provider ship right now" through the importer.
+      - '@daedalus_stylish.variant_importer'
+      # A mint joins the active design system unless it opts out (global).
+      - '@daedalus_blueprint.active_design_system'
+      # The distro lock: shipped variants are read-only while it holds; the
+      # developer gate (settings.php) lifts it on an authoring site.
+      - '@daedalus_blueprint.distro_lock'
+      # Optional: with daedalus_tempstore the gestures resolve the host entity's
+      # STAGED copy, so scope capture sees just-placed blocks.
+      - '@?daedalus_tempstore.entity_tempstore_repository'
+      # Optional: with daedalus_blueprint_stencil, file-owned variants (the
+      # stencil_file lane) resolve their owner against stencil discovery.
+      - '@?daedalus_blueprint_stencil.discovery'
+  daedalus_stylish.variant_importer:
+    class: Drupal\daedalus_stylish\VariantImporter
+    arguments:
+      - '@module_handler'
+      - '@entity_type.manager'
+      - '@daedalus_blueprint.deserializer'
+      # Shipped variants are code, not user input: the import runs as an
+      # administrative account (core's default-content precedent), because
+      # module installs often run as the anonymous CLI user.
+      - '@Drupal\Core\DefaultContent\AdminAccountSwitcher'
+      - '@datetime.time'
+      # Membership: a shipped member joins the design system its module
+      # packages unless its definition says otherwise (design_system: ~).
+      - '@daedalus_blueprint.active_design_system'
+      # Optional: without Workspaces there is no active workspace to escape;
+      # with it the sync executes outside any active workspace so shipped
+      # defaults land live, never staged invisibly.
+      - '@?workspaces.manager'
+      # Optional: with daedalus_blueprint_stencil, a shipped stencil: key may
+      # name a module-shipped FILE stencil, resolved through discovery.
+      - '@?daedalus_blueprint_stencil.discovery'
+  daedalus_stylish.variant_shipper:
+    # The disk lane's other direction: site variants OUT to a module's
+    # per-id file (MODULE.daedalus_stylish.variants.ID.yml), adopted in place so a
+    # sync right after reports UNCHANGED.
+    class: Drupal\daedalus_stylish\VariantShipper
+    arguments:
+      - '@module_handler'
+      - '@entity_type.manager'
+      # Owns the file names, the grammar check, and what modules ship.
+      - '@daedalus_stylish.variant_importer'
+      # Optional: with Workspaces the lookups and adopting saves run outside
+      # any active workspace, like the importer's sync: shipped is LIVE.
+      - '@?workspaces.manager'
+  daedalus_stylish.skin_importer:
+    class: Drupal\daedalus_stylish\SkinImporter
+    arguments:
+      - '@module_handler'
+      - '@entity_type.manager'
+      - '@daedalus_blueprint.deserializer'
+      # Same admin-account and workspace-escape rationale as the variant
+      # importer: shipped skins are code and land live.
+      - '@Drupal\Core\DefaultContent\AdminAccountSwitcher'
+      - '@datetime.time'
+      # Membership: a shipped member joins the design system its module
+      # packages unless its definition says otherwise (design_system: ~).
+      - '@daedalus_blueprint.active_design_system'
+      - '@?workspaces.manager'
+  daedalus_stylish.skin_shipper:
+    # The skins lane's other direction: site skins OUT to a module's per-id
+    # file (MODULE.daedalus_stylish.skins.ID.yml), adopted in place with the written
+    # {tokens, defaults} as the source hash so a sync right after reports
+    # UNCHANGED. Skins carry no distro lock, so this is the one way a site's
+    # edit of a shipped skin reaches disk.
+    class: Drupal\daedalus_stylish\SkinShipper
+    arguments:
+      - '@module_handler'
+      - '@entity_type.manager'
+      # Owns the file names, the grammar check, and what modules ship.
+      - '@daedalus_stylish.skin_importer'
+      # Optional: with Workspaces the lookups and adopting saves run outside
+      # any active workspace, like the importer's sync: shipped is LIVE.
+      - '@?workspaces.manager'
+  daedalus_stylish.swatch_importer:
+    class: Drupal\daedalus_stylish\SwatchImporter
+    arguments:
+      - '@module_handler'
+      - '@entity_type.manager'
+      - '@daedalus_blueprint.deserializer'
+      # Same admin-account and workspace-escape rationale as the variant
+      # importer: shipped swatches are code and land live.
+      - '@Drupal\Core\DefaultContent\AdminAccountSwitcher'
+      - '@datetime.time'
+      # Membership: a shipped member joins the design system its module
+      # packages unless its definition says otherwise (design_system: ~).
+      - '@daedalus_blueprint.active_design_system'
+      - '@?workspaces.manager'
+  daedalus_stylish.animation_importer:
+    class: Drupal\daedalus_stylish\AnimationImporter
+    arguments:
+      - '@module_handler'
+      - '@entity_type.manager'
+      - '@daedalus_blueprint.deserializer'
+      # Same admin-account and workspace-escape rationale as the variant
+      # importer: shipped animations are code and land live.
+      - '@Drupal\Core\DefaultContent\AdminAccountSwitcher'
+      - '@datetime.time'
+      # Membership: a shipped member joins the design system its module
+      # packages unless its definition says otherwise (design_system: ~).
+      - '@daedalus_blueprint.active_design_system'
+      - '@?workspaces.manager'
+  logger.channel.daedalus_stylish:
+    parent: logger.channel_base
+    arguments: ['daedalus_stylish']
+  daedalus_stylish.shipped_sync:
+    # The one activation lane for shipped definitions (disk to site is
+    # "sync"; site to disk is "ship", daedalus_stylish.ship below): the four
+    # importers in dependency order (animations, swatches, skins, variants)
+    # over a module set, behind hook_rebuild(), hook_modules_installed(), a
+    # design system being activated (every enabled module re-syncs under
+    # the incoming law: the package it defers while inactive and, on a
+    # fresh install, everything the batch left waiting for the installer
+    # to finish), and the daedalus_stylish:sync command.
+    class: Drupal\daedalus_stylish\ShippedSync
+    arguments:
+      - '@daedalus_stylish.animation_importer'
+      - '@daedalus_stylish.swatch_importer'
+      - '@daedalus_stylish.skin_importer'
+      - '@daedalus_stylish.variant_importer'
+      # The install guard: inside the installer a batch waits only until
+      # the site has its design system (the recipe's activation).
+      - '@daedalus_blueprint.active_design_system'
+      # The rebuild guard: pending entity definition updates skip the sync.
+      - '@entity.definition_update_manager'
+      - '@logger.channel.daedalus_stylish'
+  Drupal\daedalus_stylish\ShippedSync: '@daedalus_stylish.shipped_sync'
+  daedalus_stylish.ship:
+    # The sync lane's other direction as one gesture: a module's per-id
+    # files (MODULE.daedalus_stylish.<kind>.ID.yml) rebuilt from the site's entities,
+    # or named site materials adopted into new per-id files, one shipper
+    # per kind (skins, variants), behind the daedalus_stylish:ship command. The
+    # hand-authored single file is read for what the site edited and never
+    # written.
+    class: Drupal\daedalus_stylish\Ship
+    arguments:
+      - '@module_handler'
+      - '@daedalus_stylish.skin_shipper'
+      - '@daedalus_stylish.variant_shipper'
+  Drupal\daedalus_stylish\Ship: '@daedalus_stylish.ship'
+  daedalus_stylish.swatch_usage:
+    # The daedalus_swatch_usage table: which source entities reference which
+    # swatches inside their saved default-revision CSS values, mirrored
+    # from the THREE stores (host style maps, variant styles, skin
+    # tokens/defaults) at the entity save chokepoint
+    # (daedalus_stylish_entity_insert/update/delete). Every usage consumer reads it;
+    # nothing parses content on demand.
+    class: Drupal\daedalus_stylish\SwatchUsage
+    arguments:
+      - '@database'
+      - '@entity_type.manager'
+      - '@entity_field.manager'
+  daedalus_stylish.swatch_manager:
+    class: Drupal\daedalus_stylish\SwatchManager
+    arguments:
+      # The value seam every mint validates through.
+      - '@daedalus_stylish.style_map_validator'
+      - '@entity_type.manager'
+      # Reference resolution (loadSwatch), the request-lifetime identity map.
+      - '@daedalus_stylish.swatch_repository'
+      - '@current_user'
+      - '@datetime.time'
+      # The disk lane: the shipped-state comparisons, the distro lock, and
+      # the revert gesture read "what does the provider ship right now"
+      # through the importer.
+      - '@daedalus_stylish.swatch_importer'
+      # Compound condition keys canonicalize (part order) on write.
+      - '@plugin.manager.daedalus_stylish_condition_type'
+      # Usage counts and the delete lane's work list read the
+      # daedalus_swatch_usage table.
+      - '@daedalus_stylish.swatch_usage'
+      # A mint joins the active design system unless it opts out (global).
+      - '@daedalus_blueprint.active_design_system'
+      # The distro lock: shipped swatches are read-only while it holds; the
+      # developer gate (settings.php) lifts it on an authoring site.
+      - '@daedalus_blueprint.distro_lock'
+  daedalus_stylish.field_handler.swatch_value:
+    class: Drupal\daedalus_stylish\SwatchValueFieldHandler
+    arguments:
+      - '@daedalus_stylish.style_map_validator'
+      - '@daedalus_stylish.style_guide'
+      # Theme resolution: the declaration spine's one answer (siteTheme()).
+      - '@daedalus_ui.page_builder_declarations'
+      - '@plugin.manager.daedalus_stylish_condition_type'
+      # The input tier's write-time resolution (handled values, layers).
+      - '@daedalus_stylish.style_value_resolver'
+      # The guidance names stencils among the materials only while the
+      # roster has some (StyleMapFieldHandler::guidanceParagraph()).
+      - '@daedalus_blueprint.materials_roster_builder'
+      # The rosters the fragment teaches (what each address may style).
+      - '@daedalus_stylish.vocabulary_roster'
+      # Lazy: the importer injects the deserializer, whose handler manager
+      # instantiates this handler (the validator's component-locator cycle,
+      # again). The distro lock's disk read.
+      - !service_closure '@daedalus_stylish.swatch_importer'
+      # The ai_minting governance gate reads daedalus_stylish.settings.
+      - '@config.factory'
+      # The distro lock gates the blueprint-lane write and the guidance's
+      # lock sentence; the developer gate (settings.php) lifts it.
+      - '@daedalus_blueprint.distro_lock'
+    tags:
+      - { name: daedalus_blueprint.field_handler, field_types: 'daedalus_swatch_value' }
+  daedalus_stylish.animation_manager:
+    class: Drupal\daedalus_stylish\AnimationManager
+    arguments:
+      # The steps seam every mint validates through.
+      - '@daedalus_stylish.style_map_validator'
+      - '@entity_type.manager'
+      # Reference resolution (loadAnimation), the request-lifetime identity
+      # map.
+      - '@daedalus_stylish.animation_repository'
+      - '@current_user'
+      - '@datetime.time'
+      # The disk lane: the shipped-state comparisons, the distro lock, and
+      # the revert gesture read "what does the provider ship right now"
+      # through the importer.
+      - '@daedalus_stylish.animation_importer'
+      # Usage counts and the delete lane's work list read the
+      # daedalus_animation_usage table.
+      - '@daedalus_stylish.animation_usage'
+      # A mint joins the active design system unless it opts out (global).
+      - '@daedalus_blueprint.active_design_system'
+      # The distro lock: shipped animations are read-only while it holds;
+      # the developer gate (settings.php) lifts it on an authoring site.
+      - '@daedalus_blueprint.distro_lock'
+  daedalus_stylish.field_handler.animation_steps:
+    class: Drupal\daedalus_stylish\AnimationStepsFieldHandler
+    arguments:
+      - '@daedalus_stylish.style_map_validator'
+      - '@daedalus_stylish.style_guide'
+      # Theme resolution: the declaration spine's one answer (siteTheme()).
+      - '@daedalus_ui.page_builder_declarations'
+      - '@plugin.manager.daedalus_stylish_condition_type'
+      # The input tier's write-time resolution (handled values, layers).
+      - '@daedalus_stylish.style_value_resolver'
+      # The guidance names stencils among the materials only while the
+      # roster has some (StyleMapFieldHandler::guidanceParagraph()).
+      - '@daedalus_blueprint.materials_roster_builder'
+      # The rosters the fragment teaches (what each address may style).
+      - '@daedalus_stylish.vocabulary_roster'
+      # Lazy: the importer injects the deserializer, whose handler manager
+      # instantiates this handler (the validator's component-locator cycle,
+      # again). The distro lock's disk read.
+      - !service_closure '@daedalus_stylish.animation_importer'
+      # The ai_minting governance gate reads daedalus_stylish.settings.
+      - '@config.factory'
+      # The distro lock gates the blueprint-lane write and the guidance's
+      # lock sentence; the developer gate (settings.php) lifts it.
+      - '@daedalus_blueprint.distro_lock'
+    tags:
+      - { name: daedalus_blueprint.field_handler, field_types: 'daedalus_animation_steps' }
+  daedalus_stylish.media_value_resolver:
+    class: Drupal\daedalus_stylish\MediaValueResolver
+    arguments:
+      - '@entity.repository'
+      - '@entity_type.manager'
+      - '@config.factory'
+      - '@file_url_generator'
+      # Constraint resolution mirrors validation: the key's captured address
+      # (the validator's derivation) and its roster (the one derivation of
+      # the effective constraint) decide the image_style constraint.
+      - '@daedalus_stylish.style_map_validator'
+      - '@theme_handler'
+      - '@daedalus_stylish.vocabulary_roster'
+  daedalus_stylish.variant_stylesheet:
+    class: Drupal\daedalus_stylish\VariantStylesheet
+    arguments:
+      - '@daedalus_stylish.css_printer'
+      # Width-condition detection for the demand-driven page-container rule.
+      - '@plugin.manager.daedalus_stylish_condition_type'
+      - '@state'
+      - '@file_system'
+      - '@file_url_generator'
+      - '@library.discovery'
+      # Reference resolution (loadVariant) and axis-declaration emission
+      # order (orderedEntryVariants/scopeAxes) — delivery must resolve and
+      # order exactly the way validation does.
+      - '@daedalus_stylish.style_map_validator'
+      # Media tokens in variant styles resolve pre-print, per print site.
+      - '@daedalus_stylish.media_value_resolver'
+      # Optional: without workspaces there is no preview edge and compiles
+      # always see the (only) live revisions.
+      - '@?workspaces.manager'
+      # The materials roster: the compiled file's published set and its
+      # order, and the cache metadata every inline render carries so a
+      # draft becoming a material invalidates them.
+      - '@daedalus_blueprint.materials_roster_builder'
+  daedalus_stylish.variant_workspace_subscriber:
+    # Publish fires no per-entity update hooks, so the save-chokepoint
+    # reactions replay here: identity map and roster resets, stylesheet
+    # recompile, usage-row resync.
+    class: Drupal\daedalus_stylish\EventSubscriber\VariantWorkspaceSubscriber
+    arguments:
+      - '@daedalus_stylish.variant_stylesheet'
+      - '@daedalus_stylish.variant_usage'
+      - '@daedalus_stylish.variant_repository'
+      - '@daedalus_blueprint.materials_roster_builder'
+      - '@daedalus_stylish.variant_conformance'
+    tags:
+      - { name: event_subscriber }
+  daedalus_stylish.defaults_stylesheet:
+    class: Drupal\daedalus_stylish\DefaultsStylesheet
+    arguments:
+      - '@daedalus_stylish.css_printer'
+      # The active skin: site defaults are its data; its tokens are read as
+      # the roster's token records.
+      - '@daedalus_stylish.skin_manager'
+      - '@plugin.manager.daedalus_stylish_condition_type'
+      - '@daedalus_blueprint.materials_roster_builder'
+      # The declared tier: every refinement declaration's own defaults, per
+      # theme; and the default theme the file compiles for.
+      - '@daedalus_stylish.style_guide'
+      - '@config.factory'
+      - '@state'
+      - '@file_system'
+      - '@file_url_generator'
+      - '@library.discovery'
+      # Media tokens in site defaults resolve pre-print, per print site.
+      - '@daedalus_stylish.media_value_resolver'
+      # Optional: without workspaces there is no preview edge and compiles
+      # always see the (only) live revision.
+      - '@?workspaces.manager'
+  daedalus_stylish.skin_workspace_subscriber:
+    # Publish fires no per-entity update hooks: the roster reset and the
+    # recompile replay here.
+    class: Drupal\daedalus_stylish\EventSubscriber\SkinWorkspaceSubscriber
+    arguments: ['@daedalus_stylish.defaults_stylesheet', '@daedalus_blueprint.materials_roster_builder']
+    tags:
+      - { name: event_subscriber }
+  daedalus_stylish.swatch_stylesheet:
+    class: Drupal\daedalus_stylish\SwatchStylesheet
+    arguments:
+      - '@daedalus_stylish.css_printer'
+      # Condition canonicalization and width-condition detection for the
+      # demand-driven page-container rule.
+      - '@plugin.manager.daedalus_stylish_condition_type'
+      # The materials roster: the published set, its order, and the cache
+      # metadata the workspace inline preview carries.
+      - '@daedalus_blueprint.materials_roster_builder'
+      - '@state'
+      - '@file_system'
+      - '@file_url_generator'
+      - '@library.discovery'
+      # Optional: without workspaces there is no preview edge and compiles
+      # always see the (only) live revisions.
+      - '@?workspaces.manager'
+  daedalus_stylish.swatch_workspace_subscriber:
+    # Publish fires no per-entity update hooks, so the save-chokepoint
+    # reactions replay here: identity map and roster resets, stylesheet
+    # recompile, usage-row resync.
+    class: Drupal\daedalus_stylish\EventSubscriber\SwatchWorkspaceSubscriber
+    arguments:
+      - '@daedalus_stylish.swatch_stylesheet'
+      - '@daedalus_stylish.swatch_usage'
+      - '@daedalus_stylish.swatch_repository'
+      - '@daedalus_blueprint.materials_roster_builder'
+    tags:
+      - { name: event_subscriber }
+  daedalus_stylish.animation_stylesheet:
+    class: Drupal\daedalus_stylish\AnimationStylesheet
+    arguments:
+      - '@daedalus_stylish.css_printer'
+      # The published set: the same read the roster's animation records
+      # come from, so delivery and validation cannot disagree.
+      - '@daedalus_stylish.animation_repository'
+      # The animation LIST cache tag the workspace inline preview carries.
+      - '@entity_type.manager'
+      - '@state'
+      - '@file_system'
+      - '@file_url_generator'
+      - '@library.discovery'
+      # Optional: without workspaces there is no preview edge and compiles
+      # always see the (only) live revisions.
+      - '@?workspaces.manager'
+  daedalus_stylish.animation_usage:
+    # The daedalus_animation_usage table: which source entities wear which
+    # animations inside their saved default-revision CSS values (the
+    # property-scoped keyframes-name slot), mirrored at the entity save
+    # chokepoint across the three stores; the swatch table's twin.
+    class: Drupal\daedalus_stylish\AnimationUsage
+    arguments:
+      - '@database'
+      - '@entity_type.manager'
+      - '@entity_field.manager'
+  daedalus_stylish.animation_workspace_subscriber:
+    # Publish fires no per-entity update hooks, so the save-chokepoint
+    # reactions replay here: identity map and roster resets, stylesheet
+    # recompile, usage-row resync.
+    class: Drupal\daedalus_stylish\EventSubscriber\AnimationWorkspaceSubscriber
+    arguments:
+      - '@daedalus_stylish.animation_stylesheet'
+      - '@daedalus_stylish.animation_usage'
+      - '@daedalus_stylish.animation_repository'
+      - '@daedalus_blueprint.materials_roster_builder'
+    tags:
+      - { name: event_subscriber }
+  daedalus_stylish.defaults_settings_subscriber:
+    class: Drupal\daedalus_stylish\EventSubscriber\DefaultsSettingsSubscriber
+    # Breakpoint thresholds, the container_roots gate and the default theme
+    # bake into the defaults file; which skin prints is the design-system
+    # switch's business.
+    arguments:
+      - '@daedalus_stylish.defaults_stylesheet'
+    tags:
+      - { name: event_subscriber }
+  daedalus_stylish.design_system_switch_subscriber:
+    class: Drupal\daedalus_stylish\EventSubscriber\DesignSystemSwitchSubscriber
+    # A switch drops the roster memo and the style guide (the layered
+    # declarations with it, so the incoming package's law is in force
+    # whatever order the subscribers on the event run in), syncs the
+    # incoming system's package under that law, rides both systems' token
+    # and member ids on the response's materials delta, and recompiles
+    # the three roster-fed files (defaults, variants, swatches).
+    arguments:
+      - '@daedalus_stylish.defaults_stylesheet'
+      - '@daedalus_stylish.variant_stylesheet'
+      - '@daedalus_stylish.swatch_stylesheet'
+      - '@daedalus_blueprint.materials_roster_builder'
+      - '@daedalus_blueprint.materials_change_set'
+      - '@daedalus_stylish.skin_manager'
+      - '@daedalus_stylish.materials_provider'
+      - '@entity_type.manager'
+      - '@daedalus_stylish.style_guide'
+      - '@daedalus_stylish.shipped_sync'
+    tags:
+      - { name: event_subscriber }
+  daedalus_stylish.style_backend.css:
+    class: Drupal\daedalus_stylish\CssStyleBackend
+    arguments:
+      - '@daedalus_stylish.css_printer'
+      - '@plugin.manager.daedalus_stylish_condition_type'
+      - '@daedalus_stylish.variant_stylesheet'
+      # Media tokens in the entity's own map resolve pre-print.
+      - '@daedalus_stylish.media_value_resolver'
+      # Optional only for kernel tests that boot without daedalus_ui;
+      # the module dependency makes it always present on a real site.
+      # Branches variant delivery: edit mode resolves references inline at
+      # their key roots, live mode keeps class + compiled stylesheet.
+      - '@?daedalus_ui.mode_state'
+  # The active style backend. Alternative backends (utility classes, etc.)
+  # override this alias; the data model never changes.
+  daedalus_stylish.style_backend:
+    alias: daedalus_stylish.style_backend.css
+  daedalus_stylish.width_band_migration:
+    class: Drupal\daedalus_stylish\WidthBandMigration
+    arguments:
+      - '@plugin.manager.daedalus_stylish_condition_type'
+      - '@entity_type.manager'
+      - '@logger.factory'
+  Drupal\daedalus_stylish\WidthBandMigration: '@daedalus_stylish.width_band_migration'
+
+  # The width-band migration rides daedalus_layout's transform spine so the
+  # presave/load-time safety net keeps stale tempstore sessions converging
+  # after the "wide" condition retired. Registered permanently (the
+  # ContainerGrammarSweep posture); priority below daedalus_stylish_layouts' sweeps
+  # so a truly stale map speaks the container grammar before wide folds.
+  # On sites without daedalus_layout the tag is never collected and the service
+  # never instantiates.
+  daedalus_stylish.width_band_sweep:
+    class: Drupal\daedalus_stylish\WidthBandSweep
+    arguments:
+      - '@daedalus_stylish.width_band_migration'
+    tags:
+      - { name: daedalus_layout.host_transform, priority: -20 }
+
+  daedalus_stylish.form_alter.bundle_edit:
+    class: Drupal\daedalus_stylish\Form\BundleEditFormAlter
+    arguments: ['@daedalus_stylish.field_manager', '@entity_type.manager']
+  # Daedalus Stylish's materials provider: the active skin's tokens, the published
+  # swatches, the published variants and the published animations as
+  # roster records (the ONE place these four kinds are read into the
+  # materials spine; spellings derive from the declarations here and
+  # nowhere else).
+  daedalus_stylish.materials_provider:
+    class: Drupal\daedalus_stylish\Materials\DaedalusStylishMaterialsProvider
+    arguments:
+      - '@daedalus_stylish.style_guide'
+      - '@daedalus_stylish.skin_manager'
+      # Theme resolution: the declaration spine's one answer (siteTheme()).
+      - '@daedalus_ui.page_builder_declarations'
+      - '@daedalus_stylish.swatch_repository'
+      - '@daedalus_stylish.variant_repository'
+      - '@daedalus_stylish.animation_repository'
+      # The gesture lane (save_material / update_material / remove_material
+      # with kind swatch, variant or animation): the managers and the
+      # capture walk, as closures because the dependency is circular by
+      # construction (the managers validate through StyleMapValidator,
+      # whose universe is the roster this provider feeds).
+      - !service_closure '@daedalus_stylish.swatch_manager'
+      - !service_closure '@daedalus_stylish.variant_manager'
+      - !service_closure '@daedalus_stylish.animation_manager'
+      - !service_closure '@daedalus_stylish.variant_capture'
+      - '@current_user'
+      - '@config.factory'
+      # A closure: the element read walks the lean tree through the field
+      # handlers, whose validator reads the roster this provider feeds.
+      - !service_closure '@daedalus_blueprint.element_materials'
+      - '@daedalus_blueprint.value_grammar'
+      # The roster is what this provider feeds: a closure, never a direct
+      # dependency (the collector would recurse).
+      - !service_closure '@daedalus_blueprint.materials_roster_builder'
+      # The verdict the variant records are filtered by.
+      - '@daedalus_stylish.variant_conformance'
+      # The distro lock: a shipped swatch, variant or animation record is
+      # `updatable` only once the developer gate (settings.php) lifts it.
+      - '@daedalus_blueprint.distro_lock'
+    tags:
+      - { name: daedalus_blueprint.materials_provider }
+  Drupal\daedalus_stylish\Materials\DaedalusStylishMaterialsProvider: '@daedalus_stylish.materials_provider'
+  # The offered variants the site's CURRENT law refuses, judged once per
+  # law change (cache-backed under the provider's tags) and withheld from
+  # the roster by the provider; the request memo resets with the variant
+  # repository's.
+  daedalus_stylish.variant_conformance:
+    class: Drupal\daedalus_stylish\VariantConformance
+    arguments:
+      # Closures both ways: the provider withholds this verdict, and the
+      # validator's universe is the roster the provider feeds.
+      - !service_closure '@daedalus_stylish.materials_provider'
+      - !service_closure '@daedalus_stylish.style_map_validator'
+      - '@daedalus_stylish.variant_repository'
+      - '@daedalus_blueprint.active_design_system'
+      - '@daedalus_stylish.style_guide'
+      - '@daedalus_ui.page_builder_declarations'
+      - '@cache.default'
+      - '@?workspaces.manager'
+  Drupal\daedalus_stylish\VariantConformance: '@daedalus_stylish.variant_conformance'
+  # The server capture of an element's look for save_material /
+  # update_material with kind variant (the AI's door; the client's
+  # variant-scope.js captureEntries()/saveStyles() is its twin for live
+  # preview): the element's own overrides, its parts, its staged children by
+  # slot path, the same-axis look it wears folded beneath.
+  daedalus_stylish.variant_capture:
+    class: Drupal\daedalus_stylish\VariantCapture
+    arguments:
+      - '@daedalus_stylish.style_map_validator'
+      - '@daedalus_stylish.subtree_slot_keys'
+  # Contributes daedalus_stylish's declarations (axis order per scope, conditions,
+  # parts, instance namespaces, closed-world stylable rosters) to
+  # daedalus_blueprint's dialect catalog; the materials themselves ride the
+  # roster through daedalus_stylish.materials_provider.
+  daedalus_stylish.dialect_vocabulary_subscriber:
+    class: Drupal\daedalus_stylish\EventSubscriber\DialectVocabularySubscriber
+    arguments:
+      - '@plugin.manager.daedalus_stylish_condition_type'
+      - '@daedalus_stylish.style_guide'
+      # The stylable rosters the catalog carries are the vocabulary
+      # roster's, one per kind.
+      - '@daedalus_stylish.vocabulary_roster'
+      - '@daedalus_ui.page_builder_declarations'
+      # The dressed tags are the active skin's base default scopes.
+      - '@daedalus_stylish.skin_manager'
+    tags:
+      - { name: event_subscriber }
+  daedalus_stylish.component_styles_subscriber:
+    class: Drupal\daedalus_stylish\EventSubscriber\ElementStylesSubscriber
+    arguments:
+      - '@daedalus_stylish.style_guide'
+      - '@daedalus_stylish.style_map_validator'
+      - '@theme_handler'
+      - '@daedalus_blueprint.element_locator'
+      # The depth stamp a move's strip reads (MaterialRecord::rootOnly()).
+      - '@daedalus_blueprint.materials_roster_builder'
+    tags:
+      - { name: event_subscriber }

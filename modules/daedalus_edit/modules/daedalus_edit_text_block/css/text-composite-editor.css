@@ -1,0 +1,32 @@
+/**
+ * The text block editor's own widget control: the tag picker.
+ *
+ * The widget-popover grammar and the link input are daedalus_edit's shared
+ * machinery and ship their CSS there (daedalus_edit/css/verb-widgets.css);
+ * only the tag picker popover's pieces are this editor's own.
+ */
+.daedalus-edit-tag-picker {
+  gap: 2px;
+}
+
+.daedalus-edit-tag-picker__tag {
+  margin: 0;
+  padding: 6px 8px;
+  cursor: pointer;
+  color: #222;
+  border: 0;
+  /* Concentric with the popover: its radius minus the 6px inset. */
+  border-radius: calc(var(--daedalus-border-radius) - 6px);
+  background: transparent;
+  font: inherit;
+  font-weight: 600;
+}
+
+.daedalus-edit-tag-picker__tag:hover {
+  background-color: #f0f0f0;
+}
+
+.daedalus-edit-tag-picker__tag[aria-pressed="true"] {
+  color: var(--daedalus-selection-text);
+  background-color: var(--daedalus-selection);
+}

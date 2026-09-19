@@ -1,0 +1,178 @@
+/**
+ * @file
+ * Canvas state vector chrome: stage, handles, ruler.
+ */
+
+/* ------------------------------------------------------------------------
+ * The stage.
+ *
+ * In any daedalus_ui mode the root is a query container, so container
+ * breakpoint conditions in the page tree re-evaluate against the CANVAS
+ * width — which is the viewport until the vector narrows it. Accepted
+ * containment costs (margin collapse, fixed descendants) match the ones
+ * daedalus_stylish's own container roots already carry.
+ *
+ * isolation makes the canvas one atomic paint layer: a theme's own
+ * z-indexes (e.g. Olivero's z-index: 101 site header) stay confined to
+ * the page content and can never paint over edit-mode chrome (sidebars,
+ * top bar, floating toolbars), whose z-indexes only need to win against
+ * the canvas LAYER, not against arbitrary theme values. Chrome that
+ * mounts INSIDE the canvas (the insert preset picker) competes only with
+ * canvas content, which is all it ever needed.
+ * ---------------------------------------------------------------------- */
+html[data-daedalus-ui-mode] #daedalus-ui-stage {
+  container-type: inline-size;
+  container-name: canvas;
+  isolation: isolate;
+}
+
+html[data-canvas-width] #daedalus-ui-stage {
+  margin-inline: auto;
+  max-width: 100%;
+  box-shadow:
+    0 0 0 1px var(--daedalus-border),
+    0 12px 40px rgb(0, 0, 0, 0.35);
+}
+
+/* ------------------------------------------------------------------------
+ * Drag handles: body-level fixed chrome, edit mode only.
+ * ---------------------------------------------------------------------- */
+.canvas-vector-handle {
+  position: fixed;
+  /* Above the stage's isolated paint layer, the sidebars (100), and the
+     selection frame (strokes 940, chips 941): the handle sits centered on
+     the stage edge, exactly where a full-width selection's stroke runs,
+     and the resize affordance must stay grabbable there. */
+  z-index: 1259;
+  top: calc(50% - var(--admin-toolbar-top-bar-height));
+  display: none;
+  width: 12px;
+  height: 56px;
+  cursor: ew-resize;
+  transition: opacity 0.2s ease;
+  transform: translateY(50%);
+  border: 1px solid var(--daedalus-border);
+  border-radius: 99px;
+  background: var(--daedalus-background);
+  touch-action: none;
+}
+
+html[data-daedalus-ui-mode="edit"] .canvas-vector-handle {
+  display: block;
+}
+
+/* The handles carry data-daedalus-ui-conceal="minimal": the shared reveal.css hides
+   them from minimal density up until the pointer approaches. Exception: a
+   posed width means resizing is the active concern, so the handles stay
+   visible regardless of density (the shared rules are :where()-weakened
+   precisely so this override wins). */
+html[data-canvas-width] .canvas-vector-handle {
+  visibility: visible;
+  pointer-events: auto;
+  opacity: 1;
+}
+
+.canvas-vector-handle:hover,
+html.canvas-vector-resizing .canvas-vector-handle {
+  border-color: var(--daedalus-selection);
+  background: var(--daedalus-selection);
+}
+
+/* While dragging, the page must not swallow pointer events. */
+html.canvas-vector-resizing body {
+  user-select: none;
+}
+
+/* ------------------------------------------------------------------------
+ * The band ruler: fixed under the top bar, shown while the canvas is
+ * constrained in any way. Band spans mark the width bands, edge ticks
+ * their boundaries, and the band the effective width (posed ?? measured)
+ * sits in lights up; the space beyond every band is bandless (the
+ * contributor's unconditioned base), so nothing lights there.
+ * ---------------------------------------------------------------------- */
+#daedalus-ui-canvas-ruler {
+  position: fixed;
+  /* Above the stage's isolated paint layer, but UNDER both sidebars
+     (right: 5, left: 100): the ruler spans the full canvas width — the
+     canvas runs beneath the sidebars, so honest band geometry must too —
+     and its overhang belongs behind the panels, not painted over them. */
+  z-index: 4;
+  top: var(--drupal-displace-offset-top, 0);
+  right: 0;
+  left: 0;
+  display: none;
+  height: 22px;
+  pointer-events: none;
+  color: var(--daedalus-text-muted);
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 9.5px;
+}
+
+/* Constrained in any way = the ruler has something to say: JS stamps
+   is-constrained when a width is posed AT ALL (even one landing in the
+   bandless base space: a scrub through base's floor must not blink the
+   ruler) or when the unposed stage measures inside a band. The drag mark
+   holds the display up for the whole scrub besides, so crossing the
+   full-width release edge (where the pose momentarily lifts) cannot
+   thrash it; at rest with nothing posed and the stage at its natural
+   full width, the ruler leaves with the constraint. */
+html[data-daedalus-ui-mode="edit"] #daedalus-ui-canvas-ruler.is-constrained,
+html[data-daedalus-ui-mode="edit"].canvas-vector-resizing #daedalus-ui-canvas-ruler {
+  display: block;
+}
+
+.canvas-vector-ruler__band {
+  position: absolute;
+  top: 0;
+  display: flex;
+  overflow: hidden;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  white-space: nowrap;
+  background: color-mix(in sRGB, currentColor 8%, transparent);
+
+  &.is-active {
+    color: var(--daedalus-selection);
+    background: color-mix(in sRGB, currentColor 16%, transparent);
+  }
+}
+
+.canvas-vector-ruler__mark {
+  position: absolute;
+  top: 0;
+  height: 12px;
+  padding-top: 2px;
+  padding-inline-start: 4px;
+  white-space: nowrap;
+  border-inline-start: 1px solid currentColor;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The scrub readout: the actual canvas width in px, centered on the
+   stage's center line. Scrub-time feedback only: the inspector chip's
+   face deliberately names the write target (the band), so the px echo
+   lives here instead, appearing with the grab and lingering just long
+   enough after release to read where the scrub landed. */
+.canvas-vector-ruler__readout {
+  position: absolute;
+  top: 1px;
+  padding: 1px 8px;
+  /* The hide direction carries the linger: hold after release, then fade. */
+  transition: opacity 0.15s ease 0.7s;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  opacity: 0;
+  color: var(--daedalus-text);
+  border: 1px solid var(--daedalus-border);
+  border-radius: 99px;
+  background: var(--daedalus-background);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+html.canvas-vector-resizing .canvas-vector-ruler__readout {
+  transition: none;
+  /* Appear instantly with the grab; no fade on the way in. */
+  opacity: 1;
+}

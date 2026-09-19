@@ -1,0 +1,6 @@
+# A slot-path key in a declared default: defaults have no placement to
+# distribute through, so keys are element-only ('' and '::.part').
+defaults:
+  'container(1)':
+    default:
+      padding: 1rem

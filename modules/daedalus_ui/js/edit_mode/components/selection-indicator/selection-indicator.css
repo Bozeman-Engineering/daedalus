@@ -1,0 +1,157 @@
+/**
+ * The selection indicator: breadcrumb + chips floating at the
+ * canvas's bottom-left, clear of the left rail's panels. This is the lean
+ * default, same visual family as the pill (top-bar.css).
+ */
+
+/* Chrome that reserves room for the indicator (the left rail's divider
+   shortens by this much, sidebar.css) reads --daedalus-breadcrumb-height,
+   0px by default (variables.css). The component's mount/unmount IS its
+   hide/show system, so the token derives from DOM presence: mounted means
+   raised, no second visibility derivation to keep in sync. */
+html:has(.daedalus-ui-selection-indicator) {
+  --daedalus-breadcrumb-height: 1.7rem;
+}
+
+.daedalus-ui-selection-indicator {
+  position: fixed;
+  /* Above all canvas chrome but below the modal overlay (1259, modal.css),
+     so an open dialog's scrim darkens and blurs the indicator like the
+     rest of the page — unlike the pill and top bar (1261), which must
+     outstack the modal floor and mirror the scrim's effect instead. */
+  z-index: 1258;
+  /* Above the tool pill (#edit-mode-toolbar sits at bottom: 1rem). */
+  bottom: 0;
+  /* The canvas's bottom-left corner, not the viewport's: the displace var
+     aggregates whatever left-rail panels are open (they register
+     data-offset-left, and every open/close/resize re-runs
+     Drupal.displace()), so the indicator hugs the visible page instead of
+     covering the palette it may be dragging from. */
+  left: var(--drupal-displace-offset-left, 0);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  /* gap: 0.375rem; */
+  /* Stay within the canvas: the rails' displace offsets bound both edges. */
+  max-width: min(60rem, calc(100vw - var(--drupal-displace-offset-left, 0px) - var(--drupal-displace-offset-right, 0px) - 1.5rem));
+  pointer-events: none;
+  font-family: var(--daedalus-font);
+  font-size: var(--daedalus-font-size-small);
+  /* Don't inherit the site theme's roomy body line-height. */
+  line-height: normal;
+}
+
+.daedalus-ui-breadcrumb,
+.daedalus-ui-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  /* Slim: the crumbs carry their own padding (hover targets), so the box
+     only needs a whisper of its own. */
+  padding: 0.125rem 0.25rem;
+  pointer-events: auto;
+  border: 1px solid var(--daedalus-border);
+  border-bottom: none;
+  border-left: none;
+  border-radius: 0 var(--daedalus-border-radius) 0 0;
+  background-color: var(--daedalus-background);
+  gap: 0.125rem;
+}
+
+.daedalus-ui-chips {
+  border-bottom: none;
+}
+
+/* The drop trail (drag/lift active): same grammar as the selection
+   breadcrumb, tinted as caret feedback. */
+.daedalus-ui-selection-indicator--drop .daedalus-ui-breadcrumb {
+  border-color: var(--daedalus-selection);
+}
+
+.daedalus-ui-breadcrumb__segment {
+  display: inline-flex;
+  align-items: center;
+}
+
+.daedalus-ui-breadcrumb__separator {
+  padding-inline: 0.125rem;
+  color: var(--daedalus-text-muted);
+}
+
+/* Ancestor crumbs are muted, the current crumb carries the text color —
+   the page-elements tree's secondary/primary split. */
+.daedalus-ui-breadcrumb__crumb {
+  overflow: hidden;
+  max-width: 12rem;
+  /* Ancestor crumbs are buttons: kill the site theme's button box
+     (height/line-height), the same reset as the History pills. */
+  height: auto;
+  min-height: 0;
+  margin: 0;
+  padding: 0.125rem 0.25rem;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--daedalus-text-muted);
+  border: 0;
+  border-radius: var(--daedalus-border-radius);
+  background: transparent;
+  font: inherit;
+  line-height: normal;
+}
+
+button.daedalus-ui-breadcrumb__crumb {
+  cursor: pointer;
+}
+
+button.daedalus-ui-breadcrumb__crumb:hover {
+  color: var(--daedalus-text);
+  background: var(--daedalus-selection-background);
+}
+
+.daedalus-ui-breadcrumb__crumb--current {
+  color: var(--daedalus-text);
+  font-weight: 600;
+}
+
+.daedalus-ui-chips {
+  gap: 0.25rem;
+}
+
+.daedalus-ui-chip--primary {
+  color: var(--daedalus-selection-text);
+  background: var(--daedalus-ui-highlight-color);
+}
+
+.daedalus-ui-chip__label {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.daedalus-ui-chip__dismiss {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1rem;
+  height: 1rem;
+  margin: 0;
+  padding: 0;
+  cursor: pointer;
+  color: inherit;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  font-size: var(--daedalus-icon-size-small);
+  line-height: 1;
+}
+
+.daedalus-ui-chip__dismiss:hover {
+  background: var(--daedalus-selection-background);
+}
+
+.daedalus-ui-chip__number {
+  margin-inline-end: 0.3em;
+  opacity: 0.65;
+  font-variant-numeric: tabular-nums;
+}

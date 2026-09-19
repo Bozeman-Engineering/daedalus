@@ -1,0 +1,8 @@
+name: 'Daedalus Stylish swatches test'
+type: module
+description: 'Ships default swatches for testing the palette disk lane.'
+package: Testing
+core_version_requirement: '*'
+hidden: true
+dependencies:
+  - daedalus:daedalus_stylish

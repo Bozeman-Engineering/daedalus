@@ -1,0 +1,34 @@
+langcode: en
+status: true
+dependencies:
+  config:
+    - block_content.type.formatted_text
+    - field.storage.block_content.field_formatted_text_text
+  module:
+    - daedalus_edit
+    - daedalus_edit_formatted_text_block
+    - field_sample_value
+    - text
+third_party_settings:
+  field_sample_value:
+    id: wrapped_random_text
+    configuration:
+      prevent_save: false
+      count: '1'
+      filter_format: daedalus_edit_formatted_text
+  daedalus_edit:
+    disable: false
+    handle: form_item
+id: block_content.formatted_text.field_formatted_text_text
+field_name: field_formatted_text_text
+entity_type: block_content
+bundle: formatted_text
+label: Text
+description: ''
+required: true
+translatable: false
+default_value: {  }
+default_value_callback: ''
+settings:
+  allowed_formats: {  }
+field_type: text_long

@@ -1,0 +1,69 @@
+/* The chrome layer anchors at the DOCUMENT origin, not the viewport:
+   element-following chrome (outline, verb menu, spacing bands) positions
+   absolute against it at documentPosition coordinates (geometry-tracker.js),
+   so scrolling moves chrome and content together on the compositor instead
+   of the chrome trailing the scroll by a frame. Out of flow and zero-size,
+   so it never affects page layout; viewport-anchored chrome inside it
+   (the breadcrumb) stays position: fixed, which an absolute ancestor does
+   not re-root. */
+#daedalus-root {
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+
+/* Panel toggles are instant while a mode is active. The panels themselves
+   flip display (no transition to kill), but the page EASES around them:
+   core's off-canvas wrapper transitions the canvas padding (0.7s) and
+   core's admin toolbar transitions the canvas margin through its
+   --admin-toolbar-transition seam (150ms, behind an ID-specificity hack —
+   zeroing the var is the override that wins). Editing chrome should snap:
+   an eased canvas makes every open/close read as lag. */
+html[data-daedalus-ui-mode] {
+  --admin-toolbar-transition: 0s linear;
+}
+
+html[data-daedalus-ui-mode] .dialog-off-canvas-main-canvas {
+  transition: none;
+}
+
+/* Deliberately no fallback: with the secondary color unset the declaration
+   goes invalid at computed-value time and the custom property keeps its
+   inherited (core) value — the fallback a var() could not express without
+   referencing itself. */
+.daedalus-ui-mode-button,
+#edit-mode-top-bar {
+  --admin-toolbar-color-focus: var(--daedalus-ui-secondary-color);
+}
+
+/* The mode and tool buttons are anchors (href for focus and hotkey
+   affordance), and Chrome and Safari drag any anchor with an href as a
+   link no matter what `draggable` says, ghosting "javascript:void(0)".
+   user-drag is the WebKit/Blink switch that actually stops it; the
+   markup's draggable="false" covers Firefox, which honors the attribute. */
+.daedalus-ui-mode-button,
+.daedalus-ui-tool-button {
+  -webkit-user-drag: none;
+  user-drag: none;
+}
+
+/* Scrolled-to canvas elements clear the fixed top bar. scroll-margin-top
+   redefines what "in view" means for every scrollIntoView caller at once
+   (arrow traversal, the lift walk, F6, breadcrumb clicks, notification
+   reveals), so none of them needs offset math of its own. The displace
+   offset is the aggregate of everything registered data-offset-top (the
+   top bar, the classic toolbar if present), refreshed on mode changes by
+   daedalus-ui.js. Scoped to the main canvas: the sidebars live in
+   page_top outside it, so panel-internal reveals (tree rows) keep their
+   scroll container's true edges. :where() keeps specificity at zero — an
+   element's own scroll-margin always wins.
+
+   The bottom margin clears our own floating chrome instead: the tool pill
+   (bottom: 2.5rem + its height) and the selection indicator/drop trail
+   stacked around it carry no data-offset-* (they never displace the
+   canvas), so the displace var alone would be 0 — the constant is sized
+   to the pill + breadcrumb stack. */
+:where(html[data-daedalus-ui-mode] .dialog-off-canvas-main-canvas) * {
+  scroll-margin-top: calc(var(--drupal-displace-offset-top, 0px) + 2rem);
+  scroll-margin-bottom: calc(var(--drupal-displace-offset-bottom, 0px) + 10rem);
+}

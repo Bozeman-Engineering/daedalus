@@ -1,0 +1,8 @@
+# The text block's blueprint editor. Registered through the DaedalusEditQueue
+# push-queue seam, so load order against daedalus_edit/library does not matter.
+text_composite_editor:
+  js:
+    js/text-composite-editor.js: {}
+  css:
+    component:
+      css/text-composite-editor.css: {}

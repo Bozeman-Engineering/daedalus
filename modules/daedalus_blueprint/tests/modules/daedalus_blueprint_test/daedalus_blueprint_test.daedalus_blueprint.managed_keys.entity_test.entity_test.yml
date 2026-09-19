@@ -1,0 +1,7 @@
+inline_block_configuration:
+  yaml_scoped_block:
+    scoped_setting:
+      label: 'Scoped Setting'
+      description: 'A setting declared via scoped YAML.'
+      schema:
+        type: string

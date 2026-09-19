@@ -1,0 +1,13 @@
+field:
+  elements:
+    # NULL withdraws a lower layer's part (its nested tree with it): this
+    # theme's field.html.twig override dropped the items wrapper.
+    '.field__items': null
+    '.field__label':
+      label: 'Theme label'
+site:
+  # NULL withdraws a lower layer's site section like any declaration key.
+  analytics: null
+# NULL withdraws a whole instance namespace like any declaration key.
+instances:
+  '.tx-*': null

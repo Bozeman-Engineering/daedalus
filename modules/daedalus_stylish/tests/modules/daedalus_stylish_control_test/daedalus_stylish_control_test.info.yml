@@ -1,0 +1,6 @@
+name: 'Daedalus Stylish control test'
+type: module
+description: 'Provides control widget plugins and controls declarations for testing.'
+package: Testing
+core_version_requirement: '*'
+hidden: true

@@ -1,0 +1,6 @@
+name: 'Daedalus Stylish guide test extra'
+type: module
+description: 'Layers over daedalus_stylish_guide_test declarations and alters the guide.'
+package: Testing
+core_version_requirement: '*'
+hidden: true

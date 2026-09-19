@@ -1,0 +1,255 @@
+<?php
+
+/**
+ * @file
+ * Install, update and uninstall hooks for Daedalus Layout.
+ */
+
+use Drupal\layout_builder\Plugin\SectionStorage\OverridesSectionStorage;
+use Drupal\Core\Entity\EntityInterface;
+use Drupal\layout_builder\Section;
+use Drupal\layout_builder\SectionComponent;
+use Drupal\Core\Block\BlockPluginInterface;
+use Drupal\layout_builder\Plugin\Block\InlineBlock;
+use Drupal\daedalus_layout\SectionStorage\NestedAwareSectionStorage;
+
+/**
+ * Move color settings from daedalus_layout to daedalus_ui.
+ */
+function daedalus_layout_update_10000(&$sandbox) {
+  $daedalus_layout_config = Drupal::config('daedalus_layout.settings');
+  $daedalus_ui_config = Drupal::configFactory()->getEditable('daedalus_ui.settings');
+  $colors = $daedalus_layout_config->get('colors');
+  $daedalus_ui_config->set('colors', $colors);
+  $daedalus_ui_config->save();
+}
+
+/**
+ * Re-duplicate blocks to repair data from the old duplicate logic.
+ *
+ * Covers the live entity, its workspace revisions, and the tempstore copy.
+ */
+function daedalus_layout_update_10001(&$sandbox) {
+  if (!isset($sandbox['progress'])) {
+    $sandbox['progress'] = 0;
+    $sandbox['max'] = 0;
+
+    // Build a master list of entities to process.
+    $database = \Drupal::database();
+    $query = $database->select('inline_block_usage', 'ibu')
+      ->fields('ibu', ['layout_entity_type', 'layout_entity_id'])
+      ->condition('layout_entity_type', 'block_content', '!=')
+      ->groupBy('layout_entity_type')
+      ->groupBy('layout_entity_id');
+
+    $sandbox['entities'] = $query->execute()->fetchAll(\PDO::FETCH_ASSOC);
+
+    $sandbox['max'] = count($sandbox['entities']);
+  }
+
+  if ($sandbox['max'] == 0) {
+    $sandbox['#finished'] = 1;
+    return t('No entities with inline blocks to process.');
+  }
+
+  $batch_size = 15;
+  $entity_type_manager = \Drupal::entityTypeManager();
+  $database = \Drupal::database();
+
+  for ($i = 0; $i < $batch_size && $sandbox['progress'] < $sandbox['max']; $i++) {
+    $entity_data = $sandbox['entities'][$sandbox['progress']];
+    $storage = $entity_type_manager->getStorage($entity_data['layout_entity_type']);
+    $entity = $storage->load($entity_data['layout_entity_id']);
+
+    if ($entity && method_exists($entity, 'hasField') && $entity->hasField('layout_builder__layout')) {
+      // Process live workspace.
+      $cloned_entity = _daedalus_layout_replace_with_clone($entity);
+      $cloned_entity->save();
+
+      // Process workspace revisions for this entity.
+      if (\Drupal::moduleHandler()->moduleExists('workspaces')) {
+        $workspace_query = $database->select('workspace_association', 'wa')
+          ->fields('wa', ['target_entity_revision_id', 'workspace'])
+          ->condition('target_entity_type_id', $entity->getEntityTypeId())
+          ->condition('target_entity_id', $entity->id());
+
+        $workspace_results = $workspace_query->execute()->fetchAll();
+        foreach ($workspace_results as $workspace_result) {
+          $workspace_entity = $storage->loadRevision($workspace_result->target_entity_revision_id);
+          if ($workspace_entity && $workspace_entity->hasField('layout_builder__layout')) {
+            $cloned_workspace_entity = _daedalus_layout_replace_with_clone($workspace_entity);
+            $cloned_workspace_entity->save();
+          }
+        }
+      }
+
+      // Process tempstore for this entity (if daedalus_edit module exists).
+      if (\Drupal::moduleHandler()->moduleExists('daedalus_edit')) {
+        $tempstore_query = $database->select('key_value_expire', 'kve')
+          ->fields('kve')
+          ->condition('collection', 'tempstore.shared.layout_builder.section_storage.overrides')
+          ->condition('name', '%' . $entity_data['layout_entity_type'] . '.' . $entity_data['layout_entity_id'] . '.%', 'LIKE');
+        $tempstore_results = $tempstore_query->execute()->fetchAll();
+
+        if (!empty($tempstore_results)) {
+          $tempstore = \Drupal::service('daedalus_tempstore.entity_tempstore_repository');
+          $tempstore_entity = $tempstore->get($entity);
+          if ($tempstore_entity && $tempstore_entity->hasField('layout_builder__layout')) {
+            $cloned_tempstore_entity = _daedalus_layout_replace_with_clone($tempstore_entity);
+            $tempstore->set($cloned_tempstore_entity);
+          }
+        }
+      }
+    }
+
+    $sandbox['progress']++;
+  }
+
+  $sandbox['#finished'] = $sandbox['progress'] / $sandbox['max'];
+
+  if ($sandbox['#finished'] >= 1) {
+    return t('Successfully processed @count entities with all their revisions (live, workspace, tempstore).', ['@count' => $sandbox['progress']]);
+  }
+}
+
+/**
+ * Enable daedalus_tempstore module for enhanced tempstore functionality.
+ */
+function daedalus_layout_update_10002() {
+  // Check if daedalus_tempstore is available in the codebase.
+  if (!\Drupal::service('extension.list.module')->exists('daedalus_tempstore')) {
+    return t('daedalus_tempstore module not found in codebase. Run composer update.');
+  }
+
+  // Enable daedalus_tempstore if not already enabled.
+  if (!\Drupal::moduleHandler()->moduleExists('daedalus_tempstore')) {
+    \Drupal::service('module_installer')->install(['daedalus_tempstore']);
+    return t('Enabled daedalus_tempstore module for improved tempstore handling.');
+  }
+
+  return t('daedalus_tempstore module is already enabled.');
+}
+
+/**
+ * Replaces sections with cloned versions to fix duplicate UUIDs.
+ *
+ * @param \Drupal\Core\Entity\EntityInterface $entity
+ *   The entity to process.
+ * @param string $field_name
+ *   The field name containing layout sections.
+ *
+ * @return \Drupal\Core\Entity\EntityInterface
+ *   The entity with cloned sections.
+ */
+function _daedalus_layout_replace_with_clone(EntityInterface $entity, $field_name = OverridesSectionStorage::FIELD_NAME) {
+  $sections = $entity->get($field_name)->getSections();
+  $cloned_sections = [];
+  foreach ($sections as $delta => $section) {
+    $cloned_sections[$delta] = _daedalus_layout_close_section($section);
+  }
+  $entity->get($field_name)->setValue($cloned_sections);
+  return $entity;
+}
+
+/**
+ * Clone section.
+ *
+ * @param \Drupal\layout_builder\Section $section
+ *   The section to clone.
+ *
+ * @return \Drupal\layout_builder\Section
+ *   The deep cloned section.
+ *
+ * @throws \Drupal\Component\Plugin\Exception\InvalidPluginDefinitionException
+ * @throws \Drupal\Component\Plugin\Exception\PluginNotFoundException
+ * @throws \Drupal\Core\TypedData\Exception\ReadOnlyException
+ */
+function _daedalus_layout_close_section(Section $section) {
+  $components = $section->getComponents();
+  foreach ($components as $uuid => $component) {
+    $block_plugin = $component->getPlugin();
+    $configuration = $block_plugin->getConfiguration();
+    $result = _daedalus_layout_clone_block($block_plugin, $configuration);
+    if ($result === FALSE) {
+      // This InlineBlock has no corresponding Block Content entity.
+      $section->removeComponent($uuid);
+    }
+    else {
+      // Replace the component with the cloned one.
+      $cloned_component = new SectionComponent(\Drupal::service('uuid')->generate(), $component->getRegion(), ['id' => $block_plugin->getPluginId()], $component->get('additional'));
+      $cloned_component->setConfiguration($configuration);
+      $section->insertAfterComponent($uuid, $cloned_component);
+      $section->removeComponent($uuid);
+    }
+  }
+
+  return $section;
+}
+
+/**
+ * Clone block.
+ *
+ * Recursively traverses nested layouts and clones blocks and then updates
+ * the plugin configuration.
+ *
+ * @param \Drupal\Core\Block\BlockPluginInterface $block_plugin
+ *   The block plugin to clone.
+ * @param array $configuration
+ *   The plugin configuration.
+ *
+ * @throws \Drupal\Component\Plugin\Exception\InvalidPluginDefinitionException
+ * @throws \Drupal\Component\Plugin\Exception\PluginNotFoundException
+ * @throws \Drupal\Core\TypedData\Exception\ReadOnlyException
+ */
+function _daedalus_layout_clone_block(BlockPluginInterface $block_plugin, array &$configuration) {
+  if ($block_plugin instanceof InlineBlock) {
+    // Create a block_content clone using static method.
+    $block_content = NestedAwareSectionStorage::extractBlockContent($block_plugin);
+    if (is_null($block_content)) {
+      return FALSE;
+    }
+    $cloned_block_content = $block_content->createDuplicate();
+    // Pre-migration data shape (this helper serves daedalus_layout_update_10001,
+    // which runs before the layout-block migration): an inline block whose
+    // block_content carries a layout field is a legacy layout block and its
+    // nested sections deep-clone with it.
+    if ($block_content->hasField('layout_builder__layout')) {
+      // Duplicate all the nested entities within the layouts.
+      $cloned_sections = [];
+      foreach ($block_content->layout_builder__layout->getSections() as $delta => $original_section) {
+        $cloned_sections[$delta] = _daedalus_layout_close_section($original_section);
+      }
+      $block_content->layout_builder__layout->setValue($cloned_sections);
+    }
+    $configuration['block_serialized'] = serialize($cloned_block_content);
+  }
+  return TRUE;
+}
+
+/**
+ * Migrate preserved_fields third-party settings from daedalus_edit_lb to daedalus_layout.
+ */
+function daedalus_layout_update_10003() {
+  $config_factory = \Drupal::configFactory();
+  $migrated = 0;
+
+  // Find all entity_view_display config.
+  foreach ($config_factory->listAll('core.entity_view_display.') as $config_name) {
+    $config = $config_factory->getEditable($config_name);
+    $preserved_fields = $config->get('third_party_settings.daedalus_edit_lb.preserved_fields');
+
+    if (!empty($preserved_fields)) {
+      // Move to daedalus_layout namespace.
+      $config->set('third_party_settings.daedalus_layout.preserved_fields', $preserved_fields);
+      $config->clear('third_party_settings.daedalus_edit_lb');
+      $config->save();
+      $migrated++;
+    }
+  }
+
+  if ($migrated > 0) {
+    return t('Migrated preserved_fields settings from daedalus_edit_lb to daedalus_layout in @count entity view display(s).', ['@count' => $migrated]);
+  }
+
+  return t('No preserved_fields settings to migrate.');
+}

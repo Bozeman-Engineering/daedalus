@@ -1,0 +1,97 @@
+/**
+ * @file
+ * Skins the media library inside mode dialogs with the chrome palette.
+ *
+ * The functional floor (flex stack, filter row, card grid, checkbox
+ * overlay) lives in css/media-library.css: core's media_library ships
+ * no css, so the framework supplies the geometry that makes the dialog
+ * usable anywhere. This file is the cosmetic tier over that floor, the
+ * same division as css/modal.css and css/theme/dialog-skin.css: washes,
+ * borders, and the segmented control are the look, not the mechanics.
+ *
+ * Unlike dialog-skin.css this file keeps the mode gate: on admin routes
+ * (no mode active) the admin theme's own media library css owns the
+ * look. Ungating to match the "chrome on every route" premise would put
+ * these rules in competition with Claro there, a separate decision from
+ * the relocation that created this file.
+ */
+
+/* Grid/Table as the chrome's segmented control — the ui-mode toggle
+   idiom from daedalus_stylish's inspector (Basic/Advanced): a recessed track, a
+   raised active segment. dialog-skin's dialog link rule excludes
+   .views-display-link so these colors own the links. */
+html[data-daedalus-ui-mode] .js-media-library-view > header {
+  display: inline-flex;
+  padding: 0.125rem;
+  border-radius: var(--daedalus-border-radius);
+  background: var(--daedalus-toggle-background);
+}
+html[data-daedalus-ui-mode] .ui-dialog .views-display-link {
+  padding: 0.125rem 0.5rem;
+  text-decoration: none;
+  color: var(--daedalus-text-muted);
+  /* Concentric with the segmented track: its radius minus the 0.125rem
+     inset. */
+  border-radius: calc(var(--daedalus-border-radius) - 0.125rem);
+  font-size: var(--daedalus-font-size-caption);
+  font-weight: 600;
+}
+html[data-daedalus-ui-mode] .ui-dialog .views-display-link:hover:not(.is-active) {
+  color: var(--daedalus-text);
+  background: var(--daedalus-selection-background);
+}
+html[data-daedalus-ui-mode] .ui-dialog .views-display-link.is-active {
+  color: var(--daedalus-text);
+  background: var(--daedalus-toggle-active);
+  box-shadow: 0 1px 2px rgb(0, 0, 0, 0.15);
+}
+
+/* The media card wears the chrome surface treatment; selection state
+   (core's click_to_select toggles .checked) reads as the chrome
+   selection color. The floor supplies the card's positioning context
+   and overflow clipping. */
+html[data-daedalus-ui-mode] div.js-media-library-item {
+  border: 1px solid var(--daedalus-lines);
+  border-radius: var(--daedalus-border-radius);
+  background: var(--daedalus-toggle-background);
+}
+html[data-daedalus-ui-mode] div.js-media-library-item:hover {
+  border-color: var(--daedalus-selection);
+}
+html[data-daedalus-ui-mode] div.js-media-library-item.checked {
+  border-color: var(--daedalus-selection);
+  outline: 2px solid var(--daedalus-selection);
+  outline-offset: -2px;
+}
+
+/* Selection reads like a selected page-elements tree row: the blue
+   border above plus the translucent selection wash over the whole card.
+   The wash rides ::after so it tints the thumbnail too; the checkbox
+   keeps its z-index 1 perch above it. Hover takes the same wash — the
+   chrome's one shared hover treatment (see daedalus_ui's
+   variables.css). */
+html[data-daedalus-ui-mode] div.js-media-library-item::after {
+  position: absolute;
+  content: "";
+  pointer-events: none;
+  inset: 0;
+}
+html[data-daedalus-ui-mode] div.js-media-library-item:hover::after,
+html[data-daedalus-ui-mode] div.js-media-library-item.checked::after {
+  background: var(--daedalus-selection-background);
+}
+html[data-daedalus-ui-mode] div.js-media-library-item.checked .js-media-library-item-preview + div {
+  color: var(--daedalus-selection);
+}
+
+/* Table rows take the wash directly. */
+html[data-daedalus-ui-mode] tr.js-media-library-item:hover,
+html[data-daedalus-ui-mode] tr.js-media-library-item.checked {
+  background: var(--daedalus-selection-background);
+}
+
+/* The media name under the preview goes quiet; the floor handles the
+   one-line ellipsis. */
+html[data-daedalus-ui-mode] div.js-media-library-item .js-media-library-item-preview + div {
+  color: var(--daedalus-text-muted);
+}

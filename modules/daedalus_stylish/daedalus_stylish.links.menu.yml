@@ -1,0 +1,18 @@
+# The skin library lives under Appearance: a skin is the data half of the
+# site's look (the PHP theme keeps templates and mechanics), so it sits
+# beside the theme list, not under content.
+# Core's Navigation module drops the link of any menu item that gains
+# children, so restore access to /admin/appearance with a self-referencing
+# child beside Skins.
+daedalus_stylish.themes:
+  title: 'Themes'
+  description: 'Select and configure the site''s themes.'
+  route_name: system.themes_page
+  parent: system.themes_page
+  weight: -10
+
+entity.daedalus_skin.collection:
+  title: 'Skins'
+  description: 'Manage the site''s skins: its design tokens as data, with one skin active.'
+  route_name: entity.daedalus_skin.collection
+  parent: system.themes_page

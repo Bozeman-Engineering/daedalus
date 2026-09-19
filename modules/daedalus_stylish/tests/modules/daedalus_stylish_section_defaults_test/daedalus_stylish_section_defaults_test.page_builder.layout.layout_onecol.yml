@@ -1,0 +1,20 @@
+# The configured default section layout in tests: new sections are born as
+# layout_onecol, so these defaults are what add_section writes. The width
+# axis is qualified root-only (the production daedalus_stylish_layouts posture), so
+# a page-row add writes both defaults while a nested add skips the width
+# one. The flow axis applies at every depth but its DEFAULT is
+# depth-qualified root-only (the production container_layout posture): a
+# page-row add writes it, a nested add skips it, and an explicit
+# apply_variant still lands nested. Tests that create no onecol_wide or
+# onecol_row variant exercise the silent per-axis skip, leaving those axes
+# bare under this layout exactly as before they were declared.
+variant_axes:
+  - width:
+      depth: root
+  - flow
+default_variants:
+  style: onecol_default
+  width: onecol_wide
+  flow:
+    variant: onecol_row
+    depth: root

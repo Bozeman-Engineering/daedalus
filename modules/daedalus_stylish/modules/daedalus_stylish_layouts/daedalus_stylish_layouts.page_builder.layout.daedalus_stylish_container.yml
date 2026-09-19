@@ -1,0 +1,36 @@
+# Page builder declaration for the daedalus_stylish container layout — the container
+# model's ONE layout.
+#
+# The shared shape (the composed one-box root and the container_layout/width
+# variant axes) lives on the universal container kind declaration
+# (daedalus_stylish_layouts.page_builder.yml); this file adds only what is
+# container-specific. The container takes its variants from the kind-scoped
+# families (row, container_site..container_full in
+# daedalus_stylish_layouts.daedalus_stylish.variants.yml): with one layout there is nothing
+# layout-exact to scope to.
+#
+# These defaults are stamped only at the op door (the section-created
+# event of an undressed batch: the editor's add gesture, a flat
+# add_section op). A section authored in a page document (a page_create
+# document, a page_edit fragment, a create-entity blueprint) is never
+# stamped: the dialect runs dressed and the style map grammar is
+# declarative (absence means wears NONE), so a document is a total
+# statement and a deliberately stacked or full-bleed section stays
+# authorable.
+#
+# The width default is the token-referencing Site width variant, so new
+# page bands share the skin's one content-width number with the header and
+# footer by construction; the axis is root-only (see the universal
+# declaration), so nested containers are never defaulted a width. The
+# container_layout axis has NO birth default: a new container at any
+# depth is born stacked (wearing no arrangement reference, which the
+# Layout widget reads as Stack), and Columns is the deliberate gesture,
+# via the layout widget or the AI's apply_variant.
+default_variants:
+  width: container_site
+controls:
+  # No element key: the control binds the container root — the one box the
+  # width variants style.
+  content_width:
+    label: 'Content width'
+    widget: width

@@ -1,0 +1,6 @@
+name: 'Daedalus UI declarations test theme'
+type: theme
+description: 'Sub theme layering page builder declarations over its base.'
+core_version_requirement: '*'
+base theme: daedalus_ui_declarations_test_base_theme
+hidden: true

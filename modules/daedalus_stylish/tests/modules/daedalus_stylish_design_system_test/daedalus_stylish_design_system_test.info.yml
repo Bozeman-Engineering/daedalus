@@ -1,0 +1,9 @@
+name: 'Daedalus Stylish design system test'
+type: module
+description: 'Packages the aurora design system: its unit as install config plus a skin, a swatch, an animation, a variant wearing the three, and a variant on an axis only its own law declares, for testing membership, member validation, and activation.'
+package: Testing
+core_version_requirement: '*'
+hidden: true
+dependencies:
+  - daedalus:daedalus_blueprint
+  - daedalus:daedalus_stylish
