@@ -491,7 +491,7 @@ class DaedalusAiBehaviorTest extends WebDriverTestBase {
         // not the target of a body edit.
         var field = block.querySelector('[data-daedalus-edit-field-value-wrapper*="::body::"]');
         (field || block).setAttribute('data-test-pre-swap', 'turn');
-        fetch('/daedalus-ai-test/simulate-chat-turn/node/$nid', {
+        fetch(Drupal.url('daedalus-ai-test/simulate-chat-turn/node/$nid'), {
           method: 'POST',
           credentials: 'same-origin',
           headers: {'Content-Type': 'application/json'},
@@ -574,7 +574,7 @@ class DaedalusAiBehaviorTest extends WebDriverTestBase {
         // Same body-wrapper targeting as the simulated-turn leg above.
         var field = block.querySelector('[data-daedalus-edit-field-value-wrapper*="::body::"]');
         (field || block).setAttribute('data-test-pre-swap', 'deferred');
-        fetch('/daedalus-ai-test/stash-deferred-batch', {
+        fetch(Drupal.url('daedalus-ai-test/stash-deferred-batch'), {
           method: 'POST',
           credentials: 'same-origin',
           headers: {'Content-Type': 'application/json'},
@@ -586,7 +586,7 @@ class DaedalusAiBehaviorTest extends WebDriverTestBase {
         })
           .then(function (response) {
             if (!response.ok) { throw new Error('stash failed: ' + response.status); }
-            return fetch('/daedalus-ai/deferred/node/$nid/full', {
+            return fetch(Drupal.url('daedalus-ai/deferred/node/$nid/full'), {
               method: 'POST',
               credentials: 'same-origin',
               headers: {'Content-Type': 'application/json'},

@@ -1244,7 +1244,7 @@ class EditModeBehaviorTest extends WebDriverTestBase {
     // needs entity_workflow_content, which is not part of this fixture).
     $session->executeScript(<<<JS
       window.__errorWrapProbe = null;
-      fetch('/daedalus-ui/load-editable-page/node/{$node->id()}/nope', { credentials: 'same-origin' })
+      fetch(Drupal.url('daedalus-ui/load-editable-page/node/{$node->id()}/nope'), { credentials: 'same-origin' })
         .then((response) => response.json())
         .then((commands) => { window.__errorWrapProbe = commands; })
         .catch((error) => { window.__errorWrapProbe = { error: String(error) }; });
