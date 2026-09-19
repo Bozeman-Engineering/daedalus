@@ -148,7 +148,10 @@ class PendingMediaMinterTest extends DaedalusAiKernelTestBase {
     // A site-supplied placeholder at an unmanaged public:// uri: the minter
     // ensures its own managed copy under public://daedalus_ai on first use.
     $uri = 'public://custom-placeholder.png';
-    file_put_contents($uri, file_get_contents($this->container->getParameter('app.root') . '/modules/contrib/daedalus/modules/daedalus_ai/assets/image-placeholder.png'));
+    // Resolve the shipped asset through the extension list: the module lives
+    // under modules/custom on d.o CI, not modules/contrib.
+    $shipped = $this->container->getParameter('app.root') . '/' . $this->container->get('extension.list.module')->getPath('daedalus_ai') . '/' . PendingMediaMinter::DEFAULT_ASSET;
+    file_put_contents($uri, file_get_contents($shipped));
     $this->config('daedalus_ai.settings')->set('placeholder_image', $uri)->save();
 
     $result = $this->minter->mint('A dark forest', 'Dark forest');

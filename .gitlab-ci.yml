@@ -49,10 +49,14 @@ variables:
 # The tests run as `sudo -u www-data -H -E`, so an nvm install under root's
 # $HOME would be invisible to them; the official Node 22 LTS tarball unpacked
 # over /usr/local puts `node` and `npm` on the PATH every user inherits.
-# `npm ci` runs as root in $DRUPAL_PROJECT_FOLDER (the module's path inside
-# the site, exported by the composer job's build.env; package-lock.json is
-# committed) and *setup-webserver later chowns the whole checkout to www-data,
-# so the tests read node_modules like any other project file.
+# `npm ci` runs as root in $CI_PROJECT_DIR, the checkout itself, never in
+# $DRUPAL_PROJECT_FOLDER: the template's symlink_project.php builds that
+# module directory as a real directory of per-file symlinks back to the
+# checkout, and Node resolves imports from each file's real path, so a
+# node_modules installed beside the symlinks is invisible to every suite.
+# package-lock.json is committed, and *setup-webserver later chowns the whole
+# checkout to www-data, so the tests read node_modules like any other project
+# file.
 .phpunit-base:
   before_script:
     - |
@@ -72,4 +76,4 @@ variables:
       cd "$CI_PROJECT_DIR"
       rm -rf "$NODE_TMP"
       echo "node $(node --version), npm $(npm --version)"
-    - cd $DRUPAL_PROJECT_FOLDER && npm ci --no-audit --no-fund && cd $CI_PROJECT_DIR
+    - cd $CI_PROJECT_DIR && npm ci --no-audit --no-fund

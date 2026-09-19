@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Drupal\Tests\daedalus_ui\FunctionalJavascript;
 
+use Drupal\Core\Url;
 use Drupal\FunctionalJavascriptTests\WebDriverTestBase;
 use Drupal\Tests\daedalus\Traits\EditModeTrait;
 use Drupal\Tests\daedalus\Traits\DaedalusFixtureTrait;
@@ -1630,9 +1631,11 @@ class EditModeBehaviorTest extends WebDriverTestBase {
     $this->assertJsCondition(
       "window.__linkClickPrevented === true && window.location.pathname === '$lb_path'",
       20000,
-      'Clicking the link (href /user) inside the duplicated block does not navigate in Edit Mode.',
+      'Clicking the link (placed as /user) inside the duplicated block does not navigate in Edit Mode.',
     );
-    $this->assertSame('/user', $session->evaluateScript('window.__linkClickHref'), "The clone's link carries the placed URL as its href.");
+    // The placed value is root-relative; the rendered href carries the site's
+    // base path (d.o CI serves the site at /web).
+    $this->assertSame(Url::fromUserInput('/user')->toString(), $session->evaluateScript('window.__linkClickHref'), "The clone's link carries the placed URL as its href.");
     $this->getSession()->executeScript('Drupal.Daedalus.Selection.clear();');
     $this->activateTool('edit');
     // The armed session with a container primary: no armed edit can land
