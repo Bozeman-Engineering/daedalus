@@ -8,8 +8,8 @@ use Drupal\Core\Asset\LibraryDiscoveryInterface;
 use Drupal\Core\Cache\Cache;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\File\FileSystemInterface;
-use Drupal\Core\File\FileUrlGeneratorInterface;
 use Drupal\Core\State\StateInterface;
+use Drupal\Core\StreamWrapper\StreamWrapperManagerInterface;
 use Drupal\workspaces\WorkspaceManagerInterface;
 
 /**
@@ -95,11 +95,11 @@ class AnimationStylesheet extends CompiledStylesheetBase {
     protected EntityTypeManagerInterface $entityTypeManager,
     StateInterface $state,
     FileSystemInterface $fileSystem,
-    FileUrlGeneratorInterface $fileUrlGenerator,
+    StreamWrapperManagerInterface $streamWrapperManager,
     LibraryDiscoveryInterface $libraryDiscovery,
     ?WorkspaceManagerInterface $workspaceManager,
   ) {
-    parent::__construct($state, $fileSystem, $fileUrlGenerator, $libraryDiscovery, $workspaceManager);
+    parent::__construct($state, $fileSystem, $streamWrapperManager, $libraryDiscovery, $workspaceManager);
   }
 
   /**

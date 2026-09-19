@@ -189,24 +189,29 @@ function daedalus_stylish_preprocess_field(&$variables): void {
  *
  * The "daedalus_stylish/variants" library delivers the compiled variant
  * stylesheet. The file is hash-busted per compile, so the library NAME is
- * the
- * stable thing renders attach; the current filename is resolved here, at
- * library-discovery time, and VariantStylesheet::compile() invalidates
+ * the stable thing renders attach; the current filename is resolved here,
+ * at library-discovery time, and VariantStylesheet::compile() invalidates
  * library_info. The library exists even with no compiled file (attaching a
  * missing library is an error; an asset-less library is not).
+ *
+ * Each compiled file's library key is its DRUPAL_ROOT-relative path
+ * (CompiledStylesheetBase::libraryPath(), '/sites/<site>/files/...'), not a
+ * browser URL: core treats a leading-slash key as DRUPAL_ROOT-relative and
+ * prepends base_path() itself at render, so a generated URL (which already
+ * carries base_path()) would double it on any subdirectory install.
  */
 function daedalus_stylish_library_info_build(): array {
   // A variant may bind its animation to a motion trigger; the runtime that
   // polyfills the trigger (daedalus_stylish/motion_triggers) rides wherever the
   // variant stylesheet does.
   $libraries['variants'] = ['css' => ['theme' => []], 'dependencies' => ['daedalus_stylish/motion_triggers']];
-  $url = \Drupal::service('daedalus_stylish.variant_stylesheet')->url();
-  if ($url !== NULL) {
+  $path = \Drupal::service('daedalus_stylish.variant_stylesheet')->libraryPath();
+  if ($path !== NULL) {
     // User-authored variant CSS must win the cascade the same way the inline
     // per-entity styles do: unlayered. Without the exemption daedalus_stylish_layers
     // wraps this file into the site layer, where theme specificity beats it
     // again.
-    $libraries['variants']['css']['theme'][$url] = [
+    $libraries['variants']['css']['theme'][$path] = [
       'preprocess' => FALSE,
       'daedalus_stylish_layers_exempt' => TRUE,
     ];
@@ -218,9 +223,9 @@ function daedalus_stylish_library_info_build(): array {
   // definitions cannot lose to a theme's own custom-property declarations
   // at higher specificity.
   $libraries['defaults'] = ['css' => ['theme' => []]];
-  $url = \Drupal::service('daedalus_stylish.defaults_stylesheet')->url();
-  if ($url !== NULL) {
-    $libraries['defaults']['css']['theme'][$url] = [
+  $path = \Drupal::service('daedalus_stylish.defaults_stylesheet')->libraryPath();
+  if ($path !== NULL) {
+    $libraries['defaults']['css']['theme'][$path] = [
       'preprocess' => FALSE,
       'daedalus_stylish_layers_exempt' => TRUE,
       // The defaults file must sort BEFORE the variants file: defaults and
@@ -233,9 +238,9 @@ function daedalus_stylish_library_info_build(): array {
   // The "daedalus_stylish/swatches" library delivers the compiled swatch stylesheet
   // (the palette's custom properties), same posture again.
   $libraries['swatches'] = ['css' => ['theme' => []]];
-  $url = \Drupal::service('daedalus_stylish.swatch_stylesheet')->url();
-  if ($url !== NULL) {
-    $libraries['swatches']['css']['theme'][$url] = [
+  $path = \Drupal::service('daedalus_stylish.swatch_stylesheet')->libraryPath();
+  if ($path !== NULL) {
+    $libraries['swatches']['css']['theme'][$path] = [
       'preprocess' => FALSE,
       'daedalus_stylish_layers_exempt' => TRUE,
       // Before the defaults file (-10) and the variants file (0): skin
@@ -249,9 +254,9 @@ function daedalus_stylish_library_info_build(): array {
   // Every page carrying the keyframes carries the motion-triggers runtime:
   // any element wearing an animation may bind it to a trigger.
   $libraries['animations'] = ['css' => ['theme' => []], 'dependencies' => ['daedalus_stylish/motion_triggers']];
-  $url = \Drupal::service('daedalus_stylish.animation_stylesheet')->url();
-  if ($url !== NULL) {
-    $libraries['animations']['css']['theme'][$url] = [
+  $path = \Drupal::service('daedalus_stylish.animation_stylesheet')->libraryPath();
+  if ($path !== NULL) {
+    $libraries['animations']['css']['theme'][$path] = [
       'preprocess' => FALSE,
       'daedalus_stylish_layers_exempt' => TRUE,
       // After the swatch file (-20), before the defaults file (-10):

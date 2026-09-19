@@ -626,7 +626,7 @@ services:
       - '@plugin.manager.daedalus_stylish_condition_type'
       - '@state'
       - '@file_system'
-      - '@file_url_generator'
+      - '@stream_wrapper_manager'
       - '@library.discovery'
       # Reference resolution (loadVariant) and axis-declaration emission
       # order (orderedEntryVariants/scopeAxes) — delivery must resolve and
@@ -669,7 +669,7 @@ services:
       - '@config.factory'
       - '@state'
       - '@file_system'
-      - '@file_url_generator'
+      - '@stream_wrapper_manager'
       - '@library.discovery'
       # Media tokens in site defaults resolve pre-print, per print site.
       - '@daedalus_stylish.media_value_resolver'
@@ -695,7 +695,7 @@ services:
       - '@daedalus_blueprint.materials_roster_builder'
       - '@state'
       - '@file_system'
-      - '@file_url_generator'
+      - '@stream_wrapper_manager'
       - '@library.discovery'
       # Optional: without workspaces there is no preview edge and compiles
       # always see the (only) live revisions.
@@ -723,7 +723,7 @@ services:
       - '@entity_type.manager'
       - '@state'
       - '@file_system'
-      - '@file_url_generator'
+      - '@stream_wrapper_manager'
       - '@library.discovery'
       # Optional: without workspaces there is no preview edge and compiles
       # always see the (only) live revisions.

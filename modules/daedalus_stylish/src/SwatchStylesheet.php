@@ -7,8 +7,8 @@ namespace Drupal\daedalus_stylish;
 use Drupal\Core\Asset\LibraryDiscoveryInterface;
 use Drupal\Core\Cache\Cache;
 use Drupal\Core\File\FileSystemInterface;
-use Drupal\Core\File\FileUrlGeneratorInterface;
 use Drupal\Core\State\StateInterface;
+use Drupal\Core\StreamWrapper\StreamWrapperManagerInterface;
 use Drupal\daedalus_blueprint\Materials\MaterialsRosterBuilder;
 use Drupal\daedalus_blueprint\Materials\MaterialsSchema;
 use Drupal\workspaces\WorkspaceManagerInterface;
@@ -109,11 +109,11 @@ class SwatchStylesheet extends CompiledStylesheetBase {
     protected MaterialsRosterBuilder $rosterBuilder,
     StateInterface $state,
     FileSystemInterface $fileSystem,
-    FileUrlGeneratorInterface $fileUrlGenerator,
+    StreamWrapperManagerInterface $streamWrapperManager,
     LibraryDiscoveryInterface $libraryDiscovery,
     ?WorkspaceManagerInterface $workspaceManager,
   ) {
-    parent::__construct($state, $fileSystem, $fileUrlGenerator, $libraryDiscovery, $workspaceManager);
+    parent::__construct($state, $fileSystem, $streamWrapperManager, $libraryDiscovery, $workspaceManager);
   }
 
   /**

@@ -7,6 +7,7 @@ namespace Drupal\Tests\daedalus_stylish\Kernel;
 use Drupal\block_content\Entity\BlockContent;
 use Drupal\block_content\Entity\BlockContentType;
 use Drupal\Core\Layout\LayoutDefinition;
+use Drupal\Core\StreamWrapper\PublicStream;
 use Drupal\field\Entity\FieldConfig;
 use Drupal\field\Entity\FieldStorageConfig;
 use Drupal\KernelTests\KernelTestBase;
@@ -680,6 +681,20 @@ class DefaultsStylesheetTest extends KernelTestBase {
     $this->assertStringContainsString(basename($this->stylesheetUri()), $library['css'][0]['data']);
     // Token definitions compete unlayered, like every daedalus-stylish-owned file.
     $this->assertTrue($library['css'][0]['daedalus_stylish_layers_exempt'] ?? FALSE);
+
+    // The library key is the file's DRUPAL_ROOT-relative path, not a browser
+    // URL: core reads a leading-slash key as DRUPAL_ROOT-relative (strips
+    // the slash into `data`) and prepends base_path() once at render. A
+    // generated URL already carries base_path() and doubled it on every
+    // subdirectory install (d.o CI serves the site at /web: the four
+    // compiled files 404'd as /web/web/sites/...).
+    $path = $this->container->get('daedalus_stylish.defaults_stylesheet')->libraryPath();
+    $this->assertMatchesRegularExpression(
+      '#^/' . preg_quote(PublicStream::basePath(), '#') . '/daedalus_stylish/defaults-[0-9a-f]{16}\.css$#',
+      $path,
+    );
+    $this->assertSame(substr($path, 1), $library['css'][0]['data']);
+    $this->assertSame('file', $library['css'][0]['type']);
   }
 
   /**

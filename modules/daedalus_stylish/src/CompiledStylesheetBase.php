@@ -10,8 +10,10 @@ use Drupal\Core\Cache\CacheCollector;
 use Drupal\Core\File\Exception\FileException;
 use Drupal\Core\File\FileExists;
 use Drupal\Core\File\FileSystemInterface;
-use Drupal\Core\File\FileUrlGeneratorInterface;
 use Drupal\Core\State\StateInterface;
+use Drupal\Core\StreamWrapper\LocalStream;
+use Drupal\Core\StreamWrapper\StreamWrapperManager;
+use Drupal\Core\StreamWrapper\StreamWrapperManagerInterface;
 use Drupal\workspaces\WorkspaceManagerInterface;
 
 /**
@@ -22,10 +24,10 @@ use Drupal\workspaces\WorkspaceManagerInterface;
  * into a single public file whose name embeds a content hash, so browsers
  * cache it cross-page and every regeneration is a new URL. A library
  * resolves the current file at library-discovery time
- * (hook_library_info_build()), which is why cached renders that attached
- * the library never go stale on the library NAME; compile() invalidates
- * 'library_info' and the subclass's CACHE_TAG so the next request's HTML
- * carries the new <link>.
+ * (hook_library_info_build(), through libraryPath()), which is why cached
+ * renders that attached the library never go stale on the library NAME;
+ * compile() invalidates 'library_info' and the subclass's CACHE_TAG so the
+ * next request's HTML carries the new <link>.
  *
  * The compiled file always holds the LIVE (default-revision, published)
  * content: compile() runs the subclass's printing outside any active
@@ -69,7 +71,7 @@ abstract class CompiledStylesheetBase {
   public function __construct(
     protected StateInterface $state,
     protected FileSystemInterface $fileSystem,
-    protected FileUrlGeneratorInterface $fileUrlGenerator,
+    protected StreamWrapperManagerInterface $streamWrapperManager,
     protected LibraryDiscoveryInterface $libraryDiscovery,
     protected ?WorkspaceManagerInterface $workspaceManager,
   ) {}
@@ -154,18 +156,35 @@ abstract class CompiledStylesheetBase {
   }
 
   /**
-   * The current stylesheet's root-relative URL for the library definition.
+   * The current stylesheet's DRUPAL_ROOT-relative path for the library key.
+   *
+   * A library CSS key with a leading slash is, by core's contract
+   * (LibraryDiscoveryParser::buildByExtension(), "An absolute path maps to
+   * DRUPAL_ROOT / base_path()"), a path under DRUPAL_ROOT: the parser
+   * strips the slash and the asset renderer prepends base_path() once at
+   * render. So this is NOT a browser URL: a file_url_generator string
+   * already carries base_path(), and handing that to the library doubles
+   * the base path on every subdirectory install (d.o CI serves the site at
+   * /web; the four compiled files 404'd there while the module's static
+   * files did not). Built from the stream wrapper's directory path
+   * (sites/<site>/files, request-independent), never by stripping the base
+   * path off a generated URL.
    *
    * @return string|null
-   *   The URL, or NULL when no compiled stylesheet exists (nothing printed
-   *   on the last compile, or no compile has ever run).
+   *   The path ('/sites/default/files/daedalus_stylish/<prefix>-<hash>.css'),
+   *   or NULL when no compiled stylesheet exists (nothing printed on the
+   *   last compile, or no compile has ever run).
    */
-  public function url(): ?string {
+  public function libraryPath(): ?string {
     $uri = $this->state->get(static::STATE_KEY);
     if (!is_string($uri) || !file_exists($uri)) {
       return NULL;
     }
-    return $this->fileUrlGenerator->generateString($uri);
+    $wrapper = $this->streamWrapperManager->getViaUri($uri);
+    if (!$wrapper instanceof LocalStream) {
+      throw new \LogicException(sprintf('The compiled stylesheet %s is not on a local stream wrapper; the library key needs a DRUPAL_ROOT-relative path.', $uri));
+    }
+    return '/' . $wrapper->getDirectoryPath() . '/' . StreamWrapperManager::getTarget($uri);
   }
 
   /**
