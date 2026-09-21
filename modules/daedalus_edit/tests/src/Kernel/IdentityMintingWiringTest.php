@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Drupal\Tests\daedalus_edit\Kernel;
 
-use Drupal\Core\Entity\EntityStorageException;
 use Drupal\daedalus_edit\FieldHandler\IdentityMintingTextFieldHandler;
 use Drupal\daedalus_edit\IdentityMinter;
 use Drupal\field\Entity\FieldConfig;
@@ -23,11 +22,11 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  * The minter itself is covered by IdentityMinterTest; under test here are
  * the three wires of the canonical guarantee: the hook_entity_presave()
  * backstop (every saving write path leaves storage minted, byte-stable on
- * re-save, loud on an unmintable format), the blueprint stage-time seam
- * (daedalus_edit's handler outranks daedalus_blueprint's for formatted text and
- * mints at deserialize, surfacing unmintable formats as blueprint errors),
- * and the backfill (legacy identity-less content is found, minted, and
- * saved exactly once).
+ * re-save, and a format that allows a tag without class still saves with
+ * that tag skipped), the blueprint stage-time seam (daedalus_edit's handler
+ * outranks daedalus_blueprint's for formatted text and mints at deserialize,
+ * skipping the same tags without erroring), and the backfill (legacy
+ * identity-less content is found, minted, and saved exactly once).
  *
  * @group daedalus_edit
  */
@@ -179,19 +178,19 @@ class IdentityMintingWiringTest extends KernelTestBase {
   }
 
   /**
-   * An identity-incapable format fails the save loudly.
+   * A format allowing a tag without class saves; that tag stays unminted.
    */
-  public function testPresaveBackstopThrowsOnUnmintableFormat(): void {
+  public function testPresaveBackstopSkipsUnmintableTags(): void {
     $node = Node::create([
       'type' => 'page',
-      'title' => 'Broken',
-      'field_body' => ['value' => '<p>Hi</p>', 'format' => 'broken'],
+      'title' => 'Partial',
+      'field_body' => ['value' => '<p>Hi</p><h2>Title</h2>', 'format' => 'broken'],
     ]);
-    // Entity storage wraps presave exceptions in EntityStorageException; the
-    // minter's LogicException message rides along.
-    $this->expectException(EntityStorageException::class);
-    $this->expectExceptionMessageMatches('/allows <p> but not its class attribute/');
     $node->save();
+
+    $stored = $this->reload($node)->get('field_body')->value;
+    $this->assertCount(1, $this->ids($stored), 'Only the heading minted; the save was not refused.');
+    $this->assertStringContainsString('<p>Hi</p>', $stored, 'The class-less paragraph was left untouched.');
   }
 
   /**
@@ -208,16 +207,17 @@ class IdentityMintingWiringTest extends KernelTestBase {
   }
 
   /**
-   * The stage-time seam surfaces an unmintable format as a blueprint error.
+   * The stage-time seam skips class-less tags without failing the mutation.
    */
-  public function testBlueprintStageSeamSurfacesUnmintableFormat(): void {
+  public function testBlueprintStageSeamSkipsUnmintableTags(): void {
     $definition = FieldConfig::load('node.page.field_body');
     $handler = $this->container->get('daedalus_blueprint.field_handler_manager')->getHandler($definition);
 
-    $result = $handler->deserialize(['value' => '<p>Staged</p>', 'format' => 'broken'], $definition);
-    $this->assertTrue($result->hasErrors(), 'The mutation fails instead of staging identity the render would strip.');
-    $codes = array_map(fn($error) => $error->getCode(), $result->getErrors());
-    $this->assertContains('IDENTITY_UNMINTABLE_FORMAT', $codes);
+    $result = $handler->deserialize(['value' => '<p>Staged</p><h2>Title</h2>', 'format' => 'broken'], $definition);
+    $this->assertFalse($result->hasErrors(), 'The mutation stages; the format is not an error.');
+    $staged = $result->getValue()['value'];
+    $this->assertCount(1, $this->ids($staged), 'Only the heading minted at stage time.');
+    $this->assertStringContainsString('<p>Staged</p>', $staged);
   }
 
   /**

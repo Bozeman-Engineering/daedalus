@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace Drupal\Tests\daedalus_edit_formatted_text_block\Kernel;
 
+use Drupal\Core\Extension\Requirement\RequirementSeverity;
 use Drupal\Core\Render\RenderContext;
 use Drupal\block_content\Entity\BlockContent;
 use Drupal\Component\Serialization\Json;
+use Drupal\daedalus_edit_formatted_text_block\Hook\FormattedTextBlockRequirements;
 use Drupal\filter\Entity\FilterFormat;
 use Drupal\KernelTests\KernelTestBase;
 use Drupal\Tests\user\Traits\UserCreationTrait;
@@ -23,7 +25,8 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  * {value, format} pair never reaches visitor markup), and the
  * edit-capable CKEditor binding: editor identity, the stamped format and
  * the user's editor-configured formats, and the max-age 0 that keeps the
- * per-session editor settings out of shared caches.
+ * per-session editor settings out of shared caches. Also the module's
+ * status report entry for the shipped format its field stamps.
  *
  * @group daedalus_edit_formatted_text_block
  */
@@ -185,6 +188,31 @@ class FormattedTextBlockComposedRenderTest extends KernelTestBase {
     $context = new RenderContext();
     $this->container->get('renderer')->executeInRenderContext($context, fn () => $this->container->get('renderer')->render($build));
     $this->assertSame(0, $context->pop()->getCacheMaxAge(), 'The edit-capable render bubbles max-age 0.');
+  }
+
+  /**
+   * The status report flags the shipped format once it is disabled.
+   *
+   * Invoked through the hook system, not the class: a #[Hook] the container
+   * never registered would pass a direct call and still be invisible to
+   * the site (the procedural hook_requirements() this replaced was such a
+   * ghost, skipped by #[LegacyRequirementsHook] on the module's core floor).
+   */
+  public function testRuntimeRequirementFlagsDisabledFormat(): void {
+    $invoke = fn (): array => $this->container->get('module_handler')->invoke('daedalus_edit_formatted_text_block', 'runtime_requirements') ?? [];
+    $this->assertSame([], $invoke(), 'The shipped format installed and enabled raises nothing.');
+
+    $format = FilterFormat::load(FormattedTextBlockRequirements::FORMAT);
+    $format->disable()->save();
+    $requirements = $invoke();
+    $this->assertArrayHasKey('daedalus_edit_formatted_text_block_text_format', $requirements);
+    $entry = $requirements['daedalus_edit_formatted_text_block_text_format'];
+    $this->assertSame(RequirementSeverity::Error, $entry['severity']);
+    $this->assertSame(FormattedTextBlockRequirements::FORMAT, $entry['value']);
+    $this->assertStringContainsString('missing or disabled', (string) $entry['description']);
+
+    $format->enable()->save();
+    $this->assertSame([], $invoke(), 'Re-enabling the format clears the entry.');
   }
 
 }

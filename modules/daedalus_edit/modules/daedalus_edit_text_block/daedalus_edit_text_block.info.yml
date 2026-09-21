@@ -4,6 +4,8 @@ description: 'A simple text block'
 package: Daedalus
 core_version_requirement: '>=11.3 <11.5'
 dependencies:
+  - drupal:block_content
+  - drupal:link
   - drupal:options
   - daedalus:daedalus_edit
   - daedalus:daedalus_layout

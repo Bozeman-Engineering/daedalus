@@ -89,11 +89,20 @@ abstract class ShippedDefinitionsImporter {
    * @param \Drupal\daedalus_blueprint\BlueprintDeserializerInterface $deserializer
    *   The blueprint deserializer that lands each definition on the spine.
    * @param \Drupal\Core\DefaultContent\AdminAccountSwitcher $accountSwitcher
-   *   Core's default-content admin switcher. Shipped defaults are code, not
-   *   user input: importing them under whichever user happens to trigger the
-   *   install (drush is anonymous) would fail the blueprint access checks,
-   *   so the import runs as an administrative account, the same precedent
-   *   core's DefaultContent Importer sets for shipped content.
+   *   The administrative account switch, core's default-content switcher
+   *   class behind this module's own PUBLIC service
+   *   (daedalus_stylish.admin_account_switcher), never core's private one.
+   *   Shipped defaults are code, not user input: importing them under
+   *   whichever user happens to trigger the install (drush is anonymous)
+   *   would fail the blueprint access checks, so the import runs as an
+   *   administrative account, the same precedent core's DefaultContent
+   *   Importer sets for shipped content. Public because the switch and the
+   *   access check must share one current_user: a multi-module install
+   *   resets the container between the last module and
+   *   hook_modules_installed(), and Container::reset() renews public
+   *   services but keeps private ones, so a private switcher built
+   *   mid-install would switch a dead AccountProxy while the checker reads
+   *   the live one (the services.yml entry has the full account).
    * @param \Drupal\Component\Datetime\TimeInterface $time
    *   The time service, for the shipped-source hash stamp.
    * @param \Drupal\daedalus_blueprint\DesignSystem\ActiveDesignSystem $activeDesignSystem

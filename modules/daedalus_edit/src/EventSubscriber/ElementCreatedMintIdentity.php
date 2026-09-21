@@ -25,8 +25,7 @@ use Symfony\Component\EventDispatcher\EventSubscriberInterface;
  * Runs at low priority, after daedalus_layout's PlaceBlockEvent bridge and any
  * block-type sample-content subscribers, so whatever block they left in
  * configuration['block_serialized'] (the authoritative copy) is what gets
- * minted. An unmintable format's LogicException flies, failing the
- * mutation loudly like the other seams.
+ * minted.
  */
 class ElementCreatedMintIdentity implements EventSubscriberInterface {
 

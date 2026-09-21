@@ -2,6 +2,21 @@
 
 ## 2.4.0 (unreleased)
 
+- Fixed: `daedalus_edit_formatted_text_block`'s status report entry for its
+  shipped text format (Error when `daedalus_edit_formatted_text` is missing
+  or disabled) never appeared on core 11.3+: it was a procedural
+  `hook_requirements()` under `#[LegacyRequirementsHook]`, which core skips
+  from 11.3, the module's floor. It is now a `#[Hook('runtime_requirements')]`
+  class (`Hook\FormattedTextBlockRequirements`); `Install\TextFormatRequirement`
+  is gone with its only caller.
+- Changed: the identity minter no longer refuses a text format that allows a
+  vocabulary tag (`p`, `h2` to `h4`, `blockquote`, `ul`, `ol`, `li`) without an
+  unrestricted `class` attribute. Such tags are skipped (their elements stay
+  unaddressable under that format) and the save proceeds, so installing
+  daedalus_edit on a site with `basic_html` content no longer makes that
+  content unsavable. A status report warning lists every enabled format and
+  the tags it will not mint. The blueprint error code
+  `IDENTITY_UNMINTABLE_FORMAT` is gone with the throw.
 - Inline editors are now registered through `Drupal.Daedalus.Edit.Editors` via the
   `DaedalusEditQueue` push queue: `(window.DaedalusEditQueue ||= []).push((daedalusEdit) =>
   daedalusEdit.editors.register(new MyEditor()))`. Plugins extend `FormEditorBase`

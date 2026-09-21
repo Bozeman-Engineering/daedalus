@@ -9,7 +9,6 @@ use Drupal\Core\Field\FieldDefinitionInterface;
 use Drupal\daedalus_edit\IdentityMinter;
 use Drupal\daedalus_blueprint\FieldHandler\FieldHandlerResult;
 use Drupal\daedalus_blueprint\FieldHandler\TextFieldHandler;
-use Drupal\daedalus_blueprint\Result\BlueprintError;
 use Drupal\filter\FilterFormatInterface;
 
 /**
@@ -22,12 +21,9 @@ use Drupal\filter\FilterFormatInterface;
  * the stage-time seam: a higher-priority daedalus_blueprint.field_handler
  * registration over the same applies() as the parent, minting after the
  * parent's format validation, so whatever the parent would stage, it stages
- * with s-* identity classes already in place.
- *
- * A format that cannot carry identity (allows a vocabulary tag but strips
- * its class attribute) surfaces as a blueprint error failing the mutation:
- * the stage-path twin of the presave backstop letting IdentityMinter's
- * LogicException fly. Config errors surface; they are not worked around.
+ * with s-* identity classes already in place. Vocabulary tags the format
+ * allows without class are skipped here exactly as on the presave path
+ * (IdentityMinter's rules); the status report names them.
  */
 final class IdentityMintingTextFieldHandler extends TextFieldHandler {
 
@@ -46,9 +42,7 @@ final class IdentityMintingTextFieldHandler extends TextFieldHandler {
     if ($result->hasErrors()) {
       return $result;
     }
-    $errors = [];
-    $value = $this->mintValue($result->getValue(), $definition, $errors);
-    return new FieldHandlerResult($value, $errors, $result->getWarnings());
+    return new FieldHandlerResult($this->mintValue($result->getValue()), [], $result->getWarnings());
   }
 
   /**
@@ -57,16 +51,16 @@ final class IdentityMintingTextFieldHandler extends TextFieldHandler {
    * Mirrors the parent's validateFormats() shape handling so every item the
    * parent validates is an item this seam mints.
    */
-  private function mintValue(mixed $value, FieldDefinitionInterface $definition, array &$errors): mixed {
+  private function mintValue(mixed $value): mixed {
     if (!is_array($value)) {
       return $value;
     }
     if (isset($value['value'])) {
-      return $this->mintItem($value, $definition, $errors);
+      return $this->mintItem($value);
     }
     foreach ($value as $delta => $item) {
       if (is_array($item) && isset($item['value'])) {
-        $value[$delta] = $this->mintItem($item, $definition, $errors);
+        $value[$delta] = $this->mintItem($item);
       }
     }
     return $value;
@@ -77,15 +71,11 @@ final class IdentityMintingTextFieldHandler extends TextFieldHandler {
    *
    * @param array $item
    *   A field item with at least 'value'.
-   * @param \Drupal\Core\Field\FieldDefinitionInterface $definition
-   *   The field definition, for the error path.
-   * @param \Drupal\daedalus_blueprint\Result\BlueprintError[] &$errors
-   *   Errors collection to append to.
    *
    * @return array
    *   The item with identity minted into its value.
    */
-  private function mintItem(array $item, FieldDefinitionInterface $definition, array &$errors): array {
+  private function mintItem(array $item): array {
     if (!is_string($item['value']) || $item['value'] === '' || empty($item['format'])) {
       return $item;
     }
@@ -96,17 +86,7 @@ final class IdentityMintingTextFieldHandler extends TextFieldHandler {
     if (!$format instanceof FilterFormatInterface) {
       return $item;
     }
-    try {
-      $item['value'] = $this->identityMinter->mint($item['value'], $format);
-    }
-    catch (\LogicException $exception) {
-      $errors[] = new BlueprintError(
-        path: 'fields.' . $definition->getName(),
-        code: 'IDENTITY_UNMINTABLE_FORMAT',
-        message: $exception->getMessage(),
-        hint: 'Allow the class attribute on every vocabulary tag the format allows (e.g. <p class>), or use a format configured for identity.',
-      );
-    }
+    $item['value'] = $this->identityMinter->mint($item['value'], $format);
     return $item;
   }
 

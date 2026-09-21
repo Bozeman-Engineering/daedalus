@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Drupal\Tests\daedalus_edit\Kernel;
 
+use Drupal\Core\Extension\Requirement\RequirementSeverity;
 use Drupal\daedalus_edit\IdentityMinter;
 use Drupal\filter\Entity\FilterFormat;
 use Drupal\KernelTests\KernelTestBase;
@@ -19,10 +20,11 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  * ids are minted at any depth (minting is universal: list items, nested
  * lists, and the elements inside them all mint), colliding ids re-mint
  * the later carrier (first carrier owns the id, even a non-vocabulary
- * one), a format that allows a vocabulary tag but strips class fails
- * loudly instead of minting ids the render would silently destroy, and a
- * value with nothing to mint comes back byte-identical (no
- * parse/serialize phantom diffs).
+ * one), a vocabulary tag a format allows without class is skipped (the
+ * rest still mints, the save never fails) and reported by the runtime
+ * requirement so the loss shows on the status report, and a value with
+ * nothing to mint comes back byte-identical (no parse/serialize phantom
+ * diffs).
  *
  * @group daedalus_edit
  */
@@ -232,12 +234,12 @@ class IdentityMinterTest extends KernelTestBase {
   }
 
   /**
-   * A format allowing a list tag without class fails loudly.
+   * A list tag allowed without class is skipped; its wrapper still mints.
    */
-  public function testListFormatWithoutClassThrows(): void {
-    $broken = FilterFormat::create([
-      'format' => 'broken_list',
-      'name' => 'Broken list',
+  public function testListFormatWithoutClassSkipsTag(): void {
+    $partial = FilterFormat::create([
+      'format' => 'partial_list',
+      'name' => 'Partial list',
       'filters' => [
         'filter_html' => [
           'status' => TRUE,
@@ -247,19 +249,21 @@ class IdentityMinterTest extends KernelTestBase {
         ],
       ],
     ]);
-    $broken->save();
-    $this->expectException(\LogicException::class);
-    $this->expectExceptionMessageMatches('/allows <li> but not its class attribute/');
-    $this->minter->mint('<ul><li>Hi</li></ul>', $broken);
+    $partial->save();
+    $this->assertSame(['li'], $this->minter->unmintable($partial));
+
+    $minted = $this->minter->mint('<ul><li>Hi</li></ul><p>Text</p>', $partial);
+    $this->assertCount(2, $this->ids($minted), 'The list wrapper and the paragraph minted.');
+    $this->assertMatchesRegularExpression('/<ul class="s-[a-z0-9]{3}"><li>Hi<\/li><\/ul>/', $minted, 'The item was skipped, not stamped with an id the format would strip.');
   }
 
   /**
-   * An allowed vocabulary tag without class fails loudly.
+   * A vocabulary tag allowed without class is skipped; the rest mints.
    */
-  public function testFormatWithoutClassThrows(): void {
-    $broken = FilterFormat::create([
-      'format' => 'broken',
-      'name' => 'Broken',
+  public function testFormatWithoutClassSkipsTag(): void {
+    $partial = FilterFormat::create([
+      'format' => 'partial_p',
+      'name' => 'Partial paragraph',
       'filters' => [
         'filter_html' => [
           'status' => TRUE,
@@ -269,10 +273,85 @@ class IdentityMinterTest extends KernelTestBase {
         ],
       ],
     ]);
-    $broken->save();
-    $this->expectException(\LogicException::class);
-    $this->expectExceptionMessageMatches('/allows <p> but not its class attribute/');
-    $this->minter->mint('<p>Hi</p>', $broken);
+    $partial->save();
+    $this->assertSame(['p'], $this->minter->unmintable($partial));
+
+    $minted = $this->minter->mint('<p>Hi</p><h2>Title</h2>', $partial);
+    $this->assertCount(1, $this->ids($minted), 'Only the heading minted.');
+    $this->assertStringContainsString('<p>Hi</p>', $minted, 'The paragraph was left untouched.');
+    $this->assertMatchesRegularExpression('/<h2 class="s-[a-z0-9]{3}">Title<\/h2>/', $minted);
+
+    // A format whose only allowed vocabulary tags lack class is a byte-
+    // identical no-op, and a value-restricted class is as good as none.
+    $none = FilterFormat::create([
+      'format' => 'restricted_class',
+      'name' => 'Restricted class',
+      'filters' => [
+        'filter_html' => [
+          'status' => TRUE,
+          'settings' => ['allowed_html' => '<p class="lead"> <h2>'],
+        ],
+      ],
+    ]);
+    $none->save();
+    $this->assertSame(['p', 'h2'], $this->minter->unmintable($none));
+    $html = '<p>Hi</p><h2>Title</h2>';
+    $this->assertSame($html, $this->minter->mint($html, $none));
+
+    // Formats that mint every tag they allow report nothing to skip.
+    $this->assertSame([], $this->minter->unmintable($this->restricted));
+    $this->assertSame([], $this->minter->unmintable($this->full));
+  }
+
+  /**
+   * Daedalus Edit's status report entries, through the hook system.
+   *
+   * Invoking the hook (not the class) proves the entry reaches the status
+   * report; a #[Hook] the container never registered would pass a direct
+   * call and still be invisible to the site.
+   */
+  protected function runtimeRequirements(): array {
+    return $this->container->get('module_handler')->invoke('daedalus_edit', 'runtime_requirements') ?? [];
+  }
+
+  /**
+   * The runtime requirement names every enabled format that skips tags.
+   */
+  public function testRequirementNamesUnmintableFormats(): void {
+    $this->assertSame([], $this->runtimeRequirements(), 'Formats that mint every allowed tag raise no warning.');
+
+    FilterFormat::create([
+      'format' => 'partial_p',
+      'name' => 'Partial paragraph',
+      'filters' => [
+        'filter_html' => [
+          'status' => TRUE,
+          'settings' => ['allowed_html' => '<p> <h2 class> <ul class> <li>'],
+        ],
+      ],
+    ])->save();
+    // A disabled format renders nothing, so it is not reported.
+    FilterFormat::create([
+      'format' => 'retired',
+      'name' => 'Retired',
+      'status' => FALSE,
+      'filters' => [
+        'filter_html' => [
+          'status' => TRUE,
+          'settings' => ['allowed_html' => '<p>'],
+        ],
+      ],
+    ])->save();
+
+    $requirements = $this->runtimeRequirements();
+    $this->assertArrayHasKey('daedalus_edit_identity_vocabulary', $requirements);
+    $requirement = $requirements['daedalus_edit_identity_vocabulary'];
+    $this->assertSame(RequirementSeverity::Warning, $requirement['severity']);
+    $this->assertStringContainsString('1 text format allows', (string) $requirement['value']);
+    $description = (string) $requirement['description'];
+    $this->assertStringContainsString('Partial paragraph (partial_p): p, li', $description, 'The format and its skipped tags, in vocabulary order.');
+    $this->assertStringNotContainsString('retired', $description);
+    $this->assertStringNotContainsString('h2', $description, 'Tags that mint are not listed.');
   }
 
   /**

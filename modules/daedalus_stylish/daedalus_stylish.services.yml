@@ -365,6 +365,27 @@ services:
       # Optional: with daedalus_blueprint_stencil, file-owned variants (the
       # stencil_file lane) resolve their owner against stencil discovery.
       - '@?daedalus_blueprint_stencil.discovery'
+  daedalus_stylish.admin_account_switcher:
+    # The sync path's administrative account switch: core's default-content
+    # switcher class, declared here as a PUBLIC service of this module rather
+    # than consumed as core's own private one
+    # (Drupal\Core\DefaultContent\AdminAccountSwitcher, public: false). A
+    # multi-module install (core 11.4's RecipeRunner installs a recipe's whole
+    # list in one ModuleInstaller::install() call) ends with
+    # DrupalKernel::resetContainer(), whose Container::reset() drops every
+    # public service instance but keeps the private ones; a private switcher
+    # built mid-install (the config-save subscriber below pulls the importers
+    # in on the first config save) survives the reset wrapping the OLD
+    # account_switcher and current_user, and the hook_modules_installed sync
+    # then switches a dead AccountProxy while the fresh access checker reads
+    # the live one: every shipped definition fails ACCESS_DENIED_ENTITY. A
+    # public service is renewed with the container, so the switch and the
+    # check always share one current_user.
+    class: Drupal\Core\DefaultContent\AdminAccountSwitcher
+    arguments:
+      - '@account_switcher'
+      - '@entity_type.manager'
+      - '%security.enable_super_user%'
   daedalus_stylish.variant_importer:
     class: Drupal\daedalus_stylish\VariantImporter
     arguments:
@@ -374,7 +395,7 @@ services:
       # Shipped variants are code, not user input: the import runs as an
       # administrative account (core's default-content precedent), because
       # module installs often run as the anonymous CLI user.
-      - '@Drupal\Core\DefaultContent\AdminAccountSwitcher'
+      - '@daedalus_stylish.admin_account_switcher'
       - '@datetime.time'
       # Membership: a shipped member joins the design system its module
       # packages unless its definition says otherwise (design_system: ~).
@@ -407,7 +428,7 @@ services:
       - '@daedalus_blueprint.deserializer'
       # Same admin-account and workspace-escape rationale as the variant
       # importer: shipped skins are code and land live.
-      - '@Drupal\Core\DefaultContent\AdminAccountSwitcher'
+      - '@daedalus_stylish.admin_account_switcher'
       - '@datetime.time'
       # Membership: a shipped member joins the design system its module
       # packages unless its definition says otherwise (design_system: ~).
@@ -436,7 +457,7 @@ services:
       - '@daedalus_blueprint.deserializer'
       # Same admin-account and workspace-escape rationale as the variant
       # importer: shipped swatches are code and land live.
-      - '@Drupal\Core\DefaultContent\AdminAccountSwitcher'
+      - '@daedalus_stylish.admin_account_switcher'
       - '@datetime.time'
       # Membership: a shipped member joins the design system its module
       # packages unless its definition says otherwise (design_system: ~).
@@ -450,7 +471,7 @@ services:
       - '@daedalus_blueprint.deserializer'
       # Same admin-account and workspace-escape rationale as the variant
       # importer: shipped animations are code and land live.
-      - '@Drupal\Core\DefaultContent\AdminAccountSwitcher'
+      - '@daedalus_stylish.admin_account_switcher'
       - '@datetime.time'
       # Membership: a shipped member joins the design system its module
       # packages unless its definition says otherwise (design_system: ~).

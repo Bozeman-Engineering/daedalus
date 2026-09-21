@@ -127,9 +127,9 @@ function daedalus_edit_daedalus_blueprint_entity_persisted(EntityInterface $enti
  * stage-time seam (IdentityMintingTextFieldHandler) covers blueprint
  * mutations that stage into tempstore without a save; this hook is the
  * guarantee for everything that does save. A format that allows a vocabulary
- * tag but strips its class attribute fails the save loudly (IdentityMinter's
- * LogicException): silent identity loss at render is the one outcome eager
- * identity cannot absorb.
+ * tag but strips its class attribute leaves that tag unminted rather than
+ * failing the save (IdentityMinter's rules); Hook\DaedalusEditRequirements
+ * names such formats on the status report.
  */
 function daedalus_edit_entity_presave(EntityInterface $entity): void {
   if ($entity instanceof FieldableEntityInterface) {

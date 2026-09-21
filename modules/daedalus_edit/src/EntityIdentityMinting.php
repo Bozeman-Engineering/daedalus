@@ -41,13 +41,9 @@ final class EntityIdentityMinting {
    *   The entity to mint, mutated in place.
    *
    * @return bool
-   *   TRUE when any field value changed.
-   *
-   * @throws \LogicException
-   *   When a value's format allows a vocabulary tag but strips its class
-   *   attribute. Deliberately not caught: minted ids that format would strip
-   *   at render is silent identity loss, the one outcome eager identity
-   *   cannot absorb, so a misconfigured format fails the write loudly.
+   *   TRUE when any field value changed. A format that allows a vocabulary
+   *   tag without class leaves that tag's elements unminted (IdentityMinter's
+   *   rules); the save proceeds and the status report names the format.
    */
   public function mintEntity(FieldableEntityInterface $entity): bool {
     $changed = FALSE;

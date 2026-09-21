@@ -35,11 +35,17 @@ use Drupal\daedalus_ui\ElementModel\PageBuilderDeclarations;
  *   markup actually has is addressable. A collapsed <li>text</li> holds
  *   no paragraph element, so nothing forces one; the minter only ever
  *   stamps elements that exist.
- * - The text format must allow the class attribute on every vocabulary tag
- *   it allows at all; otherwise minted ids would be silently stripped at
- *   render, so the mismatch throws instead (loud misconfiguration beats
- *   quiet identity loss). Vocabulary tags the format strips entirely are
- *   excluded from minting rather than failing it.
+ * - Only vocabulary tags the format allows WITH an unrestricted class
+ *   attribute mint. A tag the format strips entirely cannot render, and a
+ *   tag allowed without class would lose its minted id at render; both are
+ *   skipped, never stamped and never fatal. The minter runs on every save
+ *   of every formatted text field on the site (EntityIdentityMinting has no
+ *   bundle gate), so refusing such a format would make every field stored
+ *   under it unsavable the moment daedalus_edit installs; unminted elements
+ *   are the lesser harm. The loss is reported instead: unmintable() names
+ *   the skipped tags and Hook\DaedalusEditRequirements lists them per
+ *   format on the status report, so a site widens its format when it wants
+ *   those elements addressable.
  * - When nothing needs minting the input string is returned byte-identical:
  *   parsing and reserializing untouched HTML could introduce phantom diffs
  *   on write paths that compare values.
@@ -140,10 +146,6 @@ final class IdentityMinter {
    * @return string
    *   The HTML with identity classes minted where missing or colliding, or
    *   the input byte-identical when nothing needed minting.
-   *
-   * @throws \LogicException
-   *   When the format allows a vocabulary tag but strips its class
-   *   attribute, which would silently destroy minted identity at render.
    */
   public function mint(string $html, FilterFormatInterface $format): string {
     $vocabulary = $this->vocabulary($format);
@@ -189,42 +191,59 @@ final class IdentityMinter {
   }
 
   /**
+   * The vocabulary tags the format allows but cannot carry identity on.
+   *
+   * The status-report side of the skip rule: every tag listed here renders
+   * under the format yet is never minted, so its elements are not
+   * addressable until the format allows class on it.
+   *
+   * @return string[]
+   *   The declared vocabulary tags the format allows without an
+   *   unrestricted class attribute, in vocabulary order; [] when every
+   *   allowed vocabulary tag mints.
+   */
+  public function unmintable(FilterFormatInterface $format): array {
+    return $this->partition($format)['unmintable'];
+  }
+
+  /**
    * The vocabulary tags the format can carry identity on.
    *
    * @return string[]
-   *   The subset of the declared vocabulary the format allows.
-   *
-   * @throws \LogicException
-   *   When an allowed vocabulary tag strips the class attribute.
+   *   The subset of the declared vocabulary the format allows with an
+   *   unrestricted class attribute.
    */
   private function vocabulary(FilterFormatInterface $format): array {
+    return $this->partition($format)['mintable'];
+  }
+
+  /**
+   * Splits the declared vocabulary by what the format lets identity through.
+   *
+   * @return array{mintable: string[], unmintable: string[]}
+   *   'mintable': allowed tags with an unrestricted class attribute;
+   *   'unmintable': allowed tags whose class attribute is stripped or
+   *   value-restricted. Tags the format strips entirely appear in neither:
+   *   no element of them can render, so identity on them is moot.
+   */
+  private function partition(FilterFormatInterface $format): array {
     $declared = $this->declaredVocabulary();
     $restrictions = $format->getHtmlRestrictions();
     if ($restrictions === FALSE) {
-      return $declared;
+      return ['mintable' => $declared, 'unmintable' => []];
     }
     $allowed = $restrictions['allowed'];
-    $vocabulary = [];
+    $partition = ['mintable' => [], 'unmintable' => []];
     foreach ($declared as $tag) {
       if (!isset($allowed[$tag])) {
-        // The format strips the tag entirely: no element of it can render,
-        // so identity on it is moot.
         continue;
       }
       // The class attribute must be allowed with unrestricted values (TRUE);
       // a value-restricted class would strip random s-* ids just the same.
       $class = $allowed[$tag]['class'] ?? $allowed['*']['class'] ?? FALSE;
-      if ($class !== TRUE) {
-        throw new \LogicException(sprintf(
-          "Text format '%s' allows <%s> but not its class attribute; identity minting requires class on every allowed vocabulary tag (%s) or minted ids are stripped at render.",
-          $format->id(),
-          $tag,
-          implode(', ', $declared),
-        ));
-      }
-      $vocabulary[] = $tag;
+      $partition[$class === TRUE ? 'mintable' : 'unmintable'][] = $tag;
     }
-    return $vocabulary;
+    return $partition;
   }
 
   /**
