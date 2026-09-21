@@ -13,6 +13,15 @@ use Drupal\Core\PathProcessor\OutboundPathProcessorInterface;
 class DaedalusUiOutboundPathProcessor implements OutboundPathProcessorInterface {
 
   /**
+   * The route path prefix of daedalus_ui.load_editable_page.
+   *
+   * This processor runs at priority 350, before path_alias and language add
+   * their outbound rewrites, so the path it sees is the route's own pattern
+   * with its parameters filled in.
+   */
+  public const LOAD_EDITABLE_PAGE_PREFIX = '/daedalus-ui/load-editable-page/';
+
+  /**
    * {@inheritdoc}
    */
   public function processOutbound($path, &$options = [], ?Request $request = NULL, ?BubbleableMetadata $bubbleable_metadata = NULL) {
@@ -31,7 +40,16 @@ class DaedalusUiOutboundPathProcessor implements OutboundPathProcessorInterface 
 
     // Catch anything like the workspace switcher trying to go to
     // LoadEditablePage directly. Let it go to EntityViewAlter as a normal page
-    // load.
+    // load. The string check gates the router: this processor runs for EVERY
+    // outbound URL, and matching a request here costs a full route match with
+    // param conversion per generated URL. Worse, that conversion runs the
+    // daedalus_tempstore entity converter, whose entity comparison evaluates
+    // computed fields; a computed field that itself generates a URL (metatag's
+    // [node:url]) then re-enters this processor, and the render recursed until
+    // PHP ran out of memory on any edit-mode page of a site with metatag.
+    if (!str_starts_with($path, self::LOAD_EDITABLE_PAGE_PREFIX)) {
+      return $path;
+    }
     $url = Url::fromUri("internal:$path");
     if ($url->isRouted() && $url->getRouteName() === 'daedalus_ui.load_editable_page') {
       // The router cannot be injected here: url_generator collects the

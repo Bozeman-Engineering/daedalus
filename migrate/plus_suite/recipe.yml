@@ -1,0 +1,53 @@
+name: 'Daedalus migration'
+description: 'Gives a site translated from the old Plus Suite what a daedalus site assumes and the old releases never had: the styling family wearing the shipped Olivero design system, and the text, image and formatted text block types. migrate.sh applies it after `drush updb`. Non-strict: config the site already carries under the same names (the old suite''s image block type and its media reference field, the translated settings objects) is left as it is, and a second apply changes nothing.'
+type: 'Site'
+
+# No `recipes:` includes: the daedalus_recipe ingredients live in a package
+# that hard-requires the AI stack, and its engine ingredient is strict on
+# config a translated site already carries. The modules and imports a
+# translated site needs are named here, in one place.
+
+install:
+  - daedalus_stylish
+  - daedalus_stylish_layouts
+  - daedalus_stylish_layers
+  - daedalus_stylish_olivero_skin
+  - daedalus_edit_text_block
+  - daedalus_edit_image_block
+  - daedalus_edit_formatted_text_block
+
+config:
+  # Nothing strict: the apply converges over a site that has some of these
+  # objects already (the old suite's image block type, a rerun of
+  # migrate.sh), creating only what is missing and refusing nothing.
+  strict: false
+  import:
+    # The settings object the action below targets; the rename's foundation
+    # install created it, and this makes the recipe whole on its own.
+    daedalus_blueprint: '*'
+    daedalus_stylish: '*'
+    daedalus_stylish_layouts: '*'
+    daedalus_stylish_layers: '*'
+    # The olivero design system (daedalus_blueprint.design_system.olivero):
+    # a recipe imports a module's install config only when listed here.
+    daedalus_stylish_olivero_skin: '*'
+    daedalus_edit_text_block: '*'
+    # The image block converges over the old suite's image type: the type,
+    # its media reference field storage and field stay as the site has them;
+    # the url field storage and field, and the displays when the site lacks
+    # them, are added.
+    daedalus_edit_image_block: '*'
+    daedalus_edit_formatted_text_block: '*'
+    # A module a recipe installs gets no default config, and the module
+    # installer pulls the block modules' dependencies in the same way. A site
+    # that never had the media library gets its widget view, view mode and
+    # image style here; a site that has them is untouched.
+    media: '*'
+    media_library: '*'
+  actions:
+    # The site wears the shipped Olivero design system, as the recipe
+    # package's styling ingredient sets it; daedalus_stylish's activation
+    # sweep syncs the shipped skin and variants under it.
+    daedalus_blueprint.settings:
+      simpleConfigUpdate:
+        active_design_system: olivero

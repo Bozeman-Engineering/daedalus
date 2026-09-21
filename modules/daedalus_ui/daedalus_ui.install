@@ -5,6 +5,7 @@
  * Install, update and uninstall functions for the daedalus_ui module.
  */
 
+use Drupal\Core\Config\Entity\ThirdPartySettingsInterface;
 use Drupal\Core\Field\BaseFieldDefinition;
 use Drupal\user\Entity\Role;
 use Drupal\user\Entity\User;
@@ -99,4 +100,44 @@ function daedalus_ui_update_10402(&$sandbox) {
       $role->save();
     }
   }
+}
+
+/**
+ * The retired 'place_block' default tool becomes the selector on every bundle.
+ *
+ * Sites migrated from the old suite carry `modes.edit.default_tool:
+ * place_block` on their bundles; there is no tool by that name any more
+ * (place_block is the Add panel's sidebar id), so edit mode warned and fell
+ * back to the selector on every load. Store the selector instead.
+ */
+function daedalus_ui_update_10403(&$sandbox) {
+  $entity_type_manager = \Drupal::entityTypeManager();
+  $bundle_entity_types = [];
+  foreach ($entity_type_manager->getDefinitions() as $entity_type) {
+    if ($bundle_entity_type = $entity_type->getBundleEntityType()) {
+      $bundle_entity_types[$bundle_entity_type] = $bundle_entity_type;
+    }
+  }
+  $count = 0;
+  foreach ($bundle_entity_types as $bundle_entity_type) {
+    foreach ($entity_type_manager->getStorage($bundle_entity_type)->loadMultiple() as $bundle) {
+      if (!$bundle instanceof ThirdPartySettingsInterface) {
+        continue;
+      }
+      $modes = $bundle->getThirdPartySetting('daedalus_ui', 'modes', []);
+      $changed = FALSE;
+      foreach ($modes as $mode => $settings) {
+        if (($settings['default_tool'] ?? NULL) === 'place_block') {
+          $modes[$mode]['default_tool'] = 'selector';
+          $changed = TRUE;
+        }
+      }
+      if ($changed) {
+        $bundle->setThirdPartySetting('daedalus_ui', 'modes', $modes);
+        $bundle->save();
+        $count++;
+      }
+    }
+  }
+  return t('Replaced the retired place_block default tool with the selector on @count bundles.', ['@count' => $count]);
 }

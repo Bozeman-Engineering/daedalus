@@ -1,0 +1,323 @@
+# The rename mapping: the old Plus Suite vocabulary to daedalus's, one table for
+# every consumer. The code-rename script beside the parent topic note
+# (refactor-page-builder-modules-to-one-module-rename.sh, `--mapping <file>`,
+# this file by default) rewrites a source tree with it and gates a renamed
+# tree on it; Drupal\daedalus\Migrate\PlusSuite\Mapping translates a site's persisted
+# state with it (config, key_value, layout sections). Tab-separated:
+# kind <TAB> old <TAB> new <TAB> note (tabs, because the regex kinds use `|`).
+# Kinds decide the boundaries around the literal `old`:
+#   id      machine names, entity types, paths, namespaces, human names:
+#           not preceded or followed by [A-Za-z0-9]; `_` may follow, so a
+#           machine name doubles as the prefix of its sub-modules, hooks,
+#           plugin IDs, config, routes, services and permissions.
+#   prefix  like id but nothing is checked after.
+#   camel   UpperCamel prefix: not preceded by [A-Z], not followed by [a-z].
+#   lcamel  lowerCamel prefix: not preceded by [A-Za-z0-9], not followed by [a-z].
+#   regex   a raw perl/PCRE regex with $1/$2 in `new`, run before the literal pass.
+#   protect a raw regex whose matches survive untouched (masked, then restored).
+#   keep    a deliberate old-name site in the source tree: masked like protect;
+#           the script reports them and never gates them.
+#   forbid  a literal that must not occur in the source tree at all (script only).
+#   floor   the oldest system.schema version of an old module the site
+#           migration serves (`new` is the version; the audit refuses below it).
+#           The script ignores these rows.
+#   skip    a regex over repo-relative paths (directories carry a trailing `/`)
+#           the script never scans, renames or gates; Mapping ignores these rows.
+# Literal patterns are tried at every position id/prefix/lcamel first, then
+# camel, longest first within each (ties in table order), and every pattern
+# refuses a `daedalus`/`Daedalus` immediately before it, which makes the
+# mapping idempotent. The script's header documents the rules in full.
+#
+# kind <TAB> old <TAB> new <TAB> note
+#
+# --- machine names (module, theme, recipe projects); sub-modules, hooks,
+# --- plugin IDs, config, schema, routes, services, libraries, permissions
+# --- and PHP namespaces follow by prefix.
+id	navigation_plus	daedalus_ui	module; also service navigation_plus.ui -> daedalus_ui.ui
+id	lb_plus	daedalus_layout	module
+id	edit_plus	daedalus_edit	module
+id	tempstore_plus	daedalus_tempstore	module
+id	entity_blueprint	daedalus_blueprint	module
+id	ai_plus	daedalus_ai	module
+id	ai_agent_memory	daedalus_ai_memory	module; moved under daedalus_ai/modules/
+id	stylish	daedalus_stylish	module; every prose "stylish" in the tree names the module (survey 2026-09-17)
+lcamel	stylish	daedalusStylish	stylishInspector -> daedalusStylishInspector
+id	plus_suite_theme	daedalus_theme	theme; library plus_suite_theme/base follows
+id	plus_suite_editor	daedalus_editor	role
+# --- sub-modules listed so the counts show per name (the prefix rule would
+# --- produce the same result); test modules ride the prefix rule.
+id	navigation_plus_entity_workflow	daedalus_ui_entity_workflow	
+id	edit_plus_text_block	daedalus_edit_text_block	
+id	edit_plus_formatted_text_block	daedalus_edit_formatted_text_block	
+id	edit_plus_image_block	daedalus_edit_image_block	
+id	edit_plus_page	daedalus_edit_page	
+id	entity_blueprint_api	daedalus_blueprint_api	
+id	entity_blueprint_ai	daedalus_blueprint_ai	
+id	entity_blueprint_ai_anthropic	daedalus_blueprint_ai_anthropic	
+id	entity_blueprint_ai_dev_tools	daedalus_blueprint_ai_dev_tools	
+id	entity_blueprint_ai_log_repair	daedalus_blueprint_ai_log_repair	
+id	entity_blueprint_config	daedalus_blueprint_config	
+id	entity_blueprint_config_ai	daedalus_blueprint_config_ai	
+id	entity_blueprint_stencil	daedalus_blueprint_stencil	
+id	ai_plus_anthropic	daedalus_ai_anthropic	
+id	ai_plus_gemini	daedalus_ai_gemini	
+id	stylish_layouts	daedalus_stylish_layouts	
+id	stylish_carbon	daedalus_stylish_carbon	
+id	stylish_discover	daedalus_stylish_discover	
+id	stylish_starter_skin	daedalus_stylish_starter_skin	
+id	stylish_olivero_skin	daedalus_stylish_olivero_skin	
+id	stylish_guide_example	daedalus_stylish_guide_example	
+id	stylish_layers	daedalus_stylish_layers	
+# --- content entity types (base tables, revision tables, *_usage, *_list,
+# --- the skin_tokens/variant_styles/swatch_value/animation_steps plugins and
+# --- entity-derived config follow by prefix); design_system and stencil stay.
+id	stylish_skin	daedalus_skin	entity type; stylish_skins_test (plural) is a module and rides `stylish`
+id	stylish_variant	daedalus_variant	entity type
+id	stylish_swatch	daedalus_swatch	entity type
+id	stylish_animation	daedalus_animation	entity type
+# --- PHP namespaces, listed for the counts (the id rule reaches them anyway).
+id	Drupal\navigation_plus	Drupal\daedalus_ui	
+id	Drupal\lb_plus	Drupal\daedalus_layout	
+id	Drupal\edit_plus	Drupal\daedalus_edit	
+id	Drupal\tempstore_plus	Drupal\daedalus_tempstore	
+id	Drupal\entity_blueprint	Drupal\daedalus_blueprint	
+id	Drupal\ai_plus	Drupal\daedalus_ai	
+id	Drupal\ai_agent_memory	Drupal\daedalus_ai_memory	
+id	Drupal\stylish	Drupal\daedalus_stylish	
+id	Drupal\Tests\navigation_plus	Drupal\Tests\daedalus_ui	
+id	Drupal\Tests\lb_plus	Drupal\Tests\daedalus_layout	
+id	Drupal\Tests\edit_plus	Drupal\Tests\daedalus_edit	
+id	Drupal\Tests\tempstore_plus	Drupal\Tests\daedalus_tempstore	
+id	Drupal\Tests\entity_blueprint	Drupal\Tests\daedalus_blueprint	
+id	Drupal\Tests\ai_plus	Drupal\Tests\daedalus_ai	
+id	Drupal\Tests\ai_agent_memory	Drupal\Tests\daedalus_ai_memory	
+id	Drupal\Tests\stylish	Drupal\Tests\daedalus_stylish	
+id	Drupal\Tests\plus_suite_ai	Drupal\Tests\daedalus_recipe_ai	the ai/ recipe's tests
+id	Drupal\Tests\plus_suite	Drupal\Tests\daedalus_recipe	the base recipe's tests
+# --- hook function definitions, listed for the counts.
+prefix	function navigation_plus_	function daedalus_ui_	
+prefix	function lb_plus_	function daedalus_layout_	
+prefix	function edit_plus_	function daedalus_edit_	
+prefix	function tempstore_plus_	function daedalus_tempstore_	
+prefix	function entity_blueprint_	function daedalus_blueprint_	
+prefix	function ai_plus_	function daedalus_ai_	
+prefix	function ai_agent_memory_	function daedalus_ai_memory_	
+prefix	function stylish_	function daedalus_stylish_	
+prefix	function plus_suite_theme_	function daedalus_theme_	
+# --- kebab: CSS classes and custom properties, once() ids, template names.
+id	navigation-plus	daedalus-ui	
+id	lb-plus	daedalus-layout	
+id	edit-plus	daedalus-edit	
+id	tempstore-plus	daedalus-tempstore	
+id	entity-blueprint	daedalus-blueprint	
+id	ai-plus	daedalus-ai	
+id	ai-agent-memory	daedalus-ai-memory	
+prefix	stylish-	daedalus-stylish-	CSS prefix per the table; --stylish-origin -> --daedalus-stylish-origin
+id	plus-suite	daedalus	--plus-suite-* chrome tokens, /admin/config/content/plus-suite, install.sh default
+# --- JS globals: Drupal.Daedalus is the one root.
+id	Drupal.NavigationPlus	Drupal.Daedalus	
+id	Drupal.EditPlus	Drupal.Daedalus.Edit	T4 makes the edit bundle attach to the root
+id	Drupal.AiPlusContext	Drupal.Daedalus.AiContext	
+id	Drupal.AiPlusDeferred	Drupal.Daedalus.AiDeferred	
+id	Drupal.AiPlusFollowup	Drupal.Daedalus.AiFollowup	
+id	Drupal.AiPlusCommands	Drupal.Daedalus.AiCommands	
+id	Drupal.AiPlus	Drupal.Daedalus.Ai	
+id	NavigationPlus	Daedalus	the root referenced bare: globalThis.Drupal?.NavigationPlus, { NavigationPlus: {} }, event names, log prefixes
+# --- UpperCamel class and identifier prefixes.
+camel	NavigationPlusUi	DaedalusUi	the service class, not DaedalusUiUi
+camel	NavigationPlus	DaedalusUi	
+camel	LbPlus	DaedalusLayout	
+camel	LBPlus	DaedalusLayout	
+camel	EditPlus	DaedalusEdit	
+camel	TempstorePlus	DaedalusTempstore	
+camel	EntityBlueprint	DaedalusBlueprint	
+camel	AiPlus	DaedalusAi	
+camel	AiAgentMemory	DaedalusAiMemory	
+id	Stylish	Daedalus Stylish	the human name in prose and t()
+camel	Stylish	DaedalusStylish	StylishSkin -> DaedalusStylishSkin
+camel	PlusSuite	Daedalus	PlusSuiteFixtureTrait -> DaedalusFixtureTrait
+# --- lowerCamel: JS behaviors, properties, drupalSettings keys.
+lcamel	navigationPlusUi	daedalusUi	
+lcamel	navigationPlus	daedalusUi	
+lcamel	lbPlus	daedalusLayout	
+lcamel	editPlus	daedalusEdit	
+lcamel	tempstorePlus	daedalusTempstore	
+lcamel	entityBlueprint	daedalusBlueprint	
+lcamel	aiPlus	daedalusAi	
+lcamel	aiAgentMemory	daedalusAiMemory	
+lcamel	plusSuite	daedalus	
+# --- drupalSettings keys (the table: daedalusUi, daedalusStylish).
+id	drupalSettings.navigationPlus	drupalSettings.daedalusUi	
+id	drupalSettings.editPlus	drupalSettings.daedalusEdit	
+id	drupalSettings.lbPlus	drupalSettings.daedalusLayout	
+id	drupalSettings.stylish	drupalSettings.daedalusStylish	JS side, camel by the table
+id	drupalSettings']['stylish']	drupalSettings']['daedalusStylish']	PHP side, one line
+regex	('drupalSettings'\s*=>\s*\[\s*)'stylish'(\s*=>)	$1'daedalusStylish'$2	PHP side, key on the next line
+# --- human names in t(), info.yml and prose.
+id	Layout Builder Plus	Daedalus Layout	
+id	Layout Builder +	Daedalus Layout	
+id	LB Plus	Daedalus Layout	
+id	LB+	Daedalus Layout	
+id	Navigation Plus	Daedalus UI	
+id	Navigation +	Daedalus UI	
+id	Edit Plus	Daedalus Edit	
+id	Edit +	Daedalus Edit	
+id	Tempstore Plus	Daedalus Tempstore	
+id	Tempstore +	Daedalus Tempstore	
+id	Entity Blueprint	Daedalus Blueprint	
+id	AI Plus	Daedalus AI	
+id	AI +	Daedalus AI	
+id	AI Agent Memory	Daedalus AI Memory	
+id	Plus Suite Entity Blueprint	Daedalus Blueprint	the ingredient's name
+id	Plus Suite Theme	Daedalus Theme	
+id	Plus Suite AI	Daedalus AI	the ai/ recipe
+id	Plus Suite Editor	Daedalus Editor	the role
+id	Plus Suite	Daedalus	package, recipe, prose
+# --- permission strings (persisted in role config; the recipe's editor role
+# --- grants them) and the lowercase and +-suffixed prose variants, found at T4.
+id	use navigation plus edit mode	use daedalus ui edit mode	permission
+id	configure navigation plus modes	configure daedalus ui modes	permission
+id	administer layout builder + configuration	administer daedalus layout configuration	permission
+id	promote layout builder + blocks	promote daedalus layout blocks	permission
+id	navigation plus	daedalus ui	lowercase prose
+id	Navigation plus	Daedalus UI	
+id	layout builder +	daedalus layout	lowercase prose
+id	edit plus	daedalus edit	lowercase prose
+id	Edit plus	Daedalus Edit	
+id	plus suite	daedalus	lowercase prose
+id	Plus suite	Daedalus	
+id	Navigation+	Daedalus UI	no-space variant
+id	navigation+	Daedalus UI
+id	Layout Builder+	Daedalus Layout	no-space variant, found at T5 (daedalus_ui README), row added at T4a
+id	Edit+	Daedalus Edit	
+id	edit+	Daedalus Edit	
+id	AI+	Daedalus AI	
+id	+Suite	Daedalus	"A +Suite example image block"
+# --- the recipe projects: paths, composer and d.o names, then the bare word.
+id	recipes/plus_suite_ai	recipes/daedalus_recipe/ai	
+id	recipes/plus_suite	recipes/daedalus_recipe	
+id	drupal/plus_suite_ai	drupal/daedalus_recipe	one recipe package now
+id	drupal/plus_suite	drupal/daedalus_recipe	
+id	drupal/plus_suite_theme	drupal/daedalus_theme	
+# --- found at T6: the theme is its own d.o project, so its project and issues
+# --- URLs must not ride the recipe rows (`project/plus_suite` reaches
+# --- `project/plus_suite_theme` by the `_` rule and produced daedalus_recipe_theme).
+id	project/plus_suite_theme	project/daedalus_theme	
+id	issues/plus_suite_theme	issues/daedalus_theme	
+id	drupalcode.org/plus_suite_theme	drupalcode.org/daedalus_theme	
+id	project/plus_suite_ai	project/daedalus_recipe	
+id	project/plus_suite	project/daedalus_recipe	
+id	issues/plus_suite_ai	issues/daedalus_recipe	
+id	issues/plus_suite	issues/daedalus_recipe	
+id	drupalcode.org/plus_suite_ai	drupalcode.org/daedalus_recipe	
+id	drupalcode.org/plus_suite	drupalcode.org/daedalus_recipe	
+# --- ingredient directories (plus_suite -> daedalus keeps the breakdown).
+id	plus_suite_entity_blueprint	daedalus_blueprint	not daedalus_entity_blueprint
+id	plus_suite_base	daedalus_base	
+id	plus_suite_demo_content	daedalus_demo_content	
+id	plus_suite_editor_roles	daedalus_editor_roles	
+id	plus_suite_engine	daedalus_engine	
+id	plus_suite_footer_block	daedalus_footer_block	
+id	plus_suite_formatted_text_block	daedalus_formatted_text_block	
+id	plus_suite_front_page	daedalus_front_page	
+id	plus_suite_header_block	daedalus_header_block	
+id	plus_suite_image_block	daedalus_image_block	
+id	plus_suite_layout_block	daedalus_layout_block	
+id	plus_suite_media_image	daedalus_media_image	
+id	plus_suite_media_vector_type	daedalus_media_vector_type	
+id	plus_suite_navigation	daedalus_navigation	core navigation config, not navigation_plus
+id	plus_suite_page	daedalus_page	
+id	plus_suite_sample_values	daedalus_sample_values	
+id	plus_suite_styling	daedalus_styling	
+id	plus_suite_text_block	daedalus_text_block	
+id	plus_suite_themes	daedalus_themes	
+id	plus_suite_ai_anthropic	daedalus_ai_anthropic	
+id	plus_suite_ai_gemini	daedalus_ai_gemini	
+id	plus_suite_ai	daedalus_ai	the umbrella AI ingredient and the bare word in prose
+id	plus_suite	daedalus	the umbrella ingredient, the ai_agent/ai_assistant config id, @group, prose
+# --- composer package and drupal.org project names of the eight modules:
+# --- all one project now (T5 rewrites composer.json and README wholesale).
+id	drupal/navigation_plus	drupal/daedalus	
+id	drupal/lb_plus	drupal/daedalus	
+id	drupal/edit_plus	drupal/daedalus	
+id	drupal/tempstore_plus	drupal/daedalus	
+id	drupal/entity_blueprint	drupal/daedalus	
+id	drupal/ai_plus	drupal/daedalus	
+id	drupal/ai_agent_memory	drupal/daedalus	
+id	drupal/stylish	drupal/daedalus	
+id	project/navigation_plus	project/daedalus	
+id	project/lb_plus	project/daedalus	
+id	project/edit_plus	project/daedalus	
+id	project/tempstore_plus	project/daedalus	
+id	project/entity_blueprint	project/daedalus	
+id	project/ai_plus	project/daedalus	
+id	project/ai_agent_memory	project/daedalus	
+id	project/stylish	project/daedalus	
+id	issues/navigation_plus	issues/daedalus	
+id	issues/lb_plus	issues/daedalus	
+id	issues/edit_plus	issues/daedalus	
+id	issues/tempstore_plus	issues/daedalus	
+id	issues/entity_blueprint	issues/daedalus	
+id	issues/ai_plus	issues/daedalus	
+id	issues/ai_agent_memory	issues/daedalus	
+id	issues/stylish	issues/daedalus	
+# --- absolute module paths in code and docs follow the repo layout.
+id	modules/contrib/navigation_plus	modules/contrib/daedalus/modules/daedalus_ui	
+id	modules/contrib/lb_plus	modules/contrib/daedalus/modules/daedalus_layout	
+id	modules/contrib/edit_plus	modules/contrib/daedalus/modules/daedalus_edit	
+id	modules/contrib/tempstore_plus	modules/contrib/daedalus/modules/daedalus_tempstore	
+id	modules/contrib/entity_blueprint	modules/contrib/daedalus/modules/daedalus_blueprint	
+id	modules/contrib/ai_plus	modules/contrib/daedalus/modules/daedalus_ai	
+id	modules/contrib/ai_agent_memory	modules/contrib/daedalus/modules/daedalus_ai/modules/daedalus_ai_memory	
+id	modules/contrib/stylish	modules/contrib/daedalus/modules/daedalus_stylish	
+# --- words that survive.
+protect	(?<![A-Za-z0-9_])drupal:navigation(?![A-Za-z0-9_])		core's navigation module as a dependency
+protect	(?<![A-Za-z0-9_])twig_events(?![A-Za-z0-9])		stays a separate project
+protect	(?<![A-Za-z0-9_])field_sample_value(?![A-Za-z0-9])		stays a separate project
+protect	(?<![A-Za-z0-9_])SectionComponent(?![a-z])		core's layout_builder type
+protect	\bstylish(?= (?:look|looks|looking|design|appearance|way|touch|finish|fashion))		the English adjective; every other prose `stylish` names the module ("a stylish skin" is a skin of stylish), so add phrases here, never articles
+protect	(?<![A-Za-z0-9_-])(?=[A-Za-z0-9_-]*[A-Z])(?=(?:[A-Za-z_-]*[0-9]){2})[A-Za-z0-9_-]{43}(?![A-Za-z0-9_-])		a base64url sha256 (Crypt::hashBase64: _core.default_config_hash on every config object), never a name: exactly 43 chars with upper case and digits, which no machine name or class name has; a stored hash can contain a short old literal (np-) by chance
+# --- the two deliberate old-name sites, both written at T5 in the daedalus
+# --- root and the only places an old name must appear (T4a). Anything else
+# --- carrying an old name is still a gate failure.
+keep	"drupal/(?:navigation_plus|lb_plus|edit_plus|tempstore_plus|entity_blueprint|ai_plus|ai_agent_memory|stylish|plus_suite_ai|plus_suite)": "\*"		composer.json `conflict` keys on the ten old packages (T5's decided conflict list)
+keep	Daedalus replaces the separate Navigation\+, Layout Builder\+, Edit\+,\s+Tempstore\+, Entity Blueprint, AI\+, AI Agent Memory and Stylish projects		README.md sentence naming the eight replaced projects by their old names
+# --- the JS member name `Stylish` of the root `Drupal.Daedalus` (T4b) is a new
+# --- name, but the inspector source map's `names` table lists property
+# --- identifiers bare, so it reads as the old camel `Stylish` there. The row
+# --- is anchored on the table's adjacent `motionTriggers` entry (the one
+# --- expression that first names both), so the gate turns red again if the
+# --- member ever appears elsewhere first, by design.
+keep	"Stylish","motionTriggers"		inspector.bundle.js.map `names` entry for Drupal.Daedalus.Stylish.motionTriggers
+forbid	lb_plus_edit_plus		deleted module; any hit is a leftover reference to delete by hand
+
+# T11 (2026-09-19, Tim): the two residues T4 left for review. The navigation_plus
+# initials on the UI chrome (classes, data- attributes, --custom properties,
+# keyframes) follow the tree's daedalus-<role>- convention; the entity_blueprint
+# initials on the drush aliases follow the dd-<role>-<verb> shape T4 set for dd-edit-*.
+prefix	np-	daedalus-ui-	.np-frame -> .daedalus-ui-frame, data-np-tooltip, --np-sidebar-width
+regex	(?<![A-Za-z0-9_])np(?=[A-Z])	daedalusUi	the dataset key of a data-np-* attribute (mount.dataset.npTreeMounted)
+id	ebdsa	dd-blueprint-activate	drush daedalus-blueprint:design-system:activate
+id	ebsc	dd-blueprint-schema	drush daedalus-blueprint:schema
+id	ebtc	dd-blueprint-capture	drush daedalus-blueprint:tool-capture
+id	ebd	dd-blueprint-deserialize	drush daedalus-blueprint:deserialize
+id	ebs	dd-blueprint-serialize	drush daedalus-blueprint:serialize
+id	ait	dd-blueprint-tail	drush daedalus-blueprint:ai-tail
+id	pau	dd-blueprint-audit	drush daedalus-blueprint:prompt-audit
+# --- plus-suite-to-daedalus-migration (2026-09-19): the rows a site's persisted
+# --- state needs beyond the code rename. The lb_plus permission rows above
+# --- (`administer layout builder + configuration`, `promote layout builder + blocks`)
+# --- are the migration's too: lb_plus 3.6.x has no update hook for them.
+# --- navigation_plus 2.3.x's `use toolbar plus edit mode` and `configure toolbar
+# --- plus modes` get no row: daedalus_ui_update_10401 renames them.
+regex	/modules/contrib/lb_plus/	/modules/contrib/daedalus/modules/daedalus_layout/	stored asset paths (block_config.icon third-party settings on view displays); listed so the counts show them, the id rows would produce the same result
+regex	/modules/contrib/edit_plus/modules/edit_plus_image_block/	/modules/contrib/daedalus/modules/daedalus_edit/modules/daedalus_edit_image_block/	stored asset paths; the header, cta and teaser block paths have no target (daedalus_layout_post_update_0005 retires block_config)
+floor	lb_plus	10003	oldest system.schema version the migration serves: lb_plus 3.6.x; the audit refuses below
+floor	navigation_plus	10400	navigation_plus 2.3.x
+floor	edit_plus	10001	edit_plus 2.3.x
+floor	tempstore_plus	11001	tempstore_plus 1.0.x
+keep	Migrate\\PlusSuite(?![A-Za-z0-9])		the plus_suite migration's PHP namespace, Drupal\daedalus\Migrate\PlusSuite: named for what it migrates from
+keep	^PlusSuite$		the src/Migrate/PlusSuite directory (the path pass substitutes bare basenames)
+keep	migrate/plus_suite(?![A-Za-z0-9])		the migrate/plus_suite directory named in prose (README, docblocks, the orchestrator)
+skip	^migrate/plus_suite/		this table is a deliberate old-name site; the code gate never scans it
+skip	^tests/src/(Unit|Kernel)/Migrate/PlusSuite/		the migration tests' survey strings and fixtures carry old names by design

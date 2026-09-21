@@ -36,6 +36,11 @@ recipe requires them.
 Daedalus replaces the separate Navigation+, Layout Builder+, Edit+,
 Tempstore+, Entity Blueprint, AI+, AI Agent Memory and Stylish projects, and
 conflicts with them: a site carries one or the other.
+A site on those projects' latest releases moves onto Daedalus with the
+migration pathway shipped in the package: read
+[`migrate/plus_suite/MIGRATING.md`](migrate/plus_suite/MIGRATING.md), or hand a coding agent
+<https://git.drupalcode.org/project/daedalus/-/raw/1.0.x/migrate/plus_suite/PROMPT.md>
+to drive it.
 
 ## Requirements
 
