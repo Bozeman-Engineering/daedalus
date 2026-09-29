@@ -9,10 +9,14 @@ use Drupal\ai\Base\FunctionCallBase;
 use Drupal\ai\OperationType\GenericType\ImageFile;
 use Drupal\ai\Service\FunctionCalling\ExecutableFunctionCallInterface;
 use Drupal\ai\Service\FunctionCalling\FunctionCallInterface;
+use Drupal\daedalus_ai\Attachments;
 use Drupal\daedalus_ai\Render\HeadlessRendererInterface;
 use Drupal\daedalus_ai\Render\HeadlessRenderException;
 use Drupal\daedalus_ai\Render\StateVector;
 use Drupal\daedalus_ai\Render\ToolImagesResult;
+use Drupal\daedalus_blueprint_ai\ConversationContext;
+use Drupal\daedalus_ui\File\FileLane;
+use Drupal\daedalus_ui\File\FileLaneException;
 use Drupal\Core\Entity\EntityMalformedException;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\Entity\Exception\UndefinedLinkTemplateException;
@@ -30,12 +34,20 @@ use Symfony\Component\HttpFoundation\RequestStack;
  * pixels instead of trusting that plausible CSS is correct CSS. The page
  * loads headlessly in Edit Mode as the current editor (same session), so
  * staged, unsaved changes are what get rendered.
+ *
+ * The shot reaches the model twice over: once as bytes on the next turn
+ * (the ai_agents image contract) and once as a handle. It is saved through
+ * the one file lane and held by the attachment store for the conversation
+ * under `render-<entity type>-<entity id>[-<pose>].png`, the name the text
+ * result reports, so after the memory runner strips the bytes the model
+ * can still re-open it with view_file, and a later turn can compare a new
+ * render against it.
  */
 #[FunctionCall(
   id: 'daedalus_ai:render_page',
   function_name: 'render_page',
   name: 'Render Page',
-  description: 'Renders an entity\'s page in a real headless browser and returns a screenshot for you to inspect. The page loads in Edit Mode as the current editor, so your staged (unsaved) changes are included. Pose the canvas state vector to verify responsive and styling work: canvas_width narrows the canvas so container-breakpoint conditions (narrow/medium) re-evaluate, canvas_scheme forces light/dark, canvas_motion forces reduced motion. The screenshot arrives as an image attached to your next turn; ALWAYS look at it before declaring visual work done. Render once per state you changed styles for (e.g. once at full width for the base look, once at canvas_width=896 for medium, once at canvas_width=375 for narrow behavior).',
+  description: 'Renders an entity\'s page in a real headless browser and returns a screenshot for you to inspect. The page loads in Edit Mode as the current editor, so your staged (unsaved) changes are included. Pose the canvas state vector to verify responsive and styling work: canvas_width narrows the canvas so container-breakpoint conditions (narrow/medium) re-evaluate, canvas_scheme forces light/dark, canvas_motion forces reduced motion. The screenshot arrives as an image attached to your next turn; ALWAYS look at it before declaring visual work done. It is also kept under the name the result reports, so view_file(name) re-opens it later. Render once per state you changed styles for (e.g. once at full width for the base look, once at canvas_width=896 for medium, once at canvas_width=375 for narrow behavior).',
   group: 'information_tools',
   context_definitions: [
     'entity_type' => new ContextDefinition(
@@ -88,6 +100,21 @@ final class RenderPage extends FunctionCallBase implements ExecutableFunctionCal
   protected HeadlessRendererInterface $renderer;
 
   /**
+   * The file lane the shot is saved through.
+   */
+  protected FileLane $fileLane;
+
+  /**
+   * The attachment store that holds the shot for the conversation.
+   */
+  protected Attachments $attachments;
+
+  /**
+   * The conversation the shot is held for.
+   */
+  protected ConversationContext $conversationContext;
+
+  /**
    * The screenshot result, delivered via the ai_agents image contract.
    */
   protected ?ToolImagesResult $result = NULL;
@@ -106,6 +133,9 @@ final class RenderPage extends FunctionCallBase implements ExecutableFunctionCal
     $instance->entityTypeManager = $container->get('entity_type.manager');
     $instance->requestStack = $container->get('request_stack');
     $instance->renderer = $container->get('daedalus_ai.headless_renderer');
+    $instance->fileLane = $container->get('daedalus_ui.file_lane');
+    $instance->attachments = $container->get('daedalus_ai.attachments');
+    $instance->conversationContext = $container->get('daedalus_blueprint_ai.conversation_context');
     return $instance;
   }
 
@@ -180,8 +210,9 @@ final class RenderPage extends FunctionCallBase implements ExecutableFunctionCal
       return;
     }
 
+    $name = "render-$entity_type-$entity_id" . ($vector->slug() === '' ? '' : '-' . $vector->slug()) . '.png';
     $this->result = new ToolImagesResult([
-      new ImageFile($shot['png'], 'image/png', "render-$entity_type-$entity_id.png"),
+      new ImageFile($shot['png'], 'image/png', $name),
     ]);
     $lines = [
       "Rendered $url at " . $vector->describe() . '.',
@@ -190,7 +221,31 @@ final class RenderPage extends FunctionCallBase implements ExecutableFunctionCal
     if ($shot['truncated']) {
       $lines[] = 'Note: the page is taller than the capture ceiling; the screenshot is cut at the bottom.';
     }
+    $lines[] = $this->keep($name, $shot['png']);
     $this->setOutput(implode(' ', $lines));
+  }
+
+  /**
+   * Saves the shot through the lane and holds it for the conversation.
+   *
+   * @return string
+   *   The sentence naming the held file, or why it was not kept: the model
+   *   still receives the bytes on the next turn either way, so a shot that
+   *   cannot be kept is reported, not lost.
+   */
+  protected function keep(string $name, string $png): string {
+    $thread = $this->conversationContext->get();
+    if ($thread === '') {
+      return 'It was not kept for later: this run has no conversation to hold it.';
+    }
+    try {
+      $file = $this->fileLane->fromBytes($name, 'image/png', $png, Attachments::DIRECTORY);
+    }
+    catch (FileLaneException $e) {
+      return 'It was not kept for later: ' . $e->getMessage();
+    }
+    $held = $this->attachments->attach($file, $thread);
+    return "It is kept as \"$held\"; view_file(\"$held\") re-opens it later.";
   }
 
   /**

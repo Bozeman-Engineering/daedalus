@@ -103,14 +103,15 @@ function daedalus_ui_update_10402(&$sandbox) {
 }
 
 /**
- * The retired 'place_block' default tool becomes the selector on every bundle.
+ * Strips the retired default_tool setting from every bundle's Edit Mode config.
  *
- * Sites migrated from the old suite carry `modes.edit.default_tool:
- * place_block` on their bundles; there is no tool by that name any more
- * (place_block is the Add panel's sidebar id), so edit mode warned and fell
- * back to the selector on every load. Store the selector instead.
+ * Edit Mode has no tools any more (one pointer, one keyboard grammar over
+ * the one selection), so the Edit mode plugin keeps no per-bundle
+ * configuration: the `modes.edit.default_tool` third-party setting goes,
+ * a mode entry it leaves empty goes with it, and so does an empty `modes`
+ * map, so the stored config carries nothing without a schema.
  */
-function daedalus_ui_update_10403(&$sandbox) {
+function daedalus_ui_update_10404(&$sandbox) {
   $entity_type_manager = \Drupal::entityTypeManager();
   $bundle_entity_types = [];
   foreach ($entity_type_manager->getDefinitions() as $entity_type) {
@@ -124,20 +125,32 @@ function daedalus_ui_update_10403(&$sandbox) {
       if (!$bundle instanceof ThirdPartySettingsInterface) {
         continue;
       }
-      $modes = $bundle->getThirdPartySetting('daedalus_ui', 'modes', []);
+      $modes = $bundle->getThirdPartySetting('daedalus_ui', 'modes');
+      if (!is_array($modes)) {
+        continue;
+      }
       $changed = FALSE;
       foreach ($modes as $mode => $settings) {
-        if (($settings['default_tool'] ?? NULL) === 'place_block') {
-          $modes[$mode]['default_tool'] = 'selector';
+        if (is_array($settings) && array_key_exists('default_tool', $settings)) {
+          unset($modes[$mode]['default_tool']);
           $changed = TRUE;
+          if ($modes[$mode] === []) {
+            unset($modes[$mode]);
+          }
         }
       }
-      if ($changed) {
-        $bundle->setThirdPartySetting('daedalus_ui', 'modes', $modes);
-        $bundle->save();
-        $count++;
+      if (!$changed) {
+        continue;
       }
+      if ($modes === []) {
+        $bundle->unsetThirdPartySetting('daedalus_ui', 'modes');
+      }
+      else {
+        $bundle->setThirdPartySetting('daedalus_ui', 'modes', $modes);
+      }
+      $bundle->save();
+      $count++;
     }
   }
-  return t('Replaced the retired place_block default tool with the selector on @count bundles.', ['@count' => $count]);
+  return t('Removed the retired default_tool Edit Mode setting from @count bundles.', ['@count' => $count]);
 }

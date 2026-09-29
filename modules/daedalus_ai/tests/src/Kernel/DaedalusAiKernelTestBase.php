@@ -9,6 +9,7 @@ use Drupal\daedalus_ai\FieldHandler\ImageGenerationHandler;
 use Drupal\daedalus_ai\ImageDimension\AspectRatioDimensionAdapter;
 use Drupal\daedalus_ai\ImageDimension\ImageDimensionAdapterManager;
 use Drupal\daedalus_ai\ImageGenerationGate;
+use Drupal\daedalus_ai\MediaMinter;
 use Drupal\daedalus_ai\PendingMedia\GenerationJobStore;
 use Drupal\daedalus_ai\PendingMedia\PendingMediaMinter;
 use Drupal\daedalus_ai\PendingMedia\PendingTargetCollector;
@@ -123,6 +124,13 @@ abstract class DaedalusAiKernelTestBase extends KernelTestBase {
   protected GenerationJobStore $jobStore;
 
   /**
+   * The shared media minter the pending minter mints through.
+   *
+   * @var \Drupal\daedalus_ai\MediaMinter
+   */
+  protected MediaMinter $mediaMinter;
+
+  /**
    * The pending-media minter behind the handler.
    *
    * @var \Drupal\daedalus_ai\PendingMedia\PendingMediaMinter
@@ -135,6 +143,13 @@ abstract class DaedalusAiKernelTestBase extends KernelTestBase {
    * @var \Drupal\daedalus_ai\PendingMedia\PendingTargetCollector
    */
   protected PendingTargetCollector $collector;
+
+  /**
+   * The dimension manager the handler reads sizing through (no provider).
+   *
+   * @var \Drupal\daedalus_ai\ImageDimension\ImageDimensionAdapterManager
+   */
+  protected ImageDimensionAdapterManager $dimensionManager;
 
   /**
    * The current (authenticated) user whose preference the gate reads.
@@ -225,11 +240,18 @@ abstract class DaedalusAiKernelTestBase extends KernelTestBase {
 
     };
     $dimension_manager->addAdapter(new AspectRatioDimensionAdapter());
+    $this->dimensionManager = $dimension_manager;
 
     // The handler is mint+delegate sugar over the pending-media capability:
     // real minter, job store, and collector, wired from the same container
     // collaborators their service definitions name.
     $this->jobStore = new GenerationJobStore($this->container->get('tempstore.private'));
+    $this->mediaMinter = new MediaMinter(
+      $this->container->get('entity_type.manager'),
+      $this->container->get('daedalus_ui.file_lane'),
+      $this->container->get('file.mime_type.guesser'),
+      $this->container->get('daedalus_blueprint.access_checker'),
+    );
     $this->minter = new PendingMediaMinter(
       $this->container->get('config.factory'),
       $this->container->get('entity_type.manager'),
@@ -238,7 +260,7 @@ abstract class DaedalusAiKernelTestBase extends KernelTestBase {
       $this->container->get('extension.list.module'),
       $this->gate,
       $this->jobStore,
-      $this->container->get('daedalus_blueprint.access_checker'),
+      $this->mediaMinter,
       $this->container->getParameter('app.root'),
     );
     $this->collector = new PendingTargetCollector(

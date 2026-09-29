@@ -1,8 +1,9 @@
 import { h } from 'preact';
-import { controlWidgets } from '../../controls.js';
+import { controlWidgets, litValues } from '../../controls.js';
 import { textGate } from '../../widget-values.js';
 import { referenceVariable } from '../../value-space.js';
 import { ChoiceRow } from '../lib/choice-row.js';
+import { styleTarget } from '../lib/use-highlight.js';
 import { widgetClasses } from '../lib/widget-classes.js';
 
 /**
@@ -39,20 +40,25 @@ import { widgetClasses } from '../lib/widget-classes.js';
  * reason. A pick commits the reference (`var(--font-heading)`) as every
  * closed row does.
  *
- * An unset row is never blank: the ghost beneath it is the row's own
- * (ChoiceRow reads it from its origin, the same derivation that colours
- * the mark), so the value the skin supplies shows where the mark says
- * "from the active skin". A text block's root IS its tag element, so
- * the skin's `base:p` delivers its font-size and line-height, a
- * heading's `base:hN` its family and weight too; the widget passes no
- * placeholder, and the well, the field and the chips wear the resting
- * value each in their own posture.
+ * Each row lights its WINNER at the pose (controls.js litValues over
+ * the model's reads: the value a worn variant, the skin or a
+ * declaration delivers is lit exactly like an own one, the mark in that
+ * layer's hue saying "from the active skin"). A text block's root IS
+ * its tag element, so the skin's `base:p` delivers its font-size and
+ * line-height, a heading's `base:hN` its family and weight too, and
+ * the well, the field and the chips wear that value lit.
  *
  * Gated on the selection carrying real text (textGate at registration,
  * shared with text_alignment): the universal block kind sanctions
  * typography on EVERY block, but only the canvas knows an image block has
  * no text — the pipeline hides the whole control there unless a value is
  * already set (registry.offered()).
+ *
+ * A row whose property the panel's write address withholds (the
+ * address's landing declaration grants the family narrower than this
+ * element's own: `base:a` granting weight but not size) renders
+ * DISABLED with the roster's reason as its title (model.withheld); what
+ * the own key never grants stays hidden as ever.
  */
 const familyFace = (stop) =>
   typeof stop.display === 'string' &&
@@ -72,27 +78,34 @@ const Typography = ({
   model,
   guide,
   materials,
+  source,
   onPreview,
   onRelease,
   onCommit,
   onPickCondition = null,
   onOpenDocument = null,
-}) => (
+}) => {
+  const lit = litValues(model.reads);
+  return (
   <div className={widgetClasses('typography', false)}>
     {ROWS.map(({ label, property, faceStyle }) => (
       <ChoiceRow
         key={property}
         guide={guide}
         materials={materials}
+        source={source}
+        highlight={styleTarget(model.keys[property])}
         condition={model.condition}
         label={Drupal.t(label)}
         property={property}
-        value={model.values[property]}
+        value={lit[property]}
         definition={model.propertyDefinitions?.[property] ?? {}}
         constraints={model.constraints?.[property] ?? {}}
-        entry={model.entry}
-        provenance={model.provenance}
+        stack={model.stacks[property]}
+        read={model.reads[property]}
         faceStyle={faceStyle}
+        disabled={Boolean(model.withheld?.[property])}
+        disabledTitle={model.withheld?.[property] ?? null}
         onPickCondition={onPickCondition}
         onOpenDocument={onOpenDocument}
         onPreview={onPreview}
@@ -101,6 +114,9 @@ const Typography = ({
       />
     ))}
   </div>
-);
+  );
+};
 
-controlWidgets.register('typography', Typography, { applicable: textGate });
+controlWidgets.register('typography', Typography, {
+  applicable: textGate,
+});

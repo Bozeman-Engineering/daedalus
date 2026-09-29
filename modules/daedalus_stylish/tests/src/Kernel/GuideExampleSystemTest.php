@@ -92,6 +92,7 @@ class GuideExampleSystemTest extends KernelTestBase {
     'twig_events',
     'daedalus_tempstore',
     'daedalus_blueprint_api',
+    'file',
     'daedalus_ui',
     'daedalus_stylish',
     'daedalus_stylish_layouts',
@@ -178,7 +179,12 @@ class GuideExampleSystemTest extends KernelTestBase {
     $text = $this->styleGuide->getBlockType('text', self::THEME);
     $this->assertSame(['animation', 'hover', 'button'], array_map(static fn (array|string $axis): string => is_array($axis) ? array_key_first($axis) : $axis, $text['variant_axes']), 'the text block re-lists the universal axes beside its button axis');
     $this->assertSame(['caption', 'body', 'title-3'], $text['elements']['.text-block-link']['property_groups']['typography']['constraints']['font-size']['stops']);
-    $this->assertSame('.text-block-link', $text['controls']['button_fill']['element']);
+    // The link's basic rows ship with daedalus_edit_text_block (the module
+    // its `button` variant ships from: the kind's ids restated over a
+    // link-first candidate list), not with this package: the package
+    // curates their grants and stops and names the part in no candidate
+    // list of its own.
+    $this->assertSame([], array_filter($text['controls'] ?? [], static fn ($control): bool => is_array($control) && in_array('.text-block-link', StyleGuide::controlCandidates($control), TRUE)), 'the package declares no link-bound control of its own');
     $this->assertSame(['style' => 'guide_image_rounded'], $this->styleGuide->getBlockType('image', self::THEME)['default_variants']);
     $this->assertFalse($this->styleGuide->getBlockType('formatted_text', self::THEME)['controls']['position']);
     $layout = $this->styleGuide->getLayout('daedalus_stylish_container', self::THEME);
@@ -292,7 +298,7 @@ class GuideExampleSystemTest extends KernelTestBase {
     foreach ($shipped['animation'] as $name) {
       $this->assertTrue($roster->has(MaterialKind::Animation, $name), "the roster offers $name");
     }
-    foreach (['row', 'container_site', 'container_full'] as $name) {
+    foreach (['columns', 'container_site', 'container_full'] as $name) {
       $this->assertTrue($roster->has(MaterialKind::Variant, $name), "the suite's $name conforms under the package's law (the layout's width default rides it)");
     }
     $withheld_names = array_keys($withheld);

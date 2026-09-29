@@ -13,10 +13,12 @@
  * - what one gesture on a part WRITES (strokeWrite: the completion
  *   rule, so a stroke that would not paint never lands half-formed);
  * - how the four border sides relate across the three families
- *   (strokeSides: per-side provenance and the uniform read; and the two
- *   patch shapes that keep the padding invariant three families wide:
- *   strokeSidesPatch expands to longhands and collapses back,
- *   strokeUniformPatch writes the shorthands over any own longhands).
+ *   (strokeSides: the per-side stack read and the uniform read; and the
+ *   two patch shapes that keep the padding invariant three families
+ *   wide: strokeSidesPatch expands to longhands and collapses back,
+ *   strokeUniformPatch writes the shorthands over any own longhands);
+ * - which own blocks make a stroke unsettable (strokeUnsetProperties:
+ *   the parts and, across a border, the spellings a side shares).
  *
  * A stroke is named by its PARTS (strokeParts): the three property names
  * the width, style and color ride under. The shorthand strokes are
@@ -29,8 +31,10 @@
 
 import { normalizeValue, segmentState } from '../../widget-values.js';
 import {
+  BOX_FAMILIES,
   SIDES,
   familyLonghand,
+  propertySides,
   sideCommit,
   sideProvenance,
   sidesPatch,
@@ -237,45 +241,53 @@ const BORDER_FAMILIES = STROKE_PARTS.map((part) => STROKES.border[part]);
  * provenance per part, and whether one stroke honestly represents all
  * four sides.
  *
- * box-model.js sideProvenance and uniformState are read once per family
- * and merged, never by composing names: a side's width, style and
- * color each carry their own supplier (a skin strokes the left edge, a
- * variant colors the top, the element authors one width), so the ring
- * cell's hue follows its width and the per-side editor's wells show the
- * other two. `uniform` holds when every family is either unset or one
- * value on all four sides (however spelled: shorthand or longhands, own
- * or variant-supplied; skin defaults are ghosts and never count as set,
- * uniformState's rule), and then `values` is the stroke the shorthand
- * row faces and writes through (strokeState / strokeWrite over
- * STROKES.border), keyed by the three shorthands. A family the sides
- * disagree on reads null there; read `uniform` first, and `families`
- * for each family's own uniformState (its custom text lists the sides).
+ * box-model.js sideProvenance and uniformState (the per-side reads of
+ * the style stack) are read once per family and merged, never by
+ * composing names: a side's width, style and color each carry their
+ * own supplier (a skin strokes the left edge, a variant colors the top,
+ * the element authors one width), so the ring cell's hue follows its
+ * width and the per-side editor's wells show the other two. `uniform`
+ * holds when every family is either unset or one value on all four
+ * sides (however spelled: shorthand or longhands, whichever layer
+ * delivers it, the skin's and the declaration's included: the display
+ * rule lights the winner), and then `values` is the stroke the
+ * shorthand row faces and writes through (strokeState / strokeWrite
+ * over STROKES.border), keyed by the three shorthands. A family the
+ * sides disagree on reads null there; read `uniform` first, and
+ * `families` for each family's own uniformState (its custom text lists
+ * the sides).
  *
- * @param {?Object<string, *>} own
- *   The element's OWN editing-compound values (order-preserving).
- * @param {?Object<string, *>} effective
- *   The RESOLVED editing-compound values (effectiveEntry(...).entry
- *   [condition]).
- * @param {object} [tables]
- *   The provenance tables (sideProvenance's: suppliers, skinEntry,
- *   declaredEntry, condition, conditions).
+ * @param {?Object<string, object>} stacks
+ *   The per-property layer stacks (a control model's `stacks`: each
+ *   family's sides read their own longhands' boxes, box-model.js
+ *   sideProvenance).
+ * @param {string} [condition]
+ *   The editing compound ('default').
+ * @param {object} [conditions]
+ *   The condition table (guide.conditions), for the cascade order.
  *
  * @return {{sides: Object<string, {width: object, style: object,
  *   color: object}>, families: Object<string, {set: boolean,
  *   uniform: ?string, text: ?string}>, uniform: boolean,
  *   values: Object<string, ?string>}}
  */
-export const strokeSides = (own, effective, tables = {}) => {
+export const strokeSides = (stacks, condition = 'default', conditions = {}) => {
   const provenance = {};
   const families = {};
   STROKE_PARTS.forEach((part) => {
     provenance[part] = sideProvenance(
-      own,
-      effective,
+      stacks,
       STROKES.border[part],
-      tables,
+      condition,
+      conditions,
     );
-    families[part] = uniformState(own, effective, STROKES.border[part]);
+    families[part] = uniformState(
+      stacks,
+      STROKES.border[part],
+      SIDES,
+      condition,
+      conditions,
+    );
   });
   const sides = {};
   SIDES.forEach((side) => {
@@ -402,41 +414,61 @@ export const strokeSidesPatch = (own, patchesBySide) => {
  * One border side's stroke as the ring reads it: the side's three
  * longhands and their values, from a strokeSides read.
  *
- * Each part's value is what its provenance resolved for the side, or
- * the family's uniform read where the per-side resolution is opaque (a
- * lone token reference as the shorthand: `border-color:
- * var(--color-accent)` resolves no side by itself, sideProvenance's
- * rule, but uniformState reads the one reference as every side's
- * value, so the cell and the editor still know the color). By default
- * only the set tiers answer (authored on the element, supplied by a
- * worn variant): the ring's side editor seeds its fields from these,
- * and a defaults-tier value is a ghost it must never settle. `ghosts`
- * adds the skin's and the declaration's values for the cell face, which
- * shows what the side wears whoever supplies it.
+ * Each part's value is what its provenance resolved for the side (a
+ * lone token reference as the shorthand, `border-color:
+ * var(--color-accent)`, is the reference on every side: box-model.js
+ * expandShorthand, the one splitter, so the cell and the editor know
+ * the color; a calc()/multi-component var() shorthand stays null, the
+ * opaque state). Every delivering layer answers (the display rule: the
+ * side wears its winner, lit, whoever supplies it); the ring's side
+ * editor seeds its fields from these and decides its Unset by the own
+ * layer at the pose (strokeUnsetProperties), never by the tier.
  *
- * @param {{sides: object, families: object}} read
+ * @param {{sides: object}} read
  *   A strokeSides result.
  * @param {string} side
  *   A physical side.
- * @param {{ghosts?: boolean}} [options]
  *
  * @return {Object<string, ?string>}
- *   longhand → value (null when unset or unread).
+ *   longhand → value (null when no layer delivers the part, or the
+ *   delivering shorthand is opaque).
  */
-export const strokeSideValues = (read, side, { ghosts = false } = {}) =>
+export const strokeSideValues = (read, side) =>
   Object.fromEntries(
-    STROKE_PARTS.map((part) => {
-      const provenance = read.sides[side][part];
-      const tiers = ghosts
-        ? ['authored', 'variant', 'skin', 'declared']
-        : ['authored', 'variant'];
-      const family = read.families[part];
-      const value = tiers.includes(provenance.state)
-        ? (provenance.value ?? (family.set ? family.uniform : null))
-        : null;
-      return [familyLonghand(STROKES.border[part], side), value];
-    }),
+    STROKE_PARTS.map((part) => [
+      familyLonghand(STROKES.border[part], side),
+      read.sides[side][part].value,
+    ]),
   );
+
+/**
+ * The properties whose own block at the pose makes a stroke UNSETTABLE:
+ * each part, plus the other spellings a border part shares its sides
+ * with. A shorthand part (`border-width`) is delivered by its four side
+ * longhands too (a ring-expanded border holds only longhands on the own
+ * layer), and a side's longhand (`border-top-width`) by its family's
+ * shorthand (a border not yet expanded), so the Unset gate reads every
+ * spelling the own layer could carry for the stroke. An outline part
+ * has no sides and reads itself alone.
+ *
+ * @param {{width: string, style: string, color: string}} parts
+ *   The stroke's property names (strokeParts).
+ *
+ * @return {string[]}
+ */
+export const strokeUnsetProperties = (parts) =>
+  STROKE_PARTS.flatMap((part) => {
+    const name = parts[part];
+    const family = Object.keys(BOX_FAMILIES).find(
+      (candidate) => propertySides(candidate, name) !== null,
+    );
+    if (!family) {
+      return [name];
+    }
+    return name === family
+      ? [name, ...SIDES.map((side) => familyLonghand(family, side))]
+      : [name, family];
+  });
 
 /**
  * The longhands a set of border sides spans across the three families:

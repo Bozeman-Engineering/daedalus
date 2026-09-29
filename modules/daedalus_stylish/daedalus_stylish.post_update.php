@@ -9,6 +9,7 @@ declare(strict_types=1);
 
 use Drupal\field\Entity\FieldConfig;
 use Drupal\field\Entity\FieldStorageConfig;
+use Drupal\Core\Utility\UpdateException;
 use Drupal\daedalus_stylish\DaedalusStylishFieldManager;
 
 /**
@@ -168,4 +169,77 @@ function daedalus_stylish_post_update_ai_minting_default(): void {
   if ($settings->get('ai_minting') === NULL) {
     $settings->set('ai_minting', TRUE)->save();
   }
+}
+
+/**
+ * Syncs shipped variants and skins onto the relative selector grammar.
+ *
+ * The suffix after a key's "::" is a relative selector in one canonical
+ * spelling now: the shipped row variant's children entry was rewritten on
+ * disk from '::>' to '::> *'. Shipped-unmodified entities converge through
+ * the sync lane here, BEFORE the convergence passes, so the in-place
+ * rewrite never touches an unmodified shipped entity (which would flip
+ * its hash to "modified" and cut it off from future updates).
+ */
+function daedalus_stylish_post_update_relative_selector_0001_sync_shipped(): void {
+  $report = \Drupal::service('daedalus_stylish.shipped_sync')->sync();
+  if ($report->hasFailures()) {
+    throw new UpdateException(implode("\n", $report->failureLines()));
+  }
+}
+
+/**
+ * Converges host style maps onto the relative selector grammar.
+ *
+ * Every content entity revision and translation carrying a style map is
+ * walked through daedalus_layout's transform spine: the retired "::>"
+ * children spelling ("{key}::>", "{key}::.cls::>", "{key}::p::>") becomes
+ * the selector it means ("::> *", "::.cls > *", "::p > *"). Per-map
+ * details are logged to the daedalus_stylish channel.
+ */
+function daedalus_stylish_post_update_relative_selector_0002_hosts(&$sandbox) {
+  if (!\Drupal::hasService('daedalus_layout.host_entity_walker')) {
+    $sandbox['#finished'] = 1;
+    return t('daedalus_layout is not installed; no style map stores to migrate.');
+  }
+  $saved = \Drupal::service('daedalus_layout.host_entity_walker')->walk($sandbox);
+  if (!empty($sandbox['#finished']) && $sandbox['#finished'] >= 1) {
+    return t('Converged host style maps onto the relative selector grammar (all revisions and translations).');
+  }
+  return t('Converged @count host revisions in this batch.', ['@count' => $saved]);
+}
+
+/**
+ * Converges style variants onto the relative selector grammar.
+ *
+ * Across ALL revisions, composition slot paths and fragment references
+ * included. Shipped unmodified variants are skipped: relative_selector_0001
+ * synced their rewritten disk sources already.
+ */
+function daedalus_stylish_post_update_relative_selector_0003_variants() {
+  $lines = \Drupal::service('daedalus_stylish.relative_selector_convergence')->convergeVariants();
+  return t('Converged style variants onto the relative selector grammar (@count report lines logged to the daedalus_stylish channel).', ['@count' => count($lines)]);
+}
+
+/**
+ * Converges skin defaults onto the relative selector grammar.
+ *
+ * Across ALL revisions. Shipped unmodified skins are skipped for the same
+ * sync-lane reason as variants.
+ */
+function daedalus_stylish_post_update_relative_selector_0004_skins() {
+  $lines = \Drupal::service('daedalus_stylish.relative_selector_convergence')->convergeSkins();
+  return t('Converged skin defaults onto the relative selector grammar (@count report lines logged to the daedalus_stylish channel).', ['@count' => count($lines)]);
+}
+
+/**
+ * Converges stored stencils onto the relative selector grammar.
+ *
+ * At every node depth. File-shipped stencils are module code and are not
+ * touched; one still carrying the retired spelling fails loudly at
+ * instantiate time.
+ */
+function daedalus_stylish_post_update_relative_selector_0005_stencils() {
+  $lines = \Drupal::service('daedalus_stylish.relative_selector_convergence')->convergeStencils();
+  return t('Converged stored stencils onto the relative selector grammar (@count report lines logged to the daedalus_stylish channel).', ['@count' => count($lines)]);
 }

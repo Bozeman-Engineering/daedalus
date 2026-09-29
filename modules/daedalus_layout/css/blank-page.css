@@ -1,42 +1,62 @@
-.blank-page-wrapper {
+/**
+ * @file
+ * The blank-page affordance: the first section, not yet here.
+ *
+ * The same language as the empty-container hint one level down
+ * (daedalus_stylish_layouts' edit-affordances.css): a dashed edge in the
+ * page's own text color, no tint, the page's font, so the affordance sits
+ * on PAGE content and wears the theme's scheme, light or dark. A band the
+ * width of the layout root and the rough height of a first section, so the
+ * drop lands where the hint stood. The one chrome element is the key cap,
+ * because a key is chrome. Carries the edit stage's id to outrank any map
+ * rule reaching the layout root's children.
+ */
+
+#daedalus-ui-stage #daedalus-layout-blank-page {
   display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
-  width: 80%;
-  min-height: 50vh;
-  margin: 0 auto;
-  margin-top: 1em;
-  padding: 20px;
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 8em;
+  margin: 0;
+  padding: 2em 1.5em;
+  cursor: pointer;
+  transition: outline-color 120ms ease;
   text-align: center;
-  color: #666;
-  border: 2px dashed #ccc;
-  background-color: #f9f9f9;
-  /* Empty-state display text, off the chrome type ramp. */
-  font-size: 18px;
+  /* The page's color on the button itself: the dashed edge and the hint's
+     dimming both mix from it, so neither compounds the other. */
+  color: inherit;
+  border: 0;
+  outline: 2px dashed color-mix(in sRGB, currentColor 40%, transparent);
+  outline-offset: -2px;
+  background: none;
+  font: inherit;
+  font-style: italic;
 }
 
-.blank-page-wrapper i {
-  margin-bottom: 10px;
-  color: #999;
-  /* Display-scale empty-state art: off the icon ramp by design. */
-  font-size: 48px;
+#daedalus-ui-stage .daedalus-layout-blank-page__hint {
+  color: color-mix(in sRGB, currentColor 60%, transparent);
 }
 
-.blank-page-wrapper:hover {
-  color: #333;
-  border-color: #999;
+#daedalus-ui-stage #daedalus-layout-blank-page:hover {
+  outline-color: color-mix(in sRGB, currentColor 70%, transparent);
 }
 
-.blank-page-wrapper:hover i {
-  color: #666;
+#daedalus-ui-stage #daedalus-layout-blank-page:focus-visible {
+  outline: 2px solid var(--daedalus-focus);
 }
 
-@media (max-width: 768px) {
-  .blank-page-wrapper i {
-    font-size: 36px;
-  }
-  .blank-page-wrapper p {
-    font-size: var(--daedalus-font-size-heading);
+#daedalus-ui-stage #daedalus-layout-blank-page kbd {
+  padding: 0.05em 0.5em;
+  vertical-align: 0.05em;
+  border: 1px solid color-mix(in sRGB, currentColor 45%, transparent);
+  border-radius: 0.3em;
+  font: 600 0.8em/1.4 var(--daedalus-font);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #daedalus-ui-stage #daedalus-layout-blank-page {
+    transition: none;
   }
 }

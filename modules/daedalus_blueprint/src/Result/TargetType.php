@@ -44,6 +44,19 @@ final class TargetType {
   const REORDERED = '_reordered';
 
   /**
+   * A field on the target UUID went from empty to valued or back.
+   *
+   * An empty field renders nothing, so its wrapper has no element on the
+   * page in one of the two states: a keyed field swap has nowhere to land
+   * when the field fills, and nothing to extract when it empties. The
+   * write records this sentinel beside the field target so the renderer
+   * answers with the containing subtree (the block root for a block field,
+   * the whole entity otherwise), and an undo across the entry re-renders
+   * the same way.
+   */
+  const PRESENCE = '_presence';
+
+  /**
    * Determines whether a target field_name is a sentinel rather than a field.
    *
    * @param string $field_name

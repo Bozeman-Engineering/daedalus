@@ -111,6 +111,7 @@ class ShippedSyncTest extends KernelTestBase {
     'twig_events',
     'daedalus_tempstore',
     'daedalus_blueprint_api',
+    'file',
     'daedalus_ui',
     'daedalus_stylish',
   ];
@@ -692,6 +693,7 @@ class ShippedSyncTest extends KernelTestBase {
     }
     $this->assertSame([], $this->log, 'the batch waits silently: the entry fires per ingredient batch');
     $waiting = [
+      ['variant', 'columns'],
       ['variant', 'row'],
       ['variant', 'container_site'],
       ['variant', 'block_fade_in'],
@@ -718,16 +720,16 @@ class ShippedSyncTest extends KernelTestBase {
     }
     $this->assertNotNull($this->load('variant', 'container_site'));
     $this->assertNotNull($this->load('animation', 'fade_in'));
-    $row = $this->load('variant', 'row');
+    $row = $this->load('variant', 'columns');
     $this->assertInstanceOf(DaedalusStylishVariantInterface::class, $row);
     $this->assertTrue($row->isPublished());
     $this->assertNull($row->getDesignSystem(), 'a global, offered under every system');
     $roster = \Drupal::service('daedalus_blueprint.materials_roster_builder');
     $roster->reset();
-    $this->assertTrue($roster->build()->has(MaterialKind::Variant, 'row'), 'the roster offers Columns with no rebuild');
+    $this->assertTrue($roster->build()->has(MaterialKind::Variant, 'columns'), 'the roster offers Columns with no rebuild');
     $report = $this->sync()->sync();
     $this->assertFalse($report->hasFailures(), implode("\n", $report->failureLines()));
-    $this->assertSame(ShippedDefinitionsImporter::UNCHANGED, $report->report('variant')->outcome('daedalus_stylish_layouts', 'row'));
+    $this->assertSame(ShippedDefinitionsImporter::UNCHANGED, $report->report('variant')->outcome('daedalus_stylish_layouts', 'columns'));
   }
 
   /**
@@ -800,31 +802,37 @@ class ShippedSyncTest extends KernelTestBase {
 
     // The batch, on the skinless site, outside the installer.
     $this->sync()->onInstall(['daedalus_stylish', 'daedalus_stylish_layouts', 'daedalus_stylish_olivero_skin']);
-    $this->assertNull($this->load('variant', 'row'), 'the skinless batch refused the Columns variant');
+    // Both arrangements carry the gutter token gap, so both wait.
+    $this->assertNull($this->load('variant', 'columns'), 'the skinless batch refused the Columns variant');
+    $this->assertNull($this->load('variant', 'row'), 'the skinless batch refused the Row variant');
     $this->assertNotNull($this->load('variant', 'container_site'), 'the width family landed in the batch');
     $this->assertNull($this->load('skin', 'olivero'), 'the olivero package waited for its activation');
     $errors = $this->logged(RfcLogLevel::ERROR);
-    $this->assertCount(1, $errors, implode("\n", $errors));
-    $this->assertStringStartsWith('daedalus_stylish_layouts: variant row failed: ', $errors[0]);
-    $this->assertStringContainsString('[STYLE_VALUE_NOT_ON_SCALE]', $errors[0]);
-    $this->assertStringContainsString('gap', $errors[0]);
+    $this->assertCount(2, $errors, implode("\n", $errors));
+    $this->assertStringStartsWith('daedalus_stylish_layouts: variant columns failed: ', $errors[0]);
+    $this->assertStringStartsWith('daedalus_stylish_layouts: variant row failed: ', $errors[1]);
+    foreach ($errors as $error) {
+      $this->assertStringContainsString('[STYLE_VALUE_NOT_ON_SCALE]', $error);
+      $this->assertStringContainsString('gap', $error);
+    }
     $layouts = array_values(array_filter(
       $this->logged(RfcLogLevel::INFO),
       static fn (string $line): bool => str_starts_with($line, 'daedalus_stylish_layouts: variant sync: '),
     ));
     $this->assertCount(1, $layouts);
-    $this->assertStringEndsWith(', 1 failed', $layouts[0]);
+    $this->assertStringEndsWith(', 2 failed', $layouts[0]);
 
     // The recipe's config import lands the system, then its action
-    // activates it: the sweep lands the package and the refused global.
+    // activates it: the sweep lands the package and the refused globals.
     $this->installConfig(['daedalus_stylish_olivero_skin']);
     $this->log = [];
     $active->activate('olivero');
     $this->assertSame([], $this->logged(RfcLogLevel::ERROR), implode("\n", $this->logged(RfcLogLevel::ERROR)));
     $info = $this->logged(RfcLogLevel::INFO);
     $this->assertContains('daedalus_stylish_olivero_skin: skin sync: 1 created', $info);
-    $this->assertContains('daedalus_stylish_layouts: variant sync: 1 created', $info);
-    $row = $this->load('variant', 'row');
+    $this->assertContains('daedalus_stylish_layouts: variant sync: 2 created', $info);
+    $this->assertNotNull($this->load('variant', 'row'), 'the Row landed beside Columns');
+    $row = $this->load('variant', 'columns');
     $this->assertInstanceOf(DaedalusStylishVariantInterface::class, $row);
     $this->assertTrue($row->isPublished());
     $this->assertNull($row->getDesignSystem(), 'a global, offered under every system');
@@ -832,13 +840,13 @@ class ShippedSyncTest extends KernelTestBase {
     $this->assertSame('var(--space-gutter)', $row->getStyles()['']['default']['gap']);
     $roster = \Drupal::service('daedalus_blueprint.materials_roster_builder');
     $roster->reset();
-    $this->assertTrue($roster->build()->has(MaterialKind::Variant, 'row'), 'the roster offers Columns with no rebuild');
-    $this->assertArrayNotHasKey('row', \Drupal::service('daedalus_stylish.variant_conformance')->withheld(), 'Columns conforms under olivero (the gutter is minted)');
+    $this->assertTrue($roster->build()->has(MaterialKind::Variant, 'columns'), 'the roster offers Columns with no rebuild');
+    $this->assertArrayNotHasKey('columns', \Drupal::service('daedalus_stylish.variant_conformance')->withheld(), 'Columns conforms under olivero (the gutter is minted)');
 
     // Converged: the rebuild a fresh site used to need finds nothing.
     $report = $this->sync()->sync();
     $this->assertFalse($report->hasFailures(), implode("\n", $report->failureLines()));
-    $this->assertSame(ShippedDefinitionsImporter::UNCHANGED, $report->report('variant')->outcome('daedalus_stylish_layouts', 'row'));
+    $this->assertSame(ShippedDefinitionsImporter::UNCHANGED, $report->report('variant')->outcome('daedalus_stylish_layouts', 'columns'));
   }
 
   /**

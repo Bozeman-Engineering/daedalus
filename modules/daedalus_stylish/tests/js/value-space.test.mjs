@@ -229,14 +229,16 @@ test('a table of bare zeros alone names the bare unit, mixed units still none', 
   assert.equal(mixed.unit, null, 'a zero settles no disagreement between px and rem');
 });
 
-test('gap reads its one px table: detented in both modes', () => {
+test('gap reads its one rem table: detented in both modes', () => {
   // The Advanced gap row and the Layout section's gap row derive the
-  // same space; nothing hands the field a vocabulary of its own.
+  // same space; nothing hands the field a vocabulary of its own. The
+  // table speaks the spacing tables' rem (one unit per value space), a
+  // bare zero settling nothing.
   const space = valueSpaceFor(makeGuide('strict'), MATERIALS, 'gap', DIMENSION, null);
   assert.equal(space.kind, 'detented');
-  assert.deepEqual(space.stops.map((stop) => stop.value), ['0px', '8px', '16px', '24px', '40px']);
-  assert.equal(space.unit, 'px');
-  assert.equal(space.stops[1].number, 8);
+  assert.deepEqual(space.stops.map((stop) => stop.value), ['0', '0.5rem', '1rem', '1.5rem', '2.5rem']);
+  assert.equal(space.unit, 'rem', 'the space names rem: the field shows the label, never a select');
+  assert.equal(space.stops[1].number, 0.5);
   assert.equal(FALLBACKS.gap.length, 5);
 });
 
@@ -280,7 +282,7 @@ test('the trigger pair reads its curated tables: detented, the spelled draft gra
   assert.deepEqual(play.stops.map((stop) => stop.label), ['Once', 'Every time', 'Forwards and back', 'Off']);
   const gap = valueSpaceFor(makeGuide('guarded'), MATERIALS, 'gap', DIMENSION, null);
   assert.deepEqual(gap.stops.map((stop) => stop.label), [null, null, null, null, null], 'a label equal to the value is no name');
-  assert.equal(stopLabel(gap.stops[1]), '8px');
+  assert.equal(stopLabel(gap.stops[1]), '0.5rem');
   // Each table's matches cover its own spelled value and nothing else,
   // so a stored stop reads back as itself on every face and a bare start
   // (`entry 20%` alone, a narrower native range) reads as its own value
@@ -471,6 +473,53 @@ test('magnet scrub rounds the shown number between magnets to the unit\'s precis
   const caught = magnetAdvance(1, 75, detents, { precision: 0 });
   assert.equal(caught.number, 1.5, 'a magnet\'s number is always the stop\'s own, whatever the precision');
   assert.equal(caught.stop.ref, 'var(--space-6)');
+});
+
+test('magnet scrub rate scales the travel per pixel, bounds and precision untouched', () => {
+  // The modifier ladder reaches the scrub as a plain multiplier over the
+  // unit-scaled base (scrubRate: Cmd/Ctrl 100, Shift 10, Alt 0.1).
+  const base = magnetAdvance(0, 10, [], { min: 0, max: 100 });
+  assert.equal(base.raw, 10 * SCRUB_PER_PIXEL, 'no rate is x1');
+  const shift = magnetAdvance(0, 10, [], { min: 0, max: 100, rate: 10 });
+  assert.equal(shift.raw, 10 * SCRUB_PER_PIXEL * 10, 'Shift travels ten times as far per pixel');
+  const cmd = magnetAdvance(0, 10, [], { min: 0, max: 100, rate: 100 });
+  assert.equal(cmd.raw, 10 * SCRUB_PER_PIXEL * 100, 'Cmd a hundred times');
+  const alt = magnetAdvance(0, 10, [], { min: 0, max: 100, rate: 0.1 });
+  assert.equal(alt.raw, 10 * SCRUB_PER_PIXEL * 0.1, 'Alt a tenth');
+  const px = magnetAdvance(12, 4, [], { perPixel: SCRUB_PER_PIXEL * 16, rate: 10 });
+  assert.equal(px.raw, 12 + 4 * (SCRUB_PER_PIXEL * 16) * 10, 'the rate multiplies the unit-scaled base, not the rem knob');
+  const pinned = magnetAdvance(0.1, -1, [], { min: 0, max: 4, rate: 100 });
+  assert.equal(pinned.raw, 0, 'a x100 tick still pins at the floor');
+  const ceiling = magnetAdvance(3.9, 1, [], { min: 0, max: 4, rate: 100 });
+  assert.equal(ceiling.raw, 4, 'and at the ceiling');
+  const rounded = magnetAdvance(1, 7, [], { rate: 10, precision: 2 });
+  assert.equal(rounded.number, 1.42, 'between magnets the shown number keeps the unit\'s precision at every rate');
+});
+
+test('magnet scrub magnets keep capturing at x100 because the radius scales with the rate', () => {
+  // A stop is 20 pointer pixels wide at every rate (0.12 rem at 0.006
+  // rem/px, 12 rem at 0.6 rem/px): 19 pixels off a lone stop still sits
+  // on it, 21 pixels off has left it, whatever the modifier.
+  const detents = detentsFor(spacingSpace('open').stops, 'rem');
+  const lone = detents.filter((detent) => detent.number === 1.5);
+  for (const rate of [1, 10, 100, 0.1]) {
+    const on = magnetAdvance(1.5, 19, lone, { rate });
+    assert.equal(on.number, 1.5, `19 pixels off the stop is still captured at x${rate}`);
+    assert.equal(on.stop.ref, 'var(--space-6)');
+    const off = magnetAdvance(1.5, 21, lone, { rate, precision: 2 });
+    assert.equal(off.stop, null, `21 pixels off the stop has left it at x${rate}`);
+  }
+  // Under Cmd one pixel is 0.6 rem on the whole scale: a two-pixel tick
+  // from 0.5 lands at 1.7, 0.2 rem past the 1.5 stop, which a radius
+  // fixed at 0.12 would step over; the scaled radius holds it.
+  const caught = magnetAdvance(0.5, 2, detents, { rate: 100 });
+  assert.equal(caught.number, 1.5, 'a x100 tick lands on the stop rather than stepping over it');
+  assert.equal(caught.stop.ref, 'var(--space-6)');
+  const nearest = magnetAdvance(0.5, 1, detents, { rate: 100 });
+  assert.equal(nearest.raw, 0.5 + 1 * SCRUB_PER_PIXEL * 100, 'the accumulator keeps the true travel');
+  assert.equal(nearest.number, 1, 'inside several widened magnets the nearest stop captures');
+  assert.equal(nearest.stop.ref, 'var(--space-4)');
+  assert.equal(MAGNET_RADIUS * 100 / (SCRUB_PER_PIXEL * 100), MAGNET_RADIUS / SCRUB_PER_PIXEL, 'the stop\'s width in pointer pixels is rate-invariant');
 });
 
 // --- steppers (detented spaces) -------------------------------------------

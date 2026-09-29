@@ -11,12 +11,13 @@ namespace Drupal\daedalus_blueprint\Materials;
  * address names a place in the declaration space, never a live element:
  * a family and an id ("kind:container", "block_type:text",
  * "block_plugin:system_menu_block", "layout:layout_onecol", "base:a"),
- * optionally refined to a part the family declares ("::.class-name", or
- * a bare tag for the tag tier) and to that part's or element's direct
- * children ("::>"). A variant's scope is a root address (no part, no
- * children); the element key grammar (daedalus_stylish's StyleMapValidator::
- * parseKey(), "container:{uuid}::.part::>") shares the suffix grammar
- * through splitSuffixes() and resolves to an address by capture.
+ * optionally refined by a relative selector into that element's subtree
+ * ("::.class-name" a declared part, "::p" its paragraphs, "::> *" its
+ * direct children, "::> pb-text .link"; RelativeSelector is the grammar).
+ * A variant's scope is a root address (no selector); the element key
+ * grammar (daedalus_stylish's StyleMapValidator::parseKey(),
+ * "container:{uuid}::> pb-text") shares the selector grammar through
+ * RelativeSelector::splitKey() and resolves to an address by capture.
  *
  * Families:
  * - kind:{kind}: an element kind (entity, container, field, block); the
@@ -61,19 +62,9 @@ final class Address implements \Stringable {
   public const ID = '[a-z0-9_]+';
 
   /**
-   * The part charset: exactly one class selector, or one bare tag name.
-   *
-   * A part prints into CSS output, so the charset is locked down hard. A
-   * tag-form part ("p") is the tag tier of the element-scoped text model;
-   * the tag vocabulary itself is semantic and enforced at resolution.
+   * The suffix separator (the relative selector grammar's).
    */
-  public const PART = '\.[A-Za-z0-9_-]+|[a-z][a-z0-9-]*';
-
-  /**
-   * The suffix separator, and the children pseudo-part it can introduce.
-   */
-  public const SUFFIX = '::';
-  public const CHILDREN = '>';
+  public const SUFFIX = RelativeSelector::SUFFIX;
 
   /**
    * Constructs an address; use the named constructors or parse().
@@ -81,27 +72,34 @@ final class Address implements \Stringable {
   private function __construct(
     public readonly string $family,
     public readonly string $id,
-    public readonly ?string $part = NULL,
-    public readonly bool $children = FALSE,
+    public readonly ?RelativeSelector $selector = NULL,
   ) {}
 
   /**
    * An address from its parts, refusing anything outside the grammar.
    *
+   * @param string $family
+   *   One of FAMILIES.
+   * @param string $id
+   *   The machine name.
+   * @param \Drupal\daedalus_blueprint\Materials\RelativeSelector|string|null $selector
+   *   The relative selector, as an object or as text in any spelling the
+   *   grammar reads (canonicalized), or NULL for the root.
+   *
    * @throws \InvalidArgumentException
-   *   When the family, id or part is not in the grammar.
+   *   When the family, id or selector is not in the grammar.
    */
-  public static function of(string $family, string $id, ?string $part = NULL, bool $children = FALSE): self {
+  public static function of(string $family, string $id, RelativeSelector|string|null $selector = NULL): self {
     if (!in_array($family, self::FAMILIES, TRUE)) {
       throw new \InvalidArgumentException(sprintf('"%s" is not an address family; one of %s.', $family, implode(', ', self::FAMILIES)));
     }
     if (!preg_match('/^' . self::ID . '$/', $id)) {
       throw new \InvalidArgumentException(sprintf('"%s" is not an address id (%s:{id}); an id is a machine name.', $id, $family));
     }
-    if ($part !== NULL && !preg_match('/^(?:' . self::PART . ')$/', $part)) {
-      throw new \InvalidArgumentException(sprintf('"%s" is not an address part; a part is one class selector (".name") or one bare tag name.', $part));
+    if (is_string($selector)) {
+      $selector = RelativeSelector::fromString($selector);
     }
-    return new self($family, $id, $part, $children);
+    return new self($family, $id, $selector);
   }
 
   /**
@@ -141,17 +139,20 @@ final class Address implements \Stringable {
 
   /**
    * Parses a printed address, or NULL when the string is not one.
+   *
+   * The selector, when present, is admitted in its canonical spelling
+   * only (RelativeSelector::splitKey()): a printed address has one shape.
    */
   public static function parse(string $address): ?self {
-    $split = self::splitSuffixes($address);
+    $split = RelativeSelector::splitKey($address);
     if ($split === NULL) {
       return NULL;
     }
-    [$root, $part, $children] = $split;
+    [$root, $selector] = $split;
     if (!preg_match('/^(' . implode('|', self::FAMILIES) . '):(' . self::ID . ')$/', $root, $matches)) {
       return NULL;
     }
-    return new self($matches[1], $matches[2], $part, $children);
+    return new self($matches[1], $matches[2], $selector);
   }
 
   /**
@@ -164,52 +165,28 @@ final class Address implements \Stringable {
    *   When the string is not an address.
    */
   public static function fromString(string $address): self {
-    return self::parse($address) ?? throw new \InvalidArgumentException(sprintf('"%s" is not a styling address; an address is {family}:{id} with family one of %s, optionally followed by "::.part" (or "::tag") and "::>".', $address, implode(', ', self::FAMILIES)));
+    return self::parse($address) ?? throw new \InvalidArgumentException(sprintf('"%s" is not a styling address; an address is {family}:{id} with family one of %s, optionally followed by "::" and a relative selector in its canonical spelling. %s', $address, implode(', ', self::FAMILIES), RelativeSelector::GRAMMAR));
   }
 
   /**
-   * Splits the part and children suffixes off a key of the grammar.
-   *
-   * The one suffix grammar an address and an element key share: the
-   * '::>' children suffix is the outermost (and always last) suffix, so
-   * stripping it first leaves an ordinary key, and '::.class::>' splits
-   * as the part's children while a doubled '::>::>' fails the part
-   * charset like any malformed remainder.
-   *
-   * @return array{0: string, 1: ?string, 2: bool}|null
-   *   The root, the part (NULL when none) and whether the children
-   *   suffix was present; NULL when a part is present but outside the
-   *   charset.
-   */
-  public static function splitSuffixes(string $key): ?array {
-    $children_suffix = self::SUFFIX . self::CHILDREN;
-    $children = str_ends_with($key, $children_suffix);
-    if ($children) {
-      $key = substr($key, 0, -strlen($children_suffix));
-    }
-    $part = NULL;
-    if (($pos = strpos($key, self::SUFFIX)) !== FALSE) {
-      $part = substr($key, $pos + strlen(self::SUFFIX));
-      $key = substr($key, 0, $pos);
-      if (!preg_match('/^(?:' . self::PART . ')$/', $part)) {
-        return NULL;
-      }
-    }
-    return [$key, $part, $children];
-  }
-
-  /**
-   * The address without its part and children suffixes.
+   * The address without its selector.
    */
   public function root(): self {
     return $this->isRoot() ? $this : new self($this->family, $this->id);
   }
 
   /**
-   * Whether the address carries no part and no children suffix.
+   * The same root refined by another selector (or none).
+   */
+  public function withSelector(?RelativeSelector $selector): self {
+    return new self($this->family, $this->id, $selector);
+  }
+
+  /**
+   * Whether the address carries no selector.
    */
   public function isRoot(): bool {
-    return $this->part === NULL && !$this->children;
+    return $this->selector === NULL;
   }
 
   /**
@@ -256,8 +233,9 @@ final class Address implements \Stringable {
    * its family. A base:{tag} variant (a tag treatment) pairs with EVERY
    * element address: whether an element renders as that tag is a
    * live-DOM fact the families cannot express, so the tag gate is soft
-   * enforcement at offer time. Parts ride their element: pairing reads
-   * the roots, exactly as a sub-element key captures its parent's scope.
+   * enforcement at offer time. Selectors ride their element: pairing
+   * reads the roots, exactly as a selector key captures its parent's
+   * scope.
    *
    * The client twin is daedalus_ui's roster.js pairing over printed
    * scopes, locked to the roster's string door (MaterialsRoster, which
@@ -282,15 +260,12 @@ final class Address implements \Stringable {
   }
 
   /**
-   * The address as the grammar prints it: "{family}:{id}[::part][::>]".
+   * The address as the grammar prints it: "{family}:{id}[::selector]".
    */
   public function __toString(): string {
     $printed = $this->family . ':' . $this->id;
-    if ($this->part !== NULL) {
-      $printed .= self::SUFFIX . $this->part;
-    }
-    if ($this->children) {
-      $printed .= self::SUFFIX . self::CHILDREN;
+    if ($this->selector !== NULL) {
+      $printed .= self::SUFFIX . $this->selector;
     }
     return $printed;
   }

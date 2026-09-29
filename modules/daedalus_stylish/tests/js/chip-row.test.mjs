@@ -230,3 +230,30 @@ test('motion menu: Auto (system), Full motion, Reduced', () => {
 test('an unknown axis derives nothing', () => {
   assert.deepEqual(chipMenuItems('bogus', { vector: REST, conditions: CONDITIONS }), []);
 });
+
+test('structural facts have no chip and join no menu', () => {
+  const withFacts = {
+    hover: CONDITIONS.hover,
+    'first-child': { label: 'First child', wrapper: ':first-child', axis: 'structural', fact: true },
+    odd: { label: 'Odd', wrapper: ':nth-child(odd)', axis: 'structural', fact: true },
+    narrow: CONDITIONS.narrow,
+    dark: CONDITIONS.dark,
+  };
+  // The four canvas axes only, in row order: a fact is the element's
+  // place in the markup, which no pose can change.
+  assert.deepEqual(
+    chipFaces(REST, null, withFacts, { hasSelection: true }).map((chip) => chip.axis),
+    ['state', 'width', 'scheme', 'motion'],
+  );
+  // A fact handed as the force state lights nothing.
+  const chips = byAxis(chipFaces(REST, 'first-child', withFacts, { hasSelection: true }));
+  assert.deepEqual(chips.state.face, { kind: 'axis-name' });
+  assert.equal(chips.state.lit, false);
+  // The state menu offers the state vocabulary alone; the structural axis
+  // has no menu.
+  assert.deepEqual(
+    chipMenuItems('state', { vector: REST, forceState: null, conditions: withFacts }).map((item) => item.key),
+    ['', 'hover'],
+  );
+  assert.deepEqual(chipMenuItems('structural', { vector: REST, forceState: null, conditions: withFacts }), []);
+});

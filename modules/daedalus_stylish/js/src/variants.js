@@ -2,55 +2,18 @@ import { h, Fragment } from 'preact';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { IconButton } from './icon-button.js';
 import { fetchUsage, revertVariant } from './variants-api.js';
-import { gesture } from './gesture-transport.js';
+import { failureText, gesture } from './gesture-transport.js';
 import { respondedMaterial } from './material-gestures.js';
 import { WearBar } from './wear-bar.js';
 import {
-  axisVocabulary,
   entryRefs,
-  elementEntries,
   captureEntries,
   hasCustomStyles,
-  effectiveElementMap,
   findVariant,
   isOrphaned,
   isShipped,
 } from './variant-scope.js';
-import { computeOps } from './code/ops.js';
-
-/**
- * The style clipboard (the copy/paste styles gesture).
- *
- * localStorage, so a treatment copies across pages, windows (satellite
- * included) and sessions of the same origin. Cross-SCOPE by design — that
- * is the gesture's whole point ("the card treatment on the FAQ block too"):
- * it pastes as the target's own override layers validated against the
- * TARGET, so the server rejects whatever its declaration doesn't allow.
- */
-const CLIPBOARD_KEY = 'daedalus_stylish.styleClipboard';
-
-export const readClipboard = () => {
-  try {
-    const raw = window.localStorage.getItem(CLIPBOARD_KEY);
-    const data = raw ? JSON.parse(raw) : null;
-    return data &&
-      typeof data === 'object' &&
-      data.entries &&
-      Object.keys(data.entries).length
-      ? data
-      : null;
-  } catch (error) {
-    return null;
-  }
-};
-
-const writeClipboard = (data) => {
-  try {
-    window.localStorage.setItem(CLIPBOARD_KEY, JSON.stringify(data));
-  } catch (error) {
-    // Quota/privacy-mode failures degrade to "nothing copied".
-  }
-};
+import { doorRequest, entriesToOps, structuralChunks } from './code/paste-door.js';
 
 const SaveVariantIcon = () => (
   <svg
@@ -91,36 +54,52 @@ const PasteStylesIcon = () => (
 /**
  * The header's element style gestures, icon-sized.
  *
- * Save as variant / Copy styles / Paste styles moved out of the variant
- * area's button row into the Inspector's header action cluster, next to
- * the host's pop-out control. The gates are unchanged: save needs the
- * create grant, a capturable look and a wired doorway; copy needs a
- * look worth copying; paste needs clipboard content copied from a
- * DIFFERENT element. The Inspector renders this in all three modes
- * (whole element, stylable selection), so an icon appearing still means
- * "this gesture applies right now"; the save icon is the ONE
- * save-as-variant doorway, entering the editing session in its creating
- * posture (the capture as dismissible pending rows, named in the
- * session header, committed from the Push/Discard bar) everywhere.
+ * Save as variant / Copy CSS / Paste CSS live in the Inspector's header
+ * action cluster, next to the host's pop-out control. Save acts on the
+ * SELECTED element (`selected`: a variant is saved from an element's
+ * stack, never from a rule) and needs the create grant, a capturable
+ * look and a wired doorway; copy and paste act at the styling TARGET
+ * (`target`, the key the panel writes at: the element, or the ancestor
+ * rule the target chip names). The Inspector renders this in all three
+ * modes for the element subject of a stylable selection; the save icon
+ * is the ONE save-as-variant doorway, entering the editing session in
+ * its creating posture everywhere.
  *
- * Success feedback rides the gesture's own tooltip ("Styles copied."
- * flashes in place of the label — the eye is already on the button);
- * only paste FAILURES go to the edit-mode messenger (source.notify),
- * which has room for a server error's sentence.
+ * One clipboard, the system's, carrying dialect text. Copy CSS reads the
+ * target's own entries printed as flat dialect rules by the server
+ * (source.readCss: daedalus_blueprint_api's read route in css mode,
+ * `#<uuid>` as the id, the element's words as a comment, its wear as a
+ * comment line) into the clipboard through a promise-backed
+ * ClipboardItem, so the write stays inside the user's gesture while the
+ * print is fetched (Safari accepts a promise for the item's data;
+ * Chrome's transient activation covers the fetch). What the AI says,
+ * what the designer copies and what they paste are one text. Paste CSS
+ * reads the system clipboard (navigator.clipboard.readText, the
+ * browser's one-time permission prompt) into the spine's parse door at
+ * the write target (paste-door.js: a copied `#id { }` block re-roots
+ * onto the element, anything else reads under the target itself) and
+ * lands the entries as one additive update_style batch, one history
+ * entry: a pasted block sets what it names and unsets nothing (clearing
+ * is a row's ×), and travels own styles only (a variant-worn treatment
+ * travels by applying the variant). Basic and Advanced have no island to
+ * paste into, so the header button is the clipboard's door there; in
+ * code mode ⌘V inside an island is the same door.
+ *
+ * Success feedback rides the gesture's own tooltip ("CSS copied" flashes
+ * in place of the label; the eye is already on the button); failures go
+ * to the edit-mode messenger (source.notify), which has room for a
+ * server corrective's sentence.
  */
 export const StyleActions = ({
   source,
   guide,
   selected,
+  target,
   styleMap,
-  variants,
-  blockTypes,
-  sectionLayouts,
   config,
   onSaveVariant = null,
 }) => {
   const [busy, setBusy] = useState(false);
-  const [clipboard, setClipboard] = useState(readClipboard());
   // The transient tooltip feedback: {key: 'copy'|'paste', text} or null.
   const [flash, setFlash] = useState(null);
   const flashTimer = useRef(null);
@@ -135,66 +114,97 @@ export const StyleActions = ({
   const capturable =
     Object.keys(captureEntries(styleMap, selected, layout)).length > 0;
   const canCopy =
-    entryRefs(styleMap?.[selected]).length > 0 ||
-    hasCustomStyles(styleMap, selected);
-  const vocabulary = axisVocabulary(
-    guide,
-    selected,
-    blockTypes,
-    sectionLayouts,
-    layout,
-  );
+    entryRefs(styleMap?.[target]).length > 0 ||
+    hasCustomStyles(styleMap, target);
 
   const copy = () => {
-    const entries = elementEntries(
-      effectiveElementMap(styleMap, selected, variants ?? [], vocabulary),
-      selected,
-    );
-    if (!Object.keys(entries).length) {
-      return;
-    }
-    const data = { entries, from: selected, copiedAt: Date.now() };
-    writeClipboard(data);
-    setClipboard(data);
-    flashTooltip('copy', Drupal.t('Styles copied'));
+    // The print's own failure is the source's to report (the leader's
+    // messenger, the satellite's settle); only a clipboard refusal after
+    // the text arrived is phrased here.
+    let printed = false;
+    const text = source.readCss(target).then((css) => {
+      printed = true;
+      return css;
+    });
+    const written =
+      typeof ClipboardItem === 'undefined'
+        ? text.then((css) => navigator.clipboard.writeText(css))
+        : navigator.clipboard.write([
+            new ClipboardItem({
+              'text/plain': text.then(
+                (css) => new Blob([css], { type: 'text/plain' }),
+              ),
+            }),
+          ]);
+    written
+      .then(() => flashTooltip('copy', Drupal.t('CSS copied')))
+      .catch((error) => {
+        if (printed) {
+          source.notify?.(
+            'error',
+            failureText(error) || Drupal.t('The CSS could not be copied.'),
+          );
+        }
+      });
   };
 
   const paste = () => {
-    const data = readClipboard();
-    if (!data) {
-      return;
-    }
-    setClipboard(data);
-    // Diff against the element's EFFECTIVE styles (references resolved in
-    // delivery order) so the pasted values land as the override layer over
-    // whatever the element wears; update_style keeps the references.
-    const effective = effectiveElementMap(
-      styleMap,
-      selected,
-      variants ?? [],
-      vocabulary,
-    );
-    const entries = {};
-    Object.entries(data.entries).forEach(([relative, value]) => {
-      entries[selected + relative] = value;
-    });
-    const operations = computeOps(
-      selected,
-      effective,
-      entries,
-      guide?.conditions ?? {},
-    );
-    if (!operations.length) {
-      flashTooltip('paste', Drupal.t('These styles are already applied'));
-      return;
-    }
     setBusy(true);
-    source
-      .commitBatch({ operations, label: Drupal.t('Pasted styles') })
-      .then(() => flashTooltip('paste', Drupal.t('Styles pasted')))
+    navigator.clipboard
+      .readText()
+      .then(
+        (text) => {
+          if (!text || text.trim() === '') {
+            flashTooltip('paste', Drupal.t('Nothing to paste'));
+            return null;
+          }
+          // The door reads under the write target; a copied `#id { }`
+          // block re-roots onto the element the target sits on.
+          const request = doorRequest(text, structuralChunks(text), {
+            mapKey: target,
+            rootKey: target.split('::')[0],
+            condition: 'default',
+            guide,
+          });
+          return source.parseCss(request.key, request.css).then((answer) => {
+            const errors = Array.isArray(answer?.errors) ? answer.errors : [];
+            if (errors.length) {
+              // The header has no island to place a corrective on a line:
+              // the messenger carries the first one.
+              source.notify?.(
+                'error',
+                [errors[0].message, errors[0].hint].filter(Boolean).join(' '),
+              );
+              return null;
+            }
+            const { operations, count } = entriesToOps(
+              answer?.entries,
+              answer?.wear,
+            );
+            if (!operations.length) {
+              flashTooltip('paste', Drupal.t('Nothing to paste'));
+              return null;
+            }
+            const label = Drupal.t('Pasted @count declarations', {
+              '@count': count,
+            });
+            return source
+              .commitBatch({ operations, label })
+              .then(() => flashTooltip('paste', label));
+          });
+        },
+        (error) => {
+          // The clipboard refused the read (permission denied, no
+          // clipboard access in this context).
+          source.notify?.(
+            'error',
+            failureText(error) || Drupal.t('The clipboard could not be read.'),
+          );
+        },
+      )
       .catch(() => {
-        // The op queue's source reported it (reportFailure on the leader, the
-        // satellite's settle).
+        // The door's transport and the op queue reported their own
+        // failures (the leader's messenger, the satellite's settle).
       })
       .finally(() => setBusy(false));
   };
@@ -212,7 +222,7 @@ export const StyleActions = ({
       )}
       {canCopy && (
         <IconButton
-          label={Drupal.t('Copy styles')}
+          label={Drupal.t('Copy CSS')}
           tooltip={flash?.key === 'copy' ? flash.text : null}
           show={flash?.key === 'copy'}
           disabled={busy}
@@ -221,17 +231,15 @@ export const StyleActions = ({
           <CopyStylesIcon />
         </IconButton>
       )}
-      {clipboard && clipboard.from !== selected && (
-        <IconButton
-          label={Drupal.t('Paste styles')}
-          tooltip={flash?.key === 'paste' ? flash.text : null}
-          show={flash?.key === 'paste'}
-          disabled={busy}
-          onClick={paste}
-        >
-          <PasteStylesIcon />
-        </IconButton>
-      )}
+      <IconButton
+        label={Drupal.t('Paste CSS')}
+        tooltip={flash?.key === 'paste' ? flash.text : null}
+        show={flash?.key === 'paste'}
+        disabled={busy}
+        onClick={paste}
+      >
+        <PasteStylesIcon />
+      </IconButton>
     </Fragment>
   );
 };
@@ -334,10 +342,12 @@ const useWornManagement = (worn, enabled, variants) => {
  * The inspector's variant area (lifecycle + copy/paste, built around the
  * wear bar).
  *
- * Renders under the element breadcrumb in the widget modes (basic and
- * advanced), for the WHOLE
- * element (a part target hides it — variants belong to elements; their
- * sub-element rules travel inside them). All gestures speak through props:
+ * Renders first in the scrolling body in every mode of the styling
+ * place (basic, advanced and code: wear is a fact of the subject, not
+ * of the editor), at the styling TARGET (`target`, the key the wearings are
+ * read and every wear gesture lands at: the selected element, or the
+ * rule the target chip names, whose every match wears what is applied
+ * there). All gestures speak through props:
  * spine ops go through the state source so the leader stays the single
  * writer; the gesture endpoints are fetched directly by either host
  * (site-wide content, not session state) and their responses handed to
@@ -351,9 +361,9 @@ const useWornManagement = (worn, enabled, variants) => {
  *   mounted section claims for the current mode, `claimedAxes`), the add
  *   row (the variant picker) and every per-row gesture (swap, Outline,
  *   Re-apply, Reset overrides, Detach, Remove, the editing-session
- *   doorway, Variant settings…) — one component across the widget modes
- *   (the code view carries no wearing chrome; page-view.js), so the
- *   control surface is one thing wherever it renders.
+ *   doorway, Variant settings…) — one component across all three modes
+ *   (the code tree carries no wearing chrome of its own; page-view.js),
+ *   so the control surface is one thing wherever it renders.
  * - Ownership and shipped-state notices, one line per worn variant that
  *   carries a story (an orphaned stencil owner, a modified shipped
  *   variant with its Revert-to-defaults action).
@@ -365,12 +375,20 @@ const useWornManagement = (worn, enabled, variants) => {
  * variant is edited in the editing session (its own document,
  * pending-until-Push; the wearing rows are the doorway), which retired
  * the old "Update a variant…" select.
+ *
+ * `readOnly` (a target that can wear nothing: a part or the children,
+ * whose landing is no element scope): `target` is then the selected
+ * element and the area stays mounted, since its wearings anchor every
+ * "from <variant>" mark on the part's rows, but carries no wear
+ * gesture: the shipped-state lines keep their notice and lose the
+ * revert button, and the wear bar takes its read-only posture
+ * (wear-bar.js).
  */
 export const VariantArea = ({
   source,
   guide,
   materials,
-  selected,
+  target,
   styleMap,
   variants,
   blockTypes,
@@ -378,6 +396,7 @@ export const VariantArea = ({
   config,
   claimedAxes = [],
   condition = 'default',
+  readOnly = false,
   outline = null,
   onFlash = null,
   onOpenDocument = null,
@@ -386,7 +405,7 @@ export const VariantArea = ({
 }) => {
   const [busy, setBusy] = useState(false);
 
-  const entry = styleMap?.[selected];
+  const entry = styleMap?.[target];
   // The structured read (entryRefs): every reference is {variant, fragment}
   // — '' the root wearing, a slot path a fragment distributed by a
   // composition apply. The notices below are per-variant uniform: a child
@@ -475,25 +494,28 @@ export const VariantArea = ({
             className={`daedalus-stylish-inspector__variant-shipped daedalus-stylish-inspector__variant-shipped--${facts.shipped_state}`}
           >
             <span>{shippedText(facts)}</span>
-            <button
-              type="button"
-              className="daedalus-stylish-inspector__variant-button daedalus-ui-pill-button"
-              disabled={busy}
-              onClick={() => revert(variant)}
-            >
-              {Drupal.t('Revert to defaults')}
-            </button>
+            {!readOnly && (
+              <button
+                type="button"
+                className="daedalus-stylish-inspector__variant-button daedalus-ui-pill-button"
+                disabled={busy}
+                onClick={() => revert(variant)}
+              >
+                {Drupal.t('Revert to defaults')}
+              </button>
+            )}
           </div>
         );
       })}
       {/* The wearing rows: the worn rows, the add row (the variant
-          picker) and every per-row gesture; one component across the
-          widget modes (the code view carries no wearing chrome). */}
+          picker) and every per-row gesture; one component across all
+          three modes (the code tree carries no wearing chrome of its
+          own). */}
       <WearBar
         source={source}
         guide={guide}
         materials={materials}
-        selected={selected}
+        target={target}
         styleMap={styleMap}
         variants={variants}
         blockTypes={blockTypes}
@@ -501,6 +523,7 @@ export const VariantArea = ({
         config={config}
         claimedAxes={claimedAxes}
         condition={condition}
+        readOnly={readOnly}
         outline={outline}
         onFlash={onFlash}
         onOpenDocument={onOpenDocument}

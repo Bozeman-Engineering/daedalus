@@ -10,6 +10,12 @@
  * session did not itself initiate (Escape's cancel inside the widget, a
  * markup swap ending an edit) — the Escape name-only-chip bug.
  *
+ * Every item kind is reported the same way: a canvas leaf by its page
+ * element (the session derives the key through its own gate), a panel
+ * widget by its wrapper AND the engine's key for it (sessionKey,
+ * panel-items.js), because a wrapper has no selectable ancestor to derive
+ * a key from.
+ *
  * The app reference arrives with engine registration
  * (edit-session-engine.js); before it, the setter still maintains the
  * global (nothing can be edited before the engine registers anyway).
@@ -33,10 +39,15 @@ export const bindEditChangeReporting = (app) => {
 /**
  * Sets the current edit and reports the change to the app.
  *
- * @param {EditableElement} EditableElement
- *   The element now being edited, or null when the edit ended.
+ * @param {?Object} item
+ *   The item now being edited (an EditableElement, a
+ *   BlueprintEditableElement or a PanelWidgetElement), or null when the
+ *   edit ended.
  */
-export const setCurrentlyEditing = (EditableElement) => {
-  Drupal.Daedalus.Edit.CurrentlyEditingElement = EditableElement;
-  appRef?.editSession.editChanged(EditableElement?.getPageElement() ?? null);
+export const setCurrentlyEditing = (item) => {
+  Drupal.Daedalus.Edit.CurrentlyEditingElement = item;
+  appRef?.editSession.editChanged(
+    item?.getPageElement() ?? null,
+    item?.sessionKey,
+  );
 };

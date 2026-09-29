@@ -3,14 +3,16 @@
  * per-side half). Preact-free on purpose, like widget-values.js and
  * dimension-value.js: everything here is testable under plain node.
  *
- * The diagram edits PADDING LONGHANDS while the chips keep writing the
- * shorthand, so this module owns the three questions that interplay
- * raises:
+ * The diagram edits PADDING LONGHANDS while the row's shorthand field
+ * (the padding row's DimensionField, the stroke row's width field) keeps
+ * writing the shorthand, so this module owns the three questions that
+ * interplay raises:
  * - what each side's effective value IS (last-declaration-wins over a
  *   condition object, shorthand expanded by the CSS 1/2/3/4 rule);
- * - where a side's value comes FROM (authored on the element / supplied
- *   by a worn variant, with the supplying reference / defaulted by the
- *   active skin / none of them: the computed-placeholder state);
+ * - where a side's value comes FROM (the per-side read of the style
+ *   stack: authored on the element / supplied by a worn variant, with
+ *   the supplying reference / defaulted by the active skin / defaulted
+ *   by the declaration / none of them: the computed-placeholder state);
  * - what one per-side edit COMMITS (a plain longhand write, or the
  *   one-time shorthand→longhand expansion: one multi-property op
  *   unsetting `padding` and writing all four longhands, so shorthand and
@@ -28,9 +30,22 @@
 import { normalizeValue } from '../../widget-values.js';
 import { entryAtPose, posedBlock } from '../../condition-cascade.js';
 import {
+  ELEMENT_LAYER,
+  TIER_ANCESTOR,
+  TIER_DECLARED,
+  TIER_SKIN,
+  TIER_VARIANT,
+  ancestorVariant,
+  layerColor,
+} from '../../code/layers.js';
+import {
   applyStep,
+  contextUnit,
+  fieldState,
   formatDimension,
   scrubAdvance,
+  scrubRate,
+  seedAnchor,
   stepSize,
   unitPrecision,
 } from './dimension-value.js';
@@ -52,8 +67,10 @@ import {
 
 /**
  * The four physical sides, in CSS clock order (top right bottom left).
- * Physical on purpose: every surveyed builder ships physical
- * sides; logical properties are a later community question.
+ * Physical on purpose: every surveyed builder ships physical sides, and
+ * every cell and per-side write is one of these. The logical longhands
+ * are READ onto them (resolveSides through LOGICAL_SIDES), never
+ * offered.
  */
 export const SIDES = ['top', 'right', 'bottom', 'left'];
 
@@ -92,19 +109,30 @@ export const LOGICAL_SIDES = {
  * way it spells a padding side.
  */
 export const BOX_FAMILIES = {
-  padding: { shorthand: 'padding', longhand: (side) => `padding-${side}` },
-  margin: { shorthand: 'margin', longhand: (side) => `margin-${side}` },
+  padding: {
+    shorthand: 'padding',
+    longhand: (side) => `padding-${side}`,
+    length: true,
+  },
+  margin: {
+    shorthand: 'margin',
+    longhand: (side) => `margin-${side}`,
+    length: true,
+  },
   'border-width': {
     shorthand: 'border-width',
     longhand: (side) => `border-${side}-width`,
+    length: true,
   },
   'border-style': {
     shorthand: 'border-style',
     longhand: (side) => `border-${side}-style`,
+    length: false,
   },
   'border-color': {
     shorthand: 'border-color',
     longhand: (side) => `border-${side}-color`,
+    length: false,
   },
 };
 
@@ -137,9 +165,9 @@ export const familyLonghand = (family, side) =>
  * (LOGICAL_SIDES), anything else none. The one side grammar every
  * consumer reads: the painter registry maps a highlighted property back
  * to the bands it tints through this, and the shadow read (longhandGrain)
- * compares an own declaration with a worn one on it. The chips' side
+ * compares an own declaration with a worn one on it. The diagram's side
  * vocabulary is NOT derived here: grantedSides reads the granted
- * longhand NAMES, so a grant of padding-inline still offers no side chip
+ * longhand NAMES, so a grant of padding-inline still offers no side cell
  * (the inline inset is the width story, not a spacing edit).
  *
  * @param {string} property
@@ -213,8 +241,8 @@ export const grantedSides = (granted, property = 'padding') =>
  * families.
  *
  * The read two declarations are compared on before one is said to
- * shadow the other (variant-scope.js shadowedProperties, wear-bar-model.js
- * resetOverrideOps): an own `padding` masks a worn `padding-inline`
+ * shadow the other (wear-bar-model.js resetOverrideOps): an own
+ * `padding` masks a worn `padding-inline`
  * because their grains overlap, an own `padding-top` leaves it showing,
  * exactly as the cascade delivers. One grammar for the diagram, the
  * highlight painter and the shadow read, so the wear bar's honesty and
@@ -291,15 +319,22 @@ const splitComponents = (text) => {
  * what splits here is exactly what the server validated per-component.
  * Components split on TOP-LEVEL whitespace only: a function's own
  * spaces (`rgb(0 0 0 / 50%)` on a border-color shorthand) stay inside
- * their component. Values the server passes STRUCTURALLY as one opaque
- * whole — anything containing `var(` or starting with `calc(`, the same
- * case-sensitive checks the server makes — cannot be split honestly (a
- * var() may expand to any number of components), so they return null
- * and the caller renders the honest set-but-unsplittable state rather
- * than a guess.
+ * their component. A shorthand that IS exactly one token reference
+ * (`var(--space-sm)`, value-space.js referenceVariable) splits into
+ * four copies of itself: one reference addresses every side
+ * identically, so a scale pick or a skin color reads and writes per
+ * side like a literal. This is the ONE splitter, shared by the read
+ * (resolveSides) and the write (sideCommit), so the two can never
+ * answer a lone reference differently. Anything else the server passes
+ * STRUCTURALLY as one opaque whole — a `calc(` head, a var() beside
+ * other components, a reference with a fallback tail — cannot be split
+ * honestly (a var() may expand to any number of components), so it
+ * returns null and the caller renders the honest set-but-unsplittable
+ * state rather than a guess.
  *
  * @param {*} value
- *   A committed shorthand value ('1rem', '1rem 2rem', '1px 2px 3px 4px').
+ *   A committed shorthand value ('1rem', '1rem 2rem', '1px 2px 3px 4px',
+ *   'var(--space-sm)').
  *
  * @return {?{top: string, right: string, bottom: string, left: string}}
  *   Per-side components in the value's own spelling, or null for unset
@@ -311,6 +346,9 @@ export const expandShorthand = (value) => {
     return null;
   }
   const text = String(value).trim();
+  if (referenceVariable(text) !== null) {
+    return { top: text, right: text, bottom: text, left: text };
+  }
   if (text.includes('var(') || text.startsWith('calc(')) {
     return null;
   }
@@ -327,14 +365,25 @@ export const expandShorthand = (value) => {
  *
  * A condition object prints as declarations in insertion order
  * (CssPrinter), so within a layer the CSS answer is
- * last-declaration-wins: a shorthand overwrites all four sides (a null
- * draft value clears them — the expansion commit's `padding: null`
- * mid-gesture), a longhand overwrites its own. Pass an ORDER-PRESERVING
- * condition object (a map entry's `.default`, an effectiveEntry
- * resolution, a draft-layered copy of one) — model.values is rebuilt in
- * owned-property order and loses the map's order, though under the
- * widget's own commit discipline (expansion always unsets the
- * shorthand) the two never coexist and order is moot.
+ * last-declaration-wins over the sides each declaration addresses
+ * (propertySides): a shorthand overwrites all four sides (a null draft
+ * value clears them — the expansion commit's `padding: null`
+ * mid-gesture), a physical longhand overwrites its own, a LOGICAL
+ * longhand (`padding-inline`, `margin-block`) overwrites its physical
+ * pair (LOGICAL_SIDES, the horizontal writing mode the canvas poses
+ * in) with its whole value, and a later physical longhand still wins
+ * its side over it. So the Site width variant's `padding-inline` reads
+ * as the right and left sides it moves, in the variant's hue, rather
+ * than as "computed from the theme". The logical spellings are READ
+ * here only: no surface offers a `padding-inline` cell (grantedSides
+ * reads the granted longhand names), and a per-side edit writes the
+ * physical longhand, which beats the worn logical one by order. Pass
+ * an ORDER-PRESERVING condition object (a map entry's `.default`, a
+ * stack layer's posed block, a draft-layered copy of one) — a values
+ * map rebuilt in owned-property order (controls.js litValues) loses
+ * the layer's order, though under the widget's own commit discipline
+ * (expansion always unsets the shorthand) shorthand and own longhands
+ * never coexist and order is moot.
  *
  * @param {?Object<string, *>} values
  *   One layer's property → value object.
@@ -345,170 +394,364 @@ export const expandShorthand = (value) => {
  * @return {Object<string, ?{value: ?string, property: string}>}
  *   side → resolution. null: the layer says nothing about this side.
  *   {value, property}: the side's effective value and the declaration
- *   that supplied it. A set-but-unsplittable shorthand (calc()/var())
- *   resolves every side to {value: null, property} — the side IS
- *   styled here, but no per-side value can honestly be shown.
+ *   that supplied it (a lone reference shorthand is the reference on
+ *   every side, expandShorthand's rule). A set-but-unsplittable
+ *   shorthand (calc(), a multi-component var()) resolves every side to
+ *   {value: null, property} — the side IS styled here, but no per-side
+ *   value can honestly be shown.
  */
 export const resolveSides = (values, property = 'padding') => {
   const sides = { top: null, right: null, bottom: null, left: null };
   Object.entries(values ?? {}).forEach(([name, raw]) => {
-    if (name === property) {
-      const set = normalizeValue(raw) !== null;
-      const expanded = set ? expandShorthand(raw) : null;
-      SIDES.forEach((side) => {
-        sides[side] = set
-          ? { value: expanded ? expanded[side] : null, property }
-          : null;
-      });
+    const addressed = propertySides(property, name);
+    if (addressed === null) {
       return;
     }
-    const side = SIDES.find(
-      (candidate) => name === familyLonghand(property, candidate),
-    );
-    if (side) {
-      sides[side] =
-        normalizeValue(raw) !== null
-          ? { value: String(raw).trim(), property: name }
-          : null;
-    }
+    const set = normalizeValue(raw) !== null;
+    // The shorthand's components split per side; a longhand, physical
+    // or logical, carries its whole value onto every side it addresses.
+    const expanded = set && name === property ? expandShorthand(raw) : null;
+    addressed.forEach((side) => {
+      sides[side] = set
+        ? {
+            value:
+              name === property
+                ? (expanded?.[side] ?? null)
+                : String(raw).trim(),
+            property: name,
+          }
+        : null;
+    });
   });
   return sides;
 };
 
 /**
- * Classifies each side's provenance across the element's style layers,
- * the diagram's four states.
+ * The diagram's state a stack layer earns: the element's own layer
+ * authors, a worn reference supplies, the two floor tiers default. An
+ * ancestor rule's own entry reads as the floor does (a value this
+ * element neither authored nor wears, in the floor hue); a variant the
+ * rule wears, reaching this element (a worn ancestor layer, layers.js
+ * ancestorVariant), reads as a variant: the identity is the variant's
+ * even though the tier keeps "this element wears" honest.
+ */
+const sideState = (layer) => {
+  switch (layer.tier) {
+    case ELEMENT_LAYER:
+      return 'authored';
+    case TIER_VARIANT:
+      return 'variant';
+    case TIER_SKIN:
+      return 'skin';
+    case TIER_DECLARED:
+      return 'declared';
+    case TIER_ANCESTOR:
+      return ancestorVariant(layer.id) === null ? 'skin' : 'variant';
+    default:
+      return 'variant';
+  }
+};
+
+/**
+ * The variant a layer supplies a side from: an own wearing's reference,
+ * or the variant an ancestor's rule wears; null for every other layer.
+ */
+const suppliedReference = (layer) =>
+  layer.tier === TIER_VARIANT ? layer.variant : ancestorVariant(layer.id);
+
+/**
+ * A side no layer resolves: nothing styles it, and the diagram shows
+ * the canvas's computed value as a muted placeholder (the caller owns
+ * that read; value here is null).
+ */
+const computedSide = () => ({
+  state: 'computed',
+  layer: null,
+  id: null,
+  reference: null,
+  condition: null,
+  atPose: false,
+  value: null,
+  property: null,
+});
+
+/**
+ * The stack a side reads: its longhand's entry in a per-property stacks
+ * map (a control model's `stacks`), null when the map carries none.
  *
- * The own entry's declarations land after every worn variant's in the
- * cascade (an element's own styles beat its references),
- * so a side the OWN layer resolves is 'authored' even when the spelling
- * differs (an own `padding` shorthand resets a variant's `padding-top`,
- * exactly as CSS would). A side only the EFFECTIVE layer resolves came
- * from a worn variant ('variant', carrying the supplying `reference`:
- * the delivery-winning variant the suppliers table names for the
- * declaration that resolved the side, at the editing condition; null
- * when no table attributes it). A side neither resolves but the
- * defaults tier does is the tier's: 'skin' when the active skin's site
- * defaults deliver it, else 'declared' when the element's declaration's
- * own defaults do (variant-scope.js skinDefaultEntry and
- * declaredDefaultEntry: read for provenance, never merged into the
- * effective entry, so they are classified here from their own
- * condition-keyed maps, each resolved on the block it DELIVERS at the
- * pose: condition-cascade.js posedBlock, the same cascade the printer
- * emits, so a skin `padding` at Base still supplies the sides a Medium
- * `padding-top` leaves alone when posed at Medium; the delivering
- * condition rides in `condition`). A side no layer resolves is
- * 'computed': nothing styles it, and the diagram shows the canvas's
- * computed value as a muted placeholder (the caller owns that read;
- * value here is null).
- *
- * The own and effective inputs are the editing compound's values by
- * construction (the diagram edits one compound), so the authored and
- * variant states sit at the pose.
- *
- * @param {?Object<string, *>} own
- *   The element's OWN editing-compound values
- *   (stripVariants(styleMap[key])[condition] — order-preserving).
- * @param {?Object<string, *>} effective
- *   The RESOLVED editing-compound values (effectiveEntry(...).entry
- *   [condition]: variant layers with the own entry merged on top).
+ * @param {?Object<string, object>} stacks
  * @param {string} property
  *   The box shorthand family (a BOX_FAMILIES key).
- * @param {object} [tables]
- *   The provenance tables (provenance-model.js provenanceFor, the
- *   widget model's `provenance`):
- *   - suppliers: condition → {property: reference}
- *     (variant-scope.js propertySuppliers), read at `condition`, for
- *     the variant state's reference;
- *   - skinEntry: the skin's condition-keyed property map
- *     (skinDefaultEntry), for the skin state;
- *   - declaredEntry: the declaration's condition-keyed property map
- *     (declaredDefaultEntry), for the declared state beneath it;
- *   - condition: the editing compound ('default');
- *   - conditions: the condition table (guide.conditions), for the
- *     cascade order.
- *   Absent tables classify only authored / variant / computed.
+ * @param {string} side
+ *   A physical side (SIDES).
  *
- * @return {Object<string, {state: string, reference: ?string,
- *   condition: ?string, value: ?string, property: ?string}>}
+ * @return {?object}
+ */
+const sideStack = (stacks, property, side) =>
+  stacks?.[familyLonghand(property, side)] ?? null;
+
+/**
+ * Classifies each side's provenance across the style stack's layers at
+ * a pose, the diagram's five states: the PER-SIDE read of the stack.
+ *
+ * stackAt() answers one property; a box family is spelled across a
+ * shorthand and four longhands whose grains overlap, so a side's
+ * delivering layer is found the way the printed document decides it:
+ * each layer's block at the pose (condition-cascade.js posedBlock, the
+ * same cascade the printer emits, so a layer's `padding` at Base still
+ * supplies the sides a Medium `padding-top` leaves alone when posed at
+ * Medium, and a later block's shorthand resets an earlier longhand) is
+ * resolved per side (resolveSides: last-declaration-wins within the
+ * layer, the shorthand expanded), and the TOPMOST layer resolving a
+ * side wins it, whatever its spelling: an own `padding` beats a worn
+ * `padding-top` on every side, exactly as CSS would, while an own
+ * `padding-top` leaves the other three to the variant. The state is the
+ * winning layer's tier (authored on this element, supplied by a worn
+ * variant with its reference, defaulted by the active skin, defaulted
+ * by the declaration), `layer` and `id` name it for the hue and the
+ * label, and `condition` is the delivering block's (the layer's block
+ * that reaches the pose for the resolving declaration). A side no
+ * layer resolves is 'computed'.
+ *
+ * Every tier is read the same way, so a skin-defaulted side is a lit
+ * value with its origin like any other (the display rule: the shown
+ * value is the winner's), never an unlit resting value; the Unset
+ * gestures read the delivering condition against the pose, not the
+ * state.
+ *
+ * The read is PER PROPERTY: `stacks` is a control model's `stacks` map
+ * (property → the layer stack of the box that property resolved to,
+ * controls.js resolveCandidates), and each side walks its own
+ * longhand's stack (sideStack: `padding-top` reads
+ * stacks['padding-top']), so a binding over two boxes reads each
+ * side from the box that paints it. A single-box binding maps every
+ * property to the same stack, and the read is the one it always was.
+ *
+ * @param {?Object<string, object>} stacks
+ *   The per-property layer stacks (style-stack.js buildStack per
+ *   candidate, floor and rendered tag included), keyed by property.
+ * @param {string} property
+ *   The box shorthand family (a BOX_FAMILIES key).
+ * @param {string} [condition]
+ *   The editing compound ('default').
+ * @param {object} [conditions]
+ *   The condition table (guide.conditions), for the cascade order.
+ *
+ * @return {Object<string, {state: string, layer: ?number, id: ?string,
+ *   reference: ?string, condition: ?string, atPose: boolean,
+ *   value: ?string, property: ?string}>}
  *   side → {state: 'authored'|'variant'|'skin'|'declared'|'computed',
- *   reference, condition, value, property}. reference names the
- *   supplying variant under 'variant' (null elsewhere); condition is
- *   the delivering condition (the pose for authored and variant, the
- *   defaults tier's delivering block's for skin and declared, null for
- *   computed); value/property follow resolveSides (value null under
- *   'computed', and for a set-but-unsplittable shorthand).
+ *   layer, id, reference, condition, atPose, value, property}. layer
+ *   indexes the stack's delivering layer and id is its layer id (null
+ *   under 'computed'); reference names the supplying variant under
+ *   'variant' (an own wearing's, or the one an ancestor's rule wears;
+ *   null elsewhere); condition is the delivering block's (null for
+ *   computed) and atPose says it is the posed compound itself (the
+ *   fill every per-part mark reads: a cell or a corner dot fills at
+ *   the pose and is hollow when the value cascades in from another
+ *   condition; false for computed); value/property follow resolveSides
+ *   (value null under 'computed', and for a set-but-unsplittable
+ *   shorthand).
  */
 export const sideProvenance = (
-  own,
-  effective,
+  stacks,
   property = 'padding',
-  {
-    suppliers = null,
-    skinEntry = null,
-    declaredEntry = null,
-    condition = 'default',
-    conditions = {},
-  } = {},
+  condition = 'default',
+  conditions = {},
 ) => {
-  const authored = resolveSides(own, property);
-  const resolved = resolveSides(effective, property);
-  const skin = resolveSides(
-    posedBlock(skinEntry, condition, conditions),
-    property,
-  );
-  const declared = resolveSides(
-    posedBlock(declaredEntry, condition, conditions),
-    property,
-  );
-  // The tier's delivering condition for the declaration that resolved a
-  // side: the same cascade posedBlock merged, read per property.
-  const deliveredFrom = (entry, side) =>
-    entryAtPose(entry, side.property, condition, conditions)?.condition ??
-    condition;
   const states = {};
   SIDES.forEach((side) => {
-    if (authored[side]) {
+    states[side] = computedSide();
+    // The side reads its own longhand's box: the layers walked are that
+    // candidate's, bottom to top, the shorthand and the longhand lines
+    // of every layer resolved together (a later layer's shorthand resets
+    // an earlier layer's longhand, as the printed document does).
+    const stack = sideStack(stacks, property, side);
+    (stack?.layers ?? []).forEach((layer, index) => {
+      const block = posedBlock(layer.styles, condition, conditions);
+      if (block === null) {
+        return;
+      }
+      const resolved = resolveSides(block, property);
+      if (!resolved[side]) {
+        return;
+      }
+      // The delivering condition for the declaration that resolved the
+      // side: the same cascade posedBlock merged, read per property.
+      const from =
+        entryAtPose(layer.styles, resolved[side].property, condition, conditions)
+          ?.condition ?? condition;
       states[side] = {
-        state: 'authored',
-        reference: null,
-        condition,
-        ...authored[side],
-      };
-    } else if (resolved[side]) {
-      const reference =
-        suppliers?.[condition]?.[resolved[side].property] ?? null;
-      states[side] = {
-        state: 'variant',
-        reference,
-        condition,
+        state: sideState(layer),
+        layer: index,
+        id: layer.id,
+        reference: suppliedReference(layer),
+        condition: from,
+        // The one derivation of "at the pose" for a side; every per-part
+        // mark (the cell, the row's derived origin) reads this field.
+        atPose: from === condition,
         ...resolved[side],
       };
-    } else if (skin[side]) {
-      states[side] = {
-        state: 'skin',
-        reference: null,
-        condition: deliveredFrom(skinEntry, skin[side]),
-        ...skin[side],
-      };
-    } else if (declared[side]) {
-      states[side] = {
-        state: 'declared',
-        reference: null,
-        condition: deliveredFrom(declaredEntry, declared[side]),
-        ...declared[side],
-      };
-    } else {
-      states[side] = {
-        state: 'computed',
-        reference: null,
-        condition: null,
-        value: null,
-        property: null,
-      };
-    }
+    });
   });
   return states;
+};
+
+/**
+ * A box family row's ONE origin over its offered sides: the facts the
+ * row's mark reads (widgets/lib/mark.js) off the per-side provenance.
+ *
+ * A family row (the padding row) shows one value for up to four sides
+ * that may come from four places, so its mark cannot be one stackAt()
+ * projection. The rule: the set sides are grouped by (delivering layer,
+ * at the pose); ONE group is the row's origin as any property row's
+ * would be (that layer's hue, filled when its block is the posed
+ * compound); several groups read as the topmost group's hue, hollow
+ * (`atPose` false), and `groups` names the split for the sentence
+ * (provenance-model.js sidesSentence). With no set side, the topmost
+ * layer authoring the family at ANY condition lends its hue (hollow,
+ * `named` its conditions), else nothing (`color` null: the resting
+ * ring). Words are not built here: the sentence is the provenance
+ * model's, over these facts.
+ *
+ * @param {?Object<string, object>} stacks
+ *   The per-property layer stacks (see sideProvenance).
+ * @param {string} property
+ *   The box shorthand family (a BOX_FAMILIES key).
+ * @param {string[]} sides
+ *   The sides the row OFFERS (grantedSides()).
+ * @param {string} [condition]
+ *   The editing compound (the pose).
+ * @param {object} [conditions]
+ *   The condition table (guide.conditions).
+ *
+ * @return {{delivers: boolean, atPose: boolean, layer: ?string, tier: ?string, reference: ?string, color: ?string, condition: ?string, supplier: ?object, groups: Array<{sides: string[], id: string, index: number, state: string, reference: ?string, condition: string, atPose: boolean, supplier: ?object}>, named: string[]}}
+ *   delivers: any offered side is set. atPose: every set side's block
+ *   is the posed compound AND one layer delivers them all. layer, tier,
+ *   reference, color, condition, supplier (the stack layer object):
+ *   the one group's, else the topmost group's, else the topmost
+ *   author's (delivers false), else null. groups: the split, topmost
+ *   layer first. named: with no set side, the author's conditions.
+ */
+export const sidesOrigin = (
+  stacks,
+  property = 'padding',
+  sides = SIDES,
+  condition = 'default',
+  conditions = {},
+) => {
+  const states = sideProvenance(stacks, property, condition, conditions);
+  const groups = [];
+  sides.forEach((side) => {
+    const prov = states[side];
+    if (prov.state === 'computed') {
+      return;
+    }
+    // The side's own at-pose fact (sideProvenance), never rederived.
+    const { atPose } = prov;
+    const group = groups.find(
+      (candidate) => candidate.id === prov.id && candidate.atPose === atPose,
+    );
+    if (group) {
+      group.sides.push(side);
+      return;
+    }
+    groups.push({
+      sides: [side],
+      id: prov.id,
+      index: prov.layer,
+      state: prov.state,
+      reference: prov.reference,
+      condition: prov.condition,
+      atPose,
+      supplier: sideStack(stacks, property, side)?.layers?.[prov.layer] ?? null,
+    });
+  });
+  groups.sort((a, b) => b.index - a.index);
+  const identity = (group) => ({
+    layer: group.id,
+    tier: group.supplier?.tier ?? null,
+    reference: group.reference,
+    color: layerColor(group.id),
+    condition: group.condition,
+    supplier: group.supplier,
+  });
+  if (groups.length) {
+    const lead = groups[0];
+    return {
+      delivers: true,
+      atPose: groups.length === 1 && lead.atPose,
+      ...identity(lead),
+      groups,
+      named: [],
+    };
+  }
+  const author = familyAuthor(stacks, property, sides, conditions);
+  return {
+    delivers: false,
+    atPose: false,
+    layer: author?.layer.id ?? null,
+    tier: author?.layer.tier ?? null,
+    reference: author ? suppliedReference(author.layer) : null,
+    color: author ? layerColor(author.layer.id) : null,
+    condition: null,
+    supplier: author?.layer ?? null,
+    groups: [],
+    named: author?.named ?? [],
+  };
+};
+
+/**
+ * The topmost layer authoring the family on any offered side at ANY
+ * condition (the hover-only padding while posed at Base), with the
+ * conditions it names, Base first then the guide's order; null when no
+ * layer authors the family at all.
+ */
+const familyAuthor = (stacks, property, sides, conditions) => {
+  const order = ['default', ...Object.keys(conditions ?? {})];
+  const rank = (name) => {
+    const index = order.indexOf(name);
+    return index === -1 ? order.length : index;
+  };
+  let found = null;
+  sides.forEach((side) => {
+    const layers = sideStack(stacks, property, side)?.layers ?? [];
+    for (let index = layers.length - 1; index >= 0; index -= 1) {
+      if (found !== null && found.index > index) {
+        break;
+      }
+      const layer = layers[index];
+      const named = Object.entries(layer.styles ?? {})
+        .filter(
+          ([name, block]) =>
+            name !== 'variants' &&
+            block !== null &&
+            typeof block === 'object' &&
+            !Array.isArray(block) &&
+            Object.entries(block).some(
+              ([key, value]) =>
+                value !== null &&
+                value !== undefined &&
+                (propertySides(property, key) ?? []).includes(side),
+            ),
+        )
+        .map(([name]) => name);
+      if (named.length) {
+        const merged =
+          found !== null && found.index === index
+            ? [...new Set([...found.named, ...named])]
+            : named;
+        found = { layer, index, named: merged };
+        break;
+      }
+    }
+  });
+  return found === null
+    ? null
+    : {
+        ...found,
+        named: [...found.named].sort((a, b) => rank(a) - rank(b)),
+      };
 };
 
 /**
@@ -526,17 +769,16 @@ export const sideProvenance = (
  *   unedited sides. After this commit the own layer is longhands-only,
  *   which is why declaration order never matters in practice.
  *
- * An own shorthand that IS exactly one token reference (var(--name))
- * splits honestly: one reference addresses all four sides identically
- * (uniformState's reading of the same spelling), so every side the
- * shorthand still supplies gets the reference itself, and a guide-scale
- * pick (`border-width: var(--stroke-thin)`) or a skin color
- * (`border-color: var(--color-x)`) never blocks the ring. An own
- * shorthand the expansion cannot honestly split (calc(), a
- * multi-component var()) returns null: committing guessed per-side
- * values would silently change the element, so the caller degrades (the
- * diagram shows the shorthand as one unsplittable value; clearing or
- * retyping it goes through the shorthand's own editor).
+ * The sides are read through resolveSides, so the split is the one
+ * splitter's (expandShorthand): an own shorthand that IS exactly one
+ * token reference (`border-width: var(--stroke-thin)`, `border-color:
+ * var(--color-x)`) lands the reference on every side it still supplies
+ * and never blocks the ring. An own shorthand the splitter cannot
+ * honestly split (calc(), a multi-component var()) returns null:
+ * committing guessed per-side values would silently change the
+ * element, so the caller degrades (the diagram shows the shorthand as
+ * one unsplittable value; clearing or retyping it goes through the
+ * shorthand's own editor).
  *
  * @param {?Object<string, *>} own
  *   The element's OWN editing-compound values (order-preserving).
@@ -561,27 +803,20 @@ export const sideCommit = (own, sides, value, property = 'padding') => {
     return patch;
   }
   const current = resolveSides(own, property);
-  // What each side carries on the own layer today: a split component, or
-  // the whole reference when the shorthand is one; null for a side the
-  // layer no longer styles. An opaque shorthand leaves a styled side with
-  // nothing honest to write, and that blocks the whole patch.
-  const reference =
-    referenceVariable(own[property]) === null
-      ? null
-      : String(own[property]).trim();
-  const supplied = {};
-  for (const side of SIDES) {
-    supplied[side] =
-      current[side] === null ? null : (current[side].value ?? reference);
-    if (current[side] !== null && supplied[side] === null) {
-      return null;
-    }
+  // What each side carries on the own layer today: a split component
+  // (the reference itself under a lone reference shorthand); null for a
+  // side the layer no longer styles. An opaque shorthand leaves a styled
+  // side with nothing honest to write, and that blocks the whole patch.
+  if (
+    SIDES.some((side) => current[side] !== null && current[side].value === null)
+  ) {
+    return null;
   }
   const patch = { [property]: null };
   SIDES.forEach((side) => {
     patch[familyLonghand(property, side)] = sides.includes(side)
       ? value
-      : supplied[side];
+      : (current[side]?.value ?? null);
   });
   return patch;
 };
@@ -653,23 +888,23 @@ const shorthandText = (values) => {
 };
 
 /**
- * The chips' longhand-aware view of a box property: whether the style
- * map styles it at all, and whether ONE value honestly represents all
- * four sides.
+ * The shorthand field's longhand-aware view of a box property: whether
+ * the style map styles it at all, and whether ONE value honestly
+ * represents all four sides.
  *
- * The chips row keeps its one-value vocabulary (a chip writes the
- * shorthand) while the diagram edits longhands, so the chips must read
+ * The field keeps its one-value vocabulary (a settle writes the
+ * shorthand) while the diagram edits longhands, so the field must read
  * per-side state honestly: four equal sides — however spelled, shorthand
- * or longhands, own or variant-supplied — light the matching stop
- * exactly as a plain shorthand would, and anything per-side is the
- * EXPLICIT custom state, never "nothing set" and never a lie that one
- * chip covers it.
+ * or longhands, whichever layer delivers them (the element's own, a
+ * worn variant's, the skin's or the declaration's: the display rule
+ * lights the winner) — show that one value exactly as a plain shorthand
+ * would (a closed vocabulary's select lights its stop), and anything
+ * per-side is the EXPLICIT custom state (uniformFieldText's degraded
+ * text), never "nothing set" and never a lie that one value covers it.
  *
- * @param {?Object<string, *>} own
- *   The element's OWN editing-compound values (order-preserving).
- * @param {?Object<string, *>} effective
- *   The RESOLVED editing-compound values (effectiveEntry(...).entry
- *   ?.[condition]).
+ * @param {?Object<string, object>} stacks
+ *   The per-property layer stacks (a control model's `stacks`; see
+ *   sideProvenance).
  * @param {string} property
  *   The box shorthand family (a BOX_FAMILIES key).
  * @param {string[]} sides
@@ -678,69 +913,70 @@ const shorthandText = (values) => {
  *   vertical-only grant lights its chip when top and bottom agree no
  *   matter what the ungoverned horizontal sides carry. Defaults to all
  *   four (the ungoverned surface).
+ * @param {string} [condition]
+ *   The editing compound ('default').
+ * @param {object} [conditions]
+ *   The condition table (guide.conditions), for the cascade order.
  *
  * @return {{set: boolean, uniform: ?string, text: ?string}}
- *   set false: nothing styles any side (chips show nothing selected).
+ *   set false: no layer styles any side the field can spell (the field
+ *   is empty); a supplied side outside the dimension grammar (the Site
+ *   width variant's `padding-inline: max(...)`) is a measurement, the
+ *   ring's cell rule (sideMeasured), not a value.
  *   uniform: the single value representing all four sides (feed
  *   segmentState), or null when the sides differ, are only partly set,
- *   or ride an unsplittable calc()/var() shorthand — except a shorthand
- *   that IS exactly one token reference (var(--name)): one reference
- *   addresses all four sides identically, so its spelling surfaces as
- *   the uniform value and a scale token pick lights its chip (the
- *   lit-stop rule is reference-spelling matching). text: display copy
- *   for the custom pill — the minimal shorthand when all four sides are
- *   set, a per-side listing when only some are, null for the opaque
+ *   or ride an unsplittable calc()/multi-component var() shorthand. A
+ *   shorthand that IS exactly one token reference (var(--name)) needs
+ *   no exception: the per-side read already yields the one spelling on
+ *   every side (expandShorthand), so it surfaces as the uniform value
+ *   and a scale token pick lights its stop (the lit-stop rule is
+ *   reference-spelling matching). text: display copy for the custom
+ *   pill — the minimal shorthand when all four sides are set, a
+ *   per-side listing when only some are, null for the opaque
  *   unsplittable case (the caller says calc/var).
  */
 export const uniformState = (
-  own,
-  effective,
+  stacks,
   property = 'padding',
   sides = SIDES,
+  condition = 'default',
+  conditions = {},
 ) => {
-  // No provenance tables here on purpose: the field's face is what the
-  // element and its worn variants SET; a skin default is a ghost, never
-  // a set value, so it must not light a chip or fill the custom pill.
-  const provenance = sideProvenance(own, effective, property);
-  const resolutions = sides.map((side) => provenance[side]);
-  if (resolutions.every((resolution) => resolution.state === 'computed')) {
+  const provenance = sideProvenance(stacks, property, condition, conditions);
+  // A side the field can spell, or one it only measures: the ring's
+  // rule (sideMeasured) read over the raw spelling, since the field has
+  // no materials to resolve a reference into its face (the ring does)
+  // and a lone reference IS the field's value (its stop lights by
+  // spelling). So the Site width variant's `padding-inline: max(...)`
+  // reads as the ring's cells read it, a measurement over an empty
+  // field, never a per-side listing of the expression. Only a length
+  // family measures (BOX_FAMILIES `length`: the rings' families); a
+  // stroke's style keyword or color is a value however it is spelled,
+  // and only its absence reads computed.
+  const measures = familyDescriptor(property).length;
+  const resolutions = sides.map((side) => ({
+    ...provenance[side],
+    measured: measures
+      ? referenceVariable(provenance[side].value ?? '') === null &&
+        sideMeasured(provenance[side].state, provenance[side].value)
+      : provenance[side].state === 'computed',
+  }));
+  if (resolutions.every((resolution) => resolution.measured)) {
     return { set: false, uniform: null, text: null };
   }
   if (
     resolutions.some(
-      (resolution) =>
-        resolution.state !== 'computed' && resolution.value === null,
+      (resolution) => !resolution.measured && resolution.value === null,
     )
   ) {
-    // Set-but-unsplittable: a calc()/var() shorthand styles the sides but
-    // no per-side value can honestly be shown. One exception surfaces
-    // whole: when every side rides the shorthand declaration itself and
-    // its value is exactly one token reference, that reference IS the
-    // box's single value — the chips must light it by its spelling, or a
-    // scale-constrained token pick would read back as custom. calc() and
-    // multi-component var() shorthands stay opaque: no one spelling
-    // honestly represents their sides.
-    const whole = resolutions.every(
-      (resolution) =>
-        resolution.state !== 'computed' &&
-        resolution.value === null &&
-        resolution.property === property,
-    );
-    if (whole) {
-      const raw =
-        normalizeValue(own?.[property]) !== null
-          ? own[property]
-          : effective?.[property];
-      const text = String(raw).trim();
-      if (referenceVariable(text) !== null) {
-        return { set: true, uniform: text, text };
-      }
-    }
+    // Set-but-unsplittable: an own calc()/multi-component var()
+    // shorthand styles the sides but no per-side value can honestly be
+    // shown.
     return { set: true, uniform: null, text: null };
   }
-  if (resolutions.some((resolution) => resolution.state === 'computed')) {
+  if (resolutions.some((resolution) => resolution.measured)) {
     const text = sides
-      .filter((side) => provenance[side].state !== 'computed')
+      .filter((side, index) => !resolutions[index].measured)
       .map((side) => `${side} ${provenance[side].value}`)
       .join(', ');
     return { set: true, uniform: null, text };
@@ -776,21 +1012,21 @@ export const uniformState = (
  *
  * The inverse of sideCommit's expansion, keeping the same invariant —
  * shorthand and authored longhands never coexist on the own layer, so
- * declaration order never decides. A chip writes `padding: value` and
+ * declaration order never decides. A settle writes `padding: value` and
  * unsets whichever longhands the OWN layer carries in the same atomic
  * patch (leaving them would let map order pick a winner); with no own
  * longhands it stays the plain one-property write the row always made.
  * Variant-supplied longhands are untouched: the own shorthand lands
  * after them in the cascade and resets all four sides, exactly as CSS
- * would, and stays detachable. A null value (toggling the lit chip off)
- * unsets the shorthand AND the own longhands — the click said "no
- * padding choice", and leaving longhands would keep sides the chips
- * claimed to clear.
+ * would, and stays detachable. A null value (the emptied field, or a
+ * closed select's unset) unsets the shorthand AND the own longhands —
+ * the gesture said "no padding choice", and leaving longhands would
+ * keep sides the field claimed to clear.
  *
  * @param {?Object<string, *>} own
  *   The element's OWN editing-compound values (order-preserving).
  * @param {?string} value
- *   The chip's canonical value; null unsets.
+ *   The field's commit spelling; null unsets.
  * @param {string} property
  *   The box shorthand family (a BOX_FAMILIES key).
  *
@@ -809,25 +1045,26 @@ export const uniformCommit = (own, value, property = 'padding') => {
 };
 
 /**
- * The properties object one CHIP pick commits under a SIDE-SUBSET grant.
+ * The properties object one FIELD settle commits under a SIDE-SUBSET
+ * grant.
  *
- * The chips' commit where the guide's allowlist withholds the shorthand
+ * The field's commit where the guide's allowlist withholds the shorthand
  * (a container's vertical-rhythm spacing): one value writes each offered
  * side's longhand — the shorthand cannot be spelled, so the subset dual
  * of uniformCommit writes longhands directly. An OWN shorthand (legacy
  * data from before the grant narrowed) is unset in the same atomic patch:
  * it is un-respellable here, and dropping it returns the withheld sides
  * to the variant/skin layer that owns them. Own longhands on withheld
- * sides are untouched — the click said nothing about them ("never reset
- * what a click didn't say"). A null value unsets the offered sides (and
- * the own shorthand), the chips' toggle-off.
+ * sides are untouched — the settle said nothing about them ("never
+ * reset what a gesture didn't say"). A null value unsets the offered
+ * sides (and the own shorthand), the emptied field.
  *
  * @param {?Object<string, *>} own
  *   The element's OWN editing-compound values (order-preserving).
  * @param {string[]} sides
  *   The offered sides (grantedSides()).
  * @param {?string} value
- *   The chip's canonical value; null unsets.
+ *   The field's commit spelling; null unsets.
  * @param {string} property
  *   The box shorthand family (a BOX_FAMILIES key).
  *
@@ -877,16 +1114,20 @@ export const spreadSides = (side, modifiers = {}) => {
  *
  * Only Shift survives, and only when Alt is not claiming it for spread;
  * Alt and Cmd/Ctrl never reach the step math here (Alt is mirror, the
- * 0.1/100 grains are field-editor-only). Feed the result to
- * dimension-value's stepSize/scrubAdvance so the diagram and the field
- * editor share one snapping implementation.
+ * 0.1/100 grains and the hundredths precision are field-editor-only,
+ * so `altKey` is spelled out false). Feed the result to
+ * dimension-value's stepSize/scrubAdvance (free cells) or scrubRate
+ * and unitPrecision (detented cells) so the diagram and the field
+ * editor share one snapping implementation, one rate ladder and one
+ * precision rule.
  *
  * @param {{altKey?: boolean, shiftKey?: boolean}} modifiers
  *
- * @return {{shiftKey: boolean}}
+ * @return {{shiftKey: boolean, altKey: false}}
  */
 export const diagramModifiers = (modifiers = {}) => ({
   shiftKey: Boolean(modifiers.shiftKey) && !modifiers.altKey,
+  altKey: false,
 });
 
 /**
@@ -919,6 +1160,91 @@ export const diagramStep = (modifiers = {}, unit = 'px') =>
  */
 export const diagramScrub = (raw, movementX, modifiers = {}, unit = 'px') =>
   scrubAdvance(raw, movementX, diagramModifiers(modifiers), unit);
+
+/**
+ * Whether a side cell reads as its MEASUREMENT (the canvas's computed
+ * value, converted into the gesture's unit, as a placeholder over an
+ * empty editor) rather than as a value of the stack's.
+ *
+ * Two sides measure. A computed side (nothing in the stack styles it)
+ * has nothing else to show. A SUPPLIED side (a worn variant's, the
+ * skin's, the declaration's) whose value is outside the dimension
+ * grammar (the Site width variant's `padding-inline: max(...)`, a
+ * skin's `calc()` shorthand no splitter can open) has a value the cell
+ * cannot scrub or the editor edit per side, so it shows what that value
+ * measures as, in the supplier's hue (the origin still names itself on
+ * hover), and a gesture writes the physical longhand over it: someone
+ * dialing in a padding meant it, and the wear bar names the override.
+ * An OWN side outside the grammar is the caller's opaque
+ * set-but-unsplittable state (the shorthand's own editor still works),
+ * never a measurement: measuring over it would invite a per-side write
+ * the expansion cannot honestly make.
+ *
+ * @param {string} state
+ *   The side's provenance state (sideProvenance: 'authored' | 'variant'
+ *   | 'skin' | 'declared' | 'computed').
+ * @param {*} face
+ *   The side's display value (a worn reference's face at the pose, a
+ *   literal as itself), null when the layer resolves no per-side value.
+ *
+ * @return {boolean}
+ */
+export const sideMeasured = (state, face) =>
+  state === 'computed' ||
+  (state !== 'authored' && fieldState(face ?? '').mode !== 'dimension');
+
+/**
+ * A side cell's gesture anchor: the unit its scrub, its arrows and the
+ * ring label's unison scrub work in, and the number they start from.
+ *
+ * A side with a value of its own works in that value's unit from its
+ * number. A measured side (sideMeasured: computed, or supplied outside
+ * the grammar; the shown text is the canvas's placeholder, px-resolved
+ * by computed-read.js, or nothing on the satellite) has no value to
+ * take a unit from, so it takes contextUnit's unit (the vocabulary's,
+ * then the first offered; no pick and no last parse, since a cell has
+ * no select and remembers nothing) and starts from the placeholder
+ * converted into it through the canvas's measured bases (seedAnchor:
+ * 16px beneath a rem scale at a 16px root starts at 1rem, 17px at
+ * 1.1rem, the ring's tenths; an incomparable or absent placeholder at
+ * 0). A bare-number own value
+ * (`0`) names no unit and takes the same context unit from its own
+ * number. The side editor beneath the ring derives the same unit and
+ * seed through DimensionField, so the cell, the label and the editor
+ * agree by construction, and the placeholder's face converts into the
+ * same unit (dimension-value.js lengthIn), so what the cell shows is
+ * what a gesture starts from.
+ *
+ * @param {object} space
+ *   The side longhand's value space (valueSpaceFor).
+ * @param {*} shown
+ *   The cell's shown text: the winner's display value, or the raw
+ *   computed placeholder (null when there is none).
+ * @param {boolean} measured
+ *   Whether the shown text is a placeholder rather than a value.
+ * @param {string[]} options
+ *   The units the longhand offers (unitOptions).
+ * @param {?{rootPx: ?number, fontPx: ?number}} bases
+ *   The canvas's measured bases (readCanvas), null off canvas.
+ *
+ * @return {{mode: string, number: number, unit: string}}
+ *   mode is fieldState's over the shown text ('text' makes an open cell
+ *   click-to-edit only); number and unit are the gesture's start.
+ */
+export const sideAnchor = (space, shown, measured, options = [], bases = null) => {
+  const state = fieldState(shown ?? '');
+  const named =
+    state.mode === 'dimension' && state.unit !== '' ? state.unit : null;
+  if (!measured && named !== null) {
+    return { mode: state.mode, number: state.number, unit: named };
+  }
+  const unit = contextUnit({ spaceUnit: space.unit, options });
+  return {
+    mode: state.mode,
+    number: measured ? seedAnchor(shown, unit, bases) : (state.number ?? 0),
+    unit,
+  };
+};
 
 /**
  * A side cell's scrub gesture seed over its value space.
@@ -965,7 +1291,14 @@ export const sideScrubSeed = (space, shown, number, unit) => {
  * - detented: continuous travel with sticky magnets at the stops, the
  *   field's rem-tuned feel knobs scaled for px-magnitude units
  *   (feelFactor), the shown number between magnets rounded to the
- *   unit's precision; grain modifiers stay out — magnets are the grain.
+ *   unit's precision (tenths of a rem, never the editor's hundredths:
+ *   Alt is spread here, so the ring's fine flag is always off). The
+ *   modifiers change the travel RATE, never
+ *   whether the magnets capture (magnetAdvance's rate scales the
+ *   radius with the travel), under the diagram's vocabulary
+ *   (diagramModifiers): Shift is x10, Alt is spread and spends Shift
+ *   (base rate), Cmd/Ctrl never reach the rate ladder. Read per tick, so
+ *   the rate changes mid-drag like the grain does on a free cell.
  * - free: the diagram's own grain policy (diagramScrub: Shift coarse,
  *   Alt spent on spread).
  *
@@ -1003,6 +1336,9 @@ export const sideScrubMove = (space, scrub, movementX, modifiers = {}) => {
   }
   if (space.kind === 'detented') {
     const factor = feelFactor(scrub.unit);
+    // The diagram's grain vocabulary keeps no Alt (spread), so the
+    // ring's precision is the unit's own, never fine.
+    const grain = diagramModifiers(modifiers);
     const advanced = magnetAdvance(
       scrub.raw,
       movementX,
@@ -1010,7 +1346,8 @@ export const sideScrubMove = (space, scrub, movementX, modifiers = {}) => {
       {
         perPixel: SCRUB_PER_PIXEL * factor,
         magnet: MAGNET_RADIUS * factor,
-        precision: unitPrecision(scrub.unit),
+        precision: unitPrecision(scrub.unit, grain.altKey),
+        rate: scrubRate(grain),
       },
     );
     return {
@@ -1101,21 +1438,23 @@ export const settleSpelling = (space, text) =>
 /**
  * The shorthand FIELD's face for a box property's uniform state — what
  * the padding row's DimensionField shows:
- * - nothing set: empty (the field's unset/ghost state);
+ * - nothing set: empty (the field's unset state, its placeholder the
+ *   computed hint);
  * - one value honestly covers the offered sides: that value in its
  *   committed spelling (a whole-reference shorthand keeps its var()
  *   spelling — the field maps ref→display and wears it blessed itself);
  * - differing or partly-set sides: uniformState's text (the minimal
  *   shorthand, or the per-side listing) — outside the dimension grammar,
  *   so the field degrades to honest text; typing over it collapses the
- *   sides back into one shorthand, the old chips' "make all sides equal";
+ *   sides back into one shorthand ("make all sides equal");
  * - the opaque unsplittable case (calc(), multi-component var()): the
  *   raw shorthand spelling — a set value always stays visible.
  *
  * @param {{set: boolean, uniform: ?string, text: ?string}} state
  *   The uniformState result.
  * @param {*} raw
- *   The raw shorthand value behind the opaque case (own or effective).
+ *   The raw shorthand value behind the opaque case (the shorthand's
+ *   winner at the pose: style-stack.js stackAt).
  *
  * @return {string}
  */

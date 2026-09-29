@@ -1,5 +1,5 @@
 import { h } from 'preact';
-import { controlWidgets } from '../../controls.js';
+import { controlWidgets, litValues } from '../../controls.js';
 import { layoutOwnsGap } from '../../layout-widget.js';
 import { gapGate, normalizeValue } from '../../widget-values.js';
 import { ChoiceRow } from '../lib/choice-row.js';
@@ -22,9 +22,10 @@ import { PaddingRow } from './padding-row.js';
  * BETWEEN siblings, so its row is gated on
  * the selection being a container with more than one child box
  * (gapGate); elsewhere gap is a no-op a lay user cannot see, and the
- * row HIDES rather than disables. A set value must always stay visible
- * and unsettable, so a committed gap keeps the row whatever the canvas
- * says; an unknown context (null self) degrades to offering it. Each
+ * row HIDES rather than disables. A shown value must always stay
+ * visible, so a delivered gap (the stack's winner at the pose) keeps
+ * the row whatever the canvas says; an unknown context (null self)
+ * degrades to offering it. Each
  * row writes only its own property/properties — a padding gesture never
  * resets gap and vice versa, per "never reset what a click didn't say".
  *
@@ -54,12 +55,13 @@ const SpacingScale = ({
   // padding family here; gap rides the names only where the roster granted
   // it over row-gap and column-gap (the server's family rule).
   const gapGranted = model.granted.includes('gap');
-  // Gate on the COMMITTED gap so the surface never reshapes under the
+  const lit = litValues(model.reads);
+  // Gate on the DELIVERED gap so the surface never reshapes under the
   // pointer mid-gesture; the row leaves only once an unset settles.
-  const gapSet = normalizeValue(model.values.gap) !== null;
+  const gapSet = normalizeValue(lit.gap) !== null;
   const hasGapRow =
     gapGranted &&
-    !layoutOwnsGap(source?.getLayout?.() ?? [], model.key) &&
+    !layoutOwnsGap(source?.getLayout?.() ?? [], model.home.key) &&
     (gapSet || gapGate(layout?.self ?? null));
 
   return (
@@ -78,20 +80,23 @@ const SpacingScale = ({
         <ChoiceRow
           guide={guide}
           materials={materials}
+          source={source}
+          highlight={styleTarget(model.keys.gap)}
           condition={model.condition}
           label={Drupal.t('Gap')}
           property="gap"
-          value={model.values.gap}
+          value={lit.gap}
           definition={model.propertyDefinitions?.gap ?? {}}
           constraints={model.constraints?.gap ?? {}}
-          entry={model.entry}
-          provenance={model.provenance}
+          stack={model.stacks.gap}
+          read={model.reads.gap}
+          disabled={Boolean(model.withheld?.gap)}
+          disabledTitle={model.withheld?.gap ?? null}
           onPickCondition={onPickCondition}
           onOpenDocument={onOpenDocument}
           onPreview={onPreview}
           onRelease={onRelease}
           onCommit={onCommit}
-          highlight={{ source, ...styleTarget(model.key) }}
         />
       )}
     </div>

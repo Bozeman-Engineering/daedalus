@@ -1,21 +1,22 @@
-import { h, render } from 'preact';
+import { h, render, createContext } from 'preact';
 import { createPortal } from 'preact/compat';
 import { Provider, useSelector, useDispatch } from 'react-redux';
-import { useEffect, useRef, useState } from 'preact/hooks';
+import { useContext, useEffect, useRef, useState } from 'preact/hooks';
 import store from '../../store/store';
 import {
   setHover,
-  setHoverPart,
+  setHoverSelector,
   setSelected,
   toggleSelected,
   setSelectedSet,
 } from '../../store/slices/selection-slice';
+import { commitAddress } from '../../selection/commit-address';
+import { projectionIndex, selectorAddress } from './projection-index';
 import { setRenameKey } from '../../store/slices/view-slice';
 import { elementForKey } from '../../selection/resolver';
 import { makeDraggable, removeDraggable } from '../../drag/drag-controller';
 import { projectTree } from './projection';
 import { rowRenamable, renameOperation } from './rename-commit';
-import { isArmed, editItemForKey } from '../../edit_session/edit-session';
 import { verbMenuItems } from '../../verbs/verb-menu-items';
 import {
   subscribeTreeViews,
@@ -25,6 +26,8 @@ import {
 } from './view-registry';
 import { createMarkupView, withInstanceRows } from './markup-view';
 import { instanceRows } from './instance-rows';
+import { generatedRows, withGeneratedRows } from './generated-rows';
+import { depictedRows } from './reach';
 import { initMarkupVerification } from './markup-verify';
 import {
   partPlacement,
@@ -33,6 +36,16 @@ import {
   partLabel,
 } from '../../blueprint/markup-index';
 import { ShowMenu } from './show-menu';
+import { PickerToggle } from './picker-toggle';
+import {
+  ancestorsOf,
+  expand,
+  isCollapsed,
+  reveal,
+  toggle,
+} from '../../../outline/collapse';
+import { CollapseControls } from '../../../outline/collapse-controls';
+import { registerCollapseHotkeys } from '../../../outline/collapse-hotkeys';
 
 /**
  * The page-elements tree — the explicit face of the selection spine.
@@ -49,22 +62,115 @@ import { ShowMenu } from './show-menu';
  * selection spine, same verbs and drags); a pseudo row commits the
  * address pair {key: owner, part: id}, the same `key::selector` address
  * the selection index (projection-index.js) carries for it in every view,
- * so which view renders never changes what is selectable: the index
- * composes both tiers view-independently. One pseudo-row source renders in
- * EVERY view: instance rows (identity-carrying rich-text content), which
- * the default projection appends chip-less via withInstanceRows — content
- * is never gated behind the markup view's developer toggle.
+ * so which view renders never changes what EXISTS: the index composes
+ * both tiers view-independently. What the tree DRAWS is reach (reach.js):
+ * the tree appends the same pseudo-row sources the index composes with,
+ * instance rows (identity-carrying rich-text content, chip-less under the
+ * default projection via withInstanceRows) and the generated-box rows
+ * (generated-rows.js: the "Before" / "After" boxes the part behavior's
+ * cascade delivers on an element, appended under the owning row of
+ * whichever tree renders), and then keeps the rows whose `source` is
+ * depicted (depictedRows). An instance row is drawn in every view because
+ * its source is 'instance'; a box row is the Markup view's, drawn only
+ * while that toggle is on; so the rows on screen are exactly the rows an
+ * entry road may land on.
  *
  * The tree renders into the page_elements sidebar panel's mount div —
  * outside #daedalus-root — as its own Preact root sharing the app store.
+ *
+ * Rows collapse and expand through the one collapse model
+ * (outline/collapse.js): the Outline component between the tree and its
+ * root row owns the posture (`folds`, explicit postures keyed by row id),
+ * projects the rendered tree into the model's shape per render, applies
+ * the selection rule and the drop rule as two effects and registers the
+ * collapse-all and expand-all hotkeys; each row reads its own posture
+ * through the outline context and its chevron toggles it, and the root
+ * row carries the outline's tools (OutlineTools). The Outline is keyed on
+ * the view id, so a view switch resets every posture to the new view's
+ * defaults: reset is a key, never a function.
  */
 
 /**
- * Whether a node's subtree contains a selectable key.
+ * The outline's id: the registrar's binding prefix (`page_elements.
+ * collapse_all`, `page_elements.expand_all`) and the control's key lookup.
  */
-const containsKey = (node, key) =>
-  !!key &&
-  node.children.some((child) => child.key === key || containsKey(child, key));
+const OUTLINE_ID = 'page_elements';
+
+/**
+ * The Outline owner's posture (`folds`), its outline in the model's shape
+ * and the state setter (`set`), read by every row.
+ */
+const OutlineContext = createContext(null);
+
+/**
+ * A model row in the collapse model's shape. Keyed by the node's key (a
+ * keyless row by its label, the same fallback its render key uses). A
+ * unit row presents as one element and starts collapsed (the panel's face
+ * of the same default stop the canvas resolver honors: the node's
+ * presentation ANNOTATION, projected from the blueprint), as does a row
+ * with nothing under it; a merged row has no absorbed structure left to
+ * hide, so only its real children (if any) show. The root row is the
+ * whole page: there is nothing outside it to reveal by collapsing it, so
+ * it is never foldable and renders no chevron.
+ */
+const modelRow = (node, isRoot) => ({
+  id: node.key ?? node.label,
+  foldable: !isRoot && node.children.length > 0,
+  folded: !isRoot && (node.presentation === 'unit' || node.children.length === 0),
+});
+
+/**
+ * A pseudo row in the model's shape. Pseudo siblings can repeat an id
+ * under one parent row (two absorbed blocks hoisting identical shell
+ * chains into one region), so the id includes the owning model key, as
+ * the render key does. Pseudo rows start expanded: they are structure on
+ * the way to real rows (a markup view's wrapper chain), so collapsing one
+ * is manual noise-reduction.
+ */
+const pseudoRow = (part) => ({
+  id: `pseudo:${part.parentKey}:${part.id}`,
+  foldable: part.children?.length > 0,
+  folded: false,
+});
+
+/**
+ * The rendered tree in the collapse model's shape: one root node whose
+ * subtree mirrors the projection, model rows and pseudo rows alike.
+ */
+const outlineOf = (tree) => {
+  const project = (node, isRoot) => ({
+    ...(node.pseudo ? pseudoRow(node) : modelRow(node, isRoot)),
+    children: (node.children ?? []).map((child) => project(child, false)),
+  });
+  return [project(tree, true)];
+};
+
+/**
+ * The outline's node for a row id, or null when the outline lacks it.
+ */
+const rowOf = (outline, id) => {
+  for (const node of outline) {
+    if (node.id === id) {
+      return node;
+    }
+    const found = rowOf(node.children, id);
+    if (found) {
+      return found;
+    }
+  }
+  return null;
+};
+
+/**
+ * The rows from the outline's root down to a key, as one string: the
+ * dependency of the two rules below. It changes when the key changes and
+ * when a re-projection moves the key under other rows, and holds through
+ * everything else, so a manual re-collapse of a row that still holds the
+ * selection sticks (the rule is keyed to the CHANGE, as the per-row rule
+ * it replaces was).
+ */
+const pathTo = (outline, key) =>
+  key ? [...ancestorsOf(outline, key), key].join('\n') : '';
 
 /**
  * Per-row inline-start padding: one disclosure-grammar child-step
@@ -109,20 +215,23 @@ const ChildRows = ({ children, provider, depth }) => (
  * A pseudo-selection row an active view provider projected.
  *
  * Visually distinct (muted italic label, no verb menu), on the selection spine only as
- * a FACET: clicking commits the row's OWNER key (its parentKey, not
- * necessarily the row it renders under) with the row id as the part facet,
- * so "active" is spine state ({selectedKey, selectedPart} equality), never
- * provider state. Hover rides the spine too, as the hoverPart facet ONLY
- * (setHoverPart, never setHover): the part lights up — canvas dashed paint
- * by whatever subscribes to the facet, row glow here — without lighting
- * the owner element's hover outline. Hot = the spine's hoverPart is this
- * row's (owner, id) pair, whoever wrote it (this row's own hover or the
- * canvas Cmd-hover resolving matching markup).
+ * a styling TARGET: clicking selects the row's OWNER key (its parentKey,
+ * not necessarily the row it renders under) and targets the row id (the
+ * part's selector) under it (commit-address.js), so "active" is spine
+ * state (the target equals this row's (owner, id) pair), never provider
+ * state. While a part row is active it is the tree's focus stop (the
+ * owner row yields its primary treatment and its Tab stop, and focus
+ * follows the target row the way it follows the primary). Hover
+ * rides the spine too, as the hoverSelector facet ONLY (setHoverSelector,
+ * never setHover): the part lights up — canvas dashed paint by whatever
+ * subscribes to the facet, row glow here — without lighting the owner
+ * element's hover outline. Hot = the spine's hoverSelector is this row's
+ * (owner, id) pair, whoever wrote it (this row's own hover or the canvas
+ * Cmd-hover resolving matching markup).
  *
- * Pseudo rows fold like model rows but start UNFOLDED: they are structure
- * on the way to real rows (a markup view's wrapper chain), so folding is
- * manual noise-reduction, and selection or drop targeting beneath one
- * unfolds it the way it unfolds model rows.
+ * Pseudo rows collapse like model rows but start expanded (pseudoRow), and
+ * selection or drop targeting beneath one expands it the way it expands
+ * model rows (the Outline's two rules).
  *
  * A pseudo row never carries data-tree-key (hover, selection, the context
  * menu and the visible-row order all read that attribute as a model
@@ -138,33 +247,31 @@ const PartRow = ({ part, provider, depth }) => {
   const isActive = useSelector(
     (state) =>
       !!part.parentKey &&
-      state.selection.selectedKey === part.parentKey &&
-      state.selection.selectedPart === part.id,
+      state.selection.target?.key === part.parentKey &&
+      state.selection.target?.selector === part.id,
   );
+  const rowRef = useRef(null);
+  // The primary's focus rule, on the target row: while the user is
+  // working IN the panel, focus follows the active part row so keyboard
+  // traversal reads out row by row across both tiers.
+  useEffect(() => {
+    const row = rowRef.current;
+    if (!isActive || !row || row === document.activeElement) {
+      return;
+    }
+    if (row.closest('.daedalus-ui-tree')?.contains(document.activeElement)) {
+      row.focus();
+    }
+  }, [isActive]);
   const isHovered = useSelector(
     (state) =>
       !!part.parentKey &&
-      state.selection.hoverPart?.key === part.parentKey &&
-      state.selection.hoverPart?.part === part.id,
+      state.selection.hoverSelector?.key === part.parentKey &&
+      state.selection.hoverSelector?.selector === part.id,
   );
-  const [folded, setFolded] = useState(false);
-  const containsSelected = useSelector((state) =>
-    containsKey(part, state.selection.selectedKey),
-  );
-  useEffect(() => {
-    if (containsSelected) {
-      setFolded(false);
-    }
-  }, [containsSelected]);
-  const containsDrop = useSelector(
-    (state) =>
-      !!state.drag.dropRowKey && containsKey(part, state.drag.dropRowKey),
-  );
-  useEffect(() => {
-    if (containsDrop) {
-      setFolded(false);
-    }
-  }, [containsDrop]);
+  const { folds, set } = useContext(OutlineContext);
+  const row = pseudoRow(part);
+  const collapsed = isCollapsed(folds, row);
 
   const classes = ['daedalus-ui-tree__row', 'daedalus-ui-tree__row--part'];
   if (isActive) {
@@ -180,12 +287,16 @@ const PartRow = ({ part, provider, depth }) => {
     // ARIA tree pattern with real focusable rows).
     <li className="daedalus-ui-tree__item" role="none">
       <div
+        ref={rowRef}
         role="treeitem"
         aria-selected={isActive}
         aria-level={depth + 1}
-        aria-expanded={expandable ? !folded : undefined}
-        tabIndex={-1}
+        aria-expanded={expandable ? !collapsed : undefined}
+        tabIndex={isActive ? 0 : -1}
         className={classes.join(' ')}
+        data-tree-address={
+          part.parentKey ? selectorAddress(part.parentKey, part.id) : undefined
+        }
         data-tree-owner={part.claims ? part.parentKey : undefined}
         data-tree-claims={part.claims ? part.claims.join(' ') : undefined}
         style={{ paddingInlineStart: rowIndent(depth) }}
@@ -195,15 +306,20 @@ const PartRow = ({ part, provider, depth }) => {
           // with its key), and setHover would light the owner element's
           // solid outline, which a part row deliberately never does.
           if (part.parentKey) {
-            dispatch(setHoverPart({ key: part.parentKey, part: part.id }));
+            dispatch(
+              setHoverSelector({ key: part.parentKey, selector: part.id }),
+            );
           }
         }}
         onMouseLeave={() => {
           // Only clear a part hover this row set; never clobber the
           // canvas resolver's.
-          const current = store.getState().selection.hoverPart;
-          if (current?.key === part.parentKey && current?.part === part.id) {
-            dispatch(setHoverPart(null));
+          const current = store.getState().selection.hoverSelector;
+          if (
+            current?.key === part.parentKey &&
+            current?.selector === part.id
+          ) {
+            dispatch(setHoverSelector(null));
           }
         }}
         onContextMenu={(event) => {
@@ -214,16 +330,16 @@ const PartRow = ({ part, provider, depth }) => {
         }}
         onClick={(event) => {
           event.stopPropagation();
-          // Part selection on the spine: the owner's key with the row id
-          // as the part facet, one dispatch. A rare ownerless row (a
-          // markup-view row whose owner is never stamped, like the layout
-          // element a collapsed block composes to) is inert: a part is
-          // only ever valid with its key, so there is nothing to commit.
+          // Part targeting on the spine: the owner selected, the row id
+          // (the part's selector) the styling target under it. A rare
+          // ownerless row (a markup-view row whose owner is never
+          // stamped, like the layout element a collapsed block composes
+          // to) is inert: a target is only ever valid with its key, so
+          // there is nothing to commit.
           if (part.parentKey) {
-            dispatch(setSelected({ key: part.parentKey, part: part.id }));
+            commitAddress(part.parentKey, part.id);
           }
-          elementForKey(part.parentKey)?.scrollIntoView({
-            block: 'center',
+          Drupal.Daedalus.scrollReveal(elementForKey(part.parentKey), {
             behavior: 'smooth',
           });
         }}
@@ -232,11 +348,11 @@ const PartRow = ({ part, provider, depth }) => {
           <button
             type="button"
             className="daedalus-ui-tree__disclosure"
-            aria-expanded={!folded}
-            aria-label={folded ? Drupal.t('Expand') : Drupal.t('Collapse')}
+            aria-expanded={!collapsed}
+            aria-label={collapsed ? Drupal.t('Expand') : Drupal.t('Collapse')}
             onClick={(event) => {
               event.stopPropagation();
-              setFolded(!folded);
+              set(toggle(folds, row));
             }}
           >
             <span
@@ -251,7 +367,7 @@ const PartRow = ({ part, provider, depth }) => {
           <span className="daedalus-ui-tree__sublabel">{part.sublabel}</span>
         )}
       </div>
-      {!folded && expandable && (
+      {!collapsed && expandable && (
         <ChildRows
           children={part.children}
           provider={provider}
@@ -263,29 +379,26 @@ const PartRow = ({ part, provider, depth }) => {
 };
 
 /**
- * Selects the visible-row range between the primary selection and the
- * clicked row (the list convention: Shift+click ranges). Folded rows
- * don't render, so the DOM order of [data-tree-key] rows IS the visible
- * order; no fold-state bookkeeping needed.
- */
-/**
- * Activates an element row (plain click, Enter/Space): the tool defines
- * the gesture on every surface, so under the armed session a row whose
- * key owns an editable leaf opens its editor, the same gesture a canvas
- * click commits; anything else (a container, a foreign host's row)
- * falls through to plain selection. Multi-select modifiers stay
- * selection-only and part/pseudo rows never come here. Either way the
- * canvas scrolls to the element (zero-render-seam rows have none;
+ * Activates an element row (plain click, Space on a focused row): a plain
+ * selection, the same gesture a canvas click commits; editing is Enter's
+ * (the dispatcher's one editor door, edit-session.js, which the tree's
+ * rows reach because a tree widget's Enter is never a control's own).
+ * Multi-select modifiers stay selection-only and part/pseudo rows never
+ * come here. The canvas reveals the element by the one reveal rule
+ * (Drupal.Daedalus.scrollReveal; zero-render-seam rows have none;
  * selection still commits and anchored chrome rides this row instead).
  */
 const activateRow = (key) => {
-  const editing = isArmed() ? editItemForKey(key) : null;
-  if (!editing) {
-    store.dispatch(setSelected(key));
-  }
-  elementForKey(key)?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  store.dispatch(setSelected(key));
+  Drupal.Daedalus.scrollReveal(elementForKey(key), { behavior: 'smooth' });
 };
 
+/**
+ * Selects the visible-row range between the primary selection and the
+ * clicked row (the list convention: Shift+click ranges). A collapsed
+ * row's children don't render, so the DOM order of [data-tree-key] rows
+ * IS the visible order; no posture bookkeeping needed.
+ */
 const selectRowRange = (clickedKey) => {
   const primary = store.getState().selection.selectedKey;
   const rows = Array.from(
@@ -304,6 +417,36 @@ const selectRowRange = (clickedKey) => {
   );
 };
 
+/**
+ * The outline's tools, at the end of the root row: the element picker,
+ * then the collapse-all and expand-all pair over the Outline's posture.
+ *
+ * The root row is the outline's head: always rendered, never collapsed,
+ * pinned to the top of the panel's scrollport (page-elements-tree.css),
+ * so the tools that reach into the outline sit on it and the collapse
+ * all, then pick gesture is one short reach. A press on a tool is the
+ * tool's alone: the click and the context menu stop here, so the row
+ * under them neither selects nor opens its menu.
+ */
+const OutlineTools = () => {
+  const { folds, outline, set } = useContext(OutlineContext);
+  return (
+    <span
+      className="daedalus-ui-tree__tools"
+      onClick={(event) => event.stopPropagation()}
+      onContextMenu={(event) => event.stopPropagation()}
+    >
+      <PickerToggle />
+      <CollapseControls
+        id={OUTLINE_ID}
+        folds={folds}
+        outline={outline}
+        apply={set}
+      />
+    </span>
+  );
+};
+
 const TreeRow = ({ node, provider, depth }) => {
   // The root row is the whole page: there is nothing outside it to reveal
   // by collapsing it, so it renders without a disclosure and never folds.
@@ -312,9 +455,20 @@ const TreeRow = ({ node, provider, depth }) => {
   const isSelected = useSelector(
     (state) => !!node.key && state.selection.selectedKeys.includes(node.key),
   );
-  const isPrimary = useSelector(
-    (state) => !!node.key && state.selection.selectedKey === node.key,
-  );
+  // The primary row: the selected element's, unless a PLACED part of it
+  // is targeted, when the part row is the active stop and this row keeps
+  // only its selected treatment (an unplaced target, a tag tier or a
+  // chain with no row, leaves the element row primary).
+  const isPrimary = useSelector((state) => {
+    const { selectedKey, target } = state.selection;
+    if (!node.key || selectedKey !== node.key) {
+      return false;
+    }
+    return !(
+      target?.key === node.key &&
+      projectionIndex()?.has(selectorAddress(node.key, target.selector))
+    );
+  });
   const isHovered = useSelector(
     (state) => !!node.key && state.selection.hoverKey === node.key,
   );
@@ -325,20 +479,12 @@ const TreeRow = ({ node, provider, depth }) => {
     (state) => !!node.key && state.view.markedKeys.includes(node.key),
   );
   const hasSelection = useSelector((state) => !!state.selection.selectedKey);
-  const containsSelected = useSelector((state) =>
-    containsKey(node, state.selection.selectedKey),
-  );
-  // Unit rows present as one element: they start folded (the panel's face
-  // of the same default stop the canvas resolver honors — the node's
-  // presentation ANNOTATION, projected from the blueprint, replaces the
-  // old isCollapseRoot DOM reach-back). Merged rows have no absorbed
-  // structure left to hide, so only their real children (if any) show.
-  // Manual fold state then survives re-projections — rows are keyed.
-  // The root row never folds — it has no disclosure to unfold with.
-  const [folded, setFolded] = useState(
-    () =>
-      !isRoot && (node.presentation === 'unit' || node.children.length === 0),
-  );
+  // The row's posture is the Outline's (modelRow gives the default, the
+  // context the explicit postures); keyed by the node's key, so a manual
+  // posture survives re-projections.
+  const { folds, set } = useContext(OutlineContext);
+  const row = modelRow(node, isRoot);
+  const collapsed = isCollapsed(folds, row);
   const rowRef = useRef(null);
 
   // Inline rename (sections at every depth): the Rename verb, or its
@@ -353,7 +499,8 @@ const TreeRow = ({ node, provider, depth }) => {
   // response's mirror replacement re-projects the row, the breadcrumb, the
   // outline badge, and the AI chips from the shared projection index, so
   // every surface renames at once. An empty commit clears the custom label
-  // (the row falls back to the layout-derived name).
+  // (the row falls back to its type word, the name the annotator mints for
+  // an unrenamed section).
   //
   // The ROOT row is the second renamable kind: the entity's label field
   // presents AS the root row (the annotation's derived edit_target), so
@@ -425,10 +572,12 @@ const TreeRow = ({ node, provider, depth }) => {
     });
   };
 
-  // Canvas → panel: reveal the row when it becomes the selection.
+  // Canvas → panel: reveal the row when it becomes the selection, by the
+  // one reveal rule (the whole row in the panel's scrollport, centered
+  // when it was out of view, unmoved when it already showed).
   useEffect(() => {
     if (isSelected) {
-      rowRef.current?.scrollIntoView({ block: 'nearest' });
+      Drupal.Daedalus.scrollReveal(rowRef.current);
     }
   }, [isSelected]);
 
@@ -451,9 +600,8 @@ const TreeRow = ({ node, provider, depth }) => {
   // all four quadrants of the move gesture are one interaction. The drag
   // data's element is the row's CANVAS element, resolved at dragstart, so
   // the descendant guard and the optimistic move reason about the page
-  // even when the gesture never touches it. Rows arm regardless of the
-  // current tool: the panel is its own surface, so its drags never collide
-  // with a canvas gesture.
+  // even when the gesture never touches it. The panel is its own surface,
+  // so its drags never collide with a canvas gesture.
   useEffect(() => {
     const row = rowRef.current;
     const parts = node.key?.split(':') ?? [];
@@ -471,32 +619,6 @@ const TreeRow = ({ node, provider, depth }) => {
     );
     return () => removeDraggable(row);
   }, [node.key, renaming]);
-
-  // A folded row can't reveal a selected descendant (its children don't
-  // render), so selection unfolds the path to it — deep select (Cmd+click)
-  // reaches inside collapse roots. Keyed to the CHANGE: re-folding a row
-  // that still contains the selection sticks.
-  useEffect(() => {
-    if (containsSelected) {
-      setFolded(false);
-    }
-  }, [containsSelected]);
-
-  // The drop's twin of the selection unfold: while a drag or lift
-  // targets a location under this row, unfold so the caret's panel face
-  // has rows to draw between. The target container itself unfolds too:
-  // an 'inside' drop points at its children's home.
-  const containsDrop = useSelector(
-    (state) =>
-      !!state.drag.dropRowKey &&
-      (node.key === state.drag.dropRowKey ||
-        containsKey(node, state.drag.dropRowKey)),
-  );
-  useEffect(() => {
-    if (containsDrop) {
-      setFolded(false);
-    }
-  }, [containsDrop]);
 
   const classes = ['daedalus-ui-tree__row', `daedalus-ui-tree__row--${node.kind}`];
   if (isSelected) {
@@ -532,7 +654,7 @@ const TreeRow = ({ node, provider, depth }) => {
         role="treeitem"
         aria-selected={isSelected}
         aria-level={depth + 1}
-        aria-expanded={expandable && !isRoot ? !folded : undefined}
+        aria-expanded={expandable && !isRoot ? !collapsed : undefined}
         tabIndex={isPrimary || (!hasSelection && isRoot) ? 0 : -1}
         className={classes.join(' ')}
         data-tree-key={node.key ?? undefined}
@@ -598,16 +720,19 @@ const TreeRow = ({ node, provider, depth }) => {
             }
             return;
           }
-          // The ARIA treeitem activation keys: Enter/Space on a focused
-          // row activates it (activateRow, the keyboard twin of the row
+          // The ARIA treeitem activation key: Space on a focused row
+          // activates it (activateRow, the keyboard twin of the row
           // click). Only the row itself (the disclosure button keeps its
           // native activation), and a PRIMARY row's Space stays with the
-          // dispatcher, where it means lift.
+          // dispatcher, where it means lift. Enter is NOT handled here:
+          // it is the dispatcher's editor door (edit-session.js), which
+          // opens the primary's editor from the canvas and the panel
+          // alike, so the row lets it propagate.
           if (
-            (event.key !== 'Enter' && event.key !== ' ') ||
+            event.key !== ' ' ||
             event.target !== event.currentTarget ||
             !node.key ||
-            (event.key === ' ' && isPrimary)
+            isPrimary
           ) {
             return;
           }
@@ -624,11 +749,11 @@ const TreeRow = ({ node, provider, depth }) => {
           <button
             type="button"
             className="daedalus-ui-tree__disclosure"
-            aria-expanded={!folded}
-            aria-label={folded ? Drupal.t('Expand') : Drupal.t('Collapse')}
+            aria-expanded={!collapsed}
+            aria-label={collapsed ? Drupal.t('Expand') : Drupal.t('Collapse')}
             onClick={(event) => {
               event.stopPropagation();
-              setFolded(!folded);
+              set(toggle(folds, row));
             }}
           >
             <span
@@ -694,8 +819,9 @@ const TreeRow = ({ node, provider, depth }) => {
         {!renaming && node.sublabel && (
           <span className="daedalus-ui-tree__sublabel">{node.sublabel}</span>
         )}
+        {isRoot && <OutlineTools />}
       </div>
-      {!folded && expandable && (
+      {!collapsed && expandable && (
         <ChildRows
           children={node.children}
           provider={provider}
@@ -703,6 +829,74 @@ const TreeRow = ({ node, provider, depth }) => {
         />
       )}
     </li>
+  );
+};
+
+/**
+ * The outline owner: the tree's one posture over the collapse model.
+ *
+ * Holds `folds` (the explicit postures; null is "every row at its
+ * default"), projects the rendered tree into the model's shape, and runs
+ * the two rules over it as effects:
+ * - the selection rule: a collapsed row cannot show a selected descendant
+ *   (its children do not render), so the selection reveals the path to it
+ *   (deep select reaches inside unit rows) and the row's own posture
+ *   stays (a unit row stays a unit when selected). Keyed to the CHANGE of
+ *   the path, so a manual re-collapse of a row that still holds the
+ *   selection sticks;
+ * - the drop rule, the selection rule's twin: while a drag or lift
+ *   targets a location under a row, the path to it reveals so the
+ *   caret's panel face has rows to draw between, and the target itself
+ *   expands too (an 'inside' drop points at its children's home).
+ * The collapse-all and expand-all hotkeys (`3` and `4`, remappable in the
+ * tray's Panels section) register for the outline's lifetime and read the
+ * posture at press time; the pair of controls on the root row reads the
+ * same state through the context. Mounted under a key on the view id by
+ * the tree, so a view switch is a fresh outline at the new view's
+ * defaults.
+ */
+const Outline = ({ tree, provider }) => {
+  const [folds, setFolds] = useState(null);
+  const outline = outlineOf(tree);
+  // The registrar's actions run at press time, against the posture and
+  // outline of the latest render, never the mount's.
+  const latest = useRef(null);
+  latest.current = { folds, outline };
+  useEffect(
+    () =>
+      registerCollapseHotkeys({
+        id: OUTLINE_ID,
+        label: Drupal.t('Page elements'),
+        keys: { collapseAll: '3', expandAll: '4' },
+        read: () => latest.current,
+        apply: setFolds,
+      }),
+    [],
+  );
+
+  const selectedKey = useSelector((state) => state.selection.selectedKey);
+  const selectionPath = pathTo(outline, selectedKey);
+  useEffect(() => {
+    setFolds((current) => reveal(current, outline, selectedKey));
+  }, [selectionPath]);
+
+  const dropRowKey = useSelector((state) => state.drag.dropRowKey);
+  const dropPath = pathTo(outline, dropRowKey);
+  useEffect(() => {
+    if (!dropRowKey) {
+      return;
+    }
+    setFolds((current) => {
+      const revealed = reveal(current, outline, dropRowKey);
+      const target = rowOf(outline, dropRowKey);
+      return target ? expand(revealed, target) : revealed;
+    });
+  }, [dropPath]);
+
+  return (
+    <OutlineContext.Provider value={{ folds, outline, set: setFolds }}>
+      <TreeRow node={tree} provider={provider} depth={0} />
+    </OutlineContext.Provider>
   );
 };
 
@@ -728,16 +922,25 @@ const PageElementsTree = ({ showMenuSlot }) => {
   // PartRow, not announcements.)
   const [, bump] = useState(0);
   useEffect(() => subscribeTreeViews(() => bump((count) => count + 1)), []);
-  useSelector((state) => state.view.parts);
+  const visibility = useSelector((state) => state.view.views);
+  // The generated-box rows read the materials record set too (a worn
+  // look's box fragment can flip a box), and a materials-only response
+  // replaces no mirror, so the tree subscribes to the records as well.
+  useSelector((state) => state.materials.records);
   if (!root || !blueprint) {
     return null;
   }
   // The active provider's view replaces the projection; a failing provider
-  // is contained — the tree falls back to the model projection. The model
-  // projection is not bare: instance rows are CONTENT (user-authored
-  // rich-text structure), so they render in every view — the fallback
-  // appends them chip-less (withInstanceRows), while shell rows and tag
-  // chips stay the markup view's own, behind its Show-menu toggle.
+  // is contained — the tree falls back to the model projection. Either
+  // tree then composes the pseudo rows the index composes with: the
+  // model projection appends the instance rows chip-less (the markup
+  // view lists its own, with chips), and the generated-box rows are
+  // appended under whichever tree renders, after everything the view
+  // lists. The draw is reach: depictedRows keeps the rows whose source
+  // the view slice depicts, so instance rows (content, source
+  // 'instance') survive in every view and box rows (the Markup view's)
+  // only while that toggle is on, the same answer reach.js gives the
+  // pointer and the keyboard.
   const provider = activeTreeView();
   let tree = null;
   if (provider) {
@@ -750,12 +953,13 @@ const PageElementsTree = ({ showMenuSlot }) => {
   const viewProvider = tree ? provider : null;
   const viewId = viewProvider ? viewProvider.displayToggle.id : 'model';
   tree ??= withInstanceRows(projectTree(root, blueprint), instanceRows);
+  tree = depictedRows(withGeneratedRows(tree, generatedRows), visibility);
   return (
     // data-selection-hover-scope: rows drive selection hover through their
     // own enter/leave handlers; the canvas mousemove resolver stays out.
-    // The root row is KEYED on the view identity: switching projections
-    // remounts the tree so fold state resets to the new view's defaults (a
-    // view flip is a new view, not a re-render of the old one).
+    // The Outline is KEYED on the view identity: switching projections
+    // remounts the tree so every posture resets to the new view's defaults
+    // (a view flip is a new view, not a re-render of the old one).
     <ul
       className="daedalus-ui-tree"
       role="tree"
@@ -763,7 +967,7 @@ const PageElementsTree = ({ showMenuSlot }) => {
       data-selection-hover-scope
     >
       {createPortal(<ShowMenu />, showMenuSlot)}
-      <TreeRow key={viewId} node={tree} provider={viewProvider} depth={0} />
+      <Outline key={viewId} tree={tree} provider={viewProvider} />
     </ul>
   );
 };
@@ -772,7 +976,7 @@ const PageElementsTree = ({ showMenuSlot }) => {
  * Mounts the tree into the page_elements panel.
  *
  * The panel markup renders server-side in page_top and persists across mode
- * and tool switches, so one mount per page lifetime suffices; the behavior
+ * switches, so one mount per page lifetime suffices; the behavior
  * guards re-attach with a dataset flag rather than once() to keep the app
  * bundle dependency-free.
  */
@@ -805,8 +1009,8 @@ export const initPageElementsTree = () => {
         return;
       }
       // The header's slot for the Show kebab is part of the panel's
-      // server-rendered contract (SidebarPanelHeaderTest); its absence is
-      // a broken panel, not a tree without a menu.
+      // server-rendered contract (SidebarPanelHeaderTest); a missing one
+      // is a broken panel, not a tree without a button.
       const showMenuSlot = document.getElementById('page-elements-show-menu');
       if (!showMenuSlot) {
         throw new Error(

@@ -6,6 +6,7 @@ namespace Drupal\daedalus_ui\ElementModel;
 
 use Drupal\Core\Entity\EntityFieldManagerInterface;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
+use Drupal\Core\Entity\FieldableEntityInterface;
 use Drupal\Core\Field\FieldDefinitionInterface;
 use Drupal\field\Entity\FieldConfig;
 use Drupal\daedalus_ui\Presentation\Presentation;
@@ -219,6 +220,62 @@ final class ElementModel {
       return new Presentation(Presentation::OPEN, NULL, $label_field);
     }
     return new Presentation(Presentation::OPEN);
+  }
+
+  /**
+   * The root field a Layout Builder field block presents, or NULL.
+   *
+   * Core's field block plugin id is field_block:{entity_type}:{bundle}:
+   * {field}; the placement presents that field exactly when the entity it
+   * renders for is one the derivative was made for (same type and bundle)
+   * and carries the field. Anything else (a plugin block, a stale
+   * derivative, a mismatched context) is no field render and presents open
+   * like any plugin component.
+   *
+   * @param string $plugin_id
+   *   The component's block plugin id.
+   * @param \Drupal\Core\Entity\FieldableEntityInterface $entity
+   *   The entity the placement renders for (the layout's root).
+   *
+   * @return \Drupal\Core\Field\FieldDefinitionInterface|null
+   *   The presented field's definition on that entity, or NULL.
+   */
+  public function presentedField(string $plugin_id, FieldableEntityInterface $entity): ?FieldDefinitionInterface {
+    $parts = explode(':', $plugin_id);
+    if (count($parts) !== 4 || $parts[0] !== 'field_block') {
+      return NULL;
+    }
+    [, $entity_type_id, $bundle, $field_name] = $parts;
+    if ($entity->getEntityTypeId() !== $entity_type_id || $entity->bundle() !== $bundle || !$entity->hasField($field_name)) {
+      return NULL;
+    }
+    return $entity->getFieldDefinition($field_name);
+  }
+
+  /**
+   * Decides presentation for a field-block placement.
+   *
+   * A field block renders one root field inside a plugin-block placement:
+   * the placement wrapper (block:{uuid}) around the field's own render
+   * (field:{root}:{name}, attributed exactly as a preserved field's, the
+   * same leaf inside). The placement presents MERGED into that field, the
+   * rule a single-content inline block merges under: one row keyed by the
+   * placement (the outermost carrier, so move, trash and duplicate arm),
+   * labeled with the field's definition label, editing routed to the
+   * field's leaf, which edits in place. Rendered evidence beats display
+   * inference: the root's existence feeders may report the field
+   * nonexistent for the root display's own rows (it renders here, not
+   * there), and the placement's merged fold is what keeps the leaf
+   * editable regardless.
+   *
+   * @param \Drupal\Core\Field\FieldDefinitionInterface $definition
+   *   The presented field (presentedField()).
+   *
+   * @return \Drupal\daedalus_ui\Presentation\Presentation
+   *   MERGED, labeled and targeted at the field.
+   */
+  public function fieldBlockPresentation(FieldDefinitionInterface $definition): Presentation {
+    return new Presentation(Presentation::MERGED, (string) $definition->getLabel(), $definition->getName());
   }
 
   /**

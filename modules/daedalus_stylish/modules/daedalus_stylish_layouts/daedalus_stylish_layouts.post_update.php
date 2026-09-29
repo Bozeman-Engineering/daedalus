@@ -8,6 +8,7 @@
 declare(strict_types=1);
 
 use Drupal\Core\Utility\UpdateException;
+use Drupal\daedalus_stylish_layouts\ContainerMigration;
 
 /**
  * Syncs shipped definitions for an update, failing the update on any failure.
@@ -305,4 +306,46 @@ function daedalus_stylish_layouts_post_update_one_box_0004_hoist_skins() {
 function daedalus_stylish_layouts_post_update_one_box_0005_hoist_stencils() {
   $lines = \Drupal::service('daedalus_stylish_layouts.container_part_hoist')->hoistStencils();
   return t('Hoisted container part styles onto the root key in stored stencils (@count report lines logged to the daedalus_stylish_layouts channel).', ['@count' => count($lines)]);
+}
+
+/**
+ * Renames the shipped Columns variant from `row` to `columns`.
+ *
+ * A variant named `row` that means Columns misleads the AI (apply_variant
+ * row) and every map reader once a real Row arrangement exists on the
+ * same axis, so the shipped variant ships under `columns` now and `row`
+ * is free for Row. The order is forced by the materials roster: two
+ * published variants on one axis cannot spell the same label slug, so
+ * `columns` cannot land beside the legacy `row` (the rebuild before this
+ * update refuses it on the sync report, loudly but harmlessly). First the
+ * unmodified shipped `row` entity retires (a modified one is kept and
+ * reported; the sync then refuses `columns` and this update fails loudly
+ * until the developer relabels or reverts it), then the module's shipped
+ * definitions sync so `columns` lands (and, once Row ships, `row` lands
+ * clean under its own label). Only then every stored `row` wearing is
+ * repointed: host style maps (every revision and translation, through
+ * daedalus_layout's host entity walker with a sweep that is deliberately
+ * not registered, since a permanent row-to-columns sweep would eat Row
+ * wearings), stored stencils and variant styles (composition variants
+ * nesting the name; shipped-unmodified ones ride the sync lane).
+ */
+function daedalus_stylish_layouts_post_update_rename_row_to_columns(&$sandbox) {
+  $from = 'row';
+  $to = ContainerMigration::COLUMNS_VARIANT;
+  $rename = \Drupal::service('daedalus_stylish_layouts.variant_rename');
+  if (!isset($sandbox['daedalus_stylish_layouts_rename_lines'])) {
+    $sandbox['daedalus_stylish_layouts_rename_lines'] = count($rename->retireShipped($from, 'daedalus_stylish_layouts'));
+    _daedalus_stylish_layouts_sync_shipped(['daedalus_stylish_layouts']);
+  }
+  if (\Drupal::hasService('daedalus_layout.host_entity_walker')) {
+    $saved = $rename->walkHosts($sandbox, $from, $to);
+    if (empty($sandbox['#finished']) || $sandbox['#finished'] < 1) {
+      return t('Repointed the "@from" wearing to "@to" on @count host revisions in this batch.', ['@from' => $from, '@to' => $to, '@count' => $saved]);
+    }
+  }
+  $count = $sandbox['daedalus_stylish_layouts_rename_lines']
+    + count($rename->renameInStencils($from, $to))
+    + count($rename->renameInVariants($from, $to));
+  $sandbox['#finished'] = 1;
+  return t('Renamed the shipped Columns variant from "@from" to "@to" across host maps, stored stencils and variant styles (the host repoints logged per revision; @count retirement, stencil and variant report lines logged to the daedalus_stylish_layouts channel).', ['@from' => $from, '@to' => $to, '@count' => $count]);
 }

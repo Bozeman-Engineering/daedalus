@@ -26,7 +26,7 @@ use Drupal\daedalus_ui\ElementModel\PageBuilderDeclarations;
  * `daedalus_edit.link_target_types` third-party setting on the link field's
  * config (FieldConfigFormAlter), defaulting to nodes.
  *
- * The payload rides the Edit tool's drupalSettings as
+ * The payload rides the form panel's drupalSettings (EntityFormSidebar) as
  * `daedalusEdit.linkAutocomplete`, keyed by field config id
  * (`block_content.BUNDLE.FIELD_NAME`), each entry a list of endpoint
  * descriptors: {type, label, url}. The label is the entity TYPE label,

@@ -6,21 +6,27 @@ namespace Drupal\Tests\daedalus_stylish\Kernel;
 
 use Drupal\block_content\Entity\BlockContent;
 use Drupal\block_content\Entity\BlockContentType;
-use Drupal\Core\Layout\LayoutDefinition;
+use Drupal\Core\Routing\RouteObjectInterface;
 use Drupal\Core\StreamWrapper\PublicStream;
 use Drupal\field\Entity\FieldConfig;
 use Drupal\field\Entity\FieldStorageConfig;
 use Drupal\KernelTests\KernelTestBase;
 use Drupal\layout_builder\SectionComponent;
-use Drupal\daedalus_stylish\ContainerDefaultsStamp;
+use Drupal\daedalus_blueprint\Materials\Address;
 use Drupal\daedalus_stylish\CssPrinter;
+use Drupal\daedalus_stylish\AnimationStylesheet;
 use Drupal\daedalus_stylish\DefaultsStylesheet;
+use Drupal\daedalus_stylish\SwatchStylesheet;
 use Drupal\daedalus_stylish\Entity\DaedalusStylishSkin;
+use Drupal\daedalus_ui\Chromeless;
+use Drupal\daedalus_ui\Render\ElementAddress;
 use Drupal\Tests\daedalus\Traits\DesignSystemActivationTrait;
 use Drupal\Tests\user\Traits\UserCreationTrait;
 use Drupal\Tests\workspaces\Kernel\WorkspaceTestTrait;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
+use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\Routing\Route;
 
 /**
  * Tests defaults delivery: the compiled defaults stylesheet and its stamps.
@@ -39,9 +45,10 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  * saves (breakpoint thresholds, container_roots), on workspace publish
  * (the staged revision previewing via page-level inline CSS in the
  * meantime), and on every declaration change (module install and
- * uninstall among them). The stamping seams read the union of both
- * tiers' scopes, so a declared default lands on its element with no
- * skin at all.
+ * uninstall among them). The whole tier prints bare at zero specificity,
+ * element scopes selecting by the element address daedalus_ui stamps
+ * unconditionally (data-element), so a declared default lands on its
+ * element with no skin at all and every authored rule beats it.
  */
 #[Group('daedalus_stylish')]
 #[RunTestsInSeparateProcesses]
@@ -80,6 +87,7 @@ class DefaultsStylesheetTest extends KernelTestBase {
     'twig_events',
     'daedalus_tempstore',
     'daedalus_blueprint_api',
+    'file',
     'daedalus_ui',
     'daedalus_stylish',
     'daedalus_stylish_control_test',
@@ -149,10 +157,17 @@ class DefaultsStylesheetTest extends KernelTestBase {
   }
 
   /**
-   * The @scope root selector of a declared or skin element-scope block.
+   * The bare selector a declared or skin element-scope default prints at.
    */
-  protected function scopeRoot(string $scope): string {
-    return '@scope (.' . DefaultsStylesheet::SCOPE_CLASS . ' .' . DefaultsStylesheet::scopeClass($scope) . ')';
+  protected function elementSelector(string $scope): string {
+    return DefaultsStylesheet::elementSelector(Address::fromString($scope));
+  }
+
+  /**
+   * The exact-address member of an element selector, token-scope prefixed.
+   */
+  protected function addressMember(string $scope): string {
+    return '.' . DefaultsStylesheet::SCOPE_CLASS . ' [' . ElementAddress::ATTRIBUTE . '="' . $scope . '"]';
   }
 
   /**
@@ -192,9 +207,16 @@ class DefaultsStylesheetTest extends KernelTestBase {
     $this->assertFileExists($uri);
     $css = file_get_contents($uri);
 
-    // Tokens deliver on the token scope element, never :root.
+    // Tokens deliver on the token scope element, never :root. The file's
+    // ONE :root rule is the scheme declaration (the skin's dark values ride
+    // prefers-color-scheme, so the UA's own chrome must follow it too), and
+    // no custom property prints on it.
     $this->assertStringContainsString('@scope (.' . DefaultsStylesheet::SCOPE_CLASS . ')', $css);
-    $this->assertStringNotContainsString(':root', $css);
+    $this->assertStringContainsString(CssPrinter::COLOR_SCHEME_RULE, $css);
+    $this->assertSame(1, substr_count($css, ':root'));
+    $root_at = strpos($css, ':root {');
+    $root_rule = substr($css, $root_at, strpos($css, '}', $root_at) - $root_at);
+    $this->assertStringNotContainsString('--', $root_rule);
     $this->assertStringContainsString('--space-4: 1rem;', $css);
     $this->assertStringContainsString('--space-8: calc(var(--space-4) * 2);', $css);
     // The declared prefix rides the ONE derivation rule.
@@ -229,6 +251,10 @@ class DefaultsStylesheetTest extends KernelTestBase {
     $this->assertStringContainsString('--space-4: 2rem;', $css);
     // No width conditions left: the containment rule is demand-driven.
     $this->assertStringNotContainsString('container-type', $css);
+    // No scheme conditions left either: a light-only skin declares no
+    // scheme (the used scheme is already light).
+    $this->assertStringNotContainsString(CssPrinter::COLOR_SCHEME_RULE, $css);
+    $this->assertStringNotContainsString(':root', $css);
 
     // An unpublished active skin compiles nothing (the variants posture).
     $skin->setUnpublished();
@@ -259,34 +285,34 @@ class DefaultsStylesheetTest extends KernelTestBase {
     $this->assertStringStartsWith(DefaultsStylesheet::DIRECTORY . '/defaults-', $uri);
     $css = file_get_contents($uri);
 
-    // Every declaring refinement prints as an @scope block at its stamped
-    // scope class, token-scope-prefixed, through the skin defaults' own
-    // printer path: root rules at :scope, part rules with the root-hoist
-    // alternative, the container family with the class-extended donut.
-    $this->assertStringContainsString($this->scopeRoot('block_plugin:fancy_menu') . " {\n  :scope {\n    display: flex;\n  }", $css);
-    $this->assertStringContainsString($this->scopeRoot('block_type:image') . " {\n  :scope {\n    display: block;\n    width: fit-content;\n  }", $css);
-    $this->assertStringContainsString(':scope.image-block-image, .image-block-image', $css);
-    $this->assertStringContainsString($this->scopeRoot('layout:layout_onecol') . ' to (' . DefaultsStylesheet::DEFAULTS_SCOPE_LIMIT . ')', $css);
-    $this->assertStringContainsString(':scope.band-inner, .band-inner', $css);
+    // Every declaring refinement prints BARE at its element address,
+    // token-scope-prefixed and fully :where()-wrapped (zero specificity, no
+    // @scope, no donut), through the skin defaults' own printer path: root
+    // rules at the address selector, part rules as :where() descendants.
+    $this->assertSame(':where(' . $this->addressMember('block_plugin:fancy_menu') . ')', $this->elementSelector('block_plugin:fancy_menu'));
+    $this->assertStringContainsString($this->elementSelector('block_plugin:fancy_menu') . " {\n  display: flex;\n}", $css);
+    $this->assertStringContainsString($this->elementSelector('block_type:image') . " {\n  display: block;\n  width: fit-content;\n}", $css);
+    $this->assertStringContainsString($this->elementSelector('block_type:image') . " :where(.image-block-image) {\n  display: block;\n}", $css);
+    $this->assertStringContainsString($this->elementSelector('layout:layout_onecol') . " :where(.band-inner) {", $css);
+    $this->assertStringNotContainsString('@scope', $css, 'No default prints inside an @scope block.');
+    $this->assertStringNotContainsString(':scope', $css);
     // Refinement rank order, stored order within: block plugins, block
     // types, layouts.
-    $plugin_at = strpos($css, $this->scopeRoot('block_plugin:fancy_menu'));
-    $type_at = strpos($css, $this->scopeRoot('block_type:image'));
-    $layout_at = strpos($css, $this->scopeRoot('layout:layout_onecol'));
+    $plugin_at = strpos($css, $this->elementSelector('block_plugin:fancy_menu'));
+    $type_at = strpos($css, $this->elementSelector('block_type:image'));
+    $layout_at = strpos($css, $this->elementSelector('layout:layout_onecol'));
     $this->assertLessThan($type_at, $plugin_at);
     $this->assertLessThan($layout_at, $type_at);
     // No skin: no token block. The layout's width-conditioned default
     // demands the live width container exactly like a skin's would.
-    $this->assertStringNotContainsString('@scope (.' . DefaultsStylesheet::SCOPE_CLASS . ')', $css);
     $this->assertStringContainsString('@container (max-width: 767px)', $css);
     $this->assertStringContainsString(CssPrinter::PAGE_CONTAINER_RULE, $css);
+    // The declared tier never feeds the scheme declaration: a module's
+    // dark-conditioned box fact says nothing about the site's scheme, and
+    // with no skin the page is the theme's light fallbacks.
+    $this->assertStringNotContainsString('color-scheme', $css);
 
-    // The stamping demand is the declared scopes, with no skin to add to
-    // them; the library serves the file.
-    $this->assertSame(
-      ['block_plugin:fancy_menu', 'block_type:image', 'layout:layout_onecol'],
-      \Drupal::service('daedalus_stylish.defaults_stylesheet')->scopes(),
-    );
+    // The library serves the file.
     $library = \Drupal::service('library.discovery')->getLibraryByName('daedalus_stylish', 'defaults');
     $this->assertStringContainsString(basename($uri), $library['css'][0]['data']);
 
@@ -294,7 +320,6 @@ class DefaultsStylesheetTest extends KernelTestBase {
     \Drupal::service('module_installer')->uninstall([self::FIXTURE]);
     $this->assertNull($this->stylesheetUri(), 'Uninstalling the declaring module recompiles the declared tier away.');
     $this->assertFileDoesNotExist($uri);
-    $this->assertSame([], \Drupal::service('daedalus_stylish.defaults_stylesheet')->scopes());
   }
 
   /**
@@ -302,50 +327,41 @@ class DefaultsStylesheetTest extends KernelTestBase {
    *
    * The ownership law's delivery half: the container kind declared
    * composed defaults its own root, the compiled declared tier carries
-   * the kind scope as an @scope block at its family class (with the
-   * container donut, like every container-family block), ranked before
-   * every refinement so a layout's default wins by document order, and
-   * the stamping demand lists the kind scope, so ContainerDefaultsStamp
-   * lands the family class on every section with no skin at all.
+   * the kind scope as a bare rule selecting every section by its layout
+   * address (the kind is the whole layout: family), ranked before every
+   * refinement so a layout's default wins by document order, with no skin
+   * at all.
    */
   public function testComposedKindRootDefaultCompiles(): void {
     $this->assertNull($this->container->get('daedalus_stylish.skin_manager')->activeSkinName());
     $this->container->get('state')->set('daedalus_stylish_control_test.kinds', [
-      'container' => ['composed' => TRUE, 'defaults' => ['' => ['default' => ['display' => 'grid']]]],
+      'container' => ['composed' => TRUE, 'defaults' => ['' => ['default' => ['display' => 'flex', 'flex-direction' => 'column', 'gap' => '0px']]]],
     ]);
     $this->container->get('daedalus_stylish.style_guide')->resetCache();
     $this->container->get('daedalus_stylish.defaults_stylesheet')->compile();
     $uri = $this->stylesheetUri();
     $this->assertIsString($uri, 'A kind\'s declared default compiles the declared tier with no skin.');
     $css = file_get_contents($uri);
-    $this->assertStringContainsString($this->scopeRoot('kind:container') . ' to (' . DefaultsStylesheet::DEFAULTS_SCOPE_LIMIT . ") {\n  :scope {\n    display: grid;\n  }", $css);
-    $this->assertSame(['kind:container'], $this->container->get('daedalus_stylish.defaults_stylesheet')->scopes());
-    $this->assertSame(['daedalus-stylish-defaults--kind-container'], ContainerDefaultsStamp::classes(['kind:container'], 'layout_onecol'));
+    $this->assertSame(':where(.' . DefaultsStylesheet::SCOPE_CLASS . ' [' . ElementAddress::ATTRIBUTE . '^="layout:"])', $this->elementSelector('kind:container'));
+    $this->assertStringContainsString($this->elementSelector('kind:container') . " {\n  display: flex;\n  flex-direction: column;\n  gap: 0px;\n}", $css);
 
     // Beside the refinements the kind block leads the file: kind before
     // refinement is the delivery rank order both tiers share.
     $this->enableFixture();
     $this->container->get('daedalus_stylish.defaults_stylesheet')->compile();
     $css = file_get_contents($this->stylesheetUri());
-    $kind_at = strpos($css, $this->scopeRoot('kind:container'));
+    $kind_at = strpos($css, $this->elementSelector('kind:container'));
     $this->assertIsInt($kind_at);
-    $this->assertLessThan(strpos($css, $this->scopeRoot('block_plugin:fancy_menu')), $kind_at);
-    $this->assertLessThan(strpos($css, $this->scopeRoot('layout:layout_onecol')), $kind_at);
-    $scopes = $this->container->get('daedalus_stylish.defaults_stylesheet')->scopes();
-    $this->assertSame(['kind:container', 'block_plugin:fancy_menu', 'block_type:image', 'layout:layout_onecol'], $scopes);
-    $this->assertSame(
-      ['daedalus-stylish-defaults--kind-container', 'daedalus-stylish-defaults--layout-layout_onecol'],
-      ContainerDefaultsStamp::classes($scopes, 'layout_onecol'),
-    );
+    $this->assertLessThan(strpos($css, $this->elementSelector('block_plugin:fancy_menu')), $kind_at);
+    $this->assertLessThan(strpos($css, $this->elementSelector('layout:layout_onecol')), $kind_at);
   }
 
   /**
    * The declared tier prints beneath the skin's tiers for the same scope.
    *
-   * Equal :scope specificity, so document order decides: the declaration
+   * Equal (zero) specificity, so document order decides: the declaration
    * ships the floor, the skin is the site's look. The declared tier leads
-   * the whole file (before the token block too), and the stamping demand
-   * is the union of both tiers' scopes.
+   * the whole file (before the token block too).
    */
   public function testDeclaredTierPrintsBeneathSkin(): void {
     $this->enableFixture();
@@ -364,70 +380,30 @@ class DefaultsStylesheetTest extends KernelTestBase {
     // follows the whole declared tier.
     $declared_at = strpos($css, 'width: fit-content;');
     $skin_at = strpos($css, 'display: inline-block;');
-    $kind_at = strpos($css, $this->scopeRoot('kind:block'));
+    $kind_at = strpos($css, $this->elementSelector('kind:block'));
     $tokens_at = strpos($css, '--space-4: 1rem;');
     $this->assertIsInt($declared_at);
     $this->assertIsInt($skin_at);
-    $this->assertLessThan($declared_at, strpos($css, $this->scopeRoot('block_type:image')));
+    $this->assertLessThan($declared_at, strpos($css, $this->elementSelector('block_type:image')));
     $this->assertLessThan($tokens_at, $declared_at);
     $this->assertLessThan($kind_at, $tokens_at);
-    $this->assertLessThan(strrpos($css, $this->scopeRoot('block_type:image')), $kind_at);
-    $this->assertLessThan($skin_at, strrpos($css, $this->scopeRoot('block_type:image')));
-
-    $this->assertSame(
-      ['block_plugin:fancy_menu', 'block_type:image', 'layout:layout_onecol', 'kind:block'],
-      $this->container->get('daedalus_stylish.defaults_stylesheet')->scopes(),
-    );
+    $this->assertLessThan(strrpos($css, $this->elementSelector('block_type:image')), $kind_at);
+    $this->assertLessThan($skin_at, strrpos($css, $this->elementSelector('block_type:image')));
   }
 
   /**
-   * Declared defaults stamp their scope classes with no skin at all.
+   * A composed block's root is selected by the compiled declared default.
    *
-   * The preprocess seams (plugin blocks, layouts) read the union of both
-   * tiers' scopes: a declaring plugin block wears the family class (the
-   * donut boundary) and its own refinement class; a declaring layout the
-   * container family's; an undeclared plugin the family class alone, since
-   * the tier holds element defaults.
+   * The two halves of the one derivation, on one live render with no
+   * design system: daedalus_ui stamps the placement's element address on
+   * the block build (LayoutBuilderBlockAttributes), ComposedBlockRender
+   * hands that bag to the composed element as the root's hoisted
+   * attributes, and the compiled file's bare selector names exactly that
+   * attribute value. Pinned here: no stylish stamping exists, and the
+   * declared default's selector must match the composed root of a live
+   * render byte for byte.
    */
-  public function testDeclaredDefaultsStampInPreprocess(): void {
-    $variables = ['plugin_id' => 'fancy_menu:main', 'attributes' => []];
-    daedalus_stylish_preprocess_block($variables);
-    $this->assertArrayNotHasKey('class', $variables['attributes'], 'Nothing declares or defaults: nothing stamps.');
-
-    $this->enableFixture();
-    $variables = ['plugin_id' => 'fancy_menu:main', 'attributes' => []];
-    daedalus_stylish_preprocess_block($variables);
-    $this->assertSame(
-      ['daedalus-stylish-defaults--kind-block', 'daedalus-stylish-defaults--block_plugin-fancy_menu'],
-      $variables['attributes']['class'],
-    );
-    $variables = ['plugin_id' => 'system_menu_block:main', 'attributes' => []];
-    daedalus_stylish_preprocess_block($variables);
-    $this->assertSame(['daedalus-stylish-defaults--kind-block'], $variables['attributes']['class']);
-
-    $variables = ['layout' => new LayoutDefinition(['id' => 'layout_onecol']), 'attributes' => []];
-    daedalus_stylish_preprocess_layout($variables);
-    $this->assertSame(
-      ['daedalus-stylish-defaults--kind-container', 'daedalus-stylish-defaults--layout-layout_onecol'],
-      $variables['attributes']['class'],
-    );
-    $variables = ['layout' => new LayoutDefinition(['id' => 'layout_twocol']), 'attributes' => []];
-    daedalus_stylish_preprocess_layout($variables);
-    $this->assertSame(['daedalus-stylish-defaults--kind-container'], $variables['attributes']['class']);
-  }
-
-  /**
-   * A composed block's root wears its declared scope classes, no skin.
-   *
-   * The entity-view stamp lands on the block content's build; block
-   * content builds eagerly so its #attributes hoist onto the block build
-   * (core's BlockComponentRenderArray), and ComposedBlockRender hands
-   * that bag to the composed element as the root's hoisted attributes.
-   * Pinned here: no composed-specific stamping exists, and a declared
-   * default's class must reach the composed root of a live render on a
-   * site with no design system.
-   */
-  public function testComposedRootStampsWithoutSkin(): void {
+  public function testComposedRootIsSelectedByDeclaredDefault(): void {
     $this->enableModules(['block', 'block_content', 'link', 'daedalus_ui_resolver_test']);
     $this->installEntitySchema('block_content');
     $this->installConfig(['system']);
@@ -459,154 +435,99 @@ class DefaultsStylesheetTest extends KernelTestBase {
       'id' => 'inline_block:text',
       'block_revision_id' => $block->getRevisionId(),
     ]);
-    // Live: no editing attributes demanded; the stamps are delivery.
+    // Live: no editing attributes demanded; the address is delivery.
     $this->setUpCurrentUser();
     $build = $component->toRenderArray();
     $html = (string) $this->container->get('renderer')->renderInIsolation($build);
     $this->assertStringNotContainsString('<div', $html, 'No sandwich renders at all.');
     $this->assertMatchesRegularExpression(
-      '/<p[^>]*class="[^"]*daedalus-stylish-defaults--kind-block[^"]*daedalus-stylish-defaults--block_type-text/',
+      '/<p[^>]*\s' . ElementAddress::ATTRIBUTE . '="block_type:text"/',
       $html,
-      'The composed root wears the family class and the declaring bundle class.',
+      'The composed root wears the bundle address, with no skin and no demand.',
     );
-    // The fragment carries every tag that can change the stamp decision.
-    $tags = $build['content']['#cache']['tags'] ?? [];
-    $this->assertContains(DefaultsStylesheet::CACHE_TAG, $tags);
-    $this->assertContains('daedalus_ui_page_builder', $tags);
-    $this->assertContains('config:daedalus_blueprint.settings', $tags);
+    $this->assertStringNotContainsString('daedalus-stylish-defaults--', $html, 'No scope class stamps anywhere.');
+    $this->container->get('daedalus_stylish.defaults_stylesheet')->compile();
+    $css = file_get_contents($this->stylesheetUri());
+    $this->assertStringContainsString($this->elementSelector('block_type:text') . " {\n  display: block;\n}", $css);
+    $this->assertStringContainsString('[' . ElementAddress::ATTRIBUTE . '="block_type:text"]', $this->elementSelector('block_type:text'), 'The selector names the stamped value verbatim.');
   }
 
   /**
-   * A composed section's root wears the container-family stamp, no skin.
+   * The shipped container kind's flex column selects every section.
    *
-   * A composed layout has no template, so daedalus_stylish_preprocess_layout()
-   * never runs for it; the stamp rides the pre_render daedalus_stylish prepends to
-   * daedalus_ui's composed_container element and lands in the
-   * #attributes bag the element hoists onto the root. Pinned here, on the
-   * resolver fixture's composed container layout: nothing stamps while no
-   * tier holds element defaults; with the declaring fixture the family
-   * class rides the <section> at root depth and the residual <div>
-   * nested, beside the section's own stamped bag; and the shared decision
-   * adds the layout refinement class exactly when that layout is
-   * defaulted (the templated seam's rule, one function).
+   * daedalus_stylish_layouts declares `display: flex; flex-direction: column`
+   * on the composed container's root (the stack: the box fact its gap
+   * grant and children pseudo-part need, code rather than skin data, and
+   * the direction the row variant flips) and `gap: 0px` beside it (a
+   * plain stack's zero gap as a declared layer of the style stack, so
+   * the Gap row's floor is declared, never a widget literal). With no skin and no
+   * other declaring module the declared tier holds exactly that kind
+   * scope, and the file prints it bare at the kind's selector: every
+   * section's layout address, a page band's <section> and a nested
+   * container's <div> alike, at zero specificity and with no donut (a
+   * default is the same value on every instance of its scope). The
+   * address itself is daedalus_ui's stamp (ElementAddressStampTest).
    */
-  public function testComposedSectionRootStampsWithoutSkin(): void {
-    $this->enableModules(['daedalus_ui_resolver_test']);
-    $this->installConfig(['system']);
-    $this->setUpCurrentUser();
-    $this->assertNull($this->container->get('daedalus_stylish.skin_manager')->activeSkinName());
-
-    $html = $this->renderComposedSection();
-    $this->assertStringContainsString('<section', $html);
-    $this->assertStringNotContainsString('daedalus-stylish-defaults--', $html, 'Nothing declares or defaults: nothing stamps.');
-
-    $this->enableFixture();
-    $html = $this->renderComposedSection();
-    $section = $this->htmlXpath($html)->query('//section');
-    $this->assertSame(1, $section->length, 'The composed root is the section element.');
-    $this->assertContains('daedalus-stylish-defaults--kind-container', explode(' ', $section->item(0)->getAttribute('class')), 'The composed section root wears the family class.');
-    $this->assertSame('container:11111111-2222-3333-4444-555555555555', $section->item(0)->getAttribute('data-selectable'), 'The section bag still hoists beside the stamp.');
-    $this->assertSame(1, $this->htmlXpath($html)->query('//section/p')->length, 'Children still mount at the root.');
-
-    $html = $this->renderComposedSection(nested: TRUE);
-    $div = $this->htmlXpath($html)->query('//div[@data-selectable]');
-    $this->assertSame(1, $div->length);
-    $this->assertContains('daedalus-stylish-defaults--kind-container', explode(' ', $div->item(0)->getAttribute('class')), 'The family class is depth-blind.');
-    $this->assertStringNotContainsString('daedalus-stylish-defaults--layout-', $html, 'The fixture defaults layout_onecol, not this layout: no refinement class.');
-
-    $scopes = $this->container->get('daedalus_stylish.defaults_stylesheet')->scopes();
-    $this->assertSame(['daedalus-stylish-defaults--kind-container'], ContainerDefaultsStamp::classes($scopes, 'resolver_test_container'));
-    $this->assertSame(
-      ['daedalus-stylish-defaults--kind-container', 'daedalus-stylish-defaults--layout-layout_onecol'],
-      ContainerDefaultsStamp::classes($scopes, 'layout_onecol'),
-    );
-    $this->assertSame([], ContainerDefaultsStamp::classes(['base:p'], 'layout_onecol'), 'Base tag defaults deliver on selectors and stamp nothing.');
-  }
-
-  /**
-   * The shipped container kind's display: grid stamps every section.
-   *
-   * daedalus_stylish_layouts declares `display: grid` on the composed container's
-   * root (the box fact its gap grant and children pseudo-part need, code
-   * rather than skin data). With no skin and no other declaring module
-   * the declared tier holds exactly that kind scope, the file prints it
-   * inside the container donut at the family class, and both render
-   * seams stamp the family class on a daedalus_stylish_container section: a page
-   * band's <section> and a nested container's <div> alike, with no
-   * refinement class since the shipped layout declares no defaults of
-   * its own.
-   */
-  public function testShippedContainerKindDefaultStampsEverySection(): void {
+  public function testShippedContainerKindDefaultSelectsEverySection(): void {
     $this->enableModules(['daedalus_stylish_layouts']);
     $this->installConfig(['system']);
     $this->setUpCurrentUser();
     $this->container->get('daedalus_stylish.style_guide')->resetCache();
     $this->assertNull($this->container->get('daedalus_stylish.skin_manager')->activeSkinName());
     $this->assertSame(
-      ['' => ['default' => ['display' => 'grid']]],
+      ['' => ['default' => ['display' => 'flex', 'flex-direction' => 'column', 'gap' => '0px']]],
       $this->container->get('daedalus_stylish.style_guide')->getKind('container')['defaults'],
-      'The shipped container kind declares its root display.',
+      'The shipped container kind declares its root as a flex column with a zero gap.',
     );
 
     $this->container->get('daedalus_stylish.defaults_stylesheet')->compile();
     $uri = $this->stylesheetUri();
     $this->assertIsString($uri, 'The shipped declaration alone compiles the declared tier.');
     $css = file_get_contents($uri);
-    $this->assertStringContainsString($this->scopeRoot('kind:container') . ' to (' . DefaultsStylesheet::DEFAULTS_SCOPE_LIMIT . ") {\n  :scope {\n    display: grid;\n  }", $css);
-    $scopes = $this->container->get('daedalus_stylish.defaults_stylesheet')->scopes();
-    $this->assertSame(['kind:container'], $scopes);
-    $this->assertSame(['daedalus-stylish-defaults--kind-container'], ContainerDefaultsStamp::classes($scopes, 'daedalus_stylish_container'));
-
-    $html = $this->renderComposedSection(layout_id: 'daedalus_stylish_container');
-    $section = $this->htmlXpath($html)->query('//section');
-    $this->assertSame(1, $section->length, 'A page band renders as the section element.');
-    $this->assertContains('daedalus-stylish-defaults--kind-container', explode(' ', $section->item(0)->getAttribute('class')), 'The page band wears the family class.');
-    $this->assertStringNotContainsString('daedalus-stylish-defaults--layout-', $html, 'The shipped layout declares no defaults: no refinement class.');
-
-    $html = $this->renderComposedSection(nested: TRUE, layout_id: 'daedalus_stylish_container');
-    $div = $this->htmlXpath($html)->query('//div[@data-selectable]');
-    $this->assertSame(1, $div->length, 'A nested container renders as a plain div.');
-    $this->assertContains('daedalus-stylish-defaults--kind-container', explode(' ', $div->item(0)->getAttribute('class')), 'The nested container wears the family class too.');
+    $this->assertStringContainsString($this->elementSelector('kind:container') . " {\n  display: flex;\n  flex-direction: column;\n  gap: 0px;\n}", $css);
+    $this->assertStringNotContainsString('@scope', $css);
+    $this->assertStringNotContainsString(' to (', $css, 'No donut bounds a default.');
+    // The shipped layout declares no defaults of its own: no refinement
+    // rule, and the kind's selector names no layout in particular.
+    $this->assertStringNotContainsString('layout:daedalus_stylish_container', $css);
   }
 
   /**
-   * Renders a composed container layout (the resolver fixture's by default).
+   * The element selector derivation: one rule per address family.
    *
-   * The stamps daedalus_layout lands on the section build after the plugin
-   * returns (the attribute bag and, embedded only, the nested marker) are
-   * stamped by hand at the seam they ride.
+   * A refinement selects its exact address; a kind selects every address
+   * of its kind (the two block placement families, the layout family, the
+   * bare entity and field kinds); base tags and non-root addresses derive
+   * nothing; every member is token-scope prefixed inside one :where().
    */
-  protected function renderComposedSection(bool $nested = FALSE, string $layout_id = 'resolver_test_container'): string {
-    $layout = $this->container->get('plugin.manager.core.layout')->createInstance($layout_id);
-    $build = $layout->build(['content' => ['aaaa' => ['#markup' => '<p>Mounted child</p>']]]);
-    $build['#attributes'] = ['data-selectable' => 'container:11111111-2222-3333-4444-555555555555'];
-    if ($nested) {
-      $build['#daedalus_layout_nested'] = TRUE;
-    }
-    return (string) $this->container->get('renderer')->renderInIsolation($build);
-  }
-
-  /**
-   * Parses rendered HTML for querying.
-   */
-  protected function htmlXpath(string $html): \DOMXPath {
-    $dom = new \DOMDocument();
-    @$dom->loadHTML('<?xml encoding="utf-8"?>' . $html);
-    return new \DOMXPath($dom);
+  public function testElementSelectorDerivation(): void {
+    $scope = '.' . DefaultsStylesheet::SCOPE_CLASS . ' ';
+    $attribute = ElementAddress::ATTRIBUTE;
+    $this->assertSame(":where({$scope}[$attribute=\"block_type:media\"])", $this->elementSelector('block_type:media'));
+    $this->assertSame(":where({$scope}[$attribute=\"block_plugin:system_menu_block\"])", $this->elementSelector('block_plugin:system_menu_block'));
+    $this->assertSame(":where({$scope}[$attribute=\"layout:layout_onecol\"])", $this->elementSelector('layout:layout_onecol'));
+    $this->assertSame(":where({$scope}[$attribute^=\"block_type:\"], {$scope}[$attribute^=\"block_plugin:\"])", $this->elementSelector('kind:block'));
+    $this->assertSame(":where({$scope}[$attribute^=\"layout:\"])", $this->elementSelector('kind:container'));
+    $this->assertSame(":where({$scope}[$attribute=\"kind:entity\"])", $this->elementSelector('kind:entity'));
+    $this->assertSame(":where({$scope}[$attribute=\"kind:field\"])", $this->elementSelector('kind:field'));
+    $this->assertNull(DefaultsStylesheet::elementSelector(Address::fromString('base:h2')), 'A base tag is its own selector.');
+    $this->assertNull(DefaultsStylesheet::elementSelector(Address::fromString('kind:region')), 'No root resolves through the region kind.');
+    $this->assertNull(DefaultsStylesheet::elementSelector(Address::fromString('kind:container::.x')), 'Only a root address selects.');
   }
 
   /**
    * Skin scoped defaults co-target; base tag defaults never do.
    *
-   * Kind:* and block_type:* defaults flow through the shared printEntry
-   * seam (printFragmentStyles at their stamped scope class), so a skin
-   * default setting a block's color reaches text-claiming interior
-   * elements exactly like a per-entity root style, without the companion
-   * it would lose to base:a the same way. base:{tag} defaults print
-   * through the bare lane (printBareEntry) and MUST NOT co-target: they
+   * Kind:* and block_type:* root defaults ride the bare lane with the
+   * co-target companion (printBareEntry, the same INHERITED_TEXT_PROPERTIES
+   * subset printEntry co-targets), at the same zero specificity under the
+   * same selector: a skin default setting a block's color reaches
+   * text-claiming interior elements past a base:a default, which prints
+   * earlier in the file and would otherwise win on the claiming element
+   * by matching it directly. base:{tag} defaults MUST NOT co-target: they
    * ARE the interposer the co-target exists to beat, and co-targeting
    * them would re-land the tag default on the claiming element and defeat
-   * the fix.
+   * the fix. Part and children entries never co-target either.
    */
   public function testScopedDefaultsCoTargetBaseDefaultsDoNot(): void {
     $skin = $this->createSkin('site_skin', ['space' => ['4' => '1rem']]);
@@ -618,10 +539,10 @@ class DefaultsStylesheetTest extends KernelTestBase {
     $this->activateSkin($skin);
     $css = file_get_contents($this->stylesheetUri());
 
-    // Element scopes carry the companion with the inherited text subset.
-    $companion = ':scope ' . CssPrinter::CLAIMS_CONTENT_SELECTOR . " {\n    color: ";
-    $this->assertStringContainsString($companion . "#222222;\n  }", $css);
-    $this->assertStringContainsString($companion . "#333333;\n  }", $css);
+    // Element scopes carry the companion with the inherited text subset,
+    // bare and under their own selector.
+    $this->assertStringContainsString($this->elementSelector('kind:block') . ' ' . CssPrinter::CLAIMS_CONTENT_SELECTOR . " {\n  color: #222222;\n}", $css);
+    $this->assertStringContainsString($this->elementSelector('block_type:text') . ' ' . CssPrinter::CLAIMS_CONTENT_SELECTOR . " {\n  color: #333333;\n}", $css);
     // Box properties never ride the companion.
     $this->assertSame(1, substr_count($css, 'padding: 1rem;'));
     // The base:a color prints once (the bare rule), and the whole file
@@ -629,6 +550,10 @@ class DefaultsStylesheetTest extends KernelTestBase {
     // none for the token block (custom properties are not in the set).
     $this->assertSame(1, substr_count($css, '#111111'));
     $this->assertSame(2, substr_count($css, CssPrinter::CLAIMS_CONTENT_SELECTOR));
+    // The base rule and the companions all sit at zero specificity, in
+    // document order base first: the companion wins on the claiming
+    // element by order alone.
+    $this->assertLessThan(strpos($css, '#222222'), strpos($css, '#111111'));
   }
 
   /**
@@ -668,7 +593,8 @@ class DefaultsStylesheetTest extends KernelTestBase {
    */
   public function testLibraryResolvesCurrentFile(): void {
     // Before anything compiles the library is asset-less but defined:
-    // pages attach it unconditionally of compile state (daedalus_stylish_page_top()).
+    // pages attach it unconditionally of compile state
+    // (daedalus_stylish_page_attachments()).
     $discovery = $this->container->get('library.discovery');
     $library = $discovery->getLibraryByName('daedalus_stylish', 'defaults');
     $this->assertNotFalse($library);
@@ -724,10 +650,13 @@ class DefaultsStylesheetTest extends KernelTestBase {
    *
    * The edge at page level: library assets cannot vary by workspace, so
    * the compiled file always holds the LIVE revision; inside a workspace
-   * the active skin's staged revision prints via workspaceInlineCss() into
-   * the page-level tag (document order beats the compiled <link>).
-   * Publishing recompiles the file: per-entity update hooks do not fire on
-   * publish, so that exercises SkinWorkspaceSubscriber.
+   * the active skin's staged revision prints via workspaceInlineCss() as a
+   * <style> tag inside the token scope element
+   * (daedalus_stylish_preprocess_off_canvas_page_wrapper(); document order
+   * beats the compiled <link> in <head>), and its cache tags ride the
+   * attachments (daedalus_stylish_page_attachments()). Publishing
+   * recompiles the file: per-entity update hooks do not fire on publish,
+   * so that exercises SkinWorkspaceSubscriber.
    */
   public function testWorkspacePreviewInlineFallback(): void {
     $skin = $this->createSkin('aurora', ['space' => ['4' => '1rem']]);
@@ -738,9 +667,11 @@ class DefaultsStylesheetTest extends KernelTestBase {
     $live_uri = $this->stylesheetUri();
     $stylesheet = $this->container->get('daedalus_stylish.defaults_stylesheet');
 
-    // Outside a workspace there is no preview to inline.
+    // Outside a workspace there is no preview to inline: the scope element
+    // wraps the children alone.
     $tags = [];
     $this->assertSame('', $stylesheet->workspaceInlineCss($tags));
+    $this->assertSame('<div class="' . DefaultsStylesheet::SCOPE_CLASS . '">X</div>', $this->wrap());
 
     // Stage a token edit: the shared public file keeps the live CSS.
     $this->switchToWorkspace('stage');
@@ -758,6 +689,19 @@ class DefaultsStylesheetTest extends KernelTestBase {
     $this->assertStringContainsString('--space-4: 9rem;', $css);
     $this->assertContains("daedalus_skin:{$skin->id()}", $tags);
 
+    // The print lands INSIDE the scope element, before the children (the
+    // one place every defaults output lives), and the page varies by
+    // workspace and the staged skin's tags through the attachments.
+    $wrapped = $this->wrap();
+    $this->assertMatchesRegularExpression(
+      '#^<div class="' . DefaultsStylesheet::SCOPE_CLASS . '"><style data-daedalus-stylish-defaults-preview>\n.*--space-4: 9rem;.*\n</style>X</div>$#s',
+      $wrapped,
+    );
+    $this->assertStringNotContainsString('data-daedalus-stylish-swatch-preview', $wrapped);
+    $attachments = $this->pageAttachments();
+    $this->assertContains('workspace', $attachments['#cache']['contexts']);
+    $this->assertContains("daedalus_skin:{$skin->id()}", $attachments['#cache']['tags']);
+
     // Publishing lands the staged tokens in the shared file.
     $this->switchToLive();
     $this->workspaces['stage']->publish();
@@ -768,30 +712,31 @@ class DefaultsStylesheetTest extends KernelTestBase {
   }
 
   /**
-   * The admin theme gates the file's reach at the token scope element.
+   * The skin's reach is gated at the token scope element.
    *
    * The scope element is the single boundary all defaults output prints
-   * inside, so not stamping it (plus skipping the page-top attach, an
+   * inside, so not stamping it (plus skipping the attachments, an
    * optimization) is what keeps user-authored styling data off
-   * admin-theme pages.
+   * admin-theme pages and out of pop-out documents
+   * (_daedalus_stylish_skinless_document()).
    */
   public function testAdminThemeReachGate(): void {
-    $wrap = function (): string {
-      $variables = ['children' => 'X'];
-      daedalus_stylish_preprocess_off_canvas_page_wrapper($variables);
-      return (string) $variables['children'];
-    };
-    $page_top_keys = function (): array {
-      $page_top = [];
-      daedalus_stylish_page_top($page_top);
-      return array_keys($page_top);
-    };
+    $libraries = ['daedalus_stylish/defaults', 'daedalus_stylish/swatches', 'daedalus_stylish/animations'];
+    $tags = [
+      DefaultsStylesheet::CACHE_TAG,
+      'config:daedalus_stylish.settings',
+      SwatchStylesheet::CACHE_TAG,
+      AnimationStylesheet::CACHE_TAG,
+    ];
 
     // No admin theme configured: the site chose one look everywhere, so
-    // nothing gates: scope element stamped, libraries attached (the swatch
-    // and animations elements ride the same seam and the same gate).
-    $this->assertStringContainsString(DefaultsStylesheet::SCOPE_CLASS, $wrap());
-    $this->assertSame(['daedalus_stylish_defaults', 'daedalus_stylish_swatches', 'daedalus_stylish_animations'], $page_top_keys());
+    // nothing gates: scope element stamped, the three libraries attached
+    // with their recompile tags (the swatch and animations files ride the
+    // same seam and the same gate).
+    $this->assertStringContainsString(DefaultsStylesheet::SCOPE_CLASS, $this->wrap());
+    $attachments = $this->pageAttachments();
+    $this->assertSame($libraries, $attachments['#attached']['library']);
+    $this->assertEqualsCanonicalizing($tags, $attachments['#cache']['tags']);
 
     // The active theme IS the configured admin theme: no scope element,
     // no attach; the defaults do not exist on admin-theme pages.
@@ -799,14 +744,46 @@ class DefaultsStylesheetTest extends KernelTestBase {
     $this->config('system.theme')->set('admin', 'stark')->save();
     $this->container->get('theme.manager')->setActiveTheme(
       $this->container->get('theme.initialization')->initTheme('stark'));
-    $this->assertSame('X', $wrap());
-    $this->assertSame([], $page_top_keys());
+    $this->assertSame('X', $this->wrap());
+    $this->assertSame([], $this->pageAttachments());
 
     // A frontend theme on a site WITH an admin theme configured still gets
     // the defaults: the gate compares the active theme, not the route.
     $this->config('system.theme')->set('admin', 'claro')->save();
-    $this->assertStringContainsString(DefaultsStylesheet::SCOPE_CLASS, $wrap());
-    $this->assertSame(['daedalus_stylish_defaults', 'daedalus_stylish_swatches', 'daedalus_stylish_animations'], $page_top_keys());
+    $this->assertStringContainsString(DefaultsStylesheet::SCOPE_CLASS, $this->wrap());
+    $this->assertSame($libraries, $this->pageAttachments()['#attached']['library']);
+
+    // A pop-out route (the _daedalus_ui.popout option, daedalus_ui.chromeless)
+    // is a tool window, not a site page: no scope element, no attach, in
+    // the frontend theme too.
+    $request = Request::create('/popout');
+    $request->attributes->set(RouteObjectInterface::ROUTE_NAME, 'popout');
+    $request->attributes->set(RouteObjectInterface::ROUTE_OBJECT, new Route('/popout', [], [], [Chromeless::ROUTE_OPTION => TRUE]));
+    $this->container->get('request_stack')->push($request);
+    $this->assertSame('X', $this->wrap());
+    $this->assertSame([], $this->pageAttachments());
+    $this->container->get('request_stack')->pop();
+    $this->assertStringContainsString(DefaultsStylesheet::SCOPE_CLASS, $this->wrap());
+    $this->assertSame($libraries, $this->pageAttachments()['#attached']['library']);
+  }
+
+  /**
+   * Runs the scope-element preprocess over one child and returns the markup.
+   */
+  private function wrap(): string {
+    $variables = ['children' => 'X'];
+    daedalus_stylish_preprocess_off_canvas_page_wrapper($variables);
+    return (string) $variables['children'];
+  }
+
+  /**
+   * Runs hook_page_attachments() and returns the attachments array.
+   */
+  private function pageAttachments(): array {
+    $attachments = [];
+    $this->container->get('module_handler')
+      ->invoke('daedalus_stylish', 'page_attachments', [&$attachments]);
+    return $attachments;
   }
 
 }

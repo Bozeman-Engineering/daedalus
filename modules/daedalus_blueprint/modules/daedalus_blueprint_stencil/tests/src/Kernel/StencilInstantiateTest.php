@@ -9,6 +9,7 @@ use Drupal\daedalus_blueprint\Event\SectionCreatedEvent;
 use Drupal\daedalus_blueprint_stencil\StencilOperationHandler;
 use Drupal\daedalus_blueprint_stencil_instantiate_test\StyleOpSpy;
 use Drupal\entity_test\Entity\EntityTest;
+use Drupal\field\Entity\FieldConfig;
 use Drupal\layout_builder\Section;
 use Drupal\layout_builder\SectionComponent;
 use Drupal\layout_builder\SectionListInterface;
@@ -37,7 +38,10 @@ class StencilInstantiateTest extends StencilKernelTestBase {
   /**
    * {@inheritdoc}
    */
-  protected static $modules = ['daedalus_blueprint_stencil_instantiate_test'];
+  protected static $modules = [
+    'daedalus_blueprint_stencil_instantiate_test',
+    'field_sample_value',
+  ];
 
   /**
    * {@inheritdoc}
@@ -46,6 +50,15 @@ class StencilInstantiateTest extends StencilKernelTestBase {
     parent::setUp();
     $this->createBlockField('field_heading', 'text', 'string');
     $this->createBlockField('field_sub', 'text', 'string');
+    // Placement fills only the fields the site has a sample policy for, so
+    // the field the stencil leaves absent carries one.
+    $sub = FieldConfig::loadByName('block_content', 'text', 'field_sub');
+    $sub->setThirdPartySetting('field_sample_value', 'id', 'random_string');
+    $sub->setThirdPartySetting('field_sample_value', 'configuration', [
+      'prevent_save' => FALSE,
+      'count' => 3,
+    ]);
+    $sub->save();
   }
 
   /**

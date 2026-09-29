@@ -13,10 +13,10 @@
  * (materials.ofKind('variant'), the delivery shape: id, label, group = the
  * axis, value = the element-relative style map, scope, owned_by, origin),
  * and a reference resolves by record id alone (findVariant). Also
- * home to the element-entry extraction the save/push/copy gestures share:
- * a variant (and the style clipboard) stores element-RELATIVE keys ('' for
- * the root element, '::.class-name' for sub-elements), so applied to
- * element key E, relative key K's entry lands at map key E + K. Composition
+ * home to the element-entry extraction the save/push gestures share:
+ * a variant stores element-RELATIVE keys ('' for the root element,
+ * '::.class-name' for sub-elements), so applied to element key E,
+ * relative key K's entry lands at map key E + K. Composition
  * capture (save/push from a section) extends the relative space with
  * slot-key paths: the staged layout tree translates child map entries
  * (container:{uuid}, block:{uuid}, block:{uuid}:{field}) into
@@ -27,14 +27,87 @@ import {
   bundleForKey,
   declarationForKey,
   isSectionNode,
+  landingForKey,
   sectionChildNodes,
 } from './style-guide.js';
 import { formatSlotKey, fragmentStyles } from './slot-key.js';
 import { INSTANCE_PART } from './parts.js';
-import { sharesGrain } from './widgets/lib/box-model.js';
+import {
+  SUFFIX,
+  TAG,
+  TYPE,
+  parseSelector,
+  selectorClasses,
+  typeAddress,
+  under,
+} from '../../../daedalus_ui/js/edit_mode/materials/relative-selector.js';
 
 const isEntryObject = (value) =>
   value !== null && typeof value === 'object' && !Array.isArray(value);
+
+/**
+ * Continues a style-map key by an element-relative suffix (the client
+ * twin of the operation handler's carrierKey, the one key continuation).
+ *
+ * The relative space every element-shaped read speaks ('' the key's own
+ * entry, '::.cls' a part beneath it) continues an ELEMENT key by
+ * appending (`block:X` + `::.cls`), and a RULE key by DESCENT under the
+ * rule's targets (`container:X::> pb-text` + `::.cls` is
+ * `container:X::> pb-text .cls`, relative-selector.js under(): a
+ * selector never carries a second `::`), the grammar deciding
+ * admissibility exactly as delivery rebases a worn variant's suffixes.
+ *
+ * @param {string} key
+ *   A style-map key, element or rule.
+ * @param {string} relative
+ *   '' or a '::selector' suffix.
+ *
+ * @return {?string}
+ *   The continued key, or null when the grammar refuses the suffix
+ *   under the rule.
+ */
+export const continuedKey = (key, relative) => {
+  if (relative === '') {
+    return key;
+  }
+  const pos = key.indexOf(SUFFIX);
+  if (pos === -1) {
+    return `${key}${relative}`;
+  }
+  const continued = under(key.slice(pos + SUFFIX.length), relative.slice(SUFFIX.length));
+  return continued === null ? null : `${key.slice(0, pos)}${SUFFIX}${continued}`;
+};
+
+/**
+ * The element-relative suffix a map key stands at under a key: the
+ * inverse of continuedKey().
+ *
+ * `block:X::.cls` under `block:X` is '::.cls'; `container:X::> pb-text
+ * .cls` under `container:X::> pb-text` is '::.cls' (the continuation by
+ * descent read back). Null when the map key is not a continuation of
+ * the key (the key itself included: '' is the caller's own read).
+ *
+ * @param {string} key
+ *   A style-map key, element or rule.
+ * @param {string} mapKey
+ *   Another style-map key.
+ *
+ * @return {?string}
+ */
+export const relativeUnder = (key, mapKey) => {
+  if (typeof key !== 'string' || typeof mapKey !== 'string' || mapKey === key) {
+    return null;
+  }
+  const pos = key.indexOf(SUFFIX);
+  if (pos === -1) {
+    return mapKey.startsWith(`${key}${SUFFIX}`) ? mapKey.slice(key.length) : null;
+  }
+  if (!mapKey.startsWith(`${key} `)) {
+    return null;
+  }
+  const relative = `${SUFFIX}${mapKey.slice(key.length + 1)}`;
+  return continuedKey(key, relative) === mapKey ? relative : null;
+};
 
 /**
  * Whether an element-relative key addresses an INSTANCE part ('::.s-xx').
@@ -43,31 +116,15 @@ const isEntryObject = (value) =>
  * instance), so the variant capture walk leaves them behind: carrying
  * them would make the variant inert on other elements, or a lie when an
  * unrelated element reuses the id. The server's matching gate is
- * StyleMapValidator::validateAt()'s STYLE_INSTANCE_PART_IN_VARIANT.
+ * StyleMapValidator::validateAt()'s STYLE_INSTANCE_PART_IN_VARIANT. The
+ * styles clipboard (copy-styles.js) leaves them behind for the same
+ * reason: a pasted instance part would reach nothing on its new host.
  */
-const isInstanceRelative = (relative) =>
+export const isInstanceRelative = (relative) =>
   typeof relative === 'string' &&
   relative.startsWith('::') &&
-  INSTANCE_PART.test(relative.slice(2));
+  selectorClasses(relative.slice(2)).some((name) => INSTANCE_PART.test(name));
 
-/**
- * Whether an element-relative key addresses the TAG TIER ('::p', '::ul::>').
- *
- * Tag tiers live in host maps only: a variant
- * carrying tag-relative styles is an explicit follow-up, and the server's
- * SlotKey charset (dot-required parts) rejects them in variant styles, so
- * the capture walk must leave them behind or the save itself would be
- * rejected. The sub is dotless and not the '>' children pseudo-part.
- */
-const isTagRelative = (relative) => {
-  if (typeof relative !== 'string' || !relative.startsWith('::')) {
-    return false;
-  }
-  const sub = relative.endsWith('::>')
-    ? relative.slice(2, -3)
-    : relative.slice(2);
-  return sub !== '' && !sub.startsWith('.') && sub !== '>';
-};
 
 /**
  * The structured variant references a style entry carries, in list order.
@@ -167,16 +224,26 @@ export const isNestedSectionUuid = (layout, uuid) => {
  * order, each with its label and depth stamp), so the lookup is
  * branchless; an unparseable key degrades to the universal single-axis
  * vocabulary. This order is the delivery order: pass it wherever an
- * `axes` argument is taken. Sub-element keys share their parent's
- * vocabulary (axes are a scope fact, and parts drill within the scope),
- * so callers pass the ROOT key.
+ * `axes` argument is taken. A part key shares its root's vocabulary
+ * (axes are a scope fact, and parts drill within the scope; a part
+ * itself wears nothing). A RULE key (a tag tier or a chain whose
+ * landing is an element scope, captureScope) reads the vocabulary of
+ * the declaration its selector LANDS on (style-guide.js landingForKey:
+ * `container:X::> pb-text` speaks block_type:text's axes, `::a` the
+ * base tag's), the scope its wear pairs at, so a rule's rows and picker
+ * group by the axes its matches can wear; the server orders each
+ * reference by its variant's own scope (StyleMapValidator::
+ * orderedEntryRefs), and the landing's vocabulary agrees with it for
+ * every applicable reference.
  *
  * Depth enters here and only here (the served node is depth-blind: one
  * layout, one node, any placement): axes the roster stamps root-only
  * (`root_only`, the {axis: {depth: root}} qualifier resolved
  * server-side) drop from a section's vocabulary when the layout tree
  * (source.getLayout(); the satellite's arrives by broadcast) positively
- * places the section at NESTED depth. Soft semantics: this gates what is
+ * places the section at NESTED depth, and from every rule's (a rule's
+ * matches are never top-level: RootOnlyVariantChecker refuses a
+ * root-only variant at any rule). Soft semantics: this gates what is
  * OFFERED; an existing reference on a dropped axis stays the tolerated
  * axis-gone orphan row (renders, sorts last, detachable). No tree, or a
  * uuid the tree does not carry, degrades to the ungated root posture,
@@ -192,15 +259,19 @@ export const axisVocabulary = (
   sectionLayouts = {},
   layout = [],
 ) => {
-  const parsed = parseKey(typeof key === 'string' ? key.split('::')[0] : key);
+  const full = typeof key === 'string' ? parseKey(key) : null;
+  const parsed = full ?? parseKey(typeof key === 'string' ? key.split('::')[0] : key);
   if (!parsed) {
     return ['style'];
   }
-  const declaration = declarationForKey(
-    guide,
-    parsed,
-    bundleForKey(parsed, blockTypes, sectionLayouts),
-  );
+  const bundle = bundleForKey(parsed, blockTypes, sectionLayouts);
+  // A rule (its landing is an element scope) reads its landing's
+  // declaration; every other key its root's.
+  const rule =
+    parsed.selector !== null && captureScope(key, blockTypes, sectionLayouts) !== null;
+  const declaration = rule
+    ? landingForKey(guide, parsed, bundle)
+    : declarationForKey(guide, { ...parsed, selector: null }, bundle);
   const axes = declaration?.axes;
   if (
     axes === null ||
@@ -211,7 +282,10 @@ export const axisVocabulary = (
     return ['style'];
   }
   const names = Object.keys(axes);
-  if (parsed.kind === 'container' && isNestedSectionUuid(layout, parsed.uuid)) {
+  if (
+    rule ||
+    (parsed.kind === 'container' && isNestedSectionUuid(layout, parsed.uuid))
+  ) {
     const filtered = names.filter((axis) => axes[axis]?.root_only !== true);
     return filtered.length ? filtered : ['style'];
   }
@@ -371,26 +445,19 @@ const stripVariants = (entry) => {
 };
 
 /**
- * Captures an element's scope (its address, printed), mirroring the server.
+ * A key's root address, printed (StyleMapValidator::keyAddress()'s root).
  *
- * Blocks are scoped per block type when the component's inline block type
- * is known ("block_type:{bundle}"), per base block plugin when the
+ * Blocks are addressed per block type when the component's inline block
+ * type is known ("block_type:{bundle}"), per base block plugin when the
  * component is a plugin placement (the table's 'plugin:{base id}'
- * discriminator, "block_plugin:{plugin_id}"), sections per layout when the section's
- * layout id is known ("layout:{layout_id}") — ONE resolution rule at every
- * depth: a section's declaration IS its layout's declaration, nested or
- * top-level — each degrading to its kind exactly as the server does
- * without context; every other element scopes by kind. Sub-element keys
- * capture their parent's scope.
- *
- * @return {?string}
- *   The scope, or null when the key does not parse.
+ * discriminator, "block_plugin:{plugin_id}"), sections per layout when
+ * the section's layout id is known ("layout:{layout_id}") — ONE
+ * resolution rule at every depth: a section's declaration IS its
+ * layout's declaration, nested or top-level — each degrading to its kind
+ * exactly as the server does without context; every other element by
+ * kind. A rule key ("{key}::{selector}") answers its owner's root.
  */
-export const captureScope = (key, blockTypes = {}, sectionLayouts = {}) => {
-  const parsed = parseKey(key);
-  if (!parsed) {
-    return null;
-  }
+const rootAddress = (parsed, blockTypes, sectionLayouts) => {
   if (parsed.kind === 'block') {
     const bundle = blockTypes?.[parsed.uuid] ?? null;
     if (typeof bundle === 'string' && bundle.startsWith('plugin:')) {
@@ -403,6 +470,44 @@ export const captureScope = (key, blockTypes = {}, sectionLayouts = {}) => {
     return layoutId ? `layout:${layoutId}` : 'kind:container';
   }
   return `kind:${parsed.kind}`;
+};
+
+/**
+ * Captures a key's variant scope, mirroring the server's captureScope().
+ *
+ * An element key captures its own root address (rootAddress()). A rule
+ * key captures its LANDING, the element its last compound names, since a
+ * rule's wear is delivered at the rule's targets and the variant must be
+ * scoped for them (VocabularyRoster::landingScope()): a type compound's
+ * root address (`> pb-text` lands on block_type:text), a tag compound's
+ * base tag (`a` on base:a). A rule whose targets are no element scope
+ * (a part, the children, a subjectless compound, a generated box behind
+ * any of them) captures null: no variant pairs there, and the server
+ * refuses a reference with a corrective naming it.
+ *
+ * @return {?string}
+ *   The scope, or null when the key does not parse or its rule lands on
+ *   no element scope.
+ */
+export const captureScope = (key, blockTypes = {}, sectionLayouts = {}) => {
+  const parsed = parseKey(key);
+  if (!parsed) {
+    return null;
+  }
+  if (parsed.selector === null) {
+    return rootAddress(parsed, blockTypes, sectionLayouts);
+  }
+  const { compounds, pseudo } = parseSelector(parsed.selector);
+  // A generated box is no element scope: no variant pairs at a pseudo
+  // rule (`> pb-text::before`, the owner's own `&::before`).
+  if (pseudo !== null) {
+    return null;
+  }
+  const last = compounds[compounds.length - 1];
+  if (last.kind === TYPE) {
+    return typeAddress(last.name);
+  }
+  return last.kind === TAG ? `base:${last.name}` : null;
 };
 
 // The bundle-like address families as [kind, refinement prefix] pairs:
@@ -465,158 +570,16 @@ export const scopeMatches = (
 /**
  * The family kind beneath a refinement scope ('kind:container' under a
  * 'layout:' scope), or null for a scope that is not a refinement (a kind
- * itself, a base tag): the layer the defaults readers fold in under the
- * captured scope, in delivery rank order.
+ * itself, a base tag): the block the style stack (and, until T5b ports
+ * their last consumer, the defaults readers below) layers beneath the
+ * captured scope's own, in delivery rank order.
+ *
+ * @return {?string}
+ *   The kind scope, or null.
  */
-const familyKindOf = (scope) =>
+export const familyKindOf = (scope) =>
   SCOPE_FAMILIES.find(([, refinement]) => scope.startsWith(refinement))?.[0] ??
   null;
-
-/**
- * The active skin's site-default entry for an element (the third layer).
- *
- * The provenance read behind the inspector's "from skin" rendering: the
- * guide payload carries the active skin's defaults (guide.skinDefaults,
- * {scope: {relative key: entry}}), and an element resolves its own scope
- * against them. Delivery layers base-tag rules first, then the family
- * kind's block, then the refinement's over it (the compiled file's rank
- * order), so the client mirrors that merge: kind values win over base
- * values, refinement values win over kind values. The result is the
- * weakest SKIN layer everywhere — every per-element value and every worn
- * variant beats a skin default in the cascade; only the declaration's
- * own defaults (declaredDefaultEntry) sit beneath it — so callers render
- * it as provenance (badges, placeholders), never merge it into the
- * effective entry the widgets edit.
- *
- * The base layer needs the caller to say what the target RENDERS AS: the
- * scope families are declaration-space (kind, block type, layout) while
- * base:{tag} rules deliver on bare markup, so only the live DOM knows
- * whether they hit this element (a collapsed heading block IS its h2; a
- * wrapped block's root is a div the base tier never touches). Callers
- * resolve the drilled element's tag from the canvas (leader-side, live;
- * satellite-side from the leader's relayed selection tags; null when
- * unknown, and the base layer then degrades away, never over-claims).
- * Base defaults are element-only ('' entries),
- * so the tag layer reads '' regardless of the key's part drill — the
- * drilled part element's own tag is what the caller resolves.
- *
- * @param {object} guide
- *   The style guide payload (drupalSettings.daedalusStylish.guide).
- * @param {string} key
- *   A full style-map key (root or '::.class' part form).
- * @param {object} [blockTypes]
- *   component uuid → inline block type, for scope capture.
- * @param {object} [sectionLayouts]
- *   section uuid → layout id, for scope capture.
- * @param {?string} [tag]
- *   The drilled target element's rendered tag name (lowercase), or null
- *   when unknown (no canvas read answers it): the base:{tag} layer key.
- *
- * @return {?object}
- *   The merged condition-keyed property map the skin supplies for this
- *   element, or null when the skin defaults nothing here.
- */
-export const skinDefaultEntry = (
-  guide,
-  key,
-  blockTypes = {},
-  sectionLayouts = {},
-  tag = null,
-) => {
-  const defaults = guide?.skinDefaults;
-  if (!isEntryHost(defaults) || typeof key !== 'string') {
-    return null;
-  }
-  const scope = captureScope(key, blockTypes, sectionLayouts);
-  if (scope === null) {
-    return null;
-  }
-  const pos = key.indexOf('::');
-  const relative = pos === -1 ? '' : key.slice(pos);
-  let entry = null;
-  const baseScope =
-    typeof tag === 'string' && tag !== '' ? `base:${tag}` : null;
-  const layerCandidate = (layer) => {
-    if (layer === null) {
-      return null;
-    }
-    return layer === baseScope
-      ? defaults[layer]?.['']
-      : defaults[layer]?.[relative];
-  };
-  [baseScope, familyKindOf(scope), scope].forEach((layer) => {
-    const candidate = layerCandidate(layer);
-    if (isEntryHost(candidate)) {
-      entry = entry ? mergeEntry(candidate, entry) : candidate;
-    }
-  });
-  return entry;
-};
-
-/**
- * A declaration's own default entry for an element (beneath the skin).
- *
- * The declared defaults tier's provenance read: a declaration ships
- * `defaults` for the markup it owns (guide.declaredDefaults, {scope:
- * {relative key: entry}}, served always, skin or no skin): a block
- * type, block plugin, or layout refinement for its own scope, and a
- * kind for what the kind itself renders (a composed kind's root, any
- * kind's declared `::.part` elements). An element resolves its scope
- * against them the way skinDefaultEntry does: the family kind's block
- * first, the refinement's merged over it (the compiled file's rank
- * order, kind before refinement), so a refined section reads the
- * container kind's `display: grid` beneath its layout's own defaults,
- * and an element whose scope IS a kind (the entity, an unrefined
- * section, an unresolved bundle) reads the kind's alone. No base:{tag}
- * layer: a declaration's box facts key off its own markup, never the
- * rendered tag. Delivery prints the tier beneath the skin's at equal
- * specificity, so the caller layers the skin's entry OVER this one;
- * both are provenance, never merged into the entry the widgets edit.
- *
- * @param {object} guide
- *   The style guide payload (drupalSettings.daedalusStylish.guide).
- * @param {string} key
- *   A full style-map key (root or '::.class' part form).
- * @param {object} [blockTypes]
- *   component uuid → inline block type, for scope capture.
- * @param {object} [sectionLayouts]
- *   section uuid → layout id, for scope capture.
- *
- * @return {?object}
- *   The merged condition-keyed property map the declarations supply for
- *   this element, or null when none declares anything here.
- */
-export const declaredDefaultEntry = (
-  guide,
-  key,
-  blockTypes = {},
-  sectionLayouts = {},
-) => {
-  const defaults = guide?.declaredDefaults;
-  if (!isEntryHost(defaults) || typeof key !== 'string') {
-    return null;
-  }
-  const scope = captureScope(key, blockTypes, sectionLayouts);
-  if (scope === null) {
-    return null;
-  }
-  const pos = key.indexOf('::');
-  const relative = pos === -1 ? '' : key.slice(pos);
-  let entry = null;
-  [familyKindOf(scope), scope].forEach((layer) => {
-    const candidate = layer === null ? null : defaults[layer]?.[relative];
-    if (isEntryHost(candidate)) {
-      entry = entry ? mergeEntry(candidate, entry) : candidate;
-    }
-  });
-  return entry;
-};
-
-/**
- * A plain-object gate for defaults payload pieces.
- */
-const isEntryHost = (value) =>
-  value !== null && typeof value === 'object' && !Array.isArray(value);
 
 /**
  * An element's stencil provenance: the nearest self-or-ancestor stamp.
@@ -707,12 +670,12 @@ const ownershipOffers = (materials, variant, provenance) => {
  * The tag half of soft enforcement for base:{tag} variants: their scope
  * pairs with every element (scopeMatches), but the OFFER is gated on the
  * selection actually rendering as the tag — anchor variants offer only on
- * an element whose live root IS an <a> (a collapsed button block), h2
- * variants only on a rendered heading. The tag is a live-DOM fact the
- * leader canvas answers (readCanvasTag) and relays to the satellite with
- * the selection; null means unknown, and base variants then do not
- * offer, never over-offering. Element-scoped variants ignore the tag
- * entirely.
+ * an element whose root IS an <a> (a collapsed button block), h2
+ * variants only on a rendered heading. The tag is the read subject's
+ * from the blueprint tree (style-stack.js subjectTag: the annotation's
+ * resolved root tag, the same answer on the leader and the satellite);
+ * null means unknown, and base variants then do not offer, never
+ * over-offering. Element-scoped variants ignore the tag entirely.
  */
 const tagOffers = (variant, tag) =>
   !variant.scope.startsWith('base:') ||
@@ -759,14 +722,16 @@ export const applicableVariants = (
 /**
  * Extracts an element's OVERRIDE style entries, element-relative.
  *
- * The shape save-as-variant, push, and the style clipboard all speak:
- * '' => the root element's entry, '::.class' => sub-element entries.
- * The extraction is overrides-only: a layered entry contributes its
- * own condition layers with the "variants" list stripped — the references
- * are not styles (resolve them through the library instead; see
- * effectiveElementMap()), and flattening their values in would bake
- * another variant's treatment into whatever consumes the capture. A
- * pure-reference entry contributes nothing.
+ * The shape save-as-variant and push speak, and the code view's page
+ * tree reads: '' => the root element's entry, '::.class' => sub-element
+ * entries. The extraction is overrides-only: a layered entry contributes
+ * its own condition layers with the "variants" list stripped — the
+ * references are not styles (the stack resolves them through the
+ * library), and flattening their values in would bake another variant's
+ * treatment into whatever consumes the capture. A
+ * pure-reference entry contributes nothing. The key is the styling
+ * target's: an element's parts sit at '::.cls' beneath it, a rule's
+ * continuations by descent (relativeUnder) at the same relative.
  */
 export const elementEntries = (map, key) => {
   const entries = {};
@@ -781,8 +746,9 @@ export const elementEntries = (map, key) => {
   };
   add('', map?.[key]);
   Object.entries(map ?? {}).forEach(([mapKey, entry]) => {
-    if (mapKey.startsWith(`${key}::`)) {
-      add(mapKey.slice(key.length), entry);
+    const relative = relativeUnder(key, mapKey);
+    if (relative !== null) {
+      add(relative, entry);
     }
   });
   return entries;
@@ -892,7 +858,7 @@ export const subtreeSlotTable = (key, layout) => {
     });
   };
   const parsed = parseKey(key);
-  if (!parsed || parsed.sub) {
+  if (!parsed || parsed.selector) {
     return table;
   }
   if (parsed.form === 'container') {
@@ -1026,6 +992,17 @@ export const captureEntries = (map, key, layout = []) => {
 };
 
 /**
+ * An entry's references that travel with a capture: its ROOT ('' fragment)
+ * references as {variant, fragment} only (the origin stripped; the
+ * server's variant-styles lane rejects "via"). A FRAGMENT reference never
+ * travels: the composition that distributed it owns it.
+ */
+const travellingRefs = (entry) =>
+  entryRefs(entry)
+    .filter((ref) => ref.fragment === '')
+    .map(({ variant, fragment }) => ({ variant, fragment }));
+
+/**
  * The capture walk with provenance: which map key fed which relative key.
  *
  * The shared walk under captureEntries() and shadowClearingOps(): the same
@@ -1053,8 +1030,20 @@ export const captureEntries = (map, key, layout = []) => {
  * strips the same way). FRAGMENT (non-'') references never travel: they
  * are owned by the composition that distributed them. saveStyles() folds
  * them where the re-attach replaces them; they stay behind on the
- * element where it does not. References live on base entries; a part
- * entry's own layers stay overrides-only exactly like the root's.
+ * element where it does not. A RULE entry's root references ('::> pb-text'
+ * wearing a text variant, the element's own or a child's) travel the
+ * same way: the wear is part of the look, delivered at the rule's
+ * matches, and apply places it at the same rule under the new wearer.
+ * The capture root's own references stay behind (the axis fold's
+ * business) and a part entry never wears.
+ *
+ * The key may be a RULE ('container:X::a', the editing session's anchor
+ * when a rule wears the document): its own sources are its entry and
+ * its continuations by descent (relativeUnder: 'container:X::a .icon'
+ * at '::.icon'), the same relatives delivery prints them at, so the
+ * push bar's shadow clearing and update-from-element read a rule
+ * anchor exactly as an element. A rule has no subtree slot table (a
+ * variant is saved from an element), so 'direct' is empty there.
  *
  * @return {{own: Array, direct: Array}}
  *   Source lists of {key, relative, entry}. 'direct' orders SHALLOW-FIRST
@@ -1065,40 +1054,52 @@ export const captureEntries = (map, key, layout = []) => {
  *   deterministic outcomes for captured nested compositions.
  */
 export const captureSources = (map, key, layout = []) => {
-  const own = Object.entries(elementEntries(map, key))
-    .filter(
-      ([relative]) => !isInstanceRelative(relative) && !isTagRelative(relative),
-    )
-    .map(([relative, entry]) => ({ key: key + relative, relative, entry }));
+  const own = [];
+  const addOwn = (relative, entry) => {
+    if (!isEntryObject(entry) || isInstanceRelative(relative)) {
+      return;
+    }
+    const overrides = stripVariants(entry);
+    // The root travels overrides-only (its references are the axis
+    // fold's business, saveStyles); a rule entry's root references
+    // travel as refs, the same way a child's do.
+    const refs = relative === '' ? [] : travellingRefs(entry);
+    if (Object.keys(overrides).length || refs.length) {
+      own.push({
+        key: continuedKey(key, relative),
+        relative,
+        entry: refs.length ? { variants: refs, ...overrides } : overrides,
+      });
+    }
+  };
+  addOwn('', map?.[key]);
+  Object.entries(map ?? {}).forEach(([mapKey, entry]) => {
+    const relative = relativeUnder(key, mapKey);
+    if (relative !== null) {
+      addOwn(relative, entry);
+    }
+  });
   const table = subtreeSlotTable(key, layout);
   const direct = [];
   Object.entries(map ?? {}).forEach(([mapKey, entry]) => {
     if (!isEntryObject(entry)) {
       return;
     }
-    if (mapKey === key || mapKey.startsWith(`${key}::`)) {
+    if (mapKey === key || relativeUnder(key, mapKey) !== null) {
       return;
     }
     const parsed = parseKey(mapKey);
-    // Instance parts are instance-bound and tag tiers are host-map-only
-    // (the server rejects both in variant styles), so
-    // neither travels in a capture.
+    // Instance parts are instance-bound (the server rejects them in
+    // variant styles, wherever they stand in a selector), so they never
+    // travel in a capture; every other selector does.
     if (
       !parsed ||
-      (parsed.sub !== null &&
-        (INSTANCE_PART.test(parsed.sub) || !parsed.sub.startsWith('.')))
+      selectorClasses(parsed.selector).some((name) => INSTANCE_PART.test(name))
     ) {
       return;
     }
     const overrides = stripVariants(entry);
-    // References live on base entries only: part and children pseudo-part
-    // entries travel overrides-only, like the root's parts.
-    const refs =
-      parsed.sub === null && !parsed.children
-        ? entryRefs(entry)
-            .filter((ref) => ref.fragment === '')
-            .map(({ variant, fragment }) => ({ variant, fragment }))
-        : [];
+    const refs = travellingRefs(entry);
     if (!Object.keys(overrides).length && !refs.length) {
       return;
     }
@@ -1120,7 +1121,7 @@ export const captureSources = (map, key, layout = []) => {
     const travels = refs.length ? { variants: refs, ...overrides } : overrides;
     direct.push({
       key: mapKey,
-      relative: formatSlotKey(segments, parsed.sub, parsed.children),
+      relative: formatSlotKey(segments, parsed.selector),
       entry: travels,
       depth: segments.length,
     });
@@ -1235,12 +1236,15 @@ export const saveStyles = (
     }),
   );
   Object.keys(map ?? {}).forEach((base) => {
-    // References live on base entries only; the root's own space is done.
-    if (base === key || base.includes('::')) {
+    // The root's own space is done.
+    if (base === key) {
       return;
     }
     // Only same-axis FRAGMENT wearings fold on children: a same-axis
-    // ROOT wearing rides the capture as a reference instead.
+    // ROOT wearing rides the capture as a reference instead. A rule's
+    // wear is a root wearing too (a composition is refused at a rule),
+    // so a rule entry never folds: its references travel with the
+    // capture (captureSources).
     const worn = sameAxisRefs(base, true);
     if (!worn.length) {
       return;
@@ -1403,17 +1407,6 @@ export const shadowClearingOps = (map, key, layout, variant, variants) => {
 };
 
 /**
- * Projects element-relative entries onto an element's full map keys.
- */
-export const entriesAtKey = (key, relativeEntries) => {
-  const full = {};
-  Object.entries(relativeEntries ?? {}).forEach(([relative, entry]) => {
-    full[key + relative] = entry;
-  });
-  return full;
-};
-
-/**
  * Resolves a variant reference against the store's records.
  *
  * A {"variant": "..."} string resolves by record id, the machine name: the
@@ -1471,287 +1464,3 @@ export const holdsFragments = (variant) =>
   Object.keys(variant?.value ?? {}).some(
     (relative) => relative !== '' && !relative.startsWith('::'),
   );
-
-/**
- * The condition-keyed styles a map key EFFECTIVELY carries, with provenance.
- *
- * The edit-mode resolver ("a variant is a preset, not a stylesheet"): when
- * the key's element roots variant references, the entry resolves from each
- * referenced variant's element-relative styles ('' for the element itself,
- * '::.class' for its parts) in DELIVERY order (axis-declaration order when
- * the caller passes the scope's vocabulary (`axes`), the stored list order
- * without it; later references beat earlier ones), with the map's own entry
- * (the overrides layer) merged on top, through the store's variant
- * records. Without references the map's own entry passes
- * through. Inspector widgets, code mode, and the detach materialization all
- * read the element through this one projection, so what they show IS
- * what the element looks like.
- *
- * Every reference resolves through ITS OWN fragment (fragmentStyles — the
- * same read delivery uses): a root ('' fragment) reference reads the
- * variant's element-relative entries, a distributed {variant, fragment}
- * reference reads its fragment's entry and part entries. Slot paths a key's
- * own references do not name address OTHER elements — those elements carry
- * their own references — so a child key still resolves against its OWN
- * root's references only.
- *
- * @param {object} map
- *   The style map (mirror view).
- * @param {string} key
- *   A full style-map key (root, '::.class' part, or block-field form).
- * @param {?Array<object>} variants
- *   The store's variant records.
- * @param {?Array<string>} axes
- *   The root element scope's axis vocabulary (the served roster's
- *   variant_axes), for delivery-order resolution; null keeps list order.
- *
- * @return {{entry: ?object, variant: ?object, reference: ?string}}
- *   `entry` is the effective condition-keyed styles (null when none),
- *   `reference` is the root's LAST raw reference string (the dominant
- *   layer) — the provenance flag: non-null means "from a variant", even
- *   when the records cannot resolve it (then `variant` is null) — and
- *   `variant` the last resolvable referenced variant's record for
- *   provenance copy.
- */
-export const effectiveEntry = (map, key, variants, axes = null) => {
-  if (typeof key !== 'string') {
-    return { entry: null, variant: null, reference: null };
-  }
-  const pos = key.indexOf('::');
-  const rootKey = pos === -1 ? key : key.slice(0, pos);
-  const refs = orderedEntryRefs(map?.[rootKey], variants, axes);
-  const own = map?.[key];
-  const ownEntry = isEntryObject(own) ? stripVariants(own) : null;
-  if (!refs.length) {
-    return { entry: ownEntry, variant: null, reference: null };
-  }
-  let entry = null;
-  let variant = null;
-  refs.forEach((ref) => {
-    const resolved = findVariant(variants, ref.variant);
-    if (resolved) {
-      variant = resolved;
-    }
-    const styles = resolved?.value?.[ref.fragment + key.slice(rootKey.length)];
-    if (isEntryObject(styles)) {
-      entry = entry ? mergeEntry(styles, entry) : styles;
-    }
-  });
-  if (ownEntry && Object.keys(ownEntry).length) {
-    entry = entry ? mergeEntry(ownEntry, entry) : ownEntry;
-  }
-  return { entry, variant, reference: refs[refs.length - 1].variant };
-};
-
-/**
- * The element's map view with its variant references RESOLVED.
- *
- * Replaces a root entry's variant references with the referenced variants'
- * entries (projected onto the element's keys in delivery order: axis order
- * when the caller passes the scope's vocabulary, list order without it,
- * later references beating earlier ones, the entry's own override layers
- * merged on top), so a paste over an on-variant element can diff against
- * what the element actually looks like: the ops then null out resolved
- * properties the pasted styles don't carry. Override layers win at EVERY
- * projected key, not only the root: a part entry the map carries beside a
- * variant that also styles that part merges OVER the variant's part styles
- * (effectiveEntry's rule), so the code buffer prints the value the page
- * actually shows.
- *
- * Each reference projects ITS OWN fragment's suffix space (fragmentStyles:
- * the fragment's entry as '', its part entries as '::.class' — the keys
- * that concatenate onto the element's own key space), so a distributed
- * {variant, fragment} reference resolves exactly what it delivers. Slot
- * keys a reference's fragment does not name address OTHER elements
- * carrying their own references; naive concatenation would mint malformed
- * map keys, so they stay out of this view.
- */
-export const effectiveElementMap = (map, key, variants, axes = null) => {
-  const root = map?.[key];
-  const refs = orderedEntryRefs(root, variants, axes);
-  if (!refs.length) {
-    return map ?? {};
-  }
-  const elementRelatives = {};
-  refs.forEach((ref) => {
-    const variant = findVariant(variants, ref.variant);
-    Object.entries(fragmentStyles(variant?.value, ref.fragment)).forEach(
-      ([relative, entry]) => {
-        if (isEntryObject(entry)) {
-          elementRelatives[relative] = elementRelatives[relative]
-            ? mergeEntry(entry, elementRelatives[relative])
-            : entry;
-        }
-      },
-    );
-  });
-  const ownRoot = stripVariants(root);
-  if (Object.keys(ownRoot).length) {
-    elementRelatives[''] = elementRelatives['']
-      ? mergeEntry(ownRoot, elementRelatives[''])
-      : ownRoot;
-  }
-  const effective = { ...map };
-  delete effective[key];
-  Object.entries(entriesAtKey(key, elementRelatives)).forEach(
-    ([fullKey, entry]) => {
-      const own = isEntryObject(effective[fullKey])
-        ? stripVariants(effective[fullKey])
-        : {};
-      effective[fullKey] = Object.keys(own).length
-        ? mergeEntry(own, entry)
-        : entry;
-    },
-  );
-  return effective;
-};
-
-/**
- * The override tuples shadowing a worn variant's values (the badges).
- *
- * An entry's own condition layers beat every reference the element wears
- * (own beats worn), so each (condition, property) the OWN entry defines
- * whose longhand grain meets a declaration a referenced variant makes at
- * the same element-relative key is a SHADOW: the variant's value cannot
- * show through until the override is unset (or the reference detached).
- * The match is grain-aware, not name-exact (box-model.js sharesGrain):
- * an own `padding` shadows a worn `padding-inline` (the band's own
- * padding masks its width inset), an own `padding-top` does not, exactly
- * as the cascade delivers. Resolution reads the key exactly like
- * effectiveEntry(): the ROOT's references answer for the root and its
- * '::.class' parts, each reference's styles looked up through ITS OWN
- * fragment at the key's relative position — a child wearing a distributed
- * {variant, fragment} reference badges exactly like a root wearer; among
- * several defining references the delivery winner (orderedEntryRefs with
- * the vocabulary) is reported.
- *
- * @return {object}
- *   condition → {own property: reference} for every shadowing own
- *   tuple, {} when nothing shadows.
- */
-export const shadowedProperties = (map, key, variants, axes = null) => {
-  if (typeof key !== 'string') {
-    return {};
-  }
-  const pos = key.indexOf('::');
-  const rootKey = pos === -1 ? key : key.slice(0, pos);
-  const refs = orderedEntryRefs(map?.[rootKey], variants, axes);
-  const own = map?.[key];
-  if (!refs.length || !isEntryObject(own)) {
-    return {};
-  }
-  const relative = key.slice(rootKey.length);
-  const shadowed = {};
-  Object.entries(stripVariants(own)).forEach(([condition, values]) => {
-    if (!isEntryObject(values)) {
-      return;
-    }
-    Object.keys(values).forEach((property) => {
-      refs.forEach((ref) => {
-        const styles = findVariant(variants, ref.variant)?.value?.[
-          ref.fragment + relative
-        ];
-        const worn = isEntryObject(styles) ? styles[condition] : null;
-        if (
-          isEntryObject(worn) &&
-          Object.keys(worn).some(
-            (declaration) =>
-              worn[declaration] !== undefined &&
-              sharesGrain(property, declaration),
-          )
-        ) {
-          (shadowed[condition] ??= {})[property] = ref.variant;
-        }
-      });
-    });
-  });
-  return shadowed;
-};
-
-/**
- * The variant-supplied (condition, property) tuples at a key.
- *
- * The widget rows' layer-attribution read (the layer dots): for every
- * (condition, property) any worn reference defines at the key's relative
- * position, the DELIVERY-WINNING reference — orderedEntryRefs order, a
- * later reference beating an earlier one, exactly the cascade the compiled
- * stylesheet delivers. Reported regardless of the element's own entry: the
- * own layer always wins delivery, so the caller checks it first and reads
- * this table only for values the element does not set itself. Resolution
- * mirrors shadowedProperties(): the ROOT's references answer for the root
- * and its '::.class' parts, each reference's styles looked up through ITS
- * OWN fragment at the key's relative position.
- *
- * @return {object}
- *   condition → {property: reference} for every variant-defined tuple, {}
- *   when nothing is worn.
- */
-export const propertySuppliers = (map, key, variants, axes = null) => {
-  if (typeof key !== 'string') {
-    return {};
-  }
-  const pos = key.indexOf('::');
-  const rootKey = pos === -1 ? key : key.slice(0, pos);
-  const refs = orderedEntryRefs(map?.[rootKey], variants, axes);
-  const relative = key.slice(rootKey.length);
-  const suppliers = {};
-  refs.forEach((ref) => {
-    const styles = findVariant(variants, ref.variant)?.value?.[
-      ref.fragment + relative
-    ];
-    if (!isEntryObject(styles)) {
-      return;
-    }
-    Object.entries(styles).forEach(([condition, values]) => {
-      if (condition === 'variants' || !isEntryObject(values)) {
-        return;
-      }
-      Object.keys(values).forEach((property) => {
-        (suppliers[condition] ??= {})[property] = ref.variant;
-      });
-    });
-  });
-  return suppliers;
-};
-
-/**
- * The value ONE worn reference supplies for a (condition, property) at a
- * key: the provenance model's "what returns on unset" read behind the
- * overriding row's menu. Resolution mirrors propertySuppliers(): the
- * ROOT's references answer for the root and its '::.class' parts, the
- * reference's styles looked up through ITS OWN fragment at the key's
- * relative position.
- *
- * @return {*}
- *   The supplied value, undefined when the reference is not worn there
- *   or sets nothing at that tuple.
- */
-export const suppliedValue = (
-  map,
-  key,
-  variants,
-  reference,
-  condition,
-  property,
-  axes = null,
-) => {
-  if (typeof key !== 'string') {
-    return undefined;
-  }
-  const pos = key.indexOf('::');
-  const rootKey = pos === -1 ? key : key.slice(0, pos);
-  const ref = orderedEntryRefs(map?.[rootKey], variants, axes).find(
-    (candidate) => candidate.variant === reference,
-  );
-  if (!ref) {
-    return undefined;
-  }
-  const styles = findVariant(variants, reference)?.value?.[
-    ref.fragment + key.slice(rootKey.length)
-  ];
-  const block =
-    isEntryObject(styles) && condition !== 'variants'
-      ? styles[condition]
-      : null;
-  return isEntryObject(block) ? block[property] : undefined;
-};

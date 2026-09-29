@@ -249,11 +249,6 @@ export const VariantPicker = ({
                       ✓
                     </span>
                   )}
-                  {active && option.description !== '' && (
-                    <span className="daedalus-stylish-variant-picker__description">
-                      {option.description}
-                    </span>
-                  )}
                 </div>
               );
             })}

@@ -4,7 +4,6 @@ namespace Drupal\daedalus_edit\Form;
 
 use Drupal\Core\Entity\EntityInterface;
 use Drupal\Core\Form\FormStateInterface;
-use Drupal\Core\Field\FieldItemListInterface;
 
 /**
  * Entity Form Interface.
@@ -45,32 +44,5 @@ interface EntityFormInterface {
    *   The main entity of the page.
    */
   public function getMainEntity(array &$form, FormStateInterface $form_state): EntityInterface;
-
-  /**
-   * Update form state.
-   *
-   * Updates the form state and user input for a given field.
-   *
-   * @param array $form
-   *   The entity form.
-   * @param \Drupal\Core\Form\FormStateInterface $form_state
-   *   The form state.
-   * @param \Drupal\Core\Field\FieldItemListInterface $field
-   *   The field whose value is written into the form state and user input.
-   * @param \Drupal\Core\Entity\EntityInterface $entity
-   *   The entity the field belongs to.
-   */
-  public function updateFormState(array &$form, FormStateInterface $form_state, FieldItemListInterface $field, EntityInterface $entity);
-
-  /**
-   * Get the user input.
-   *
-   * @param \Drupal\Core\Form\FormStateInterface $form_state
-   *   The form state.
-   *
-   * @return mixed
-   *   The user input.
-   */
-  public function getUserInput(FormStateInterface $form_state);
 
 }

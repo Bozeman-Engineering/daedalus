@@ -11,7 +11,9 @@ use Drupal\ai\OperationType\Chat\ChatMessage;
 use Drupal\ai\OperationType\Chat\ChatOutput;
 use Drupal\ai\Service\HostnameFilter;
 use Drupal\daedalus_ai_memory\Enum\AgentState;
+use Drupal\daedalus_ai_memory\FailureReason;
 use Drupal\ai_agents\PluginInterfaces\AiAgentInterface;
+use Drupal\ai_assistant_api\AiAssistantInterface;
 use Drupal\ai_assistant_api\Event\AiAssistantPassContextToAgentEvent;
 use Drupal\ai_assistant_api\Service\AgentRunner;
 use Drupal\Core\Config\ConfigFactoryInterface;
@@ -185,10 +187,15 @@ class AgentMemoryRunner extends AgentRunner {
         $logger->warning('Agent returned JOB_NOT_SOLVABLE for job @job_id.', ['@job_id' => $job_id]);
       }
 
+      // The files on this leg's messages have been delivered; drop the bytes
+      // before the record is persisted so the tempstore holds no binaries and
+      // no later turn pays to re-send them. The message text, and with it the
+      // ATTACHMENTS block naming each file by its handle, survives; view_file
+      // re-opens a handle on demand.
       $this->fileStripper->stripFiles($agent);
       $this->trimAndPersist($agent, $store, $job_id, count($chat_history), $solvability);
 
-      return $this->buildResponse($agent, $logger);
+      return $this->buildResponse($agent, $assistant_id, $logger);
     }
     catch (\Throwable $e) {
       $logger->error('Agent turn failed for job @job_id (state=@state, provider=@provider): @class: @message' . PHP_EOL . '@trace', [
@@ -204,7 +211,7 @@ class AgentMemoryRunner extends AgentRunner {
       // error recovery, distinct from the "never delete on finish" rule that
       // governs normal completion.
       $store->delete($job_id);
-      return $this->buildErrorResponse();
+      return $this->failureReply($assistant_id, FailureReason::distill($e->getMessage()), $e);
     }
   }
 
@@ -232,14 +239,11 @@ class AgentMemoryRunner extends AgentRunner {
    */
   private function applyProviderConfiguration(AiAgentInterface $agent, string $assistant_id, array $defaults): void {
     $configuration = $defaults['configuration'] ?? [];
-    if (!$configuration) {
-      $assistants = $this->entityTypeManager->getStorage('ai_assistant')->loadByProperties(['ai_agent' => $assistant_id]);
-      if ($assistant = reset($assistants)) {
-        $configuration = array_filter(
-          $assistant->get('llm_configuration') ?? [],
-          static fn ($value) => $value !== NULL && $value !== '',
-        );
-      }
+    if (!$configuration && ($assistant = $this->frontingAssistant($assistant_id))) {
+      $configuration = array_filter(
+        $assistant->get('llm_configuration') ?? [],
+        static fn ($value) => $value !== NULL && $value !== '',
+      );
     }
     if (!$configuration) {
       return;
@@ -247,6 +251,20 @@ class AgentMemoryRunner extends AgentRunner {
     $provider = $agent->getAiProvider();
     $provider->setConfiguration($configuration + $provider->getConfiguration());
     $agent->setAiConfiguration($configuration);
+  }
+
+  /**
+   * Loads the assistant entity fronting an agent.
+   *
+   * @param string $assistant_id
+   *   The agent plugin id the assistant delegates to.
+   *
+   * @return \Drupal\ai_assistant_api\AiAssistantInterface|null
+   *   The assistant, or NULL when no assistant fronts this agent.
+   */
+  private function frontingAssistant(string $assistant_id): ?AiAssistantInterface {
+    $assistants = $this->entityTypeManager->getStorage('ai_assistant')->loadByProperties(['ai_agent' => $assistant_id]);
+    return reset($assistants) ?: NULL;
   }
 
   /**
@@ -389,24 +407,30 @@ class AgentMemoryRunner extends AgentRunner {
    * Builds a ChatOutput from the agent's current state.
    *
    * Guards against echoing the user's own message back when the agent
-   * produces no response (e.g. provider timeout).
+   * produces no response: the history then still ends on the user's line,
+   * and the reply is the failure the agent recorded for it (a provider
+   * rejection such as an image over the API's size limit) or, when it
+   * recorded none, the plain fact that no reply was produced.
    *
    * @param \Drupal\ai_agents\PluginInterfaces\AiAgentInterface $agent
    *   The agent instance.
+   * @param string $assistant_id
+   *   The agent plugin id the assistant delegates to.
    * @param \Psr\Log\LoggerInterface $logger
    *   The logger channel.
    *
    * @return \Drupal\ai\OperationType\Chat\ChatOutput
    *   The chat output.
    */
-  private function buildResponse(AiAgentInterface $agent, LoggerInterface $logger): ChatOutput {
+  private function buildResponse(AiAgentInterface $agent, string $assistant_id, LoggerInterface $logger): ChatOutput {
     $response = $agent->solve() ?? '';
 
     if ($history = $agent->getChatHistory()) {
       $last = end($history);
       if ($last->getRole() === 'user') {
-        $logger->warning('Agent produced no response — last history message is from the user.');
-        return $this->buildErrorResponse();
+        $reason = $this->recordedFailure($agent) ?? 'The assistant produced no reply.';
+        $logger->warning('Agent produced no response for the last user message: @reason', ['@reason' => $reason]);
+        return $this->failureReply($assistant_id, $reason);
       }
       return new ChatOutput($last, [$response], []);
     }
@@ -415,11 +439,54 @@ class AgentMemoryRunner extends AgentRunner {
   }
 
   /**
-   * Builds a generic error response for the chat.
+   * Returns the failure the agent recorded for its last provider call.
+   *
+   * AiAgentEntityWrapper catches the provider call's exception, keeps its
+   * message and answers JOB_NOT_SOLVABLE with an empty reply; the message is
+   * reachable through getLastError(), which ai_agents keeps on the wrapper
+   * class rather than on any agent interface, so it is read by presence.
+   *
+   * @param \Drupal\ai_agents\PluginInterfaces\AiAgentInterface $agent
+   *   The agent instance.
+   *
+   * @return string|null
+   *   The distilled failure, or NULL when the agent recorded none.
    */
-  private function buildErrorResponse(): ChatOutput {
-    $message = new ChatMessage('assistant', 'Sorry, I wasn\'t able to process that request. The AI provider may be temporarily unavailable.');
-    return new ChatOutput($message, [''], []);
+  private function recordedFailure(AiAgentInterface $agent): ?string {
+    if (!method_exists($agent, 'getLastError')) {
+      return NULL;
+    }
+    $raw = $agent->getLastError();
+    return is_string($raw) && trim($raw) !== '' ? FailureReason::distill($raw) : NULL;
+  }
+
+  /**
+   * Builds the assistant's reply for a turn that failed.
+   *
+   * The wording is the assistant entity's own error template (ai_assistant_api's
+   * `error_message`, or the `specific_error_messages` entry for the
+   * exception's class when one is set), with its `[error_message]` token
+   * replaced by the reason, so a site phrases failures once for every road.
+   * Without an assistant, or with an empty template, the reason stands alone.
+   *
+   * @param string $assistant_id
+   *   The agent plugin id the assistant delegates to.
+   * @param string $reason
+   *   The distilled reason the turn failed.
+   * @param \Throwable|null $exception
+   *   The exception that ended the turn, when one did.
+   *
+   * @return \Drupal\ai\OperationType\Chat\ChatOutput
+   *   The chat output carrying the reply.
+   */
+  private function failureReply(string $assistant_id, string $reason, ?\Throwable $exception = NULL): ChatOutput {
+    $template = '';
+    if ($assistant = $this->frontingAssistant($assistant_id)) {
+      $specific = $exception ? ($assistant->get('specific_error_messages')[(new \ReflectionClass($exception))->getShortName()] ?? '') : '';
+      $template = $specific !== '' ? $specific : (string) $assistant->get('error_message');
+    }
+    $text = $template === '' ? $reason : str_replace('[error_message]', $reason, $template);
+    return new ChatOutput(new ChatMessage('assistant', $text), [$text], []);
   }
 
 }

@@ -9,8 +9,10 @@ import {
   valueSpaceFor,
   wearing,
 } from '../../value-space.js';
-import { rowMenu, tokenItems } from '../../provenance-model.js';
-import { useMenu } from '../../menu.js';
+import { tokenItems } from '../../provenance-model.js';
+import { displayAt } from '../../value-space.js';
+import { stackAt } from '../../style-stack.js';
+import { ownAtPose } from '../../controls.js';
 import { Face } from '../../face.js';
 import { PaletteGrid } from '../../palette-picker.js';
 import { listboxHome, listboxTarget } from '../../palette-picker-model.js';
@@ -18,7 +20,6 @@ import { usePopover } from '../../popover.js';
 import {
   choiceState,
   choiceStops,
-  ghostFace,
   originFor,
   paintedSpace,
   rowHidden,
@@ -26,9 +27,11 @@ import {
 } from '../../choice-row-model.js';
 import { useFieldGesture, useGesture } from './use-gesture.js';
 import { DimensionField, useKachunk } from './dimension-field.js';
+import { Mark } from './mark.js';
 import { Segments } from './segments.js';
 import { wellFace } from './swatch-well-model.js';
 import { useRowHighlight } from './use-highlight.js';
+import { useRowMenu } from './use-row-menu.js';
 
 /**
  * ChoiceRow: the one basic-mode row over one property, bound through the
@@ -45,9 +48,9 @@ import { useRowHighlight } from './use-highlight.js';
  * - chips (Segments): the whole vocabulary in the row, at most five
  *   stops with short or icon faces. Clicking the lit chip unsets; a
  *   value no chip represents is the explicit custom pill.
- * - the choice well: one face wearing the current value (the lit stop's
+ * - the choice well: one face wearing the shown value (the lit stop's
  *   paint on a color or image space, its text face otherwise; "Custom"
- *   for an unrepresentable value; the ghost beneath an unset row), a
+ *   for an unrepresentable value; a dash when no layer delivers), a
  *   popover with the whole roster behind it (the palette grid for
  *   painted stops, a listbox of "name · value" rows with the lit stop
  *   checked otherwise). Picking the lit stop unsets, as on the chips.
@@ -57,27 +60,38 @@ import { useRowHighlight } from './use-highlight.js';
  *   never renders a free text input for any other shape: a
  *   non-dimension property with nothing to offer hides (choice-row-
  *   model.js rowHidden), as does a closed space minting nothing, unless
- *   a committed value keeps the row visible.
+ *   a shown value keeps the row visible.
+ * The shown value is the WINNER's at the pose, whichever layer delivers
+ * it (the display rule: a worn variant's value, the skin's default, a
+ * declaration's, lit exactly like an own value, with the mark in that
+ * layer's hue naming it), so a row always shows what applies and never
+ * a faded stand-in for it.
  * Unset is one gesture everywhere: the lit chip, the lit stop in the
- * well, the emptied field, the menu's unset doorway.
+ * well, the emptied field, the menu's unset doorway, and it exists only
+ * while the element's own entry delivers at the exact pose (controls.js
+ * ownAtPose): with a lower layer delivering, the lit chip and the lit
+ * stop do nothing, since there is nothing here to remove, and the menu
+ * offers no unset. An edit over any winner writes an own override at
+ * the pose.
  *
- * The leading slot is the row's provenance mark. On a chips or well
- * surface over a numeric ramp (a closed radius or type scale) it is the
- * GRIP, and dragging it scrubs the stops detent to detent with the
+ * The leading slot is the row's mark (lib/mark.js Mark over the row's
+ * origin: hue = the supplier, fill = at the pose, shape = the gesture).
+ * On a chips or well surface over a numeric ramp (a closed radius or
+ * type scale) the mark is a SQUARE while the scrub is live, and
+ * dragging it or the label scrubs the stops detent to detent with the
  * ka-chunk (value-space.js discreteScrubStart/Move), so nothing the
  * closed dimension field could do is lost when its faces outgrow the
- * chips; over a keyword or shadow vocabulary it is the resting ring;
- * on the field surface the field's own grip fills it. Either mark
- * paints in the origin's hue (`--daedalus-stylish-origin` on the row) and wears
- * the origin's hover story.
+ * chips; over a keyword or shadow vocabulary it is the circle; on the
+ * field surface the field leads its scrub label with the mark the row
+ * hands it and stamps the shape itself.
  *
  * Picks. Without `onPick` the row IS the gesture: a pick stages the
  * optimistic paint and commits `{[property]: stop.value}` through
  * `onCommit` (useGesture, one op per pick, the draft lighting the stop
  * before the round trip; a rejected commit marks the row invalid). A
  * widget whose gesture is not "one property, one value" supplies
- * `onPick(stop | null)` and does its own writing (a pair write, a batch
- * with companions), handing the row the draft-layered `value` it reads
+ * `onPick(stop | null)` and does its own writing (a pair write, a
+ * multi-key batch), handing the row the draft-layered `value` it reads
  * state from; `state` is its own mapping over the widget stop table
  * where segmentState over that value would lie (corners_border's
  * strokeState over the width+style+color stroke, the Layout section's
@@ -94,30 +108,37 @@ import { useRowHighlight } from './use-highlight.js';
  * for the property's own fallback; a guide constraint still displaces
  * it.
  *
- * `disabled` renders a chips or well surface inert (an axis reality has
- * taken off the table); `disabledTitle` is the reason, riding the
- * surface's hover title, since no prose lives inside a widget. The
- * state still renders honestly, so a committed value that currently
- * does nothing stays visible. `icons` is the chip icon map keyed by
+ * `disabled` renders the surface inert, chips, well or field (an axis
+ * reality has taken the write off the table, or the panel's write
+ * address withholds the property); `disabledTitle` is the reason,
+ * riding the surface's hover title, since no prose lives inside a
+ * widget. The state still renders honestly, so a committed value that
+ * currently does nothing stays visible, and the menu's Unset doorway
+ * is refused with the rest. `icons` is the chip icon map keyed by
  * stop id (Segments' contract; surfaceFor reads the same map so an icon
  * face is always within the chip budget).
  *
- * The ghost beneath an unset row is the row's own. It is the resting
- * value the element actually has, read from the same origin as the
- * mark (choice-row-model.js originFor's `ghost`, restingValue beneath
- * it: the map's delivering block at the pose, else the defaults tier,
- * a skin's `base:p` font-size or a declared default), never a committed
- * value, so a widget wires nothing to show it: the field shows it as
- * its placeholder, the well as its ghost face, and the chips wear it on
- * the stop that represents it (Segments' ghost posture: unlit, titled
- * with the value that applies). `placeholder` is a caller's OWN resting
- * value and beats the derived ghost when supplied, for the one reason
- * the derivation cannot know: a source outside the layer stack (the
- * position row's parent-attributed axis value, the Layout section's
- * arrangement gap and its floor). Handed RAW in the var() spelling and
- * faced at the surface, like the derived one. `highlight` ({source,
- * key, sub}) makes the row a canvas-highlight consumer
- * (useRowHighlight). `faceStyle(stop)`
+ * `placeholder` is a value attributed to the row from OUTSIDE the layer
+ * stack, the one thing the stack cannot know: the position row's
+ * parent-attributed axis value (a parent's align-items placing this
+ * child). Never a layer's value (a delivering layer is the shown value);
+ * shown only beneath an unset row, as the field's placeholder and on
+ * the chip that represents it (Segments' attributed posture: unlit,
+ * titled with the value that applies). Handed RAW in the var() spelling
+ * and faced at the surface.
+ *
+ * `source` is the state source, a prop of its own on EVERY row: the
+ * menu's ancestor doorway seats a rule through it (`source.target`),
+ * the origin's words read its block-type and layout tables, and the
+ * canvas highlight claims through it. `highlight` is the row's canvas
+ * ADDRESS alone, `{key, selector}` split from the property's write key
+ * (use-highlight.js styleTarget over `model.keys[property]`: the box a
+ * write lands on, or under a write address the rule reaching it), and
+ * makes the row a canvas-highlight consumer (useRowHighlight); without
+ * it the row claims nothing. The two are separate on purpose: the
+ * source is the row's road to the host, the address is chrome, and
+ * folding one into the other is how seven widgets once lost both.
+ * `faceStyle(stop)`
  * is the one seam a text face renders THROUGH: an inline style for an
  * offer entry's text (a chip, a listbox option, the well's lit face), or
  * null for the panel's own type; the Font row hands each stop its own
@@ -125,24 +146,23 @@ import { useRowHighlight } from './use-highlight.js';
  * resolve outside the token scope) so a face wears the family it names.
  *
  * Provenance (choice-row-model.js originFor over provenance-model.js
- * rowOrigin), the same story the
- * advanced rows tell: `provenance` is the bound target's origin inputs
- * ({own, suppliers, shadowed, skinEntry, declaredEntry, declaredScope,
- * labelOf, valueOf}, a control model's `provenance` or the Layout
- * section's own assembly) and `entry`
- * the RESOLVED condition-keyed entry the row's value was read from; the
- * row reads the property's values across it, finds the block delivering
- * at the pose, and asks the model who sets it there. The origin renders
- * as the mark's hue and hover title and as the row's right-click menu on
- * every surface: the origin in words, the doorways (drive the canvas to
- * the delivering condition, open the supplying variant there through
- * `onOpenDocument`, unset so the beaten layer returns, edit the skin),
- * every other condition carrying a value (driving the canvas through
- * `onPickCondition`), then on the field surface the field's token items
- * (follow a design-system stop or freeze the literal; a pick surface
- * commits references by construction, so it offers none). Without
- * `provenance` the row has no origin story: the field's menu is its
- * tokens alone and the native menu rides through elsewhere.
+ * originOf), the same story the advanced rows tell: `stack` is the
+ * bound target's layer stack (a control model's `stack`, or the Layout
+ * section's own build) and `read` the property's read at the pose (the
+ * model's `reads[property]`; taken from the stack when a caller has
+ * none). The origin renders as the mark's hue and hover title and as
+ * the row's right-click menu on every surface (the shared row menu,
+ * lib/use-row-menu.js, the one every property row opens): the origin
+ * in words, the doorways (drive the canvas to the delivering condition,
+ * open the supplying variant there through `onOpenDocument`, edit at
+ * an ancestor's rule through `source.target`, unset so the beaten
+ * layer returns, edit the skin), every other condition carrying a value
+ * (driving the canvas through `onPickCondition`), then on the field
+ * surface the field's token items (follow a design-system stop or
+ * freeze the literal; a pick surface commits references by
+ * construction, so it offers none). Without `stack` the row has no
+ * origin story: the field's menu is its tokens alone, the native menu
+ * rides through elsewhere, and every null pick is refused.
  */
 export const ChoiceRow = ({
   guide,
@@ -153,9 +173,9 @@ export const ChoiceRow = ({
   value,
   definition = {},
   constraints = {},
-  entry = null,
-  provenance = null,
-  placeholder,
+  stack = null,
+  read: readProp = null,
+  placeholder = null,
   fallback = null,
   icons = null,
   disabled = false,
@@ -168,6 +188,7 @@ export const ChoiceRow = ({
   onCommit,
   onPickCondition = null,
   onOpenDocument = null,
+  source = null,
   highlight = null,
 }) => {
   const space = valueSpaceFor(
@@ -193,6 +214,12 @@ export const ChoiceRow = ({
   const closed = space.kind === 'closed';
   const scrubs = scrubbable(space, surface);
   const hidden = rowHidden(space, value, definition);
+  const conditions = guide?.conditions ?? {};
+  // The row's read: the winner at the pose, the layers beneath, and
+  // what the editable layer says (the Unset verb's test).
+  const read =
+    readProp ?? (stack ? stackAt(stack, property, condition, conditions) : null);
+  const unsettable = ownAtPose(read, condition);
 
   // Every hook runs on every render, before the hide rule can return and
   // whatever the surface: the row's posture may change render to render
@@ -203,19 +230,20 @@ export const ChoiceRow = ({
     onPreview,
     onRelease,
     onCommit,
+    unsettable ? read.own.value : null,
   );
   const gesture = useGesture(
-    { key: property, values: { [property]: value } },
+    property,
+    { [property]: value },
     onPreview,
     onCommit,
   );
   const rowHighlight = useRowHighlight(
-    highlight?.source ?? null,
+    source,
     highlight?.key ?? null,
-    highlight?.sub ?? null,
+    highlight?.selector ?? null,
     [property],
   );
-  const menu = useMenu();
   const [chunk, kachunk] = useKachunk();
   const scrubRef = useRef(null);
   const [scrubbing, setScrubbing] = useState(false);
@@ -235,6 +263,12 @@ export const ChoiceRow = ({
       : offer.findIndex((stop) => stop.id === lit.selected);
 
   const choose = (stop) => {
+    // A null pick is the Unset gesture: refused while the element's own
+    // entry says nothing at the pose (a lower layer delivers the lit
+    // stop; a null write would remove nothing).
+    if (stop === null && !unsettable) {
+      return;
+    }
     if (onPick) {
       onPick(stop);
       return;
@@ -243,71 +277,79 @@ export const ChoiceRow = ({
   };
   const preview = (stop) => {
     if (onPick) {
-      onPreview?.(property, stop.value);
+      onPreview?.({ [property]: stop.value });
       return;
     }
     gesture.stage({ [property]: stop.value });
   };
 
-  const origin = provenance
-    ? originFor({ guide, materials, condition, property, entry, provenance })
+  const origin = stack
+    ? originFor({
+        guide,
+        materials,
+        condition,
+        property,
+        stack,
+        read,
+        blockTypes: source?.getBlockTypes?.() ?? {},
+        sectionLayouts: source?.getSectionLayouts?.() ?? {},
+      })
     : null;
   const style = origin?.color
     ? { '--daedalus-stylish-origin': origin.color }
     : undefined;
-  const onDoorway = (doorway) => {
-    switch (doorway.id) {
-      case 'drive':
-        onPickCondition?.(doorway.condition);
-        break;
-      case 'document':
-        onOpenDocument?.(doorway.reference, doorway.condition);
-        break;
-      case 'unset':
-        if (surface === 'field') {
-          field.settle('');
-        } else {
-          choose(null);
-        }
-        break;
-      case 'skin':
-        window.open(doorway.url, '_blank', 'noopener');
-        break;
-      default:
-        break;
-    }
-  };
-  const openMenu = (event, tokens, face) => {
-    const spec = rowMenu({
-      origin,
-      tokens,
-      face,
-      onDoorway,
-      onCondition: onPickCondition,
-    });
-    if (spec && menu.open({ x: event.clientX, y: event.clientY, ...spec })) {
-      event.preventDefault();
-    }
-  };
+  // The pick surfaces' face: the lit stop's label, else the raw value.
+  const face =
+    lit.selected !== null ? (offer[litIndex]?.label ?? '') : (lit.value ?? '');
+  // The row menu: the field surface offers its token items over the
+  // shown value; a pick surface offers none. Unset is refused with a
+  // withheld row (a withheld property removes nothing either).
+  const onContextMenu = useRowMenu({
+    origin,
+    source,
+    onOpenDocument,
+    onPickCondition,
+    onUnset: () => {
+      if (disabled) {
+        return;
+      }
+      if (surface === 'field') {
+        field.settle('');
+      } else {
+        choose(null);
+      }
+    },
+    tokens: () =>
+      surface === 'field'
+        ? tokenItems(guide, materials, condition, space, field.shown, {
+            onPreview: field.preview,
+            onSettle: field.settle,
+          })
+        : [],
+    face: () =>
+      surface === 'field'
+        ? wearing(guide, materials, space, field.shown, condition).face ||
+          field.shown
+        : face,
+  });
 
   const surfaceTitle = disabled ? (disabledTitle ?? undefined) : undefined;
-  // The row's resting value, RAW (the var() spelling the chip match and
-  // the face need): a caller's own placeholder when it has a source the
-  // derivation lacks, else the origin's ghost, the same read the mark's
-  // hue and sentence come from (choice-row-model.js restingValue), so
-  // the two can never disagree.
-  const resting = placeholder ?? origin?.ghost ?? null;
-  const ghost = ghostFace(guide, materials, resting, condition);
-  // The chips' ghost posture: the offer stop the resting value lights
-  // beneath an unset row, matched the way a committed value lights a
-  // chip (its commit spelling or one of the stop's equivalents).
-  const ghostStop =
-    ghost === null
+  // The caller's attributed placeholder, faced (a reference through the
+  // roster at the pose, a literal as itself), and the chip it lights
+  // beneath an unset row, matched the way a shown value lights a chip
+  // (its commit spelling or one of the stop's equivalents).
+  const attributed =
+    placeholder === null || placeholder === undefined || placeholder === ''
+      ? null
+      : (displayAt(guide, materials, placeholder, condition) ??
+        String(placeholder));
+  const attributedStop =
+    attributed === null
       ? null
       : (offer.find(
           (stop) =>
-            stop.value === resting ||
-            stop.matches.includes(normalizeValue(resting)),
+            stop.value === placeholder ||
+            stop.matches.includes(normalizeValue(placeholder)),
         ) ?? null);
   const well = useChoiceWell({
     offer,
@@ -315,7 +357,6 @@ export const ChoiceRow = ({
     painted,
     closed,
     label,
-    ghost,
     disabled,
     title: surfaceTitle,
     chunk,
@@ -332,16 +373,6 @@ export const ChoiceRow = ({
   const rowClasses = `daedalus-stylish-inspector__widget-row${invalid ? ' daedalus-stylish-inspector__widget-row--invalid' : ''}`;
 
   if (surface === 'field') {
-    const onContextMenu = (event) =>
-      openMenu(
-        event,
-        tokenItems(guide, materials, condition, space, field.shown, {
-          onPreview: field.preview,
-          onSettle: field.settle,
-        }),
-        wearing(guide, materials, space, field.shown, condition).face ||
-          field.shown,
-      );
     return (
       <div
         className={rowClasses}
@@ -358,9 +389,11 @@ export const ChoiceRow = ({
           guide={guide}
           materials={materials}
           condition={condition}
-          placeholder={resting}
+          placeholder={placeholder}
           invalid={field.invalid}
-          gripTitle={origin?.title}
+          mark={<Mark origin={origin} />}
+          disabled={disabled}
+          disabledTitle={disabledTitle}
           onPreview={field.preview}
           onSettle={field.settle}
         />
@@ -438,9 +471,6 @@ export const ChoiceRow = ({
     choose(landed);
   };
 
-  const face =
-    lit.selected !== null ? (offer[litIndex]?.label ?? '') : (lit.value ?? '');
-  const onContextMenu = (event) => openMenu(event, [], face);
   const scrubClasses = [
     'daedalus-stylish-dimension__scrub',
     scrubbing ? 'daedalus-stylish-dimension__scrub--active' : '',
@@ -457,54 +487,53 @@ export const ChoiceRow = ({
         onContextMenu={onContextMenu}
         {...rowHighlight}
       >
-        {scrubs ? (
-          <span
-            className={scrubClasses}
-            title={
-              live
-                ? Drupal.t('Drag sideways to step through the allowed values')
-                : undefined
-            }
-            onPointerDown={onScrubDown}
-            onPointerMove={onScrubMove}
-            onPointerUp={onScrubUp}
-            onPointerCancel={onScrubUp}
-          >
+        {/* The label cell: mark + label (the scrub label over a closed
+            numeric ramp, the drag surface); the value cell: the pick
+            surface, filling the panel's shared value column. */}
+        <span className="daedalus-stylish-inspector__widget-label">
+          {scrubs ? (
             <span
-              className="daedalus-stylish-dimension__grip"
-              title={origin?.title}
-              aria-hidden="true"
+              className={scrubClasses}
+              title={
+                live
+                  ? Drupal.t('Drag sideways to step through the allowed values')
+                  : undefined
+              }
+              onPointerDown={onScrubDown}
+              onPointerMove={onScrubMove}
+              onPointerUp={onScrubUp}
+              onPointerCancel={onScrubUp}
             >
-              ⣿
+              <Mark origin={origin} slide={live} />
+              <span className="daedalus-stylish-inspector__widget-axis">{label}</span>
             </span>
-            <span className="daedalus-stylish-inspector__widget-axis">{label}</span>
-          </span>
-        ) : (
-          <Fragment>
-            <span
-              className="daedalus-stylish-inspector__mark daedalus-ui-dot"
-              title={origin?.title}
-              aria-hidden="true"
+          ) : (
+            <Fragment>
+              <Mark origin={origin} />
+              <span className="daedalus-stylish-inspector__widget-axis">{label}</span>
+            </Fragment>
+          )}
+        </span>
+        <span className="daedalus-stylish-inspector__widget-value">
+          {surface === 'chips' ? (
+            <Segments
+              stops={offer}
+              state={lit}
+              custom={lit.value}
+              placeholder={
+                attributedStop ? { id: attributedStop.id, value: attributed } : null
+              }
+              icons={icons}
+              disabled={disabled}
+              closed={closed}
+              title={surfaceTitle}
+              faceStyle={faceStyle}
+              onPick={choose}
             />
-            <span className="daedalus-stylish-inspector__widget-axis">{label}</span>
-          </Fragment>
-        )}
-        {surface === 'chips' ? (
-          <Segments
-            stops={offer}
-            state={lit}
-            custom={lit.value}
-            ghost={ghostStop ? { id: ghostStop.id, value: ghost } : null}
-            icons={icons}
-            disabled={disabled}
-            closed={closed}
-            title={surfaceTitle}
-            faceStyle={faceStyle}
-            onPick={choose}
-          />
-        ) : (
-          well.well
-        )}
+          ) : (
+            well.well
+          )}
+        </span>
       </div>
       {surface === 'well' && well.popover}
     </Fragment>
@@ -517,7 +546,8 @@ export const ChoiceRow = ({
  * the shared surface), the swatch well's posture over a text or painted
  * vocabulary. The
  * face is wellFace's answer over the offer (the lit stop, custom, or
- * unset; a literal color reads as custom here, the choice well has no
+ * unset, a dash when no layer delivers; a literal color reads as custom
+ * here, the choice well has no
  * paint lane); the popover is the shared palette grid for painted
  * stops and the choice listbox otherwise, either closing on a pick and
  * returning focus to the well. Dismissal is usePopover's (Escape, an
@@ -532,7 +562,6 @@ const useChoiceWell = ({
   painted,
   closed,
   label,
-  ghost,
   disabled,
   title,
   chunk,
@@ -566,9 +595,7 @@ const useChoiceWell = ({
       case 'media':
         return face.stop.text;
       default:
-        return ghost === null
-          ? Drupal.t('Pick a value')
-          : Drupal.t('Unset; !value applies', { '!value': ghost });
+        return Drupal.t('Pick a value');
     }
   })();
   const classes = [
@@ -619,8 +646,8 @@ const useChoiceWell = ({
         </span>
       )}
       {kind === 'unset' && (
-        <span className="daedalus-stylish-choice-well__text daedalus-stylish-choice-well__text--ghost">
-          {ghost ?? '–'}
+        <span className="daedalus-stylish-choice-well__text daedalus-stylish-choice-well__text--unset">
+          –
         </span>
       )}
       <span className="daedalus-stylish-choice-well__chevron" aria-hidden="true">

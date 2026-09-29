@@ -3,9 +3,9 @@
 # daedalus_stylish_layouts.page_builder.yml):
 #
 # - container_layout (label "Layout"): the mode half of mode + share (see
-#   the row variant's comment below). ONE count-independent variant; the
-#   ratio fact lives on the children as flex-grow overrides, never on the
-#   parent.
+#   the columns variant's comment below). TWO count-independent variants,
+#   columns (equal shares) and row (natural widths); the ratio fact lives
+#   on the children as flex-grow overrides, never on the parent.
 # - width: the constrained content width. A container is ONE box, so the
 #   constraint is a padding-inline stop on the root itself:
 #   `max(gutter, calc((100% - W) / 2))` keeps the background full-bleed,
@@ -27,30 +27,41 @@
 # hand-written media query, except the band follows the posed edit canvas
 # rather than the browser viewport.
 #
-# The container layout's default_variants (in its page_builder YAML) name
-# a root-only width default (container_site) and a depth-qualified row
-# default, stamped at the op door only (document-authored sections, the
+# The container layout's default_variants (in its page_builder layout
+# YAML, daedalus_stylish_layouts.page_builder.layout.daedalus_stylish_container.yml)
+# name ONE birth default, the width stop (width: container_site); the
+# width axis is root-only, so a nested container is never defaulted a
+# width. The container_layout axis has no birth default: a container at
+# any depth is born stacked (the declared flex column below), and Row or
+# Columns is the deliberate gesture, via the layout widget or
+# apply_variant. The
+# default is stamped at the op door only (document-authored sections, the
 # dialect's and a blueprint's, wear exactly what the document states; see
 # the layout YAML's comment), so op-added page bands place constrained
-# (and as columns) and
-# keep following shipped updates while unmodified. The retired
+# and keep following shipped updates while unmodified. The retired
 # layout-exact families (onecol_* .. fourcol_*) mapped onto these generics
 # in ContainerMigration::VARIANT_MAP, and the retired count-keyed
 # proportions family (split_50_50 .. split_25_25_25_25) converted onto the
-# row variant (frozen ratios in ContainerMigration::SPLIT_GROWS).
+# columns variant (frozen ratios in ContainerMigration::SPLIT_GROWS).
 
-# The row variant (labeled "Columns": the wear bar echoes the widget's
-# Stack | Columns words; `row` stays the machine name the code and AI
-# recipes speak): mode + share. ONE count-independent variant carries
-# everything shared about columns: flex on the root, the gutter gap (the
-# skin's space.gutter token, the same inset the width family rides: a
-# token reference is the one spelling every strict law accepts verbatim,
-# so the gap tracks the skin and a skinless site gets none, exactly as
-# container_site already gave up the skinless posture), narrow stacking,
-# and equal fill on the container's direct children (the '::>' children
-# pseudo-part). Equal columns at every count are one worn reference with
-# zero per-instance CSS, and a child added later joins at grow 1 purely
-# by CSS (no seeding seam exists).
+# The columns variant (machine name `columns`, the id the code and the AI
+# recipes speak; it was `row` until the rename post-update repointed every
+# stored wearing, freeing `row` for a real Row arrangement): mode +
+# share. ONE count-independent variant carries
+# everything shared about columns: the row direction on the root, the
+# gutter gap (the skin's space.gutter token, the same inset the width
+# family rides: a token reference is the one spelling every strict law
+# accepts verbatim, so the gap tracks the skin and a skinless site gets
+# none, exactly as container_site already gave up the skinless posture),
+# narrow stacking, and equal fill on the container's direct children (the
+# '> *' children selector). The variant never states a display: the
+# declared tier ships every container as `display: flex; flex-direction:
+# column` (daedalus_stylish_layouts.page_builder.yml), so the variant only
+# flips the direction its axis owns, and its narrow block, which flips it
+# back, IS the stack (the same flex column a container is born as, not a
+# second mechanic). Equal columns at every count are one worn reference
+# with zero per-instance CSS, and a child added later joins at grow 1
+# purely by CSS (no seeding seam exists).
 # Unequal ratios are per-child flex-grow overrides written by the layout
 # widget (default condition only); a child's own entry always beats these
 # children rules (the printer caps the children rule at :scope weight, so
@@ -58,7 +69,7 @@
 # The curated Layout group ships no `flex` shorthand, so the longhands
 # spell `flex: 1 1 0` (equal fill) and `flex: none` (stacked children must
 # not flex: grows never act on stacked heights).
-row:
+columns:
   label: 'Columns'
   scope: 'kind:container'
   axis: 'container_layout'
@@ -66,11 +77,11 @@ row:
   styles:
     '':
       default:
-        display: 'flex'
+        flex-direction: 'row'
         gap: 'var(--space-gutter)'
       narrow:
         flex-direction: 'column'
-    '::>':
+    '::> *':
       default:
         flex-grow: '1'
         flex-shrink: '1'
@@ -80,6 +91,33 @@ row:
         flex-grow: '0'
         flex-shrink: '0'
         flex-basis: 'auto'
+
+# The row variant (machine name `row`, minted for this arrangement once
+# the rename post-update freed the name): the container_layout axis's
+# second shipped mode, a plain flex row of NATURAL-WIDTH children. Where
+# Columns hands every child an equal share of the line (the '> *' equal
+# fill above), Row lets each child keep its own size and wraps the line
+# when it runs out of room (flex-wrap: wrap), so a line of buttons, a
+# logo strip or a tag list never squeezes or overflows; it never flips
+# to a column on narrow pages, wrapping IS its narrow behavior, so it
+# ships no narrow block and no children rule. The same gutter gap as
+# Columns (the skin's space.gutter token) keeps the two modes' rhythm
+# one. Both screen axes mean something on a Row (the children fill
+# nothing): the layout widget offers justify-content along the line
+# (Left, Center, Right, Spread = space-between) and align-items across
+# it, and none of that is stated here, so a wearer's alignment is its
+# own layer above the wear.
+row:
+  label: 'Row'
+  scope: 'kind:container'
+  axis: 'container_layout'
+  description: 'Lay the container''s children out side by side at their natural width, wrapping onto new lines when they run out of room. Reach for it over Columns when the items should keep their own size (a line of buttons, a logo strip, a tag list, a label beside a control); Columns is for content that shares the width equally. A Row never stacks on narrow pages; it wraps.'
+  styles:
+    '':
+      default:
+        flex-direction: 'row'
+        flex-wrap: 'wrap'
+        gap: 'var(--space-gutter)'
 
 # Widths: the constrained content width of any page band. Site width is
 # the default: it references the skin's tokens (--layout-max-width for the

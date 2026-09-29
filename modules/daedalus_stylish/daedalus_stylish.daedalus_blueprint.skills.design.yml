@@ -96,9 +96,11 @@ instructions: |
   a section as a stencil (save_material with kind stencil, a page_edit
   op) only when the user asks; never volunteer it.
   Materials first: wear a saved look when one expresses the intent,
-  compose from the named values next, write raw values last. Novel
-  styling stays on this page; propose promoting it to the materials
-  rather than minting silently.
+  compose from the named values next, write raw values last. Before
+  overriding a value on an element that wears a look, read the element's
+  stack with explain_element_styles, so the override is judged against
+  the layer it shadows. Novel styling stays on this page;
+  propose promoting it to the materials rather than minting silently.
 
   ## Composition
   Principles, not moves: there is no list of sections to pick from.
@@ -109,11 +111,11 @@ instructions: |
     owns it), h2 for sections, h3 within them, never skipping levels.
   - Rhythm: vary the shape and the density down the page. A wide
     spacious band, then a tight dense one, then a single line, then
-    columns reads as rhythm; three same-shaped bands back to back read
+    Columns reads as rhythm; three same-shaped bands back to back read
     as a template. Arrangement is styling: stacked containers for
-    reading and for statements, columns for parallel things, nesting to
-    group what must read and move as one, no deeper than the content
-    needs. Air between bands is the page's Layout gap, set once on the
+    reading and for statements, Columns for parallel things, a Row for
+    a line of items that keep their own size, nesting to group what
+    must read and move as one, no deeper than the content needs. Air between bands is the page's Layout gap, set once on the
     page and never as a band's margin; air inside a band is that band's
     own padding.
   - Contrast: put the emphasis in one place per band. Not everything
@@ -176,14 +178,48 @@ instructions: |
      block on an EXISTING page is ONE atomic page_edit batch: insert
      fragments carrying their styles, with sibling style/set ops in the
      same batch. EDITS to what exists are targeted ops, never rebuilds.
+     Style a container's children with a selector on the container (one
+     `#band > * { ... }` rule reaches every child in it, now and later;
+     a type or tag after the `>` narrows it to one kind), never by
+     copying the look onto each child: three identical style="" values
+     are three places to drift. A relation narrows the set further
+     (`+`, `~`, `:has()`, `:not()`: the child right after another, the
+     children that contain a link, every child but one kind), and a
+     position fact (`:not(:last-child)`) is a pseudo-class on the last
+     compound, after the qualifiers.
+     A generated box is one more address, never a decorative element
+     in the markup: a selector ending in `::before` or `::after` styles
+     the box of what it addresses (`#hero::after` the element's own,
+     `#band > *::before` each child's), a state before it
+     (`#cta:hover::after`). The box is born with `content: ""`, the
+     line that makes it exist; `content` takes `""`, `none` or one
+     media reference (`url('media:<uuid>')`, the image at its own size;
+     `background-image` on the box sizes, positions and layers) and
+     nothing else (text belongs in the element's content, where it is
+     read, translated and searched), and deleting the content line is
+     how the box goes away. Use it for the ornament, the icon, the
+     underline, the overlay tint, the corner mark; never for words.
+     Arrangement is a wear on the container, in three modes: a
+     container is born a stack (a flex column); Row lays its children
+     side by side at their natural width and wraps them when the line
+     runs out of room; Columns hands every child an equal share of the
+     line and stacks on narrow pages. Row is for items that keep their
+     own size (a line of buttons, a logo strip, a tag list, a label
+     beside a control); Columns is for content that shares the width
+     (two halves of copy, a card grid). There is no display upgrade,
+     so never write a display on a container.
      Centering is the one recipe worth spelling: the container arranges
      its contents and is one box, so the write lands on the container
-     itself: `#hero { display: grid; justify-items: center }` centers
-     its children horizontally, `align-content: center` plus a
-     min-height centers them vertically (display grid is the canonical
-     container upgrade, a near-no-op on stacked children that unlocks
-     both axes), and `align-items: center` on a columns container
-     vertically aligns its columns.
+     itself. `#hero { align-items: center }` centers a stack's children
+     horizontally, `justify-content: center` plus a min-height centers
+     them vertically, `margin-top: auto` on one child pins it to the
+     band's bottom (auto margins are a stack's per-child vertical
+     placement); on a Row, `justify-content` places the items along the
+     line (`space-between` spreads them to both edges) and
+     `align-items` aligns them across it; on a Columns container,
+     `align-items: center` vertically aligns the equal shares. The
+     alignment stops are `flex-start`, `center` and `flex-end`, plus
+     `space-between` along a Row.
   5. ITERATE. Verify each result against the updated page print it
      echoes, fix what is off with targeted ops, and stop when the page
      reads as one designed thing.

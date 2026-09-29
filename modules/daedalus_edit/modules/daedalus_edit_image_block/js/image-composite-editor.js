@@ -32,7 +32,7 @@
  * An empty leaf's edit() auto-opens the library: picking an image is the
  * placeholder's whole point, so the gesture saves the click.
  *
- * @see daedalus_edit/js/daedalus_edit/plugins/blueprint-editor-base.js
+ * @see daedalus_edit/js/daedalus_edit/plugins/editor-plugin-base.js
  * @see daedalus_edit/js/daedalus_edit/composed/verb-widgets.js
  * @see daedalus_edit/js/daedalus_edit/composed/link-control.js
  * @see daedalus_edit/js/daedalus_edit/composed/element-preview.js
@@ -40,7 +40,7 @@
  * @see ../daedalus_edit_image_block.page_builder.block_type.image.yml
  */
 (window.DaedalusEditQueue ||= []).push(
-  ({ BlueprintEditorBase, editors, linkControl, elementPreview }) => {
+  ({ EditorPluginBase, editors, linkControl, elementPreview }) => {
     // Phosphor icon, the site's icon language (daedalus_ui/assets); the
     // chip's icon class sizes and colors it.
     const IMAGE_ICON =
@@ -80,7 +80,7 @@
      * - linkPreview: the link control's previewed value (see
      *   composed/link-control.js).
      */
-    class ImageCompositeEditor extends BlueprintEditorBase {
+    class ImageCompositeEditor extends EditorPluginBase {
       id = 'image_composite';
 
       /**
@@ -132,7 +132,7 @@
        * snapshots, so a stale linkPreview from an earlier gesture on the
        * same leaf cannot shadow the snapshot for an untouched link. A
        * foreign mutation's swap mid-gesture does not come back through here:
-       * the engine hands the open edit's draft to BlueprintEditorBase.resume,
+       * the engine hands the open edit's draft to EditorPluginBase.resume,
        * which resets the same state through resetGesture() before it
        * re-snapshots.
        *
@@ -266,7 +266,7 @@
        * is derived server-side — so the mutation's markup swap delivers the
        * new image, and undo is the revert path. The edit itself survives the
        * swap as a draft (the engine resumes it through
-       * BlueprintEditorBase.resume, whose three-way rule takes the new
+       * EditorPluginBase.resume, whose three-way rule takes the new
        * target_id as the remote-won snapshot), so the link half of the
        * gesture keeps its blur/Escape semantics on the new markup.
        *
@@ -362,7 +362,7 @@
        * unlinking reverses it. The part class rides the model on both
        * sides, so the old re-seating fixups have no successor. The
        * previewed anchor is not navigable in edit mode: clicks resolve to
-       * the leaf and the armed session's click handler prevents their
+       * the leaf and the open edit's press decision prevents their
        * default.
        *
        * @param {EditableElement} EditableElement

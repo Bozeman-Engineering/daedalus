@@ -1,12 +1,13 @@
 /**
  * Self-asserting tests for the part behavior's resolution seam and the
- * canvas part paint riding it: selectorFor's scoped-rule grammar (dual
+ * canvas selector paint riding it: selectorFor's scoped-rule grammar (dual
  * selector, container donut, key escaping), resolve's non-Element
  * degradation and its walk under the registry's injected placement gate
  * (a hoisted part the model does not place resolves nothing, a nested one
- * resolves, instance carriers gate the same way), and the paint adapter's
- * facet rendering (hover and selection tags built through selectorFor,
- * hover yielding to the selection on the same part).
+ * resolves, instance carriers gate the same way), matches' host-plus-box
+ * answer, generated's delivered boxes, and the paint adapter's facet
+ * rendering (hover and selection tags built through selectorFor, hover
+ * yielding to the selection on the same part).
  *
  * Run directly (`node tests/js/tree-parts.test.mjs`) or via
  * PrinterEquivalenceTest, which executes this file inside the PHPUnit
@@ -15,16 +16,29 @@
  * The paint adapter touches the DOM only through its <style> tags, so a
  * few-line stub suffices. resolve's walk uses closest(), contains(),
  * classList, getAttribute and parentElement over class and attribute
- * selectors only, so a small fake element tree drives it; the browser
- * seam (annotation -> index -> registry predicate -> this walk) is FJS's.
+ * selectors only, and matches' read (computed-read's resolveTargets)
+ * adds `:scope`-glued compounds and a descendant querySelectorAll, so a
+ * small fake element tree drives both; the browser seam (annotation ->
+ * index -> registry predicate -> this walk) is FJS's.
  */
 import { strict as assert } from 'node:assert';
+import { roster, variantRecord } from './materials-fixture.mjs';
 
 // The paint adapter mints a <style> tag per painted facet; the stubs
-// record what it appends.
+// record what it appends. matches resolves the owner's root through
+// document.querySelector: a test seats a canvas root here for the read.
 const appended = [];
+const canvas = { root: null };
 globalThis.document = {
   head: { appendChild: (tag) => appended.push(tag) },
+  querySelector: (selector) => {
+    if (!canvas.root) {
+      return null;
+    }
+    return canvas.root.matches(selector)
+      ? canvas.root
+      : (canvas.root.querySelectorAll(selector)[0] ?? null);
+  },
   createElement: () => {
     const tag = {
       isConnected: true,
@@ -42,9 +56,11 @@ globalThis.document = {
 };
 
 /**
- * The fake canvas element: exactly the DOM surface resolve's walk reads.
- * Selectors are the two shapes the walk uses, `.class` and `[attr]`,
- * optionally comma-separated.
+ * The fake canvas element: exactly the DOM surface resolve's walk and
+ * matches' read use. Selectors are compounds of `:scope` (the element
+ * itself, as the DOM's matches() reads it), `.class`, `[attr]` and
+ * `[attr="value"]`, glued, optionally comma-separated; querySelectorAll
+ * takes the one descendant shape resolveTargets issues (`:scope X`).
  */
 class FakeElement {
   constructor(tag, { classes = [], attributes = {} } = {}) {
@@ -69,16 +85,48 @@ class FakeElement {
 
   matches(selector) {
     return selector.split(',').some((simple) => {
-      const one = simple.trim();
-      if (one.startsWith('.')) {
-        return this.classList.includes(one.slice(1));
+      let rest = simple.trim();
+      while (rest !== '') {
+        if (rest.startsWith(':scope')) {
+          rest = rest.slice(':scope'.length);
+          continue;
+        }
+        const cls = rest.match(/^\.[A-Za-z0-9_-]+/);
+        if (cls) {
+          if (!this.classList.includes(cls[0].slice(1))) {
+            return false;
+          }
+          rest = rest.slice(cls[0].length);
+          continue;
+        }
+        const attribute = rest.match(/^\[([^\]=]+)(?:="([^"]*)")?\]/);
+        if (attribute) {
+          const [, name, value] = attribute;
+          if (!(name in this.attributes) || (value !== undefined && this.attributes[name] !== value)) {
+            return false;
+          }
+          rest = rest.slice(attribute[0].length);
+          continue;
+        }
+        throw new Error(`FakeElement.matches: unsupported selector ${rest}`);
       }
-      const attribute = one.match(/^\[([^\]=]+)\]$/);
-      if (attribute) {
-        return attribute[1] in this.attributes;
-      }
-      throw new Error(`FakeElement.matches: unsupported selector ${one}`);
+      return true;
     });
+  }
+
+  querySelectorAll(selector) {
+    const rest = selector.replace(/^:scope\s+/, '');
+    const found = [];
+    const walk = (node) => {
+      for (const child of node.children) {
+        if (child.matches(rest)) {
+          found.push(child);
+        }
+        walk(child);
+      }
+    };
+    walk(this);
+    return found;
   }
 
   closest(selector) {
@@ -103,8 +151,9 @@ globalThis.Element = FakeElement;
 globalThis.Drupal = { t: (text) => text };
 
 const { createPartBehavior } = await import('../../js/src/tree-parts.js');
-const { createCanvasPartPaint } = await import('../../js/src/canvas-part-paint.js');
+const { createCanvasSelectorPaint } = await import('../../js/src/canvas-selector-paint.js');
 const { CONTAINER_SCOPE_LIMIT } = await import('../../js/src/printer.js');
+const { resolveTargets } = await import('../../js/src/computed-read.js');
 
 const UUID_A = 'aaaaaaaa-1111-2222-3333-444444444444';
 const UUID_B = 'bbbbbbbb-1111-2222-3333-444444444444';
@@ -155,25 +204,32 @@ const presented = () => true;
 const placedOnly = (...addresses) => (key, id) => addresses.includes(`${key}::${id}`);
 
 // A minimal spine stub: captured subscriptions the tests fire by hand,
-// and facade getters reading the stub's committed pair.
-const spine = { selected: { key: null, part: null }, hoverListener: null, partListener: null };
+// and facade getters reading the stub's committed selection and target.
+const spine = { selected: null, target: null, hoverListener: null, targetListener: null };
 const app = {
   Selection: {
-    getSelected: () => spine.selected.key,
-    getSelectedPart: () => spine.selected.part,
+    getSelected: () => spine.selected,
+    getTarget: () => spine.target,
   },
-  onHoverPartChange: (callback) => {
+  onHoverSelectorChange: (callback) => {
     spine.hoverListener = callback;
   },
-  onPartChange: (callback) => {
-    spine.partListener = callback;
+  onTargetChange: (callback) => {
+    spine.targetListener = callback;
   },
 };
-createCanvasPartPaint({ app, behavior });
-const hoverTo = (hoverPart) => spine.hoverListener(hoverPart);
-const selectTo = (key, part) => {
-  spine.selected = { key, part };
-  spine.partListener({ key, part });
+createCanvasSelectorPaint({ app, behavior });
+const hoverTo = (hoverSelector) => spine.hoverListener(hoverSelector);
+const selectTo = (key, selector) => {
+  spine.selected = key;
+  spine.target = selector ? { key, selector } : null;
+  spine.targetListener({ selected: spine.selected, target: spine.target });
+};
+// A target on an ancestor of the standing selection (the switcher's
+// pick), fired the way the facade fires it: the selection unchanged.
+const targetTo = (key, selector) => {
+  spine.target = { key, selector };
+  spine.targetListener({ selected: spine.selected, target: spine.target });
 };
 
 const tests = [];
@@ -187,6 +243,133 @@ test('selectorFor scopes a block-owned part with the printers\' dual selector', 
   );
 });
 
+test('matches is the DOM twin of selectorFor: computed-read\'s resolveTargets plus the box it addresses', () => {
+  // The same host targets and donut answer both; a consumer that
+  // measures the matches and then prints through selectorFor sees one
+  // reach. A generated box has no node: its elements are the HOSTS (the
+  // root for the anchor, every `.quote` for the part's box) and `pseudo`
+  // names the box for the computed read; an element selector carries
+  // null there.
+  const quote = el('span', { classes: ['quote'] });
+  const root = el('div', { attributes: { 'data-selectable': BLOCK } }).append(el('p').append(quote));
+  el('div', { attributes: { 'data-main-entity': '' } }).append(root);
+  canvas.root = root;
+  try {
+    assert.deepEqual(behavior.matches(BLOCK, '.quote'), { elements: [quote], pseudo: null });
+    assert.deepEqual(behavior.matches(BLOCK, '.quote').elements, resolveTargets(BLOCK, '.quote'));
+    assert.deepEqual(behavior.matches(BLOCK, '&::before'), { elements: [root], pseudo: 'before' });
+    assert.deepEqual(behavior.matches(BLOCK, '.quote::after'), { elements: [quote], pseudo: 'after' });
+    assert.deepEqual(behavior.matches(BLOCK, '.quote::after').elements, resolveTargets(BLOCK, '.quote::after'));
+    // Outside the grammar: nothing, and no box either (`::marker` is not
+    // an address here).
+    assert.deepEqual(behavior.matches(BLOCK, 'div > .loose'), { elements: [], pseudo: null });
+    assert.deepEqual(behavior.matches(BLOCK, '&::marker'), { elements: [], pseudo: null });
+  }
+  finally {
+    canvas.root = null;
+  }
+  // Off the canvas the box is still named: the read has no host, the
+  // consumer still knows what it asked for.
+  assert.deepEqual(behavior.matches(BLOCK, '&::before'), { elements: [], pseudo: 'before' });
+});
+
+// The generated boxes: a behavior over a source carrying a map, a
+// materials roster and a tree (the stack's inputs), the image block
+// under a container.
+const generatedWith = ({ map = {}, variants = [], tree = [] } = {}) =>
+  createPartBehavior({
+    source: {
+      getBlockTypes: () => ({ [UUID_A]: 'image' }),
+      getSectionLayouts: () => ({ [UUID_B]: 'daedalus_stylish_container' }),
+      getStyleMap: () => map,
+      getMaterials: () => roster(variants),
+      getTree: () => tree,
+      getLayout: () => [],
+    },
+    guide: { kinds: {}, blockTypes: { image: { elements: {} } } },
+  }).generated;
+const BEFORE_ROW = { id: '&::before', pseudo: 'before', label: 'Before' };
+const AFTER_ROW = { id: '&::after', pseudo: 'after', label: 'After' };
+
+test('generated lists nothing where no layer delivers a box, and nothing for a key that owns none', () => {
+  assert.deepEqual(generatedWith()(BLOCK), []);
+  // Styles at the box without `content` are not a box: it exists iff
+  // the cascade sets content.
+  assert.deepEqual(generatedWith({ map: { [`${BLOCK}::&::before`]: { default: { width: '1rem' } } } })(BLOCK), []);
+  // A key already carrying a selector owns no boxes of its own (a
+  // pseudo-element is terminal); nor does a key outside the grammar.
+  assert.deepEqual(generatedWith({ map: { [`${BLOCK}::&::before`]: { default: { content: '""' } } } })(`${BLOCK}::.quote`), []);
+  assert.deepEqual(generatedWith()('nonsense'), []);
+});
+
+test('generated lists the owner\'s box born with content, in grammar order, with the row words', () => {
+  assert.deepEqual(
+    generatedWith({ map: { [`${BLOCK}::&::before`]: { default: { content: '""' } } } })(BLOCK),
+    [BEFORE_ROW],
+  );
+  // Map order does not matter: before, then after.
+  assert.deepEqual(
+    generatedWith({
+      map: {
+        [`${BLOCK}::&::after`]: { default: { content: '""', color: 'red' } },
+        [`${BLOCK}::&::before`]: { hover: { content: '""' } },
+      },
+    })(BLOCK),
+    [BEFORE_ROW, AFTER_ROW],
+  );
+});
+
+test('content none is no box, and a state that switches it on is one under that state', () => {
+  assert.deepEqual(
+    generatedWith({ map: { [`${BLOCK}::&::after`]: { default: { content: 'none', width: '1rem' } } } })(BLOCK),
+    [],
+  );
+  assert.deepEqual(
+    generatedWith({ map: { [`${BLOCK}::&::after`]: { default: { content: ' NONE ' }, hover: { content: '""' } } } })(BLOCK),
+    [AFTER_ROW],
+  );
+});
+
+test('a worn look\'s box fragment delivers a box the owner never wrote', () => {
+  const glow = variantRecord('glow', {
+    scope: 'block_type:image',
+    value: {
+      '': { default: { color: 'gold' } },
+      '::&::after': { default: { content: '""', 'background-color': 'gold' } },
+    },
+  });
+  const map = { [BLOCK]: { variants: [{ variant: 'glow', fragment: '' }] } };
+  assert.deepEqual(generatedWith({ map, variants: [glow] })(BLOCK), [AFTER_ROW]);
+  // The owner's own `content: none` at the box beats the fragment's.
+  assert.deepEqual(
+    generatedWith({ map: { ...map, [`${BLOCK}::&::after`]: { default: { content: 'none' } } }, variants: [glow] })(BLOCK),
+    [],
+  );
+});
+
+test('an ancestor rule ending in the box delivers it on every element it reaches', () => {
+  const tree = [
+    {
+      kind: 'container',
+      uuid: UUID_B,
+      layout_id: 'daedalus_stylish_container',
+      children: [{ kind: 'block', uuid: UUID_A, block_type: 'image' }],
+    },
+  ];
+  const generated = generatedWith({
+    tree,
+    map: {
+      [`${CONTAINER}::> pb-image::before`]: { default: { content: '""' } },
+      // A rule at the other box without content styles nothing into
+      // existence.
+      [`${CONTAINER}::> pb-image::after`]: { default: { width: '2rem' } },
+    },
+  });
+  assert.deepEqual(generated(BLOCK), [BEFORE_ROW]);
+  // The container itself owns neither: the rule is its children's box.
+  assert.deepEqual(generated(CONTAINER), []);
+});
+
 test('a container-owned part takes the container donut limit', () => {
   const rule = behavior.selectorFor(CONTAINER, '.section__inner', 'color: red;');
   assert.ok(rule.startsWith(`@scope ([data-selectable="${CONTAINER}"]) to (${CONTAINER_SCOPE_LIMIT}) {`));
@@ -198,10 +381,37 @@ test('instance parts build rules like declared parts', () => {
   assert.ok(rule.includes(':scope.s-a1b2, .s-a1b2'));
 });
 
-test('a non-part id builds nothing', () => {
+test('any relative selector builds the printers\' targets: children, types, tags', () => {
+  // The children of a container: no donut (`>` self-limits), the
+  // universal compound carries no weight, so `:scope` prints bare.
+  const children = behavior.selectorFor(CONTAINER, '> *', 'outline: 1px solid red;');
+  assert.equal(
+    children,
+    `@scope ([data-selectable="${CONTAINER}"]) {\n  :scope > * {\n    outline: 1px solid red;\n  }\n}`,
+  );
+  // A type compound selects by the element address stamp, the one
+  // weighted link; a text block's face lights up, never the container's.
+  const typed = behavior.selectorFor(CONTAINER, '> pb-text', 'color: red;');
+  assert.equal(
+    typed,
+    `@scope ([data-selectable="${CONTAINER}"]) {\n  :where(:scope) > [data-element="block_type:text"] {\n    color: red;\n  }\n}`,
+  );
+  // A tag reaches the whole subtree (doctrine B: no donut for tags).
+  const tag = behavior.selectorFor(CONTAINER, 'p', 'color: red;');
+  assert.equal(tag, `@scope ([data-selectable="${CONTAINER}"]) {\n  p {\n    color: red;\n  }\n}`);
+  // A part reaching by `>` keeps the child-shifted donut, as delivered.
+  const shifted = behavior.selectorFor(CONTAINER, '.cols > *', 'gap: 0;');
+  assert.ok(shifted.startsWith(`@scope ([data-selectable="${CONTAINER}"]) to (${CONTAINER_SCOPE_LIMIT.split(', ').map((m) => `${m} > *`).join(', ')}) {`));
+  assert.ok(shifted.includes(':scope:where(.cols) > *'));
+});
+
+test('a selector outside the grammar builds nothing', () => {
   assert.equal(behavior.selectorFor(BLOCK, 'div > .loose', 'color: red;'), null);
-  assert.equal(behavior.selectorFor(BLOCK, 'quote', 'color: red;'), null);
   assert.equal(behavior.selectorFor(BLOCK, '.two.classes', 'color: red;'), null);
+  assert.equal(behavior.selectorFor(BLOCK, 'a:hover', 'color: red;'), null);
+  // The canonical spelling only: the facade canonicalizes before the
+  // facet is seated, so a lenient spelling here is a caller bug.
+  assert.equal(behavior.selectorFor(BLOCK, '>*', 'color: red;'), null);
 });
 
 test('the scope attribute value escapes quote and backslash', () => {
@@ -252,9 +462,9 @@ test('instance carriers gate on placement; the deepest placed carrier wins', () 
 });
 
 test('the hover facet paints through selectorFor byte for byte', () => {
-  hoverTo({ key: BLOCK, part: '.quote' });
+  hoverTo({ key: BLOCK, selector: '.quote' });
   const tag = appended.at(-1);
-  assert.equal(tag.attributes['data-daedalus-stylish-part-paint'], 'hover');
+  assert.equal(tag.attributes['data-daedalus-stylish-selector-paint'], 'hover');
   assert.ok(tag.textContent.startsWith(`@scope ([data-selectable="${BLOCK}"])`));
   assert.ok(tag.textContent.includes('dashed'));
   assert.ok(tag.textContent.includes('--daedalus-selection-muted'));
@@ -262,33 +472,95 @@ test('the hover facet paints through selectorFor byte for byte', () => {
   assert.ok(tag.removed);
 });
 
-test('the selection facet paints its own tag in the selection color', () => {
+test('the styling target paints its own tag in the selection color', () => {
   selectTo(BLOCK, '.quote');
   const tag = appended.at(-1);
-  assert.equal(tag.attributes['data-daedalus-stylish-part-paint'], 'selected');
+  assert.equal(tag.attributes['data-daedalus-stylish-selector-paint'], 'selected');
   assert.ok(tag.textContent.includes('var(--daedalus-selection,'));
   assert.ok(!tag.textContent.includes('--daedalus-selection-muted'));
   selectTo(BLOCK, null);
   assert.ok(tag.removed);
 });
 
-test('hovering the selected part paints no hover box over the selection', () => {
+test('hovering the target\'s selector paints no hover box over the target', () => {
   selectTo(BLOCK, '.quote');
   const before = appended.length;
-  hoverTo({ key: BLOCK, part: '.quote' });
+  hoverTo({ key: BLOCK, selector: '.quote' });
   assert.equal(appended.length, before);
-  // Deselecting while the hover stands re-paints the hover box.
+  // Dropping the target while the hover stands re-paints the hover box.
   selectTo(BLOCK, null);
   const tag = appended.at(-1);
-  assert.equal(tag.attributes['data-daedalus-stylish-part-paint'], 'hover');
+  assert.equal(tag.attributes['data-daedalus-stylish-selector-paint'], 'hover');
   hoverTo(null);
   assert.ok(tag.removed);
 });
 
-test('a non-part hover facet injects no tag', () => {
+test('a type target on a container paints every matching child', () => {
+  // The done-when's shape: seating '> pb-text' on a container outlines
+  // all its text blocks through the one printed target.
+  selectTo(CONTAINER, '> pb-text');
+  const tag = appended.at(-1);
+  assert.equal(tag.attributes['data-daedalus-stylish-selector-paint'], 'selected');
+  assert.ok(tag.textContent.includes(':where(:scope) > [data-element="block_type:text"]'));
+  assert.ok(!tag.textContent.includes(' to ('));
+  selectTo(CONTAINER, null);
+  assert.ok(tag.removed);
+});
+
+test('a target above the selection paints its every match in the write slot, dotted, and empties the dashed slot', () => {
+  // The done-when's shape: a link selected, "Every link in Welcome"
+  // chosen; the container's `a` rule outlines every anchor in it. One
+  // target: the part's dashed box goes with it (the element's solid
+  // outline stays, from the element spine).
+  selectTo(BLOCK, '.quote');
+  const selected = appended.at(-1);
+  targetTo(CONTAINER, 'a');
+  const tag = appended.at(-1);
+  assert.equal(tag.attributes['data-daedalus-stylish-selector-paint'], 'write');
+  assert.equal(tag.textContent, `@scope ([data-selectable="${CONTAINER}"]) {\n  a {\n    outline: 2px dotted var(--daedalus-selection, #0071e3) !important;\n    outline-offset: 5px !important;\n  }\n}`);
+  assert.ok(selected.removed);
+  // A new address replaces the slot's tag.
+  targetTo(CONTAINER, '> pb-text .quote');
+  assert.ok(tag.removed);
+  const next = appended.at(-1);
+  assert.equal(next.attributes['data-daedalus-stylish-selector-paint'], 'write');
+  assert.ok(next.textContent.includes(':where(:scope) > :where([data-element="block_type:text"]) .quote'));
+  // Seating the facet back on the element (the switcher's own key)
+  // empties the write slot and paints the dashed box again.
+  targetTo(BLOCK, '.quote');
+  assert.ok(next.removed);
+  const back = appended.at(-1);
+  assert.equal(back.attributes['data-daedalus-stylish-selector-paint'], 'selected');
+  // A selection move (the spine drops the target) empties both.
+  targetTo(CONTAINER, 'a');
+  const again = appended.at(-1);
+  assert.equal(again.attributes['data-daedalus-stylish-selector-paint'], 'write');
+  assert.ok(back.removed);
+  selectTo(BLOCK, null);
+  assert.ok(again.removed);
+  assert.ok(appended.every((tag) => tag.removed));
+});
+
+test('a hover facet outside the grammar injects no tag', () => {
   const before = appended.length;
-  hoverTo({ key: BLOCK, part: 'div > .loose' });
+  hoverTo({ key: BLOCK, selector: 'div > .loose' });
   assert.equal(appended.length, before);
+});
+
+test('the label seam words a selector the way the inspector chip does', () => {
+  // The breadcrumb's target crumb reads this (daedalus_ui label-for-key.js
+  // targetLabel): a declared part by its declared label, the children
+  // and a type by the vocabulary's words, and a selector the words
+  // cannot place by its raw spelling (selectorLabel's own fallback).
+  assert.equal(behavior.label(BLOCK, IMAGE_PART), 'Image');
+  assert.equal(typeof behavior.label(CONTAINER, '> *'), 'string');
+  assert.notEqual(behavior.label(CONTAINER, '> *'), '');
+  assert.equal(behavior.label(BLOCK, '.quote'), '.quote');
+  // A generated box: the word generated(key) gives its tree row (the
+  // owner's own), a part's box behind its part.
+  assert.equal(behavior.label(BLOCK, '&::before'), 'Before');
+  assert.equal(behavior.label(BLOCK, '&::after'), 'After');
+  assert.equal(behavior.label(BLOCK, `${IMAGE_PART}::after`), 'Image › After');
 });
 
 let failures = 0;

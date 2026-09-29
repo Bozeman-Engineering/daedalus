@@ -6,6 +6,10 @@ use Drupal\Core\Render\Element;
 use Drupal\Core\Render\Element\RenderElementBase;
 use Drupal\Core\Ajax\AjaxHelperTrait;
 use Drupal\Core\Config\ConfigFactoryInterface;
+use Drupal\Core\Extension\ModuleHandlerInterface;
+use Drupal\Core\StringTranslation\StringTranslationTrait;
+use Drupal\daedalus_ui\SidebarPluginManager;
+use Drupal\Component\Render\FormattableMarkup;
 use Drupal\layout_builder\LayoutBuilderEvents;
 use Drupal\layout_builder\Element\LayoutBuilder;
 use Drupal\daedalus_layout\NestedSectionStorageInterface;
@@ -36,6 +40,7 @@ class LayoutBuilderPlus extends RenderElementBase implements ContainerFactoryPlu
   use AjaxHelperTrait;
   use LayoutBuilderContextTrait;
   use LayoutBuilderHighlightTrait;
+  use StringTranslationTrait;
 
   /**
    * The section storage being rendered.
@@ -57,6 +62,8 @@ class LayoutBuilderPlus extends RenderElementBase implements ContainerFactoryPlu
       $container->get('event_dispatcher'),
       $container->get('config.factory'),
       $container->get('daedalus_tempstore.history_recorder'),
+      $container->get('module_handler'),
+      $container->get('plugin.manager.daedalus_ui_sidebars'),
     );
   }
 
@@ -69,6 +76,8 @@ class LayoutBuilderPlus extends RenderElementBase implements ContainerFactoryPlu
     protected EventDispatcherInterface $eventDispatcher,
     protected ConfigFactoryInterface $configFactory,
     protected HistoryRecorder $historyRecorder,
+    protected ModuleHandlerInterface $moduleHandler,
+    protected SidebarPluginManager $sidebarManager,
   ) {
     parent::__construct($configuration, $plugin_id, $plugin_definition);
   }
@@ -189,10 +198,7 @@ class LayoutBuilderPlus extends RenderElementBase implements ContainerFactoryPlu
       }
     }
     else {
-      // Show a default blank page.
-      $output['add_block'] = [
-        '#markup' => '<div id="daedalus-layout-blank-page" class="blank-page-wrapper"><i class="fas fa-th-large" aria-hidden="true"></i><p>Drag and drop a block here to begin creating your layout.</p></div>',
-      ];
+      $output['add_block'] = $this->buildBlankPage();
     }
 
     // As the Layout Builder UI is typically displayed using the frontend theme,
@@ -213,6 +219,38 @@ class LayoutBuilderPlus extends RenderElementBase implements ContainerFactoryPlu
     // Mark this UI as uncacheable.
     $output['#cache']['max-age'] = 0;
     return $output;
+  }
+
+  /**
+   * Builds the blank-page affordance: the first section, not yet here.
+   *
+   * One button filling the layout root, so the drop lands where the hint
+   * stood. It carries data-sidebar-button-for, daedalus_ui's one road from
+   * a chrome click to a panel toggle (sidebar-buttons.js), so a click on
+   * the empty page opens the Blocks panel exactly as the top-bar button and
+   * the panel's hotkey do; the key cap prints that panel's declared
+   * hot_key, the same code default the tool tooltips print. The AI clause
+   * prints only where daedalus_ai exists. The id is the element's identity
+   * for daedalus_ui's file drag (removed on the first Files drag) and the
+   * tests. Its look is css/blank-page.css.
+   */
+  protected function buildBlankPage(): array {
+    $definition = $this->sidebarManager->getDefinition('place_block');
+    $key = new FormattableMarkup('<kbd>@key</kbd>', ['@key' => $definition['hot_key'] ?? '']);
+    $hint = $this->moduleHandler->moduleExists('daedalus_ai')
+      ? $this->t('Empty page. Drag a block here, press @key for Blocks, or ask the AI.', ['@key' => $key])
+      : $this->t('Empty page. Drag a block here, or press @key for Blocks.', ['@key' => $key]);
+    return [
+      '#type' => 'html_tag',
+      '#tag' => 'button',
+      '#attributes' => [
+        'id' => 'daedalus-layout-blank-page',
+        'class' => ['daedalus-layout-blank-page'],
+        'type' => 'button',
+        'data-sidebar-button-for' => '#place_block',
+      ],
+      '#value' => new FormattableMarkup('<span class="daedalus-layout-blank-page__hint">@hint</span>', ['@hint' => $hint]),
+    ];
   }
 
   /**

@@ -6,7 +6,10 @@
  * header is the whole pose UI: each chip renders its axis's contribution
  * to the editing compound (lit = contributes a part, dim = resting), and
  * its menu poses that ONE axis of daedalus_ui's canvas state vector
- * (plus the selection-scoped force state on the state axis). This module
+ * (plus the selection-scoped force state on the state axis). The
+ * structural axis (first-child, empty, …: facts, editing-at.js
+ * isFactCondition) has no chip and joins no menu: a fact is the
+ * element's place in the markup, which no pose can change. This module
  * derives everything the component renders — faces, lit state, menu
  * items, checked marks, and the action each pick dispatches — from the
  * vector + force state + the guide payload's condition table, so the row

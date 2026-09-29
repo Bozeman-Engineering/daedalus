@@ -9,6 +9,7 @@ use Drupal\daedalus_blueprint\BlueprintElementResolverInterface;
 use Drupal\daedalus_blueprint\EntityStorageHandler;
 use Drupal\daedalus_blueprint\Materials\ElementMaterials;
 use Drupal\daedalus_blueprint\Materials\MaterialsRoster;
+use Drupal\daedalus_blueprint\Materials\RelativeSelector;
 use Drupal\daedalus_blueprint\ResolvedElement;
 
 /**
@@ -33,14 +34,29 @@ use Drupal\daedalus_blueprint\ResolvedElement;
  * - block:{component_uuid}:{property} — an inline block field, or `label`:
  *   the placement's display label rendered as page content.
  *
+ * A selection may carry a styling TARGET: the address styling acts at
+ * when the user pointed below or above the selected element (a part, a
+ * tag tier, a chain, an ancestor rule reaching it). The chips send it as
+ * the address's own key plus a `selector` (the relative selector in its
+ * canonical spelling; a `{key}::{selector}` key spells the same address).
+ * The element described is the address's owner (the target's key), the
+ * target rides the description as its own fact (`target`), and the worn
+ * materials are read AT the address (ElementMaterials::worn() reads a
+ * rule's own references beneath its root's), so a rule that wears a
+ * variant is seen wearing it. A selector outside the grammar is dropped
+ * and the owner described alone: a crafted selector never reaches the
+ * stack read.
+ *
  * Beside its identity, each description names the materials the element
- * WEARS (its worn variants by label and spelling) and the stencil it was
- * PLACED FROM (the placement's provenance stamp by id and label), both
- * read from the STAGED copy of the root entity, because the canvas shows
- * staged state: "the wide one", "what do these share" and "update the
- * stencil this came from" resolve through labels the print never carries
- * and without a print read. Per-turn facts, allowed on the message and
- * barred from the cached prefix.
+ * WEARS (its worn variants by label, each with the origin of the wearing,
+ * read from its style stack) and the stencil it was PLACED FROM (the
+ * placement's provenance stamp by id and label), both read from the
+ * STAGED copy of the root entity, because the canvas shows staged state:
+ * "the wide one", "what do these share" and "update the stencil this came
+ * from" resolve through labels the print never carries and without a
+ * print read. Labels and origins only, never values: what the stack
+ * delivers is explain_element_styles' answer. Per-turn facts, allowed on
+ * the message and barred from the cached prefix.
  */
 class ElementSelectionResolver {
 
@@ -55,11 +71,13 @@ class ElementSelectionResolver {
    *
    * @param array $selectedElements
    *   Raw selection data from the client, each with 'key' (a selectable
-   *   key), 'number', and optionally 'label'.
+   *   key, or a `{key}::{selector}` address), 'number', optionally
+   *   'label', and optionally 'selector' (a styling target's relative
+   *   selector under the key).
    * @param \Drupal\Core\Entity\FieldableEntityInterface|null $rootEntity
    *   The root entity from the current route.
    *
-   * @return array<int, array{description: string, materials?: string, placed_from?: string}>
+   * @return array<int, array{description: string, target?: string, materials?: string, placed_from?: string}>
    *   Resolved elements keyed by selection number.
    */
   public function resolve(array $selectedElements, ?FieldableEntityInterface $rootEntity): array {
@@ -74,9 +92,14 @@ class ElementSelectionResolver {
         continue;
       }
 
+      [$key, $selector] = $this->address($key, $element['selector'] ?? NULL);
       $result = $this->resolveKey($key, $rootEntity);
       if ($result) {
-        $materials = $this->wornMaterials($staged, $key);
+        $address = $selector === NULL ? $key : $key . RelativeSelector::SUFFIX . $selector;
+        if ($selector !== NULL) {
+          $result['target'] = sprintf('the rule "%s" under it (style-map key %s): styling acts on every element the rule matches, not on this element alone', $selector, $address);
+        }
+        $materials = $this->wornMaterials($staged, $address);
         if ($materials !== '') {
           $result['materials'] = $materials;
         }
@@ -93,6 +116,32 @@ class ElementSelectionResolver {
   }
 
   /**
+   * The owner key and the target selector a selection entry spells.
+   *
+   * Two spellings of one address: a `{key}::{selector}` key, or a bare
+   * key with a `selector` field (the chips' wire). The selector must be
+   * a relative selector in the grammar (RelativeSelector::parse(),
+   * canonicalized); one outside it is dropped, so the owner is described
+   * alone and nothing malformed reaches the stack read. A selector field
+   * beside a `::` key would be two answers, so the key's own wins.
+   *
+   * @return array{0: string, 1: ?string}
+   *   The owner key and the canonical selector, or NULL for none.
+   */
+  protected function address(string $key, mixed $selector): array {
+    $pos = strpos($key, RelativeSelector::SUFFIX);
+    if ($pos !== FALSE) {
+      $selector = substr($key, $pos + strlen(RelativeSelector::SUFFIX));
+      $key = substr($key, 0, $pos);
+    }
+    if (!is_string($selector) || $selector === '') {
+      return [$key, NULL];
+    }
+    $relative = RelativeSelector::parse($selector);
+    return [$key, $relative === NULL ? NULL : (string) $relative];
+  }
+
+  /**
    * The root entity's staged copy (the canvas state), or the entity itself.
    */
   protected function stagedCopy(?FieldableEntityInterface $entity): ?FieldableEntityInterface {
@@ -104,18 +153,42 @@ class ElementSelectionResolver {
   }
 
   /**
-   * What the element wears, as prose: id "Label" (spelling); ...
+   * What the element wears, as prose, one wearing per clause.
    *
-   * Only keys naming the root entity's own elements are read (the style
-   * map is the root's), so a crafted key can describe nothing the root
-   * does not already reach.
+   * A wearing applied here reads id "Label" (spelling), the identity the
+   * page language writes; a wearing a composition distributed reads id
+   * "Label" via composition "Label", and a fragment of a composition reads
+   * fragment {slot} of id "Label": neither is the element's own to write
+   * (the composition on the root put it there), so neither shows a
+   * spelling, and the origin names what to change instead. A stale origin
+   * prints by machine name. Only keys naming the root entity's own
+   * elements are read (the style map is the root's), so a crafted key can
+   * describe nothing the root does not already reach.
    */
   protected function wornMaterials(?FieldableEntityInterface $staged, string $key): string {
     if ($staged === NULL || $this->elementMaterials === NULL) {
       return '';
     }
-    $worn = $this->elementMaterials->worn($staged, $key);
-    return $worn === [] ? '' : MaterialsRoster::describe($worn, FALSE);
+    $clauses = [];
+    foreach ($this->elementMaterials->worn($staged, $key) as $wearing) {
+      $record = $wearing->record;
+      $clauses[] = match (TRUE) {
+        $wearing->isFragment() => sprintf('fragment %s of %s "%s"', $wearing->fragment, $record->id, $record->label),
+        $wearing->via !== NULL => sprintf('%s "%s" via %s', $record->id, $record->label, $this->materialName($wearing->via, $wearing->viaLabel)),
+        default => MaterialsRoster::describe([$record], FALSE),
+      };
+    }
+    return implode('; ', $clauses);
+  }
+
+  /**
+   * A material's name for the reader: id "Label", or the bare id.
+   *
+   * The bare machine name when the roster no longer labels it (a stale
+   * origin: inert, never hidden).
+   */
+  protected function materialName(string $id, ?string $label): string {
+    return $label === NULL ? $id : sprintf('%s "%s"', $id, $label);
   }
 
   /**
@@ -135,7 +208,7 @@ class ElementSelectionResolver {
   }
 
   /**
-   * Resolves a single selectable key.
+   * Resolves a single element key (an address's owner: never a `::` key).
    *
    * @param string $key
    *   The selectable key.
@@ -146,13 +219,6 @@ class ElementSelectionResolver {
    *   The description array, or NULL for unusable keys.
    */
   protected function resolveKey(string $key, ?FieldableEntityInterface $entity): ?array {
-    // Anatomy sub-element keys ({parent}::.class, the element model's
-    // markup-shell parts) are stylable, never selectable; they cannot
-    // legitimately appear in selection state.
-    if (str_contains($key, '::')) {
-      return NULL;
-    }
-
     $segments = explode(':', $key);
     $prefix = $segments[0];
 

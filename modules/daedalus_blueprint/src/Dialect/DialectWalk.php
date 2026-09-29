@@ -37,6 +37,19 @@ final class DialectWalk {
   public const GLOBAL_ATTRS = ['id', 'class', 'style', 'stencil'];
 
   /**
+   * The container's own attribute: its name, the section's label.
+   *
+   * The element-naming spine's one writable slot on the dialect door: the
+   * word the editor's tree, chips and panels call the section by
+   * (layout_settings.label, the same slot update_element {label} takes).
+   * Container-only: a block's name is derived from its content and is
+   * not renamable, so <pb-text name="..."> is ILLEGAL_ATTR. On
+   * <pb-stencil> the same spelling names the stencil to place, a
+   * different attribute (stencilReference()).
+   */
+  public const NAME_ATTR = 'name';
+
+  /**
    * The structural errors found while walking.
    *
    * @var \Drupal\daedalus_blueprint\Dialect\DialectError[]
@@ -44,11 +57,11 @@ final class DialectWalk {
   public array $errors = [];
 
   /**
-   * Collected element ids.
+   * Collected element ids, for duplicate detection.
    *
-   * Id => ['container' => bool, 'block_type' => ?string, 'body' =>
-   * string (the authored rich body, when the element has one; the
-   * content `#id .s-x` selectors existence-check against)].
+   * Id => ['container' => bool, 'block_type' => ?string]. The selector
+   * grammar judges against DialectCssParser::knownIds() over the parsed
+   * tree instead (the one derivation both doors share).
    */
   public array $ids = [];
 
@@ -75,6 +88,10 @@ final class DialectWalk {
     $tag = $el->tag;
     if ($tag === 'style') {
       $this->errors[] = new DialectError('ILLEGAL_CONTAINMENT', '<style> belongs at the top level of the document, after the elements', $el->line);
+      return NULL;
+    }
+    if ($tag === DialectParser::FILE_TAG) {
+      $this->errors[] = new DialectError('ILLEGAL_CONTAINMENT', sprintf('<%s> belongs at the top level of the document, beside <style>; the element that places the file refers to it by name (file="name")', DialectParser::FILE_TAG), $el->line);
       return NULL;
     }
     if (($corrective = DialectParser::sugarCorrective($tag, $this->catalog)) !== NULL) {
@@ -121,7 +138,8 @@ final class DialectWalk {
 
     $axes = $this->catalog->axesFor(TRUE, NULL, NULL);
     $roster = $this->catalog->classRosterFor(TRUE, NULL, NULL);
-    $cascade = $this->earlyClosedAttr($el, array_merge(self::GLOBAL_ATTRS, array_keys($axes)));
+    $legal = [...self::GLOBAL_ATTRS, self::NAME_ATTR, ...array_keys($axes)];
+    $cascade = $this->earlyClosedAttr($el, $legal);
     foreach ($el->attributes as $name => $value) {
       if ($this->cascadeGuard($el, (string) $name, $cascade)) {
         continue;
@@ -130,11 +148,21 @@ final class DialectWalk {
       if ($this->globalAttr($el, $name, $value, $node, $default, $worn, $roster)) {
         continue;
       }
+      if ($name === self::NAME_ATTR) {
+        // The node carries the name under the serializer's key, so a
+        // parsed tree, a stored tree (a stencil's element) and the print
+        // share one shape; an empty name is no name, as the section's
+        // label slot holds none.
+        if ($value !== '') {
+          $node['label'] = $value;
+        }
+        continue;
+      }
       if (isset($axes[$name])) {
         $this->axisAttr($el, $name, $value, $axes[$name], $depth, $axis_values);
         continue;
       }
-      $this->errors[] = self::illegalAttr($name, 'pb-container', array_merge(self::GLOBAL_ATTRS, array_keys($axes)), $el->line);
+      $this->errors[] = self::illegalAttr($name, 'pb-container', $legal, $el->line);
     }
 
     $children = [];
@@ -178,7 +206,7 @@ final class DialectWalk {
       }
       $value = $value === NULL ? '' : (string) $value;
       if ($tag === 'pb-image' && $name === 'src') {
-        $this->errors[] = new DialectError('ILLEGAL_SRC', 'src is not writable on <pb-image>: reference existing media with media="id or label" or mint one with generate="prompt" + alt', $el->line);
+        $this->errors[] = new DialectError('ILLEGAL_SRC', 'src is not writable on <pb-image>: reference existing media with media="id or label", mint one with generate="prompt" + alt, or place a file this conversation holds with file="name" + alt', $el->line);
         continue;
       }
       if ($this->globalAttr($el, $name, $value, $node, $default, $worn, $roster)) {

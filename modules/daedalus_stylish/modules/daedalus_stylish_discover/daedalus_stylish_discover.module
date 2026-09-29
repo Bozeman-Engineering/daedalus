@@ -19,9 +19,9 @@ use Drupal\daedalus_stylish_discover\ElementDiscovery;
  * elements: the nested class tree the block type's sample render emits
  * becomes the elements: tree — contains: slots included — each part
  * unlabeled (the label is the class name) but fully functional, declared
- * for every installed property group. Authored curation wins: a block type
- * whose YAML declares an "elements" key (even an empty one) chose its
- * parts, and discovery leaves it alone entirely.
+ * for every installed property group a real element may name. Authored
+ * curation wins: a block type whose YAML declares an "elements" key (even
+ * an empty one) chose its parts, and discovery leaves it alone entirely.
  *
  * Note for strict-mode sites: discovered parts are declared UNCONSTRAINED,
  * so enabling this module opens every rendered class to every property
@@ -36,7 +36,7 @@ function daedalus_stylish_discover_page_builder_declarations_alter(array &$decla
   }
   /** @var \Drupal\daedalus_stylish_discover\ElementDiscovery $discovery */
   $discovery = \Drupal::service('daedalus_stylish_discover.element_discovery');
-  $groups = array_fill_keys(array_keys(\Drupal::service('plugin.manager.daedalus_stylish_property_group')->getGroups()), []);
+  $groups = array_fill_keys(array_keys(\Drupal::service('plugin.manager.daedalus_stylish_property_group')->getElementGroups()), []);
   foreach (array_keys(\Drupal::service('entity_type.bundle.info')->getBundleInfo('block_content')) as $bundle) {
     if (array_key_exists('elements', $declarations['block_types'][$bundle] ?? [])) {
       continue;
@@ -53,11 +53,12 @@ function daedalus_stylish_discover_page_builder_declarations_alter(array &$decla
  * @param array $tree
  *   A discovered tree (\Drupal\daedalus_stylish_discover\ElementDiscovery::discover).
  * @param array $groups
- *   Every installed property group, unconstrained, keyed by id.
+ *   Every installed property group a real element may name,
+ *   unconstrained, keyed by id.
  *
  * @return array
  *   The same tree in the guide's elements: shape: every node gains its
- *   class-name label and the full property group set; contains: slots and
+ *   class-name label and the given property group set; contains: slots and
  *   nesting carry through as discovered.
  */
 function _daedalus_stylish_discover_declare_elements(array $tree, array $groups): array {

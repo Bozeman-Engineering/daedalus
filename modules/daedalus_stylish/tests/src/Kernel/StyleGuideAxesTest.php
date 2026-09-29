@@ -44,6 +44,7 @@ class StyleGuideAxesTest extends KernelTestBase {
     'twig_events',
     'daedalus_tempstore',
     'daedalus_blueprint_api',
+    'file',
     'daedalus_ui',
     'daedalus_stylish',
     'daedalus_stylish_control_test',
@@ -123,7 +124,7 @@ class StyleGuideAxesTest extends KernelTestBase {
   }
 
   /**
-   * A valid children section (the '::>' pseudo-part) serves as authored.
+   * A valid children section (the '::> *' pseudo-part) serves as authored.
    */
   public function testChildrenSectionGrammar(): void {
     $this->layerOverSectionKind(['children' => ['property_groups' => ['layout' => [], 'sizing' => []]]]);
@@ -354,6 +355,32 @@ class StyleGuideAxesTest extends KernelTestBase {
     $payload = $this->container->get('daedalus_stylish.client_style_guide')->build(self::THEME);
     $this->assertSame($roster->axes(), $payload['kinds']['container']['axes']);
     $this->assertSame(['padding-top'], $payload['blockTypes']['media']['axes']['proportions']['owns']);
+  }
+
+  /**
+   * The shipped container kind's Layout axis owns the direction it flips.
+   *
+   * daedalus_stylish_layouts declares every container a flex column and
+   * its row variant flips flex-direction, so the axis owns that one
+   * property (the width axis's precedent: it owns the inset its stops
+   * write). A direct write of flex-direction on a container root then
+   * draws the wear-the-axis warning, doctrine rather than legality, and
+   * the roster answers axisOwning() for the validator and the client
+   * alike. The display itself stays the declared tier's: the axis owns
+   * the direction, never the mechanic.
+   */
+  public function testShippedContainerLayoutAxisOwnsDirection(): void {
+    $this->enableModules(['daedalus_stylish_layouts']);
+    $this->styleGuide->resetCache();
+    $roster = $this->container->get('daedalus_stylish.vocabulary_roster')->build(Address::kind('container'), self::THEME);
+    $this->assertSame([
+      'width' => ['padding-left', 'padding-right', 'max-width'],
+      'container_layout' => ['flex-direction'],
+    ], $roster->axisOwns());
+    $this->assertSame('container_layout', $roster->axisOwning('flex-direction'));
+    $this->assertNull($roster->axisOwning('display'), 'The display is the declared tier\'s, never the axis\'s.');
+    $this->assertSame(['flex-direction'], $roster->axes()['container_layout']['owns']);
+    $this->assertFalse($roster->axes()['container_layout']['root_only'], 'Columns is offered at every depth, so the direction is owned wherever the container sits.');
   }
 
   /**

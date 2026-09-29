@@ -37,12 +37,21 @@ final class PropertyGroup extends AttributeBase {
    * @param class-string|null $deriver
    *   (optional) The deriver class (the generated wide tier derives one
    *   group per CSS spec area from data/wide-properties.json).
+   * @param bool $pseudo
+   *   (optional) Whether the group is granted only at a pseudo-element
+   *   (the generated box a selector ends in: "&::before", ".quote::after").
+   *   The roster walk grants every such group wherever it lands on a
+   *   pseudo-element, declared or derived, and nowhere else; a declaration
+   *   naming one on a real element fails the guide build, and a write of
+   *   one of its properties outside a pseudo-element is refused in every
+   *   enforcement mode (the property has no meaning on a real box).
    */
   public function __construct(
     public readonly string $id,
     public readonly TranslatableMarkup $label,
     public readonly int $weight = 0,
     public readonly ?string $deriver = NULL,
+    public readonly bool $pseudo = FALSE,
   ) {}
 
 }

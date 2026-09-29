@@ -10,6 +10,7 @@ use Drupal\Core\Field\FieldConfigInterface;
 use Drupal\Core\Field\FieldDefinitionInterface;
 use Drupal\daedalus_blueprint\Dialect\Event\DialectCatalogBuildEvent;
 use Drupal\daedalus_blueprint\FieldHandler\FieldHandlerManager;
+use Drupal\daedalus_blueprint\FieldHandler\MediaFromFileInterface;
 use Drupal\daedalus_blueprint\FieldHandler\MediaGenerationInterface;
 use Drupal\daedalus_blueprint\LayoutBuilder\ContainerLayout;
 use Drupal\daedalus_blueprint\LayoutBuilder\PlacementRestrictionsInterface;
@@ -34,7 +35,8 @@ use Symfony\Contracts\EventDispatcher\EventDispatcherInterface;
  *   scalar attrs (allowed_values become the value roster); link fields are
  *   kind 'link'; an entity_reference to media expands into the media
  *   handler's authored keys (alt => alt_text, media => ref, and, when the
- *   handler generates (MediaGenerationInterface), generate => _generate
+ *   handler places files (MediaFromFileInterface), file => _file; when it
+ *   generates (MediaGenerationInterface), generate => _generate
  *   plus the active provider's sizing key in kebab case, aspect-ratio =>
  *   aspectRatio) — bare when the base name IS the bundle name, prefixed
  *   'base-' otherwise; any other
@@ -99,11 +101,11 @@ class DialectCatalogBuilder {
       axes: $event->getAxes(),
       blockTypes: $block_types,
       conditions: $event->getConditions(),
-      parts: $event->getParts(),
+      facts: $event->getFacts(),
+      selectors: $event->getSelectors(),
       instances: $event->getInstances(),
       stylable: $event->getStylable(),
       roster: $roster,
-      textTags: $event->getTextTags(),
       prose: $event->getVocabularyProse(),
       birthDefaults: $event->getBirthDefaults(),
       dressedTags: $event->getDressedTags(),
@@ -200,11 +202,15 @@ class DialectCatalogBuilder {
             $prefix = ($base === str_replace('_', '-', $bundle) || $base === '') ? '' : "$base-";
             $attributes[$prefix . 'alt'] = ['field' => $field_name, 'key' => 'alt_text'];
             $attributes[$prefix . 'media'] = ['field' => $field_name, 'kind' => 'ref'];
-            // Generation and its sizing are the field handler's vocabulary
-            // (MediaGenerationInterface): the sizing attribute is the active
+            // File placement, generation and its sizing are the field
+            // handler's vocabulary (MediaFromFileInterface,
+            // MediaGenerationInterface): the sizing attribute is the active
             // provider's key in kebab case (aspectRatio => aspect-ratio) and
             // exists only while a provider takes one.
             $handler = $this->fieldHandlerManager->getHandler($definition);
+            if ($handler instanceof MediaFromFileInterface) {
+              $attributes[$prefix . 'file'] = ['field' => $field_name, 'key' => '_file'];
+            }
             if ($handler instanceof MediaGenerationInterface) {
               $attributes[$prefix . 'generate'] = ['field' => $field_name, 'key' => '_generate'];
               $key = $handler->getDimensionKey();

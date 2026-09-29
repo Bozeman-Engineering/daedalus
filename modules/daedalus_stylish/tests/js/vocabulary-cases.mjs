@@ -8,18 +8,20 @@
  * JSON on stdin: {guide, cases: [{key, bundle, properties}]}, each case
  * an element key plus its bundle discriminator (the client's address
  * derivation) and the property names to ask. stdout is {closed, law,
- * cases: [{groups, granted, spaces, axes, rootOnly, descriptions,
- * owns}]}: the reads style-guide.js and variant-scope.js make of the
- * served node (declaredSets, propertyGranted, constraintsFor,
- * axisVocabulary, the axes' depth stamps, axisDescription, axisOwns),
- * in case order; the test asserts deep equality against the PHP
- * roster's groups(), grantsProperty(), valueSpace(), axisNames(),
- * rootOnlyAxes(), axisDescriptions() and axisOwns(), so the client twin
- * and the roster are locked together.
+ * cases: [{declared, groups, granted, spaces, axes, rootOnly,
+ * descriptions, owns}]}: the reads style-guide.js and variant-scope.js
+ * make of the served node (declaredForKey, declaredSets,
+ * propertyGranted, constraintsFor, axisVocabulary, the axes' depth
+ * stamps, axisDescription, axisOwns), in case order; the test asserts
+ * deep equality against the PHP roster's declared(), groups(),
+ * grantsProperty(), valueSpace(), axisNames(), rootOnlyAxes(),
+ * axisDescriptions() and axisOwns(), so the client twin and the roster
+ * are locked together (a pseudo-element's box, declared or derived,
+ * included).
  */
 import { readFileSync } from 'node:fs';
 import {
-  bundleForKey, constraintsAreLaw, constraintsFor, declarationForKey, declaredSets, parseKey, propertiesClosed, propertyGranted,
+  bundleForKey, constraintsAreLaw, constraintsFor, declarationForKey, declaredForKey, declaredSets, parseKey, propertiesClosed, propertyGranted,
 } from '../../js/src/style-guide.js';
 import { axisDescription, axisOwns, axisVocabulary } from '../../js/src/variant-scope.js';
 
@@ -32,7 +34,8 @@ const answer = ({ key, bundle = null, properties = [] }) => {
   // case's discriminator exactly as the blueprint tables would carry it.
   const blockTypes = parsed?.kind === 'block' ? { [parsed.uuid]: bundle } : {};
   const layouts = parsed?.kind === 'container' ? { [parsed.uuid]: bundle } : {};
-  const node = declarationForKey(guide, parsed, bundleForKey(parsed, blockTypes, layouts));
+  const bundleOf = bundleForKey(parsed, blockTypes, layouts);
+  const node = declarationForKey(guide, parsed, bundleOf);
   const rootKey = key.split('::')[0];
   const root = declarationForKey(guide, parseKey(rootKey), bundleForKey(parsed, blockTypes, layouts));
   const axes = root?.axes !== null && typeof root?.axes === 'object' && !Array.isArray(root.axes) ? root.axes : {};
@@ -55,6 +58,7 @@ const answer = ({ key, bundle = null, properties = [] }) => {
     }
   });
   return {
+    declared: declaredForKey(guide, parsed, bundleOf),
     groups: declaredSets(node),
     granted: properties.filter((property) => propertyGranted(node, property)),
     spaces,

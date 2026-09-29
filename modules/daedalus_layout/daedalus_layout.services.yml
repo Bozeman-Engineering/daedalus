@@ -21,8 +21,18 @@ services:
     class: Drupal\daedalus_layout\NewMedia
   Drupal\daedalus_layout\NewMedia: '@daedalus_layout.new_media'
 
+  # The media drop on a placed block, as one update_element op on the spine
+  # (explicit arguments: the history services carry no autowire alias).
   daedalus_layout.navigation_replace_media:
     class: Drupal\daedalus_layout\EventSubscriber\DaedalusUiReplaceMedia
+    arguments:
+      - '@request_stack'
+      - '@daedalus_blueprint.operations'
+      - '@daedalus_blueprint.storage_handler'
+      - '@daedalus_blueprint_api.mutation_response_builder'
+      - '@daedalus_tempstore.history_recorder'
+      - '@daedalus_tempstore.history_manager'
+      - '@daedalus_blueprint.daedalus_layout_adapter'
 
   daedalus_layout.root_entity_registry:
     class: Drupal\daedalus_layout\RootEntityRegistry
@@ -53,9 +63,6 @@ services:
 
   daedalus_layout.dialog_close_subscriber:
     class: Drupal\daedalus_layout\EventSubscriber\DialogCloseSubscriber
-
-  daedalus_layout.blueprint_mirror_refresh:
-    class: Drupal\daedalus_layout\EventSubscriber\BlueprintMirrorRefresh
 
   daedalus_layout.layout_settings:
     class: Drupal\daedalus_layout\EventSubscriber\LayoutSettings

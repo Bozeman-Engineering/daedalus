@@ -12,8 +12,10 @@
  * Live updates: this file is a native module script (served standalone, see
  * the library definition) so it can import daedalus_ui's shared
  * BroadcastChannel wire relative to its own URL. It listens on prefix
- * 'preview' with the scope the opener forwarded, and reloads the iframe on
- * the editing window's mutated pings, preserving the scroll position.
+ * 'preview' with the pop-out document's session scope (the opener's
+ * ?scope, delivered as daedalusUi.popout.scope by the pop-out route
+ * contract), and reloads the iframe on the editing window's mutated pings,
+ * preserving the scroll position.
  */
 import { openChannel } from '../broadcast/channel.js';
 import { createReloadCoordinator } from './reload-coordinator.js';
@@ -27,15 +29,10 @@ import { createDeviceList } from './device-list.js';
         '#daedalus-ui-responsive-preview-root',
         context,
       ).forEach((root) => {
-        const { devices, userDevices, src, scope } =
+        const { devices, userDevices, src } =
           drupalSettings.daedalusUi.responsivePreview;
+        const { scope } = drupalSettings.daedalusUi.popout;
         root.classList.add('responsive-preview');
-
-        // Themes wrap page content in their own stacking contexts (olivero's
-        // .layout-main-wrapper sits at z-index 2), which would trap the shell
-        // under the admin toolbar no matter how high its own z-index is.
-        // Re-mounting the root directly on body frees it to cover the window.
-        document.body.append(root);
 
         const header = document.createElement('div');
         header.className = 'responsive-preview__header';

@@ -13,10 +13,15 @@ use Drupal\Tests\daedalus\Kernel\NestedStorageKernelTestBase;
 /**
  * Tests the preserved-fields root-existence feeder.
  *
- * On a Layout Builder display, non-preserved configurable root fields never
- * render under their own field keys (a field block render is block-keyed),
- * so the feeder reports them nonexistent to daedalus_ui's element
- * model. Non-LB displays are not daedalus_layout's truth: the feeder stays silent.
+ * On a Layout Builder display, non-preserved configurable root fields have
+ * no row of their own in the page-elements tree (the display renders only
+ * the preserved ones beside the layout), so the feeder reports them
+ * nonexistent to daedalus_ui's element model. That answers the tree's
+ * default rows, not editability: a field block placing the same field
+ * renders it under its own key inside the placement, and that leaf is
+ * admitted by rendered evidence (the placement's merged presentation and
+ * the resolver's mirror-backed gate), never by this feeder. Non-LB
+ * displays are not daedalus_layout's truth: the feeder stays silent.
  *
  * @group daedalus_layout
  */
@@ -58,7 +63,7 @@ class PreservedFieldsRootExistenceTest extends NestedStorageKernelTestBase {
     $model = $this->container->get('daedalus_ui.element_model');
     $names = $model->nonExistentFields(ElementModel::KIND_ENTITY, 'entity_test', 'entity_test', 'full');
 
-    $this->assertContains('field_dropped', $names, 'A non-preserved field never renders under its own key on an LB display.');
+    $this->assertContains('field_dropped', $names, 'A non-preserved field has no row of its own on an LB display (a field block placing it presents it under the placement).');
     $this->assertNotContains('field_kept', $names, 'A preserved field keeps rendering beside the layout.');
   }
 

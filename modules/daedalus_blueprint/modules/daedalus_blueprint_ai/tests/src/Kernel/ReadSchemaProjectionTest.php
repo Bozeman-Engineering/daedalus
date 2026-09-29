@@ -57,6 +57,7 @@ class ReadSchemaProjectionTest extends BlueprintKernelTestBase {
       'twig_events',
       'daedalus_tempstore',
       'daedalus_blueprint_api',
+      'file',
       'daedalus_ui',
       'daedalus_layout',
       'daedalus_stylish',
@@ -277,7 +278,7 @@ class ReadSchemaProjectionTest extends BlueprintKernelTestBase {
     $prompt = $this->container->get('daedalus_blueprint_ai.dialect_catalog_prompt')->render();
     $this->assertStringContainsString('Rich text styles by element', $prompt);
     $this->assertStringContainsString('#id .s-x > *', $prompt);
-    $this->assertStringContainsString('(' . implode(', ', $catalog->textTags()) . ')', $prompt);
+    $this->assertStringContainsString('tags: ' . implode(', ', $catalog->textTags()) . ')', $prompt);
     $this->assertStringContainsString('KEEP the s-* classes', $prompt);
   }
 

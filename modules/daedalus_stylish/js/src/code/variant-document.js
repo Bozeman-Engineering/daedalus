@@ -1,5 +1,9 @@
 import { captureSources, entryRefs, findVariant } from '../variant-scope.js';
 import { ROOT_KINDS, compareSegments, parseSlotKey } from '../slot-key.js';
+import {
+  CLASS_PART,
+  parseSelector,
+} from '../../../../daedalus_ui/js/edit_mode/materials/relative-selector.js';
 import { ELEMENT_LAYER, variantLayerId } from './layers.js';
 
 /**
@@ -7,7 +11,7 @@ import { ELEMENT_LAYER, variantLayerId } from './layers.js';
  *
  * A variant is its own document, not a write-target flip over the
  * places (four controls, one loud mode): the editing session renders the
- * variant's OWN key space — the root, its part and '::>' rows, and the
+ * variant's OWN key space — the root, its part and '> *' rows, and the
  * slot-path tree of a composition — in wearer context, and every edit is
  * a PENDING variant change (pending.js update sessions), committed only
  * by the Push/Discard bar. This module owns everything computable without
@@ -56,9 +60,10 @@ export const wearingOf = (entry, reference) =>
  * (compareSegments: layout tree order), the root ('') always first and
  * always present, even in an empty document (the honest edit surface a
  * fresh or wears-nothing document still offers). Each node lists its
- * document KEYS in render order: the element's own entry, its '::>'
- * children pseudo-part, then each '::.class' part with its own '::>'
- * directly after it. A key lists when the variant stores a non-empty
+ * document KEYS in render order: the element's own entry, then its
+ * selector entries grouped by their first part class in first-seen order
+ * (a part's own entry directly before the selectors under it), the
+ * part-less selectors (the children, a tag, a type) first. A key lists when the variant stores a non-empty
  * entry at it or the open session stages lines into it (a staged new slot
  * renders with its pending marks; an entry whose only content is a nested
  * "variants" list still lists — references are content), plus the root's
@@ -77,8 +82,7 @@ export const wearingOf = (entry, reference) =>
  *   (unresolvable scope: only path-less keys parse).
  *
  * @return {Array<{slot: string, depth: number, kind: ?string,
- *   detail: ?string, keys: Array<{key: string, part: ?string,
- *   children: boolean}>}>}
+ *   detail: ?string, keys: Array<{key: string, selector: ?string}>}>}
  *   kind is 'root' for the root slot, the last segment's type
  *   ('container' | 'block' | 'field') for a path slot, null for an
  *   unparsed one; detail carries the block type or field name.
@@ -136,24 +140,37 @@ export const documentTree = (styles, session = null, rootKind = null) => {
   return order.map((slot) => {
     const slotParsed = parsed.get(slot);
     // Suffixes are path-less keys, so they parse without a root kind.
-    const suffixes = slots.get(slot).map((key) => {
-      const suffix = parseSlotKey(key.slice(slot.length), null);
-      return {
-        key,
-        part: suffix?.part ?? null,
-        children: suffix?.children ?? false,
-      };
-    });
+    const suffixes = slots.get(slot).map((key) => ({
+      key,
+      selector: parseSlotKey(key.slice(slot.length), null)?.selector ?? null,
+    }));
+    // The group a selector files under: its first class when it is
+    // part-first, else the part-less group (rank 1, right after the root).
+    const groupOf = (selector) => {
+      const first = parseSelector(selector)?.compounds[0];
+      return first?.kind === CLASS_PART ? first.name : null;
+    };
     const partOrder = [];
-    suffixes.forEach(({ part }) => {
-      if (part !== null && !partOrder.includes(part)) {
-        partOrder.push(part);
+    suffixes.forEach(({ selector }) => {
+      const group = groupOf(selector);
+      if (group !== null && !partOrder.includes(group)) {
+        partOrder.push(group);
       }
     });
+    const rankOf = ({ selector }) => {
+      if (selector === null) {
+        return [0, 0];
+      }
+      const group = groupOf(selector);
+      return [
+        group === null ? 1 : 2 + partOrder.indexOf(group),
+        parseSelector(selector).compounds.length,
+      ];
+    };
     suffixes.sort((a, b) => {
-      const rankA = a.part === null ? 0 : 1 + partOrder.indexOf(a.part);
-      const rankB = b.part === null ? 0 : 1 + partOrder.indexOf(b.part);
-      return rankA - rankB || Number(a.children) - Number(b.children);
+      const [groupA, depthA] = rankOf(a);
+      const [groupB, depthB] = rankOf(b);
+      return groupA - groupB || depthA - depthB;
     });
     const last = slotParsed?.segments.length
       ? slotParsed.segments[slotParsed.segments.length - 1]
@@ -171,14 +188,15 @@ export const documentTree = (styles, session = null, rootKind = null) => {
 /**
  * The current-page carriers of each document fragment ("carried by").
  *
- * Which elements on THIS page wear each of the document's fragments: the
- * root fragment's carriers are its root wearers, a composition child
- * slot's carriers are the elements its distributed fragment landed on.
- * References live on base map entries and a reference is the document's
- * record id (the paintCoverage matching rule), so matching is verbatim.
- * Fragments nothing on this page carries are absent: the document still
- * renders them (a variant's reach is site-wide), the chrome just names no
- * local carrier.
+ * Which keys on THIS page wear each of the document's fragments: the
+ * root fragment's carriers are its root wearers, elements and rules
+ * alike (a rule `container:X::> pb-text` wearing the document delivers
+ * its root fragment at every match), a composition child slot's
+ * carriers are the elements its distributed fragment landed on. A
+ * reference is the document's record id (the paintCoverage matching
+ * rule), so matching is verbatim. Fragments nothing on this page
+ * carries are absent: the document still renders them (a variant's
+ * reach is site-wide), the chrome just names no local carrier.
  *
  * @param {?object} map
  *   The style map (mirror view).
@@ -186,14 +204,11 @@ export const documentTree = (styles, session = null, rootKind = null) => {
  *   The document's reference (the variant's record id).
  *
  * @return {Map<string, string[]>}
- *   Fragment → carrier selectable keys, both in map order.
+ *   Fragment → carrier keys (elements and rules), both in map order.
  */
 export const carriedBy = (map, reference) => {
   const carriers = new Map();
   Object.entries(map ?? {}).forEach(([key, entry]) => {
-    if (key.includes('::')) {
-      return;
-    }
     entryRefs(entry).forEach((ref) => {
       if (reference == null || ref.variant !== reference) {
         return;
@@ -318,7 +333,7 @@ export const overlaySessionLines = (baseline, session, slot, condition) => {
 /**
  * The wearer cascade's winners, per property.
  *
- * From the wearer island's layered lines (islandLines()): which layer's
+ * From the wearer island's layered lines (stackLines()): which layer's
  * value the wearer actually shows for each property. The honesty read
  * behind document-line shadowing — a document edit a higher layer beats
  * on this wearer must say so, or the buffer promises a look Push cannot
@@ -326,10 +341,10 @@ export const overlaySessionLines = (baseline, session, slot, condition) => {
  *
  * @param {Array<{property: string, layer: string, variant: ?string,
  *   lost: boolean}>} wearerLines
- *   islandLines() for the wearer's (key, condition) pair.
+ *   stackLines() for the wearer's (key, condition) pair.
  *
  * @return {Map<string, {layer: string, variant: ?string}>}
- *   property → the winning layer in islandLines' winner shape (the layer
+ *   property → the winning layer in stackLines' winner shape (the layer
  *   id, and the reference on a variant layer). Properties no layer
  *   defines are absent.
  */
@@ -359,7 +374,7 @@ export const wearerWinners = (wearerLines) => {
  *   The line's property.
  *
  * @return {?{layer: string, variant: ?string}}
- *   The winning layer in islandLines' winner shape, or null.
+ *   The winning layer in stackLines' winner shape, or null.
  */
 export const documentLineWinner = (winners, reference, property) =>
   winners.has(property) &&
@@ -374,7 +389,7 @@ export const documentLineWinner = (winners, reference, property) =>
  * The widget-mode counterpart of the islands' print: where an island
  * renders one (slot, condition) line list, the property rows and basic
  * controls read a whole slot's entry (every condition at once, the
- * effectiveEntry shape) so their values, other-condition chips, and
+ * condition-keyed entry shape) so their values, other-condition chips, and
  * has-more hints all speak the variant's post-Push truth. Composes the
  * same primitives the islands print from (documentBaselineLines +
  * overlaySessionLines), so the two surfaces can never disagree about what
@@ -433,55 +448,6 @@ export const documentSlotEntry = (variantStyles, slot, session) => {
     }
   });
   return { entry, pending };
-};
-
-/**
- * The layer beating a document value on this wearer, if any — the widget
- * modes' honesty read.
- *
- * The documentLineWinner counterpart over the widget surface's inputs:
- * the wearer's OWN entry always wins delivery (the element's
- * condition layers beat every reference), and among the worn references
- * the delivery winner is the suppliers table's (propertySuppliers,
- * ordered by the vocabulary). Null when the document's own value wins
- * (either half of a composition pair), or when nothing else defines the
- * property — then the widget's value is what the wearer shows (or will
- * show on Push); previews are gated on exactly this, so the canvas never
- * lies.
- *
- * @param {?object} own
- *   The wearer target's OWN style entry (map[targetKey], layers verbatim).
- * @param {?object} suppliers
- *   propertySuppliers() for the target key (raw references).
- * @param {string} reference
- *   The document's reference, verbatim.
- * @param {string} condition
- * @param {string} property
- *
- * @return {?{variant: ?string}}
- *   The winning layer (variant: null = the element's own value), or null
- *   when the document wins.
- */
-export const documentValueWinner = (
-  own,
-  suppliers,
-  reference,
-  condition,
-  property,
-) => {
-  const ownValues =
-    isEntryObject(own) && isEntryObject(own[condition]) ? own[condition] : null;
-  if (
-    ownValues &&
-    ownValues[property] !== undefined &&
-    ownValues[property] !== null
-  ) {
-    return { variant: null };
-  }
-  const supplier = suppliers?.[condition]?.[property];
-  return supplier !== undefined && supplier !== reference
-    ? { variant: supplier }
-    : null;
 };
 
 /**

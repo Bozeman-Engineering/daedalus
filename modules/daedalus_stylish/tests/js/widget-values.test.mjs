@@ -16,12 +16,14 @@ import {
   fallbackFor,
   gapGate,
   gradientFallback,
+  imageSlot,
+  marginAxisValue,
+  marginAxisWrite,
   normalizeValue,
   paletteFallback,
   parentAlignment,
   positionAxes,
   positionGate,
-  positionUpgrade,
   propertyStops,
   segmentState,
   stopsFor,
@@ -461,8 +463,8 @@ test('elevation: a guide shadow scale becomes the preset row (stopsFor)', () => 
 });
 
 test('positionAxes: a grid parent unlocks both axes as local writes', () => {
-  // The payoff of grid as the canonical container upgrade: align-self
-  // vertical, justify-self horizontal, no companion needed.
+  // A hand-made grid is still a grid: align-self vertical, justify-self
+  // horizontal, both the child's own.
   [{ display: 'grid' }, { display: 'inline-grid' }].forEach((parent) => {
     const axes = positionAxes(parent);
     assert.equal(axes.vertical.property, 'align-self');
@@ -472,10 +474,10 @@ test('positionAxes: a grid parent unlocks both axes as local writes', () => {
   });
 });
 
-test('positionAxes: a flex parent yields only its cross axis to the child', () => {
-  // align-self is the cross axis (vertical under row, horizontal under
-  // column); justify-self is ignored by flex, so it takes the leftover
-  // axis as 'none' — a committed value keeps a (disabled) row.
+test('positionAxes: a flex row yields only its cross axis to the child', () => {
+  // align-self is the vertical cross axis under a row; justify-self is
+  // ignored by flex, so it takes the horizontal axis as 'none' and a
+  // committed value keeps a (disabled) row.
   const row = positionAxes({ display: 'flex', flexDirection: 'row' });
   assert.equal(row.vertical.property, 'align-self');
   assert.equal(row.vertical.write, 'local');
@@ -484,26 +486,76 @@ test('positionAxes: a flex parent yields only its cross axis to the child', () =
   // Direction defaults to row when unreported; reverse stays on the axis.
   assert.equal(positionAxes({ display: 'inline-flex' }).vertical.write, 'local');
   assert.equal(positionAxes({ display: 'flex', flexDirection: 'row-reverse' }).vertical.property, 'align-self');
+});
+
+test('positionAxes: a flex column places horizontally with align-self and vertically with the margin pair', () => {
+  // The stacked container: the cross axis is align-self, the main axis
+  // is the auto-margin pair (free space goes to auto margins before
+  // justify-content), both the child's own writes.
   const column = positionAxes({ display: 'Flex', flexDirection: ' Column-Reverse ' });
   assert.equal(column.horizontal.property, 'align-self');
   assert.equal(column.horizontal.write, 'local');
-  assert.equal(column.vertical.property, 'justify-self');
-  assert.equal(column.vertical.write, 'none');
+  const margin = column.vertical;
+  assert.equal(margin.property, 'margin-block');
+  assert.deepEqual(margin.pair, ['margin-top', 'margin-bottom']);
+  assert.equal(margin.write, 'local');
+  assert.equal(margin.label, 'Vertical');
+  // Three stops faced as the vertical axis, the placement token as the
+  // value (the offer hands a pick back by id; the pair rides the write).
+  assert.deepEqual(margin.stops.map((stop) => [stop.id, stop.value, stop.label]), [
+    ['start', 'start', 'Top'],
+    ['center', 'center', 'Middle'],
+    ['end', 'end', 'Bottom'],
+  ]);
+  // The stop tokens light through segmentState like every other axis.
+  assert.equal(segmentState('end', margin.stops).selected, 'end');
+  assert.deepEqual(segmentState(null, margin.stops), { selected: null, custom: false });
 });
 
-test('positionAxes: a plain block parent marks both axes for the grid upgrade', () => {
-  // The gorilla scenario: nothing places the child yet, so a pick must
-  // ride in with the parent's display: grid (the compound gesture).
+test('marginAxisValue: the pair reads as which sides are auto', () => {
+  assert.equal(marginAxisValue({ 'margin-bottom': 'auto' }), 'start');
+  assert.equal(marginAxisValue({ 'margin-top': 'AUTO ', 'margin-bottom': 'auto' }), 'center');
+  assert.equal(marginAxisValue({ 'margin-top': 'auto' }), 'end');
+  // Neither auto is unset, never custom: a typed margin is not a
+  // placement and the axis does not own it.
+  assert.equal(marginAxisValue({}), null);
+  assert.equal(marginAxisValue({ 'margin-top': '2rem', 'margin-bottom': '0' }), null);
+  assert.equal(marginAxisValue(null), null);
+  // A typed margin beside an auto is left alone by the read.
+  assert.equal(marginAxisValue({ 'margin-top': '2rem', 'margin-bottom': 'auto' }), 'start');
+});
+
+test('marginAxisWrite: a pick sets its autos and clears only a standing auto', () => {
+  // Top pins with a bottom auto, Bottom with a top auto, Middle with both.
+  // From unset: the auto side alone rides; the other side is not touched.
+  assert.deepEqual(marginAxisWrite('start', {}), { 'margin-bottom': 'auto' });
+  assert.deepEqual(marginAxisWrite('end', {}), { 'margin-top': 'auto' });
+  assert.deepEqual(marginAxisWrite('center', {}), { 'margin-top': 'auto', 'margin-bottom': 'auto' });
+  // Middle to Top: the top auto must go, so its null rides.
+  assert.deepEqual(marginAxisWrite('start', { 'margin-top': 'auto', 'margin-bottom': 'auto' }), { 'margin-top': null, 'margin-bottom': 'auto' });
+  // A typed margin on the other side is left alone (no null over it).
+  assert.deepEqual(marginAxisWrite('start', { 'margin-top': '2rem' }), { 'margin-bottom': 'auto' });
+  assert.deepEqual(marginAxisWrite('end', { 'margin-bottom': '0' }), { 'margin-top': 'auto' });
+  // Unset clears every standing auto and nothing else; nothing standing,
+  // nothing to write.
+  assert.deepEqual(marginAxisWrite(null, { 'margin-top': 'auto', 'margin-bottom': 'auto' }), { 'margin-top': null, 'margin-bottom': null });
+  assert.deepEqual(marginAxisWrite(null, { 'margin-top': '2rem', 'margin-bottom': 'auto' }), { 'margin-bottom': null });
+  assert.deepEqual(marginAxisWrite(null, { 'margin-top': '2rem' }), {});
+});
+
+test('positionAxes: a plain block parent places nothing and no upgrade rides in', () => {
+  // A field inside a block wrapper: nothing places the child, and a
+  // container parent is always flex, so there is no display to give.
+  // Both rows render disabled with the plain-flow reason (the parent
+  // places nothing; no gesture is prescribed).
   const axes = positionAxes({ display: 'block' });
-  assert.equal(axes.vertical.write, 'upgrade');
-  assert.equal(axes.horizontal.write, 'upgrade');
+  assert.equal(axes.vertical.write, 'none');
+  assert.equal(axes.horizontal.write, 'none');
   assert.equal(axes.vertical.property, 'align-self');
   assert.equal(axes.horizontal.property, 'justify-self');
 });
 
 test('positionAxes: exotic parent displays place nothing basic can offer', () => {
-  // Upgrading a non-block box to grid is not a near-no-op; both rows
-  // render disabled rather than guessing.
   ['inline', 'inline-block', 'flow-root', 'table', 'list-item'].forEach((display) => {
     const axes = positionAxes({ display });
     assert.equal(axes.vertical.write, 'none', display);
@@ -513,8 +565,7 @@ test('positionAxes: exotic parent displays place nothing basic can offer', () =>
 
 test('positionAxes: unknown parent facts degrade to plain local writes', () => {
   // Reached only when a value is already set (positionGate hides the
-  // widget otherwise): the set value stays visible and unsettable, and no
-  // companion is ever guessed.
+  // widget otherwise): the set value stays visible and unsettable.
   [null, undefined, {}, { display: '' }].forEach((parent) => {
     const axes = positionAxes(parent);
     assert.equal(axes.vertical.write, 'local');
@@ -557,22 +608,6 @@ test('positionGate: the widget needs a KNOWN parent context', () => {
   assert.equal(positionGate({ hasText: true }, undefined), false);
   assert.equal(positionGate(null, {}), false);
   assert.equal(positionGate(null, { display: '' }), false);
-});
-
-test('positionUpgrade: the companion needs the real parent box and a free display', () => {
-  const parent = { key: 'region:s1:content', isSelectable: true, display: 'block' };
-  assert.equal(positionUpgrade(parent, null), true);
-  assert.equal(positionUpgrade(parent, undefined), true);
-  assert.equal(positionUpgrade(parent, ''), true);
-  // A committed display — even 'block' — was chosen deliberately and is
-  // never clobbered (the layout widget's stack-upgrade rule).
-  assert.equal(positionUpgrade(parent, 'block'), false);
-  assert.equal(positionUpgrade(parent, 'flex'), false);
-  // Wrapper markup between the child and the selectable ancestor: the
-  // grid would land on the ancestor, not the layout parent. No companion.
-  assert.equal(positionUpgrade({ ...parent, isSelectable: false }, null), false);
-  assert.equal(positionUpgrade({ ...parent, key: null }, null), false);
-  assert.equal(positionUpgrade(null, null), false);
 });
 
 test('parentAlignment: a local align-self owns the axis, no attribution', () => {
@@ -661,15 +696,21 @@ test('boundGapGate: the page\'s Gap opens on two bands and closes on one', () =>
 
 test('FALLBACKS: one built-in vocabulary per property, both modes', () => {
   // The padding family shares the spacing steps (the field row and the
-  // box-model diagram's side cells scrub one scale); gap has its own px
-  // steps, value-only (px spelling as id, commit and only alias), the
+  // box-model diagram's side cells scrub one scale); gap has its own rem
+  // steps, value-only (rem spelling as id, commit and only alias; zero
+  // bare, matching every unit's zero like the spacing table's), the
   // table the Layout section's row and the Advanced gap row both read.
   ['padding-top', 'padding-right', 'padding-bottom', 'padding-left'].forEach((longhand) => {
     assert.equal(FALLBACKS[longhand], SPACING_STEPS, `${longhand} shares padding's steps`);
   });
-  assert.deepEqual(GAP_STOPS, [0, 8, 16, 24, 40].map((px) => ({
-    id: `${px}px`, value: `${px}px`, matches: [`${px}px`], label: `${px}px`,
-  })));
+  assert.deepEqual(GAP_STOPS, [
+    { id: '0', value: '0', matches: ['0', '0px', '0rem', '0em'], label: '0' },
+    ...['0.5rem', '1rem', '1.5rem', '2.5rem'].map((rem) => ({
+      id: rem, value: rem, matches: [rem], label: rem,
+    })),
+  ]);
+  assert.deepEqual(segmentState('0px', GAP_STOPS), { selected: '0', custom: false }, 'the container declaration\'s `gap: 0px` floor lights the zero stop');
+  assert.deepEqual(segmentState('8px', GAP_STOPS), { selected: null, custom: true }, 'a px gap is honestly custom under the rem table');
   // No entry for the properties that never had a built-in vocabulary.
   assert.equal(FALLBACKS.margin, undefined);
   assert.equal(FALLBACKS.color, undefined);
@@ -687,6 +728,14 @@ test('fallbackFor: the property table wins; the shape rule answers the rest', ()
   assert.deepEqual(fallbackFor(paletteGuide, paletteMaterials, 'color', { type: 'color' }), paletteFallback(paletteGuide, paletteMaterials));
   assert.deepEqual(fallbackFor(paletteGuide, paletteMaterials, 'outline-color', { type: 'color' }).map((stop) => stop.value), ['var(--color-accent)', 'var(--color-surface)', 'var(--swatch-brand_red)']);
   assert.deepEqual(fallbackFor(paletteGuide, paletteMaterials, 'background-image', { type: 'text', media: true }), gradientFallback(paletteGuide, paletteMaterials));
+  // The offer follows the type; the media flag adds the picker. A
+  // keyword-typed media definition (content: `""`, `none` or one media
+  // token) offers its keywords, never the gradient swatches the server
+  // refuses there, though the same store holds a gradient.
+  assert.deepEqual(fallbackFor(paletteGuide, paletteMaterials, 'content', { type: 'keyword', keywords: ['""', 'none'], media: true }), [
+    { id: '""', value: '""', matches: ['""'], label: '""' },
+    { id: 'none', value: 'none', matches: ['none'], label: 'none' },
+  ]);
   assert.deepEqual(gradientFallback(paletteGuide, paletteMaterials), [{
     id: 'var(--swatch-hero_fade)',
     value: 'var(--swatch-hero_fade)',
@@ -706,6 +755,23 @@ test('fallbackFor: the property table wins; the shape rule answers the rest', ()
   assert.deepEqual(fallbackFor(null, EMPTY_MATERIALS, 'font-family', { type: 'family' }), []);
   assert.deepEqual(fallbackFor(null, EMPTY_MATERIALS, 'mystery', null), []);
   assert.deepEqual(fallbackFor(null, EMPTY_MATERIALS, 'display', { type: 'keyword', keywords: [] }), []);
+});
+
+test('imageSlot: the gradient half of a media row follows the type', () => {
+  // The advanced row's media control comes from the flag (the library
+  // chip on every media definition); its gradient half (the `{}` grid,
+  // the gradient opener) and the code view's swatch completions come
+  // from the type: a free <image> slot takes a gradient, a keyword-typed
+  // one (content) takes its keywords or one token and nothing else.
+  assert.equal(imageSlot({ type: 'text', media: true }), true);
+  assert.equal(imageSlot({ type: 'image', media: true }), true);
+  assert.equal(imageSlot({ type: 'keyword', keywords: ['""', 'none'], media: true }), false);
+  // No flag, no slot: a color or keyword row never reads as an image.
+  assert.equal(imageSlot({ type: 'text' }), false);
+  assert.equal(imageSlot({ type: 'color' }), false);
+  assert.equal(imageSlot({ type: 'keyword', keywords: ['block'] }), false);
+  assert.equal(imageSlot(null), false);
+  assert.equal(imageSlot(undefined), false);
 });
 
 test('propertyStops: stopsFor over the property\'s one fallback', () => {

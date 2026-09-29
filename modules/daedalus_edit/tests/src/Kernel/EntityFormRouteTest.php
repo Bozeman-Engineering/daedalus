@@ -63,6 +63,7 @@ class EntityFormRouteTest extends KernelTestBase {
     'daedalus_tempstore',
     'daedalus_blueprint',
     'daedalus_blueprint_api',
+    'file',
     'daedalus_ui',
     'field_sample_value',
     'daedalus_edit',
@@ -155,7 +156,7 @@ class EntityFormRouteTest extends KernelTestBase {
     // save submit became the hidden Update button of the tempstore
     // pipeline, and the empty-field reporting input rides the form.
     $this->assertStringContainsString('daedalus-edit-update-button', $html, 'The submit is the inline-editing Update button.');
-    $this->assertStringContainsString('id="empty-field"', $html, 'The empty-field reporting input rides the form.');
+    $this->assertStringNotContainsString('empty-field', $html, 'No hidden transport inputs ride the form: a commit names its field on the request.');
   }
 
 }

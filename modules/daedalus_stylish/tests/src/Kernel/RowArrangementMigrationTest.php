@@ -233,7 +233,7 @@ class RowArrangementMigrationTest extends NestedStorageKernelTestBase {
     $this->assertSame([
       'variants' => [
         ['variant' => 'container_lg', 'fragment' => ''],
-        ['variant' => 'row', 'fragment' => ''],
+        ['variant' => 'columns', 'fragment' => ''],
       ],
     ], $map['container:' . self::HERO_UUID]);
     $this->assertSame(['default' => ['align-content' => 'center']], $map['container:' . self::HERO_TEXT_UUID]);
@@ -279,12 +279,12 @@ class RowArrangementMigrationTest extends NestedStorageKernelTestBase {
 
     // 67/33 is the frozen 2:1 - the wider child carries grow 2, the equal
     // child stays unwritten (weight 1 is spelled by NOT writing).
-    $this->assertSame(['variants' => [['variant' => 'row', 'fragment' => '']]], $map["container:$section_uuid"]);
+    $this->assertSame(['variants' => [['variant' => 'columns', 'fragment' => '']]], $map["container:$section_uuid"]);
     $this->assertSame(['default' => ['flex-grow' => '2']], $map["container:$wide"]);
     $this->assertArrayNotHasKey("block:$narrow", $map);
 
     // 25/50/25: only the middle child deviates from equal.
-    $this->assertSame(['variants' => [['variant' => 'row', 'fragment' => '']]], $map["container:$middle_uuid"]);
+    $this->assertSame(['variants' => [['variant' => 'columns', 'fragment' => '']]], $map["container:$middle_uuid"]);
     $this->assertArrayNotHasKey("block:{$blocks[0]}", $map);
     $this->assertSame(['default' => ['flex-grow' => '2']], $map["block:{$blocks[1]}"]);
     $this->assertArrayNotHasKey("block:{$blocks[2]}", $map);
@@ -348,7 +348,7 @@ class RowArrangementMigrationTest extends NestedStorageKernelTestBase {
     // the row sweep, so the surviving width properties land on the ROOT
     // key (the container is one box).
     $this->assertSame([
-      'variants' => [['variant' => 'row', 'fragment' => '']],
+      'variants' => [['variant' => 'columns', 'fragment' => '']],
       'default' => [
         'width' => '100%',
         'max-width' => '80rem',
@@ -361,7 +361,7 @@ class RowArrangementMigrationTest extends NestedStorageKernelTestBase {
 
     // The shadowed container: the override's 2:1 wins, the retiring
     // reference drops, the part entry empties away entirely.
-    $this->assertSame(['variants' => [['variant' => 'row', 'fragment' => '']]], $map["container:$shadowed_uuid"]);
+    $this->assertSame(['variants' => [['variant' => 'columns', 'fragment' => '']]], $map["container:$shadowed_uuid"]);
     $this->assertArrayNotHasKey("container:$shadowed_uuid" . ContainerMigration::CONTAINER_PART, $map);
     $this->assertSame(['default' => ['flex-grow' => '2']], $map["block:{$shadowed_children[0]}"]);
     $this->assertArrayNotHasKey("block:{$shadowed_children[1]}", $map);
@@ -565,7 +565,7 @@ class RowArrangementMigrationTest extends NestedStorageKernelTestBase {
     $storage->resetCache();
     $component = $storage->loadUnchanged($stencil->id())->getElement();
 
-    $this->assertSame(['variants' => ['container_lg', 'row'], 'default' => ['background-color' => 'aliceblue']], $component['styles']['']);
+    $this->assertSame(['variants' => ['container_lg', 'columns'], 'default' => ['background-color' => 'aliceblue']], $component['styles']['']);
     $children = $component['regions']['content'];
     $this->assertArrayNotHasKey('styles', $children[0]);
     $this->assertSame(['' => ['default' => ['flex-grow' => '2']]], $children[1]['styles']);

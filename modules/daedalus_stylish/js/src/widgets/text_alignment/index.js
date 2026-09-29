@@ -1,8 +1,9 @@
 import { h } from 'preact';
-import { controlWidgets } from '../../controls.js';
+import { controlWidgets, litValues } from '../../controls.js';
 import { textGate } from '../../widget-values.js';
 import { ChoiceRow } from '../lib/choice-row.js';
 import { ALIGNMENT_ICONS } from '../lib/alignment-icons.js';
+import { styleTarget } from '../lib/use-highlight.js';
 import { widgetClasses } from '../lib/widget-classes.js';
 
 /**
@@ -33,6 +34,7 @@ const TextAlignment = ({
   model,
   guide,
   materials,
+  source,
   onPreview,
   onRelease,
   onCommit,
@@ -43,15 +45,19 @@ const TextAlignment = ({
     <ChoiceRow
       guide={guide}
       materials={materials}
+      source={source}
+      highlight={styleTarget(model.keys['text-align'])}
       condition={model.condition}
       label={model.label}
       property="text-align"
-      value={model.values['text-align']}
+      value={litValues(model.reads)['text-align']}
       definition={model.propertyDefinitions?.['text-align'] ?? {}}
       constraints={model.constraints?.['text-align'] ?? {}}
-      entry={model.entry}
-      provenance={model.provenance}
+      stack={model.stacks['text-align']}
+      read={model.reads['text-align']}
       icons={ALIGNMENT_ICONS['text-align']}
+      disabled={Boolean(model.withheld?.['text-align'])}
+      disabledTitle={model.withheld?.['text-align'] ?? null}
       onPickCondition={onPickCondition}
       onOpenDocument={onOpenDocument}
       onPreview={onPreview}

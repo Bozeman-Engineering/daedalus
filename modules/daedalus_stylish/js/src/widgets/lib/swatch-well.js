@@ -3,7 +3,6 @@ import { Face } from '../../face.js';
 import { facePair } from '../../materials.js';
 import { MediaGlyph } from '../../media-button.js';
 import { stopTitle, usePalettePopover } from '../../palette-picker.js';
-import { ghostFace } from '../../choice-row-model.js';
 import { wellFace } from './swatch-well-model.js';
 
 /**
@@ -15,20 +14,22 @@ import { wellFace } from './swatch-well-model.js';
  * open (user-mintable, gradient kinds appended), shared by every
  * color-bearing widget, and clipped at narrow sidebar widths: so the
  * enumeration moves into a popover and the row keeps only the WELL, a
- * face button wearing the row's current value: the selected stop's paint
- * (split face for scheme pairs, the shared Face renderer), the media
- * thumbnail when the selected stop is the synthetic media entry
- * (wellFace's media kind — the Background widget's url('media:…')
- * posture), the painted LITERAL face for a lone inline color no stop
- * represents (the value wears its own paint from the one face-paint rule,
- * under a custom marker), the honest "?" custom face for an opaque
- * compound (the old custom pill's message rides its tooltip), the muted
- * GHOST face when nothing is set but a resting value reaches the row
- * (the matching stop's paint or the raw value's own under a dashed ring,
- * titled "Unset; X applies": the skin's default, or the Base value at a
- * pose, the same raw read the row's mark tells its story from), or the
- * slashed empty face when unset with nothing resting. The well stays a
- * pure OFFER: it never becomes a select of its own value.
+ * face button wearing the row's shown value (the winner's at the pose,
+ * whichever layer delivers it: the skin's default lights its stop the
+ * way an own value does): the selected stop's paint (split face for
+ * scheme pairs, the shared Face renderer), the media thumbnail when the
+ * selected stop is the synthetic media entry (wellFace's media kind —
+ * the Background widget's url('media:…') posture), the painted LITERAL
+ * face for a lone inline color no stop represents (the value wears its
+ * own paint from the one face-paint rule, under a custom marker), the
+ * painted gradient face when the selected stop is the synthetic gradient
+ * entry (wellFace's gradient kind, the Background widget's lone-literal
+ * posture: the same paint rule and marker, lit in the grid so its toggle
+ * is the unpick, the gradient lane edits it in place), the honest "?"
+ * custom face for an opaque compound (the old custom pill's
+ * message rides its tooltip), or the slashed empty face when no layer
+ * delivers. The well stays a pure OFFER: it never becomes a select of
+ * its own value.
  *
  * The well IS the control: its popover carries the palette grid, then
  * the consumer's self-labelled lane row (the color picker, the gradient
@@ -56,12 +57,6 @@ import { wellFace } from './swatch-well-model.js';
  *   The row's mapped state (segmentState or a two-property twin).
  * @param {?string} options.custom
  *   The raw unrepresentable value for the custom face's tooltip, or null.
- * @param {?string} [options.ghost]
- *   The RAW resting value beneath an unset row (choice-row-model.js
- *   restingValue, the var() spelling kept), or null: the ghost face's
- *   paint and title. Ignored while the state is set.
- * @param {string} [options.condition]
- *   The editing compound (the pose) the ghost's title faces at.
  * @param {?object} [options.guide]
  *   The style guide payload (the literal face paints through the
  *   materials' face-paint rule).
@@ -79,9 +74,11 @@ import { wellFace } from './swatch-well-model.js';
  * @param {?object} [options.below]
  *   What flows under the grid and the lanes (usePalettePopover's
  *   `below`: the mint row).
- * @param {?string} [options.customTitle]
- *   Overrides the custom face's tooltip (a consumer with its own edit
- *   path tells that story).
+ * @param {boolean} [options.disabled]
+ *   Renders the well inert (the panel's write address withholds the
+ *   property); `disabledTitle` is the reason, riding the well's hover
+ *   title. The face still renders honestly.
+ * @param {?string} [options.disabledTitle]
  *
  * @return {{open: boolean, face: object, well: object, popover: ?object}}
  *   The well button and the (open ? mounted : null) popover, as vnodes
@@ -91,15 +88,14 @@ export const useSwatchWell = ({
   stops,
   state,
   custom,
-  ghost = null,
-  condition = 'default',
   guide = null,
   materials = null,
   closed = false,
   onPick,
   lanes = [],
   below = null,
-  customTitle = null,
+  disabled = false,
+  disabledTitle = null,
 }) => {
   const { open, triggerProps, popover } = usePalettePopover({
     stops,
@@ -108,9 +104,9 @@ export const useSwatchWell = ({
     lanes,
     below,
   });
-  const face = wellFace(stops, state, ghost);
+  const face = wellFace(stops, state);
   // A value's own paint (nested references substituted from roster data)
-  // for the literal face and a ghost no stop represents.
+  // for the literal face.
   const paintOf = (value) =>
     materials !== null
       ? facePair(guide, materials, value)
@@ -118,57 +114,48 @@ export const useSwatchWell = ({
   const literalPair =
     face.kind === 'literal'
       ? paintOf(face.literal)
-      : { paint: null, paintDark: null };
-  const ghostPair = (() => {
-    if (face.kind !== 'ghost') {
-      return { paint: null, paintDark: null };
-    }
-    return face.stop !== null
-      ? {
-          paint: face.stop.paint ?? face.stop.value,
-          paintDark: face.stop.paintDark ?? null,
-        }
-      : paintOf(face.literal);
-  })();
+      : face.kind === 'gradient'
+        ? paintOf(face.gradient)
+        : { paint: null, paintDark: null };
 
   const wellTitle = (() => {
     switch (face.kind) {
       case 'literal':
-        return (
-          customTitle ??
-          (closed
-            ? Drupal.t(
-                "A custom color is set: !value. This property's palette is closed here, so pick a swatch to replace it.",
-                { '!value': face.literal },
-              )
-            : Drupal.t(
-                'A custom color is set: !value. Open the well to edit it, or pick a swatch to replace it.',
-                { '!value': face.literal },
-              ))
-        );
+        return closed
+          ? Drupal.t(
+              "A custom color is set: !value. This property's palette is closed here, so pick a swatch to replace it.",
+              { '!value': face.literal },
+            )
+          : Drupal.t(
+              'A custom color is set: !value. Open the well to edit it, or pick a swatch to replace it.',
+              { '!value': face.literal },
+            );
+      case 'gradient':
+        return closed
+          ? Drupal.t(
+              "A custom gradient is set: !value. This property's palette is closed here, so pick a swatch to replace it.",
+              { '!value': face.gradient },
+            )
+          : Drupal.t(
+              'A custom gradient is set: !value. Its lit chip in the palette unsets it; open the well to edit it, or pick a swatch to replace it.',
+              { '!value': face.gradient },
+            );
       case 'custom':
-        return (
-          customTitle ??
-          (closed
-            ? Drupal.t(
-                "A value the palette cannot represent is set: !value. This property's palette is closed here, so pick a swatch to replace it.",
-                { '!value': custom },
-              )
-            : Drupal.t(
-                'A value the palette cannot represent is set: !value. Open the well to replace it.',
-                { '!value': custom },
-              ))
-        );
+        return closed
+          ? Drupal.t(
+              "A value the palette cannot represent is set: !value. This property's palette is closed here, so pick a swatch to replace it.",
+              { '!value': custom },
+            )
+          : Drupal.t(
+              'A value the palette cannot represent is set: !value. Open the well to replace it.',
+              { '!value': custom },
+            );
       case 'media':
         return Drupal.t(
           'An image from the media library. Its lit chip in the palette unsets it; any other pick replaces it.',
         );
       case 'stop':
         return stopTitle(face.stop);
-      case 'ghost':
-        return Drupal.t('Unset; !value applies', {
-          '!value': ghostFace(guide, materials, ghost, condition),
-        });
       default:
         return Drupal.t('Pick a palette value');
     }
@@ -179,7 +166,8 @@ export const useSwatchWell = ({
       {...triggerProps}
       type="button"
       className={`daedalus-stylish-swatch-well daedalus-stylish-swatch-well--${face.kind}${open ? ' daedalus-stylish-swatch-well--open' : ''}`}
-      title={wellTitle}
+      title={disabled ? (disabledTitle ?? undefined) : wellTitle}
+      disabled={disabled}
     >
       {face.kind === 'stop' && (
         <Face
@@ -188,26 +176,15 @@ export const useSwatchWell = ({
           paintDark={face.stop.paintDark}
         />
       )}
-      {/* The literal face: the value's own paint (nested references
-          substituted from roster data) under the custom marker the
-          modifier class draws, so a custom color reads as a color, not
-          a question mark. */}
-      {face.kind === 'literal' && (
+      {/* The literal and gradient faces: the value's own paint (nested
+          references substituted from roster data) under the custom
+          marker the modifier class draws, so a custom color or gradient
+          reads as itself, not a question mark. */}
+      {(face.kind === 'literal' || face.kind === 'gradient') && (
         <Face
           className="daedalus-stylish-swatch-well__face"
           paint={literalPair.paint}
           paintDark={literalPair.paintDark}
-        />
-      )}
-      {/* The ghost face: the resting value's paint (the matching stop's,
-          else the raw value's own) rendered muted by the modifier class,
-          so an unset well shows what applies without claiming a value
-          is set. */}
-      {face.kind === 'ghost' && (
-        <Face
-          className="daedalus-stylish-swatch-well__face"
-          paint={ghostPair.paint}
-          paintDark={ghostPair.paintDark}
         />
       )}
       {/* The media face: the resolved thumbnail, or the photo glyph when

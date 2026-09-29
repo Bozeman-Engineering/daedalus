@@ -31,13 +31,13 @@ use Symfony\Component\DependencyInjection\ContainerInterface;
  * envelope and follows the leader's deltas over the materials wire; there
  * is no snapshot of materials in the pairing protocol.
  *
- * The window should read as a floating panel, not a page, so page chrome is
- * suppressed server-side on this route from both sources: block chrome via
- * daedalus_ui's PopoutPageVariant (the route declares the
- * _daedalus_ui.popout option, which forces the simple_page display
- * variant) and
- * page_top chrome — navigation rail, toolbar, sidebar toggles — via
- * PopoutHooks (empties page_top after every contributor has run).
+ * The window should read as a floating panel, not a page. The route
+ * declares daedalus_ui's _daedalus_ui.popout option, and that one line is
+ * its whole chrome story: daedalus_ui renders every pop-out as a
+ * chromeless document (Chromeless; the pop-out display variant drops the
+ * block chrome, DaedalusUiHooks::preprocessHtml drops the page_top and
+ * page_bottom chrome and everything it attaches). Nothing here is
+ * per-pop-out.
  */
 final class InspectorPopout extends ControllerBase {
 

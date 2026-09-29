@@ -14,31 +14,15 @@
 /**
  * This editor's own widget control: the text format picker. The
  * widget-popover grammar ships its CSS with daedalus_edit
- * (css/verb-widgets.css); these pieces mirror the text block's tag picker
- * so the composed editors read as one system.
+ * (css/verb-widgets.css); the picker itself is the kit's segmented control
+ * (daedalus_ui/panel_controls: .daedalus-ui-segments track,
+ * .daedalus-ui-segment buttons, --active for the pressed format), the same
+ * recipe as the text block's tag picker, so the composed editors read as
+ * one system. Only what the kit cannot know is here.
  */
-.daedalus-edit-format-picker {
-  gap: 2px;
-}
 
+/* A format label is a phrase ("Basic HTML"); never let one wrap inside its
+   segment. */
 .daedalus-edit-format-picker__format {
-  margin: 0;
-  padding: 6px 8px;
-  cursor: pointer;
   white-space: nowrap;
-  color: #222;
-  border: 0;
-  /* Concentric with the popover: its radius minus the 6px inset. */
-  border-radius: calc(var(--daedalus-border-radius) - 6px);
-  background: transparent;
-  font: inherit;
-}
-
-.daedalus-edit-format-picker__format:hover {
-  background-color: #f0f0f0;
-}
-
-.daedalus-edit-format-picker__format[aria-pressed="true"] {
-  color: var(--daedalus-selection-text);
-  background-color: var(--daedalus-selection);
 }

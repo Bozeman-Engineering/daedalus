@@ -1,0 +1,30 @@
+# The Explode panel and its canvas host: one bundle (js/src/index.js) that
+# registers the daedalus_explode sidebar plugin type through the
+# DaedalusUiQueue seam. Attached by ExplodeSidebar::build(), so it rides
+# only where the panel renders. The canvas rules (stage, lift, labels) are
+# printed into one <style> at runtime, never static: css/explode.css is the
+# panel's own chrome only.
+explode:
+  js:
+    js/dist/explode.bundle.js: { minified: true, attributes: { type: 'module' } }
+  css:
+    component:
+      # Editor chrome must never lose to page CSS: exempt from the
+      # daedalus_stylish_layers wrapper layer so it competes unlayered.
+      css/explode.css: { daedalus_stylish_layers_exempt: true }
+  dependencies:
+    - core/drupal
+    - core/drupalSettings
+    # The root this bundle registers under (Drupal.Daedalus.DefaultSidebar,
+    # Drupal.Daedalus.SidebarManager live on it).
+    - daedalus_ui/daedalus
+    # explode.css consumes the --daedalus-* tokens.
+    - daedalus_ui/variables
+    # The panel's controls wear the shared panel kit (pill buttons, segments).
+    - daedalus_ui/panel_controls
+    # The controls label themselves through the chrome tooltip spine
+    # (data-daedalus-ui-tooltip); the engine must be attached to this document.
+    - daedalus_ui/tooltip
+    # js/src/log.js grabs Drupal.Daedalus.logger at bundle load; the
+    # dependency is what guarantees logging.js is there by then.
+    - daedalus_ui/logging

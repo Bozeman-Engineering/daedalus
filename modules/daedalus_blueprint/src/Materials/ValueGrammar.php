@@ -20,12 +20,14 @@ namespace Drupal\daedalus_blueprint\Materials;
  * The grammar owns no vocabulary of its own: material spellings come from
  * the roster (the provider is the one place that knows "--swatch-" or
  * that a width-axis variant spells as an attribute), so resolution is an
- * exact-match index lookup per slot plus the three inline syntaxes the
- * spine defines here: a literal (anything else), url('media:<uuid>') and
- * url('generate:<prompt>').
+ * exact-match index lookup per slot plus the four inline syntaxes the
+ * spine defines here: a literal (anything else), url('media:<uuid>'),
+ * url('generate:<prompt>') and url('file:<name>') (a file the
+ * conversation holds, by the name the model knows it under).
  *
  * Slots (MaterialRecord::SLOT_*): "style" holds a CSS declaration value
- * (tokens and swatches by var(), media and generate by url(), literals);
+ * (tokens and swatches by var(), media, generate and file by url(),
+ * literals);
  * "class" holds one class token (style-axis variants);
  * "attr:{scope}:{name}" holds an axis attribute's value on one variant
  * scope (axis variants: the same attribute value on the container kind
@@ -63,13 +65,15 @@ final class ValueGrammar {
 
   private const MEDIA_PREFIX = 'media:';
   private const GENERATE_PREFIX = 'generate:';
+  private const FILE_PREFIX = 'file:';
 
   /**
    * Resolves a value in a slot to what it is.
    *
    * The whole value is the reference: a style value that is exactly one
    * var() resolves to the material spelled so (or Unknown); exactly one
-   * url('media:…') / url('generate:…') resolves to the inline kind; any
+   * url('media:…') / url('generate:…') / url('file:…') resolves to the
+   * inline kind; any
    * other style value is a literal, even when references sit inside it
    * (references() lists those). A class token, an axis attribute value,
    * a stencil name and an animation name resolve to the variant, stencil
@@ -98,10 +102,10 @@ final class ValueGrammar {
    * Every reference a value carries, in source order.
    *
    * A style value yields each var() reference (with or without a
-   * fallback) and each media or generate url() inside it, so a compound
-   * like "1px solid var(--swatch-x)" or "linear-gradient(…),
+   * fallback) and each media, generate or file url() inside it, so a
+   * compound like "1px solid var(--swatch-x)" or "linear-gradient(…),
    * url('media:…')" is checked reference by reference; a plain url()
-   * (a file URL) is no reference and is not listed. A class list yields
+   * (a path or an external URL) is no reference and is not listed. A class list yields
    * one reference per whitespace-separated token. An attribute value, a
    * stencil name or an animation name yields its one reference. Literals
    * never appear here:
@@ -137,10 +141,11 @@ final class ValueGrammar {
    * The one rewrite rule behind every parse and every print (the dialect
    * parser's media-token canonicalization and the client's token builders
    * were copies of it): in a style value each var() head is normalized
-   * (whitespace dropped, a fallback left untouched) and each media or
-   * generate url() is respelled single-quoted with a lowercased uuid or a
-   * trimmed prompt, whatever quoting it carried; everything else in the
-   * value, a file url() included, stays byte-identical. A class list
+   * (whitespace dropped, a fallback left untouched) and each media,
+   * generate or file url() is respelled single-quoted with a lowercased
+   * uuid, a trimmed prompt or a trimmed name, whatever quoting it carried;
+   * everything else in the value, a plain url() included, stays
+   * byte-identical. A class list
    * canonicalizes to its tokens joined by one space; an attribute value,
    * a stencil name or an animation name to its trimmed self. Unknown
    * references keep their
@@ -195,6 +200,16 @@ final class ValueGrammar {
   }
 
   /**
+   * The canonical spelling of a file reference: url('file:<name>').
+   *
+   * The name is the handle the conversation knows the file under (the
+   * saved filename), kept case-exact: file aliases are exact-match.
+   */
+  public static function spellFile(string $name): string {
+    return sprintf("url('file:%s')", trim($name));
+  }
+
+  /**
    * Whether a slot name is one the grammar resolves.
    */
   public static function isSlot(string $slot): bool {
@@ -223,9 +238,10 @@ final class ValueGrammar {
    *
    * Reading is quote- and case-agnostic on the prefix (values stored
    * before the single-quote canon keep resolving); the spelling returned
-   * is canonical. A generate request with an empty prompt still resolves
-   * as a generate request (an empty id): what it IS is settled here, and
-   * whether it is acceptable is the consumer's rule.
+   * is canonical. A generate request with an empty prompt (or a file
+   * reference with an empty name) still resolves as that kind (an empty
+   * id): what it IS is settled here, and whether it is acceptable is the
+   * consumer's rule.
    */
   private static function urlReference(string $argument): ?ValueReference {
     $argument = trim($argument);
@@ -237,6 +253,10 @@ final class ValueGrammar {
     if (str_starts_with($lower, self::GENERATE_PREFIX)) {
       $prompt = trim(substr($argument, strlen(self::GENERATE_PREFIX)));
       return new ValueReference(ValueKind::Generate, $prompt, self::spellGenerate($prompt));
+    }
+    if (str_starts_with($lower, self::FILE_PREFIX)) {
+      $name = trim(substr($argument, strlen(self::FILE_PREFIX)));
+      return new ValueReference(ValueKind::File, $name, self::spellFile($name));
     }
     return NULL;
   }

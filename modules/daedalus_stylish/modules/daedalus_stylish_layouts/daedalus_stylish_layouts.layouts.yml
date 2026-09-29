@@ -3,7 +3,7 @@
 # this is the only layout the page builder offers.
 #
 # daedalus_stylish_container is the container model's layout: arrangement is styling
-# on the container (the row variant + width variants, child grows),
+# on the container (the columns variant + width variants, child grows),
 # grouping is nesting, so column COUNT is never plugin identity.
 #
 # No template and no theme hook: the universal container kind declaration

@@ -7,6 +7,7 @@ namespace Drupal\daedalus_stylish;
 use Drupal\Core\Entity\FieldableEntityInterface;
 use Drupal\Core\Field\FieldDefinitionInterface;
 use Drupal\daedalus_blueprint\FieldHandler\FieldHandlerResult;
+use Drupal\daedalus_blueprint\Materials\RelativeSelector;
 use Drupal\daedalus_blueprint\Materials\DistroLock;
 use Drupal\daedalus_blueprint\Materials\MaterialsRosterBuilder;
 use Drupal\daedalus_blueprint\Result\BlueprintError;
@@ -30,7 +31,7 @@ use Drupal\daedalus_stylish\Vocabulary\VocabularyRosterBuilder;
  * prose generator (VocabularyProse), never a projection of its own.
  *
  * A sibling of StyleMapFieldHandler, deliberately: the key grammar differs
- * ('' for the root element plus '::.class-name' sub-elements, vs full
+ * ('' for the root element plus '::selector' relatives, vs full
  * selectable keys) and validation reads the vocabulary roster of the
  * variant's DECLARED scope, never an address derived from a host entity's
  * layout. The scope is read from the submitted sibling fields first (the
@@ -117,7 +118,7 @@ class VariantStylesFieldHandler extends StyleMapFieldHandler {
     }
     if (!is_array($value) || (array_is_list($value) && $value !== [])) {
       return new FieldHandlerResult(NULL, [
-        new BlueprintError("fields.$field_name", 'INVALID_VARIANT_STYLES', 'The variant styles are not an object of element-relative keys.', [], 'Provide an object mapping element-relative keys to style entries: "" for the root element, "::.class-name" for a sub-element, e.g. {"": {"default": {"padding": "2rem"}}}.'),
+        new BlueprintError("fields.$field_name", 'INVALID_VARIANT_STYLES', 'The variant styles are not an object of element-relative keys.', [], 'Provide an object mapping element-relative keys to style entries: "" for the root element, "::" plus a relative selector for a sub-element, its paragraphs, its children or a block type among them, e.g. {"": {"default": {"padding": "2rem"}}}. ' . RelativeSelector::GRAMMAR),
       ]);
     }
 
@@ -150,7 +151,7 @@ class VariantStylesFieldHandler extends StyleMapFieldHandler {
     // and the commit below only runs after validation succeeded, so
     // a failed write mints nothing. A variant authored with a handled
     // layer stores the resolved canonical string like any other value.
-    $resolution = $this->valueResolver->check($value, $entity instanceof FieldableEntityInterface ? $entity : NULL);
+    $resolution = $this->valueResolver->check($value, $entity instanceof FieldableEntityInterface ? $entity : NULL, (string) ($options['conversation'] ?? ''));
     if ($resolution->getErrors()) {
       return new FieldHandlerResult(NULL, array_map(
         static fn (BlueprintError $error) => $error->withPath(
@@ -314,7 +315,7 @@ class VariantStylesFieldHandler extends StyleMapFieldHandler {
     $lock = $this->distroLock->holds()
       ? ' Module-shipped variants are READ-ONLY (the distro lock): updating their styles is refused; to change such a look, create a NEW variant with the styles you want (copying the shipped variant\'s styles as a starting point if useful) and apply that instead.'
       : '';
-    return 'A variant\'s styles: an object of element-relative keys — "" for the variant\'s root element, "::.class-name" for a sub-element its scope declares — each mapping conditions to CSS properties, e.g. {"": {"default": {"padding": "2rem"}}, "::.cta-text": {"default": {"align-self": "center"}}}. Values are plain semantic CSS; "default" always applies. Media-capable properties accept url(\'media:<uuid>\') image media references here exactly as in the style map (store the token, never a file URL).' . $input_tier . ' The styles validate against the style guide declaration of the variant\'s scope field ("block_type:{bundle}", "block_plugin:{plugin_id}" for plugin blocks such as menus and site branding, "layout:{layout_id}", or "kind:{entity|container|field|block}"), so set scope in the same payload; the field schema\'s style_guide key says what is valid (its scopes catalog, bindings and deviations lines, guidance paragraph, and the condition names under conditions). An entry may also carry a "variants" reference list exactly like a style map entry ({"variants": [{"variant": "machine_name", "fragment": ""}]}, at most one reference per axis): applying the variant distributes each nested reference onto the element its entry\'s slot resolves to, stamped with this variant\'s id as its "via" (the style map\'s provenance: a later switch or removal of this variant removes what it distributed and nothing applied by hand); a nested reference here never carries "via" itself. A nested reference must name an EXISTING variant scoped to the slot\'s element kind, and reference chains must stay acyclic — a variant can never reference itself, directly or through other variants. A variant also carries an axis field, the axis it competes on within its scope: an element wears at most one variant per axis and composes variants across axes. Omit axis for the built-in "style" axis; a scope\'s style_guide.scopes entry lists its additional axes under variant_axes.' . $lock;
+    return 'A variant\'s styles: an object of element-relative keys ("" for the variant\'s root element, "::" plus a relative selector under it: "::.class-name" a sub-element its scope declares, "::p" its paragraphs, "::> *" its children, "::> pb-text" the text blocks among them) each mapping conditions to CSS properties, e.g. {"": {"default": {"padding": "2rem"}}, "::.cta-text": {"default": {"align-self": "center"}}}. Values are plain semantic CSS; "default" always applies. Media-capable properties accept url(\'media:<uuid>\') image media references here exactly as in the style map (store the token, never a file URL).' . $input_tier . ' The styles validate against the style guide declaration of the variant\'s scope field ("block_type:{bundle}", "block_plugin:{plugin_id}" for plugin blocks such as menus and site branding, "layout:{layout_id}", or "kind:{entity|container|field|block}"), so set scope in the same payload; the field schema\'s style_guide key says what is valid (its scopes catalog, bindings and deviations lines, guidance paragraph, and the condition names under conditions). An entry may also carry a "variants" reference list exactly like a style map entry ({"variants": [{"variant": "machine_name", "fragment": ""}]}, at most one reference per axis): applying the variant distributes each nested reference onto the element its entry\'s slot resolves to, stamped with this variant\'s id as its "via" (the style map\'s provenance: a later switch or removal of this variant removes what it distributed and nothing applied by hand); a nested reference here never carries "via" itself. A nested reference must name an EXISTING variant scoped to the slot\'s element kind, and reference chains must stay acyclic — a variant can never reference itself, directly or through other variants. A variant also carries an axis field, the axis it competes on within its scope: an element wears at most one variant per axis and composes variants across axes. Omit axis for the built-in "style" axis; a scope\'s style_guide.scopes entry lists its additional axes under variant_axes.' . $lock;
   }
 
   /**
@@ -327,8 +328,8 @@ class VariantStylesFieldHandler extends StyleMapFieldHandler {
   /**
    * {@inheritdoc}
    */
-  protected function stylableGrammar(): string {
-    return 'What each scope\'s element may style, by property name: an entry per scope value, its declared sub-elements ("{scope}::.class-name", the keys variant styles may carry) and its direct children ("{scope}::>"). A block type, block plugin, or layout scope absent here at one of those places styles exactly what its kind scope does there (kind:block; kind:container for layouts); a sub-element or children key absent here is not declared there.';
+  protected function stylableGrammar(?string $theme): string {
+    return 'What each scope\'s element may style, by property name: an entry per scope value, its declared sub-elements ("{scope}::.class-name", the keys variant styles may carry) and its direct children ("{scope}::> *"). A block type, block plugin, or layout scope absent here at one of those places styles exactly what its kind scope does there (kind:block; kind:container for layouts); a sub-element or children key absent here is not declared there. ' . $this->selectorGrammar('{scope}', $theme);
   }
 
   /**

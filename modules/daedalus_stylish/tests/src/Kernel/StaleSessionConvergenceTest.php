@@ -161,7 +161,7 @@ class StaleSessionConvergenceTest extends NestedStorageKernelTestBase {
     // ratio, so no child grows), and the emptied part entry is gone.
     $map = $staged->get(DaedalusStylishFieldManager::FIELD_NAME)->first()->getStyleMap();
     $this->assertSame([
-      'variants' => [['variant' => 'row', 'fragment' => '']],
+      'variants' => [['variant' => 'columns', 'fragment' => '']],
     ], $map['container:' . self::TWOCOL_UUID]);
     $this->assertArrayNotHasKey('container:' . self::TWOCOL_UUID . '::.daedalus-stylish-layout-container', $map);
     $this->assertArrayNotHasKey('section:' . self::TWOCOL_UUID . '::.daedalus-stylish-layout-container', $map);

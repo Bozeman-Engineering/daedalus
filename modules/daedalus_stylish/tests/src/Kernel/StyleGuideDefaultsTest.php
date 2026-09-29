@@ -55,6 +55,7 @@ class StyleGuideDefaultsTest extends KernelTestBase {
     'twig_events',
     'daedalus_tempstore',
     'daedalus_blueprint_api',
+    'file',
     'daedalus_ui',
     'daedalus_stylish',
     'daedalus_stylish_layouts',
@@ -103,7 +104,7 @@ class StyleGuideDefaultsTest extends KernelTestBase {
     $this->container->get('state')->set('daedalus_stylish_control_test.kinds', [
       'container' => [
         'default_variants' => [
-          'container_layout' => 'row',
+          'container_layout' => 'columns',
           'width' => ['variant' => 'container_site', 'depth' => StyleGuide::DEPTH_ROOT],
         ],
       ],
@@ -124,7 +125,7 @@ class StyleGuideDefaultsTest extends KernelTestBase {
 
     $catalog = $this->container->get('daedalus_blueprint.dialect_catalog_builder')->build();
     $this->assertSame('daedalus_stylish_container', $catalog->containerLayoutId());
-    $this->assertSame(['layout' => 'row', 'width' => 'container_site'], $catalog->birthDefaults(Address::layout('daedalus_stylish_container')), 'The layout answers the kind\'s defaults, spelled on the container tag.');
+    $this->assertSame(['layout' => 'columns', 'width' => 'container_site'], $catalog->birthDefaults(Address::layout('daedalus_stylish_container')), 'The layout answers the kind\'s defaults, spelled on the container tag.');
     $this->assertSame(['style' => 'media_card', 'proportions' => 'media_wide'], $catalog->birthDefaults(Address::blockType('media')), 'A block type\'s axis spells minus the type\'s prefix.');
     $this->assertSame([], $catalog->birthDefaults(Address::blockType('undeclared')));
     $this->assertSame(['h2', 'p'], $catalog->dressedTags(), 'Base scopes with entries, in the skin\'s order; element scopes and empty scopes are not tags.');
@@ -135,7 +136,7 @@ class StyleGuideDefaultsTest extends KernelTestBase {
     $this->container->get('daedalus_blueprint.dialect_catalog_builder')->reset();
     $catalog = $this->container->get('daedalus_blueprint.dialect_catalog_builder')->build();
     $this->assertSame([], $catalog->dressedTags());
-    $this->assertSame(['layout' => 'row', 'width' => 'container_site'], $catalog->birthDefaults(Address::layout('daedalus_stylish_container')));
+    $this->assertSame(['layout' => 'columns', 'width' => 'container_site'], $catalog->birthDefaults(Address::layout('daedalus_stylish_container')));
   }
 
   /**

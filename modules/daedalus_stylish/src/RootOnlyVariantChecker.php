@@ -31,7 +31,10 @@ use Drupal\daedalus_blueprint\Result\BlueprintError;
  * the picker, the dialect catalog and this gate read one stamp. A record
  * the roster does not carry is no opinion (the validator's existence
  * check ran first); a container the locator cannot place reads as root
- * (isNestedSection() degrades to the ungated posture).
+ * (isNestedSection() degrades to the ungated posture). A RULE key
+ * ("{key}::{selector}") is refused for every root-only record whatever
+ * its owner's depth: a rule wears at its matches, and the matches of a
+ * rule are inside the owner, never top-level.
  *
  * Gesture only, like the seam: the validator stays depth-blind on
  * references (a whole-map write cannot tell a new reference from an old
@@ -57,7 +60,7 @@ class RootOnlyVariantChecker implements VariantApplicabilityCheckerInterface {
    */
   public function check(DaedalusStylishVariantInterface $variant, FieldableEntityInterface $entity, string $key): array {
     $parsed = $this->validator->parseKey($key);
-    if ($parsed === NULL || $parsed['kind'] !== 'container') {
+    if ($parsed === NULL || ($parsed['selector'] === NULL && $parsed['kind'] !== 'container')) {
       return [];
     }
     $name = $variant->getMachineName();
@@ -65,14 +68,20 @@ class RootOnlyVariantChecker implements VariantApplicabilityCheckerInterface {
     if ($record === NULL || !$record->rootOnly()) {
       return [];
     }
+    $context = ['variant' => $name, 'axis' => $variant->getAxis()];
+    // A rule's matches are never top-level: whatever the rule's owner, the
+    // elements it reaches sit inside that owner, so a root-only wearing
+    // at any rule is refused before depth is even asked.
+    if ($parsed['selector'] !== NULL) {
+      return [
+        new BlueprintError('variant', 'VARIANT_ROOT_ONLY', sprintf('The "%s" variant applies to top-level containers only, and "%s" is a rule: a rule\'s matches are never top-level.', $name, $key), $context, 'Set it on the outermost container itself (its key without "::"), or wear a variant on an axis the container offers at every depth at the rule.'),
+      ];
+    }
     if (!$this->elementLocator->isNestedSection($entity, $parsed['uuid'])) {
       return [];
     }
     return [
-      new BlueprintError('variant', 'VARIANT_ROOT_ONLY', sprintf('The "%s" variant applies to top-level containers only, never nested inside another container.', $name), [
-        'variant' => $name,
-        'axis' => $variant->getAxis(),
-      ], 'Set it on the outermost container.'),
+      new BlueprintError('variant', 'VARIANT_ROOT_ONLY', sprintf('The "%s" variant applies to top-level containers only, never nested inside another container.', $name), $context, 'Set it on the outermost container.'),
     ];
   }
 

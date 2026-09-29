@@ -8,10 +8,13 @@
  * the request body.
  *
  * Wraps deepchat-init.js's requestInterceptor by deferring install
- * until after all Drupal behaviors have attached.
+ * until after all Drupal behaviors have attached. The same interceptor
+ * turns a turn with attachments (deep-chat's multipart body) into the JSON
+ * turn every text turn sends, the files uploaded to the attach route first
+ * and their names riding as contexts.attachments; see install().
  */
 
-(($, Drupal, once) => {
+(($, Drupal, drupalSettings, once) => {
   /**
    * Daedalus AI context manager.
    *
@@ -68,7 +71,20 @@
      * Installs the request interceptor on DeepChat.
      *
      * Wraps any existing interceptor so other modules' interceptors continue
-     * to work. Only installs once.
+     * to work (ai_chatbot's runs first: it mints the session token on the
+     * first turn and returns nothing). Only installs once.
+     *
+     * A text turn's body is a plain object deep-chat stringifies after the
+     * interceptor, so the collected contexts are merged into it in place.
+     * A turn with attachments arrives as deep-chat's multipart body, which
+     * is never sent: the files are uploaded to daedalus_ai's attach route
+     * (the one file lane, one request each, the answered name being the
+     * handle the model addresses the file by) and the turn is re-encoded
+     * as the same JSON body a text turn sends, its `contexts.attachments`
+     * carrying the names (daedalus-ai-attachment-request.js). An upload
+     * refused, or a file over the lane's ceiling, cancels the send with
+     * the reason as deep-chat's error message; the user's bubble already
+     * shows the attachment, so nothing is hidden by the re-encoding.
      */
     install() {
       const deepchat = document.querySelector('deep-chat');
@@ -79,6 +95,41 @@
       const existingInterceptor = deepchat.requestInterceptor;
       deepchat.requestInterceptor = async (request) => {
         const collected = Drupal.Daedalus.AiContext.collect();
+        if (request.body instanceof FormData) {
+          const attachments = Drupal.Daedalus.AiAttachments;
+          const settings = drupalSettings.daedalus_ai.attachments;
+          const { messages, files } = attachments.readMultipart(request.body);
+          const oversized = attachments.oversized(files, settings.size_limit);
+          if (oversized.length > 0) {
+            return {
+              error: Drupal.t('@names: over the @limit MB limit.', {
+                '@names': oversized.join(', '),
+                '@limit': Math.floor(settings.size_limit / (1024 * 1024)),
+              }),
+            };
+          }
+          if (existingInterceptor) {
+            await existingInterceptor(request);
+          }
+          let names;
+          try {
+            names = await attachments.upload(
+              files,
+              drupalSettings.ai_deepchat.thread_id,
+            );
+          } catch (error) {
+            // The refusal is the user's to see: deep-chat renders the
+            // interceptor's error and does not send.
+            return { error: error.message };
+          }
+          return attachments.encode({
+            messages,
+            bodyProps: deepchat.connect.additionalBodyProps || {},
+            contexts: collected,
+            attachments: names,
+            headers: request.headers,
+          });
+        }
         if (Object.keys(collected).length > 0) {
           if (!request.body.contexts) {
             request.body.contexts = {};
@@ -141,4 +192,4 @@
     }
     return originalFetch.call(this, resource, options);
   };
-})(jQuery, Drupal, once);
+})(jQuery, Drupal, drupalSettings, once);

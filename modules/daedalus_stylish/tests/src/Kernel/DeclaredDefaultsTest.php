@@ -58,6 +58,7 @@ class DeclaredDefaultsTest extends KernelTestBase {
     'twig_events',
     'daedalus_tempstore',
     'daedalus_blueprint_api',
+    'file',
     'daedalus_ui',
     'daedalus_stylish',
     'daedalus_stylish_control_test',
@@ -279,7 +280,7 @@ class DeclaredDefaultsTest extends KernelTestBase {
           '' => ['default' => ['display' => 'grid']],
           '::.daedalus-layout-layout' => ['default' => ['display' => 'grid']],
           '::.not-declared' => ['default' => ['display' => 'grid']],
-          '::.daedalus-layout-layout::>' => ['default' => ['display' => 'grid']],
+          '::.daedalus-layout-layout > *' => ['default' => ['display' => 'grid']],
         ],
       ],
     ]);
@@ -293,7 +294,7 @@ class DeclaredDefaultsTest extends KernelTestBase {
     }
     $this->assertStringContainsString('The kind "entity" declares root defaults (the \'\' key), but declared defaults follow markup ownership', $message);
     $this->assertStringContainsString('The kind "entity" declares defaults at "::.not-declared", but declared defaults follow markup ownership: a kind that is not composed owns only the anatomy it declares', $message);
-    $this->assertStringContainsString('The kind "entity" declares defaults at "::.daedalus-layout-layout::>", but declared defaults follow markup ownership', $message);
+    $this->assertStringContainsString('The kind "entity" declares defaults at "::.daedalus-layout-layout > *", but declared defaults follow markup ownership', $message);
     $this->assertStringNotContainsString('"::.daedalus-layout-layout",', $message, 'The declared part\'s key is owned and passes.');
   }
 

@@ -44,7 +44,10 @@ import { RevisionList, revisionDate } from './revision-list.js';
  * means wearing it first — which is exactly what "Apply to selection"
  * offers: the browse-first doorway, the same instant apply_variant the
  * styling place's variant picker speaks, aimed from the catalog at the
- * current selection (applyDoorway computes its honest states).
+ * styling TARGET (`target`: the selected element, or the rule the
+ * target chip above names, whose every match then wears it; the
+ * inspector renders the chip on this place too, so the card says where
+ * it lands; applyDoorway computes its honest states).
  * Locked variants (the distro lock, the record's `updatable` flag: a
  * shipped variant on a consuming site, where the importer owns their
  * label and styles) render the card read-only, with "Copy as my variant"
@@ -75,7 +78,7 @@ const VariantCard = ({
   materials,
   config,
   styleMap,
-  selected,
+  target,
   offer,
   provenance,
   outline,
@@ -103,11 +106,14 @@ const VariantCard = ({
   const ownership = variantOwnership(variant, materials);
   const offered = isOffered(variant);
   const worn = (management?.usages ?? 0) > 0;
-  const wearer = pageWearer(styleMap, variant, selected);
+  // Edit styles anchors the editing session on a wearer of the variant,
+  // the styling target first (pageWearer: an element, or the rule the
+  // target chip names); Apply lands at the target too.
+  const wearer = pageWearer(styleMap, variant, target);
   const doorway = applyDoorway(
     variant,
     styleMap,
-    selected,
+    target,
     offer,
     provenance,
     materials,
@@ -190,7 +196,7 @@ const VariantCard = ({
   };
 
   // Apply to selection: the browse-first doorway — an ordinary
-  // apply_variant on the current selection (the inspector wires the op;
+  // apply_variant at the styling target (the inspector wires the op;
   // the same-axis reference swaps, everything else layers over). The map
   // echo re-renders the card, so the doorway flips to its worn state and
   // Edit styles gains its wearer.
@@ -200,7 +206,7 @@ const VariantCard = ({
         .then(() => {
           source.notify?.(
             'status',
-            Drupal.t('Applied "@label" to the selected element.', {
+            Drupal.t('Applied "@label" at the styling target.', {
               '@label': variant.label,
             }),
           );
@@ -577,7 +583,7 @@ const VariantCard = ({
         {worn && outline && (
           <button
             type="button"
-            className={`daedalus-ui-chip daedalus-stylish-library-card__outline${outline.isOn(reference) ? ' daedalus-stylish-library-card__outline--on' : ''}`}
+            className={`daedalus-ui-chip daedalus-stylish-library-card__outline${outline.isOn(reference) ? ' daedalus-ui-chip--active' : ''}`}
             aria-pressed={outline.isOn(reference)}
             title={Drupal.t(
               'Outline every element wearing this variant on the canvas and in the page elements panel until toggled off.',
@@ -609,16 +615,16 @@ const VariantCard = ({
             title={
               {
                 ready: Drupal.t(
-                  'Apply this variant to the selected element. It replaces the same-axis variant; overrides and other axes stay.',
+                  'Apply this variant at the styling target (the selected element, or the rule the target chip names: every match wears it). It replaces the same-axis variant; overrides and other axes stay.',
                 ),
                 'no-selection': Drupal.t(
                   'Select an element on the canvas to apply it to.',
                 ),
                 worn: Drupal.t(
-                  "The selected element already wears it. Re-apply lives on its wearing row's menu.",
+                  "The styling target already wears it. Re-apply lives on its wearing row's menu.",
                 ),
                 unfit: Drupal.t(
-                  'The variant does not offer on the selected element.',
+                  'The variant does not offer at the styling target.',
                 ),
                 'unfit-owned': Drupal.t(
                   'Belongs to the stencil "@stencil": it only offers inside that stencil\'s placements.',
@@ -751,7 +757,7 @@ export const LibraryView = ({
   materials,
   config,
   styleMap,
-  selected,
+  target,
   offer,
   provenance,
   card,
@@ -861,7 +867,7 @@ export const LibraryView = ({
                   materials={materials}
                   config={config}
                   styleMap={styleMap}
-                  selected={selected}
+                  target={target}
                   offer={offer}
                   provenance={provenance}
                   outline={outline}

@@ -4,7 +4,10 @@ declare(strict_types=1);
 
 namespace Drupal\daedalus_stylish;
 
+use Drupal\daedalus_blueprint\Materials\Address;
+use Drupal\daedalus_blueprint\Materials\RelativeSelector;
 use Drupal\daedalus_ui\ElementModel\ElementResolver;
+use Drupal\daedalus_ui\Render\ElementAddress;
 
 /**
  * Prints a style map as CSS text with @scope roots.
@@ -13,15 +16,37 @@ use Drupal\daedalus_ui\ElementModel\ElementResolver;
  * preview and the code editor view, and a round-trip equivalence test locks
  * the two together — so this printer is deliberately dumb and deterministic.
  * Each element key becomes one @scope block rooted at the key's selectable
- * attribute; sub-element keys select their class inside the parent's scope
- * AND on the scope root itself (":scope.cls, .cls" — a collapsed container
- * hoists its part class onto the element carrying the key); tag-tier keys
- * ("{key}::p") select their bare tag as a descendant rule inside the scope
- * (the element-scoped middle tier of the three-tier text model);
+ * attribute, and the key's relative selector (RelativeSelector, the one
+ * suffix grammar) prints as the block's targets by the SPECIFICITY
+ * DISCIPLINE (scopeTargets()): every rule under an @scope root weighs
+ * exactly what the addressed element's own equivalent rule weighs (0-1-0
+ * when the last compound addresses an element root: `*`, a type, a part
+ * class; 0-0-1 when it is a tag), so an ancestor's rule for a descendant
+ * always TIES that descendant's own rule and loses to it on @scope
+ * proximity (the descendant's root is the closer scoping root), beats
+ * every default (the defaults tier prints bare at 0-0-0), and two
+ * ancestors' rules resolve by proximity, nearest first. Mechanically ONE
+ * compound of the chain carries the weight (the last non-universal one,
+ * `:scope` included), every other prints inside :where(), `*` never
+ * carries any, and a qualifier (`:has()`, `:not()`) takes its argument's
+ * weight, so every argument compound prints inside :where() too with its
+ * combinators bare (`:has(> :where([data-element="block_type:image"]))`;
+ * :where() takes complex selectors, never relative ones, so the wrap is
+ * per compound). Part keys keep their dual: the class inside the scope AND
+ * on the scope root itself (":scope.cls, .cls" — a collapsed container
+ * hoists its part class onto the element carrying the key); a type
+ * compound selects by the element address stamp (`[data-element="…"]`,
+ * daedalus_ui's ElementAddress); a terminal pseudo-element (`::before`,
+ * `::after`, the generated box of the last compound, or of the scope
+ * root itself for the owner's anchor `&::before`) prints LAST on every
+ * target, after the condition suffixes (`:scope:is(:hover, …)::before`):
+ * :where() cannot wrap a pseudo-element, so every rule addressing a box
+ * weighs 0-0-1 more than its host's, own and ancestor alike, and the
+ * tie-and-proximity discipline holds by construction;
  * conditions wrap declarations in pseudo-class selectors or at-rules, and
  * an "a+b" compound composes its parts' wrappers (at-rules nest in part
- * order, pseudo suffixes append — each as an :is() that also matches the
- * editor's data-force-state stamp).
+ * order, pseudo suffixes append: a posable state as an :is() that also
+ * matches the editor's data-force-state stamp, a structural fact bare).
  * Because @scope preludes name their root by selector, the emitted text is
  * position-independent — where the <style> tag lands in the DOM is purely a
  * delivery concern.
@@ -35,39 +60,31 @@ use Drupal\daedalus_ui\ElementModel\ElementResolver;
 class CssPrinter {
 
   /**
-   * The @scope limit for container-rooted blocks.
+   * The @scope limit for container-rooted blocks: the donut.
    *
    * The daedalus_layout nests containers (a nested container renders inside the outer
    * container), and every layout template's own markup carries the same
-   * part classes — so without a lower bound, an outer container's
-   * sub-element styles would also match the identical markup of every
-   * nested container. The donut stops at nested container roots: what a
-   * container key styles is that container's own markup, never an inner
-   * container's (which has its own key, stamped at its own root at every
-   * depth). The donut stops at nested BLOCK roots too: a block's interior
-   * (a collapsed block's composed markup, an inline block's own layout
-   * classes) belongs to the block's own key family.
+   * part classes — so without a lower bound, an outer container's PART
+   * styles would also match the identical markup of every nested
+   * container. The donut stops at nested container roots: what a
+   * container's part key styles is that container's own markup, never an
+   * inner container's (which has its own key, stamped at its own root at
+   * every depth). The donut stops at nested BLOCK roots too: a block's
+   * interior (a collapsed block's composed markup, an inline block's own
+   * layout classes) belongs to the block's own key family.
+   *
+   * Which entries take it is donutLimit(): the root entry (its co-target
+   * companion reaches claiming interiors) and PART-FIRST selectors, the
+   * owner's own anatomy, whose class names recur in nested anatomy. Every
+   * other selector (a tag, a type, `> *`) reaches its whole subtree on
+   * purpose: it addresses other elements by relation, a type compound
+   * names a nested root itself, and @scope proximity precedence is what
+   * bounds it (the nearest key's rule wins at equal weight).
    * DaedalusStylishLiveAttribution demands the stamps that form this boundary on
    * live renders (container roots, and block roots once the map styles any
    * container).
    */
   public const CONTAINER_SCOPE_LIMIT = ':scope [data-selectable^="container:"], :scope [data-selectable^="block:"]';
-
-  /**
-   * The @scope limit for container-rooted CHILDREN pseudo-part entries.
-   *
-   * A '::>' entry's targets are exactly the elements the standard donut
-   * excludes: a container's direct children ARE nested container/block
-   * roots. Shifting the boundary one level down (the CHILDREN of nested
-   * roots instead of the roots themselves) keeps the roots stylable as
-   * children while their interiors stay out, so a part-composed children
-   * selector ('.cls > *') cannot leak into a nested container's identical
-   * part markup (the nested part's children sit below the shifted limit).
-   * The '>' combinator makes the bare form (':scope > *') self-limiting
-   * anyway; the shifted donut is what makes the descendant half of the
-   * part dual safe.
-   */
-  public const CONTAINER_CHILDREN_SCOPE_LIMIT = ':scope [data-selectable^="container:"] > *, :scope [data-selectable^="block:"] > *';
 
   /**
    * The page-level width-band query root's selector.
@@ -104,6 +121,27 @@ class CssPrinter {
    * the exact text (printer.js containerRootsCss).
    */
   public const PAGE_CONTAINER_RULE = self::PAGE_CONTAINER_SELECTOR . " {\n  container-type: inline-size;\n}";
+
+  /**
+   * The rule telling the UA the document follows the visitor's color scheme.
+   *
+   * A skin's dark values ride @media (prefers-color-scheme: dark), so on a
+   * dark OS the page paints dark; but the UA draws its OWN chrome (the
+   * viewport scrollbar, native form controls, light-dark()) from the
+   * document's used color-scheme, which stays `normal` (light) until
+   * something declares it: a white scrollbar track down a dark page.
+   * `light dark` is exactly "follow the preference", the scheme the skin's
+   * tokens picked. The rule sits on :root because the viewport reads
+   * color-scheme from the root element alone (the token scope element is
+   * a descendant of body and cannot reach it). Only the compiled defaults
+   * file emits it, on demand: when any condition on the active skin's
+   * tokens or defaults is a scheme condition
+   * (ConditionTypePluginManager::isSchemeCondition()), never otherwise, so
+   * a light-only skin keeps light UA chrome. The edit canvas's posed
+   * scheme is an inline color-scheme on the stage (canvas-vector.js),
+   * which beats this inherited root value for the canvas subtree.
+   */
+  public const COLOR_SCHEME_RULE = ":root {\n  color-scheme: light dark;\n}";
 
   /**
    * The properties a scope-root entry co-targets onto text-claiming parts.
@@ -251,13 +289,8 @@ class CssPrinter {
         continue;
       }
       $root = ($pos = strpos($key, '::')) === FALSE ? $key : substr($key, 0, $pos);
-      // Children pseudo-part entries take the child-shifted donut: their
-      // targets are the nested roots the standard donut would exclude
-      // (see CONTAINER_CHILDREN_SCOPE_LIMIT).
-      $limit = $parsed['kind'] === 'container'
-        ? ($parsed['children'] ? self::CONTAINER_CHILDREN_SCOPE_LIMIT : self::CONTAINER_SCOPE_LIMIT)
-        : NULL;
-      $block = $this->printEntry(sprintf('[data-selectable="%s"]', $root), $parsed['sub'], $entry, $limit, $parsed['children']);
+      $limit = $parsed['kind'] === 'container' ? static::donutLimit($parsed['selector']) : NULL;
+      $block = $this->printEntry(sprintf('[data-selectable="%s"]', $root), $parsed['selector'], $entry, $limit);
       if ($block !== '') {
         $blocks[] = $block;
       }
@@ -271,82 +304,33 @@ class CssPrinter {
    * Public so variant compilation can reuse it with a variant-class scope
    * root instead of a selectable-key root.
    *
-   * A scope-root entry ($sub NULL, not children) additionally co-targets
-   * its inherited text properties onto declared text-claiming elements —
+   * A scope-root entry ($selector NULL) additionally co-targets its
+   * inherited text properties onto declared text-claiming elements —
    * see INHERITED_TEXT_PROPERTIES. Every @scope lane rides this seam
-   * (per-entity maps, compiled variants, edit-mode fragments, skin element
-   * defaults), so co-targeting is one behavior everywhere; the bare lane
-   * (printBareEntry) does not.
+   * (per-entity maps, compiled variants, edit-mode fragments), and the
+   * bare defaults lane co-targets its element scopes' root entries the
+   * same way (printBareEntry), so co-targeting is one behavior everywhere.
    *
    * @param string $scope_root
    *   The @scope prelude selector, e.g. '[data-selectable="block:{uuid}"]'.
-   * @param string|null $sub
-   *   The sub-element class selector (".quote") for sub-element keys, a
-   *   bare tag name ("p") for tag-tier keys, or NULL when the entry styles
-   *   the scope root itself.
+   * @param \Drupal\daedalus_blueprint\Materials\RelativeSelector|null $selector
+   *   The key's relative selector, or NULL when the entry styles the
+   *   scope root itself. Its targets are scopeTargets()'s.
    * @param array $entry
    *   The entry: condition keys mapping properties to values.
    * @param string|null $scope_limit
-   *   An @scope "to" limit selector bounding the scope from below (the donut
-   *   for container-rooted blocks: CONTAINER_SCOPE_LIMIT, and its
-   *   child-shifted variant for children entries), or NULL for an
-   *   unbounded scope.
-   * @param bool $children
-   *   TRUE for a '::>' children pseudo-part entry: every target selector is
-   *   extended with ' > *', so the entry styles the addressed element's
-   *   direct children (':scope > *' for the root, ':scope.cls > *, .cls > *'
-   *   for a part's children).
+   *   An @scope "to" limit selector bounding the scope from below (the
+   *   donut, donutLimit()), or NULL for an unbounded scope.
    *
    * @return string
    *   The @scope block, or empty string when nothing inside it printed.
    */
-  public function printEntry(string $scope_root, ?string $sub, array $entry, ?string $scope_limit = NULL, bool $children = FALSE): string {
-    // A sub-element CLASS selector targets the part class inside the scope
-    // AND on the scope root itself (":scope.cls" first, then the descendant
-    // selector): a collapsed container hoists its part class onto the very
-    // element carrying the key (nested containers render as ONE element),
-    // so part-targeted styles must land on the root exactly like on a
-    // descendant. Leakage into nested sections' identical part markup is
-    // still stopped by the scope-limit donut.
-    // A dotless sub is a TAG-TIER entry ("{key}::p"): it emits ONE bare
-    // descendant tag target inside the scope. No ":scope" dual (the scope
-    // root is the element carrying the key, never one of its own text
-    // tags), and no :where() wrap on purpose: the bare tag stays at 0-0-1,
-    // which is the whole three-tier cascade. It beats the skin's
-    // zero-specificity base:{tag} default (tier 1), and every minted part
-    // rule (tier 3, a class at 0-1-0 or higher) beats it, regardless of
-    // document order.
-    $is_tag = $sub !== NULL && !str_starts_with($sub, '.');
-    $targets = match (TRUE) {
-      $sub === NULL => [':scope'],
-      $is_tag => [$sub],
-      default => [':scope' . $sub, $sub],
-    };
-    // The children pseudo-part rides the same targets one level down: the
-    // element's own selectors, each extended with the direct-child
-    // combinator. Children rules are DEFAULTS under any per-child fact: a
-    // child's own entry (':scope' at its own scope root, weight 0-1-0)
-    // must always win, which at equal weight it does on scope proximity
-    // (the child's root is closer than the parent's). So no children
-    // target may outweigh ':scope': the part half would ('':scope.cls' is
-    // 0-2-0) exactly where it matters most, on a collapsed nested
-    // container wearing the hoisted part class on the very element
-    // carrying the variant class or selectable key, so its class wraps in
-    // :where(). Without the cap a column's flex-grow override would
-    // silently lose to the row variant's equal-fill rule at nested depth,
-    // in both delivery modes. A tag-tier children entry keeps its single
-    // descendant target ("p > *"): no root dual exists to cap.
-    if ($children) {
-      if ($sub !== NULL && !$is_tag) {
-        $targets[0] = ':scope:where(' . $sub . ')';
-      }
-      $targets = array_map(static fn (string $target): string => $target . ' > *', $targets);
-    }
-    // Only the scope root's own entry co-targets: a part entry styles a
-    // concrete interior element (claiming parts included — a real part
-    // style must WIN over the co-target, not feed it), and a children entry
-    // already addresses descendants directly.
-    $pieces = $this->entryPieces($targets, $entry, 1, $sub === NULL && !$children);
+  public function printEntry(string $scope_root, ?RelativeSelector $selector, array $entry, ?string $scope_limit = NULL): string {
+    // Only the scope root's own entry co-targets: a selector entry styles
+    // concrete interior elements (claiming parts included — a real part
+    // style must WIN over the co-target, not feed it), and the owner's
+    // own generated box (`&::before`) is a selector entry like any other.
+    $pieces = $this->entryPieces(static::hostTargets($selector), $entry, 1, $selector === NULL ? ':scope' : NULL, static::pseudoTail($selector));
 
     if ($pieces === []) {
       return '';
@@ -358,33 +342,53 @@ class CssPrinter {
   }
 
   /**
-   * Prints one style entry as bare (unscoped) rules.
+   * Prints one style entry as bare (unscoped) zero-specificity rules.
    *
-   * The skin defaults' base:{tag} lane: prose-markup defaults print as
-   * plain selectors OUTSIDE any @scope, on purpose. In the cascade, scoped
-   * declarations beat unscoped ones on scoping proximity at equal
-   * specificity, so staying unscoped is exactly what makes EVERY scoped
-   * delivery path — per-entity @scope tags, variant classes, element-
-   * default scope classes — override a base default regardless of document
-   * order; callers additionally wrap the tag in :where() so the selector
-   * never outweighs a single class. Conditions wrap exactly as in
-   * printEntry() (same pieces builder), so a compound means the same thing
-   * in every lane.
+   * The defaults lane, every tier of it (DefaultsStylesheet: the base:{tag}
+   * tier and the element scopes alike): defaults print as plain selectors
+   * OUTSIDE any @scope and at 0-0-0, on purpose. Every authored rule (a
+   * per-entity @scope block, a compiled variant, an ancestor's rule for
+   * its descendants) then beats a default by specificity, and @scope
+   * proximity only ever orders authored rules among themselves: a default
+   * in its own @scope at the element would sit at 0-1-0 and, by the
+   * cascade's proximity step, beat an ancestor's equal-weight rule for
+   * that element, inverting the layer model. Callers pass a fully
+   * :where()-wrapped selector; the part and children forms added here stay
+   * inside :where() too. Conditions wrap exactly as in printEntry() (same
+   * pieces builder), so a compound means the same thing in every lane.
    *
    * @param string $selector
-   *   The full selector for the styled element, e.g.
-   *   ':where(.daedalus-stylish-token-scope) :where(h2)'.
-   * @param string|null $sub
-   *   The sub-element class selector ('.quote') for part keys, or NULL.
+   *   The full zero-specificity selector for the styled element, e.g.
+   *   ':where(.daedalus-stylish-token-scope) :where(h2)' or
+   *   ':where(.daedalus-stylish-token-scope [data-element="kind:block"])'.
+   * @param \Drupal\daedalus_blueprint\Materials\RelativeSelector|null $relative
+   *   The key's relative selector, printed as a chain of :where()-wrapped
+   *   compounds after the element's selector (`*` bare, since it carries
+   *   no weight; a terminal pseudo-element glued last, after the
+   *   condition suffixes, the anchor `&::before` printing it on the
+   *   element's own selector), or NULL for the element itself.
    * @param array $entry
    *   The entry: condition keys mapping properties to values.
+   * @param bool $co_target
+   *   TRUE to co-target the entry's INHERITED_TEXT_PROPERTIES onto declared
+   *   text-claiming elements, exactly as printEntry() does for a scope
+   *   root's own entry (the companion prints at the same zero specificity
+   *   under the same selector). An element scope's root default passes
+   *   TRUE so a block's text default reaches its claimed content past a
+   *   base:{tag} default, which prints earlier in the same file; base:{tag}
+   *   defaults pass FALSE: they ARE the interposer the companion exists to
+   *   beat, and co-targeting them would re-land the tag default on the
+   *   claiming element.
    *
    * @return string
    *   The rules, or empty string when nothing printed.
    */
-  public function printBareEntry(string $selector, ?string $sub, array $entry): string {
-    $targets = $sub === NULL ? [$selector] : [$selector . ' ' . $sub];
-    $pieces = $this->entryPieces($targets, $entry, 0);
+  public function printBareEntry(string $selector, ?RelativeSelector $relative, array $entry, bool $co_target = FALSE): string {
+    $target = $selector;
+    foreach ($relative?->compounds ?? [] as $compound) {
+      $target .= static::renderCombinator($compound) . static::renderCompound($compound, FALSE);
+    }
+    $pieces = $this->entryPieces([$target], $entry, 0, $co_target ? $selector : NULL, static::pseudoTail($relative));
     return $pieces === [] ? '' : implode("\n", $pieces);
   }
 
@@ -397,21 +401,24 @@ class CssPrinter {
    * are locked by the printer equivalence test and unchanged.
    *
    * @param string[] $targets
-   *   The target selectors; pseudo-class condition suffixes append to each.
+   *   The target selectors, the hosts of the styled boxes; pseudo-class
+   *   condition suffixes append to each, then $pseudo.
    * @param array $entry
    *   The entry: condition keys mapping properties to values.
    * @param int $nesting
    *   How many levels the pieces are nested inside enclosing braces.
-   * @param bool $co_target
-   *   TRUE for a scope-root entry: each condition block's rule gains a
-   *   companion rule re-targeting its INHERITED_TEXT_PROPERTIES subset onto
-   *   declared text-claiming elements (':scope :where([data-claims-content])'),
+   * @param string|null $co_target_root
+   *   The element's own selector to co-target from, for a scope-root entry
+   *   (':scope' in the @scope lane, the bare zero-specificity selector in
+   *   the bare lane): each condition block's rule gains a companion rule
+   *   re-targeting its INHERITED_TEXT_PROPERTIES subset onto declared
+   *   text-claiming elements ('{root} :where([data-claims-content])'),
    *   inside the same condition wrappers — pseudo-class suffixes stay on
-   *   :scope (the condition holds on the styled element; the claiming
+   *   the root (the condition holds on the styled element; the claiming
    *   element merely receives), at-rules wrap rule and companion together.
-   *   Nothing emits when the block holds no co-targetable property. The
-   *   bare lane (printBareEntry) never co-targets: base:{tag} defaults ARE
-   *   the interposer this mechanism exists to beat.
+   *   Nothing emits when the block holds no co-targetable property. NULL
+   *   never co-targets (part and children entries, and base:{tag}
+   *   defaults, which ARE the interposer this mechanism exists to beat).
    *
    *   A block binding an animation to a trigger additionally emits the
    *   polyfill hold (TRIGGER_HOLD_SUPPORTS) as a sibling of the rule, after
@@ -420,11 +427,20 @@ class CssPrinter {
    *   extended with `:not([data-daedalus-stylish-triggered])`. Every lane rides this
    *   seam (per-entity maps, compiled variants, skin defaults, the bare
    *   lane), so a trigger holds the same way wherever it was declared.
+   * @param string $pseudo
+   *   The terminal pseudo-element the entry styles (pseudoTail(): '' for
+   *   an element, `::before` or `::after` for its generated box), printed
+   *   LAST on every target: after the condition suffixes (the state holds
+   *   on the host, `:scope:is(:hover, …)::before`) and after the hold's
+   *   `:not()` (the runtime stamps the host). Nothing composes behind a
+   *   pseudo-element, and no companion co-targets one: the companion is
+   *   the scope root's own entry's, and a generated box is a selector
+   *   entry (the anchor `&::before` included), never the root.
    *
    * @return string[]
    *   The printed pieces; empty when nothing survived the emit gate.
    */
-  protected function entryPieces(array $targets, array $entry, int $nesting, bool $co_target = FALSE): array {
+  protected function entryPieces(array $targets, array $entry, int $nesting, ?string $co_target_root = NULL, string $pseudo = ''): array {
     $pieces = [];
 
     foreach ($this->orderedConditions($entry) as $condition => $value) {
@@ -459,17 +475,23 @@ class CssPrinter {
             break;
           }
           if (str_starts_with($wrapper, ':')) {
-            // A pseudo-class condition also matches the editor's forced
-            // state (the inspector's DevTools-style :hov): the
-            // canvas stamps data-force-state on the selected element, and
-            // the :is() alternative makes the stored styles render without
-            // the real interaction. Inert everywhere else — nothing but
-            // edit mode ever stamps the attribute — and specificity is
-            // unchanged (:is() takes its most specific argument; the
-            // attribute selector ties the pseudo-class). The part name is
-            // safe inside the quoted attribute value: it resolved to a
-            // wrapper above, so it is a plugin-declared condition name.
-            $suffixes .= sprintf(':is(%s, [data-force-state~="%s"])', $wrapper, $part);
+            // A structural FACT (":first-child", ":nth-child(odd)") holds
+            // by the element's place in the markup: nothing the editor
+            // does can force it, so it prints bare, the pseudo-class
+            // itself. Every other pseudo-class condition also matches the
+            // editor's forced state (the inspector's DevTools-style :hov):
+            // the canvas stamps data-force-state on the selected element,
+            // and the :is() alternative makes the stored styles render
+            // without the real interaction. Inert everywhere else,
+            // nothing but edit mode ever stamps the attribute, and
+            // specificity is unchanged (:is() takes its most specific
+            // argument; the attribute selector ties the pseudo-class).
+            // The part name is safe inside the quoted attribute value: it
+            // resolved to a wrapper above, so it is a plugin-declared
+            // condition name.
+            $suffixes .= $this->conditionTypes->isFact($part)
+              ? $wrapper
+              : sprintf(':is(%s, [data-force-state~="%s"])', $wrapper, $part);
           }
           else {
             $at_rules[] = $wrapper;
@@ -484,13 +506,14 @@ class CssPrinter {
       if ($declarations === '') {
         continue;
       }
-      // Pseudo suffixes append to EVERY selector in the target list.
+      // Pseudo-class suffixes append to EVERY selector in the target list,
+      // the pseudo-element after them.
       $selector = implode(', ', array_map(
-        static fn (string $target): string => $target . $suffixes,
+        static fn (string $target): string => $target . $suffixes . $pseudo,
         $targets,
       ));
       $piece = sprintf("%s%s {\n%s\n%s}", $target_indent, $selector, $declarations, $target_indent);
-      if ($co_target) {
+      if ($co_target_root !== NULL) {
         // The companion declarations are the block's INHERITED_TEXT_PROPERTIES
         // subset in stored order, through the same emit gate (a subset of
         // declarations that just printed, so an empty main rule above never
@@ -501,7 +524,7 @@ class CssPrinter {
           $piece .= sprintf(
             "\n%s%s {\n%s\n%s}",
             $target_indent,
-            ':scope' . $suffixes . ' ' . self::CLAIMS_CONTENT_SELECTOR,
+            $co_target_root . $suffixes . ' ' . self::CLAIMS_CONTENT_SELECTOR,
             $companion,
             $target_indent,
           );
@@ -509,10 +532,12 @@ class CssPrinter {
       }
       if ($this->holdsAnimation($value)) {
         // The hold targets exactly what the rule targets (the same selector
-        // list, the same pseudo suffixes): the trigger binds the animation
-        // on those elements, so those are the elements to hold.
+        // list, the same pseudo-class suffixes, the same pseudo-element
+        // last): the trigger binds the animation on those boxes, so those
+        // are the boxes to hold, and the stamp the :not() reads sits on
+        // the host.
         $held = implode(', ', array_map(
-          static fn (string $target): string => $target . $suffixes . ':not([' . self::TRIGGERED_ATTRIBUTE . '])',
+          static fn (string $target): string => $target . $suffixes . ':not([' . self::TRIGGERED_ATTRIBUTE . '])' . $pseudo,
           $targets,
         ));
         $piece .= sprintf(
@@ -616,46 +641,44 @@ class CssPrinter {
    *   prints, since key pieces land inside selectors. An unresolvable
    *   scope degrades to the path-less key space: only the '' fragment can
    *   print.
-   * @param string|null $container_scope_limit
-   *   The @scope "to" limit to use WHEN the fragment addresses a container,
-   *   overriding CONTAINER_SCOPE_LIMIT. The skin defaults lane passes its
-   *   class-extended donut (DefaultsStylesheet::DEFAULTS_SCOPE_LIMIT): live
-   *   markup carries selectable-key stamps only on demand, so a boundary
-   *   the compiled defaults can rely on must include the stamped scope
-   *   classes. NULL (every variant path) keeps the standard donut.
+   * @param \Drupal\daedalus_blueprint\Materials\RelativeSelector|null $under
+   *   The rule the fragment is worn at, or NULL at an element. Wear at a
+   *   rule delivers inside the rule OWNER's scope (the scope root is the
+   *   owner's selectable attribute) with every suffix continued under
+   *   the rule by descent (RelativeSelector::under(): the '' suffix at
+   *   the rule's own targets, '::.cls' at `{rule} .cls`, '::> *' at
+   *   `{rule} > *`); a suffix the grammar refuses under the rule prints
+   *   nothing, the same admissibility an authored key gets. Never a
+   *   class: a rule has no one element to stamp. The donut is judged on
+   *   the continued selector, as for an authored key.
    *
    * @return string
    *   CSS text, '' when nothing printed.
    */
-  public function printFragmentStyles(string $scope_root, string $scope, array $styles, string $fragment, ?string $container_scope_limit = NULL): string {
+  public function printFragmentStyles(string $scope_root, string $scope, array $styles, string $fragment, ?RelativeSelector $under = NULL): string {
     $root_kind = SlotKey::rootKindForScope($scope);
     $slot = SlotKey::parse($fragment, $root_kind);
     if ($slot === NULL) {
       return '';
     }
     $kind = $slot->segments === [] ? $root_kind : $slot->segments[array_key_last($slot->segments)]['type'];
-    $limit = $kind === 'container' ? ($container_scope_limit ?? self::CONTAINER_SCOPE_LIMIT) : NULL;
     $blocks = [];
     foreach (SlotKey::fragmentStyles($styles, $fragment) as $suffix => $entry) {
-      $sub = NULL;
-      // The '::>' children suffix strips first, mirroring the key grammar
-      // (SlotKey::parse()): '::.class::>' is the part's children.
-      $entry_children = str_ends_with($suffix, '::>');
-      if ($entry_children) {
-        $suffix = substr($suffix, 0, -3);
+      // The suffix is '' or '::selector'; the selector prints into
+      // selectors, so the grammar (canonical spelling) is the emit gate,
+      // the same gate authored keys pass (parseKey()).
+      $split = RelativeSelector::splitKey((string) $suffix);
+      if ($split === NULL) {
+        continue;
       }
-      if ($suffix !== '') {
-        $sub = substr($suffix, 2);
-        // The part selector prints verbatim, so its charset is the same
-        // emit-side gate authored '::.class' keys pass (parseKey()).
-        if (!preg_match('/^\.[A-Za-z0-9_-]+$/', $sub)) {
+      $selector = $split[1];
+      if ($under !== NULL) {
+        $selector = $selector === NULL ? $under : RelativeSelector::under($under, $selector);
+        if ($selector === NULL) {
           continue;
         }
       }
-      // Children entries take the child-shifted donut: their targets are
-      // the nested roots the standard donut excludes.
-      $entry_limit = $entry_children && $limit !== NULL ? static::childShiftedLimit($limit) : $limit;
-      $block = $this->printEntry($scope_root, $sub, $entry, $entry_limit, $entry_children);
+      $block = $this->printEntry($scope_root, $selector, $entry, $kind === 'container' ? static::donutLimit($selector) : NULL);
       if ($block !== '') {
         $blocks[] = $block;
       }
@@ -716,18 +739,293 @@ class CssPrinter {
   }
 
   /**
-   * Shifts an @scope donut one level down for children pseudo-part entries.
+   * The @scope targets a relative selector prints to: the discipline.
    *
-   * Every comma member gets the direct-child combinator appended, turning
-   * "stop at nested roots" into "stop at nested roots' children": the
-   * standard donut maps onto CONTAINER_CHILDREN_SCOPE_LIMIT, and the skin
-   * defaults' class-extended donut shifts the same way. Members must stay
-   * comma-safe (no :is(a, b) selectors), which every donut here is.
+   * The chain is `:scope` (the scoping root) followed by the selector's
+   * compounds. Exactly ONE link of the chain carries specificity, the
+   * LAST non-universal one (`*` never weighs), and every other link
+   * prints inside :where(); so a rule's weight is its addressed element's
+   * own kind of weight (0-1-0 for `:scope`, a type or a class, 0-0-1 for
+   * a tag) and never more, and an ancestor's rule ties the descendant's
+   * own and loses on proximity. A descendant-first chain omits `:scope`
+   * from the print: inside @scope a bare selector is already relative to
+   * the root at zero weight, which is the same thing.
+   *
+   * A PART-FIRST selector prints a second, first-listed target with the
+   * part class glued onto the scope root (`:scope.cls`): a collapsed
+   * container hoists its part class onto the very element carrying the
+   * key (nested containers render as ONE element), so part-targeted
+   * styles must land on the root exactly like on a descendant. The bare
+   * part (`.cls`) keeps `:scope.cls` at 0-2-0 on purpose: the owner's own
+   * part on the owner's own root outranks the owner's root entry, and no
+   * other element competes there. A longer part-first chain puts the
+   * root's weight where the discipline says: `:scope` carries it when
+   * nothing after the class does (`:scope:where(.cls) > *`), otherwise
+   * the last weighted compound does (`:where(:scope):where(.cls) > […]`).
+   * The dual is skipped when the part's next compound is a sibling
+   * (`.cls + .cls`): the scope root has no sibling inside itself.
+   *
+   * A sibling combinator prints like `>` (` + `, ` ~ `); a compound's
+   * qualifiers print on it, their argument compounds each inside :where()
+   * with bare combinators (renderCompound()), so a qualifier adds no
+   * weight. Type compounds select by the element address stamp
+   * (typeSelector()).
+   *
+   * A terminal pseudo-element glues onto every target after the last
+   * compound's qualifiers (`:where(:scope) > [data-element="…"]::before`,
+   * the part dual on both halves: `:scope.quote::after, .quote::after`),
+   * and the owner's anchor (`&::before`, no compounds) is the scoping
+   * root's own box (`:scope::before`). :where() cannot wrap a
+   * pseudo-element, so every rule addressing a box weighs its host's
+   * weight plus 0-0-1, own and ancestor alike: the ties the discipline
+   * relies on hold on the boxes exactly as on their hosts. The printed
+   * entry puts the condition suffixes BEFORE the pseudo (entryPieces()),
+   * so these targets are the whole selectors of an unconditional rule and
+   * the hosts are hostTargets()'s. Mirrored by printer.js's scopeTargets,
+   * byte for byte.
+   *
+   * @return string[]
+   *   The target selectors, the hoisted dual first when there is one.
    */
-  protected static function childShiftedLimit(string $limit): string {
+  public static function scopeTargets(?RelativeSelector $selector): array {
+    $pseudo = static::pseudoTail($selector);
+    return array_map(
+      static fn (string $host): string => $host . $pseudo,
+      static::hostTargets($selector),
+    );
+  }
+
+  /**
+   * The terminal pseudo-element a selector prints, as selector text.
+   *
+   * @return string
+   *   `::before` / `::after`, or '' for an element (NULL included).
+   */
+  protected static function pseudoTail(?RelativeSelector $selector): string {
+    return $selector?->pseudo === NULL ? '' : RelativeSelector::SUFFIX . $selector->pseudo;
+  }
+
+  /**
+   * The @scope targets of a selector's HOSTS: scopeTargets() without the
+   * pseudo-element, the selectors a condition suffix appends to.
+   *
+   * The owner's anchor (`&::before`) hosts on the scoping root itself.
+   *
+   * @return string[]
+   *   The host selectors, the hoisted dual first when there is one.
+   */
+  protected static function hostTargets(?RelativeSelector $selector): array {
+    if ($selector === NULL || $selector->compounds === []) {
+      return [':scope'];
+    }
+    $compounds = $selector->compounds;
+    $carrier = static::lastWeighted($compounds, 0);
+    if ($compounds[0]['combinator'] === RelativeSelector::CHILD) {
+      $main = ($carrier === -1 ? ':scope' : ':where(:scope)') . static::renderTail($compounds, $carrier, 0);
+    }
+    else {
+      $main = static::renderCompound($compounds[0], $carrier === 0) . static::renderTail($compounds, $carrier, 1);
+    }
+    if (!$selector->isPartFirst()) {
+      return [$main];
+    }
+    if (count($compounds) === 1) {
+      return [':scope' . $compounds[0]['name'] . static::renderQualifiers($compounds[0]), $main];
+    }
+    if (static::isSibling($compounds[1])) {
+      return [$main];
+    }
+    $rest_carrier = static::lastWeighted($compounds, 1);
+    $dual = ($rest_carrier === -1 ? ':scope' : ':where(:scope)') . ':where(' . $compounds[0]['name'] . ')' . static::renderQualifiers($compounds[0]) . static::renderTail($compounds, $rest_carrier, 1);
+    return [$dual, $main];
+  }
+
+  /**
+   * Whether a compound is reached by a sibling combinator (`+`, `~`).
+   */
+  protected static function isSibling(array $compound): bool {
+    return in_array($compound['combinator'], [RelativeSelector::NEXT, RelativeSelector::SUBSEQUENT], TRUE);
+  }
+
+  /**
+   * The index of the last weighted (non-universal) compound from $from, or -1.
+   *
+   * The subject alone weighs: a qualifier takes its argument's weight,
+   * and every argument compound prints inside :where().
+   */
+  protected static function lastWeighted(array $compounds, int $from): int {
+    for ($i = count($compounds) - 1; $i >= $from; $i--) {
+      if ($compounds[$i]['kind'] !== RelativeSelector::UNIVERSAL) {
+        return $i;
+      }
+    }
+    return -1;
+  }
+
+  /**
+   * Prints the chain from one compound on, each behind its combinator.
+   */
+  protected static function renderTail(array $compounds, int $carrier, int $from): string {
+    $printed = '';
+    foreach (array_slice($compounds, $from, NULL, TRUE) as $i => $compound) {
+      $printed .= static::renderCombinator($compound) . static::renderCompound($compound, $i === $carrier);
+    }
+    return $printed;
+  }
+
+  /**
+   * The symbols of the spelled combinators (the descendant one is a space).
+   */
+  protected const COMBINATOR_SYMBOLS = [
+    RelativeSelector::CHILD => '>',
+    RelativeSelector::NEXT => '+',
+    RelativeSelector::SUBSEQUENT => '~',
+  ];
+
+  /**
+   * Prints the combinator reaching a compound: ` > `, ` + ` or ` ~ `, the
+   * one space for a descendant.
+   */
+  protected static function renderCombinator(array $compound): string {
+    return $compound['combinator'] === RelativeSelector::DESCENDANT
+      ? ' '
+      : ' ' . static::COMBINATOR_SYMBOLS[$compound['combinator']] . ' ';
+  }
+
+  /**
+   * Prints one compound: its subject, bare when it carries the weight,
+   * else in :where(), then its qualifiers.
+   *
+   * `*` prints bare (it weighs nothing); an implied subject (inside
+   * `:not()`) prints nothing.
+   */
+  protected static function renderCompound(array $compound, bool $bare): string {
+    if ($compound['kind'] === NULL) {
+      return static::renderQualifiers($compound);
+    }
+    if ($compound['kind'] === RelativeSelector::UNIVERSAL) {
+      return '*' . static::renderQualifiers($compound);
+    }
+    $printed = $compound['kind'] === RelativeSelector::TYPE ? static::typeSelector($compound['name']) : $compound['name'];
+    return ($bare ? $printed : ':where(' . $printed . ')') . static::renderQualifiers($compound);
+  }
+
+  /**
+   * Prints a compound's qualifiers, each at zero weight.
+   *
+   * `:has()` and `:not()` take their argument's specificity, and the
+   * discipline puts ONE weight on the chain, so every argument compound
+   * prints inside :where(); :where() takes complex selectors and never
+   * relative ones, so the wrap is per compound and the argument's
+   * combinators stay bare, its lead glued to its space
+   * (`:has(> :where([data-element="block_type:image"]))`,
+   * `:not(:where(p))`, `:not(:has(:where(a)))`).
+   */
+  protected static function renderQualifiers(array $compound): string {
+    $printed = '';
+    foreach ($compound['qualifiers'] as $qualifier) {
+      $printed .= $qualifier['name'] === RelativeSelector::HAS
+        ? ':has(' . static::renderArgument($qualifier['argument']) . ')'
+        : ':not(' . static::renderCompound($qualifier['argument'], FALSE) . ')';
+    }
+    return $printed;
+  }
+
+  /**
+   * Prints a `:has()` argument: its lead, then each compound in :where().
+   */
+  protected static function renderArgument(array $compounds): string {
+    $printed = $compounds[0]['combinator'] === RelativeSelector::DESCENDANT
+      ? ''
+      : static::COMBINATOR_SYMBOLS[$compounds[0]['combinator']] . ' ';
+    foreach ($compounds as $i => $compound) {
+      $printed .= ($i === 0 ? '' : static::renderCombinator($compound)) . static::renderCompound($compound, FALSE);
+    }
+    return $printed;
+  }
+
+  /**
+   * The selector a type compound matches: the element address stamp.
+   *
+   * `pb-text` is `[data-element="block_type:text"]`; the two kind
+   * families select every member of the family (addressMembers()),
+   * `pb-block` as an :is() list so the compound stays one link of the
+   * chain. Mirrored by printer.js's typeSelector, byte for byte.
+   */
+  public static function typeSelector(string $type): string {
+    $members = static::addressMembers(RelativeSelector::typeAddress($type));
+    return count($members) === 1 ? $members[0] : ':is(' . implode(', ', $members) . ')';
+  }
+
+  /**
+   * The attribute selectors a root address selects, by the stamp.
+   *
+   * The ONE derivation of "which stamped roots does this address name":
+   * a refinement (block_type:, block_plugin:, layout:) its own address
+   * exactly; a kind every address of that kind: kind:block the two block
+   * placement families, kind:container the layout family, kind:entity
+   * and kind:field their own bare kinds, which are the addresses entity
+   * and field roots wear. The defaults tier (DefaultsStylesheet) and the
+   * type compounds read here. A base tag derives no selector (the tag IS
+   * the selector), and neither does a kind no root resolves through.
+   *
+   * @return string[]
+   *   The members, [] when the address selects no stamped root.
+   */
+  public static function addressMembers(Address $address): array {
+    if ($address->isBase() || !$address->isRoot()) {
+      return [];
+    }
+    $attribute = ElementAddress::ATTRIBUTE;
+    return match (TRUE) {
+      !$address->isKind() => [sprintf('[%s="%s"]', $attribute, $address)],
+      $address->id === Address::KIND_BLOCK => [
+        sprintf('[%s^="%s"]', $attribute, ElementAddress::BLOCK_TYPE_PREFIX),
+        sprintf('[%s^="%s"]', $attribute, ElementAddress::BLOCK_PLUGIN_PREFIX),
+      ],
+      $address->id === Address::KIND_CONTAINER => [sprintf('[%s^="%s"]', $attribute, ElementAddress::LAYOUT_PREFIX)],
+      (string) $address === ElementAddress::ENTITY, (string) $address === ElementAddress::FIELD => [sprintf('[%s="%s"]', $attribute, $address)],
+      default => [],
+    };
+  }
+
+  /**
+   * The donut a container-rooted entry takes, by its selector's shape.
+   *
+   * The root entry takes the standard donut (its co-target companion
+   * reaches claiming interiors, which nested roots own). A part-first
+   * selector takes it too, shifted one child level per compound the part
+   * reaches by `>`: the targets of `.cls > *` are the nested roots the
+   * standard limit would exclude, so the boundary moves to the nested
+   * roots' children, which keeps the roots stylable as the part's
+   * children while a nested container's identical part markup (whose own
+   * children sit below the shifted limit) stays out; `.cls > pb-text > *`
+   * shifts twice, and so on. A part-first selector that continues by a
+   * DESCENDANT combinator (`.cls p`) reaches inside nested roots on
+   * purpose (doctrine: a tag or type compound has descendant reach,
+   * bounded by proximity precedence alone), so it takes no donut; nor
+   * does any other selector shape. Mirrored by printer.js's donutLimit.
+   */
+  public static function donutLimit(?RelativeSelector $selector): ?string {
+    if ($selector === NULL) {
+      return self::CONTAINER_SCOPE_LIMIT;
+    }
+    if (!$selector->isPartFirst()) {
+      return NULL;
+    }
+    $levels = 0;
+    foreach (array_slice($selector->compounds, 1) as $compound) {
+      if ($compound['combinator'] !== RelativeSelector::CHILD) {
+        return NULL;
+      }
+      $levels++;
+    }
+    if ($levels === 0) {
+      return self::CONTAINER_SCOPE_LIMIT;
+    }
     return implode(', ', array_map(
-      static fn (string $member): string => trim($member) . ' > *',
-      explode(',', $limit),
+      static fn (string $member): string => trim($member) . str_repeat(' > *', $levels),
+      explode(',', self::CONTAINER_SCOPE_LIMIT),
     ));
   }
 

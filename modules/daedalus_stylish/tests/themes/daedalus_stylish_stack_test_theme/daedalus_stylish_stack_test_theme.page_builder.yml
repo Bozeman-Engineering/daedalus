@@ -1,0 +1,8 @@
+# One declared default on the (composed, in the stack test's state) container
+# kind: a stack read under this theme carries it in its declared layer, a read
+# under any other theme does not.
+container:
+  defaults:
+    '':
+      default:
+        gap: 1rem

@@ -26,7 +26,7 @@
  * mounts/unmounts the declared anchor with the typing surface following
  * the text), so the preview is the same tree the commit's markup swap
  * will deliver. Blur commits every changed field as one `update_element`
- * op through the blueprint mutation spine (BlueprintEditorBase). Escape
+ * op through the blueprint mutation spine (EditorPluginBase). Escape
  * restores the mirror snapshot, previewed structure included.
  *
  * The widget-verb popover grammar, link control, and resolved-tree morph
@@ -34,20 +34,14 @@
  * DaedalusEditQueue API; the tag picker and the property-bag resolution are
  * this editor's own.
  *
- * @see daedalus_edit/js/daedalus_edit/plugins/blueprint-editor-base.js
+ * @see daedalus_edit/js/daedalus_edit/plugins/editor-plugin-base.js
  * @see daedalus_edit/js/daedalus_edit/composed/verb-widgets.js
  * @see daedalus_edit/js/daedalus_edit/composed/link-control.js
  * @see daedalus_edit/js/daedalus_edit/composed/element-preview.js
  * @see ../daedalus_edit_text_block.page_builder.block_type.text.yml
  */
 (window.DaedalusEditQueue ||= []).push(
-  ({
-    BlueprintEditorBase,
-    editors,
-    verbWidgets,
-    linkControl,
-    elementPreview,
-  }) => {
+  ({ EditorPluginBase, editors, verbWidgets, linkControl, elementPreview }) => {
     // Phosphor icon, the site's icon language (daedalus_ui/assets); the
     // chip's icon class sizes and colors it.
     const CODE_ICON =
@@ -68,7 +62,7 @@
      * - linkPreview: the link control's previewed value (see
      *   composed/link-control.js).
      */
-    class TextCompositeEditor extends BlueprintEditorBase {
+    class TextCompositeEditor extends EditorPluginBase {
       id = 'text_composite';
 
       /**
@@ -116,7 +110,7 @@
        * snapshots, so a stale linkPreview from an earlier gesture on the
        * same leaf cannot shadow the snapshot for an untouched link. A
        * foreign mutation's swap mid-gesture does not come back through here:
-       * the engine hands the open edit's draft to BlueprintEditorBase.resume,
+       * the engine hands the open edit's draft to EditorPluginBase.resume,
        * which resets the same state through resetGesture() before it
        * re-snapshots.
        *
@@ -239,20 +233,26 @@
           icon: CODE_ICON,
           showLabel,
         });
-        const tags = verbWidgets.buildPopover(
-          EditableElement,
-          container,
-          'tags',
-        );
-        tags.classList.add('daedalus-edit-tag-picker');
+        const popover = verbWidgets.buildPopover(EditableElement, 'tags', {
+          // The surface closing with focus on a tag button (a scroll, a
+          // press outside) hands focus back to the text.
+          returnFocus: (element) => this.textElement(element),
+        });
+        // The picker is the kit's segmented control on the surface's card
+        // (daedalus_ui/panel_controls): one track, one segment per tag,
+        // the pressed tag raised by daedalus-ui-segment--active.
+        const tags = document.createElement('div');
+        tags.className = 'daedalus-edit-tag-picker daedalus-ui-segments';
         tags.setAttribute('role', 'group');
         tags.setAttribute('aria-label', Drupal.t('Tag'));
+        popover.append(tags);
         Object.entries(
           EditableElement.settings.tag_allowed_values ?? {},
         ).forEach(([tag, label]) => {
           const button = document.createElement('button');
           button.type = 'button';
-          button.className = 'daedalus-edit-tag-picker__tag';
+          button.className =
+            'daedalus-edit-tag-picker__tag daedalus-ui-segment';
           button.dataset.tag = tag;
           button.textContent = label;
           // Reached by roving focus (arrows/Tab within the popover), never by
@@ -272,10 +272,11 @@
           tags.append(button);
         });
         // Roving focus within the open picker: arrows and Tab cycle the tag
-        // buttons (trapped — leaving the picker is Escape's job), Escape
-        // closes it and returns to the text. stopPropagation keeps these
-        // presses from the document-level hotkey dispatcher, so the session's
-        // Tab/Escape grammar only sees keys from the text itself.
+        // buttons (trapped — leaving the picker is Escape's job, and Escape
+        // is the surface's: it closes the picker at document capture and
+        // returns focus to the text, the opener). stopPropagation keeps
+        // these presses from the document-level hotkey dispatcher, so the
+        // session's Tab grammar only sees keys from the text itself.
         tags.addEventListener('keydown', (event) => {
           const buttons = Array.from(
             tags.querySelectorAll('.daedalus-edit-tag-picker__tag'),
@@ -294,12 +295,6 @@
             (event.key === 'Tab' && event.shiftKey)
           ) {
             target = buttons[(index - 1 + buttons.length) % buttons.length];
-          } else if (event.key === 'Escape') {
-            event.preventDefault();
-            event.stopPropagation();
-            verbWidgets.togglePopover(EditableElement, 'tags', false);
-            this.textElement(EditableElement)?.focus();
-            return;
           } else {
             return;
           }
@@ -324,10 +319,9 @@
           ?.get('tags')
           ?.popover?.querySelectorAll('.daedalus-edit-tag-picker__tag')
           .forEach((button) => {
-            button.setAttribute(
-              'aria-pressed',
-              String(button.dataset.tag === current),
-            );
+            const pressed = button.dataset.tag === current;
+            button.setAttribute('aria-pressed', String(pressed));
+            button.classList.toggle('daedalus-ui-segment--active', pressed);
           });
       }
 
@@ -368,7 +362,7 @@
        * reconciles the leaf between the two trees, the typing-surface
        * markers following the text's mount. The previewed anchor is not
        * navigable in edit mode: clicks inside the leaf resolve to the leaf
-       * and the armed session's click handler prevents their default.
+       * and the open edit's press decision prevents their default.
        *
        * @param {EditableElement} EditableElement
        *   The element being edited.
@@ -376,7 +370,7 @@
        *   The changed properties (readProperties() names).
        */
       previewProperties(EditableElement, changes) {
-        const Blueprint = Drupal.Daedalus.Blueprint;
+        const { Blueprint } = Drupal.Daedalus;
         const declaration = Blueprint.blockTypeDeclaration(
           this.mirrorComponent(EditableElement)?.block_type ?? 'text',
         );
@@ -480,9 +474,9 @@
        * the tag). Parameterized
        * shortcuts, not verbs: the Tag verb (with Cmd+Opt+T) is the
        * registry's one entry for the gesture, and these are its expert
-       * accelerators. Each declares both the armed-session and typing
+       * accelerators. Each declares both the editing and typing
        * contexts — focus alternates between the contenteditable text
-       * (typing) and the tag buttons (armed-session) — and is listed
+       * (typing) and the tag buttons (editing) — and is listed
        * remappable in the settings tray under the Text block section.
        */
       registerHotkeys() {
@@ -546,7 +540,7 @@
         bindings.forEach((binding) => {
           Drupal.Daedalus.Hotkeys.register({
             ...binding,
-            when: ['armed-session', 'typing'],
+            when: ['editing', 'typing'],
             section: Drupal.t('Text block'),
             remappable: true,
           });
@@ -586,21 +580,21 @@
         applies: () => editor.currentEdit() !== null,
         run: () => {
           const current = editor.currentEdit();
-          const popover = current?.verbWidgets?.get('tags')?.popover;
-          if (!popover) {
+          const entry = current?.verbWidgets?.get('tags');
+          if (!entry?.popover) {
             return;
           }
-          const show = popover.hidden;
+          const show = !entry.open;
           verbWidgets.togglePopover(current, 'tags', show);
           if (show) {
             // Land on the current tag so arrows/Tab pick from there.
             (
-              popover.querySelector("[aria-pressed='true']") ??
-              popover.querySelector('button')
+              entry.popover.querySelector("[aria-pressed='true']") ??
+              entry.popover.querySelector('button')
             )?.focus();
-          } else {
-            editor.textElement(current)?.focus();
           }
+          // Toggling closed with focus on a tag button returns focus to the
+          // text through the widget's returnFocus (the surface's onClose).
         },
         widget: (key, container, { labels } = {}) => {
           const current = editor.currentEdit();

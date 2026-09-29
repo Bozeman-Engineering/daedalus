@@ -348,7 +348,11 @@ interface BlueprintOperationsInterface {
    *   would have landed (success, or every failing op's errors), and the
    *   entity is restored either way with no alias persisted. The posture
    *   is the judged batch's own; nested batches its ops run land on the
-   *   doomed entity as usual.
+   *   doomed entity as usual. `langcode` (string, default NULL): the
+   *   translation the batch mutates, resolved as the read side resolves
+   *   it (the translation must exist); NULL mutates the entity as handed
+   *   in, whatever translation that object is. The result carries the
+   *   entity object the caller passed, its named translation modified.
    *
    * @return \Drupal\daedalus_blueprint\Result\BlueprintResult
    *   Success with the fully modified entity, or failure with errors.

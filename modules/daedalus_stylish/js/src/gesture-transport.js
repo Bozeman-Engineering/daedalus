@@ -100,6 +100,15 @@ export const asJson = async (response) => {
 export const get = (path) => fetch(Drupal.url(path)).then(asJson);
 
 /**
+ * A text read (a route answering text/css): the body as a string,
+ * rejecting on the shared JSON error envelope exactly as asJson does.
+ */
+export const getText = (path) =>
+  fetch(Drupal.url(path)).then((response) =>
+    response.ok ? response.text() : asJson(response),
+  );
+
+/**
  * A write with the CSRF header; payload null sends no body.
  */
 export const send = async (method, path, payload = null) => {

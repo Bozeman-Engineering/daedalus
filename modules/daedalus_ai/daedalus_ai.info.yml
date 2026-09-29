@@ -8,6 +8,8 @@ lifecycle: experimental
 configure: daedalus_ui.settings
 dependencies:
   - daedalus:daedalus
+  # The attachment store holds a conversation's files on file.usage.
+  - drupal:file
   - daedalus:daedalus_ui
   - ai:ai_chatbot
   - ai_agents:ai_agents

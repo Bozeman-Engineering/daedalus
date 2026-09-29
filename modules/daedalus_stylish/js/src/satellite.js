@@ -40,7 +40,11 @@ const SatelliteHost = ({ source, guide, variants, swatches, animations }) => {
   );
 };
 
-const scope = new URLSearchParams(window.location.search).get('scope');
+// The session scope is the pop-out route contract's one input (the
+// leader's ?scope, delivered as daedalusUi.popout.scope by daedalus_ui's
+// pop-out page attachments); a hand-typed URL without one has no leader
+// to pair with, so nothing mounts.
+const { scope } = drupalSettings.daedalusUi.popout;
 const mount = document.getElementById('daedalus-stylish-inspector-root');
 if (scope && mount) {
   render(

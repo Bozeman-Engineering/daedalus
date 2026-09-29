@@ -47,6 +47,7 @@ class ComposedBlockSchemaTest extends KernelTestBase {
     'twig_events',
     'daedalus_tempstore',
     'daedalus_blueprint_api',
+    'file',
     'daedalus_ui',
     'daedalus_stylish',
     'daedalus_stylish_nested_test',
@@ -219,7 +220,7 @@ class ComposedBlockSchemaTest extends KernelTestBase {
     $this->assertStringContainsString('Addressable tags: h1, h2, h3, h4, h5, h6, p, a, ul, ol, li, blockquote, pre, code, img.', $rich_text);
     $this->assertStringContainsString('{key}::.s-x', $rich_text);
     $this->assertStringContainsString('{key}::tag', $rich_text);
-    $this->assertStringContainsString('{key}::.s-x::>', $rich_text);
+    $this->assertStringContainsString('{key}::.s-x > *', $rich_text);
     $this->assertStringContainsString('keep them on elements you are keeping', $rich_text);
     $this->assertStringContainsString('author your own classes', $rich_text);
     $this->assertStringContainsString('strips at render', $rich_text);

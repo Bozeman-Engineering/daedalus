@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Drupal\Tests\daedalus_stylish\Kernel;
 
 use Drupal\KernelTests\KernelTestBase;
+use Drupal\daedalus_blueprint\Materials\RelativeSelector;
 use Drupal\daedalus_stylish\CssPrinter;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
@@ -35,6 +36,7 @@ class CssPrinterTest extends KernelTestBase {
     'twig_events',
     'daedalus_tempstore',
     'daedalus_blueprint_api',
+    'file',
     'daedalus_ui',
     'daedalus_stylish',
   ];
@@ -233,7 +235,7 @@ CSS;
     $this->assertSame($expected, $css);
 
     $css = $this->printer->printMap([
-      "block:{$this->uuid}::>" => ['default' => ['color' => 'red']],
+      "block:{$this->uuid}::> *" => ['default' => ['color' => 'red']],
     ]);
     $expected = <<<CSS
 @scope ([data-selectable="block:{$this->uuid}"]) {
@@ -291,6 +293,52 @@ CSS;
   }
 
   /**
+   * A structural fact prints its pseudo-class bare: no force-state dual.
+   *
+   * The fact holds by the element's place in the markup, so nothing the
+   * editor stamps can make it true; a posable state in the same compound
+   * keeps its :is() dual, and the fact appends to every target of a
+   * selector entry (the children lane's ":scope > *:first-child").
+   */
+  public function testStructuralFacts(): void {
+    $css = $this->printer->printMap([
+      "container:{$this->uuid}::> *" => [
+        'first-child' => ['margin-top' => '0'],
+        'odd' => ['background-color' => '#f5f5f5'],
+        'hover+last-child' => ['color' => 'blue'],
+      ],
+      "block:{$this->uuid}" => [
+        'empty' => ['display' => 'none'],
+        'even+narrow' => ['padding' => '1rem'],
+      ],
+    ]);
+    $expected = <<<CSS
+@scope ([data-selectable="container:{$this->uuid}"]) {
+  :scope > *:first-child {
+    margin-top: 0;
+  }
+  :scope > *:nth-child(odd) {
+    background-color: #f5f5f5;
+  }
+  :scope > *:is(:hover, [data-force-state~="hover"]):last-child {
+    color: blue;
+  }
+}
+@scope ([data-selectable="block:{$this->uuid}"]) {
+  :scope:empty {
+    display: none;
+  }
+  @container (max-width: 767px) {
+    :scope:nth-child(even) {
+      padding: 1rem;
+    }
+  }
+}
+CSS;
+    $this->assertSame($expected, $css);
+  }
+
+  /**
    * Sub-element keys select their class inside the parent's scope root.
    *
    * The target is a selector LIST: the descendant part class plus the
@@ -328,10 +376,12 @@ CSS;
    * no :where() wrap, so the rule sits at 0-0-1. That weight IS the tier
    * cascade: it beats the skin's zero-specificity base:{tag} default and
    * loses to every minted part class (0-1-0), regardless of document
-   * order. Pseudo suffixes append to the tag; container keys keep the
-   * standard donut; a tag children entry ("::ul::>") extends the single
-   * target with ' > *'; tag entries never co-target (they already address
-   * descendants directly).
+   * order. Pseudo suffixes append to the tag; a container's tag rule
+   * reaches its whole subtree (doctrine: a tag compound crosses nested
+   * roots on purpose, bounded by proximity precedence, so a text block's
+   * root paragraph IS reachable from its container); a tag children entry
+   * ("::ul > *") extends the single target with ' > *'; tag entries never
+   * co-target (they already address descendants directly).
    */
   public function testTagTierKey(): void {
     $css = $this->printer->printMap([
@@ -355,14 +405,14 @@ CSS;
     // Text properties on a tag entry never emit the co-target companion.
     $this->assertStringNotContainsString('[data-claims-content]', $css);
 
-    // Container keys keep the standard donut: the tag rule stops at
-    // nested container and block roots, whose text belongs to their own
-    // key families.
+    // A container's tag rule takes no donut: it reaches every paragraph
+    // under the container, nested block roots included, and loses to a
+    // block's own rule by proximity.
     $css = $this->printer->printMap([
       "container:{$this->uuid}::ul" => ['default' => ['margin-block' => '0']],
     ]);
     $expected = <<<CSS
-@scope ([data-selectable="container:{$this->uuid}"]) to (:scope [data-selectable^="container:"], :scope [data-selectable^="block:"]) {
+@scope ([data-selectable="container:{$this->uuid}"]) {
   ul {
     margin-block: 0;
   }
@@ -373,7 +423,7 @@ CSS;
     // A tag children entry keeps the single descendant target, extended
     // one level down.
     $css = $this->printer->printMap([
-      "block:{$this->uuid}::ul::>" => ['default' => ['padding-inline-start' => '1rem']],
+      "block:{$this->uuid}::ul > *" => ['default' => ['padding-inline-start' => '1rem']],
     ]);
     $expected = <<<CSS
 @scope ([data-selectable="block:{$this->uuid}"]) {
@@ -416,16 +466,17 @@ CSS;
   }
 
   /**
-   * The '::>' children pseudo-part prints as a ' > *' target extension.
+   * The '> *' children selector prints as a ' > *' target extension.
    *
    * The children entry rides the addressed element's own targets one level
    * down: ':scope > *' for a root key, the part dual with ' > *' appended
-   * for a part's children ('::.class::>'). Container-rooted children
-   * entries take the CHILD-SHIFTED donut: their targets are exactly the
-   * nested container/block roots the standard donut excludes, so the
-   * boundary moves to those roots' children. The columns stay stylable,
+   * for a part's children ('::.class > *'). A part-first children entry
+   * on a container takes the CHILD-SHIFTED donut: its targets are exactly
+   * the nested container/block roots the standard donut excludes, so the
+   * boundary moves to those roots' children; the columns stay stylable,
    * their interiors stay out, and the descendant half of the part dual
-   * cannot leak into a nested container's identical part markup.
+   * cannot leak into a nested container's identical part markup. The bare
+   * '> *' takes no donut at all: the child combinator self-limits.
    *
    * The part half's class wraps in :where(), capping every children
    * target at ':scope' weight (0-1-0): a child's own entry ties it and
@@ -434,7 +485,7 @@ CSS;
    */
   public function testChildrenPseudoPart(): void {
     $css = $this->printer->printMap([
-      "container:{$this->uuid}::.daedalus-stylish-layout-container::>" => [
+      "container:{$this->uuid}::.daedalus-stylish-layout-container > *" => [
         'default' => ['flex-grow' => '1', 'min-width' => '0'],
         'narrow' => ['flex-grow' => '0'],
       ],
@@ -454,13 +505,13 @@ CSS;
 CSS;
     $this->assertSame($expected, $css);
 
-    // Bare root children on a container key: ':scope > *' with the same
-    // child-shifted donut.
+    // Bare root children on a container key: ':scope > *', no donut (the
+    // child combinator self-limits).
     $css = $this->printer->printMap([
-      "container:{$this->uuid}::>" => ['default' => ['min-width' => '0']],
+      "container:{$this->uuid}::> *" => ['default' => ['min-width' => '0']],
     ]);
     $expected = <<<CSS
-@scope ([data-selectable="container:{$this->uuid}"]) to (:scope [data-selectable^="container:"] > *, :scope [data-selectable^="block:"] > *) {
+@scope ([data-selectable="container:{$this->uuid}"]) {
   :scope > * {
     min-width: 0;
   }
@@ -471,7 +522,7 @@ CSS;
     // Non-container keys print children unbounded, like their other
     // entries.
     $css = $this->printer->printMap([
-      "block:{$this->uuid}::>" => ['default' => ['gap' => '1rem']],
+      "block:{$this->uuid}::> *" => ['default' => ['gap' => '1rem']],
     ]);
     $expected = <<<CSS
 @scope ([data-selectable="block:{$this->uuid}"]) {
@@ -482,12 +533,294 @@ CSS;
 CSS;
     $this->assertSame($expected, $css);
 
-    // A doubled or misplaced children suffix is not a key and prints
-    // nothing (the emit gate's grammar posture).
+    // A doubled or misplaced children suffix, the retired '::>' spelling
+    // and a non-canonical spelling are not keys and print nothing (the
+    // emit gate's grammar posture).
     $this->assertSame('', $this->printer->printMap([
       "container:{$this->uuid}::>::>" => ['default' => ['color' => 'red']],
       "container:{$this->uuid}::>x" => ['default' => ['color' => 'red']],
+      "container:{$this->uuid}::>" => ['default' => ['color' => 'red']],
+      "container:{$this->uuid}::>*" => ['default' => ['color' => 'red']],
     ]));
+  }
+
+  /**
+   * Type compounds and chains print by the specificity discipline.
+   *
+   * ONE link of the chain carries the weight (the last non-universal
+   * compound, ':scope' included) and every other prints inside :where(),
+   * so an ancestor's rule for a descendant weighs exactly what the
+   * descendant's own rule weighs and loses to it on proximity. A type
+   * compound selects by the element address stamp; the two kind spellings
+   * select their families; a chain crossing into children takes no donut.
+   */
+  public function testSelectorDiscipline(): void {
+    $cases = [
+      "container:{$this->uuid}::> pb-text" => ':where(:scope) > [data-element="block_type:text"]',
+      "container:{$this->uuid}::pb-formatted-text" => '[data-element="block_type:formatted_text"]',
+      "container:{$this->uuid}::> pb-text .text-block-link" => ':where(:scope) > :where([data-element="block_type:text"]) .text-block-link',
+      "container:{$this->uuid}::> pb-text p" => ':where(:scope) > :where([data-element="block_type:text"]) p',
+      "container:{$this->uuid}::> pb-container" => ':where(:scope) > [data-element^="layout:"]',
+      "container:{$this->uuid}::pb-block" => ':is([data-element^="block_type:"], [data-element^="block_plugin:"])',
+      "container:{$this->uuid}::> * > *" => ':scope > * > *',
+    ];
+    foreach ($cases as $key => $target) {
+      $css = $this->printer->printMap([$key => ['default' => ['color' => 'red'], 'hover' => ['color' => 'blue']]]);
+      $this->assertStringNotContainsString(' to (', $css, "$key crosses into children, so it takes no donut.");
+      $this->assertStringContainsString("\n  $target {\n    color: red;\n  }\n", $css, $key);
+      $this->assertStringContainsString("\n  {$target}:is(:hover, [data-force-state~=\"hover\"]) {\n    color: blue;\n  }\n", $css, $key);
+    }
+    // A child part keeps the hoisted dual (the collapsed container wears
+    // its part class on the root the scope names) and the standard donut.
+    $css = $this->printer->printMap([
+      "container:{$this->uuid}::> .quote" => ['default' => ['color' => 'red']],
+    ]);
+    $this->assertStringContainsString('to (:scope [data-selectable^="container:"], :scope [data-selectable^="block:"])', $css);
+    $this->assertStringContainsString(':scope.quote, :where(:scope) > .quote {', $css);
+    // A part reaching a type by '>' shifts the donut and puts the weight
+    // on the type; a part continuing by a descendant combinator takes no
+    // donut and keeps the tag's 0-0-1.
+    $css = $this->printer->printMap([
+      "container:{$this->uuid}::.band > pb-text" => ['default' => ['color' => 'red']],
+      "container:{$this->uuid}::.band p" => ['default' => ['color' => 'blue']],
+    ]);
+    $this->assertStringContainsString('to (:scope [data-selectable^="container:"] > *, :scope [data-selectable^="block:"] > *) {' . "\n" . '  :where(:scope):where(.band) > [data-element="block_type:text"], :where(.band) > [data-element="block_type:text"] {', $css);
+    $this->assertStringContainsString('@scope ([data-selectable="container:' . $this->uuid . '"]) {' . "\n" . '  :where(:scope):where(.band) p, :where(.band) p {', $css);
+  }
+
+  /**
+   * Sibling combinators and qualifiers print by the same discipline.
+   *
+   * A sibling combinator prints like `>` (` + `, ` ~ `); a qualifier
+   * prints on its compound and adds no weight: `:has()` and `:not()` take
+   * their argument's specificity, so every argument compound prints
+   * inside :where() with its combinators bare (:where() takes complex
+   * selectors, never relative ones, so the wrap is per compound). The
+   * subject alone weighs, so `> *:not(pb-image)` leaves the weight on
+   * `:scope`. A part's dual carries the part's qualifiers and is skipped
+   * when the part's next compound is a sibling (the scope root has no
+   * sibling inside itself). The bare print path (the defaults tier)
+   * prints the same compounds.
+   */
+  public function testRelationDiscipline(): void {
+    $cases = [
+      "container:{$this->uuid}::> pb-text:has(a)" => ':where(:scope) > [data-element="block_type:text"]:has(:where(a))',
+      "container:{$this->uuid}::> pb-container:has(> pb-image)" => ':where(:scope) > [data-element^="layout:"]:has(> :where([data-element="block_type:image"]))',
+      "container:{$this->uuid}::> pb-text:has(+ pb-image)" => ':where(:scope) > [data-element="block_type:text"]:has(+ :where([data-element="block_type:image"]))',
+      "container:{$this->uuid}::> p + p" => ':where(:scope) > :where(p) + p',
+      "container:{$this->uuid}::> p ~ p" => ':where(:scope) > :where(p) ~ p',
+      "container:{$this->uuid}::> p + *" => ':where(:scope) > p + *',
+      "container:{$this->uuid}::> *:not(pb-image)" => ':scope > *:not(:where([data-element="block_type:image"]))',
+      "container:{$this->uuid}::> *:not(pb-image):not(pb-video)" => ':scope > *:not(:where([data-element="block_type:image"])):not(:where([data-element="block_type:video"]))',
+      "container:{$this->uuid}::> pb-text:not(:has(a))" => ':where(:scope) > [data-element="block_type:text"]:not(:has(:where(a)))',
+      "container:{$this->uuid}::> pb-text:has(a):not(.featured)" => ':where(:scope) > [data-element="block_type:text"]:has(:where(a)):not(:where(.featured))',
+      "container:{$this->uuid}::> pb-text .link ~ .link" => ':where(:scope) > :where([data-element="block_type:text"]) :where(.link) ~ .link',
+      "block:{$this->uuid}::p:has(a)" => 'p:has(:where(a))',
+    ];
+    foreach ($cases as $key => $target) {
+      $css = $this->printer->printMap([$key => ['default' => ['color' => 'red'], 'hover' => ['color' => 'blue']]]);
+      $this->assertStringNotContainsString(' to (', $css, "$key crosses into children, so it takes no donut.");
+      $this->assertStringContainsString("\n  $target {\n    color: red;\n  }\n", $css, $key);
+      $this->assertStringContainsString("\n  {$target}:is(:hover, [data-force-state~=\"hover\"]) {\n    color: blue;\n  }\n", $css, $key);
+    }
+    $css = $this->printer->printMap([
+      "container:{$this->uuid}::> pb-text:has(a)" => ['default' => ['color' => 'red']],
+    ]);
+    $expected = <<<CSS
+@scope ([data-selectable="container:{$this->uuid}"]) {
+  :where(:scope) > [data-element="block_type:text"]:has(:where(a)) {
+    color: red;
+  }
+}
+CSS;
+    $this->assertSame($expected, $css);
+
+    // A part-first sibling chain prints no dual; a qualified part keeps
+    // it, the qualifier riding both halves, and the standard donut.
+    $css = $this->printer->printMap([
+      "container:{$this->uuid}::.band + .band" => ['default' => ['margin-top' => '0']],
+      "container:{$this->uuid}::.band:has(a)" => ['default' => ['color' => 'red']],
+      "container:{$this->uuid}::.band:has(a) > *" => ['default' => ['color' => 'blue']],
+    ]);
+    $this->assertStringContainsString("\n  :where(.band) + .band {\n", $css);
+    $this->assertStringNotContainsString(':scope:where(.band) + .band', $css);
+    $this->assertStringContainsString('to (:scope [data-selectable^="container:"], :scope [data-selectable^="block:"]) {' . "\n" . '  :scope.band:has(:where(a)), .band:has(:where(a)) {', $css);
+    $this->assertStringContainsString('to (:scope [data-selectable^="container:"] > *, :scope [data-selectable^="block:"] > *) {' . "\n" . '  :scope:where(.band):has(:where(a)) > *, .band:has(:where(a)) > * {', $css);
+
+    // The bare lane prints the same compounds after the element's selector.
+    $css = $this->printer->printBareEntry(':where([data-element="kind:container"])', RelativeSelector::parse('> pb-text:has(+ pb-image) ~ p'), ['default' => ['color' => 'red']]);
+    $this->assertSame(":where([data-element=\"kind:container\"]) > :where([data-element=\"block_type:text\"]):has(+ :where([data-element=\"block_type:image\"])) ~ :where(p) {\n  color: red;\n}", $css);
+  }
+
+  /**
+   * A terminal pseudo-element prints last, after the host and its states.
+   *
+   * A generated box (`::before`, `::after`) has no node: the selector's
+   * chain addresses its HOST by the discipline, and the pseudo-element
+   * glues onto every target after the last compound's qualifiers, after
+   * the condition suffixes (the state holds on the host:
+   * `:scope:is(:hover, …)::before`) and after the hold's `:not()` (the
+   * runtime stamps the host). :where() cannot wrap a pseudo-element, so
+   * every rule addressing a box weighs its host's weight plus 0-0-1, own
+   * and ancestor alike, and the ties the discipline relies on hold on the
+   * boxes as on their hosts. The owner's anchor (`&::before`) is the
+   * scoping root's own box and never co-targets: the companion is the
+   * root's own entry's, and a box has no claiming interior. The part
+   * dual carries the pseudo on both halves and keeps the part's donut;
+   * the bare lane prints the same tail after the element's selector; a
+   * fragment worn at a rule continues the anchor onto the rule's landing
+   * and nothing continues under a rule that already ends in a box.
+   */
+  public function testPseudoElement(): void {
+    $css = $this->printer->printMap([
+      "block:{$this->uuid}::&::before" => [
+        'default' => ['content' => '""', 'color' => 'red', 'animation-trigger' => '--in-view play-once'],
+        'hover' => ['color' => 'blue'],
+        'first-child' => ['display' => 'none'],
+        'narrow' => ['display' => 'none'],
+      ],
+    ]);
+    $expected = <<<CSS
+@scope ([data-selectable="block:{$this->uuid}"]) {
+  :scope::before {
+    content: "";
+    color: red;
+    animation-trigger: --in-view play-once;
+    --daedalus-stylish-animation-trigger: --in-view play-once;
+  }
+  @supports not (animation-trigger: none) {
+    :scope:not([data-daedalus-stylish-triggered])::before {
+      animation-play-state: paused;
+    }
+  }
+  :scope:is(:hover, [data-force-state~="hover"])::before {
+    color: blue;
+  }
+  :scope:first-child::before {
+    display: none;
+  }
+  @container (max-width: 767px) {
+    :scope::before {
+      display: none;
+    }
+  }
+}
+CSS;
+    $this->assertSame($expected, $css);
+    $this->assertStringNotContainsString('data-claims-content', $css);
+
+    // Every chain shape carries the box after its host, the discipline
+    // untouched beneath it; a pseudo rule crosses into children exactly
+    // as its host does, so it takes no donut.
+    $cases = [
+      "container:{$this->uuid}::> pb-text::before" => [':where(:scope) > [data-element="block_type:text"]', '::before'],
+      "container:{$this->uuid}::> pb-text:has(a)::after" => [':where(:scope) > [data-element="block_type:text"]:has(:where(a))', '::after'],
+      "container:{$this->uuid}::> p + p::before" => [':where(:scope) > :where(p) + p', '::before'],
+      "container:{$this->uuid}::> *::after" => [':scope > *', '::after'],
+      "container:{$this->uuid}::pb-block::before" => [':is([data-element^="block_type:"], [data-element^="block_plugin:"])', '::before'],
+      "container:{$this->uuid}::> pb-text .link::after" => [':where(:scope) > :where([data-element="block_type:text"]) .link', '::after'],
+      "block:{$this->uuid}::p::before" => ['p', '::before'],
+      "block:{$this->uuid}::&::after" => [':scope', '::after'],
+    ];
+    foreach ($cases as $key => [$host, $pseudo]) {
+      $css = $this->printer->printMap([$key => ['default' => ['content' => '""'], 'hover' => ['color' => 'blue']]]);
+      $this->assertStringNotContainsString(' to (', $css, "$key takes no donut.");
+      $this->assertStringContainsString("\n  {$host}{$pseudo} {\n    content: \"\";\n  }\n", $css, $key);
+      $this->assertStringContainsString("\n  {$host}:is(:hover, [data-force-state~=\"hover\"]){$pseudo} {\n    color: blue;\n  }\n", $css, $key);
+      $this->assertStringNotContainsString('data-claims-content', $css, $key);
+    }
+
+    // The part dual carries the box on both halves and keeps the part's
+    // donut (standard for the bare part, child-shifted through `>`, none
+    // after a sibling step, where the dual is skipped too).
+    $css = $this->printer->printMap([
+      "container:{$this->uuid}::.quote::after" => ['default' => ['content' => '""'], 'hover' => ['color' => 'purple']],
+      "container:{$this->uuid}::.band > *::before" => ['default' => ['content' => '""']],
+      "container:{$this->uuid}::.band + .band::before" => ['default' => ['content' => '""']],
+    ]);
+    $this->assertStringContainsString('to (:scope [data-selectable^="container:"], :scope [data-selectable^="block:"]) {' . "\n" . '  :scope.quote::after, .quote::after {', $css);
+    $this->assertStringContainsString("\n  :scope.quote:is(:hover, [data-force-state~=\"hover\"])::after, .quote:is(:hover, [data-force-state~=\"hover\"])::after {\n", $css);
+    $this->assertStringContainsString('to (:scope [data-selectable^="container:"] > *, :scope [data-selectable^="block:"] > *) {' . "\n" . '  :scope:where(.band) > *::before, .band > *::before {', $css);
+    $this->assertStringContainsString("@scope ([data-selectable=\"container:{$this->uuid}\"]) {\n  :where(.band) + .band::before {", $css);
+    $this->assertStringNotContainsString(':scope:where(.band) + .band::before', $css);
+
+    // Outside the grammar nothing prints: another pseudo-element, a bare
+    // anchor, a space before the box, a box behind a box.
+    $this->assertSame('', $this->printer->printMap([
+      "block:{$this->uuid}::&::marker" => ['default' => ['color' => 'red']],
+      "block:{$this->uuid}::&" => ['default' => ['color' => 'red']],
+      "block:{$this->uuid}::& ::before" => ['default' => ['color' => 'red']],
+      "block:{$this->uuid}::.quote::before::after" => ['default' => ['color' => 'red']],
+    ]));
+
+    // The bare lane (the defaults tier, both scopes of it) prints the
+    // same tail after the element's selector, its states before the box.
+    $css = $this->printer->printBareEntry(':where(.daedalus-stylish-token-scope [data-element="kind:block"])', RelativeSelector::parse('&::before'), [
+      'default' => ['content' => '""', 'animation-trigger' => '--in-view play-once'],
+      'hover' => ['color' => 'purple'],
+    ]);
+    $expected = <<<CSS
+:where(.daedalus-stylish-token-scope [data-element="kind:block"])::before {
+  content: "";
+  animation-trigger: --in-view play-once;
+  --daedalus-stylish-animation-trigger: --in-view play-once;
+}
+@supports not (animation-trigger: none) {
+  :where(.daedalus-stylish-token-scope [data-element="kind:block"]):not([data-daedalus-stylish-triggered])::before {
+    animation-play-state: paused;
+  }
+}
+:where(.daedalus-stylish-token-scope [data-element="kind:block"]):is(:hover, [data-force-state~="hover"])::before {
+  color: purple;
+}
+CSS;
+    $this->assertSame($expected, $css);
+    $css = $this->printer->printBareEntry(':where(.daedalus-stylish-token-scope [data-element="block_type:text"])', RelativeSelector::parse('.quote::after'), ['default' => ['content' => '""']]);
+    $this->assertSame(":where(.daedalus-stylish-token-scope [data-element=\"block_type:text\"]) :where(.quote)::after {\n  content: \"\";\n}", $css);
+    $css = $this->printer->printBareEntry(':where(.daedalus-stylish-token-scope [data-element="kind:container"])', RelativeSelector::parse('> pb-text::before'), ['default' => ['content' => '""']]);
+    $this->assertSame(":where(.daedalus-stylish-token-scope [data-element=\"kind:container\"]) > :where([data-element=\"block_type:text\"])::before {\n  content: \"\";\n}", $css);
+
+    // Worn at a rule, a fragment's anchor continues onto the rule's
+    // landing and a part's box under the rule by descent.
+    $styles = [
+      '' => ['default' => ['padding' => '1rem']],
+      '::&::before' => ['default' => ['content' => '""'], 'hover' => ['color' => 'purple']],
+      '::.link::after' => ['default' => ['content' => '""']],
+    ];
+    $css = $this->printer->printFragmentStyles('[data-selectable="container:x"]', 'block_type:text', $styles, '', RelativeSelector::fromString('> pb-text'));
+    $expected = <<<CSS
+@scope ([data-selectable="container:x"]) {
+  :where(:scope) > [data-element="block_type:text"] {
+    padding: 1rem;
+  }
+}
+@scope ([data-selectable="container:x"]) {
+  :where(:scope) > [data-element="block_type:text"]::before {
+    content: "";
+  }
+  :where(:scope) > [data-element="block_type:text"]:is(:hover, [data-force-state~="hover"])::before {
+    color: purple;
+  }
+}
+@scope ([data-selectable="container:x"]) {
+  :where(:scope) > :where([data-element="block_type:text"]) .link::after {
+    content: "";
+  }
+}
+CSS;
+    $this->assertSame($expected, $css);
+
+    // A rule ending in a box admits no continuation: only the fragment's
+    // own entry prints, at the box.
+    $css = $this->printer->printFragmentStyles('[data-selectable="container:x"]', 'block_type:text', $styles, '', RelativeSelector::fromString('> pb-text::before'));
+    $expected = <<<CSS
+@scope ([data-selectable="container:x"]) {
+  :where(:scope) > [data-element="block_type:text"]::before {
+    padding: 1rem;
+  }
+}
+CSS;
+    $this->assertSame($expected, $css);
   }
 
   /**
@@ -631,17 +964,18 @@ CSS;
   /**
    * Children pseudo-part entries deliver through fragments (compiled form).
    *
-   * A variant's '::>' and '::.class::>' entries ride their element's
+   * A variant's '::> *' and '::.class > *' entries ride their element's
    * fragment like part entries do, so the compiled shared stylesheet gets
    * the children rule at the variant-class scope root: the '.variant-class
-   * > *' delivery of the equal-fill model, with the child-shifted donut
-   * whenever the fragment addresses a container.
+   * > *' delivery of the equal-fill model, the part's children with the
+   * child-shifted donut whenever the fragment addresses a container, the
+   * bare children with none.
    */
   public function testFragmentChildrenDelivery(): void {
     $styles = [
       '' => ['default' => ['padding' => '0']],
-      '::>' => ['default' => ['flex-grow' => '1', 'min-width' => '0'], 'narrow' => ['flex-grow' => '0']],
-      '::.daedalus-stylish-layout-container::>' => ['default' => ['min-width' => '0']],
+      '::> *' => ['default' => ['flex-grow' => '1', 'min-width' => '0'], 'narrow' => ['flex-grow' => '0']],
+      '::.daedalus-stylish-layout-container > *' => ['default' => ['min-width' => '0']],
     ];
 
     $css = $this->printer->printFragmentStyles('.daedalus-stylish-variant--row', 'kind:container', $styles, '');
@@ -651,7 +985,7 @@ CSS;
     padding: 0;
   }
 }
-@scope (.daedalus-stylish-variant--row) to (:scope [data-selectable^="container:"] > *, :scope [data-selectable^="block:"] > *) {
+@scope (.daedalus-stylish-variant--row) {
   :scope > * {
     flex-grow: 1;
     min-width: 0;
@@ -673,7 +1007,7 @@ CSS;
     // On a fragment addressing a non-container element the children entry
     // prints unbounded, like the element's own entry would.
     $css = $this->printer->printFragmentStyles('.daedalus-stylish-variant--pull--block-text-1', 'layout:daedalus_stylish_container', [
-      'block(text,1)::>' => ['default' => ['gap' => '1rem']],
+      'block(text,1)::> *' => ['default' => ['gap' => '1rem']],
     ], 'block(text,1)');
     $expected = <<<CSS
 @scope (.daedalus-stylish-variant--pull--block-text-1) {
@@ -782,7 +1116,7 @@ CSS;
         'reduced-motion' => ['timeline-trigger' => 'none'],
       ],
       "block:{$this->uuid}::.quote" => ['default' => ['animation-trigger' => '--in-view play-once']],
-      "container:{$this->uuid}::>" => ['default' => ['animation-trigger' => '--in-view play-forwards play-backwards']],
+      "container:{$this->uuid}::> *" => ['default' => ['animation-trigger' => '--in-view play-forwards play-backwards']],
     ]);
     $expected = <<<CSS
 @scope ([data-selectable="block:{$this->uuid}"]) {
@@ -848,7 +1182,7 @@ CSS;
     }
   }
 }
-@scope ([data-selectable="container:{$this->uuid}"]) to (:scope [data-selectable^="container:"] > *, :scope [data-selectable^="block:"] > *) {
+@scope ([data-selectable="container:{$this->uuid}"]) {
   :scope > * {
     animation-trigger: --in-view play-forwards play-backwards;
     --daedalus-stylish-animation-trigger: --in-view play-forwards play-backwards;
@@ -947,6 +1281,88 @@ CSS;
         'default' => ['font size' => 'bad'],
       ],
     ]));
+  }
+
+
+  /**
+   * A fragment printed under a rule continues every suffix by descent.
+   *
+   * The rule-wear rebase: the '' suffix prints at the rule's own targets,
+   * '::.cls' at `{rule} .cls`, '::> *' at `{rule} > *`; a suffix the
+   * grammar refuses under the rule (a class under a tag) prints nothing;
+   * and the donut follows the rebased selector's shape (a type rule is
+   * never part-first, so a container-scoped variant worn at
+   * `> pb-container` prints unbounded).
+   */
+  public function testFragmentUnderRule(): void {
+    $styles = [
+      '' => ['default' => ['padding' => '1rem'], 'hover' => ['color' => 'purple']],
+      '::.link' => ['default' => ['font-weight' => '700']],
+      '::> *' => ['default' => ['margin' => '0']],
+    ];
+    $css = $this->printer->printFragmentStyles('[data-selectable="container:x"]', 'block_type:text', $styles, '', RelativeSelector::fromString('> pb-text'));
+    $expected = <<<CSS
+@scope ([data-selectable="container:x"]) {
+  :where(:scope) > [data-element="block_type:text"] {
+    padding: 1rem;
+  }
+  :where(:scope) > [data-element="block_type:text"]:is(:hover, [data-force-state~="hover"]) {
+    color: purple;
+  }
+}
+@scope ([data-selectable="container:x"]) {
+  :where(:scope) > :where([data-element="block_type:text"]) .link {
+    font-weight: 700;
+  }
+}
+@scope ([data-selectable="container:x"]) {
+  :where(:scope) > [data-element="block_type:text"] > * {
+    margin: 0;
+  }
+}
+CSS;
+    $this->assertSame($expected, $css);
+
+    // Under a tag rule the class suffix is outside the grammar: only the
+    // root and the children print.
+    $css = $this->printer->printFragmentStyles('[data-selectable="container:x"]', 'base:a', $styles, '', RelativeSelector::fromString('a'));
+    $expected = <<<CSS
+@scope ([data-selectable="container:x"]) {
+  a {
+    padding: 1rem;
+  }
+  a:is(:hover, [data-force-state~="hover"]) {
+    color: purple;
+  }
+}
+@scope ([data-selectable="container:x"]) {
+  a > * {
+    margin: 0;
+  }
+}
+CSS;
+    $this->assertSame($expected, $css);
+
+    // A container variant at a type rule: no donut (the rebased selector
+    // is not part-first), the part continued under the rule.
+    $css = $this->printer->printFragmentStyles('[data-selectable="container:x"]', 'layout:daedalus_stylish_container', [
+      '' => ['default' => ['gap' => '2rem']],
+      '::.daedalus-stylish-layout-container' => ['default' => ['max-width' => '60rem']],
+      'container(1)' => ['default' => ['padding' => '0']],
+    ], '', RelativeSelector::fromString('> pb-container'));
+    $expected = <<<CSS
+@scope ([data-selectable="container:x"]) {
+  :where(:scope) > [data-element^="layout:"] {
+    gap: 2rem;
+  }
+}
+@scope ([data-selectable="container:x"]) {
+  :where(:scope) > :where([data-element^="layout:"]) .daedalus-stylish-layout-container {
+    max-width: 60rem;
+  }
+}
+CSS;
+    $this->assertSame($expected, $css);
   }
 
 }

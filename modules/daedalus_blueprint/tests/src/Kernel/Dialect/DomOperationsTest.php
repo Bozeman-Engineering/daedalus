@@ -7,7 +7,9 @@ namespace Drupal\Tests\daedalus_blueprint\Kernel\Dialect;
 use Drupal\Component\Uuid\Php as PhpUuid;
 use Drupal\daedalus_blueprint\Dialect\DialectCatalog;
 use Drupal\daedalus_blueprint\Dialect\DomOperationHandler;
+use Drupal\daedalus_blueprint\Dialect\DialectAliasMap;
 use Drupal\daedalus_blueprint\Result\TargetType;
+use Drupal\daedalus_blueprint_test\TestFileDeclarationHandler;
 use Drupal\Tests\daedalus\Kernel\BlueprintKernelTestBase;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
@@ -71,8 +73,10 @@ class DomOperationsTest extends BlueprintKernelTestBase {
       'block',
       'block_content',
       'layout_builder',
+      'file',
       'daedalus_ui',
       'daedalus_tempstore',
+      'daedalus_blueprint_api',
       'daedalus_layout',
       'daedalus_blueprint_test',
     ]);
@@ -103,6 +107,8 @@ class DomOperationsTest extends BlueprintKernelTestBase {
       'dialect_catalog' => $this->catalog(),
       'conversation' => 'conv-1',
     ];
+    TestFileDeclarationHandler::$declared = [];
+    TestFileDeclarationHandler::$uuids = [];
   }
 
   /**
@@ -494,6 +500,81 @@ class DomOperationsTest extends BlueprintKernelTestBase {
   }
 
   /**
+   * Set {name} on a container renames the section; null clears the name.
+   *
+   * The dialect's name attribute is the element-naming spine's renamable
+   * slot: set translates it to update_element {label}, the same op the
+   * editor's tree rename takes, so the tree node reads the new word and
+   * the page print carries it back as name="...". A block has no name
+   * attribute (its name is derived from its content), so set refuses it
+   * with the block's legal roster; the container's roster names it.
+   */
+  public function testSetNameRenamesContainer(): void {
+    $result = $this->operations->batchOperations($this->entity, [
+      ['op' => 'set', 'ref' => $this->rootUuid, 'attrs' => ['name' => 'Welcome']],
+    ], $this->options);
+    $this->assertTrue($result->isSuccess(), print_r($result->toArray()['errors'] ?? [], TRUE));
+    $this->assertSame('Welcome', $this->rootNode()['label']);
+    $this->assertNotEmpty($result->getTargets());
+    $print = $this->container->get('daedalus_blueprint.dialect_printer')->print($this->tree(), $this->options['dialect_catalog']);
+    $this->assertStringContainsString(sprintf('<pb-container id="%s" name="Welcome">', $this->rootUuid), $print);
+
+    $cleared = $this->operations->batchOperations($this->entity, [
+      ['op' => 'set', 'ref' => $this->rootUuid, 'attrs' => ['name' => NULL]],
+    ], $this->options);
+    $this->assertTrue($cleared->isSuccess(), print_r($cleared->toArray()['errors'] ?? [], TRUE));
+    $this->assertArrayNotHasKey('label', $this->rootNode(), 'A cleared name leaves the section reading by its kind.');
+
+    $bad = $this->operations->batchOperations($this->entity, [
+      ['op' => 'set', 'ref' => $this->rootUuid, 'attrs' => ['title' => 'Welcome']],
+    ], $this->options);
+    $this->assertFalse($bad->isSuccess());
+    $this->assertSame('ILLEGAL_ATTR', $bad->getErrors()[0]->getCode());
+    $this->assertSame(['class', 'name', 'style'], $bad->getErrors()[0]->getContext()['legal']);
+
+    $insert = $this->operations->batchOperations($this->entity, [
+      ['op' => 'insert', 'html' => '<pb-basic id="card" heading="A">x</pb-basic>', 'at' => ['ref' => $this->rootUuid, 'position' => 'beforeend']],
+    ], $this->options);
+    $block = $this->operations->batchOperations($this->entity, [
+      ['op' => 'set', 'ref' => $insert->getAliases()['card'], 'attrs' => ['name' => 'Card']],
+    ], $this->options);
+    $this->assertFalse($block->isSuccess());
+    $this->assertSame('ILLEGAL_ATTR', $block->getErrors()[0]->getCode());
+    $this->assertSame(['body', 'class', 'heading', 'style'], $block->getErrors()[0]->getContext()['legal']);
+  }
+
+  /**
+   * Insert: a named container is born with its name in the label slot.
+   *
+   * The fragment's name="" rides add_section as layout_settings.label, the
+   * section's one label slot, so the born band reads by its name in the
+   * tree and prints it back, at every depth.
+   */
+  public function testInsertNamedContainer(): void {
+    $result = $this->operations->batchOperations($this->entity, [
+      [
+        'op' => 'insert',
+        'html' => '<pb-container id="band" name="Pricing"><pb-container id="inner" name="Plans"></pb-container><pb-basic id="one" heading="A">x</pb-basic></pb-container>',
+        'at' => ['ref' => 'root', 'position' => 'beforeend'],
+      ],
+    ], $this->options);
+    $this->assertTrue($result->isSuccess(), print_r($result->toArray()['errors'] ?? [], TRUE));
+    $aliases = $result->getAliases();
+
+    $tree = $this->tree();
+    $this->assertCount(2, $tree);
+    $this->assertArrayNotHasKey('label', $tree[0], 'The unnamed root band stays unnamed.');
+    $band = $tree[1];
+    $this->assertSame('Pricing', $band['label']);
+    $this->assertSame('Plans', $band['children'][0]['label']);
+    $this->assertSame($aliases['one'], $band['children'][1]['uuid']);
+
+    $print = $this->container->get('daedalus_blueprint.dialect_printer')->print($tree, $this->options['dialect_catalog']);
+    $this->assertStringContainsString(sprintf('<pb-container id="%s" name="Pricing">', $aliases['band']), $print);
+    $this->assertStringContainsString(sprintf('  <pb-container id="%s" name="Plans">', $aliases['inner']), $print);
+  }
+
+  /**
    * Set on "root": the page's own fields, through the field handlers (v0.3).
    *
    * The root is not an element (no class, style, or wear); its attrs are
@@ -562,6 +643,168 @@ class DomOperationsTest extends BlueprintKernelTestBase {
     $this->assertContains('SUGAR_TAG', $codes);
     $this->assertStringContainsString('pb-container', $result->getErrors()[0]->getMessage());
     $this->assertCount(1, $this->tree());
+  }
+
+  /**
+   * A file op reaches the seam and its name settles with the batch.
+   *
+   * The declaration is not a mutation (no target, the tree untouched);
+   * its effect is the name the conversation holds, recorded on the
+   * overlay by the seam and persisted by the outermost batch's
+   * settlement, so the next request resolves it and the same batch's
+   * later ops could already.
+   */
+  public function testFileOpDeclaresAndSettlesWithTheBatch(): void {
+    $result = $this->operations->batchOperations($this->entity, [
+      [
+        'op' => 'file',
+        'name' => 'logo.svg',
+        'type' => 'image/svg+xml',
+        'content' => ' <svg xmlns="http://www.w3.org/2000/svg"/> ',
+      ],
+      [
+        'op' => 'insert',
+        'html' => '<pb-basic id="intro" heading="Hi">.</pb-basic>',
+        'at' => ['ref' => $this->rootUuid, 'position' => 'beforeend'],
+      ],
+    ], $this->options);
+
+    $this->assertTrue($result->isSuccess(), print_r($result->toArray()['errors'] ?? [], TRUE));
+    $this->assertSame([['conv-1', 'logo.svg', 'image/svg+xml', '<svg xmlns="http://www.w3.org/2000/svg"/>']], TestFileDeclarationHandler::$declared, 'The seam receives the batch\'s conversation and the trimmed declaration.');
+    $this->assertSame(['intro'], array_keys($result->getAliases()), 'A declared file is no element alias.');
+    $this->assertCount(1, $this->rootNode()['children']);
+    $uuid = TestFileDeclarationHandler::$uuids['logo.svg'];
+    $this->assertSame($uuid, $this->container->get('daedalus_blueprint.dialect_alias_map')->resolveFile('conv-1', 'logo.svg'));
+    // The next request reads it from tempstore: the batch settled it.
+    $this->assertSame($uuid, (new DialectAliasMap($this->container->get('tempstore.shared')))->resolveFile('conv-1', 'logo.svg'));
+  }
+
+  /**
+   * A refused body is a structural error naming the declaration.
+   */
+  public function testFileOpRefusalNamesTheDeclaration(): void {
+    $result = $this->operations->batchOperations($this->entity, [
+      [
+        'op' => 'insert',
+        'html' => '<pb-basic id="intro" heading="Hi">.</pb-basic>',
+        'at' => ['ref' => $this->rootUuid, 'position' => 'beforeend'],
+      ],
+      [
+        'op' => 'file',
+        'name' => 'bad.svg',
+        'type' => 'image/svg+xml',
+        'content' => '<svg>' . TestFileDeclarationHandler::REFUSE . '</svg>',
+      ],
+    ], $this->options);
+
+    $this->assertFalse($result->isSuccess());
+    $this->assertSame('structural', $result->getPhase());
+    $error = $result->getErrors()[0];
+    $this->assertSame('FILE_REJECTED', $error->getCode());
+    $this->assertSame(1, $error->getOperationIndex());
+    $this->assertStringContainsString('The file "bad.svg" was refused: The body was refused by the test seam. The declared type image/svg+xml was noted.', $error->getMessage());
+    $this->assertSame(['The body was refused by the test seam.', 'The declared type image/svg+xml was noted.'], $error->getContext()['reasons']);
+    // The whole batch rolled back: the insert before it did not land.
+    $this->assertSame([], $this->rootNode()['children']);
+    $this->assertNull($this->container->get('daedalus_blueprint.dialect_alias_map')->resolve($this->entity, 'conv-1', 'intro'));
+
+    // The envelope: a declaration missing a part is refused before the seam.
+    $missing = $this->operations->batchOperations($this->entity, [
+      ['op' => 'file', 'name' => 'logo.svg', 'type' => 'image/svg+xml'],
+    ], $this->options);
+    $this->assertSame('MISSING_PARAMETER', $missing->getErrors()[0]->getCode());
+    $this->assertSame('content', $missing->getErrors()[0]->getPath());
+    $path = $this->operations->batchOperations($this->entity, [
+      ['op' => 'file', 'name' => 'icons/logo.svg', 'type' => 'image/svg+xml', 'content' => '<svg/>'],
+    ], $this->options);
+    $this->assertStringContainsString('bare filename', $path->getErrors()[0]->getMessage());
+    $this->assertCount(1, TestFileDeclarationHandler::$declared, 'Only the refused declaration reached the seam.');
+  }
+
+  /**
+   * A batch that fails after a declaration leaves no name behind.
+   */
+  public function testRollbackDropsTheDeclaredName(): void {
+    $result = $this->operations->batchOperations($this->entity, [
+      ['op' => 'file', 'name' => 'logo.svg', 'type' => 'image/svg+xml', 'content' => '<svg/>'],
+      ['op' => 'remove', 'ref' => 'never-existed'],
+    ], $this->options);
+
+    $this->assertFalse($result->isSuccess());
+    $this->assertCount(1, TestFileDeclarationHandler::$declared, 'The seam ran (the declaration preceded the failure).');
+    $alias_map = $this->container->get('daedalus_blueprint.dialect_alias_map');
+    $this->assertNull($alias_map->resolveFile('conv-1', 'logo.svg'), 'Discarded with the overlay.');
+    $this->assertNull($this->container->get('tempstore.shared')->get('daedalus_blueprint.dialect_aliases')->get('conv-1|file'));
+  }
+
+  /**
+   * Without a conversation or a seam the declaration answers in words.
+   */
+  public function testFileOpWithoutConversationOrSeam(): void {
+    $result = $this->operations->batchOperations($this->entity, [
+      ['op' => 'file', 'name' => 'logo.svg', 'type' => 'image/svg+xml', 'content' => '<svg/>'],
+    ], ['dialect_catalog' => $this->catalog()]);
+    $this->assertSame('CONVERSATION_MISSING', $result->getErrors()[0]->getCode());
+    $this->assertStringContainsString('"logo.svg"', $result->getErrors()[0]->getMessage());
+    $this->assertSame([], TestFileDeclarationHandler::$declared);
+
+    // A handler nobody handed a seam (a site without daedalus_ai).
+    $bare = new DomOperationHandler(
+      $this->container->get('daedalus_blueprint.dialect_parser'),
+      $this->container->get('daedalus_blueprint.dialect_alias_map'),
+      $this->treeBuilder,
+      $this->container->get('uuid'),
+      fn () => $this->operations,
+    );
+    $this->assertContains('file', $bare->getPageLanguageOperations());
+    $result = $bare->apply($this->entity, [
+      'op' => 'file',
+      'name' => 'logo.svg',
+      'type' => 'image/svg+xml',
+      'content' => '<svg/>',
+    ], $this->options);
+    $this->assertSame('FILE_STORE_MISSING', $result->getErrors()[0]->getCode());
+    $this->assertSame([], TestFileDeclarationHandler::$declared);
+  }
+
+  /**
+   * A document's <pb-file> declarations land before its batch.
+   *
+   * Whatever the source order, the declaration is saved and named before
+   * the translated batch runs, so file="name" anywhere in the document
+   * resolves; the settlement persists the name with the element aliases.
+   * A refused body joins the grammar errors, addressed by line, and the
+   * judged batch lands nothing.
+   */
+  public function testDocumentDeclaresFilesBeforeTheBatch(): void {
+    $handler = $this->container->get('daedalus_blueprint.dom_operation_handler');
+    $entity = $this->entityTypeManager->getStorage('entity_test')->create(['name' => 'Fresh page']);
+    $result = $handler->applyDocument(
+      $entity,
+      "<pb-container id=\"hero\"><pb-basic id=\"intro\" heading=\"Hello\">.</pb-basic></pb-container>\n<pb-file name=\"logo.svg\" type=\"image/svg+xml\"><svg xmlns=\"http://www.w3.org/2000/svg\"/></pb-file>",
+      $this->options,
+    );
+    $this->assertTrue($result->isSuccess(), print_r($result->toArray()['errors'] ?? [], TRUE));
+    $this->assertSame([['conv-1', 'logo.svg', 'image/svg+xml', '<svg xmlns="http://www.w3.org/2000/svg"/>']], TestFileDeclarationHandler::$declared);
+    $this->assertSame(['hero', 'intro'], array_keys($result->getAliases()));
+    $alias_map = $this->container->get('daedalus_blueprint.dialect_alias_map');
+    $alias_map->discard();
+    $this->assertSame(TestFileDeclarationHandler::$uuids['logo.svg'], $alias_map->resolveFile('conv-1', 'logo.svg'), 'Settled with the document\'s batch.');
+
+    TestFileDeclarationHandler::$declared = [];
+    $doomed = $this->entityTypeManager->getStorage('entity_test')->create(['name' => 'Doomed page']);
+    $result = $handler->applyDocument(
+      $doomed,
+      "<pb-container id=\"hero\"></pb-container>\n<pb-file name=\"bad.svg\" type=\"image/svg+xml\"><svg>" . TestFileDeclarationHandler::REFUSE . "</svg></pb-file>",
+      $this->options,
+    );
+    $this->assertFalse($result->isSuccess());
+    $codes = array_map(static fn ($error) => $error->getCode(), $result->getErrors());
+    $this->assertSame(['FILE_REJECTED'], $codes);
+    $this->assertSame('layout', $result->getErrors()[0]->getPath());
+    $this->assertStringContainsString('The file "bad.svg" was refused: The body was refused by the test seam. The declared type image/svg+xml was noted. (line 2)', $result->getErrors()[0]->getMessage());
+    $this->assertNull($alias_map->resolveFile('conv-1', 'bad.svg'));
+    $this->assertNull($alias_map->resolve($doomed, 'conv-1', 'hero'), 'A judged batch lands nothing.');
   }
 
   /**

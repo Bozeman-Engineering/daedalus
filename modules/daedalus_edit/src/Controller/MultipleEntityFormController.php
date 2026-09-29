@@ -10,7 +10,6 @@ use Drupal\Core\Ajax\AppendCommand;
 use Drupal\daedalus_edit\DaedalusEditFormTrait;
 use Drupal\daedalus_edit\Plugin\Sidebar\EntityFormSidebar;
 use Drupal\Core\Entity\EntityInterface;
-use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\Controller\ControllerBase;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\EventDispatcher\EventDispatcherInterface;
@@ -18,7 +17,6 @@ use Drupal\daedalus_tempstore\EntityTempstoreRepository;
 use Drupal\Core\Entity\EntityDisplayRepositoryInterface;
 use Drupal\Core\StringTranslation\StringTranslationTrait;
 use Symfony\Component\DependencyInjection\ContainerInterface;
-use Drupal\field_sample_value\SampleValueEntityGeneratorInterface;
 use Symfony\Component\HttpKernel\Controller\ArgumentResolverInterface;
 
 /**
@@ -34,7 +32,6 @@ final class MultipleEntityFormController extends ControllerBase {
     protected EventDispatcherInterface $dispatcher,
     protected ArgumentResolverInterface $argumentResolver,
     protected EntityTempstoreRepository $tempstoreRepository,
-    protected SampleValueEntityGeneratorInterface $fieldGenerator,
     protected EntityDisplayRepositoryInterface $entityDisplayRepository,
   ) {}
 
@@ -47,7 +44,6 @@ final class MultipleEntityFormController extends ControllerBase {
       $container->get('event_dispatcher'),
       $container->get('http_kernel.controller.argument_resolver'),
       $container->get('daedalus_tempstore.entity_tempstore_repository'),
-      $container->get('field_sample_value.generator'),
       $container->get('entity_display.repository'),
     );
   }
@@ -97,15 +93,6 @@ final class MultipleEntityFormController extends ControllerBase {
     $response->addCommand(new AppendCommand('#' . EntityFormSidebar::FORM_CACHE_ID, $form));
 
     return $response;
-  }
-
-  /**
-   * {@inheritdoc}
-   *
-   * Never called: the controller only builds and wraps the entity form.
-   */
-  public function entityContent(array &$form, FormStateInterface $form_state, ?string $view_mode = NULL) {
-    return [];
   }
 
 }

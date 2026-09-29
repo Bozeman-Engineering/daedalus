@@ -63,7 +63,7 @@ class PendingMediaMinterTest extends DaedalusAiKernelTestBase {
       $this->container->get('extension.list.module'),
       $this->gate,
       $this->jobStore,
-      $this->container->get('daedalus_blueprint.access_checker'),
+      $this->mediaMinter,
       $this->container->getParameter('app.root'),
     );
   }
@@ -170,8 +170,8 @@ class PendingMediaMinterTest extends DaedalusAiKernelTestBase {
    * CSS url('generate:') values carry no alt slot, so callers fall back to
    * the prompt as alt text and the media name inherits it; a long prompt
    * would overflow the storage columns (name varchar 255, alt varchar 512)
-   * and the minter saves without entity validation. The clamp lives in
-   * createMedia(); the GenerationJob keeps the full prompt.
+   * and the minter saves without entity validation. The clamp lives in the
+   * shared MediaMinter; the GenerationJob keeps the full prompt.
    */
   public function testMintClampsDerivedMetadata(): void {
     $prompt = trim(str_repeat('sweeping golden dunes under a violet evening sky ', 13));

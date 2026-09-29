@@ -9,10 +9,11 @@
  * lookups tolerate arrays wherever a map may be empty.
  *
  * The guide carries ROSTERS: every served node (a kind, block type, block
- * plugin, layout, base tag or instance namespace, and each part or
- * children section under one) is the vocabulary roster's resolved answers
- * at that address (PHP: VocabularyRosterBuilder, the one derivation the
- * validator reads too): `grants` (group id => the granted property names),
+ * plugin, layout, base tag or instance namespace, and each part,
+ * children section or declared generated box under one) is the
+ * vocabulary roster's resolved answers at that address (PHP:
+ * VocabularyRosterBuilder, the one derivation the validator reads too):
+ * `grants` (group id => the granted property names),
  * `valueSpaces` (property => the effective constraint block) and, on a
  * root, `axes` (axis => its label, depth stamp, description and owned
  * properties). The reads below (declaredSets,
@@ -28,6 +29,18 @@
  * the guide as a roster (materials.js); nothing here lists or mutates a
  * material.
  */
+
+import {
+  CLASS_PART,
+  HAS,
+  NEXT,
+  SUBSEQUENT,
+  TAG,
+  TYPE,
+  parseSelector,
+  splitKey,
+  typeAddress,
+} from '../../../daedalus_ui/js/edit_mode/materials/relative-selector.js';
 
 const UUID =
   '[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}';
@@ -51,71 +64,33 @@ const FORMS = [
 /**
  * Parses a selectable/style-map key.
  *
- * The ELEMENT key grammar (a kind qualified by a live uuid); the part and
- * children suffixes are the styling address grammar's (PHP:
- * daedalus_blueprint's Address::splitSuffixes(), one suffix grammar for
- * element keys and addresses alike).
+ * The ELEMENT key grammar (a kind qualified by a live uuid); the suffix
+ * after the first "::" is the relative selector grammar's (PHP:
+ * daedalus_blueprint's RelativeSelector, one suffix grammar for element
+ * keys, slot keys and addresses alike; relative-selector.js is its
+ * twin), admitted in its canonical spelling only.
  *
- * @return {?{form: string, kind: string, uuid: string, sub: ?string, children: boolean}}
- *   The parsed key, or null when it does not parse. `sub` is the ::.class
- *   sub-element selector when present; `children` is true for keys
- *   carrying the trailing '::>' children pseudo-part suffix (the
- *   addressed element's direct children). A sub WITHOUT the leading dot
- *   ('{key}::p') is a TAG-TIER key: the element-scoped tag tier of the
- *   three-tier text model, styling every one of the element's text
- *   elements of that tag. The grammar here is charset only; the tag
- *   vocabulary (the spine's declared instance tags) is semantic and
- *   enforced at resolution (declarationForKey resolves only declared
- *   tags; the server rejects undeclared ones in every enforcement mode).
+ * @return {?{form: string, kind: string, uuid: string, selector: ?string}}
+ *   The parsed key, or null when it does not parse. `selector` is the
+ *   canonical relative selector after the "::" ('.class' a part, 'p' the
+ *   tag tier, '> *' the children, '> pb-text .link' a compound), null
+ *   for the element itself. The grammar here is charset only; which
+ *   tags, types and parts a selector may name is semantic and enforced
+ *   at resolution (declarationForKey walks the declarations; the server
+ *   rejects an undeclared tag in every enforcement mode).
  */
 export const parseKey = (key) => {
-  if (typeof key !== 'string') {
+  const split = splitKey(key);
+  if (split === null) {
     return null;
   }
-  // The '::>' children suffix is the outermost (and always last) suffix:
-  // stripping it first leaves an ordinary element key, so '::.class::>'
-  // parses as the part's children (PHP mirror:
-  // StyleMapValidator::parseKey()).
-  const children = key.endsWith('::>');
-  if (children) {
-    key = key.slice(0, -3);
-  }
-  let base = key;
-  let sub = null;
-  const pos = key.indexOf('::');
-  if (pos !== -1) {
-    base = key.slice(0, pos);
-    sub = key.slice(pos + 2);
-    // The selector prints into CSS output, so its charset is locked down
-    // hard: exactly one class selector, or one bare tag name (the tag
-    // tier; the charset is the declarations spine's tag-name shape —
-    // PHP mirror: StyleMapValidator::parseKey()).
-    if (!/^\.[A-Za-z0-9_-]+$/.test(sub) && !/^[a-z][a-z0-9-]*$/.test(sub)) {
-      return null;
-    }
-  }
   for (const [pattern, form, kind] of FORMS) {
-    const match = base.match(pattern);
+    const match = split.root.match(pattern);
     if (match) {
-      return { form, kind, uuid: match[1], sub, children };
+      return { form, kind, uuid: match[1], selector: split.selector };
     }
   }
   return null;
-};
-
-/**
- * Human labels for the key kinds, untranslated (this module runs under
- * node, where Drupal.t does not exist); render sites wrap them in
- * Drupal.t(). Shared vocabulary for every surface that names an element by
- * its key: the inspector's kind badge, widget attribution copy naming a
- * parent element.
- */
-export const KIND_LABELS = {
-  entity: 'Entity',
-  field: 'Field',
-  container: 'Container',
-  region: 'Region',
-  block: 'Block',
 };
 
 /**
@@ -243,7 +218,8 @@ export const sectionLayouts = (blueprint) => {
  * preserved so the positional slot grammar can tell them apart. A child
  * node is either a nested section (pared recursively, same shape) or a
  * component carrying uuid and block_type (null for non-inline placements,
- * the walk's transparency contract). Sections and components keep their
+ * the walk's transparency contract). Every node carries the naming
+ * spine's `type` and `name` words. Sections and components keep their
  * read-only `stencil` provenance stamp when they carry one (the serializer's
  * placed-root annotation) — the offering filter for stencil-owned
  * variants reads it (variant-scope.js stencilProvenance). Field names are
@@ -261,18 +237,29 @@ export const layoutTree = (blueprint) => {
     typeof node?.stencil === 'string' && node.stencil !== ''
       ? { stencil: node.stencil }
       : {};
+  // The element-naming spine's two words (the annotator's minted
+  // `_element.type` and `_element.name`: "Section" / "Welcome", "Text" /
+  // its content excerpt, an unrenamed element's name being its type word)
+  // ride the pared node: the code view's page tree titles its rows with
+  // them, and the satellite reads them off this broadcast alone.
+  const typeOf = (node) => node?._element?.type ?? null;
+  const nameOf = (node) => node?._element?.name ?? null;
   const pareNode = (node) =>
     isSectionNode(node)
       ? pareSection(node)
       : {
           uuid: node?.uuid ?? null,
           block_type: node?.block_type ?? null,
+          type: typeOf(node),
+          name: nameOf(node),
           ...stampOf(node),
         };
   const pareSection = (section) => {
     const pared = {
       uuid: section?.uuid ?? null,
       layout_id: section?.layout_id ?? null,
+      type: typeOf(section),
+      name: nameOf(section),
       ...stampOf(section),
     };
     if (Array.isArray(section?.children)) {
@@ -483,10 +470,11 @@ export const baseTags = (base) => Object.keys(isPlainObject(base) ? base : {});
  * The client twin of StyleGuide::instanceTags(): the merged {tag: label}
  * map across the guide's instance namespaces, in declaration order (first
  * declaration wins a duplicate tag). This is IDENTITY — the tags the
- * minter mints, with the labels the annotator and the code view's tag
- * rows show — not the tag tier's vocabulary (baseTags() is): a tag may
- * carry identity without being styleable, or be styleable without ever
- * minting (links).
+ * minter mints, with the labels the annotator shows on instance rows —
+ * not the tag tier's vocabulary (baseTags() is): a tag may carry
+ * identity without being styleable, or be styleable without ever
+ * minting (links). A tag TIER's word is tagWord()'s: the base word wins
+ * over the identity word for the same tag.
  *
  * @param {?object} instances
  *   The guide payload's instances map (guide.instances).
@@ -510,6 +498,35 @@ export const instanceTags = (instances) => {
     },
   );
   return tags;
+};
+
+/**
+ * The one word for a tag, as prose spells it ("Link", "Paragraph").
+ *
+ * The client read of StyleGuide::baseTagLabels(): the guide's tagLabels
+ * word (every closed base tag, the site's declared `label:` applied)
+ * wins, because the tag tier resolves to the base declaration for every
+ * owner; a tag outside the closed set reads the instance lane's identity
+ * word (instanceTags()), and a tag no lane words spells itself. Every
+ * surface that speaks a tag tier in a sentence (the write address, the
+ * selector labels, the code view's tag offer) reads here, so a tag never
+ * has two words on one panel.
+ *
+ * @param {?object} guide
+ *   The style guide payload.
+ * @param {string} tag
+ *   The tag name.
+ *
+ * @return {string}
+ *   The word, capitalized as declared.
+ */
+export const tagWord = (guide, tag) => {
+  const labels = guide?.tagLabels;
+  if (isPlainObject(labels) && Object.hasOwn(labels, tag)) {
+    return String(labels[tag]);
+  }
+  const identity = instanceTags(guide?.instances);
+  return Object.hasOwn(identity, tag) ? identity[tag] : tag;
 };
 
 /**
@@ -574,9 +591,94 @@ export const flattenElements = (declaration) => {
  * and instance namespaces are never consulted for tags (classes only,
  * the PHP rule) — and an undeclared tag resolves to {} (the server
  * rejects the write in every enforcement mode; the client resolver just
- * has nothing to say about it).
+ * has nothing to say about it). A terminal pseudo-element (`&::before`,
+ * `.quote::after`, `> pb-text::before`) resolves to its host's
+ * generated box (pseudoNode(): the served declared box, else the
+ * derivation from the host node), once the chain has landed.
  */
-export const declarationForKey = (guide, parsed, bundle) => {
+export const declarationForKey = (guide, parsed, bundle) =>
+  landingForKey(guide, parsed, bundle) ?? {};
+
+/**
+ * The declaration the roster walk lands on, or null when a compound of
+ * the key's selector lands nowhere.
+ *
+ * declarationForKey's honest half: the same walk, but an undeclared
+ * landing answers null instead of the grammar-only `{}`, so a surface
+ * that must know whether an address lands at all can ask without
+ * mistaking a declared node that happens to grant nothing for an
+ * undeclared one. The root itself always lands (the kind is the
+ * fallback the server resolves to as well), and so does a
+ * pseudo-element whose host lands (the twin of the builder's walk,
+ * whose node is the derivation even when no section declares the box):
+ * whether a landing is DECLARED is declaredForKey()'s question, the one
+ * the write-address switcher's mintable addresses ask on a strict site.
+ *
+ * @param {object} guide
+ *   The style guide payload.
+ * @param {{kind: string, selector: ?string}} parsed
+ *   A parsed key (parseKey).
+ * @param {?string} bundle
+ *   The kind-appropriate discriminator (bundleForKey).
+ *
+ * @return {?object}
+ *   The landing declaration, or null.
+ */
+export const landingForKey = (guide, parsed, bundle) => {
+  const { host, pseudo } = hostForKey(guide, parsed, bundle);
+  if (host === null || pseudo === null) {
+    return host;
+  }
+  return pseudoNode(guide, host, pseudo);
+};
+
+/**
+ * Whether a parsed key names a DECLARED place (PHP: VocabularyRoster::
+ * declared()).
+ *
+ * A root always does; a selector key when every compound lands
+ * (landingForKey) and, with a terminal pseudo-element, when the host
+ * node's served `pseudo` section carries the box. A derived box still
+ * LANDS (landingForKey answers its derivation, since existence is
+ * universal) but is not declared: the server refuses a write there on a
+ * strict site (STYLE_PSEUDO_NOT_DECLARED), so the surfaces that gate a
+ * mintable address on the closed world ask here, not landingForKey.
+ *
+ * @param {object} guide
+ *   The style guide payload.
+ * @param {{kind: string, selector: ?string}} parsed
+ *   A parsed key (parseKey).
+ * @param {?string} bundle
+ *   The kind-appropriate discriminator (bundleForKey).
+ *
+ * @return {boolean}
+ */
+export const declaredForKey = (guide, parsed, bundle) => {
+  const { host, pseudo } = hostForKey(guide, parsed, bundle);
+  if (host === null) {
+    return false;
+  }
+  return pseudo === null || declaredPseudo(host, pseudo) !== null;
+};
+
+/**
+ * The roster walk's chain landing and the selector's terminal pseudo.
+ *
+ * PHP: VocabularyRosterBuilder::walk() before its pseudo step: the
+ * selector's compounds resolve left to right, each landing on the
+ * declaration it names; a class part by the one part rule against the
+ * owner (the element, or the last type compound's declaration), a tag
+ * by the base section, a type by its own root declaration, `*` by the
+ * current landing's `children` section; a sibling compound resolves
+ * where its predecessor did, and a compound's qualifiers are judged
+ * (walkChain) without moving the landing. An undeclared compound
+ * anywhere resolves the host to null (the box is never reached: the
+ * host is corrected first). The anchor (`&::before`) has no compounds,
+ * so its host is the root itself.
+ *
+ * @return {{host: ?object, pseudo: ?string}}
+ */
+const hostForKey = (guide, parsed, bundle) => {
   const kinds = guide?.kinds ?? {};
   let declaration;
   if (parsed.kind === 'block') {
@@ -591,29 +693,213 @@ export const declarationForKey = (guide, parsed, bundle) => {
   } else {
     declaration = kinds[parsed.kind] || {};
   }
-  if (parsed.sub && !parsed.sub.startsWith('.')) {
-    declaration = findBaseTagDeclaration(guide?.base, parsed.sub) ?? {};
-  } else if (parsed.sub) {
-    declaration =
-      findElement(declaration, parsed.sub) ??
-      findPatternElement(declaration, parsed.sub) ??
-      findInstanceDeclaration(guide?.instances, parsed.sub) ??
-      {};
+  const selector = parseSelector(parsed.selector);
+  return {
+    host: walkChain(guide, selector?.compounds ?? [], declaration, declaration, declaration),
+    pseudo: selector?.pseudo ?? null,
+  };
+};
+
+/**
+ * The served node a pseudo-element lands on: its host's generated box.
+ *
+ * The client twin of VocabularyRosterBuilder::pseudoNode() over served
+ * answers: the host's served `pseudo.before` / `pseudo.after` node when
+ * the host declares the box (ClientStyleGuide serves a declared box as
+ * the roster at its address); else the derivation, a node granting
+ * exactly what the host grants (its value spaces with it: the same
+ * groups, allowlists and constraints resolve to the same answers) plus
+ * the pseudo-only groups (pseudoGroups()) in full, last, each of their
+ * properties taking the site's authored constraint default when one
+ * names it (the builder's own rule for a group declared without
+ * constraints). Nothing is re-derived from authored declarations: the
+ * host's grants are the roster's, and the box's are the host's plus the
+ * existence switch. VocabularyRosterTest::testClientTwinEquivalence
+ * locks both branches.
+ *
+ * @param {object} guide
+ *   The style guide payload.
+ * @param {object} host
+ *   The served node the selector's chain landed on.
+ * @param {string} pseudo
+ *   The pseudo-element's name ('before', 'after').
+ *
+ * @return {object}
+ *   The box's served node.
+ */
+export const pseudoNode = (guide, host, pseudo) => {
+  const declared = declaredPseudo(host, pseudo);
+  if (declared !== null) {
+    return declared;
   }
-  // The '::>' children pseudo-part resolves to the element's `children`
-  // section (declared like a part, beside its styling refs); undeclared
-  // children resolve to {}, grammar-only on open sites, mirroring the
-  // roster's children resolution and the validator's resolveRoster().
-  if (parsed.children) {
-    const children = declaration?.children;
-    declaration =
-      children !== null &&
-      typeof children === 'object' &&
-      !Array.isArray(children)
-        ? children
-        : {};
+  const grants = grantsOf(host);
+  const valueSpaces = isPlainObject(host?.valueSpaces) ? { ...host.valueSpaces } : {};
+  pseudoGroups(guide).forEach((id) => {
+    if (Object.hasOwn(grants, id)) {
+      return;
+    }
+    const names = Object.keys(guide.groups[id].properties ?? {});
+    if (!names.length) {
+      return;
+    }
+    grants[id] = names;
+    names.forEach((property) => {
+      const block = guide?.constraintDefaults?.[property];
+      if (isPlainObject(block) && Object.keys(block).length) {
+        valueSpaces[property] = block;
+      }
+    });
+  });
+  return { grants, valueSpaces };
+};
+
+/**
+ * The host's served node for a declared pseudo-element, or null (derived).
+ */
+const declaredPseudo = (host, pseudo) => {
+  const section = host?.pseudo;
+  return isPlainObject(section) && isPlainObject(section[pseudo]) ? section[pseudo] : null;
+};
+
+/**
+ * The group ids granted only at a generated box, in panel order.
+ *
+ * The payload's `pseudo: true` groups (PropertyGroupPluginManager::
+ * getPseudoGroups(): generated_content, the existence switch), the fact
+ * a derived box's grant is built from.
+ *
+ * @param {?object} guide
+ *   The style guide payload.
+ *
+ * @return {string[]}
+ */
+export const pseudoGroups = (guide) =>
+  Object.keys(isPlainObject(guide?.groups) ? guide.groups : {}).filter(
+    (id) => guide.groups[id]?.pseudo === true,
+  );
+
+/**
+ * The declaration a compound's subject lands on, or null when undeclared
+ * (PHP: VocabularyRosterBuilder::land()).
+ */
+const land = (guide, compound, node, owner) => {
+  if (compound.kind === CLASS_PART) {
+    return (
+      findElement(owner, compound.name) ??
+      findPatternElement(owner, compound.name) ??
+      findInstanceDeclaration(guide?.instances, compound.name)
+    );
   }
-  return declaration;
+  if (compound.kind === TAG) {
+    return findBaseTagDeclaration(guide?.base, compound.name);
+  }
+  if (compound.kind === TYPE) {
+    return declarationForAddress(guide, typeAddress(compound.name));
+  }
+  const children = node?.children;
+  return children !== null &&
+    typeof children === 'object' &&
+    !Array.isArray(children)
+    ? children
+    : null;
+};
+
+/**
+ * Walks one chain of compounds (the selector's, or a `:has()` argument)
+ * to its last landing, or null when a compound anywhere lands nowhere
+ * (PHP: VocabularyRosterBuilder::walkChain()).
+ *
+ * @param {object} guide
+ *   The style guide payload.
+ * @param {object[]} compounds
+ *   The chain.
+ * @param {object} node
+ *   The declaration the first compound resolves in.
+ * @param {object} owner
+ *   The declaration a class part resolves against.
+ * @param {object} previous
+ *   The declaration a leading sibling compound resolves in (the context
+ *   of the compound the chain qualifies).
+ *
+ * @return {?object}
+ */
+const walkChain = (guide, compounds, node, owner, previous) => {
+  let current = node;
+  let currentOwner = owner;
+  let before = previous;
+  for (const compound of compounds) {
+    if ([NEXT, SUBSEQUENT].includes(compound.combinator)) {
+      current = before;
+    }
+    const landing = land(guide, compound, current, currentOwner);
+    if (landing === null) {
+      return null;
+    }
+    const argumentOwner = compound.kind === TYPE ? landing : currentOwner;
+    if (!judgeQualifiers(guide, compound.qualifiers, landing, argumentOwner, current, currentOwner)) {
+      return null;
+    }
+    before = current;
+    current = landing;
+    if (compound.kind === TYPE) {
+      currentOwner = landing;
+    }
+  }
+  return current;
+};
+
+/**
+ * Whether every compound in a compound's qualifiers lands (PHP:
+ * VocabularyRosterBuilder::judgeQualifiers()): a `:has()` argument walked
+ * from the landing, its parts resolving against the argument owner and a
+ * sibling lead in the compound's context; a `:not()` compound judged
+ * where the qualified compound stands, an implied subject judging its
+ * qualifiers from the qualified compound's landing.
+ */
+const judgeQualifiers = (guide, qualifiers, landing, argumentOwner, node, owner) =>
+  qualifiers.every((qualifier) => {
+    if (qualifier.name === HAS) {
+      return walkChain(guide, qualifier.argument, landing, argumentOwner, node) !== null;
+    }
+    const negated = qualifier.argument;
+    if (negated.kind === null) {
+      return judgeQualifiers(guide, negated.qualifiers, landing, argumentOwner, node, owner);
+    }
+    const negatedLanding = land(guide, negated, node, owner);
+    return (
+      negatedLanding !== null &&
+      judgeQualifiers(
+        guide,
+        negated.qualifiers,
+        negatedLanding,
+        negated.kind === TYPE ? negatedLanding : owner,
+        node,
+        owner,
+      )
+    );
+  });
+
+/**
+ * The served root declaration a printed root address names, or null.
+ *
+ * The type compounds' landing: `block_type:{bundle}` the bundle's node
+ * (the universal block kind when undeclared: the server refuses an
+ * unknown type on a strict site, and an open site is grammar-only
+ * anyway), `kind:{kind}` the kind's node.
+ */
+const declarationForAddress = (guide, address) => {
+  if (typeof address !== 'string') {
+    return null;
+  }
+  const kinds = guide?.kinds ?? {};
+  if (address.startsWith('block_type:')) {
+    const bundle = address.slice('block_type:'.length);
+    return guide?.blockTypes?.[bundle] ?? null;
+  }
+  if (address.startsWith('kind:')) {
+    return kinds[address.slice('kind:'.length)] ?? null;
+  }
+  return null;
 };
 
 /**
@@ -644,18 +930,19 @@ export const declarationForKey = (guide, parsed, bundle) => {
  *   True when the key's sub resolves through the instances lane.
  */
 export const isInstancePartKey = (guide, parsed, bundle) => {
-  if (!parsed?.sub || parsed.children) {
+  const selector = parseSelector(parsed?.selector);
+  const compounds = selector?.compounds;
+  // A box of an instance part (`.s-a3::before`) is a rule of its own,
+  // not the part (relative-selector.js isPart() is false with a pseudo).
+  if (selector?.pseudo || compounds?.length !== 1 || compounds[0].kind !== CLASS_PART) {
     return false;
   }
-  const owner = declarationForKey(
-    guide,
-    { ...parsed, sub: null, children: false },
-    bundle,
-  );
+  const sub = compounds[0].name;
+  const owner = declarationForKey(guide, { ...parsed, selector: null }, bundle);
   return (
-    findElement(owner, parsed.sub) === null &&
-    findPatternElement(owner, parsed.sub) === null &&
-    findInstanceDeclaration(guide?.instances, parsed.sub) !== null
+    findElement(owner, sub) === null &&
+    findPatternElement(owner, sub) === null &&
+    findInstanceDeclaration(guide?.instances, sub) !== null
   );
 };
 
@@ -1185,3 +1472,22 @@ export const buildSections = (guide, declaration, entry) => {
 
   return sections;
 };
+
+/**
+ * A section's arrival posture: the two auto signals.
+ *
+ * Open when the section's rows show a value (`hasValues` above, over the
+ * stack's delivered entry: any layer's, the element's own, a worn
+ * variant's, the active skin's or a declaration's, since a row shows
+ * what the page shows) or when one of its visible rows carries a pending
+ * line (a pending removal still needs its dismiss surface). `rows` is
+ * the section's VISIBLE rows (after the inspector's hidden-row filter);
+ * the pending signal is read through the caller's row-keyed lookup. The
+ * inspector's Sections project it as the section's DEFAULT posture in
+ * the collapse model (`folded: !autoOpen(...)`); the user's toggles are
+ * the explicit postures over it.
+ */
+export const autoOpen = (section, rows, { pendingFor }) =>
+  Boolean(
+    section.hasValues || rows.some((row) => pendingFor(row) !== null),
+  );

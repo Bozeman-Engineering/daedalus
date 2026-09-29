@@ -8,8 +8,15 @@ use Drupal\Component\Utility\Html;
 use Drupal\Core\Ajax\ReplaceCommand;
 use Drupal\Core\Entity\Entity\EntityViewDisplay;
 use Drupal\Core\Entity\FieldableEntityInterface;
+use Drupal\Core\Entity\TranslatableInterface;
+use Drupal\Core\Render\RendererInterface;
 use Drupal\Core\Session\AccountInterface;
+use Drupal\daedalus_blueprint\Result\BlueprintResult;
+use Drupal\daedalus_blueprint_api\Event\BlueprintMutationResponseEvent;
 use Drupal\daedalus_blueprint_api\Render\SelectableKey;
+use Drupal\daedalus_blueprint_api\Render\SubtreeRenderer;
+use Drupal\daedalus_blueprint_api\Render\TargetKeyMapper;
+use Drupal\daedalus_edit\EditIdentity;
 use Drupal\daedalus_ui\ElementModel\ElementModel;
 use Drupal\daedalus_ui\Event\LoadEditablePageEvent;
 use Drupal\daedalus_ui\DaedalusUi;
@@ -42,6 +49,14 @@ use Symfony\Component\EventDispatcher\EventSubscriberInterface;
  * entity, the ordinary field attribution path owns the edit surface and
  * this service stays inert.
  *
+ * The H1 is outside the entity, so the mutation-response contract's
+ * whole-entity render never carries it: a label write on the op spine (an
+ * endpoint op, an AI tool, an undo) would leave the H1 stale. This service
+ * rides the contract (onMutationResponse) and delivers the page-title
+ * render under the label field's own key, the same key the H1 carries on
+ * the canvas, so every road that answers the contract swaps the H1 by
+ * construction.
+ *
  * The rule is currently daedalus_edit-only vocabulary (leaf ids, field-value
  * wrappers). If a second consumer needs "does the root label render outside
  * the entity" (e.g. Daedalus Stylish styling the H1), promote outsideLabelField()
@@ -62,11 +77,25 @@ final class PageTitleEditing implements EventSubscriberInterface {
    */
   public const MARKER = 'data-daedalus-edit-page-title';
 
+  /**
+   * The warning code a response carries when the H1 could not be delivered.
+   *
+   * The page-title render attributes itself only under the edit-mode
+   * response convention (the mode on the request, the entity on the route
+   * match, the rendered title being the staged label); a render that came
+   * back without the label's key would swap an unattributed H1 over the
+   * leaf, so the payload says the title was left alone instead.
+   */
+  public const WARNING_UNATTRIBUTED = 'PAGE_TITLE_UNATTRIBUTED';
+
   public function __construct(
     private readonly ElementModel $elementModel,
     private readonly DaedalusUi $daedalusUi,
     private readonly EntityTempstoreRepository $tempstoreRepository,
     private readonly AccountInterface $currentUser,
+    private readonly RendererInterface $renderer,
+    private readonly SubtreeRenderer $subtreeRenderer,
+    private readonly TargetKeyMapper $targetKeyMapper,
   ) {}
 
   /**
@@ -186,39 +215,38 @@ final class PageTitleEditing implements EventSubscriberInterface {
     }
 
     $definition = $entity->getFieldDefinition($label_field);
-    $main_property = method_exists($definition, 'getMainPropertyName') ? $definition->getMainPropertyName() : 'value';
-    $id = daedalus_ui_entity_identifier($entity);
-    $entity_type_id = $entity->getEntityTypeId();
+    $main_property = EditIdentity::mainProperty($definition);
 
-    // The same shape RenderEditableFieldAttributes stamps on field renders:
-    // the title element is the leaf, a wrapper div is the field-value
-    // wrapper (the throbber/replacement handle), title_attributes carry the
-    // selection identity so the element competes as itself.
+    // The same identities RenderEditableFieldAttributes stamps on field
+    // renders (EditIdentity, the one minter): the title element is the
+    // leaf, a wrapper div is the field-value wrapper (the
+    // throbber/replacement handle), title_attributes carry the selection
+    // identity so the element competes as itself.
     $variables['title_attributes'][SelectableKey::ATTRIBUTE] = SelectableKey::field($entity->uuid(), $label_field);
     $variables['title_attributes']['class'][] = 'daedalus-edit-field-value';
-    $variables['title_attributes']['data-daedalus-edit-id'] = sprintf('%s::%s::%s::%s::%s::%s::%s::%s::%s', $entity_type_id, $entity->bundle(), $id, $label_field, 0, $entity->language()->getId(), $definition->getType(), 'string', $main_property);
-    $variables['title_attributes']['data-daedalus-edit-page-element-id'] = sprintf('%s::%s::%s::%s::%s', $entity_type_id, $id, $label_field, 0, $main_property);
+    $variables['title_attributes']['data-daedalus-edit-id'] = EditIdentity::editId($entity, $label_field, 0, $entity->language()->getId(), $definition->getType(), 'string', $main_property);
+    $variables['title_attributes']['data-daedalus-edit-page-element-id'] = EditIdentity::itemId($entity, $label_field, 0, $main_property);
     $variables['title_prefix']['daedalus_edit'] = [
-      '#markup' => sprintf('<div %s="" data-daedalus-edit-field-value-wrapper="%s::%s::%s::%s">', self::MARKER, $entity_type_id, $id, $label_field, $main_property),
+      '#markup' => sprintf('<div %s="" data-daedalus-edit-field-value-wrapper="%s">', self::MARKER, EditIdentity::fieldWrapperId($entity, $label_field, $main_property)),
     ];
     $variables['title_suffix']['daedalus_edit'] = ['#markup' => '</div>'];
     $variables['#cache']['tags'][] = daedalus_edit_cache_tag($entity);
   }
 
   /**
-   * A fresh page-title render for the update round-trip.
+   * A fresh page-title render for a label that just changed.
    *
-   * When an edit commits, DaedalusEditFormTrait::updatePage() re-renders the
-   * entity and replaces the edited element by its field-value-wrapper
-   * selector, but an outside-rendered label is not IN the entity render,
-   * and updateElement treats a live-only selector as a removal (the H1
-   * would vanish). This render rides beside the entity content so the
-   * selector matches: it goes through the active theme's page-title
-   * template and this service's preprocess, so the replacement H1 arrives
-   * attributed exactly like the one it replaces.
+   * An outside-rendered label is not IN the entity render, so every
+   * round-trip that re-renders the entity needs this render beside it: the
+   * mutation response (onMutationResponse, which every write rides, the
+   * form transport's commits included) and the mode transition
+   * (onLoadEditablePage). It goes through the active
+   * theme's page-title template and this service's preprocess, so the
+   * replacement H1 arrives attributed exactly like the one it replaces.
    *
    * @param \Drupal\Core\Entity\FieldableEntityInterface $entity
-   *   The form's entity (the tempstore version with the staged edit).
+   *   The entity carrying the new label (the tempstore version with the
+   *   staged edit, in the language being rendered).
    * @param string $field_name
    *   The field the update targets.
    *
@@ -234,6 +262,80 @@ final class PageTitleEditing implements EventSubscriberInterface {
       '#type' => 'page_title',
       '#title' => (string) $entity->label(),
     ];
+  }
+
+  /**
+   * Delivers the page title on the mutation-response contract.
+   *
+   * When a successful mutation's targets name the root's outside-rendered
+   * label, the payload's markup gains the page-title render under the
+   * label field's key (field:{root}:{label}), the key the H1 carries on
+   * the canvas, so the client's swap-by-key replaces the H1 like any field.
+   *
+   * The key is CLAIMED, never merged: the whole-entity render behind the
+   * contract can print the label inside the entity too (a node template
+   * printing its label under a non-full view mode, or on the endpoint's
+   * route where core's page test fails), and daedalus_ui stamps that inner
+   * render with the same key. Left alone, the contract would deliver the
+   * inner render under the H1's key and the client would swap the H1 for
+   * it. Overwriting the key with the H1 render neutralizes the duplicate
+   * whatever the theme prints.
+   *
+   * A label-only mutation drops the whole-entity fallback the renderer
+   * produced for want of the key (the label is outside the entity by
+   * definition here, so the entity swap carries nothing the H1 does not):
+   * the response swaps the H1 alone, as the entity-form path did.
+   *
+   * @param \Drupal\daedalus_blueprint_api\Event\BlueprintMutationResponseEvent $event
+   *   The mutation response assembly event.
+   */
+  public function onMutationResponse(BlueprintMutationResponseEvent $event): void {
+    $result = $event->result;
+    if (!$result->isSuccess() || !$result instanceof BlueprintResult) {
+      return;
+    }
+    $entity = $result->getEntity();
+    if (!$entity instanceof FieldableEntityInterface) {
+      return;
+    }
+    $payload = $event->getPayload();
+    // The response renders one language for the whole round (the mutate
+    // endpoint's rule); the H1 must carry that translation's label.
+    $langcode = $payload['langcode'] ?? NULL;
+    if (is_string($langcode) && $entity instanceof TranslatableInterface && $entity->hasTranslation($langcode)) {
+      $entity = $entity->getTranslation($langcode);
+    }
+    $label_field = $this->outsideLabelField($entity);
+    if ($label_field === NULL) {
+      return;
+    }
+    $label_key = SelectableKey::field($entity->uuid(), $label_field);
+    $keys = $this->targetKeyMapper->map($entity, $result->getTargets());
+    if (!in_array($label_key, $keys, TRUE)) {
+      return;
+    }
+
+    $render = $this->titleRender($entity, $label_field);
+    $html = (string) $this->renderer->renderInIsolation($render);
+    $title = $this->subtreeRenderer->subtree($html, $label_key);
+    if ($title === NULL) {
+      $payload['warnings'][] = [
+        'path' => 'markup',
+        'code' => self::WARNING_UNATTRIBUTED,
+        'message' => 'The label changed but the page-title render carried no editable leaf, so the page title was not re-rendered.',
+      ];
+      $event->setPayload($payload);
+      return;
+    }
+
+    // An empty markup channel is a stdClass so it encodes as an object.
+    $markup = (array) $payload['markup'];
+    $markup[$label_key] = $title;
+    if ($keys === [$label_key]) {
+      unset($markup[SelectableKey::entity($entity->uuid())]);
+    }
+    $payload['markup'] = $markup;
+    $event->setPayload($payload);
   }
 
   /**
@@ -271,6 +373,7 @@ final class PageTitleEditing implements EventSubscriberInterface {
   public static function getSubscribedEvents(): array {
     return [
       LoadEditablePageEvent::class => 'onLoadEditablePage',
+      BlueprintMutationResponseEvent::class => 'onMutationResponse',
     ];
   }
 

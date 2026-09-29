@@ -73,7 +73,10 @@ final class PageElementsSidebar extends SidebarPluginBase implements ContainerFa
     return [
       // The Show kebab (show-menu.js) is the tree's, rendered client-side;
       // the header lends it a slot in the action cluster so it shares the
-      // corner with the close instead of being positioned into it.
+      // corner with the close instead of being positioned into it. The
+      // tree's tools (the element picker, the collapse controls) ride the
+      // tree's pinned root row, so the header holds its title's line at
+      // any rail width.
       'header' => $this->buildPanelHeader($this->t('Page elements'), [
         'show_menu' => [
           '#type' => 'html_tag',

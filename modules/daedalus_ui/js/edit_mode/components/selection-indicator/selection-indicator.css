@@ -17,10 +17,9 @@ html:has(.daedalus-ui-selection-indicator) {
   position: fixed;
   /* Above all canvas chrome but below the modal overlay (1259, modal.css),
      so an open dialog's scrim darkens and blurs the indicator like the
-     rest of the page — unlike the pill and top bar (1261), which must
-     outstack the modal floor and mirror the scrim's effect instead. */
+     rest of the page — unlike the top bar (1261), which must outstack the
+     modal floor and mirror the scrim's effect instead. */
   z-index: 1258;
-  /* Above the tool pill (#edit-mode-toolbar sits at bottom: 1rem). */
   bottom: 0;
   /* The canvas's bottom-left corner, not the viewport's: the displace var
      aggregates whatever left-rail panels are open (they register
@@ -39,6 +38,17 @@ html:has(.daedalus-ui-selection-indicator) {
   font-size: var(--daedalus-font-size-small);
   /* Don't inherit the site theme's roomy body line-height. */
   line-height: normal;
+}
+
+/* Under a canvas view (html[data-daedalus-ui-canvas-view], the axis
+   documented in daedalus_ui.api.php) the indicator stands down with the
+   rest of the flat page's canvas chrome: its breadcrumb and chips read
+   the selection over the page as laid out, and a projected canvas labels
+   its own planes. display, not unmount: the component stays in the DOM,
+   so the html:has() token above still reserves the rail's room and the
+   indicator returns without a remount when the view ends. */
+html[data-daedalus-ui-canvas-view] .daedalus-ui-selection-indicator {
+  display: none;
 }
 
 .daedalus-ui-breadcrumb,

@@ -17,20 +17,25 @@ use Drupal\daedalus_stylish\Plugin\Field\FieldType\StyleMapItem;
  * shadow-clearing ops, which read the same sources; this walk answers the
  * one question "what look does this element have", element-relative, in
  * the variant entity's storage shape:
- * - OWN: the element's root entry ('') and its class parts ('::.class'),
- *   overrides-only (the `variants` reference list never travels as a
- *   layer). Instance parts ('::.s-xx', identity classes minted per content
- *   instance) and tag tiers ('::p') stay behind: the server refuses both
- *   in variant styles, and the capture must not author a save that
- *   refuses.
+ * - OWN: the element's root entry ('') and every selector entry under it
+ *   ('::.class', '::p', '::> *', '::> pb-text'). The root travels
+ *   overrides-only (its `variants` list is the axis fold's business,
+ *   below); a RULE entry's worn ROOT references travel verbatim as the
+ *   captured '::selector' entry's `variants` list (a rule's wear is part
+ *   of the look, delivered at the rule's matches; apply places it at the
+ *   same rule under the new wearer, continued by descent under a rule
+ *   wearer). Instance parts ('::.s-xx', identity classes minted per
+ *   content instance, wherever they stand in a selector) stay behind:
+ *   the server refuses them in variant styles, and the capture must not
+ *   author a save that refuses.
  * - CHILDREN: every entry of the staged subtree the slot grammar can
  *   address, its key translated to a positional slot path
  *   (SubtreeSlotKeys::slotPaths(), "container(1)/block(text,2)", a block
  *   field riding its block as "field(name)"), overrides-only; a child base
- *   entry's worn ROOT references travel verbatim as its `variants` list
- *   (refs stay refs: the minted variant re-distributes them instead of
- *   baking their values in). Shallow-first, so apply distributes a parent
- *   before its children.
+ *   entry's worn ROOT references, and a child's rule entry's, travel
+ *   verbatim as the entry's `variants` list (refs stay refs: the minted
+ *   variant re-distributes them instead of baking their values in).
+ *   Shallow-first, so apply distributes a parent before its children.
  * - FOLD: save means "save this LOOK", not "save my tweaks": the root's
  *   same-axis wearings (the ones minting this axis's replacement retires)
  *   resolve through their own fragment (SlotKey::fragmentStyles(), the
@@ -72,8 +77,9 @@ final class VariantCapture {
         continue;
       }
       $own = StyleEntry::stripVariants($entry);
-      if ($own !== []) {
-        $entries[$relative] = $own;
+      $refs = $relative === '' ? [] : $this->travellingRefs($entry);
+      if ($own !== [] || $refs !== []) {
+        $entries[$relative] = $refs !== [] ? ['variants' => $refs] + $own : $own;
       }
     }
 
@@ -86,23 +92,11 @@ final class VariantCapture {
         continue;
       }
       $parsed = $this->validator->parseKey($map_key);
-      if ($parsed === NULL || ($parsed['sub'] !== NULL && $this->staysBehind($parsed['sub']))) {
+      if ($parsed === NULL || StyleMapValidator::instancePart($parsed['selector']) !== NULL) {
         continue;
       }
       $overrides = StyleEntry::stripVariants($entry);
-      // A captured child's root references travel as {variant, fragment}
-      // only: a variant's nested list says what to distribute, never who
-      // did, so the origin the read carries ("via") is stripped here and
-      // the variant styles lane, which rejects the key, accepts the save.
-      $refs = $parsed['sub'] === NULL && !$parsed['children']
-        ? array_values(array_map(static fn (array $ref): array => [
-          'variant' => $ref['variant'],
-          'fragment' => $ref['fragment'],
-        ], array_filter(
-          StyleMapValidator::entryRefs($entry),
-          static fn (array $ref): bool => $ref['fragment'] === '',
-        )))
-        : [];
+      $refs = $this->travellingRefs($entry);
       if ($overrides === [] && $refs === []) {
         continue;
       }
@@ -111,7 +105,7 @@ final class VariantCapture {
       if ($path === NULL) {
         continue;
       }
-      $relative = $path . ($parsed['sub'] !== NULL ? '::' . $parsed['sub'] : '') . ($parsed['children'] ? '::>' : '');
+      $relative = $path . ($parsed['selector'] !== NULL ? '::' . $parsed['selector'] : '');
       $direct[] = [
         'relative' => $relative,
         'entry' => $refs !== [] ? ['variants' => $refs] + $overrides : $overrides,
@@ -154,14 +148,41 @@ final class VariantCapture {
   }
 
   /**
-   * Whether a map key is the element's own root or one of its class parts.
+   * An entry's references that travel with a capture.
+   *
+   * The entry's ROOT ('' fragment) references as {variant, fragment}
+   * only: a variant's nested list says what to distribute, never who
+   * did, so the origin the read carries ("via") is stripped here and
+   * the variant styles lane, which rejects the key, accepts the save. A
+   * FRAGMENT reference never travels: it is owned by the composition
+   * that distributed it (the fold, or the element, keeps it).
+   *
+   * @return array<int, array{variant: string, fragment: string}>
+   *   The references, in the entry's application order.
+   */
+  protected function travellingRefs(array $entry): array {
+    return array_values(array_map(static fn (array $ref): array => [
+      'variant' => $ref['variant'],
+      'fragment' => $ref['fragment'],
+    ], array_filter(
+      StyleMapValidator::entryRefs($entry),
+      static fn (array $ref): bool => $ref['fragment'] === '',
+    )));
+  }
+
+  /**
+   * Whether a map key is the element's own root or a selector under it.
+   *
+   * Every selector travels (a structural relation transfers with the
+   * look) except one carrying an instance part, which is bound to this
+   * content's minted identities.
    *
    * @param string $map_key
    *   The style map key under test.
    * @param string $key
    *   The element's own selectable key.
    * @param string|null $relative
-   *   Set to the relative key ('' or '::.class') when it is.
+   *   Set to the relative key ('' or '::selector') when it is.
    */
   protected function isOwn(string $map_key, string $key, ?string &$relative): bool {
     if ($map_key === $key) {
@@ -172,15 +193,8 @@ final class VariantCapture {
       return FALSE;
     }
     $relative = substr($map_key, strlen($key));
-    $sub = str_ends_with($relative, '::>') ? substr($relative, 2, -3) : substr($relative, 2);
-    return !$this->staysBehind($sub);
-  }
-
-  /**
-   * Whether a part stays out of a capture: instance-bound or tag tier.
-   */
-  protected function staysBehind(string $sub): bool {
-    return !str_starts_with($sub, '.') || preg_match(StyleMapValidator::INSTANCE_PART, $sub) === 1;
+    $parsed = $this->validator->parseKey($map_key);
+    return $parsed !== NULL && StyleMapValidator::instancePart($parsed['selector']) === NULL;
   }
 
   /**

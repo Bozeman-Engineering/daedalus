@@ -65,6 +65,11 @@ final class DialectSchemaProjector {
   private const AXES_NOTE = 'Each axis attribute value names the saved variant the element wears on that axis (described under materials.variants).';
 
   /**
+   * The guidance beside the container's name attribute.
+   */
+  private const NAME_GUIDANCE = 'The container\'s name: what the editor\'s page tree, canvas chips and panels call it ("Hero", "Pricing"). Prints on a named container, set {name} renames it (null clears); an unnamed container reads by its kind (Section at the top level, Container nested).';
+
+  /**
    * Whether a built schema has a page-language view.
    *
    * A bundle with a layout field on a site whose catalog knows the
@@ -133,8 +138,10 @@ final class DialectSchemaProjector {
 
     $container = ['guidance' => $this->containerGuidance($layout, $catalog)];
     $axes = $this->axisAttributes($catalog->axesFor(TRUE, NULL, NULL));
+    // The container's name leads its attributes: the one renamable slot
+    // of the element-naming spine, the same word the editor shows.
+    $container['attributes'] = [DialectWalk::NAME_ATTR => ['guidance' => self::NAME_GUIDANCE]] + $axes;
     if ($axes !== []) {
-      $container['attributes'] = $axes;
       $container['attributes_note'] = self::AXES_NOTE;
     }
     $born = $this->bornWearing($catalog, Address::layout($catalog->containerLayoutId()), $catalog->axesFor(TRUE, NULL, NULL));
@@ -307,7 +314,8 @@ final class DialectSchemaProjector {
    * (the 'generation' entry the schema builder carried in from
    * MediaGenerationInterface, the one home of the sizing heuristic too),
    * never the JSON door's guidance and never a copy here; the sizing
-   * attribute lists its values and leans on that text.
+   * attribute lists its values and leans on that text. File placement
+   * speaks the same way (the 'file' entry, from MediaFromFileInterface).
    *
    * @param string $name
    *   The attribute name.
@@ -325,6 +333,10 @@ final class DialectSchemaProjector {
     switch ($attr_spec['key'] ?? NULL) {
       case '_generate':
         $guidance = $generation['guidance'] ?? NULL;
+        return is_string($guidance) && $guidance !== '' ? $guidance : NULL;
+
+      case '_file':
+        $guidance = $type_schema['block_fields'][$attr_spec['field'] ?? '']['file']['guidance'] ?? NULL;
         return is_string($guidance) && $guidance !== '' ? $guidance : NULL;
 
       case 'alt_text':

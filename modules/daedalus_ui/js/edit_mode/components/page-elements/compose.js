@@ -99,11 +99,15 @@
  *   from declarations alone, never to an emptier tree than they promise.
  *
  * Composed node vocabulary (one `type` per identity class):
- * - model: {type, key, kind, label, bundle?, presentation, children} — a
- *   blueprint identity, carrying the same facts the built-in projection's
- *   row does (the selection index derives from THIS composition, so a
- *   bundle-bearing row's bundle and a form-only stub's `formOnly` ride
- *   here too); field rows with shells on also carry `markupClass` (the
+ * - model: {type, key, kind, label, elementType, bundle?, presentation,
+ *   children} — a blueprint identity, carrying the same facts the built-in
+ *   projection's row does (the selection index derives from THIS
+ *   composition, so a bundle-bearing row's bundle and a form-only stub's
+ *   `formOnly` ride here too). `label` and `elementType` are the
+ *   annotation's `_element.name` and `_element.type`, the server-minted
+ *   naming spine (projection.js documents the words); the composed
+ *   vocabulary's own `type` is why the element's type word travels as
+ *   `elementType`. Field rows with shells on also carry `markupClass` (the
  *   field's own wrapper class: the selectable element and the
  *   .field--name-X wrapper are ONE element = ONE row), merged rows carry
  *   `editTarget`, absorbed field rows carry `absorbed: true`.
@@ -137,7 +141,7 @@
  * declared, so the model picks one convention and keeps it.
  */
 
-import { isSectionNode, sectionChildren, sectionLabel } from './projection.js';
+import { isSectionNode, sectionChildren } from './projection.js';
 import { isFormOnlyStub } from '../../blueprint/form-only-stub.js';
 
 const isPlainObject = (value) =>
@@ -153,23 +157,28 @@ const isPlainObject = (value) =>
  */
 export const PART_SELECTOR = /^\.[A-Za-z0-9_-]+$/;
 
+/**
+ * The vocabulary for rows the annotator does not name: a field row's
+ * machine name, a region's, an inline entity's bundle (paragraphs carry
+ * no `_element`). Never an annotated node's word, which is delivered.
+ */
 const humanize = (machineName) => {
   const words = String(machineName)
-    .replace(/^(field_|layout_|daedalus_stylish_)/, '')
+    .replace(/^field_/, '')
     .replace(/[_-]+/g, ' ')
     .trim();
   return words.charAt(0).toUpperCase() + words.slice(1);
 };
 
 /**
- * A merged/value row's live label: the field's own text, first line, 80
- * chars (the row is a name, not a preview). Non-string and empty values
- * fall through to null. Must agree with the built-in projection — the data
- * view and the markup view name a merged row identically. Exported for the
- * instance rows (instance-rows.js), whose excerpt sublabels follow the
- * same convention.
+ * A content row's text: the value's first line, 80 chars (the row shows
+ * content, not a preview). Non-string and empty values fall through to
+ * null. This words VALUE rows (a scalar field's editable content) and, in
+ * instance-rows.js, a carrier's excerpt sublabel: content rows, never
+ * elements. An element's name is minted server-side (`_element.name`),
+ * where the same first-line rule names a merged block.
  */
-export const contentLabel = (value) => {
+export const textExcerpt = (value) => {
   if (typeof value !== 'string' || value.trim() === '') {
     return null;
   }
@@ -430,12 +439,15 @@ const composeField = (
     // A form-only stub row presents under its definition label and
     // offers only the Edit verb, the built-in projection's rule verbatim;
     // with shells on, its field kind's sketch still mounts around the
-    // (empty) value slot like any other field's.
+    // (empty) value slot like any other field's. A field is what it is
+    // called: its one word is both its label and its type.
+    const label = value._label || humanize(name);
     const node = {
       type: 'model',
       key,
       kind: 'field',
-      label: value._label || humanize(name),
+      label,
+      elementType: label,
       presentation,
       formOnly: true,
       children: [],
@@ -455,11 +467,13 @@ const composeField = (
   const entityChildren = values
     .filter(isInlineEntity)
     .map((entity) => composeEntity(entity, context));
+  const label = humanize(name);
   const node = {
     type: 'model',
     key,
     kind: 'field',
-    label: humanize(name),
+    label,
+    elementType: label,
     presentation,
     children: entityChildren,
   };
@@ -475,7 +489,7 @@ const composeField = (
   if (
     entityChildren.length === 0 &&
     values.length === 1 &&
-    contentLabel(values[0]) !== null
+    textExcerpt(values[0]) !== null
   ) {
     entries.push({
       slotKind: 'value',
@@ -483,7 +497,7 @@ const composeField = (
       node: {
         type: 'value',
         key: null,
-        label: contentLabel(values[0]),
+        label: textExcerpt(values[0]),
         children: [],
       },
     });
@@ -501,7 +515,8 @@ const composeField = (
  * An inline entity (paragraph) row: a full model identity that composes
  * recursively; its fields mount into the entity kind's shell. Inline
  * entities carry no `_element` annotation (the projection reads none
- * either), so their fields exist and present open.
+ * either), so their fields exist and present open, and their words are
+ * the entity's own label and its humanized bundle.
  */
 const composeEntity = (entity, context) => {
   const key = `entity:${entity.uuid}`;
@@ -510,11 +525,13 @@ const composeEntity = (entity, context) => {
     name,
     node: composeField(`field:${entity.uuid}:${name}`, name, value, context),
   }));
+  const type = humanize(entity.type ?? 'entity');
   return {
     type: 'model',
     key,
     kind: 'entity',
-    label: entity.label ?? humanize(entity.type ?? 'entity'),
+    label: entity.label ?? type,
+    elementType: type,
     bundle: entity.type ?? null,
     presentation: 'open',
     children: context.targets
@@ -573,17 +590,18 @@ const foldSiblings = (rows, spared) =>
  *   The rows replacing the block row at its position.
  */
 const absorb = (blockNode, component, context) => {
-  const presentation = component._element?.presentation ?? {};
+  const element = component._element ?? {};
+  const presentation = element.presentation ?? {};
   const target = presentation.edit_target ?? null;
+  // The merged row wears the block's delivered words (the annotator's
+  // excerpt of the absorbed content as its name), so the data view and the
+  // markup view name the row alike by construction.
   const merged = {
     type: 'model',
     key: blockNode.key,
     kind: 'block',
-    label:
-      contentLabel(target ? component.block_fields?.[target] : null) ??
-      presentation.label ??
-      component.label ??
-      humanize(component.block_type ?? 'block'),
+    label: element.name,
+    elementType: element.type,
     bundle: component.block_type ?? null,
     presentation: 'merged',
     editTarget: target,
@@ -731,7 +749,8 @@ const composeComponent = (component, context) => {
     type: 'model',
     key,
     kind: 'block',
-    label: component.label ?? humanize(component.block_type ?? 'block'),
+    label: element.name,
+    elementType: element.type,
     bundle,
     presentation: presentation.mode,
     children,
@@ -763,10 +782,14 @@ const composeRegionChild = (child, context) =>
  * it) with no region name to bind a specific claim. A section is ONE
  * element at every depth — its declaration mounts the same rows nested
  * as at root (the root's own tag swap is the annotation's business, not
- * the sketch's).
+ * the sketch's). Its words are the annotation's: `name` (the custom label
+ * when renamed, else the type word) and `type` ("Section" at page depth,
+ * "Container" nested); `customLabel` is the raw stored label the rename
+ * input seeds from.
  */
 const composeSection = (section, context) => {
   const key = section.uuid ? `container:${section.uuid}` : null;
+  const element = section._element ?? {};
   const list = sectionChildren(section);
   const regions = Object.entries(section.regions ?? {});
   let entries;
@@ -808,7 +831,8 @@ const composeSection = (section, context) => {
     type: 'model',
     key,
     kind: 'container',
-    label: sectionLabel(section),
+    label: element.name,
+    elementType: element.type,
     customLabel: section.label ?? '',
     presentation: 'open',
     children: context.targets
@@ -868,8 +892,9 @@ const absorbRootTarget = (rootNode, targetKey, context) => {
  *   declarations' elements trees per kind, block type, and layout.
  * @param {object} view
  *   The view state:
- *   - root: the root identity envelope ({uuid, label}) — the mirror itself
- *     does not carry the root entity's uuid.
+ *   - root: the root identity envelope ({uuid}) — the mirror itself does
+ *     not carry the root entity's uuid (its words ride the mirror's own
+ *     `_element`).
  *   - targets: the markup-view toggle — shells, markup identities and
  *     value rows compose in. Off = the data tree.
  *   - placement: the part placement channel, `(ownerKey, selector) =>
@@ -885,7 +910,14 @@ const absorbRootTarget = (rootNode, targetKey, context) => {
  */
 export const compose = (blueprint, anatomy, view = {}) => {
   const { root = null, targets = false, placement = null } = view;
-  const context = { anatomy: anatomy ?? {}, targets, placement };
+  // The root's field map rides the context: a field-block placement's
+  // merged row labels itself from the root field it presents.
+  const context = {
+    anatomy: anatomy ?? {},
+    targets,
+    placement,
+    rootFields: blueprint?.fields ?? {},
+  };
   const uuid = root?.uuid ?? null;
   const key = uuid ? `entity:${uuid}` : null;
   const element = blueprint?._element ?? {};
@@ -928,9 +960,8 @@ export const compose = (blueprint, anatomy, view = {}) => {
     type: 'model',
     key,
     kind: 'entity',
-    label:
-      (editTarget ? contentLabel(blueprint?.fields?.[editTarget]) : null) ??
-      (root?.label || humanize(blueprint?.bundle ?? 'page')),
+    label: element.name,
+    elementType: element.type,
     bundle: blueprint?.bundle ?? null,
     presentation: 'open',
     editTarget,

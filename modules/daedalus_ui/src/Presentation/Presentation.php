@@ -35,6 +35,15 @@ final class Presentation {
   public const ATTRIBUTE = 'data-presentation';
 
   /**
+   * The DOM attribute naming the root field a field-block placement
+   * presents (the field's selectable key), the twin of the delivered
+   * annotation's `presented_field`. Stamped beside a MERGED mode on the
+   * placement (ElementModel::fieldBlockPresentation), so a consumer holding
+   * the placement can find its subject without parsing the inner render.
+   */
+  public const PRESENTED_FIELD_ATTRIBUTE = 'data-presented-field';
+
+  /**
    * Constructs a Presentation.
    *
    * @param string $mode

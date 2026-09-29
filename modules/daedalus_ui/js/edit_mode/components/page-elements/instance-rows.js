@@ -12,10 +12,14 @@
  * text?, children}, labels stamped translated, no client tag-vocabulary
  * copy), and this module projects them into the tree's row seam — for
  * BOTH projections. Instance rows are content, not markup (a freshly
- * placed empty block would have none), so they are not gated behind the
- * markup view's Show-menu toggle: the default model projection appends
- * them too (markup-view.js withInstanceRows), chip-less; only shell rows
- * and tag chips — developer-declared anatomy — stay the markup view's.
+ * placed empty block would have none), so each seam row they become is
+ * stamped `source: 'instance'` (markup-view.js toInstanceRow), and
+ * reach (reach.js depicted) draws and reaches an instance source in
+ * every view: the default model projection appends them too
+ * (withInstanceRows), chip-less, and the tree's draw filter keeps them
+ * whatever the Show menu says. Only shell rows, generated-box rows and
+ * tag chips — developer-declared anatomy and the cascade — carry the
+ * markup view's source and ride its toggle.
  *
  * Ownership mirrors the DOM by construction: a composed block's carriers
  * ride the block's own markup (its render is one element), an open
@@ -30,7 +34,7 @@
  */
 
 import { markupForKey } from '../../blueprint/markup-index';
-import { contentLabel } from './compose';
+import { textExcerpt } from './compose';
 
 /**
  * One annotation instance as a markup-view row.
@@ -51,7 +55,7 @@ const toRow = (instance) => {
     // no client accessor is asked (unlike shell rows).
     row.tag = instance.tag;
   }
-  const excerpt = contentLabel(instance.text ?? '');
+  const excerpt = textExcerpt(instance.text ?? '');
   if (excerpt !== null) {
     row.sublabel = excerpt;
   }

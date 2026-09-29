@@ -8,6 +8,7 @@ use Drupal\daedalus_blueprint\BlueprintOperations;
 use Drupal\daedalus_blueprint\Event\ElementCreatedEvent;
 use Drupal\daedalus_blueprint\Event\SectionCreatedEvent;
 use Drupal\daedalus_blueprint\Result\TargetType;
+use Drupal\field\Entity\FieldConfig;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
@@ -31,6 +32,15 @@ use Drupal\Tests\daedalus\Kernel\BlueprintKernelTestBase;
 #[CoversClass(BlueprintOperations::class)]
 #[Group('daedalus_blueprint')]
 class BlueprintOperationsAddParityTest extends BlueprintKernelTestBase {
+
+  /**
+   * {@inheritdoc}
+   *
+   * The policy layer (field_sample_value) is daedalus_blueprint's hard
+   * dependency on a site, so the placement contract is tested with it
+   * present.
+   */
+  protected static $modules = ['field_sample_value'];
 
   /**
    * The blueprint operations service.
@@ -204,15 +214,28 @@ class BlueprintOperationsAddParityTest extends BlueprintKernelTestBase {
   /**
    * Tests populate: 'sample' enrichment on inline blocks.
    *
-   * Unprovided fields get sample content (core generateSampleItems — the
-   * field_sample_value module is not in this env), provided fields keep
-   * their explicit values, and the component view_mode resolves to one
-   * that exists for the block bundle instead of InlineBlock's 'full'.
+   * Placement fills only what the site answers (SampleFiller's placement
+   * entrance): an unprovided field with a configured field_sample_value
+   * generator fills, an unprovided field with no policy stays empty (core's
+   * type-level sample is not a placement rung, so a dropped block never
+   * arrives with a made-up value), provided fields keep their explicit
+   * values, and the component view_mode resolves to one that exists for
+   * the block bundle instead of InlineBlock's 'full'.
    */
   public function testPopulateSample(): void {
     $entity = $this->createLbEntity();
+    // A second string field beside field_heading, with no sample policy.
+    $this->createBlockField('field_subheading', 'string', 'text_section');
+    $heading = FieldConfig::loadByName('block_content', 'text_section', 'field_heading');
+    $heading->setThirdPartySetting('field_sample_value', 'id', 'random_string');
+    $heading->setThirdPartySetting('field_sample_value', 'configuration', [
+      'prevent_save' => FALSE,
+      'count' => 3,
+    ]);
+    $heading->save();
 
-    // No fields provided: sample content fills field_heading.
+    // No fields provided: the configured generator fills field_heading and
+    // the policy-less field_subheading stays empty.
     $result = $this->operations->addElement($entity, ['anchor' => self::SEED_UUID, 'placement' => 'after'], [
       'block_type' => 'text_section',
       'uuid' => 'f0f45ea4-c594-783b-9ccb-94c896ee4891',
@@ -223,6 +246,7 @@ class BlueprintOperationsAddParityTest extends BlueprintKernelTestBase {
     $configuration = $components['f0f45ea4-c594-783b-9ccb-94c896ee4891']->get('configuration');
     $block = $this->unserializeBlock($configuration['block_serialized']);
     $this->assertNotEmpty($block->get('field_heading')->value);
+    $this->assertTrue($block->get('field_subheading')->isEmpty(), 'A field with no sample policy is left empty on placement.');
     // No 'full' display exists for the bundle, so view_mode falls back.
     $this->assertSame('default', $configuration['view_mode']);
 

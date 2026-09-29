@@ -6,6 +6,7 @@ namespace Drupal\Tests\daedalus_stylish\Kernel;
 
 use Drupal\KernelTests\KernelTestBase;
 use Drupal\daedalus_stylish\ControlSection;
+use Drupal\daedalus_stylish\StyleGuide;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 
@@ -52,12 +53,16 @@ class BaselineControlBindingsTest extends KernelTestBase {
     'twig_events',
     'daedalus_tempstore',
     'daedalus_blueprint_api',
+    'file',
     'daedalus_ui',
     'daedalus_layout',
     'field_sample_value',
     'filter',
     'editor',
     'daedalus_edit',
+    'link',
+    'options',
+    'daedalus_edit_text_block',
     'daedalus_stylish',
   ];
 
@@ -135,6 +140,70 @@ class BaselineControlBindingsTest extends KernelTestBase {
     );
     $this->assertSame('typography', $instances['.s-*']['controls']['typography']['widget']);
     $this->assertArrayNotHasKey('element', $instances['.s-*']['controls']['text_color']);
+  }
+
+  /**
+   * The text block restates the kind's ids over a link-first candidate list.
+   *
+   * A linked text block is two boxes (the tag root and the anchor inside
+   * it, where the shipped `button` variant keys every style), and basic
+   * mode shows ONE row per binding: daedalus_edit_text_block restates the
+   * universal block kind's ids (so the maps key-merge and no second row
+   * appears) with `['.text-block-link', '']` as the address, and the
+   * projection resolves each owned property to the first candidate that
+   * paints it. The five ids are pinned as authored on the effective
+   * declaration (a list, the link first) and as served (controlCandidates
+   * is the one normalizer ClientStyleGuide::serveNode() runs, so the
+   * served list IS this read); the bindings whose widget the link's
+   * groups cannot cover (elevation needs shadow; width sizing; position
+   * layout on the kind's terms) stay the kind's root bindings; and no
+   * `button_*` id survives. The clean build (getBlockType runs the loud
+   * control validation) is the proof that the link's property groups
+   * cover every restated widget at the second candidate as well as the
+   * first.
+   */
+  public function testTextBlockBindsTheLinkFirst(): void {
+    $style_guide = $this->container->get('daedalus_stylish.style_guide');
+    $text = $style_guide->getBlockType('text', self::THEME);
+    $this->assertIsArray($text);
+    $this->assertSame(['background', 'spacing', 'border', 'typography', 'layout'], array_keys($text['elements']['.text-block-link']['property_groups']));
+
+    $link_first = ['.text-block-link', ''];
+    foreach ([
+      'background' => ['Background', 'background'],
+      'text_color' => ['Text color', 'text_color'],
+      'typography' => ['Typography', 'typography'],
+      'corners_border' => ['Corners and border', 'corners_border'],
+      'spacing' => ['Spacing', 'spacing_scale'],
+    ] as $id => [$label, $widget]) {
+      $this->assertSame([
+        'label' => $label,
+        'widget' => $widget,
+        'element' => $link_first,
+      ], $text['controls'][$id], "$id restates the kind's id over the link-first list");
+      $this->assertSame($link_first, StyleGuide::controlCandidates($text['controls'][$id]), "$id is served as the same list");
+    }
+    foreach (['elevation', 'width', 'position', 'text_alignment'] as $id) {
+      $this->assertArrayNotHasKey('element', $text['controls'][$id], "$id stays a root binding");
+      $this->assertSame([''], StyleGuide::controlCandidates($text['controls'][$id]), "$id is served as the root list");
+    }
+    $this->assertSame([], preg_grep('/^button_/', array_keys($text['controls'])), 'no button_* id survives: the link\'s rows are the kind\'s rows');
+    $this->assertSame(
+      [
+        'typography',
+        'text_color',
+        'background',
+        'corners_border',
+        'elevation',
+        'position',
+        'spacing',
+        'width',
+        'motion_trigger',
+        'text_alignment',
+      ],
+      array_keys($text['controls']),
+      'the kind\'s ids merge in the kind\'s order (the suite\'s motion trigger layered after them); the text block adds only its alignment',
+    );
   }
 
 }

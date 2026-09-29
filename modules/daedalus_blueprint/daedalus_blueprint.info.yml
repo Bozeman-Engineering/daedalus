@@ -5,3 +5,4 @@ core_version_requirement: '>=11.3 <11.5'
 package: Daedalus
 dependencies:
   - daedalus:daedalus
+  - field_sample_value:field_sample_value

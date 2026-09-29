@@ -1,6 +1,4 @@
 import { EditorPluginBase } from './plugins/editor-plugin-base.js';
-import { FormEditorBase } from './plugins/form-editor-base.js';
-import { BlueprintEditorBase } from './plugins/blueprint-editor-base.js';
 import * as verbWidgets from './composed/verb-widgets.js';
 import * as linkControl from './composed/link-control.js';
 import * as elementPreview from './composed/element-preview.js';
@@ -14,7 +12,8 @@ import * as elementPreview from './composed/element-preview.js';
  * - getPlugin(EditableElement): widget-indexed lookup for form-edited
  *   leaves — candidates for the leaf's widget are offered in descending
  *   priority and the first whose applies() accepts wins, falling back to
- *   the default editor.
+ *   the panel widget editor (the one editor for "no canvas editor for
+ *   this widget": the real widget in the panel).
  */
 class EditorRegistry {
   constructor() {
@@ -78,7 +77,7 @@ class EditorRegistry {
    *   The element being edited.
    * @return {EditorPluginBase}
    *   The highest-priority applicable editor for the element's widget, or
-   *   the default editor.
+   *   the panel widget editor.
    */
   getPlugin = (EditableElement) => {
     const candidates = this.widgetIndex[EditableElement.info.widget] ?? [];
@@ -87,7 +86,7 @@ class EditorRegistry {
         return editor;
       }
     }
-    return this.editors.default;
+    return this.editors.panel_widget;
   };
 
   /**
@@ -126,7 +125,7 @@ class EditorRegistry {
  * plain array that needs no daedalus_edit code to exist:
  *
  *   (window.DaedalusEditQueue ||= []).push((daedalusEdit) => {
- *     class MyEditor extends daedalusEdit.FormEditorBase {
+ *     class MyEditor extends daedalusEdit.EditorPluginBase {
  *       id = 'my_editor';
  *       supportedWidgets = ['my_widget'];
  *     }
@@ -143,14 +142,12 @@ export default function () {
   const registry = new EditorRegistry();
   Drupal.Daedalus.Edit.Editors = registry;
 
-  // The API handed to registration callbacks. Besides the base classes and
-  // the registry, it carries the shared machinery composed-element editors
-  // build on: the widget-verb popover grammar, the link control, and the
-  // resolved-tree preview morph (see js/daedalus_edit/composed/).
+  // The API handed to registration callbacks. Besides the one base class
+  // and the registry, it carries the shared machinery composed-element
+  // editors build on: the widget-verb popover grammar, the link control,
+  // and the resolved-tree preview morph (see js/daedalus_edit/composed/).
   const daedalusEdit = {
     EditorPluginBase,
-    FormEditorBase,
-    BlueprintEditorBase,
     verbWidgets,
     linkControl,
     elementPreview,

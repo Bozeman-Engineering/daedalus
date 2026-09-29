@@ -46,6 +46,7 @@ class WidePropertyGroupTest extends KernelTestBase {
     'twig_events',
     'daedalus_tempstore',
     'daedalus_blueprint_api',
+    'file',
     'daedalus_ui',
     'daedalus_stylish',
     'daedalus_stylish_wide_guide_test',
@@ -225,6 +226,22 @@ class WidePropertyGroupTest extends KernelTestBase {
       $this->assertSame('border', $manager->getGroupIdForProperty($name));
     }
     $this->assertSame('wide:basic_user_interface', $manager->getGroupIdForProperty('outline'));
+    // GeneratedContent curates `content` (the existence switch of a
+    // generated box, closed to `none | ""`) away from the wide Generated
+    // Content derivative, whose 'any' copy would have admitted every
+    // string; `quotes` stays wide beside it. The curated group is
+    // pseudo-only: granted at every pseudo-element landing and nowhere
+    // else, so it is never declared on a real box.
+    $wide_content = $manager->createInstance('wide:generated_content')->getProperties();
+    $this->assertArrayHasKey('content', $wide_content);
+    $this->assertSame('any', $wide_content['content']['type']);
+    $this->assertSame('generated_content', $manager->getGroupIdForProperty('content'));
+    $this->assertSame('wide:generated_content', $manager->getGroupIdForProperty('quotes'));
+    $this->assertSame(['generated_content'], $manager->getPseudoGroups());
+    $this->assertTrue($manager->isPseudoOnly('generated_content'));
+    $this->assertFalse($manager->isPseudoOnly('wide:generated_content'));
+    $this->assertFalse($manager->isPseudoOnly('background'));
+    $this->assertFalse($manager->isPseudoOnly('nope'));
 
     // The curated grammar is in force: the wide 'any' copy would have
     // passed a value that is not a keyframes name.
@@ -252,6 +269,23 @@ class WidePropertyGroupTest extends KernelTestBase {
     $this->assertSame([], $this->validator->validate([
       "block:{$this->uuid}" => ['default' => ['opacity' => '0.5', 'transform' => 'translateY(-4px)']],
     ]));
+    // The curated content grammar is in force where the wide copy would
+    // have passed hygiene: a string is refused on the box, and content on
+    // a real box is refused outright (the wide copy would have admitted
+    // it as any recognized property).
+    $codes = $this->codes($this->validator->validate([
+      "block:{$this->uuid}::&::before" => ['default' => ['content' => '"hi"']],
+      "block:{$this->uuid}" => ['default' => ['content' => '""']],
+    ]));
+    $this->assertSame(['INVALID_STYLE_VALUE'], $codes["block:{$this->uuid}::&::before.default.content"]);
+    $this->assertSame(['STYLE_PROPERTY_PSEUDO_ONLY'], $codes["block:{$this->uuid}.default.content"]);
+    $this->assertSame([], $this->validator->validate([
+      "container:{$this->uuid}::&::before" => ['default' => ['content' => '""', 'backdrop-filter' => 'blur(4px)', 'scroll-margin' => '1rem']],
+    ]));
+    $codes = $this->codes($this->validator->validate([
+      "container:{$this->uuid}::&::before" => ['default' => ['scroll-margin' => '2rem']],
+    ]));
+    $this->assertSame(['STYLE_VALUE_NOT_ALLOWED'], $codes["container:{$this->uuid}::&::before.default.scroll-margin"], 'The derived box carries the host\'s wide-tier constraint.');
     // The curated outline grammar is in force: the wide copy typed
     // outline-width as signed, the curated one is unsigned; the offset is
     // signed on both, and the shorthand still validates as wide 'any'.

@@ -20,7 +20,7 @@ use Drupal\daedalus_stylish\Attribute\ConditionType;
  * by the printer and validator directly.
  *
  * Also the authority on the COMPOUND grammar: conditions live on axes
- * (width/scheme/motion/state, declared per condition type), a style entry
+ * (state/structural/width/scheme/motion, declared per condition type), a style entry
  * may key on an "a+b" compound holding at most one condition per axis, and
  * the canonical part order is axis-declaration order
  * (canonicalizeCondition()) — accepted in any order on write, normalized
@@ -115,11 +115,23 @@ final class ConditionTypePluginManager extends DefaultPluginManager {
    * Gets the axis a condition name lives on.
    *
    * @return string|null
-   *   The axis ("width", "scheme", "motion", "state"), or NULL for an
-   *   unknown condition.
+   *   The axis ("state", "structural", "width", "scheme", "motion"), or
+   *   NULL for an unknown condition.
    */
   public function getAxis(string $name): ?string {
     return $this->getConditions()[$name]['axis'] ?? NULL;
+  }
+
+  /**
+   * Whether a condition is a structural fact rather than a posable state.
+   *
+   * The one read behind every fact consumer (the printers' bare wrapper,
+   * the client payload, the AI schema, the dialect catalog): a fact is
+   * whatever its plugin declared `fact: TRUE`
+   * (ConditionTypeInterface::getConditions()). Unknown names are not facts.
+   */
+  public function isFact(string $name): bool {
+    return ($this->getConditions()[$name]['fact'] ?? FALSE) === TRUE;
   }
 
   /**
@@ -262,6 +274,28 @@ final class ConditionTypePluginManager extends DefaultPluginManager {
     foreach (self::compoundParts($name) as $part) {
       $wrapper = $this->getWrapper($part);
       if ($wrapper !== NULL && str_starts_with($wrapper, '@container')) {
+        return TRUE;
+      }
+    }
+    return FALSE;
+  }
+
+  /**
+   * Whether a condition tests the user's color scheme preference.
+   *
+   * Keyed on the declared preference fact
+   * (ConditionTypeInterface::getConditions(): preference.feature is
+   * "prefers-color-scheme"), never on the wrapper's text, the same read the
+   * canvas emulation matches a forced scheme against. Compound-aware like
+   * isContainerCondition(): "narrow+dark" is a scheme condition because one
+   * of its parts is. The defaults file reads this to decide whether the
+   * skin's values follow the visitor's scheme and so whether the UA's own
+   * chrome must too (CssPrinter::COLOR_SCHEME_RULE).
+   */
+  public function isSchemeCondition(string $name): bool {
+    foreach (self::compoundParts($name) as $part) {
+      $feature = $this->getConditions()[$part]['preference']['feature'] ?? NULL;
+      if ($feature === 'prefers-color-scheme') {
         return TRUE;
       }
     }

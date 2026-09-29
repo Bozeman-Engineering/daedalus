@@ -45,6 +45,7 @@ class InstallTest extends KernelTestBase {
     'twig_events',
     'daedalus_tempstore',
     'daedalus_blueprint_api',
+    'file',
     'daedalus_ui',
     'daedalus_layout',
     'field_sample_value',
@@ -72,7 +73,9 @@ class InstallTest extends KernelTestBase {
     $this->assertNotNull($node_type);
     $daedalus_ui = $node_type->getThirdPartySettings('daedalus_ui');
     $this->assertSame('edit', $daedalus_ui['initial_mode']);
-    $this->assertSame('selector', $daedalus_ui['modes']['edit']['default_tool']);
+    $this->assertSame(['edit' => TRUE], $daedalus_ui['status']);
+    // Edit Mode keeps no per-bundle configuration (there are no tools).
+    $this->assertArrayNotHasKey('modes', $daedalus_ui);
     $this->assertSame(['footer', 'main'], $node_type->getThirdPartySetting('menu_ui', 'available_menus'));
     // Previewing happens in place through the page builder; core's preview
     // button is disabled so it cannot detour out of it.

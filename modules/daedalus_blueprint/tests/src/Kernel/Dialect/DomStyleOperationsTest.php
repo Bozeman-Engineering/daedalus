@@ -15,6 +15,7 @@ use Drupal\daedalus_blueprint\Materials\MaterialsRoster;
 use Drupal\daedalus_stylish\Entity\DaedalusStylishVariant;
 use Drupal\daedalus_stylish\DaedalusStylishFieldManager;
 use Drupal\daedalus_stylish\Vocabulary\VocabularyRoster;
+use Drupal\daedalus_stylish_value_handler_test\TestFileStyleValueHandler;
 use Drupal\daedalus_stylish_value_handler_test\TestGenerateStyleValueHandler;
 use Drupal\Tests\daedalus\Kernel\BlueprintKernelTestBase;
 use Drupal\Tests\daedalus\Traits\DesignSystemActivationTrait;
@@ -79,6 +80,7 @@ class DomStyleOperationsTest extends BlueprintKernelTestBase {
       'twig_events',
       'daedalus_tempstore',
       'daedalus_blueprint_api',
+      'file',
       'daedalus_ui',
       // Section identity (the uuid the tree addresses containers by) is
       // daedalus_layout's third-party setting; without it no container is
@@ -86,9 +88,9 @@ class DomStyleOperationsTest extends BlueprintKernelTestBase {
       'daedalus_layout',
       'daedalus_stylish',
       'daedalus_stylish_guide_test',
-      // Registers the `_generate` marker stub (daedalus_ai's production
-      // handler, minus the minting), so the dialect's generate-url
-      // translation is testable end to end.
+      // Registers the `_generate` and `_file` marker stubs (daedalus_ai's
+      // production handlers, minus the minting), so the dialect's generate
+      // and file url translations are testable end to end.
       'daedalus_stylish_value_handler_test',
       // State-layered spine declarations: the rich-text tests declare the
       // '.s-*' instance namespace on the spine through its alter hook.
@@ -179,9 +181,10 @@ class DomStyleOperationsTest extends BlueprintKernelTestBase {
           'tags' => ['p' => 'Paragraph', 'h2' => 'Heading 2', 'ul' => 'Bulleted list', 'ol' => 'Numbered list'],
         ],
       ],
-      // The tag tier's vocabulary is the styling layer's base section
-      // (daedalus_stylish's shipped one), not the identity tags above.
-      textTags: ['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p', 'a', 'ul', 'ol', 'li', 'blockquote', 'pre', 'code', 'img'],
+      // The tag tier's vocabulary on every owner is the styling layer's
+      // base section (daedalus_stylish's shipped one), not the identity
+      // tags above.
+      selectors: array_fill_keys(['pb-container', 'pb-text', 'pb-formatted-text', 'pb-block'], ['parts' => [], 'tags' => ['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p', 'a', 'ul', 'ol', 'li', 'blockquote', 'pre', 'code', 'img']]),
     );
   }
 
@@ -236,7 +239,68 @@ class DomStyleOperationsTest extends BlueprintKernelTestBase {
     $map = $this->styleMap();
     $this->assertSame(['color' => 'red'], $map["block:$uuid::.s-lead"]['default']);
     $this->assertSame(['font-size' => '1.5rem'], $map["block:$uuid::p"]['default']);
-    $this->assertSame(['padding-top' => '0.5rem'], $map["block:$uuid::.s-list::>"]['default']);
+    $this->assertSame(['padding-top' => '0.5rem'], $map["block:$uuid::.s-list > *"]['default']);
+  }
+
+  /**
+   * Child selectors land as the container's selector keys, one grammar.
+   *
+   * `#band > pb-formatted-text { color }` styles every formatted-text
+   * block among the band's children through ONE entry on the container's
+   * key, nesting flattens on the way in, and the document print reads the
+   * flat rules back.
+   */
+  public function testStyleOpWritesChildSelectors(): void {
+    $options = $this->setUpRichTextLane();
+    $result = $this->operations->batchOperations($this->entity, [
+      [
+        'op' => 'insert',
+        'at' => ['ref' => $this->rootUuid, 'position' => 'beforeend'],
+        'html' => '<pb-formatted-text id="one"><p>One</p></pb-formatted-text><pb-formatted-text id="two"><p>Two</p></pb-formatted-text>',
+      ],
+      [
+        'op' => 'style',
+        'css' => "#{$this->rootUuid} { > pb-formatted-text { color: red; &:hover { color: blue; } } > * { margin: 0; } p { font-size: 1.5rem; } > pb-formatted-text + pb-formatted-text { margin-top: 1rem; } > pb-formatted-text:has(a):hover { color: green; } > *:not(pb-formatted-text) { margin-bottom: 0; } }",
+      ],
+    ], $options);
+    $this->assertTrue($result->isSuccess(), print_r($result->toArray()['errors'] ?? [], TRUE));
+    $map = $this->styleMap();
+    $this->assertSame(['color' => 'red'], $map["container:{$this->rootUuid}::> pb-formatted-text"]['default']);
+    $this->assertSame(['color' => 'blue'], $map["container:{$this->rootUuid}::> pb-formatted-text"]['hover']);
+    $this->assertSame(['margin' => '0'], $map["container:{$this->rootUuid}::> *"]['default']);
+    $this->assertSame(['font-size' => '1.5rem'], $map["container:{$this->rootUuid}::p"]['default']);
+    // The relations land the same way: the qualifiers in the key, the
+    // state as the condition.
+    $this->assertSame(['margin-top' => '1rem'], $map["container:{$this->rootUuid}::> pb-formatted-text + pb-formatted-text"]['default']);
+    $this->assertSame(['color' => 'green'], $map["container:{$this->rootUuid}::> pb-formatted-text:has(a)"]['hover']);
+    $this->assertSame(['margin-bottom' => '0'], $map["container:{$this->rootUuid}::> *:not(pb-formatted-text)"]['default']);
+    // The print reads the flat rules back (the corpus round-trips in
+    // DialectSpecTest lock the whole document; this entity's layout is
+    // multi-region, which the printer refuses, so the rule printer is
+    // exercised on a lean container node here).
+    $print = $this->container->get('daedalus_blueprint.dialect_printer')->print([
+      [
+        'kind' => 'container',
+        'uuid' => $this->rootUuid,
+        'layout_id' => 'daedalus_stylish_container',
+        'children' => [],
+        'styles' => [
+          '::> pb-formatted-text' => $map["container:{$this->rootUuid}::> pb-formatted-text"],
+          '::> *' => $map["container:{$this->rootUuid}::> *"],
+          '::p' => $map["container:{$this->rootUuid}::p"],
+          '::> pb-formatted-text + pb-formatted-text' => $map["container:{$this->rootUuid}::> pb-formatted-text + pb-formatted-text"],
+          '::> pb-formatted-text:has(a)' => $map["container:{$this->rootUuid}::> pb-formatted-text:has(a)"],
+          '::> *:not(pb-formatted-text)' => $map["container:{$this->rootUuid}::> *:not(pb-formatted-text)"],
+        ],
+      ],
+    ], $options['dialect_catalog']);
+    $this->assertStringContainsString("#{$this->rootUuid} > pb-formatted-text { color: red; }", $print);
+    $this->assertStringContainsString("#{$this->rootUuid} > pb-formatted-text:hover { color: blue; }", $print);
+    $this->assertStringContainsString("#{$this->rootUuid} > * { margin: 0; }", $print);
+    $this->assertStringContainsString("#{$this->rootUuid} p { font-size: 1.5rem; }", $print);
+    $this->assertStringContainsString("#{$this->rootUuid} > pb-formatted-text + pb-formatted-text { margin-top: 1rem; }", $print);
+    $this->assertStringContainsString("#{$this->rootUuid} > pb-formatted-text:has(a):hover { color: green; }", $print);
+    $this->assertStringContainsString("#{$this->rootUuid} > *:not(pb-formatted-text) { margin-bottom: 0; }", $print);
   }
 
   /**
@@ -472,6 +536,65 @@ class DomStyleOperationsTest extends BlueprintKernelTestBase {
   }
 
   /**
+   * Style: a rule wears a variant as a declaration; remove takes it off.
+   *
+   * `class: band` inside `#root > pb-container` lands as apply_variant at
+   * the rule key beside the rule's own gap (daedalus_stylish judging the
+   * wear by the rule's landing), the print reads the rule back with its
+   * declaration, a wear on the element itself is refused (its attributes
+   * and the set op spell that), a remove entry naming "class" takes every
+   * class the rule wears off (remove_variant) and leaves its properties,
+   * and a remove naming a wear the rule does not carry says so.
+   */
+  public function testStyleOpWearsAtARule(): void {
+    $this->mintBandVariant();
+    $rule = "container:{$this->rootUuid}::> pb-container";
+
+    $worn = $this->operations->batchOperations($this->entity, [
+      ['op' => 'style', 'css' => "#{$this->rootUuid} > pb-container { class: band; gap: 1rem; }"],
+    ], $this->options);
+    $this->assertTrue($worn->isSuccess(), print_r($worn->toArray()['errors'] ?? [], TRUE));
+    $entry = $this->styleMap()[$rule];
+    $this->assertSame([['variant' => 'band', 'fragment' => '']], $entry['variants']);
+    $this->assertSame(['gap' => '1rem'], $entry['default']);
+    $this->assertArrayNotHasKey('variants', $this->styleMap()["container:{$this->rootUuid}"] ?? [], 'The wear is the rule\'s, never the owner\'s.');
+
+    $print = $this->container->get('daedalus_blueprint.dialect_printer')->print([
+      [
+        'kind' => 'container',
+        'uuid' => $this->rootUuid,
+        'layout_id' => 'daedalus_stylish_container',
+        'children' => [],
+        'styles' => ['::> pb-container' => $entry],
+      ],
+    ], $this->options['dialect_catalog']);
+    $this->assertStringContainsString("#{$this->rootUuid} > pb-container { class: band; gap: 1rem; }", $print);
+
+    $element = $this->operations->batchOperations($this->entity, [
+      ['op' => 'style', 'css' => "#{$this->rootUuid} { class: band; }"],
+    ], $this->options);
+    $this->assertFalse($element->isSuccess());
+    $this->assertSame('WEAR_ON_ELEMENT', $element->getErrors()[0]->getCode());
+    $this->assertSame('css', $element->getErrors()[0]->getPath());
+
+    $off = $this->operations->batchOperations($this->entity, [
+      ['op' => 'style', 'remove' => [['selector' => "#{$this->rootUuid} > pb-container", 'properties' => ['class']]]],
+    ], $this->options);
+    $this->assertTrue($off->isSuccess(), print_r($off->toArray()['errors'] ?? [], TRUE));
+    $entry = $this->styleMap()[$rule];
+    $this->assertArrayNotHasKey('variants', $entry);
+    $this->assertSame(['gap' => '1rem'], $entry['default']);
+
+    $nothing = $this->operations->batchOperations($this->entity, [
+      ['op' => 'style', 'remove' => [['selector' => "#{$this->rootUuid} > pb-container", 'properties' => ['class']]]],
+    ], $this->options);
+    $this->assertFalse($nothing->isSuccess());
+    $this->assertSame('BAD_OP', $nothing->getErrors()[0]->getCode());
+    $this->assertSame('remove.0', $nothing->getErrors()[0]->getPath());
+    $this->assertStringContainsString('wears no class variant', $nothing->getErrors()[0]->getMessage());
+  }
+
+  /**
    * Reads the entity's style map back.
    */
   protected function styleMap(): array {
@@ -524,6 +647,45 @@ CSS;
       $this->styleMap()["container:{$this->rootUuid}"]['default']['background-image'],
       'The stored value is one comma-joined CSS value: the literal gradient over the resolved media token.',
     );
+  }
+
+  /**
+   * A file handle in a style op lands as the {_file} handled value.
+   *
+   * The file url translates exactly as the generate url: alone it is the
+   * bare handled value, over a gradient it is one layer,
+   * and the resolver commits the stub's token in its place; the batch's
+   * conversation reaches the handler through the seam's context (the
+   * production handler resolves the name for that conversation).
+   */
+  public function testStyleOpPlacesFileHandle(): void {
+    $result = $this->operations->batchOperations($this->entity, [
+      [
+        'op' => 'style',
+        'css' => "#{$this->rootUuid} { background-image: url('file:hero.svg'); }",
+      ],
+    ], ['conversation' => 'thread-style'] + $this->options);
+
+    $this->assertTrue($result->isSuccess(), print_r($result->toArray()['errors'] ?? [], TRUE));
+    $this->assertSame(
+      sprintf("url('media:%s')", TestFileStyleValueHandler::UUID),
+      $this->styleMap()["container:{$this->rootUuid}"]['default']['background-image'],
+    );
+    $this->assertSame('thread-style', TestFileStyleValueHandler::$conversation, 'The batch conversation reaches the style value seam.');
+
+    $gradient = 'linear-gradient(rgb(0 0 0 / 0.5), rgb(0 0 0 / 0.5))';
+    $result = $this->operations->batchOperations($this->entity, [
+      [
+        'op' => 'style',
+        'css' => "#{$this->rootUuid} { background-image: $gradient, url('file:hero.svg'); }",
+      ],
+    ], array_diff_key($this->options, ['conversation' => '']));
+    $this->assertTrue($result->isSuccess(), print_r($result->toArray()['errors'] ?? [], TRUE));
+    $this->assertSame(
+      sprintf("%s, url('media:%s')", $gradient, TestFileStyleValueHandler::UUID),
+      $this->styleMap()["container:{$this->rootUuid}"]['default']['background-image'],
+    );
+    $this->assertSame('', TestFileStyleValueHandler::$conversation, 'A batch without a conversation hands the seam the empty one.');
   }
 
   /**

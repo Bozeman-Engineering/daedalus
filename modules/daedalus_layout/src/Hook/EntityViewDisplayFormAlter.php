@@ -53,7 +53,7 @@ class EntityViewDisplayFormAlter {
     $form['daedalus_layout'] = [
       '#type' => 'details',
       '#title' => $this->t('Preserved Fields'),
-      '#description' => $this->t("By default, Layout Builder removes all entity fields from the render array since they are typically managed as field blocks within the layout. Select fields below to preserve them in the render array outside of Layout Builder sections. Preserved fields can be edited with the Edit tool and will appear in your theme's content variable, allowing you to position them independently from the Layout Builder UI for greater design flexibility."),
+      '#description' => $this->t("By default, Layout Builder removes all entity fields from the render array since they are typically managed as field blocks within the layout. Select fields below to preserve them in the render array outside of Layout Builder sections. Preserved fields can be edited in place in Edit Mode and will appear in your theme's content variable, allowing you to position them independently from the Layout Builder UI for greater design flexibility."),
       '#open' => !empty($preserved_fields),
       '#tree' => TRUE,
       '#weight' => 99,

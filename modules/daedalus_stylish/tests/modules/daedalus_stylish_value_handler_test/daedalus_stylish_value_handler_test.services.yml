@@ -9,3 +9,7 @@ services:
     class: Drupal\daedalus_stylish_value_handler_test\TestGenerateStyleValueHandler
     tags:
       - { name: daedalus_stylish.style_value_handler }
+  daedalus_stylish_value_handler_test.file_handler:
+    class: Drupal\daedalus_stylish_value_handler_test\TestFileStyleValueHandler
+    tags:
+      - { name: daedalus_stylish.style_value_handler }

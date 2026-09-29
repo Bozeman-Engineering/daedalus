@@ -20,6 +20,7 @@ use Drupal\daedalus_ai_memory\Service\ChatMessageFileStripper;
 use Drupal\ai_agents\AiAgentInterface as AiAgentEntityInterface;
 use Drupal\ai_agents\PluginInterfaces\AiAgentInterface;
 use Drupal\ai_agents\PluginInterfaces\ConfigAiAgentInterface;
+use Drupal\ai_assistant_api\AiAssistantInterface;
 use Drupal\ai_assistant_api\Service\AgentRunner;
 use Drupal\Component\Plugin\PluginManagerInterface;
 use Drupal\Component\Uuid\UuidInterface;
@@ -51,10 +52,13 @@ use Symfony\Component\EventDispatcher\EventDispatcherInterface;
  * Test), which only ever drives the happy persistent path of a real agent:
  *
  *  - the enabled_agents allow-list (delegate verbatim when not opted in),
- *  - the catch block (drop the poison record, return a generic error, never
- *    rethrow and never replay the user's message),
+ *  - the catch block (drop the poison record, reply with the failure's
+ *    reason, never rethrow and never replay the user's message),
  *  - the buildResponse echo-guard (if the agent's last history line is from the
- *    user, return the generic error instead of echoing the prompt back).
+ *    user, reply with the failure the agent recorded, or the plain fact that
+ *    no reply was produced, instead of echoing the prompt back),
+ *  - the failure reply's wording (the fronting assistant's error template
+ *    with its [error_message] token carrying the reason).
  *
  * Each of those is pure orchestration over injected collaborators, so this is a
  * container-free unit test: the runner is constructed directly with test
@@ -78,12 +82,25 @@ class AgentMemoryRunnerTest extends UnitTestCase {
   private const ENABLED_AGENT = 'daedalus';
 
   /**
-   * The generic message buildErrorResponse() returns on a failed turn.
+   * The reply when the agent produced nothing and recorded no failure.
    *
    * Hard-coded here (rather than read from source) so that if the production
    * string drifts the test fails loudly, forcing a deliberate update.
    */
-  private const ERROR_MESSAGE = 'Sorry, I wasn\'t able to process that request. The AI provider may be temporarily unavailable.';
+  private const NO_REPLY_MESSAGE = 'The assistant produced no reply.';
+
+  /**
+   * A provider rejection as the Anthropic provider throws it.
+   *
+   * The SDK's message is a label line followed by the pretty-printed response
+   * body; the API's sentence inside it is what the reply must carry.
+   */
+  private const PROVIDER_FAILURE = "Anthropic Bad Request Exception\n{\n    \"status\": 400,\n    \"body\": {\n        \"type\": \"error\",\n        \"error\": {\n            \"type\": \"invalid_request_error\",\n            \"message\": \"messages.0.content.1.image.source.base64.data: At least one of the image dimensions exceed max allowed size: 8000 pixels\"\n        },\n        \"request_id\": \"req_011\"\n    }\n}";
+
+  /**
+   * The sentence distilled from PROVIDER_FAILURE.
+   */
+  private const PROVIDER_REASON = 'messages.0.content.1.image.source.base64.data: At least one of the image dimensions exceed max allowed size: 8000 pixels';
 
   /**
    * Delegation: a non-enabled agent never touches persistence machinery.
@@ -154,12 +171,13 @@ class AgentMemoryRunnerTest extends UnitTestCase {
    * uncaught exception instead of a message. The test makes the agent plugin
    * manager throw while a record already exists in the bin, then asserts the
    * runner (1) deletes exactly that job's record so the next turn can start
-   * clean, and (2) returns the generic error ChatOutput - NOT a rethrow (the
-   * call returns normally) and NOT the user's own text. The thrown point is
-   * createInstance() because it is the first thing inside the try block, which
-   * proves the catch wraps the whole run rather than a single late step.
+   * clean, and (2) returns a ChatOutput carrying the failure's reason - NOT a
+   * rethrow (the call returns normally) and NOT the user's own text. The
+   * thrown point is createInstance() because it is the first thing inside the
+   * try block, which proves the catch wraps the whole run rather than a single
+   * late step. No assistant fronts the agent here, so the reason stands alone.
    */
-  public function testFailedTurnDeletesRecordAndReturnsErrorResponse(): void {
+  public function testFailedTurnDeletesRecordAndRepliesWithTheReason(): void {
     $job_id = 'poison-job';
 
     $store = $this->createMock(PrivateTempStore::class);
@@ -199,25 +217,25 @@ class AgentMemoryRunnerTest extends UnitTestCase {
 
     $this->assertInstanceOf(ChatOutput::class, $result);
     $this->assertSame(
-      self::ERROR_MESSAGE,
+      'provider exploded',
       $result->getNormalized()->getText(),
-      'A failed turn returns the generic error message, not the user prompt.',
+      'A failed turn replies with the reason it failed, not the user prompt.',
     );
   }
 
   /**
-   * Echo-guard: a trailing user message yields the error, never an echo.
+   * Echo-guard: a trailing user message yields the no-reply line, not an echo.
    *
    * This guards the exact anti-pattern the module exists to prevent. The stock
    * runner ends with `end($history)` and returns that as the assistant reply,
    * so if the agent produced nothing the user's own last message becomes the
    * "answer". buildResponse() defends against this: when the last chat-history
-   * message has role 'user' it returns the generic error instead. The test
-   * feeds a fake agent that succeeds through determineSolvability()/solve() but
-   * whose getChatHistory() ends with a user message, and asserts the runner
-   * returns the generic error message rather than echoing 'echo me back'. If
-   * the trailing-role check were removed the assertion would catch the echoed
-   * prompt.
+   * message has role 'user' it replies with the failure the agent recorded or,
+   * as here where it recorded none, the plain no-reply line. The test feeds a
+   * fake agent that succeeds through determineSolvability()/solve() but whose
+   * getChatHistory() ends with a user message, and asserts the runner returns
+   * that line rather than echoing 'echo me back'. If the trailing-role check
+   * were removed the assertion would catch the echoed prompt.
    *
    * It uses a hand-written fake agent (FakeEchoAgent below) rather than a
    * PHPUnit mock because the runner calls several ConfigAiAgentInterface
@@ -269,14 +287,122 @@ class AgentMemoryRunnerTest extends UnitTestCase {
     );
 
     $this->assertSame(
-      self::ERROR_MESSAGE,
+      self::NO_REPLY_MESSAGE,
       $result->getNormalized()->getText(),
-      'When the last history message is the user, return the error, never echo it.',
+      'When the last history message is the user, say no reply was produced, never echo it.',
     );
     $this->assertNotSame(
       'echo me back',
       $result->getNormalized()->getText(),
       'The user prompt must never be returned as the assistant reply.',
+    );
+  }
+
+  /**
+   * A provider rejection reaches the chat as the API's own sentence.
+   *
+   * AiAgentEntityWrapper catches the provider call's exception, records its
+   * message through getLastError() and answers JOB_NOT_SOLVABLE with the
+   * history still ending on the user's line. The runner must then persist the
+   * thread as usual (the conversation survives a rejected attachment; the
+   * stripper has already dropped the bytes) and reply with the sentence
+   * distilled from the recorded message, not a fixed apology and not the raw
+   * SDK dump. The fake records the Anthropic provider's message for an image
+   * over the API's dimension limit.
+   */
+  public function testRecordedProviderFailureRepliesWithItsReason(): void {
+    $job_id = 'rejected-job';
+
+    $store = $this->createMock(PrivateTempStore::class);
+    $store->method('get')->with($job_id)->willReturn([
+      'agent_data' => ['chat_history' => []],
+      'processed_message_count' => 1,
+      'finished' => FALSE,
+    ]);
+    $store->expects($this->once())->method('set');
+    $store->expects($this->never())->method('delete');
+
+    $pluginManager = $this->createMock(PluginManagerInterface::class);
+    $pluginManager->method('createInstance')
+      ->with(self::ENABLED_AGENT)
+      ->willReturn(new FakeEchoAgent(self::PROVIDER_FAILURE));
+
+    $runner = $this->createRunner($store, $pluginManager);
+
+    $result = $runner->runAsAgent(
+      self::ENABLED_AGENT,
+      [['role' => 'user', 'message' => 'describe website.png']],
+      ['provider_id' => 'prompt_capture', 'model_id' => 'capture'],
+      $job_id,
+      FALSE,
+      [],
+    );
+
+    $this->assertSame(
+      self::PROVIDER_REASON,
+      $result->getNormalized()->getText(),
+      'The reply is the sentence the provider gave for the rejection.',
+    );
+  }
+
+  /**
+   * The failure reply wears the fronting assistant's error template.
+   *
+   * The ai_assistant_api module lets a site phrase failures once on the
+   * assistant entity (error_message, with specific_error_messages per
+   * exception class, both carrying an [error_message] token). The runner renders the same template
+   * so every road reads alike: a recorded provider failure takes the default
+   * template, a thrown turn the entry for its exception's short class name
+   * when one is set. Both are pinned here through one assistant double.
+   */
+  public function testFailureReplyRendersTheAssistantTemplate(): void {
+    $assistant = $this->createMock(AiAssistantInterface::class);
+    $assistant->method('get')->willReturnMap([
+      ['error_message', 'Sorry, I could not process that: [error_message]'],
+      ['specific_error_messages', ['RuntimeException' => 'The site broke: [error_message]']],
+      ['llm_configuration', []],
+    ]);
+
+    // A recorded provider failure: the default template.
+    $store = $this->createMock(PrivateTempStore::class);
+    $store->method('get')->willReturn([
+      'agent_data' => ['chat_history' => []],
+      'processed_message_count' => 1,
+      'finished' => FALSE,
+    ]);
+    $pluginManager = $this->createMock(PluginManagerInterface::class);
+    $pluginManager->method('createInstance')->willReturn(new FakeEchoAgent(self::PROVIDER_FAILURE));
+    $runner = $this->createRunner($store, $pluginManager, NULL, NULL, $assistant);
+    $result = $runner->runAsAgent(
+      self::ENABLED_AGENT,
+      [['role' => 'user', 'message' => 'x']],
+      ['provider_id' => 'prompt_capture', 'model_id' => 'capture'],
+      'templated-job',
+      FALSE,
+      [],
+    );
+    $this->assertSame(
+      'Sorry, I could not process that: ' . self::PROVIDER_REASON,
+      $result->getNormalized()->getText(),
+    );
+
+    // A thrown turn: the entry for the exception's class wins.
+    $store = $this->createMock(PrivateTempStore::class);
+    $store->method('get')->willReturn(NULL);
+    $pluginManager = $this->createMock(PluginManagerInterface::class);
+    $pluginManager->method('createInstance')->willThrowException(new \RuntimeException('provider exploded'));
+    $runner = $this->createRunner($store, $pluginManager, NULL, NULL, $assistant);
+    $result = $runner->runAsAgent(
+      self::ENABLED_AGENT,
+      [['role' => 'user', 'message' => 'x']],
+      ['provider_id' => 'prompt_capture', 'model_id' => 'capture'],
+      'thrown-job',
+      FALSE,
+      [],
+    );
+    $this->assertSame(
+      'The site broke: provider exploded',
+      $result->getNormalized()->getText(),
     );
   }
 
@@ -358,24 +484,27 @@ class AgentMemoryRunnerTest extends UnitTestCase {
    * @param object|null $agentEntity
    *   The ai_agent config entity the runner loads to read the
    *   hostname_filter_disabled flag, or NULL when none exists.
+   * @param \Drupal\ai_assistant_api\AiAssistantInterface|null $assistant
+   *   The assistant entity fronting the agent (its error template and
+   *   llm_configuration), or NULL when none fronts it.
    *
    * @return \Drupal\daedalus_ai_memory\Service\AgentMemoryRunner
    *   The runner under test.
    */
-  private function createRunner(PrivateTempStore $store, PluginManagerInterface $pluginManager, ?HostnameFilter $hostnameFilter = NULL, ?object $agentEntity = NULL): AgentMemoryRunner {
+  private function createRunner(PrivateTempStore $store, PluginManagerInterface $pluginManager, ?HostnameFilter $hostnameFilter = NULL, ?object $agentEntity = NULL, ?AiAssistantInterface $assistant = NULL): AgentMemoryRunner {
     $tempStoreFactory = $this->createMock(PrivateTempStoreFactory::class);
     $tempStoreFactory->method('get')
       ->with('daedalus_ai_memory_threads')
       ->willReturn($store);
 
-    // The runner resolves the fronting assistant's llm_configuration; these
-    // tests run without one, so the lookup legitimately finds nothing
-    // (loadByProperties has no declared return type, so the mock must be
-    // told to return an array or reset() throws). It also loads the agent
-    // config entity to read the hostname_filter_disabled flag before
-    // rehydration.
+    // The runner resolves the fronting assistant for its llm_configuration
+    // and its error template; most tests run without one, so the lookup
+    // legitimately finds nothing (loadByProperties has no declared return
+    // type, so the mock must be told to return an array or reset() throws).
+    // It also loads the agent config entity to read the
+    // hostname_filter_disabled flag before rehydration.
     $assistantStorage = $this->createMock(EntityStorageInterface::class);
-    $assistantStorage->method('loadByProperties')->willReturn([]);
+    $assistantStorage->method('loadByProperties')->willReturn($assistant ? [$assistant] : []);
     $agentStorage = $this->createMock(EntityStorageInterface::class);
     $agentStorage->method('load')->with(self::ENABLED_AGENT)->willReturn($agentEntity);
     $entityTypeManager = $this->createMock(EntityTypeManagerInterface::class);
@@ -502,10 +631,30 @@ class FakeEchoAgent implements ConfigAiAgentInterface {
   private array $chatHistory = [];
 
   /**
+   * Constructs the fake.
+   *
+   * @param string|null $lastError
+   *   The failure the agent recorded for its provider call, as
+   *   AiAgentEntityWrapper::getLastError() would report it, or NULL for a
+   *   turn that recorded none.
+   */
+  public function __construct(private readonly ?string $lastError = NULL) {}
+
+  /**
+   * Mirrors AiAgentEntityWrapper::getLastError().
+   *
+   * The ai_agents module keeps that method off the agent interfaces; the
+   * runner reads it by presence.
+   */
+  public function getLastError(): ?string {
+    return $this->lastError;
+  }
+
+  /**
    * {@inheritdoc}
    */
   public function determineSolvability() {
-    return AiAgentInterface::JOB_SOLVABLE;
+    return $this->lastError === NULL ? AiAgentInterface::JOB_SOLVABLE : AiAgentInterface::JOB_NOT_SOLVABLE;
   }
 
   /**

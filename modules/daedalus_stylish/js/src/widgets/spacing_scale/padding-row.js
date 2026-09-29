@@ -1,18 +1,25 @@
 import { h, Fragment } from 'preact';
 import { useState } from 'preact/hooks';
 import { valueSpaceFor, wearing } from '../../value-space.js';
-import { rowMenu, tokenItems } from '../../provenance-model.js';
-import { useMenu } from '../../menu.js';
+import { withheldReasonFor } from '../../controls.js';
+import { sidesSentence, tokenItems } from '../../provenance-model.js';
+import { stackAt } from '../../style-stack.js';
+import { normalizeValue } from '../../widget-values.js';
 import { PencilToggle } from '../lib/pencil.js';
 import { DimensionField } from '../lib/dimension-field.js';
+import { Mark } from '../lib/mark.js';
 import { useFieldGesture } from '../lib/use-gesture.js';
+import { useRowMenu } from '../lib/use-row-menu.js';
 import { BoxModelDiagram } from '../lib/box-model-diagram.js';
 import { useDiagramHost } from '../lib/diagram-host.js';
+import { ownLayerAt, writeLayer } from '../lib/write-layer.js';
 import {
   SIDES,
   familyLonghand,
   grantedSides,
   sideLonghands,
+  sidesOrigin,
+  sidesPatch,
   subsetCommit,
   uniformCommit,
   uniformFieldText,
@@ -21,17 +28,14 @@ import {
 
 const PADDING_LONGHANDS = sideLonghands('padding', SIDES);
 
-const isPlainObject = (value) =>
-  value !== null && typeof value === 'object' && !Array.isArray(value);
-
 /**
  * The spacing widget's padding row: the shorthand field + ✎ + the
  * box-model diagram.
  *
- * The scrubbable DimensionField IS the row (the choice row's field posture: its
- * grip is the row's leading provenance slot and its scrub label the row
- * label; the ✎ rides the field's `tools` slot between label and value
- * column, so the value column keeps the panel's shared right edge),
+ * The scrubbable DimensionField IS the row (the choice row's field posture: the
+ * row's mark leads its scrub label, which is the row label; the ✎ rides
+ * the field's `tools` slot between label and value column, so the
+ * value column keeps the panel's shared right edge),
  * writing the SHORTHAND `padding` over
  * the value-space spine — closed vocabularies render the stop select
  * with detent scrub, detented ones the free field with sticky magnets,
@@ -51,26 +55,50 @@ const isPlainObject = (value) =>
  * a closed row with an EMPTY vocabulary hides whole unless a committed
  * value keeps it visible (the choice row's rule, choice-row-model.js rowHidden).
  *
- * The field's value derivation is longhand-aware (uniformState): four
- * equal sides show their one value however they are spelled, per-side
+ * The field's value derivation is longhand-aware (uniformState, the
+ * per-side read of the model's stacks): four equal sides show their one
+ * value however they are spelled and whichever layer delivers them (a
+ * skin's padding is lit like an own one, the display rule), per-side
  * padding degrades the field to the honest shorthand/per-side text
  * (typing over it makes all sides equal — the diagram is the per-side
  * surface), and a whole-reference shorthand wears the blessed chrome
- * through the field's own ref→display read.
+ * through the field's own ref→display read. The emptied field commits
+ * the unset only while the own layer spells the padding at the exact
+ * pose (useFieldGesture's `own`); over a lower layer's value it
+ * releases, since there is nothing here to remove.
  *
  * Host seams (through the source, satellite-safe; lib/diagram-host.js
  * useDiagramHost, shared with the border ring): the diagram's computed
- * placeholders and center readout come from source.readCanvas (null
- * off-canvas — cells show '–'), and its onHighlight sides map to
- * padding longhands claimed on the per-source highlight claim stack
- * (highlight-claims.js), the arbitrated way into
- * source.setCanvasHighlight every row consumer shares.
+ * placeholders and center readout come from source.readCanvas at the
+ * home box (null off-canvas — cells show '–'), and its onHighlight
+ * sides map to padding longhands claimed at the field's write key (the
+ * shorthand's, or the first granted side's under a subset grant) on the
+ * per-source highlight claim stack (highlight-claims.js), the
+ * arbitrated way into source.setCanvasHighlight every row consumer
+ * shares.
  *
- * Right-click on the row opens the row menu (provenance-model.js
- * rowMenu) over the field's token items, the advanced rows' token half.
- * The shorthand row itself tells no origin story (four sides can have
- * four origins); the diagram's cells carry it, each in its supplying
- * layer's hue, from the model's provenance tables.
+ * Right-click on the row opens the shared row menu (lib/use-row-menu.js)
+ * over the field's token items, the advanced rows' token half; the
+ * menu's doorways are per property, and four sides can have four
+ * origins, so the shorthand row offers none (the diagram's cells are
+ * the per-side surface).
+ *
+ * The row's mark (lib/mark.js) still speaks for the set: its origin is
+ * derived from the per-side provenance (box-model.js sidesOrigin over
+ * the offered sides): one delivering layer at one pose-relation across
+ * the set sides gives the mark that layer's hue, filled when the block
+ * is the posed compound; a split gives the topmost layer's hue, hollow,
+ * and the sentence (provenance-model.js sidesSentence) names which sides
+ * come from where and points at the diagram; no set side reads the
+ * topmost author's hue hollow ("Set at Hover, not here") or the resting
+ * ring ("Not set").
+ *
+ * Under a write address that withholds the shorthand or any offered
+ * side (controls.js withheldReasonFor) the row renders DISABLED with
+ * the roster's reason as the field's title and no pencil: the family
+ * writes as one patch, so no side may be written where another is
+ * refused. What the own key never grants stays hidden (the grant read
+ * above), never disabled.
  */
 export const PaddingRow = ({
   model,
@@ -83,7 +111,6 @@ export const PaddingRow = ({
   onCommit,
 }) => {
   const [open, setOpen] = useState(false);
-  const menu = useMenu();
 
   // The offer is the served roster's answer, read whole: model.granted is
   // the widget's owned names the target grants, and the roster grants the
@@ -101,29 +128,19 @@ export const PaddingRow = ({
   const granted = model.granted;
   const offeredSides = grantedSides(granted, 'padding');
   const shorthandGranted = granted.includes('padding');
+  const disabledTitle = withheldReasonFor(model, [
+    ...(shorthandGranted ? ['padding'] : []),
+    ...sideLonghands('padding', offeredSides),
+  ]);
+  const disabled = disabledTitle !== null;
 
-  // The two style layers the per-side logic reads, ORDER-PRESERVING:
-  // the element's own values and the resolved (variant-layered) ones,
-  // both at the EDITING COMPOUND (model.condition — where the pipeline's
-  // writes land) — never model.values, which is rebuilt in
-  // owned-property order.
-  const ownEntry = styleMap?.[model.key];
-  const own =
-    isPlainObject(ownEntry) && isPlainObject(ownEntry[model.condition])
-      ? ownEntry[model.condition]
-      : null;
-  const effective = isPlainObject(model.entry?.[model.condition])
-    ? model.entry[model.condition]
-    : null;
-
-  const identity = JSON.stringify([model.key, model.condition, own, effective]);
-  const host = useDiagramHost({
-    source,
-    model,
-    open,
-    longhands: PADDING_LONGHANDS,
-    identity,
-  });
+  // The write layer the patches expand and collapse, read PER WRITE
+  // (lib/write-layer.js): the own values at the editing compound of the
+  // box THAT WRITE lands on, its set members at the model's landing, a
+  // removal alone at the retired name's key. The reads are the model's
+  // per-property stacks (every layer, the per-side read's input).
+  const ownFor = (write) => writeLayer(styleMap, model, write);
+  const conditions = guide?.conditions ?? {};
 
   // The field maps the SHORTHAND's value space (it writes it); under a
   // side-subset grant it writes longhands, so its space is the first
@@ -143,6 +160,18 @@ export const PaddingRow = ({
           : undefined) ?? model.propertyDefinitions?.padding)) ?? {};
   const fieldProperty =
     shorthandGranted || !leadLonghand ? 'padding' : leadLonghand;
+
+  // The ring's host: the probe at the home box, the highlight at the
+  // field's write key (the family's, the same address the field's own
+  // gesture writes at).
+  const host = useDiagramHost({
+    source,
+    model,
+    open,
+    property: fieldProperty,
+    longhands: PADDING_LONGHANDS,
+  });
+
   const space = valueSpaceFor(
     guide,
     materials,
@@ -152,32 +181,108 @@ export const PaddingRow = ({
     model.condition,
   );
 
-  const uniform = uniformState(own, effective, 'padding', offeredSides);
+  const uniform = uniformState(
+    model.stacks,
+    'padding',
+    offeredSides,
+    model.condition,
+    conditions,
+  );
   const fieldText = uniformFieldText(
     uniform,
-    own?.padding ?? effective?.padding,
+    stackAt(model.stacks.padding, 'padding', model.condition, conditions)
+      .winner?.value,
   );
+  // The mark's origin over the offered sides (sidesOrigin's facts, the
+  // sentence over them); the uniform value's face leads the sentence
+  // when the sides agree.
+  const sidesFacts = sidesOrigin(
+    model.stacks,
+    'padding',
+    offeredSides,
+    model.condition,
+    conditions,
+  );
+  const sentence = sidesSentence(sidesFacts, {
+    pose: model.condition,
+    conditions,
+    value:
+      uniform.uniform !== null
+        ? wearing(guide, materials, space, uniform.uniform, model.condition)
+            .face || uniform.uniform
+        : null,
+  });
+  const origin = { ...sidesFacts, title: sentence, header: sentence };
+  // The own layer spelling the offered sides at the exact pose (the
+  // shorthand or any offered side's longhand), each name read on the
+  // box its null would land on: the emptied field's unset has something
+  // to remove.
+  const ownAtPose = ['padding', ...sideLonghands('padding', offeredSides)].some(
+    (name) =>
+      normalizeValue(
+        ownLayerAt(styleMap, model.keys[name], model.condition)?.[name],
+      ) !== null,
+  );
+
+  // The field's write: the shorthand, or the granted side longhands
+  // under a subset grant; its own layer is the box that write lands on.
+  const fieldWrite = (value) =>
+    shorthandGranted
+      ? { padding: value }
+      : Object.fromEntries(
+          sideLonghands('padding', offeredSides).map((name) => [name, value]),
+        );
 
   // One settle's patch: the shorthand write with own longhands collapsed
   // (uniformCommit), or the granted side longhands under a subset grant.
   // The DimensionField hands over the COMMIT spelling (the reference on a
   // capture), so the patch carries refs where the guide minted them.
-  const patchFor = (value) =>
-    shorthandGranted
+  const patchFor = (value) => {
+    const own = ownFor(fieldWrite(value));
+    return shorthandGranted
       ? uniformCommit(own, value)
       : subsetCommit(own, offeredSides, value);
+  };
+
+  // The ring's patch: the family's per-side expansion (sidesPatch) over
+  // the layer the sides' writes land on. The empty gesture is the
+  // diagram's blocked probe: it writes nothing, so it asks the layer
+  // where a side's write would land (the four longhands as the set).
+  const ringPatch = (bySide) => {
+    const write = Object.fromEntries(
+      Object.entries(bySide ?? {}).map(([side, value]) => [
+        familyLonghand('padding', side),
+        value,
+      ]),
+    );
+    const own = Object.keys(write).length
+      ? ownFor(write)
+      : ownLayerAt(styleMap, model.landing(PADDING_LONGHANDS), model.condition);
+    return sidesPatch(own, bySide, 'padding');
+  };
 
   const field = useFieldGesture(
     fieldText,
     'padding',
-    (name, value) => {
-      Object.entries(patchFor(value)).forEach(([property, staged]) =>
-        onPreview(property, staged),
-      );
-    },
+    (properties) => onPreview(patchFor(properties.padding ?? null)),
     (properties) => onRelease(patchFor(properties.padding ?? null)),
     (properties) => onCommit(patchFor(properties.padding ?? null)),
+    ownAtPose ? fieldText : null,
   );
+  // The row menu over the field's token items alone: the doorways are
+  // per property, and four sides can have four origins (the mark's
+  // sentence names the split; the diagram is the per-side surface).
+  const onContextMenu = useRowMenu({
+    origin: null,
+    tokens: () =>
+      tokenItems(guide, materials, model.condition, space, field.shown, {
+        onPreview: field.preview,
+        onSettle: field.settle,
+      }),
+    face: () =>
+      wearing(guide, materials, space, field.shown, model.condition).face ||
+      field.shown,
+  });
 
   // Nothing padding-shaped granted at all: no row (the widget's gap row
   // may still render on its own).
@@ -193,25 +298,6 @@ export const PaddingRow = ({
   }
 
   const rowClasses = `daedalus-stylish-inspector__widget-row${field.invalid ? ' daedalus-stylish-inspector__widget-row--invalid' : ''}`;
-  const onContextMenu = (event) => {
-    const spec = rowMenu({
-      origin: null,
-      tokens: tokenItems(
-        guide,
-        materials,
-        model.condition,
-        space,
-        field.shown,
-        { onPreview: field.preview, onSettle: field.settle },
-      ),
-      face:
-        wearing(guide, materials, space, field.shown, model.condition).face ||
-        field.shown,
-    });
-    if (spec && menu.open({ x: event.clientX, y: event.clientY, ...spec })) {
-      event.preventDefault();
-    }
-  };
 
   // The diagram's placeholder read: per-side computed longhands (the
   // host's probe; null in the satellite / when the target has no canvas
@@ -238,31 +324,36 @@ export const PaddingRow = ({
           materials={materials}
           condition={model.condition}
           invalid={field.invalid}
+          mark={<Mark origin={origin} />}
+          disabled={disabled}
+          disabledTitle={disabledTitle}
           tools={
-            <PencilToggle
-              open={open}
-              onToggle={() => setOpen((current) => !current)}
-              label={Drupal.t('Edit padding per side')}
-              openTitle={Drupal.t('Hide the padding diagram')}
-              closedTitle={Drupal.t('Edit each side of the padding')}
-            />
+            disabled ? null : (
+              <PencilToggle
+                open={open}
+                onToggle={() => setOpen((current) => !current)}
+                label={Drupal.t('Edit padding per side')}
+                openTitle={Drupal.t('Hide the padding diagram')}
+                closedTitle={Drupal.t('Edit each side of the padding')}
+              />
+            )
           }
           onPreview={field.preview}
           onSettle={field.settle}
         />
       </div>
-      {open && (
+      {open && !disabled && (
         <BoxModelDiagram
           guide={guide}
           materials={materials}
           condition={model.condition}
-          own={own}
-          effective={effective}
-          provenance={model.provenance ?? null}
+          stacks={model.stacks}
           computed={computed}
+          bases={host.probe?.bases ?? null}
           center={host.center}
           family="padding"
           label={Drupal.t('Padding')}
+          patchFor={ringPatch}
           definitions={model.propertyDefinitions ?? {}}
           constraints={model.constraints ?? {}}
           sides={offeredSides}

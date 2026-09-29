@@ -7,18 +7,20 @@ namespace Drupal\daedalus_edit;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\Entity\FieldableEntityInterface;
 use Drupal\Core\Field\FieldDefinitionInterface;
+use Drupal\Core\Field\FieldItemListInterface;
 use Drupal\filter\FilterFormatInterface;
 
 /**
  * Mints identity classes across an entity's formatted text fields.
  *
- * The entity-level walker behind eager identity's universal write paths: the
- * hook_entity_presave() backstop runs it on every save (forms, REST,
- * migrations, blueprint persists), and IdentityBackfill runs it over
- * existing content. The blueprint stage-time seam
- * (\Drupal\daedalus_edit\FieldHandler\IdentityMintingTextFieldHandler) mints the
- * same values per field at deserialize time, so mutations that stage into
- * tempstore without a save carry ids too.
+ * The one walker behind eager identity's write paths: the
+ * hook_entity_presave() backstop runs mintEntity() on every save (forms,
+ * REST, migrations, blueprint persists), IdentityBackfill runs it over
+ * existing content, the placement-time seam (ElementCreatedMintIdentity)
+ * runs it over a freshly placed block, and the stage-time seam
+ * (\Drupal\daedalus_edit\EventSubscriber\FieldAppliedMintIdentity) runs
+ * mintItems() over each field the blueprint spine applies, so mutations
+ * that stage into tempstore without a save carry ids too.
  *
  * Only the 'value' property is minted. Summaries (text_with_summary) render
  * in teasers outside the canvas identity story: no row, no Daedalus Stylish target,
@@ -49,29 +51,50 @@ final class EntityIdentityMinting {
     $changed = FALSE;
     foreach (array_keys($entity->getTranslationLanguages()) as $langcode) {
       $translation = $entity->getTranslation($langcode);
-      foreach ($translation->getFieldDefinitions() as $field_name => $definition) {
-        if (!$this->carriesFormat($definition)) {
-          continue;
+      foreach (array_keys($translation->getFieldDefinitions()) as $field_name) {
+        if ($this->mintItems($translation->get($field_name))) {
+          $changed = TRUE;
         }
-        foreach ($translation->get($field_name) as $item) {
-          $value = $item->value;
-          if (!is_string($value) || $value === '') {
-            continue;
-          }
-          $format = $this->loadFormat($item->format);
-          if ($format === NULL) {
-            // No format (or a dangling id with no filter_format entity)
-            // renders through the filter system's fallback machinery; its
-            // restrictions are unknowable here, so there is nothing sound to
-            // mint against. The format system owns surfacing that state.
-            continue;
-          }
-          $minted = $this->identityMinter->mint($value, $format);
-          if ($minted !== $value) {
-            $item->value = $minted;
-            $changed = TRUE;
-          }
-        }
+      }
+    }
+    return $changed;
+  }
+
+  /**
+   * Mints missing identity classes on one field's items in place.
+   *
+   * A field that carries no text format is left alone, so callers hand over
+   * any field and let the format predicate decide.
+   *
+   * @param \Drupal\Core\Field\FieldItemListInterface $items
+   *   The field's live item list, mutated in place.
+   *
+   * @return bool
+   *   TRUE when any item value changed; the same skip rule as mintEntity()
+   *   for tags a format allows without class.
+   */
+  public function mintItems(FieldItemListInterface $items): bool {
+    if (!$this->carriesFormat($items->getFieldDefinition())) {
+      return FALSE;
+    }
+    $changed = FALSE;
+    foreach ($items as $item) {
+      $value = $item->value;
+      if (!is_string($value) || $value === '') {
+        continue;
+      }
+      $format = $this->loadFormat($item->format);
+      if ($format === NULL) {
+        // No format (or a dangling id with no filter_format entity)
+        // renders through the filter system's fallback machinery; its
+        // restrictions are unknowable here, so there is nothing sound to
+        // mint against. The format system owns surfacing that state.
+        continue;
+      }
+      $minted = $this->identityMinter->mint($value, $format);
+      if ($minted !== $value) {
+        $item->value = $minted;
+        $changed = TRUE;
       }
     }
     return $changed;

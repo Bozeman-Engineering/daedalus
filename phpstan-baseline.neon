@@ -136,6 +136,12 @@ parameters:
 			message: '#^Drupal\\Tests\\BrowserTestBase\:\:\$defaultTheme is required\. See https\://www\.drupal\.org/node/3083055, which includes recommendations on which theme to use\.$#'
 			identifier: BrowserTestBase.defaultThemeRequired
 			count: 1
+			path: modules/daedalus_ai/tests/src/Functional/AttachRouteTest.php
+
+		-
+			message: '#^Drupal\\Tests\\BrowserTestBase\:\:\$defaultTheme is required\. See https\://www\.drupal\.org/node/3083055, which includes recommendations on which theme to use\.$#'
+			identifier: BrowserTestBase.defaultThemeRequired
+			count: 1
 			path: modules/daedalus_ai/tests/src/FunctionalJavascript/DaedalusAiBehaviorTest.php
 
 		-
@@ -1297,18 +1303,6 @@ parameters:
 			path: modules/daedalus_edit/src/Form/InlineEntityFormAlter.php
 
 		-
-			message: '#^Call to an undefined method Drupal\\Core\\Form\\FormInterface\:\:getCurrentComponent\(\)\.$#'
-			identifier: method.notFound
-			count: 1
-			path: modules/daedalus_edit/src/Form/LayoutBuilderBlockFormAlter.php
-
-		-
-			message: '#^Call to an undefined method Drupal\\Core\\Form\\FormInterface\:\:getSectionStorage\(\)\.$#'
-			identifier: method.notFound
-			count: 1
-			path: modules/daedalus_edit/src/Form/LayoutBuilderBlockFormAlter.php
-
-		-
 			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:get\(\)\.$#'
 			identifier: method.notFound
 			count: 2
@@ -1769,48 +1763,6 @@ parameters:
 			identifier: method.notFound
 			count: 11
 			path: modules/daedalus_layout/tests/src/Unit/Event/PlaceBlockEventTest.php
-
-		-
-			message: '#^Call to an undefined method Drupal\\Core\\Entity\\FieldableEntityInterface\:\:willReturn\(\)\.$#'
-			identifier: method.notFound
-			count: 2
-			path: modules/daedalus_layout/tests/src/Unit/EventSubscriber/BlueprintMirrorRefreshTest.php
-
-		-
-			message: '#^Call to an undefined method Prophecy\\Prophecy\\ObjectProphecy\<Drupal\\Core\\Entity\\FieldableEntityInterface\>\:\:getEntityTypeId\(\)\.$#'
-			identifier: method.notFound
-			count: 1
-			path: modules/daedalus_layout/tests/src/Unit/EventSubscriber/BlueprintMirrorRefreshTest.php
-
-		-
-			message: '#^Call to an undefined method Prophecy\\Prophecy\\ObjectProphecy\<Drupal\\Core\\Entity\\FieldableEntityInterface\>\:\:id\(\)\.$#'
-			identifier: method.notFound
-			count: 1
-			path: modules/daedalus_layout/tests/src/Unit/EventSubscriber/BlueprintMirrorRefreshTest.php
-
-		-
-			message: '#^Call to an undefined method Prophecy\\Prophecy\\ObjectProphecy\<Drupal\\Core\\Plugin\\Context\\ContextInterface\>\:\:getContextValue\(\)\.$#'
-			identifier: method.notFound
-			count: 2
-			path: modules/daedalus_layout/tests/src/Unit/EventSubscriber/BlueprintMirrorRefreshTest.php
-
-		-
-			message: '#^Call to an undefined method Prophecy\\Prophecy\\ObjectProphecy\<Drupal\\daedalus_layout\\NestedSectionStorageInterface\>\:\:getRootStorage\(\)\.$#'
-			identifier: method.notFound
-			count: 1
-			path: modules/daedalus_layout/tests/src/Unit/EventSubscriber/BlueprintMirrorRefreshTest.php
-
-		-
-			message: '#^Call to an undefined method Prophecy\\Prophecy\\ObjectProphecy\<Drupal\\layout_builder\\SectionStorageInterface\>\:\:getContexts\(\)\.$#'
-			identifier: method.notFound
-			count: 1
-			path: modules/daedalus_layout/tests/src/Unit/EventSubscriber/BlueprintMirrorRefreshTest.php
-
-		-
-			message: '#^Cannot call method willReturn\(\) on string\.$#'
-			identifier: method.nonObject
-			count: 2
-			path: modules/daedalus_layout/tests/src/Unit/EventSubscriber/BlueprintMirrorRefreshTest.php
 
 		-
 			message: '#^Call to an undefined method Symfony\\Component\\HttpFoundation\\Request\:\:willReturn\(\)\.$#'
@@ -3257,6 +3209,12 @@ parameters:
 			identifier: BrowserTestBase.defaultThemeRequired
 			count: 1
 			path: modules/daedalus_ui/tests/src/Functional/ChromeDensityStampTest.php
+
+		-
+			message: '#^Drupal\\Tests\\BrowserTestBase\:\:\$defaultTheme is required\. See https\://www\.drupal\.org/node/3083055, which includes recommendations on which theme to use\.$#'
+			identifier: BrowserTestBase.defaultThemeRequired
+			count: 1
+			path: modules/daedalus_ui/tests/src/Functional/ToolCursorTest.php
 
 		-
 			message: '#^Drupal\\Tests\\BrowserTestBase\:\:\$defaultTheme is required\. See https\://www\.drupal\.org/node/3083055, which includes recommendations on which theme to use\.$#'

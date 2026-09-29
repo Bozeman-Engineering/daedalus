@@ -6,6 +6,8 @@ namespace Drupal\Tests\daedalus_blueprint\Kernel\LayoutBuilder;
 
 use Drupal\daedalus_blueprint\ElementContext;
 use Drupal\daedalus_blueprint\LayoutBuilder\DaedalusLayoutAdapter;
+use Drupal\layout_builder\Entity\LayoutBuilderEntityViewDisplay;
+use Drupal\layout_builder\Section;
 use Drupal\Tests\daedalus\Kernel\BlueprintKernelTestBase;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
@@ -111,6 +113,36 @@ class DaedalusLayoutAdapterTest extends BlueprintKernelTestBase {
     $entity->save();
 
     return ['entity' => $entity, 'uuids' => $uuids];
+  }
+
+  /**
+   * Tests core's blank placeholder reads as no sections on both lists.
+   *
+   * Core seeds layout_builder_blank onto a display whose sections were all
+   * removed and copies it into a fresh override; both lists answer empty
+   * here, so a reader never meets a section the canvas does not render.
+   */
+  public function testBlankPlaceholderReadsAsNoSections(): void {
+    $this->assertFalse($this->adapter->isBlankSectionList([]));
+    $this->assertFalse($this->adapter->isBlankSectionList([new Section('layout_onecol')]));
+    $this->assertTrue($this->adapter->isBlankSectionList([new Section('layout_builder_blank')]));
+
+    $display = LayoutBuilderEntityViewDisplay::load('entity_test.entity_test.default');
+    $display->removeAllSections(TRUE)->save();
+    $this->assertSame('layout_builder_blank', $display->getSections()[0]->getLayoutId());
+
+    $entity = $this->createTestEntity();
+    $this->assertSame([], $this->adapter->getDefaultSections($entity), 'A blank-only display default is no default.');
+    $this->assertSame([], $this->adapter->getFieldSections($entity), 'An empty field holds no sections.');
+
+    $entity->set('layout_builder__layout', [new Section('layout_builder_blank')]);
+    $this->assertSame([], $this->adapter->getFieldSections($entity), 'A blank-only field reads as empty.');
+
+    $section = new Section('layout_onecol');
+    $entity->set('layout_builder__layout', [$section]);
+    $field = $this->adapter->getFieldSections($entity);
+    $this->assertCount(1, $field);
+    $this->assertSame('layout_onecol', $field[0]->getLayoutId());
   }
 
   /**

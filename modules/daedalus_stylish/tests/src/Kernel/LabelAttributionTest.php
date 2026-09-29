@@ -53,6 +53,7 @@ class LabelAttributionTest extends KernelTestBase {
     'twig_events',
     'daedalus_tempstore',
     'daedalus_blueprint_api',
+    'file',
     'daedalus_ui',
     'daedalus_layout',
     'field_sample_value',

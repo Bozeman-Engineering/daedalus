@@ -4,10 +4,11 @@
  * (strokeState, the honesty rule over width, style and color), the
  * completion rule (strokeWrite: a part set on an unset stroke lands a
  * whole stroke, an unset clears the whole stroke), the four border
- * sides read across the three families (strokeSides), and the two patch
- * shapes that keep the padding invariant three families wide
- * (strokeSidesPatch's expansion and collapse, strokeUniformPatch's
- * shorthand write over own longhands).
+ * sides read across the three families (strokeSides, the per-side read
+ * of the style stack), the two patch shapes that keep the padding
+ * invariant three families wide (strokeSidesPatch's expansion and
+ * collapse, strokeUniformPatch's shorthand write over own longhands),
+ * and the Unset gate's spellings (strokeUnsetProperties).
  *
  * Run directly: `node tests/js/stroke-model.test.mjs`. Exits non-zero on
  * failure.
@@ -25,8 +26,10 @@ import {
   strokeSidesPatch,
   strokeState,
   strokeUniformPatch,
+  strokeUnsetProperties,
   strokeWrite,
 } from '../../js/src/widgets/lib/stroke-model.js';
+import { stackOf, stacksOf } from './stack-fixture.mjs';
 
 const tests = [];
 const test = (name, run) => tests.push([name, run]);
@@ -45,6 +48,7 @@ const ACCENT = 'var(--color-accent)';
 
 // The built-in vocabulary the border row reads on an unconstrained site.
 const STOPS = { width: WIDTHS, style: STYLES, color: COLORS };
+const CONDITIONS = { medium: { label: 'Medium', axis: 'width' } };
 const BORDER = STROKES.border;
 
 test('strokeParts spells the shorthand strokes and a border side through the box-model naming seam', () => {
@@ -208,53 +212,70 @@ test('strokeSides: each side carries a provenance per family, read once per fami
   // The blockquote posture skins ship: the skin strokes the left edge
   // alone, the element authors one width for every side, a worn variant
   // colors the top.
-  const own = { 'border-width': '1px 2px' };
-  const effective = { 'border-top-color': 'red', 'border-width': '1px 2px' };
-  const skinEntry = { default: { 'border-left-width': '4px', 'border-left-style': 'solid', 'border-left-color': ACCENT } };
-  const tables = { suppliers: { default: { 'border-top-color': 'accent' } }, skinEntry, condition: 'default' };
-  const { sides } = strokeSides(own, effective, tables);
+  const stack = stacksOf({
+    skin: { 'border-left-width': '4px', 'border-left-style': 'solid', 'border-left-color': ACCENT },
+    variants: [{ id: 'accent', styles: { 'border-top-color': 'red' } }],
+    own: { 'border-width': '1px 2px' },
+  });
+  const { sides } = strokeSides(stack);
   assert.deepEqual(Object.keys(sides), ['top', 'right', 'bottom', 'left']);
   assert.deepEqual(Object.keys(sides.top), ['width', 'style', 'color']);
-  assert.deepEqual(sides.top.width, { state: 'authored', reference: null, condition: 'default', value: '1px', property: 'border-width' });
-  assert.deepEqual(sides.left.width, { state: 'authored', reference: null, condition: 'default', value: '2px', property: 'border-width' });
-  assert.deepEqual(sides.left.style, { state: 'skin', reference: null, condition: 'default', value: 'solid', property: 'border-left-style' });
+  assert.deepEqual(sides.top.width, { state: 'authored', layer: 2, id: 'element', reference: null, condition: 'default', atPose: true, value: '1px', property: 'border-width' });
+  assert.deepEqual(sides.left.width, { state: 'authored', layer: 2, id: 'element', reference: null, condition: 'default', atPose: true, value: '2px', property: 'border-width' });
+  assert.deepEqual(sides.left.style, { state: 'skin', layer: 0, id: 'skin:block_type:text', reference: null, condition: 'default', atPose: true, value: 'solid', property: 'border-left-style' });
   assert.equal(sides.top.style.state, 'computed', 'a width says nothing about a style');
-  assert.deepEqual(sides.top.color, { state: 'variant', reference: 'accent', condition: 'default', value: 'red', property: 'border-top-color' });
+  assert.deepEqual(sides.top.color, { state: 'variant', layer: 1, id: 'variant:accent', reference: 'accent', condition: 'default', atPose: true, value: 'red', property: 'border-top-color' });
   assert.equal(sides.left.color.value, ACCENT);
   assert.equal(sides.right.color.state, 'computed');
 });
 
-test('strokeSides: uniform when every family is unset or one value on all four sides, skin ghosts never counting', () => {
-  const unset = strokeSides({}, {}, {});
+test('strokeSides: uniform when every family is unset or one value on all four sides, every delivering layer counting', () => {
+  const unset = strokeSides(stacksOf());
   assert.equal(unset.uniform, true);
   assert.deepEqual(unset.values, { 'border-width': null, 'border-style': null, 'border-color': null });
   assert.deepEqual(unset.families.width, { set: false, uniform: null, text: null });
-  // A skin's left stroke is a ghost: still uniform, still unset.
-  const skinEntry = { default: { 'border-left-width': '4px', 'border-left-style': 'solid' } };
-  assert.equal(strokeSides({}, {}, { skinEntry }).uniform, true);
+  // A skin's left stroke is a lit per-side value (the display rule):
+  // set, and not uniform.
+  const skinned = strokeSides(stacksOf({ skin: { 'border-left-width': '4px', 'border-left-style': 'solid' } }));
+  assert.equal(skinned.uniform, false);
+  assert.deepEqual(skinned.families.width, { set: true, uniform: null, text: 'left 4px' });
+  // A skin's whole border reads as one stroke, lit from the skin.
+  const skinBorder = strokeSides(stacksOf({ skin: { 'border-width': '1px', 'border-style': 'solid', 'border-color': ACCENT } }));
+  assert.equal(skinBorder.uniform, true);
+  assert.deepEqual(skinBorder.values, { 'border-width': '1px', 'border-style': 'solid', 'border-color': ACCENT });
+  assert.equal(skinBorder.sides.top.width.state, 'skin');
   // Shorthands, expanded longhands and a variant's supply all read as
   // one stroke when the sides agree.
   const longhands = {
     'border-top-width': '1px', 'border-right-width': '1px', 'border-bottom-width': '1px', 'border-left-width': '1px',
     'border-style': 'solid',
   };
-  const worn = strokeSides(longhands, { ...longhands, 'border-color': ACCENT });
+  const worn = strokeSides(stacksOf({ variants: [{ id: 'v', styles: { 'border-color': ACCENT } }], own: longhands }));
   assert.equal(worn.uniform, true);
   assert.deepEqual(worn.values, { 'border-width': '1px', 'border-style': 'solid', 'border-color': ACCENT });
   // One family disagreeing across the sides breaks uniformity; the
   // agreeing families still read, the disagreeing one lists its sides.
-  const perSide = strokeSides({ 'border-width': '1px 2px', 'border-style': 'solid' }, { 'border-width': '1px 2px', 'border-style': 'solid' });
+  const perSide = strokeSides(stacksOf({ own: { 'border-width': '1px 2px', 'border-style': 'solid' } }));
   assert.equal(perSide.uniform, false);
   assert.deepEqual(perSide.values, { 'border-width': null, 'border-style': 'solid', 'border-color': null });
   assert.deepEqual(perSide.families.width, { set: true, uniform: null, text: '1px 2px' });
-  const partial = strokeSides({ 'border-top-color': 'red' }, { 'border-top-color': 'red' });
+  const partial = strokeSides(stacksOf({ own: { 'border-top-color': 'red' } }));
   assert.equal(partial.uniform, false);
   assert.equal(partial.families.color.text, 'top red');
-  // A one-reference shorthand is the box's single value (uniformState's
-  // exception), so a scale token lights the row.
-  const token = strokeSides({ 'border-width': 'var(--stroke-thin)' }, { 'border-width': 'var(--stroke-thin)' });
+  // A one-reference shorthand is the reference on every side (the one
+  // splitter, box-model.js expandShorthand), so a scale token lights the
+  // row and each side's value is the reference itself.
+  const token = strokeSides(stacksOf({ own: { 'border-width': 'var(--stroke-thin)' } }));
   assert.equal(token.uniform, true);
   assert.equal(token.values['border-width'], 'var(--stroke-thin)');
+  // The read is posed: a Base border delivers at Medium as the own
+  // layer's from Base (lit, not unsettable there), and a Medium block
+  // overrides the parts it spells.
+  const posed = stacksOf({ own: { default: { 'border-width': '1px', 'border-style': 'solid' }, medium: { 'border-style': 'dashed' } } });
+  const medium = strokeSides(posed, 'medium', CONDITIONS);
+  assert.deepEqual(medium.values, { 'border-width': '1px', 'border-style': 'dashed', 'border-color': null });
+  assert.equal(medium.sides.top.width.condition, 'default');
+  assert.equal(medium.sides.top.style.condition, 'medium');
 });
 
 test('strokeSidesPatch: a side edit expands every own shorthand into longhands in one patch, three families wide', () => {
@@ -381,11 +402,13 @@ test('strokeSidesPatch: the families collapse back into the shorthands together,
   );
 });
 
-test('strokeSideValues reads one side\'s stroke from a strokeSides read, the set tiers by default and the ghosts on request', () => {
-  const own = { 'border-width': '1px 2px', 'border-color': ACCENT };
-  const effective = { ...own, 'border-top-style': 'dashed' };
-  const skinEntry = { default: { 'border-left-style': 'solid' } };
-  const read = strokeSides(own, effective, { skinEntry, condition: 'default' });
+test('strokeSideValues reads one side\'s stroke from a strokeSides read, every delivering layer answering', () => {
+  const stack = stacksOf({
+    skin: { 'border-left-style': 'solid' },
+    variants: [{ id: 'v', styles: { 'border-top-style': 'dashed' } }],
+    own: { 'border-width': '1px 2px', 'border-color': ACCENT },
+  });
+  const read = strokeSides(stack);
   // The width is split per side; the token color is opaque per side and
   // read through the family's uniform value; the variant style is set.
   assert.deepEqual(strokeSideValues(read, 'top'), {
@@ -393,24 +416,39 @@ test('strokeSideValues reads one side\'s stroke from a strokeSides read, the set
     'border-top-style': 'dashed',
     'border-top-color': ACCENT,
   });
-  // The skin's left style is a ghost: absent from the editor's read,
-  // present on the cell's.
+  // The skin's left style is lit like every other winner (the display
+  // rule): present on the cell's face and in the editor's seed alike;
+  // the editor's Unset reads the own layer, never the tier.
   assert.deepEqual(strokeSideValues(read, 'left'), {
-    'border-left-width': '2px',
-    'border-left-style': null,
-    'border-left-color': ACCENT,
-  });
-  assert.deepEqual(strokeSideValues(read, 'left', { ghosts: true }), {
     'border-left-width': '2px',
     'border-left-style': 'solid',
     'border-left-color': ACCENT,
   });
   // Nothing at all: every part null.
-  assert.deepEqual(strokeSideValues(strokeSides({}, {}), 'right'), {
+  assert.deepEqual(strokeSideValues(strokeSides(stacksOf()), 'right'), {
     'border-right-width': null,
     'border-right-style': null,
     'border-right-color': null,
   });
+});
+
+test('strokeUnsetProperties spans every spelling the own layer could carry for a stroke', () => {
+  // The Border row's parts: each shorthand plus its four side longhands
+  // (a ring-expanded border holds only longhands on the own layer).
+  assert.deepEqual(strokeUnsetProperties(STROKES.border), [
+    'border-width', 'border-top-width', 'border-right-width', 'border-bottom-width', 'border-left-width',
+    'border-style', 'border-top-style', 'border-right-style', 'border-bottom-style', 'border-left-style',
+    'border-color', 'border-top-color', 'border-right-color', 'border-bottom-color', 'border-left-color',
+  ]);
+  // A side's parts: each longhand plus its family shorthand (a border
+  // not yet expanded delivers the side through the shorthand).
+  assert.deepEqual(strokeUnsetProperties(strokeParts('border', 'top')), [
+    'border-top-width', 'border-width',
+    'border-top-style', 'border-style',
+    'border-top-color', 'border-color',
+  ]);
+  // An outline has no sides: the parts alone.
+  assert.deepEqual(strokeUnsetProperties(STROKES.outline), ['outline-width', 'outline-style', 'outline-color']);
 });
 
 test('strokeSideLonghands spans the three families for the ring\'s highlight claim', () => {

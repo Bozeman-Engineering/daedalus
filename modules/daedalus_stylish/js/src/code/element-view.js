@@ -2,7 +2,7 @@
 // Two CodeMirror WidgetType subclasses (the winner chip and the pending
 // line's chrome) render the decorations this view module owns.
 import { h, Fragment } from 'preact';
-import { useEffect, useRef, useState } from 'preact/hooks';
+import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import {
   EditorView,
   keymap,
@@ -14,7 +14,7 @@ import {
 import { EditorState, StateEffect, StateField } from '@codemirror/state';
 import { history, defaultKeymap, historyKeymap } from '@codemirror/commands';
 import { css } from '@codemirror/lang-css';
-import { linter } from '@codemirror/lint';
+import { forceLinting, linter } from '@codemirror/lint';
 import {
   acceptCompletion,
   autocompletion,
@@ -23,12 +23,14 @@ import {
 import {
   analyzeIsland,
   islandDelta,
-  islandLines,
   islandOps,
   matchLines,
   printIsland,
+  stackLines,
+  unseenOwnLines,
 } from './island.js';
-import { ELEMENT_LAYER } from './layers.js';
+import { ELEMENT_LAYER, layerColor, variantLayerId } from './layers.js';
+import { buildStack } from '../style-stack.js';
 import {
   createStitching,
   nextTabTarget,
@@ -36,26 +38,41 @@ import {
   tabStops,
 } from './stitching.js';
 import {
+  PSEUDO,
+  bracedSelector,
   conditionRemovalOps,
   draftRoster,
   elementIslands,
   occupiedRoster,
-  partGestureOptions,
+  ownIslandLines,
   partRemovalOps,
   posedRoster,
   restoredLines,
+  ruleIslandLines,
+  selectorGestureOptions,
   settleOps,
   shouldRestoreTinted,
-  tagGestureOptions,
 } from './element-model.js';
+import { Prelude } from './selector-chrome.js';
 import {
+  FRESH_LINE,
   createIslandSurface,
   pendingMark,
+  runLabel,
   tooltipParent,
   winnerChip,
 } from './island-surface.js';
 import { lineMarks } from './line-marks.js';
-import { lineMenuItems } from './line-menu.js';
+import {
+  doorRequest,
+  documentSlot,
+  entriesToOps,
+  errorLines,
+  lineCount,
+  structuralChunks,
+} from './paste-door.js';
+import { notify } from '../notify.js';
+import { lineMenuItems, runMenuItems } from './line-menu.js';
 import {
   carriedBy,
   documentBaselineLines,
@@ -64,13 +81,10 @@ import {
   overlaySessionLines,
   wearerWinners,
 } from './variant-document.js';
-import { lineTints as lineTintsStore } from '../line-tints.js';
+import { rowWords } from './page-model.js';
 import { useMenu } from '../menu.js';
-import {
-  axisVocabulary,
-  declaredDefaultEntry,
-  skinDefaultEntry,
-} from '../variant-scope.js';
+import { axisVocabulary, continuedKey, findVariant } from '../variant-scope.js';
+import { styleTarget } from '../widgets/lib/use-highlight.js';
 import {
   parseKey,
   bundleForKey,
@@ -79,11 +93,20 @@ import {
   declaredSets,
   definitionFor,
   baseTags,
-  instanceTags,
+  flattenElements,
   propertiesClosed,
   propertyGranted,
-  KIND_LABELS,
+  tagWord,
 } from '../style-guide.js';
+import {
+  TYPE_BLOCK,
+  TYPE_CONTAINER,
+  CLASS_PART,
+  TAG,
+  TYPE,
+  UNIVERSAL,
+  typeAddress,
+} from '../../../../daedalus_ui/js/edit_mode/materials/relative-selector.js';
 import {
   animationOptions,
   scaleTokens,
@@ -91,15 +114,27 @@ import {
   tokenOptions,
 } from '../materials.js';
 import { KEYFRAMES_PROPERTIES } from '../keyframes-names.js';
+import { imageSlot } from '../widget-values.js';
 import { widePropertyNames, wideValueKeywords } from './wide-tier.js';
-import { partLabel, partsForKey } from '../parts.js';
+import { PART_SELECTOR, boxWord, selectorLabel, partsForKey, typeLabels } from '../parts.js';
+import {
+  conditionRenders,
+  isFactCondition,
+  satisfiedFacts,
+} from '../editing-at.js';
+import { createMatcher } from '../selector-matcher.js';
+import {
+  addressDeclaration,
+  addressLabel,
+  ownerName,
+} from '../write-address.js';
 
 /**
  * The per-element islands body (the page tree mounts one per element)
  * and the variant document view built on the same engine.
  *
  * Structure is chrome, never characters: the selected element renders as a
- * tree of Preact rows — its default declaration island, a WHEN row per
+ * tree of Preact rows — its default declaration island, a condition row per
  * condition holding values, and a part row per styled sub-element — with
  * one island per (key, condition) pair holding a FLAT DECLARATION LIST
  * (element-model.js computes the roster; island.js is the
@@ -107,16 +142,21 @@ import { partLabel, partsForKey } from '../parts.js';
  * default; exactly one, the one holding the cursor, is a live CodeMirror
  * instance (island-surface.js owns the swap), so the code view's cost is
  * bounded to one editor however big the page is.
- * Selectors, condition wrappers, and part headers cannot be typed here —
- * they MATERIALIZE from typing instead: `.` opens the declared-anatomy
- * completion and picking a part creates its chrome row + island (open
- * sites additionally offer an explicit "Create this part" confirm for an
- * undeclared class); `&`/`@` opens the condition vocabulary and picking
- * one creates its WHEN row + island; a bare declared instance tag typed
- * at a declaration position offers its TAG-TIER row ('{key}::p')
- * alongside the property completions (tagCompletions), materializing it
- * beside the part rows. Materialized rows are view-state
- * drafts until their first declaration commits. The inverse gesture, the
+ * Selectors, condition wrappers, and selector headers cannot be typed
+ * here — they MATERIALIZE from typing instead: a relative selector typed
+ * at a declaration position (`>`, `.`, `pb-`, a bare tag word, a chain
+ * of them on one line) opens ONE selector completion built from the
+ * element itself (element-model.js selectorGestureOptions over the
+ * selector matcher: the children present, their types and tags, the
+ * declared parts and base tags; open sites additionally offer an
+ * explicit "Create this part" confirm for an undeclared class), and
+ * picking an option creates its chrome row + island, exactly as typing
+ * `{` after a whole selector does (the brace is swallowed with the
+ * selector, bracedSelector); a bare word merges with the property
+ * completions at the same anchor, since `p` is a paragraph rule and the
+ * start of `padding` alike; `&`/`@` opens the condition vocabulary and
+ * picking one creates its condition row + island. Materialized rows are
+ * view-state drafts until their first declaration commits. The inverse gesture, the
  * row's × button, unsets the row's OWN styles and collapses it — with
  * variant-restore honesty: variant-supplied values survive (only detach
  * removes delivery), so a variant-backed row stays. At-rules
@@ -218,9 +258,13 @@ const TOKEN_SHAPES_FOR = {
  *
  * The palette's swatch half of the mapping above: color swatches in color
  * slots and on rows without a clean mapping, no swatches on numeric rows
- * (no kind fits). Media-capable properties (<image> slots) bypass this
- * table: the value is free-typed grammar where a gradient swatch is the
- * whole layer and a color swatch is a legitimate stop, so both offer.
+ * (no kind fits). Free <image> slots (widget-values.js imageSlot) bypass
+ * this table: the value is free-typed grammar where a gradient swatch is
+ * the whole layer and a color swatch is a legitimate stop, so both offer.
+ * A keyword-typed media property (content) offers no swatch kind at all:
+ * its grammar takes its keywords or one media token, and a swatch
+ * reference is refused there, so the offer follows the type and the
+ * flag adds only the picker.
  */
 const SWATCH_KINDS_FOR = {
   color: ['color'],
@@ -237,7 +281,9 @@ const tokenCompletions = (guide, materials, definition) => {
     ? (TOKEN_SHAPES_FOR[definition.type] ?? null)
     : null;
   const kinds = definition?.media
-    ? null
+    ? imageSlot(definition)
+      ? null
+      : []
     : definition?.type
       ? (SWATCH_KINDS_FOR[definition.type] ?? ['color'])
       : ['color'];
@@ -295,6 +341,11 @@ export const guideCompletions = (context, propsRef) => {
   const before = line.text.slice(0, context.pos - line.from);
   const colon = before.indexOf(':');
   if (colon === -1) {
+    // A property is one bare word: a line carrying a combinator, a dot
+    // or a second token is a selector being typed (selectorCompletions).
+    if (!/^[A-Za-z-]*$/.test(before.trim())) {
+      return null;
+    }
     const word = context.matchBefore(/[A-Za-z-]+$/);
     if (!word && !context.explicit) {
       return null;
@@ -421,175 +472,224 @@ export const guideCompletions = (context, propsRef) => {
 };
 
 /**
- * Materialization-from-typing: the `.` / `&` / `@` gestures.
- *
- * A gesture token owns its line (nothing typed after the cursor): `.` on
- * an element island opens the declared-anatomy completion — parts are
- * REFERENCES into anatomy, typing cannot create markup — gated on DOM
- * presence (partGestureOptions: a declared part absent from the canvas is
- * not offered; rows already materialized from the style map persist
- * regardless, the store projection) — plus, on open
- * sites, one explicit "Create this part" entry for a well-formed
- * undeclared class (picking it IS the confirmation). `&` and `@` open the
- * condition vocabulary on any island. Picking an option REMOVES the typed
- * token and materializes the chrome row + island instead of inserting
- * text; structure never becomes characters.
+ * The declaration-position read every gesture shares: the line's text
+ * before and after the cursor, or null when the cursor is not at a
+ * declaration position (text follows it, or a colon precedes it). A
+ * generated box's `::` tail (`&::`, `> pb-text::bef`) is the selector
+ * gesture's own token, not a declaration's colon.
  */
-const gestureCompletions = (context, propsRef) => {
+const gestureLine = (context) => {
+  const line = context.state.doc.lineAt(context.pos);
+  const before = line.text.slice(0, context.pos - line.from);
+  const after = line.text.slice(context.pos - line.from);
+  if (after.trim() !== '' || before.replace(/::[A-Za-z]*$/, '').includes(':')) {
+    return null;
+  }
+  return { line, before, after };
+};
+
+/**
+ * The sentence a selector completion's detail reads: what the rule
+ * addresses, in the reader's words.
+ */
+const selectorDetail = (option) => {
+  const lower = (label) =>
+    typeof label === 'string' && label !== ''
+      ? label.charAt(0).toLowerCase() + label.slice(1)
+      : label;
+  switch (option.kind) {
+    case UNIVERSAL:
+      return Drupal.t('Children');
+    case TYPE:
+      return option.name === TYPE_CONTAINER || option.name === TYPE_BLOCK
+        ? Drupal.t('Every @label here', { '@label': lower(option.label ?? option.name) })
+        : Drupal.t('Every @label block here', {
+            '@label': lower(option.label ?? option.name),
+          });
+    case TAG:
+      return Drupal.t('Every @label here', { '@label': lower(option.label ?? option.name) });
+    case PSEUDO:
+      return boxWord(option.name);
+    default:
+      return option.label ?? option.name;
+  }
+};
+
+/**
+ * Materialization-from-typing: the selector gesture.
+ *
+ * A selector typed alone on a line (nothing after the cursor, no colon
+ * before it) opens the one selector completion: element-model.js
+ * selectorGestureOptions reads the position (the owner, `>`, a chain's
+ * landing) and the element (the matcher's actual children, the declared
+ * parts and base tags) and offers full selectors; each option's label
+ * is the selector it mints, its detail the human reading ("Children",
+ * "Every text block here", "Every paragraph here", the part's label,
+ * a generated box's "Before" / "After"). Picking one REMOVES the typed
+ * text and materializes the chrome row + island instead of inserting
+ * anything: structure never becomes characters. The offer re-queries
+ * whenever the token under the cursor changes shape (a space, a `>`, a
+ * `.`, a `::`), so a chain typed on one line completes compound by
+ * compound and a subject continues into its boxes (`> pb-text::`; the
+ * owner's own through the anchor, `&::`).
+ */
+const selectorCompletions = (context, propsRef) => {
+  const { materialize } = propsRef.current;
+  if (!materialize?.selectors) {
+    return null;
+  }
+  const read = gestureLine(context);
+  if (!read) {
+    return null;
+  }
+  const match = /^(\s*)([A-Za-z0-9_.*>& -]*(?:::[A-Za-z]*)?)$/.exec(read.before);
+  if (!match || match[2].trim() === '') {
+    return null;
+  }
+  const typed = match[2];
+  const offer = selectorGestureOptions(typed, materialize.selectors.context);
+  if (!offer) {
+    return null;
+  }
+  const tokenFrom = read.line.from + match[1].length;
+  const pick = (selector) => (view, completion, from, to) => {
+    view.dispatch({ changes: { from: tokenFrom, to } });
+    materialize.selectors.onMaterialize(selector);
+  };
+  const typeOf = (kind) =>
+    kind === UNIVERSAL || kind === PSEUDO ? 'keyword' : kind === TYPE ? 'type' : 'class';
+  const completions = offer.options.map((option) => ({
+    label: option.selector,
+    type: typeOf(option.kind),
+    detail: selectorDetail(option),
+    apply: pick(option.selector),
+  }));
+  if (offer.create) {
+    completions.push({
+      label: offer.create,
+      type: 'class',
+      detail: Drupal.t('Create this part'),
+      boost: -1,
+      apply: pick(offer.create),
+    });
+  }
+  if (!completions.length) {
+    return null;
+  }
+  // The stem is the typed text up to the token under the cursor; the
+  // popup stays valid while only that token grows, and a new compound
+  // (a space, a combinator, a dot) asks the source again.
+  const token = /[A-Za-z0-9_.*-]*$/.exec(typed)?.[0] ?? '';
+  const stem = typed.slice(0, typed.length - token.length);
+  return {
+    from: tokenFrom,
+    options: completions,
+    validFor: (text) =>
+      text.startsWith(stem) && /^[A-Za-z0-9_.*-]*$/.test(text.slice(stem.length)),
+  };
+};
+
+/**
+ * Materialization-from-typing: the `&` / `@` gestures.
+ *
+ * A condition sigil owns its line: `&` and `@` open the condition
+ * vocabulary on any island, the structural facts grouped under Position.
+ * On the element's own island the `&` is also the anchor of its
+ * generated boxes, so that popup ends with `::before` and `::after`
+ * under their own group (the selector gesture's offer for `&`, labelled
+ * past the sigil so the filter reads the typed tail); typing the `::`
+ * hands the line to the selector gesture. Picking an option REMOVES the
+ * typed token and materializes the condition row (or the box row) + island
+ * instead of inserting text.
+ */
+const conditionCompletions = (context, propsRef) => {
   const { guide, materialize } = propsRef.current;
   if (!materialize) {
     return null;
   }
-  const line = context.state.doc.lineAt(context.pos);
-  const before = line.text.slice(0, context.pos - line.from);
-  const after = line.text.slice(context.pos - line.from);
-  if (after.trim() !== '') {
+  const read = gestureLine(context);
+  if (!read) {
     return null;
   }
-
-  const partMatch = materialize.parts
-    ? /^(\s*)(\.[A-Za-z0-9_-]*)$/.exec(before)
-    : null;
-  if (partMatch) {
-    const tokenFrom = line.from + partMatch[1].length;
-    const { options, create } = partGestureOptions(
-      partMatch[2],
-      materialize.parts.declared,
-      {
-        closed: materialize.parts.closed,
-        presence: materialize.parts.presence ?? null,
-      },
-    );
-    const pick = (sub) => (view, completion, from, to) => {
-      view.dispatch({ changes: { from: tokenFrom, to } });
-      materialize.parts.onMaterialize(sub);
-    };
-    const completions = options.map((option) => ({
-      label: option.sub,
-      type: 'class',
-      detail: option.label,
-      apply: pick(option.sub),
-    }));
-    if (create) {
-      completions.push({
-        label: create,
-        type: 'class',
-        detail: Drupal.t('Create this part'),
-        boost: -1,
-        apply: pick(create),
-      });
-    }
-    return completions.length
-      ? {
-          from: tokenFrom,
-          options: completions,
-          validFor: /^\.[A-Za-z0-9_-]*$/,
-        }
-      : null;
+  const conditionMatch = /^(\s*)[&@]([A-Za-z0-9_-]*)$/.exec(read.before);
+  if (!conditionMatch) {
+    return null;
   }
-
-  const conditionMatch = /^(\s*)[&@]([A-Za-z0-9_-]*)$/.exec(before);
-  if (conditionMatch) {
-    const tokenFrom = line.from + conditionMatch[1].length;
-    const vocabulary = Object.entries(guide?.conditions ?? {});
-    if (!vocabulary.length) {
-      return null;
-    }
-    return {
-      // The filter range starts past the sigil so typed text matches
-      // condition names.
-      from: tokenFrom + 1,
-      options: vocabulary.map(([name, definition]) => ({
+  const tokenFrom = read.line.from + conditionMatch[1].length;
+  const vocabulary = Object.entries(guide?.conditions ?? {});
+  if (!vocabulary.length) {
+    return null;
+  }
+  // Structural facts (first-child, empty, …) are offered under their
+  // own Position group after the posable conditions: a fact is the
+  // element's place in the markup, never a canvas pose, so the group
+  // says what picking one means (a row that renders when the element
+  // sits there).
+  const position = { name: Drupal.t('Position'), rank: 1 };
+  const box = { name: Drupal.t('Generated box'), rank: 2 };
+  const boxes =
+    read.before.trim().startsWith('&') && materialize.selectors
+      ? (selectorGestureOptions('&', materialize.selectors.context)?.options ?? [])
+      : [];
+  return {
+    // The filter range starts past the sigil so typed text matches
+    // condition names.
+    from: tokenFrom + 1,
+    options: [
+      ...vocabulary.map(([name, definition]) => ({
         label: name,
         type: 'keyword',
         detail: definition?.label,
+        ...(isFactCondition(name, guide?.conditions) && { section: position }),
         apply: (view, completion, from, to) => {
           view.dispatch({ changes: { from: tokenFrom, to } });
           materialize.condition(name);
         },
       })),
-      validFor: /^[A-Za-z0-9_-]*$/,
-    };
-  }
-  return null;
-};
-
-/**
- * Tag-row materialization from typing: the bare-tag half of the gestures.
- *
- * A tag has no sigil — a bare tag name IS how CSS spells it — so the
- * offer rides the property-completion position instead of owning a token
- * shape: at a declaration position (no ':' yet, nothing after the
- * cursor) on an element ROOT island, base's declared tags join the popup
- * alongside the property options (completionSource merges the two), each
- * gated on content presence (tagGestureOptions: a tag the element's prose
- * does not contain is not offered). Picking one removes the typed
- * word and materializes the '{key}::{tag}' row alongside the part rows —
- * structure never becomes characters, exactly the `.` gesture's rule.
- */
-const tagCompletions = (context, propsRef) => {
-  const { materialize } = propsRef.current;
-  if (!materialize?.tags) {
-    return null;
-  }
-  const line = context.state.doc.lineAt(context.pos);
-  const before = line.text.slice(0, context.pos - line.from);
-  const after = line.text.slice(context.pos - line.from);
-  if (after.trim() !== '' || before.includes(':')) {
-    return null;
-  }
-  const word = context.matchBefore(/[a-z][a-z0-9-]*$/);
-  if (!word && !context.explicit) {
-    return null;
-  }
-  const offered = tagGestureOptions(
-    materialize.tags.declared,
-    materialize.tags.present ?? null,
-  );
-  if (!offered.length) {
-    return null;
-  }
-  const from = word ? word.from : context.pos;
-  return {
-    from,
-    options: offered.map((option) => ({
-      label: option.tag,
-      type: 'class',
-      detail: Drupal.t('Every @label here', { '@label': option.label }),
-      apply: (view, completion, applyFrom, to) => {
-        view.dispatch({ changes: { from, to } });
-        materialize.tags.onMaterialize(option.tag);
-      },
-    })),
-    validFor: /^[a-z][a-z0-9-]*$/,
+      ...boxes.map((option) => ({
+        label: option.selector.slice(1),
+        type: 'keyword',
+        detail: selectorDetail(option),
+        section: box,
+        apply: (view, completion, from, to) => {
+          view.dispatch({ changes: { from: tokenFrom, to } });
+          materialize.selectors.onMaterialize(option.selector);
+        },
+      })),
+    ],
+    validFor: /^[A-Za-z0-9_-]*$/,
   };
 };
 
 /**
- * The one completion source: gestures first, then properties and tags.
+ * The one completion source: the condition gesture, then the selector
+ * gesture and the properties.
  *
- * The `.`/`&`/`@` gestures own their token shapes and preempt. A bare
- * word is ambiguous — the start of a property OR a declared instance tag
- * — so the property completions and the tag-row offers merge into one
- * popup at the same anchor (the typed word), letting the editor's own
- * filtering rank them; an exact tag match ('p') naturally surfaces its
- * row offer beside the 'padding's.
+ * The `&`/`@` sigils own their token shape and preempt. A bare word is
+ * ambiguous — the start of a property OR a tag rule (`p`, a paragraph
+ * rule, and the start of `padding`) — so the property completions and
+ * the selector offer merge into one popup at the same anchor (the typed
+ * word), letting the editor's own filtering rank them; an exact tag
+ * match surfaces its row offer beside the properties. Any other
+ * selector shape (`>`, `.`, `pb-`, a chain) is the selector gesture
+ * alone, and the property offer stands down there (guideCompletions
+ * reads only a bare word as a property).
  */
 const completionSource = (context, propsRef) => {
-  const gesture = gestureCompletions(context, propsRef);
-  if (gesture) {
-    return gesture;
+  const condition = conditionCompletions(context, propsRef);
+  if (condition) {
+    return condition;
   }
-  const tags = tagCompletions(context, propsRef);
+  const selector = selectorCompletions(context, propsRef);
   const properties = guideCompletions(context, propsRef);
-  if (tags && properties && tags.from === properties.from) {
+  if (selector && properties && selector.from === properties.from) {
     return {
       ...properties,
-      options: [...properties.options, ...tags.options],
+      options: [...properties.options, ...selector.options],
       validFor: /^[A-Za-z0-9-]*$/,
     };
   }
-  return properties ?? tags;
+  return selector ?? properties;
 };
 
 /**
@@ -600,7 +700,8 @@ const completionSource = (context, propsRef) => {
  * first/last line with the goal column for vertical arrival, first/last
  * tab stop for the Tab chain. Takes the state, not a view: a wake
  * resolves the placement against the freshly built state before any
- * EditorView exists.
+ * EditorView exists. The fresh-line placement (FRESH_LINE) never
+ * arrives here: the surface resolves it, since it edits the document.
  */
 const placementAnchor = (state, placement) => {
   const doc = state.doc;
@@ -711,6 +812,44 @@ class WinnerWidget extends WidgetType {
 }
 
 /**
+ * The run label: the block naming a layer run once above its first line,
+ * in the layer's hue (line-marks.js `run`). A block widget before the
+ * line, never buffer text, so it cannot diff or read as an edit; the
+ * printer places the same DOM before the printed line (island-surface.js
+ * runLabel), so the two postures agree on where the label sits. The
+ * label is the run's handle: ignoreEvent keeps its right-click out of
+ * the editor (CodeMirror hands the event no further), so it bubbles to
+ * the island's contextmenu, which opens the run menu.
+ */
+class RunWidget extends WidgetType {
+  constructor(label, color, layer) {
+    super();
+    this.label = label;
+    this.color = color;
+    this.layer = layer;
+  }
+
+  eq(other) {
+    return (
+      other.label === this.label &&
+      other.color === this.color &&
+      other.layer === this.layer
+    );
+  }
+
+  toDOM() {
+    return runLabel(this.label, this.color, this.layer);
+  }
+
+  // CodeMirror's WidgetType hook: the answer is the widget class's, never
+  // an instance's.
+  // eslint-disable-next-line class-methods-use-this
+  ignoreEvent() {
+    return true;
+  }
+}
+
+/**
  * The pending-row mark: the dismiss (or restore) control on a pending
  * line. Document islands (the editing session's body) wear it on staged
  * lines:
@@ -751,12 +890,30 @@ class PendingMarkWidget extends WidgetType {
  * parking on blur. The surface (island-surface.js) owns the container in
  * both postures; the cost of the code view is bounded to one editor.
  *
- * `floor` is the defaults floor for this island's key ({skinEntry,
- * declaredEntry}, the raw condition-keyed entries), printed at the
- * bottom of the layered document at the island's exact condition
- * (islandLines); null prints the map's lines only. A floor line is
- * display, never a write target: editing it is a SET on the own layer,
- * its menu offers the lift and the skin doorway, never Unset.
+ * `stack` is this island's key's style stack (buildStack), the layered
+ * document the island prints at its exact condition (stackLines): built
+ * with the defaults floor for the selected element's islands (one
+ * `declared:{scope}` / `skin:{scope}` layer per declaring scope, the
+ * base:{tag} layer when the canvas tag is known), without it for the
+ * tree scopes' sparse rows, and for a document island the anchoring
+ * wearer's stack (the honesty read's winners) or null when unanchored. A
+ * floor line is display, never a write target: editing it is a SET on
+ * the own layer, its menu offers the lift and the skin doorway, never
+ * Unset.
+ *
+ * `project` is the island's read of its stack's lines in element mode,
+ * `(lines, condition) => lines` (element-model.js): the selected
+ * element's own islands drop the ancestor tier's lines (ownIslandLines:
+ * the rules print as rule islands beneath), a rule island strikes what
+ * the selected element beats (ruleIslandLines, the `beaten` mark);
+ * null prints the stack's lines as they are (the tree's sparse rows, a
+ * document island).
+ *
+ * `rule` marks a rule island (its own layer is the rule's entry, so its
+ * own run reads "this rule"); `onOpenDocument` is the variant doorway
+ * the run menu opens a variant run through (the Inspector's
+ * openDocument: reference, condition, anchor), null where no host wires
+ * it (the satellite), which drops the item.
  */
 const Island = ({
   source,
@@ -773,21 +930,33 @@ const Island = ({
   stitch,
   sheet = null,
   posed = false,
-  floor = null,
+  stack = null,
+  project = null,
+  rule = false,
+  onOpenDocument = null,
 }) => {
   const containerRef = useRef(null);
   const surfaceRef = useRef(null);
   const session = useRef({});
   const [hasErrors, setHasErrors] = useState(false);
-  // The right-click line menu (the shared primitive; line-menu.js
-  // computes the items, the handlers below execute them).
+  // The posture as a class: the surface swaps the editor in and out
+  // imperatively (island-surface.js) and reports each swap through
+  // onPosture; the live island is the one lifted off the panel
+  // (inspector.css `--live`), a paint only, so the class may arrive a
+  // render after the wake without moving a pixel.
+  const [live, setLive] = useState(false);
+  // The right-click line and run menus (the shared primitive;
+  // line-menu.js computes the items, the handlers below execute them).
   const menu = useMenu();
   const islandId = `${mapKey}|${condition}`;
   const rootPos = mapKey.indexOf('::');
   const rootKey = rootPos === -1 ? mapKey : mapKey.slice(0, rootPos);
   const relative = mapKey.slice(rootKey.length);
 
-  const floorSignature = floor ? JSON.stringify(floor) : '';
+  // The stack is rebuilt per render; its signature keys the re-print on
+  // what it says (a floor layer appearing, a tag change swapping the
+  // base:{tag} layer), not on its identity.
+  const stackSignature = stack ? JSON.stringify(stack.layers) : '';
 
   // CM6 lives outside preact's render loop; its closures read the latest
   // props through this ref.
@@ -803,7 +972,10 @@ const Island = ({
     materialize,
     stitch,
     sheet,
-    floor,
+    stack,
+    project,
+    rule,
+    onOpenDocument,
   };
 
   // The wearer cascade's winners for this island — the document honesty
@@ -813,38 +985,23 @@ const Island = ({
   // document island (nothing on this page carries the fragment) has no
   // wearer cascade to read.
   const currentWinners = () => {
-    const {
-      styleMap: map,
-      variants: library,
-      axes: currentAxes,
-      sheet: sheetCtx,
-    } = propsRef.current;
-    if (sheetCtx && !sheetCtx.anchored) {
+    const { sheet: sheetCtx, stack: currentStack } = propsRef.current;
+    if ((sheetCtx && !sheetCtx.anchored) || !currentStack) {
       return new Map();
     }
-    return wearerWinners(
-      islandLines(
-        map ?? {},
-        mapKey,
-        condition,
-        library ?? [],
-        currentAxes,
-        propsRef.current.floor ?? null,
-      ),
-    );
+    return wearerWinners(stackLines(currentStack, condition));
   };
 
   // The island's document. Element mode prints the wearer's layered
-  // document; a document island (the editing session's body) prints the
-  // VARIANT'S OWN SHEET at its document key with the session's staged
-  // lines rendered in place (pending marks), wearer-context shadowing
-  // overlaid for display only.
+  // document through the island's projection; a document island (the
+  // editing session's body) prints the VARIANT'S OWN SHEET at its
+  // document key with the session's staged lines rendered in place
+  // (pending marks), wearer-context shadowing overlaid for display only.
   const currentLines = () => {
     const {
-      styleMap: map,
-      variants: library,
-      axes: currentAxes,
       sheet: sheetCtx,
+      stack: currentStack,
+      project: projection,
     } = propsRef.current;
     if (sheetCtx) {
       const baseline = documentBaselineLines(
@@ -867,14 +1024,8 @@ const Island = ({
         return winner === null ? line : { ...line, lost: true, winner };
       });
     }
-    return islandLines(
-      map ?? {},
-      mapKey,
-      condition,
-      library ?? [],
-      currentAxes,
-      propsRef.current.floor ?? null,
-    );
+    const lines = currentStack ? stackLines(currentStack, condition) : [];
+    return projection ? projection(lines, condition) : lines;
   };
 
   // The document diff baseline: the PURE variant sheet, no overlay, no
@@ -887,11 +1038,16 @@ const Island = ({
       ? documentBaselineLines(sheetCtx.variantStyles, sheetCtx.slot, condition)
       : null;
   };
+  // An element island hands the lint the lines it printed from, so the
+  // delivered text beneath the own layer is never judged as the user's; a
+  // document island's lines are the variant's own sheet, all of it the
+  // user's to write, so it hands none.
   const analyze = (text) =>
     analyzeIsland(text, {
       guide: propsRef.current.guide,
       materials: propsRef.current.materials,
       declaration: propsRef.current.declaration,
+      lines: propsRef.current.sheet ? [] : (session.current.lines ?? []),
     });
 
   const releaseStaged = () => {
@@ -920,7 +1076,7 @@ const Island = ({
     setHasErrors(
       analysis.diagnostics.some(
         (diagnostic) => diagnostic.severity === 'error',
-      ),
+      ) || doorDiagnostics(view).length > 0,
     );
     const sheetCtx = propsRef.current.sheet;
     const delta = islandDelta(
@@ -973,6 +1129,11 @@ const Island = ({
   const commitPass = (view, { includeActive }) => {
     const doc = view.state.doc.toString();
     const analysis = analyze(doc);
+    // Structure settles through the door, never as declarations: every
+    // closed block in the buffer goes to the spine's parser on the same
+    // boundary a declaration commits on, and leaves the buffer when its
+    // entries land (settleChunks).
+    settleChunks(view, analysis);
     const cursor = includeActive ? null : view.state.selection.main.head;
     const sheetCtx = propsRef.current.sheet;
     if (sheetCtx) {
@@ -1034,6 +1195,256 @@ const Island = ({
     restorePass(view, analysis);
   };
 
+  // --- The paste door --------------------------------------------------
+  // Text is a door, never the store. A pasted text with structure (a
+  // nested `&:hover { }`, an `@container` wrapper, a `#id { }` block from
+  // the AI's answer, a `.quote { }` part) never enters the buffer as
+  // text, and a closed block the buffer holds at a settle leaves it: the
+  // text goes whole to the spine's parse door through the source seam
+  // (source.parseCss: the leader fetches the route, the satellite relays),
+  // which answers the flat (key, condition) entries it means through the
+  // one parser the AI's style op uses. The element document lands them
+  // as one update_style batch plus apply_variant for rule wear (one
+  // history entry, the grant judged at the write exactly as the AI's
+  // path); the variant document stages them (wear refused with a notice:
+  // a document has no element to wear on). Correctives become standing
+  // diagnostics at their lines and the chunk stays put until it is
+  // edited, when the next settle sends it again.
+
+  // The door's standing correctives as CM diagnostics: the sent texts
+  // located verbatim in the buffer (in order), each error's line mapped
+  // through them. A text no longer found verbatim was edited, which
+  // retires the correctives (the next settle re-sends the chunk).
+  const doorDiagnostics = (view) => {
+    const door = session.current.door;
+    if (!door) {
+      return [];
+    }
+    const { doc } = view.state;
+    const text = doc.toString();
+    const segments = [];
+    let cursor = 0;
+    for (let i = 0; i < door.texts.length; i += 1) {
+      const at = text.indexOf(door.texts[i], cursor);
+      if (at === -1) {
+        session.current.door = null;
+        return [];
+      }
+      segments.push({
+        startLine: doc.lineAt(at).number,
+        lines: lineCount(door.texts[i]),
+      });
+      cursor = at + door.texts[i].length;
+    }
+    return errorLines(door.errors, segments).map(({ line, message }) => {
+      const docLine = doc.line(Math.min(Math.max(line, 1), doc.lines));
+      return { from: docLine.from, to: docLine.to, severity: 'error', message };
+    });
+  };
+
+  // Lands the door's entries: the element document's one batch, the
+  // variant document's staged lines per (slot, condition), merged over
+  // what the session already stages there (a paste is additive) and
+  // dropped where the pasted value is the sheet's own (nothing pending).
+  const landDoorAnswer = ({ entries = [], wear = [] }) => {
+    const sheetCtx = propsRef.current.sheet;
+    if (!sheetCtx) {
+      const { operations, count } = entriesToOps(entries, wear);
+      if (!operations.length) {
+        return;
+      }
+      propsRef.current.source
+        .commitBatch({
+          operations,
+          label: Drupal.t('Pasted @count declarations', { '@count': count }),
+        })
+        .catch(() => {
+          // The op failure report lands on the leader page.
+        });
+      return;
+    }
+    if (wear.length) {
+      notify(
+        'warning',
+        Drupal.t(
+          'A variant document cannot wear another variant; the pasted wear was skipped. Apply that variant on the element instead.',
+        ),
+      );
+    }
+    const grouped = new Map();
+    let strangers = 0;
+    entries.forEach(({ key, condition: entryCondition, properties }) => {
+      const slot = documentSlot(key, mapKey, sheetCtx.slot);
+      if (slot === null) {
+        strangers += 1;
+        return;
+      }
+      const id = `${slot}\u0000${entryCondition}`;
+      const group = grouped.get(id) ?? { slot, condition: entryCondition, properties: {} };
+      Object.assign(group.properties, properties ?? {});
+      grouped.set(id, group);
+    });
+    grouped.forEach(({ slot, condition: entryCondition, properties }) => {
+      const baseline = new Map(
+        documentBaselineLines(sheetCtx.variantStyles, slot, entryCondition).map(
+          (line) => [line.property, line.value],
+        ),
+      );
+      const merged = new Map(
+        (sheetCtx.session?.lines ?? [])
+          .filter((line) => line.relative === slot && line.condition === entryCondition)
+          .map((line) => [line.property, line.value]),
+      );
+      Object.entries(properties).forEach(([property, value]) => {
+        merged.set(property, value);
+      });
+      sheetCtx.stage(
+        slot,
+        entryCondition,
+        [...merged.entries()]
+          .filter(([property, value]) => baseline.get(property) !== value)
+          .map(([property, value]) => ({ property, value })),
+      );
+    });
+    if (strangers) {
+      notify(
+        'warning',
+        Drupal.t(
+          'Part of the pasted CSS addressed another element and was skipped; a document island takes its own rules only.',
+        ),
+      );
+    }
+  };
+
+  // Sends texts with structure through the door, once per text: a text
+  // whose correctives stand is not re-sent until it is edited, and a
+  // text in flight is not sent twice. Resolves true when the entries
+  // landed, false when correctives stand (the caller places the text).
+  const sendToDoor = (texts, chunks, { onErrors = null, onLanded = null } = {}) => {
+    const text = texts.join('\n');
+    const standing = session.current.door;
+    if (session.current.doorInFlight === text || standing?.texts.join('\n') === text) {
+      return;
+    }
+    const { guide: currentGuide, sheet: sheetCtx, source: currentSource } = propsRef.current;
+    if (sheetCtx && !sheetCtx.anchored) {
+      notify(
+        'warning',
+        Drupal.t(
+          'Nothing on this page carries this fragment, so pasted CSS has no element to be read under; paste where an element wears the variant.',
+        ),
+      );
+      return;
+    }
+    const request = doorRequest(text, chunks, {
+      mapKey,
+      rootKey,
+      condition,
+      guide: currentGuide,
+      document: Boolean(sheetCtx),
+    });
+    session.current.doorInFlight = text;
+    currentSource.parseCss(request.key, request.css).then(
+      (answer) => {
+        session.current.doorInFlight = null;
+        const errors = Array.isArray(answer?.errors) ? answer.errors : [];
+        if (errors.length) {
+          session.current.door = { texts, errors };
+          onErrors?.(errors);
+          return;
+        }
+        session.current.door = null;
+        landDoorAnswer(answer ?? {});
+        onLanded?.();
+      },
+      () => {
+        // The source reported the failure (the leader's messenger, the
+        // satellite's own); the text stays where it is.
+        session.current.doorInFlight = null;
+      },
+    );
+  };
+
+  // The paste: text with structure never enters the buffer. It goes to
+  // the door whole (its bare declarations included: they are the
+  // island's own entry in the answer); only when correctives stand does
+  // it land where the paste would have put it, its errors at their lines.
+  const handlePaste = (event, view) => {
+    const text = event.clipboardData?.getData('text/plain') ?? '';
+    const chunks = structuralChunks(text);
+    if (!chunks.length) {
+      return false;
+    }
+    event.preventDefault();
+    sendToDoor([text], chunks, {
+      onErrors: (errors) => {
+        if (surfaceRef.current?.live === view) {
+          view.dispatch(view.state.replaceSelection(text));
+          forceLinting(view);
+          return;
+        }
+        notify('error', errorLines(errors, [])[0]?.message ?? '');
+      },
+    });
+    return true;
+  };
+
+  // The settle's half: every closed block the buffer holds goes to the
+  // door, and leaves the buffer when its entries land (a block on lines
+  // of its own takes its line with it).
+  const settleChunks = (view, analysis) => {
+    const chunks = analysis.structural ?? [];
+    if (!chunks.length) {
+      return;
+    }
+    const texts = chunks.map((chunk) => chunk.text);
+    sendToDoor(texts, chunks, {
+      onErrors: () => {
+        if (surfaceRef.current?.live === view) {
+          forceLinting(view);
+        }
+      },
+      onLanded: () => removeChunks(view, texts),
+    });
+  };
+
+  const removeChunks = (view, texts) => {
+    if (surfaceRef.current?.live !== view) {
+      return;
+    }
+    const { doc } = view.state;
+    const text = doc.toString();
+    const changes = [];
+    let cursor = 0;
+    texts.forEach((chunk) => {
+      const at = text.indexOf(chunk, cursor);
+      if (at === -1) {
+        return;
+      }
+      cursor = at + chunk.length;
+      let from = at;
+      let to = at + chunk.length;
+      const first = doc.lineAt(from);
+      const last = doc.lineAt(to);
+      if (
+        text.slice(first.from, from).trim() === '' &&
+        text.slice(to, last.to).trim() === ''
+      ) {
+        from = first.from;
+        to = last.to;
+        if (to < doc.length) {
+          to += 1;
+        } else if (from > 0) {
+          from -= 1;
+        }
+      }
+      changes.push({ from, to });
+    });
+    if (changes.length) {
+      view.dispatch({ changes });
+    }
+  };
+
   // The honest-restore half of variant-line deletion: deleting a variant-
   // supplied line commits nothing, so no authoritative refresh ever
   // re-prints the buffer — the variant keeps delivering while the island
@@ -1062,24 +1473,37 @@ const Island = ({
     redecorate(view);
   };
 
+  // The one lineMarks context both postures read (redecorate and the
+  // printer's marksFor), so a line wears the same marks whichever posture
+  // shows it: the library for the supplier words, the sheet gate, the
+  // own layer's word.
+  const marksContext = () => {
+    const {
+      variants: library,
+      sheet: sheetCtx,
+      rule: isRule,
+    } = propsRef.current;
+    return {
+      library: library ?? [],
+      sheet: Boolean(sheetCtx),
+      own: isRule ? 'rule' : 'element',
+    };
+  };
+
   // Provenance and the shadowing story, as decorations over the plain
   // buffer. Buffer declarations pair with baseline lines first-fit
   // (matchLines); an edited line matches nothing and prints plain — the
   // override-in-the-making. What each matched line wears comes from the
   // one marks model (line-marks.js) both postures share; this side only
-  // turns marks into Decoration.line + widgets.
+  // turns marks into Decoration.line + widgets (the run label a block
+  // widget before the run's first line).
   const redecorate = (view, analysis = null) => {
     const currentAnalysis = analysis ?? analyze(view.state.doc.toString());
-    const { variants: library, sheet: sheetCtx } = propsRef.current;
     const matched = matchLines(
       currentAnalysis.declarations,
       session.current.lines ?? [],
     );
-    const marks = lineMarks(matched, {
-      library: library ?? [],
-      sheet: Boolean(sheetCtx),
-      tints: lineTintsStore.get(),
-    });
+    const marks = lineMarks(matched, marksContext());
     const seen = new Set();
     const ranges = [];
     currentAnalysis.declarations.forEach((parsed, index) => {
@@ -1092,6 +1516,15 @@ const Island = ({
         return;
       }
       seen.add(docLine.from);
+      if (mark.run) {
+        ranges.push(
+          Decoration.widget({
+            widget: new RunWidget(mark.run.label, mark.run.color, mark.run.layer),
+            block: true,
+            side: -1,
+          }).range(docLine.from),
+        );
+      }
       if (mark.pending) {
         // A staged document edit: the focus treatment plus the dismiss
         // mark (the review/exclude surface, in the stylesheet
@@ -1132,12 +1565,7 @@ const Island = ({
   // The printer's half of the one marks model: the same lineMarks context
   // redecorate reads, so a line wears the same marks whichever posture
   // shows it.
-  const marksFor = (lines) =>
-    lineMarks(lines, {
-      library: propsRef.current.variants ?? [],
-      sheet: Boolean(propsRef.current.sheet),
-      tints: lineTintsStore.get(),
-    });
+  const marksFor = (lines) => lineMarks(lines, marksContext());
 
   // Prints the island's truth: the current session lines, marked. The
   // fresh-mount and authoritative-refresh print; printedLines carries the
@@ -1148,16 +1576,6 @@ const Island = ({
     session.current.printed = printed;
     session.current.printedLines = lines;
     surfaceRef.current?.print(printed.split('\n'), marksFor(lines));
-  };
-
-  // Re-marks the standing print without changing its text (a decoration-
-  // state change, the printed twin of redecorate): same printed lines,
-  // marks re-derived.
-  const reprintMarks = () => {
-    surfaceRef.current?.print(
-      (session.current.printed ?? '').split('\n'),
-      marksFor(session.current.printedLines ?? session.current.lines ?? []),
-    );
   };
 
   // The park trigger's body: timers cleared, then the surface swaps the
@@ -1229,11 +1647,22 @@ const Island = ({
     return true;
   };
 
-  // The line menu on the print, WITHOUT waking: the line index comes from
+  // The island's contextmenu, both postures: a run label opens the run
+  // menu (the label is a block outside the editor's event ownership in
+  // the live posture, so the event bubbles here live or printed); a
+  // printed line opens the line menu WITHOUT waking, the line index from
   // the DOM target (data-line), the line from the print's stored shapes.
-  // The live view keeps its own posAtCoords path above; a live island's
-  // contextmenu bubbles here too, so this half stands down when live.
+  // The live view keeps its own posAtCoords path for its lines above; a
+  // live island's line contextmenu bubbles here too, so that half stands
+  // down when live.
   const openPrintLineMenu = (event) => {
+    const run = event.target.closest?.('.daedalus-stylish-island__run');
+    if (run) {
+      if (openRunMenu(event, run.dataset.layer ?? '')) {
+        event.preventDefault();
+      }
+      return;
+    }
     if (surfaceRef.current?.live || propsRef.current.sheet) {
       return;
     }
@@ -1258,6 +1687,19 @@ const Island = ({
       y: event.clientY,
       items: lineMenuItems(line)
         .map((item) => menuItem(item, line))
+        .filter(Boolean),
+    });
+
+  // Opens the run menu at the pointer, headed by the run's word: the
+  // layer's doorways (line-menu.js runMenuItems); false (the own run, a
+  // doorway no host wires) leaves the native menu to the browser.
+  const openRunMenu = (event, layer) =>
+    menu.open({
+      x: event.clientX,
+      y: event.clientY,
+      header: runWord(layer),
+      items: runMenuItems(layer, propsRef.current.stack?.layers ?? [])
+        .map((item) => runItem(item))
         .filter(Boolean),
     });
 
@@ -1419,6 +1861,8 @@ const Island = ({
       pending: new Map(),
       previewTimer: null,
       commitTimer: null,
+      door: null,
+      doorInFlight: null,
     };
     setHasErrors(false);
     // A re-print retires the line the menu was over.
@@ -1442,17 +1886,44 @@ const Island = ({
           autocompletion({
             override: [(context) => completionSource(context, propsRef)],
           }),
+          // The braced materialize: `p {` / `> pb-text {` / `.quote {`
+          // typed at a declaration position mints the selector's row
+          // without the pick, the brace and the selector swallowed
+          // together (bracedSelector decides; a partial selector or a
+          // declaration keeps the brace as text for the lint to name).
+          EditorView.inputHandler.of((view, from, to, inserted) => {
+            const selectors = propsRef.current.materialize?.selectors;
+            if (inserted !== '{' || !selectors) {
+              return false;
+            }
+            const line = view.state.doc.lineAt(from);
+            const selector = bracedSelector(
+              line.text.slice(0, from - line.from),
+              line.text.slice(to - line.from),
+            );
+            if (selector === null) {
+              return false;
+            }
+            const leading = line.text.length - line.text.trimStart().length;
+            view.dispatch({ changes: { from: line.from + leading, to: line.to } });
+            selectors.onMaterialize(selector);
+            return true;
+          }),
           linter(
             (lintView) => {
               const docLength = lintView.state.doc.length;
-              return analyze(lintView.state.doc.toString()).diagnostics.map(
-                (diagnostic) => ({
-                  from: Math.min(diagnostic.from, docLength),
-                  to: Math.min(diagnostic.to, docLength),
-                  severity: diagnostic.severity,
-                  message: diagnostic.message,
-                }),
-              );
+              return [
+                ...analyze(lintView.state.doc.toString()).diagnostics.map(
+                  (diagnostic) => ({
+                    from: Math.min(diagnostic.from, docLength),
+                    to: Math.min(diagnostic.to, docLength),
+                    severity: diagnostic.severity,
+                    message: diagnostic.message,
+                  }),
+                ),
+                // The door's standing correctives, at their lines.
+                ...doorDiagnostics(lintView),
+              ];
             },
             { delay: 300 },
           ),
@@ -1500,6 +1971,7 @@ const Island = ({
             }
           }),
           EditorView.domEventHandlers({
+            paste: (event, target) => handlePaste(event, target),
             blur: (event, target) => {
               commitPass(target, { includeActive: true });
               // Park on blur, EXCEPT when the whole window lost focus: a
@@ -1526,6 +1998,7 @@ const Island = ({
       resolveAnchor: placementAnchor,
       onPark: parkedPrint,
       onPendingRun: dismissPendingLine,
+      onPosture: setLive,
     });
     surfaceRef.current = surface;
     printTruth();
@@ -1563,29 +2036,15 @@ const Island = ({
   }, [mapKey, condition, sheet?.reference ?? null]);
 
   // A freshly materialized island takes the cursor: typing flows straight
-  // from the gesture into the new row's declarations (a wake, at the
-  // island's start).
+  // from the gesture into the new row's declarations, on a fresh line
+  // after the floor lines the drafted row prints (a wake at the island's
+  // start would join the first typed declaration to the first floor
+  // line).
   useEffect(() => {
     if (autoFocus) {
-      surfaceRef.current?.wake({ anchor: 0 });
+      surfaceRef.current?.wake({ placement: { edge: FRESH_LINE } });
     }
   }, [autoFocus]);
-
-  // Decoration-state changes re-decorate in place: no doc change, no
-  // text change (the printed posture re-derives its marks over the same
-  // text). The signature keys on content (whether variant tints are on)
-  // so a parent re-render with an identical state costs nothing.
-  const [tints, setTints] = useState(lineTintsStore.get());
-  useEffect(() => lineTintsStore.subscribe(setTints), []);
-  const decorationSignature = `${tints}`;
-  useEffect(() => {
-    const live = surfaceRef.current?.live;
-    if (live) {
-      redecorate(live);
-    } else if (surfaceRef.current) {
-      reprintMarks();
-    }
-  }, [decorationSignature]);
 
   // Authoritative refresh: a settled commit, a foreign edit, or the
   // async variant library replaced the resolved read. The baseline lines always
@@ -1644,6 +2103,26 @@ const Island = ({
       }
       releaseStaged();
       setHasErrors(false);
+    } else if (!propsRef.current.sheet) {
+      // The buffer stays the user's, but an own line the truth carries
+      // and the buffer never showed (born by another door while this
+      // island is live: the op spine's seed beneath a generated box's
+      // first declaration, a satellite's or an AI turn's write) joins it
+      // above the user's text, in truth order (island.js
+      // unseenOwnLines). Without the splice the next settle would read
+      // its absence as a deletion and unset it. The cursor maps forward
+      // over the insert; a property with the island's own write in
+      // flight is left alone until that write settles.
+      const unseen = unseenOwnLines(
+        analyze(doc),
+        lines,
+        session.current.pending.keys(),
+      );
+      if (unseen.length) {
+        view.dispatch({
+          changes: { from: 0, insert: `${printIsland(unseen)}\n` },
+        });
+      }
     }
     // The deferred variant-line-restore case: a deletion no-oped while other
     // edits were in flight; now that they've committed and the baseline
@@ -1653,11 +2132,11 @@ const Island = ({
     // The document session is input too: a dismissed (or staged)
     // pending line re-prints the sheet exactly like an authoritative map
     // refresh — when the buffer is clean; never under the user's cursor.
-    // The floor is input by content (the entries are rebuilt per render;
-    // the signature keys on what they say), so a row becoming the
+    // The stack is input by content (it is rebuilt per render; the
+    // signature keys on what its layers say), so a row becoming the
     // selection re-prints with its floor, and a tag change re-prints
     // the base:{tag} layer.
-  }, [styleMap, variants, sheet?.session ?? null, floorSignature]);
+  }, [styleMap, variants, sheet?.session ?? null, stackSignature]);
 
   // The menu's items (the shared menu primitive renders the chrome; the
   // keyboard's route to the same landings is typing, which always lifts).
@@ -1698,9 +2177,70 @@ const Island = ({
     }
   };
 
+  // The run's word for the run menu's header: the label the run wears
+  // (the printed run's text, or the marks re-derived for a live view's
+  // run), so the menu is headed by exactly what was right-clicked.
+  const runWord = (layer) =>
+    marksFor(session.current.printedLines ?? session.current.lines ?? []).find(
+      (mark) => mark?.run?.layer === layer,
+    )?.run.label ?? null;
+
+  // The run menu's items (the shared menu primitive renders the chrome).
+  // The variant doorway is the wear bar's (the Inspector's openDocument:
+  // the editing session on the variant's document, at this island's
+  // condition when it is not the default, anchored at the carrier a
+  // rule-carried or worn ancestor run names); the skin doorway is the
+  // line menu's. A rule has no doorway here: it prints as a rule island
+  // whose header is its seat (line-menu.js runMenuItems).
+  const runItem = (item) => {
+    switch (item.type) {
+      case 'edit-variant': {
+        const open = propsRef.current.onOpenDocument;
+        if (!open) {
+          return null;
+        }
+        const label =
+          findVariant(propsRef.current.variants ?? [], item.reference)?.label ??
+          item.reference;
+        return {
+          label: Drupal.t('Edit @variant', { '@variant': label }),
+          title: Drupal.t(
+            "Edit this variant's whole document, in context of this wearer. Edits are pending until pushed.",
+          ),
+          run: () =>
+            open(
+              item.reference,
+              condition !== 'default' ? condition : null,
+              item.anchor,
+            ),
+        };
+      }
+      case 'edit-skin':
+        return menuItem({ type: 'edit-skin' }, null);
+      default:
+        return {
+          label: Drupal.t('Declared in code'),
+          hint: Drupal.t('edited beside the templates'),
+          disabled: true,
+          reason: Drupal.t(
+            'A declaration ships with its module; the site has no form for it.',
+          ),
+        };
+    }
+  };
+
+  // A document island prints one sheet with no per-line provenance
+  // (line-marks.js), so its rail hue is the island's: the variant's own
+  // identity color, inherited by every line (a staged line overrides it
+  // with the focus color in inspector.css).
+  const railHue = sheet
+    ? { '--daedalus-stylish-line-hue': layerColor(variantLayerId(sheet.reference)) }
+    : undefined;
+
   return (
     <div
-      className={`daedalus-stylish-island${hasErrors ? ' daedalus-stylish-island--invalid' : ''}${posed ? ' daedalus-stylish-island--posed' : ''}`}
+      className={`daedalus-stylish-island${live ? ' daedalus-stylish-island--live' : ''}${hasErrors ? ' daedalus-stylish-island--invalid' : ''}${posed ? ' daedalus-stylish-island--posed' : ''}`}
+      style={railHue}
     >
       <div
         className="daedalus-stylish-island__editor"
@@ -1716,19 +2256,29 @@ const Island = ({
  *
  * The per-element unit of the code view: the page tree mounts one per
  * styled element under its chrome row (the full body for the selection,
- * sparse for the rest). Owns the materialization drafts: rows the `.`/`&`/`@` gestures created that
- * hold no committed values yet. Drafts are view state keyed to the element
+ * sparse for the rest). Owns the materialization drafts: rows the
+ * selector and `&`/`@` gestures created that hold no committed values
+ * yet. Drafts are view state keyed to the element
  * (an element change discards them); once a draft row's first declaration
  * commits, the map-derived roster surfaces the row itself and the draft
  * merges away (draftRoster deduplicates).
  *
- * The WHEN rows are also code view's pose surface (the widget modes'
- * Styled-at, one level closer to the styles): clicking a row drives the
- * canvas to its compound (`onPose`, the Inspector's driveCanvas), and the
- * island matching the posed compound (`posed`, derived from the canvas
- * vector + force state) wears the POSED marker — POSED, not EDITING HERE:
- * islands address their own conditions, so the pose only picks what the
- * canvas previews.
+ * A condition row reads the condition's word as its label and its
+ * nested-rule prelude as its code face (`&:hover`, `&:not(:last-child)`,
+ * `@container (max-width: 640px) &`; prelude.js, rendered by
+ * selector-chrome.js Prelude): under a selector row the `&` is that
+ * row, exactly as CSS nesting reads it, so the rows ARE the page's
+ * stylesheet in nesting form. The condition rows are also code view's
+ * pose surface (the widget modes' Styled-at, one level closer to the
+ * styles): clicking a row drives the canvas to its compound (`onPose`,
+ * the Inspector's driveCanvas), and the island matching the posed
+ * compound (`posed`, derived from the canvas vector + force state) wears
+ * the "Posed" tag — posed, not editing here: islands address their own
+ * conditions, so the pose only picks what the canvas previews. A
+ * structural fact (first-child, empty, …) is no pose: its row lights
+ * ("Applies") when this element satisfies it in the blueprint tree, and
+ * a compound with facts lights when its posable parts are posed and its
+ * facts hold.
  *
  * With `posedGhost` (the hosts set it on the SELECTED element only), a
  * posed compound with no stored island renders an empty chrome-minted
@@ -1743,24 +2293,46 @@ const Island = ({
  * placeholder editors on rows the user is not working in; selecting the
  * element brings the full roster back.
  *
- * The defaults floor (the active skin's defaults over the declaration's
- * own, the tier every widget mode reads through provenanceFor) prints on
- * the SELECTED element's islands only, DevTools' rule (inherited rules
- * for the element you are inspecting): sparse rows print the map's lines,
- * so the page scope stays readable and the occupancy read is untouched.
- * Each island's floor is read for its own key (a part island reads the
- * part's scope) with the rendered tag `source.readCanvasTag` answers for
- * the selection and that part (the satellite answers for the selection
- * from the leader's relayed tags, null elsewhere, so the base:{tag} layer
- * degrades rather than over-claims).
+ * Each island prints its key's style stack (style-stack.js buildStack,
+ * the one model every row and the AI's explain tool read). The defaults
+ * floor (the active skin's defaults over the declaration's own, one
+ * layer per declaring scope) and the ancestor tier (every ancestor rule
+ * the selector matcher says reaches the key) join the SELECTED
+ * element's stacks only, DevTools' rule (inherited rules for the
+ * element you are inspecting): sparse rows build the map's layers
+ * alone, so the page scope stays readable and the occupancy read is
+ * untouched. Each island's stack is built for its own key (a part
+ * island reads the part's scope, its base:{tag} layer keyed by that
+ * key's read subject from the tree: the root's tag, a part's declared
+ * tag, none for a tag tier or a chain). The own islands print the
+ * floor's lines and drop the ancestor tier's (element-model.js
+ * ownIslandLines; a floor line a rule beats keeps the rule's winner
+ * chip), because every ancestor rule reaching a key prints as a RULE
+ * ISLAND of its own beneath the key's own rows (rulesFor over the
+ * roster's `ancestors`, nearest ancestor first, at the root and inside
+ * each part row): the rule's own key's stack, the map's layers alone,
+ * so it diffs, commits and lifts exactly as the owner's part row for
+ * the same rule (a write lands at the ancestor key), struck where this
+ * element beats it (ruleIslandLines, the winner chip naming the layer).
  *
- * Part headers ride the selection spine like the tree's part rows do:
- * `selectedPart` (the spine facet, passed only when this element IS the
- * selection) wears the active mark, hovering a header drives the
- * hoverPart facet through the source, and clicking one selects
- * (owner key, part) — parts at the same two-way sync the element rows
- * already have. The hot mark paints imperatively from the page tree
- * (page-view.js), addressed by the headers' data attributes.
+ * Selector row headers (the human label, selectorLabel(), beside the
+ * row's prelude with its combinator chips, Prelude) ride the
+ * selection spine like the tree's part rows do:
+ * `targetSelector` (the spine's styling target's selector, passed only
+ * when this element IS the selection) wears the active mark, hovering a
+ * header drives the hoverSelector facet through the source, and clicking
+ * one selects the owner and targets the selector under it — selector
+ * rows at the same two-way sync the element rows already have. The hot
+ * mark paints imperatively from the page tree (page-view.js), addressed
+ * by the headers' data attributes. A rule row's header speaks the
+ * address words the subject line's chip speaks (write-address.js
+ * addressLabel), carries the OWNER's key and the rule's selector in the
+ * same data attributes, hovers the rule's reach and seats the rule as
+ * the target on click; `address` (the inspector's write address, an
+ * ancestor rule the address set carries, passed for the selection
+ * alone) lights the seated one, and a seated rule the map does not
+ * hold yet mounts as an empty island that takes the cursor: the chip
+ * and the headers are two readouts of one spine target.
  */
 export const ElementIslands = ({
   source,
@@ -1774,7 +2346,9 @@ export const ElementIslands = ({
   onPose = null,
   posedGhost = false,
   sparse = false,
-  selectedPart = null,
+  targetSelector = null,
+  address = null,
+  onOpenDocument = null,
 }) => {
   const selected = elementKey;
   // The stitching registry spans the whole code surface: the page tree
@@ -1788,6 +2362,13 @@ export const ElementIslands = ({
   const blockTypes = source.getBlockTypes();
   const layoutsTable = source.getSectionLayouts();
   const layoutTree = source.getLayout?.() ?? [];
+  const tree = source.getTree?.() ?? null;
+  // The matcher over the tree, for the rule headers' owner words; the
+  // roster and the stacks build their own reads of the same tree.
+  const matcher = useMemo(
+    () => (Array.isArray(tree) ? createMatcher(tree) : null),
+    [tree],
+  );
   const axes = axisVocabulary(
     guide,
     selected,
@@ -1812,11 +2393,13 @@ export const ElementIslands = ({
       mutate(previous.for === selected ? previous : emptyDrafts),
     );
 
-  const materializePart = (sub) =>
+  const materializeSelector = (selector) =>
     withDrafts((state) => ({
       ...state,
-      parts: state.parts.includes(sub) ? state.parts : [...state.parts, sub],
-      focus: `${selected}::${sub}|default`,
+      parts: state.parts.includes(selector)
+        ? state.parts
+        : [...state.parts, selector],
+      focus: `${selected}::${selector}|default`,
     }));
   const materializeCondition = (mapKey, name) =>
     withDrafts((state) => {
@@ -1841,7 +2424,7 @@ export const ElementIslands = ({
     if (ops.length) {
       source.commitBatch({
         operations: ops,
-        label: Drupal.t('Removed WHEN @condition styles', {
+        label: Drupal.t('Removed @condition styles', {
           '@condition': conditionLabel(condition),
         }),
       });
@@ -1862,7 +2445,7 @@ export const ElementIslands = ({
     if (ops.length) {
       source.commitBatch({
         operations: ops,
-        label: Drupal.t('Removed @part styles', { '@part': part.sub }),
+        label: Drupal.t('Removed @part styles', { '@part': part.selector }),
       });
     }
     withDrafts((state) => {
@@ -1871,7 +2454,7 @@ export const ElementIslands = ({
       return {
         ...state,
         conditions,
-        parts: state.parts.filter((sub) => sub !== part.sub),
+        parts: state.parts.filter((selector) => selector !== part.selector),
         focus: null,
       };
     });
@@ -1884,12 +2467,18 @@ export const ElementIslands = ({
         )
       : Drupal.t('Remove this row and unset its styles.');
 
+  // The full body (the selection) lists the ancestor rules reaching each
+  // key and places the write address's rule; a sparse row lists none.
   const baseModel = elementIslands(
     styleMap ?? {},
     selected,
     guide,
     library,
     axes,
+    blockTypes,
+    layoutsTable,
+    sparse ? null : tree,
+    sparse ? null : address,
   );
   const rosterModel = sparse
     ? occupiedRoster(baseModel, styleMap ?? {}, selected, library, axes)
@@ -1906,100 +2495,166 @@ export const ElementIslands = ({
     condition === posed &&
     !storedModel.conditions.includes(condition);
 
-  // Part materialization is the element's gesture (parts do not nest);
-  // condition materialization belongs to every island.
-  // The `.` offer is an element projection, so it carries the DOM-presence
-  // facts (layout context self.parts) for partGestureOptions' gate. The
-  // facts describe the CANVAS SELECTION only, so they join in just when
-  // this element is it; any other element's islands (a styled-but-
-  // unselected page-tree row) have no facts and degrade to offering, the
-  // gates' unknown-context posture. The rows already materialized below
-  // (model.parts, off the style map) are the store projection and ignore
-  // presence by construction.
-  const partGestures = {
-    declared: partsForKey(guide, selected, blockTypes, layoutsTable),
-    closed: propertiesClosed(guide),
-    presence:
-      selected === source.getSelected?.()
-        ? (source.getLayoutContext?.()?.self?.parts ?? null)
-        : null,
-    onMaterialize: materializePart,
+  // Selector materialization is the element's gesture (selector rows
+  // do not nest); condition materialization belongs to every island.
+  // The offer is an ELEMENT projection: it reads the blueprint's lean
+  // tree through the matcher (the children present, their types and
+  // tags), the declared anatomy (the owner's parts, and a type's parts
+  // for a chain landing on it), the base tag vocabulary worded by the
+  // guide's one tag word (tagWord: the base declaration's label, else
+  // the shipped word), the owner's own prose tags (its markup
+  // annotation), and the DOM-presence
+  // facts for the owner's declared parts (the layout context's
+  // self.parts), which describe the CANVAS SELECTION only and so join in
+  // just when this element is it; anywhere else (a styled-but-unselected
+  // page-tree row, the satellite pre-broadcast) the unknown facts
+  // degrade to offering, the gate's rule. The rows already materialized
+  // below (model.parts, off the style map) are the store projection and
+  // ignore presence by construction.
+  const partsOfType = (type) => {
+    const address = typeAddress(type);
+    const declaration =
+      type === TYPE_CONTAINER
+        ? guide?.kinds?.container
+        : type === TYPE_BLOCK
+          ? guide?.kinds?.block
+          : address?.startsWith('block_type:')
+            ? guide?.blockTypes?.[address.slice('block_type:'.length)]
+            : null;
+    return Object.entries(flattenElements(declaration))
+      .filter(([selector]) => PART_SELECTOR.test(selector))
+      .map(([selector, part]) => ({ id: selector, label: part?.label ?? selector }));
   };
-  // Tag rows materialize alongside part rows through the same draft lane
-  // (a tag row IS a sub row: materializePart drafts '{key}::p' exactly
-  // like '{key}::.quote'). The offer is the site's base tag vocabulary
-  // (the one declaration of a prose tag's styleability), each labelled
-  // by its identity label where the instance lane declares one and by
-  // the bare tag otherwise (links never mint), gated on the element's
-  // markup annotation: its `tags` fact (the tag names the prose contains,
-  // minting or not) is reachable for any key the model speaks for, so no
-  // canvas-selection join is needed (the satellite's null annotation
-  // degrades to offering, tagGestureOptions' rule).
-  const tagLabels = instanceTags(guide?.instances);
-  const tagGestures = {
-    declared: Object.fromEntries(
-      baseTags(guide?.base).map((tag) => [tag, tagLabels[tag] ?? tag]),
-    ),
-    present: source.getMarkup?.(selected)?.tags ?? null,
-    onMaterialize: materializePart,
+  const selectorGestures = {
+    context: {
+      key: selected,
+      tree,
+      parts: partsForKey(guide, selected, blockTypes, layoutsTable),
+      partsFor: partsOfType,
+      presence:
+        selected === source.getSelected?.()
+          ? (source.getLayoutContext?.()?.self?.parts ?? null)
+          : null,
+      closed: propertiesClosed(guide),
+      tags: Object.fromEntries(
+        baseTags(guide?.base).map((tag) => [tag, tagWord(guide, tag)]),
+      ),
+      present: source.getMarkup?.(selected)?.tags ?? null,
+      types: typeLabels(guide),
+    },
+    onMaterialize: materializeSelector,
   };
 
-  // The POSED marker matches non-default compounds only: the default
+  // The posed tag matches non-default compounds only: the default
   // condition is the canvas's resting pose, and marking every default
   // island at rest would say nothing.
-  const isPosed = (condition) => condition === posed && condition !== 'default';
+  // A condition row is lit when its condition renders on this element right
+  // now: its posable parts are the posed compound and its structural
+  // facts (first-child, empty, …) are ones this element satisfies, read
+  // from the lean node tree's sibling index (editing-at.js
+  // satisfiedFacts over the selector matcher). A fact on a SELECTOR row
+  // qualifies the row's targets, not this element, so there no fact
+  // ever lights: the row addresses other elements' places. An ancestor
+  // rule reaching the ROOT qualifies this element (it is the rule's
+  // match), so its rows read the own facts; one reaching a part reads
+  // none, like the part row.
+  const conditionTable = guide?.conditions ?? {};
+  const ownFacts = satisfiedFacts(tree, selected, conditionTable);
+  const noFacts = new Set();
+  const isPosed = (condition, facts) =>
+    conditionRenders(condition, posed, facts, conditionTable);
+  // The lit tag's word: "Posed" for a compound the canvas stands at,
+  // "Applies" for a pure fact, which no pose produced.
+  const litTag = (condition) =>
+    condition
+      .split('+')
+      .every((part) => isFactCondition(part, conditionTable))
+      ? Drupal.t('Applies')
+      : Drupal.t('Posed');
 
-  // The defaults floor for one of this element's islands, the selection's
-  // full body only (the docblock's rule): the same entries provenanceFor
-  // builds, keyed by the island's own key, the tag read for its part.
-  const floorFor = (mapKey) => {
-    if (sparse) {
-      return null;
-    }
-    const pos = mapKey.indexOf('::');
-    const sub = pos === -1 ? null : mapKey.slice(pos + 2);
-    const tag = source.readCanvasTag?.(selected, sub) ?? null;
-    return {
-      skinEntry: skinDefaultEntry(guide, mapKey, blockTypes, layoutsTable, tag),
-      declaredEntry: declaredDefaultEntry(
-        guide,
-        mapKey,
-        blockTypes,
-        layoutsTable,
-      ),
-    };
-  };
+  // The style stack for one of this element's islands, keyed by the
+  // island's own key: with the floor and the ancestor tier (the tree)
+  // for the selection's full body only (the docblock's rule). Built once
+  // per island key; the key's islands share it.
+  const stackFor = (mapKey) =>
+    buildStack({
+      guide,
+      map: styleMap ?? {},
+      key: mapKey,
+      variants: library,
+      axes,
+      blockTypes,
+      sectionLayouts: layoutsTable,
+      floor: !sparse,
+      tree: sparse ? null : tree,
+    });
+  // A rule island's stack: the rule's own key, the map's layers alone
+  // (the rule's wear, the owner's wear continued to the position, the
+  // rule's entry as the own layer), the owner's axis vocabulary ordering
+  // the owner's wear as the ancestor tier reads it. No floor: the
+  // owner's floor at the position is not a layer this element's stack
+  // knows, so it could vouch for none of its lines.
+  const ruleStackFor = (rule) =>
+    buildStack({
+      guide,
+      map: styleMap ?? {},
+      key: rule.key,
+      variants: library,
+      axes: axisVocabulary(guide, rule.owner, blockTypes, layoutsTable, tree),
+      blockTypes,
+      sectionLayouts: layoutsTable,
+      floor: false,
+    });
 
-  const islandsFor = (mapKey, conditions) =>
+  // One island per condition of one island key. `stack` is the key's
+  // stack, `project` the Island's line projection, `facts` the fact set
+  // the condition rows light against, `declaration` the grant judge for the
+  // key's writes, `wake` the condition whose island takes the cursor on
+  // mount beside the drafts' focus.
+  const islandsFor = (
+    mapKey,
+    conditions,
+    {
+      stack,
+      project = null,
+      facts = noFacts,
+      declaration = declarationOf(mapKey),
+      wake = null,
+      rule = false,
+    },
+  ) =>
     conditions.map((condition) => (
       <Fragment key={`${mapKey}|${condition}`}>
         {condition !== 'default' && (
           <div
-            className={`daedalus-stylish-islands__when${isPosed(condition) ? ' daedalus-stylish-islands__when--posed' : ''}`}
+            className={`daedalus-stylish-islands__condition${isPosed(condition, facts) ? ' daedalus-stylish-islands__condition--posed' : ''}`}
           >
             {/* The pose gesture: chrome never takes the cursor — the
               mouse's gesture, skipped by the keyboard chain. */}
             <button
               type="button"
               tabIndex={-1}
-              className="daedalus-stylish-islands__when-pose"
+              className="daedalus-stylish-islands__condition-pose"
               title={Drupal.t(
                 'Pose the canvas at "@condition" to preview these styles',
                 { '@condition': conditionLabel(condition) },
               )}
               onClick={() => onPose?.(condition)}
             >
-              <span className="daedalus-stylish-islands__when-keyword">
-                {Drupal.t('WHEN')}
-              </span>
-              <span className="daedalus-stylish-islands__when-condition">
+              <span className="daedalus-stylish-islands__condition-label">
                 {conditionLabel(condition)}
               </span>
+              <Prelude
+                selector={null}
+                condition={condition}
+                guide={guide}
+                className="daedalus-stylish-islands__prelude"
+              />
             </button>
             {/* The canvas stands here: this island's styles render. */}
-            {isPosed(condition) && (
-              <span className="daedalus-stylish-islands__posed-tag">
-                {Drupal.t('POSED')}
+            {isPosed(condition, facts) && (
+              <span className="daedalus-stylish-islands__condition-lit">
+                {litTag(condition)}
               </span>
             )}
             {!isGhost(mapKey, condition) && (
@@ -2027,49 +2682,64 @@ export const ElementIslands = ({
           source={source}
           guide={guide}
           materials={materials}
-          declaration={declarationOf(mapKey)}
+          declaration={declaration}
           mapKey={mapKey}
           condition={condition}
           styleMap={styleMap}
           variants={library}
           axes={axes}
           materialize={{
-            parts: mapKey === selected ? partGestures : null,
-            tags: mapKey === selected ? tagGestures : null,
+            selectors: mapKey === selected ? selectorGestures : null,
             condition: (name) => materializeCondition(mapKey, name),
           }}
-          autoFocus={drafts.focus === `${mapKey}|${condition}`}
+          autoFocus={
+            drafts.focus === `${mapKey}|${condition}` || wake === condition
+          }
           stitch={stitching}
-          posed={isPosed(condition)}
-          floor={floorFor(mapKey)}
+          posed={isPosed(condition, facts)}
+          stack={stack}
+          project={project}
+          rule={rule}
+          onOpenDocument={onOpenDocument}
         />
       </Fragment>
     ));
 
-  return (
-    <div className="daedalus-stylish-islands">
-      {islandsFor(selected, model.conditions)}
-      {model.parts.map((part) => (
-        <Fragment key={part.key}>
-          {/* The part header is the part's chrome row on the selection
-              spine, the page tree rows' pattern one level down: hovering
-              it drives the hoverPart FACET (never the element hover — a
-              part header must not light its owner's solid outline; the
-              tree part rows' rule), leave clears only a facet this header
-              set, and clicking selects (owner key, part) — the code twin
-              of a tree part-row click. Active reads from the selectedPart
-              prop (spine state); the hot mark is painted imperatively by
-              the page tree (page-view.js) through the data attributes,
-              hover's pointer-speed rule. */}
+  // The rule rows reaching one island key (the roster's `ancestors`,
+  // nearest ancestor first): a header on the selection spine like the
+  // part headers, carrying the OWNER's key and the rule's selector in
+  // the same data attributes (the page tree's hot painter and the FJS
+  // reads address both alike), then the rule's islands. The header's
+  // words are the address's (addressLabel: "All children of Hero"), the
+  // same sentence the subject line's chip offers for it. Hover paints
+  // the rule's reach through the hoverSelector facet; a click seats the
+  // rule as the styling target (the selection stays put), and the
+  // inspector's write address lights the seated row. A seated rule the
+  // map does not hold yet (`existing` false: the chip's mintable entry)
+  // is an empty island that takes the cursor, so the seat is one move
+  // from the first declaration; its first settled write mints the entry
+  // at the ancestor key. `facetStack` is the reached key's full stack,
+  // whose winners strike what this element beats in the rule's lines.
+  const rulesFor = (rules, facetStack, facts) =>
+    rules.map((rule) => {
+      const lit =
+        address !== null &&
+        address.key === rule.owner &&
+        address.selector === rule.selector;
+      return (
+        <Fragment key={rule.key}>
           <div
-            className={`daedalus-stylish-islands__part${part.sub === selectedPart ? ' daedalus-stylish-islands__part--active' : ''}`}
-            data-daedalus-stylish-part-owner={selected}
-            data-daedalus-stylish-part={part.sub}
-            onMouseEnter={() => source.hoverPart?.(selected, part.sub)}
+            className={`daedalus-stylish-islands__part daedalus-stylish-islands__part--rule${lit ? ' daedalus-stylish-islands__part--active' : ''}`}
+            data-daedalus-stylish-part-owner={rule.owner}
+            data-daedalus-stylish-part={rule.selector}
+            onMouseEnter={() => source.hoverSelector?.(rule.owner, rule.selector)}
             onMouseLeave={() => {
-              const current = source.getHoveredPart?.();
-              if (current?.key === selected && current?.part === part.sub) {
-                source.hoverPart?.(null);
+              const current = source.getHoveredSelector?.();
+              if (
+                current?.key === rule.owner &&
+                current?.selector === rule.selector
+              ) {
+                source.hoverSelector?.(null);
               }
             }}
           >
@@ -2077,47 +2747,147 @@ export const ElementIslands = ({
               type="button"
               tabIndex={-1}
               className="daedalus-stylish-islands__part-select"
-              title={part.key}
-              aria-pressed={part.sub === selectedPart}
-              onClick={() => source.select?.(selected, part.sub)}
+              title={rule.key}
+              aria-pressed={lit}
+              onClick={() => source.target?.(rule.owner, rule.selector)}
             >
               <span className="daedalus-stylish-islands__part-label">
-                {partLabel(
+                {addressLabel(
                   guide,
-                  selected,
-                  part.sub,
+                  { key: rule.owner, selector: rule.selector },
+                  ownerName(matcher, rule.owner),
                   blockTypes,
                   layoutsTable,
-                  source.getMarkup?.(selected),
                 )}
               </span>
-              <code className="daedalus-stylish-islands__part-selector">{part.sub}</code>
-            </button>
-            <button
-              type="button"
-              tabIndex={-1}
-              className="daedalus-stylish-islands__remove daedalus-ui-icon-button daedalus-ui-icon-button--muted"
-              title={removeTitle(
-                part.conditions.flatMap((condition) =>
-                  restoredLines(
-                    styleMap ?? {},
-                    part.key,
-                    condition,
-                    library,
-                    axes,
-                  ),
-                ),
-              )}
-              onClick={() => removePart(part)}
-            >
-              ×
+              <Prelude
+                selector={rule.selector}
+                guide={guide}
+                className="daedalus-stylish-islands__prelude"
+              />
             </button>
           </div>
           <div className="daedalus-stylish-islands__part-body">
-            {islandsFor(part.key, part.conditions)}
+            {islandsFor(rule.key, rule.conditions, {
+              stack: ruleStackFor(rule),
+              project: (lines, condition) =>
+                ruleIslandLines(lines, rule, stackLines(facetStack, condition)),
+              facts,
+              declaration: addressDeclaration(
+                guide,
+                { key: rule.owner, selector: rule.selector },
+                blockTypes,
+                layoutsTable,
+              ),
+              wake: lit && !rule.existing ? 'default' : null,
+              rule: true,
+            })}
           </div>
         </Fragment>
-      ))}
+      );
+    });
+
+  const rootStack = stackFor(selected);
+  return (
+    <div className="daedalus-stylish-islands">
+      {islandsFor(selected, model.conditions, {
+        stack: rootStack,
+        project: ownIslandLines,
+        facts: ownFacts,
+      })}
+      {model.parts.map((part) => {
+        const partStack = stackFor(part.key);
+        // A part facet lights while the target sits on the element; under
+        // an ancestor address the seated rule row inside it is the lit one.
+        const active = address === null && part.selector === targetSelector;
+        return (
+          <Fragment key={part.key}>
+            {/* The part header is the part's chrome row on the selection
+                spine, the page tree rows' pattern one level down: hovering
+                it drives the hoverSelector FACET (never the element hover — a
+                part header must not light its owner's solid outline; the
+                tree part rows' rule), leave clears only a facet this header
+                set, and clicking selects the owner (when it is not the
+                selection already) and targets the selector under it — the
+                code twin of a tree part-row click. Active reads from the
+                targetSelector prop (spine state); the hot mark is painted
+                imperatively by the page tree (page-view.js) through the
+                data attributes, hover's pointer-speed rule. */}
+            <div
+              className={`daedalus-stylish-islands__part${active ? ' daedalus-stylish-islands__part--active' : ''}`}
+              data-daedalus-stylish-part-owner={selected}
+              data-daedalus-stylish-part={part.selector}
+              onMouseEnter={() => source.hoverSelector?.(selected, part.selector)}
+              onMouseLeave={() => {
+                const current = source.getHoveredSelector?.();
+                if (
+                  current?.key === selected &&
+                  current?.selector === part.selector
+                ) {
+                  source.hoverSelector?.(null);
+                }
+              }}
+            >
+              <button
+                type="button"
+                tabIndex={-1}
+                className="daedalus-stylish-islands__part-select"
+                title={part.key}
+                aria-pressed={active}
+                onClick={() => {
+                  if (source.getSelected?.() !== selected) {
+                    source.select?.(selected);
+                  }
+                  source.target?.(selected, part.selector);
+                }}
+              >
+                <span className="daedalus-stylish-islands__part-label">
+                  {selectorLabel(
+                    guide,
+                    selected,
+                    part.selector,
+                    blockTypes,
+                    layoutsTable,
+                    source.getMarkup?.(selected),
+                  )}
+                </span>
+                <Prelude
+                  selector={part.selector}
+                  guide={guide}
+                  className="daedalus-stylish-islands__prelude"
+                />
+              </button>
+              <button
+                type="button"
+                tabIndex={-1}
+                className="daedalus-stylish-islands__remove daedalus-ui-icon-button daedalus-ui-icon-button--muted"
+                title={removeTitle(
+                  part.conditions.flatMap((condition) =>
+                    restoredLines(
+                      styleMap ?? {},
+                      part.key,
+                      condition,
+                      library,
+                      axes,
+                    ),
+                  ),
+                )}
+                onClick={() => removePart(part)}
+              >
+                ×
+              </button>
+            </div>
+            <div className="daedalus-stylish-islands__part-body">
+              {islandsFor(part.key, part.conditions, {
+                stack: partStack,
+                project: ownIslandLines,
+              })}
+              {rulesFor(part.ancestors ?? [], partStack, noFacts)}
+            </div>
+          </Fragment>
+        );
+      })}
+      {rulesFor(model.ancestors ?? [], rootStack, ownFacts)}
     </div>
   );
 };
@@ -2128,7 +2898,7 @@ export const ElementIslands = ({
  *
  * One chrome row per document SLOT in documentTree order — the root
  * first and always present (the honest edit surface even an empty
- * document offers), each slot's part and '::>' rows under it, and a
+ * document offers), each slot's part and '> *' rows under it, and a
  * slot-path tree for a composition's children — with one island per
  * (document key, condition) beneath. Every island prints the variant's
  * OWN sheet with the open session's staged lines rendered in place
@@ -2136,13 +2906,19 @@ export const ElementIslands = ({
  * `document.stage`; the Push/Discard bar is the only commit surface.
  *
  * Wearer context: each fragment's islands anchor on a current-page
- * carrier of that fragment (carriedBy — the selection wins when it
- * carries it), which is where typed previews land and what the shadowing
- * overlay (winner dots) reads. A fragment nothing on this page carries
- * still renders — a variant's reach is site-wide — but its "carried by"
+ * carrier of that fragment (carriedBy — the session's anchor wins when
+ * it carries it, then an element carrier, then a rule carrier), which is
+ * where typed previews land and what the shadowing overlay (winner dots)
+ * reads. A rule carrier (`container:X::a` wearing the document)
+ * continues a slot's suffix by descent (continuedKey), so its islands
+ * preview on every match. A fragment nothing on this page carries still
+ * renders — a variant's reach is site-wide — but its "carried by"
  * chrome says so and its islands stage without previewing (no canvas
  * element could honestly show the line).
  *
+ * @param {string} props.anchor
+ *   The session's anchor: the styling target's wear key the document was
+ *   entered from (an element or a rule).
  * @param {object} props.document
  *   The document context the Inspector builds: {reference, styles,
  *   session, rootKind, stage(slot, condition, lines), dismiss(id)}.
@@ -2151,7 +2927,7 @@ export const VariantDocumentView = ({
   source,
   guide,
   materials,
-  selected,
+  anchor,
   styleMap,
   variants,
   document: doc,
@@ -2165,13 +2941,21 @@ export const VariantDocumentView = ({
   const layout = source.getLayout?.() ?? [];
   const tree = documentTree(doc.styles, doc.session, doc.rootKind);
   const carriers = carriedBy(map, doc.reference);
+  // The matcher over the blueprint tree, for the slot headers' element
+  // words (the same read every host makes: the leader off the mirror,
+  // the satellite off the broadcast tree).
+  const nodeTree = source.getTree?.() ?? null;
+  const nodeMatcher = useMemo(
+    () => (Array.isArray(nodeTree) ? createMatcher(nodeTree) : null),
+    [nodeTree],
+  );
   // One stitching registry over the whole document, so the keyboard
   // chain crosses slot boundaries in document order.
   const stitchRef = useRef(null);
   if (!stitchRef.current) {
     stitchRef.current = createStitching();
   }
-  // Materialized-but-uncommitted WHEN rows on document keys (the `@`
+  // Materialized-but-uncommitted condition rows on document keys (the `@`
   // gesture): view state keyed to the document, exactly the host body's
   // draft rule one document over.
   const emptyDrafts = { for: doc.reference, conditions: {}, focus: null };
@@ -2195,12 +2979,52 @@ export const VariantDocumentView = ({
   const isEntry = (value) =>
     value !== null && typeof value === 'object' && !Array.isArray(value);
 
-  // The anchoring carrier for a fragment: the selection when it carries
-  // the fragment (the entered-from wearer), else the first carrier in map
-  // order, else none.
+  // The anchoring carrier for a fragment: the session's anchor when it
+  // carries the fragment (the entered-from wearer), else the first
+  // element carrier in map order (a read subject of its own), else the
+  // first rule carrier, else none.
+  const isRule = (key) => styleTarget(key).selector !== null;
   const carrierOf = (fragment) => {
     const keys = carriers.get(fragment) ?? [];
-    return keys.includes(selected) ? selected : (keys[0] ?? null);
+    if (keys.includes(anchor)) {
+      return anchor;
+    }
+    return keys.find((key) => !isRule(key)) ?? keys[0] ?? null;
+  };
+  // The element a carrier's part labels resolve through: the carrier
+  // itself, or a rule carrier's root (the markup a part is declared in).
+  const labelOwner = (fragment) => {
+    const carrier = carrierOf(fragment);
+    return carrier === null ? '' : styleTarget(carrier).key;
+  };
+  // A slot header's words: the element's minted type word and name (the
+  // tree node's `_element` through the matcher's facts, spelled by the
+  // page tree's rowWords so both documents read one way) when an
+  // element carrier anchors the slot to a live node; else the slot's
+  // own vocabulary, since a variant nobody wears has positions, not
+  // elements (a container slot is nested by construction: no variant
+  // roots at the entity, so its word is "Container").
+  const slotWords = (node) => {
+    if (node.slot === '') {
+      return { word: Drupal.t('Root'), name: null };
+    }
+    const carrier = carrierOf(node.slot);
+    const facts =
+      carrier !== null && !isRule(carrier)
+        ? (nodeMatcher?.facts(carrier) ?? null)
+        : null;
+    if (facts?.type) {
+      return rowWords(facts);
+    }
+    const word =
+      node.kind === 'container'
+        ? Drupal.t('Container')
+        : node.kind === 'block'
+          ? Drupal.t('Block')
+          : node.kind === 'field'
+            ? Drupal.t('Field')
+            : Drupal.t('Slot');
+    return { word, name: null };
   };
 
   // A document key's islands: its stored conditions, the session's staged
@@ -2228,12 +3052,14 @@ export const VariantDocumentView = ({
     const text =
       keys.length === 0
         ? Drupal.t('not on this page')
-        : keys.includes(selected)
-          ? Drupal.t('carried by this element')
+        : keys.includes(anchor)
+          ? isRule(anchor)
+            ? Drupal.t('carried by this rule')
+            : Drupal.t('carried by this element')
           : Drupal.formatPlural(
               keys.length,
-              'carried by 1 element here',
-              'carried by @count elements here',
+              'carried by 1 place here',
+              'carried by @count places here',
             );
     return (
       <span
@@ -2258,8 +3084,12 @@ export const VariantDocumentView = ({
   const islandsFor = (node, key) => {
     const suffix = key.slice(node.slot.length);
     const carrier = carrierOf(node.slot);
-    const anchored = carrier !== null;
-    const mapKey = anchored ? carrier + suffix : `~${key}`;
+    // A rule carrier continues the suffix by descent; a suffix the
+    // grammar refuses under it anchors nothing (delivery prints nothing
+    // there either).
+    const carried = carrier === null ? null : continuedKey(carrier, suffix);
+    const anchored = carried !== null;
+    const mapKey = anchored ? carried : `~${key}`;
     const axes = anchored
       ? axisVocabulary(guide, carrier, blockTypes, layoutsTable, layout)
       : [];
@@ -2270,32 +3100,46 @@ export const VariantDocumentView = ({
           bundleForKey(parseKey(carrier), blockTypes, layoutsTable),
         )
       : null;
+    // The anchoring wearer's stack, the map's layers alone: the honesty
+    // read's winners (a sheet line a higher layer beats on this wearer).
+    const wearerStack = anchored
+      ? buildStack({
+          map: styleMap ?? {},
+          key: mapKey,
+          variants: library,
+          axes,
+          floor: false,
+        })
+      : null;
     return conditionsFor(key).map((condition) => (
       <Fragment key={`${key}|${condition}`}>
         {condition !== 'default' && (
           <div
-            className={`daedalus-stylish-islands__when${isPosed(condition) ? ' daedalus-stylish-islands__when--posed' : ''}`}
+            className={`daedalus-stylish-islands__condition${isPosed(condition) ? ' daedalus-stylish-islands__condition--posed' : ''}`}
           >
             <button
               type="button"
               tabIndex={-1}
-              className="daedalus-stylish-islands__when-pose"
+              className="daedalus-stylish-islands__condition-pose"
               title={Drupal.t(
                 'Pose the canvas at "@condition" to preview these styles',
                 { '@condition': conditionLabel(condition) },
               )}
               onClick={() => onPose?.(condition)}
             >
-              <span className="daedalus-stylish-islands__when-keyword">
-                {Drupal.t('WHEN')}
-              </span>
-              <span className="daedalus-stylish-islands__when-condition">
+              <span className="daedalus-stylish-islands__condition-label">
                 {conditionLabel(condition)}
               </span>
+              <Prelude
+                selector={null}
+                condition={condition}
+                guide={guide}
+                className="daedalus-stylish-islands__prelude"
+              />
             </button>
             {isPosed(condition) && (
-              <span className="daedalus-stylish-islands__posed-tag">
-                {Drupal.t('POSED')}
+              <span className="daedalus-stylish-islands__condition-lit">
+                {Drupal.t('Posed')}
               </span>
             )}
           </div>
@@ -2326,6 +3170,7 @@ export const VariantDocumentView = ({
             dismiss: doc.dismiss,
           }}
           posed={isPosed(condition)}
+          stack={wearerStack}
         />
       </Fragment>
     ));
@@ -2333,7 +3178,9 @@ export const VariantDocumentView = ({
 
   return (
     <div className="daedalus-stylish-document">
-      {tree.map((node) => (
+      {tree.map((node) => {
+        const words = slotWords(node);
+        return (
         <div
           key={node.slot || 'root'}
           className="daedalus-stylish-document__slot"
@@ -2342,17 +3189,10 @@ export const VariantDocumentView = ({
           }
         >
           <div className="daedalus-stylish-document__header">
-            <span className="daedalus-stylish-document__kind">
-              {node.slot === ''
-                ? Drupal.t('Root')
-                : node.kind === 'container'
-                  ? Drupal.t(KIND_LABELS.container)
-                  : node.kind === 'block'
-                    ? Drupal.t('Block')
-                    : node.kind === 'field'
-                      ? Drupal.t('Field')
-                      : Drupal.t('Slot')}
-            </span>
+            <span className="daedalus-stylish-document__kind">{words.word}</span>
+            {words.name !== null && (
+              <span className="daedalus-stylish-document__name">{words.name}</span>
+            )}
             {node.detail && (
               <code className="daedalus-stylish-document__detail">{node.detail}</code>
             )}
@@ -2361,32 +3201,32 @@ export const VariantDocumentView = ({
             )}
             {carriedChip(node.slot)}
           </div>
-          {node.keys.map(({ key, part, children }) => (
+          {node.keys.map(({ key, selector }) => (
             <Fragment key={key}>
-              {(part !== null || children) && (
+              {selector !== null && (
                 <div className="daedalus-stylish-islands__part">
                   <span className="daedalus-stylish-islands__part-label">
-                    {children
-                      ? Drupal.t('Children')
-                      : carrierOf(node.slot)
-                        ? partLabel(
-                            guide,
-                            carrierOf(node.slot),
-                            part,
-                            blockTypes,
-                            layoutsTable,
-                            source.getMarkup?.(carrierOf(node.slot)),
-                          )
-                        : part}
+                    {selectorLabel(
+                      guide,
+                      labelOwner(node.slot),
+                      selector,
+                      blockTypes,
+                      layoutsTable,
+                      labelOwner(node.slot)
+                        ? source.getMarkup?.(labelOwner(node.slot))
+                        : null,
+                    )}
                   </span>
-                  <code className="daedalus-stylish-islands__part-selector">
-                    {children ? '::>' : part}
-                  </code>
+                  <Prelude
+                    selector={selector}
+                    guide={guide}
+                    className="daedalus-stylish-islands__prelude"
+                  />
                 </div>
               )}
               <div
                 className={
-                  part !== null || children
+                  selector !== null
                     ? 'daedalus-stylish-islands__part-body'
                     : undefined
                 }
@@ -2396,7 +3236,8 @@ export const VariantDocumentView = ({
             </Fragment>
           ))}
         </div>
-      ))}
+        );
+      })}
     </div>
   );
 };

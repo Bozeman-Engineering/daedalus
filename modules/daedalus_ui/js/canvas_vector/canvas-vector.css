@@ -93,9 +93,10 @@ html.canvas-vector-resizing body {
 #daedalus-ui-canvas-ruler {
   position: fixed;
   /* Above the stage's isolated paint layer, but UNDER both sidebars
-     (right: 5, left: 100): the ruler spans the full canvas width — the
-     canvas runs beneath the sidebars, so honest band geometry must too —
-     and its overhang belongs behind the panels, not painted over them. */
+     (both rails sit at 100, css/sidebar.css): the ruler spans the full
+     canvas width — the canvas runs beneath the sidebars, so honest band
+     geometry must too — and its overhang belongs behind the panels, not
+     painted over them. */
   z-index: 4;
   top: var(--drupal-displace-offset-top, 0);
   right: 0;
@@ -119,6 +120,17 @@ html.canvas-vector-resizing body {
 html[data-daedalus-ui-mode="edit"] #daedalus-ui-canvas-ruler.is-constrained,
 html[data-daedalus-ui-mode="edit"].canvas-vector-resizing #daedalus-ui-canvas-ruler {
   display: block;
+}
+
+/* Under a canvas view (html[data-daedalus-ui-canvas-view], the axis
+   documented in daedalus_ui.api.php) the stage is transformed, so its
+   measured edges no longer sit where the handles and the ruler's bands
+   would mark them: both stand down until the view ends. The selector
+   carries the mode qualifier too, so it ties the show rules above on
+   specificity and wins by order; a view only ever exists in a mode. */
+html[data-daedalus-ui-mode][data-daedalus-ui-canvas-view] .canvas-vector-handle,
+html[data-daedalus-ui-mode][data-daedalus-ui-canvas-view] #daedalus-ui-canvas-ruler {
+  display: none;
 }
 
 .canvas-vector-ruler__band {

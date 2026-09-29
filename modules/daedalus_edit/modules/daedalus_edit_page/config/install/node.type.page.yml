@@ -14,11 +14,6 @@ third_party_settings:
     initial_mode: edit
     status:
       edit: true
-    modes:
-      edit:
-        # The Selector is the resting state: there is no place_block tool;
-        # adding blocks is the Add panel plus drag/Insert, not a tool.
-        default_tool: selector
 name: 'Page'
 type: page
 description: 'Use <em>pages</em> to build with the page builder.'

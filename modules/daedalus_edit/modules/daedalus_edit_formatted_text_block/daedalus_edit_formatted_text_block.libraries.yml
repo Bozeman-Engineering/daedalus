@@ -7,3 +7,7 @@ formatted_text_editor:
   css:
     component:
       css/formatted-text-editor.css: {}
+  dependencies:
+    # The format picker is the kit's segmented control on a token surface.
+    - daedalus_ui/variables
+    - daedalus_ui/panel_controls

@@ -45,6 +45,17 @@
   outline-style: dashed;
 }
 
+/* Under a canvas view (html[data-daedalus-ui-canvas-view], the axis
+   documented in daedalus_ui.api.php) the canvas is transformed, and a
+   member's getBoundingClientRect is the 2D box of a projected quad, so
+   the strokes and the chip anchors (both placed from that rect) stand
+   down until the view ends. The frame's own state keeps tracking; only
+   the paint is withheld. */
+html[data-daedalus-ui-canvas-view] .daedalus-ui-frame__stroke,
+html[data-daedalus-ui-canvas-view] .daedalus-ui-frame__anchor {
+  display: none;
+}
+
 /**
  * A chip's anchor: one document-positioned box per member, placed above
  * the member's top-left corner (or below its bottom edge when there is

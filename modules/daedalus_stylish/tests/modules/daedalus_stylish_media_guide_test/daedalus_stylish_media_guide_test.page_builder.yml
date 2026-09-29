@@ -1,9 +1,21 @@
 # The universal block kind constrains background-image to the "large" image
 # style: media tokens on block-keyed entries must resolve through it, beating
 # the daedalus_stylish.settings media_image_style site default.
+#
+# Its declared ::before box constrains content, the second media-capable
+# property, the same way; the ::after box is left undeclared (derived), so
+# a content token there resolves through the site default: per-box
+# resolution, exactly as per-key.
 block:
   property_groups:
     background:
       constraints:
         background-image:
           image_style: large
+  pseudo:
+    before:
+      property_groups:
+        generated_content:
+          constraints:
+            content:
+              image_style: large

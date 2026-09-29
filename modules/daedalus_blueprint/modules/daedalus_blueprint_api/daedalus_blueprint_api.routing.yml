@@ -27,6 +27,21 @@ daedalus_blueprint_api.mutate:
     _entity_access: 'entity.update'
     _csrf_request_header_token: 'TRUE'
 
+daedalus_blueprint_api.parse_css:
+  path: '/daedalus-blueprint/{entity_type}/{entity}/parse-css'
+  methods: [POST]
+  defaults:
+    _title: 'Daedalus Blueprint CSS parse'
+    _controller: '\Drupal\daedalus_blueprint_api\Controller\BlueprintApiController::parseCss'
+  options:
+    no_cache: 'TRUE'
+    parameters:
+      entity:
+        type: entity:{entity_type}
+  requirements:
+    _entity_access: 'entity.update'
+    _csrf_request_header_token: 'TRUE'
+
 daedalus_blueprint_api.history:
   path: '/daedalus-blueprint/{entity_type}/{entity}/history'
   methods: [GET]

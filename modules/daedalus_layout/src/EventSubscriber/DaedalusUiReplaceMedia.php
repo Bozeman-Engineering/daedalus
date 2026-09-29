@@ -1,93 +1,133 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Drupal\daedalus_layout\EventSubscriber;
 
-use Drupal\daedalus_ui\Ajax\UpdateElement;
-use Drupal\daedalus_ui\Event\LayoutBuilderReplaceMedia;
+use Drupal\Component\Serialization\Json;
 use Drupal\Core\Ajax\AjaxResponse;
-use Drupal\Core\Ajax\RemoveCommand;
-use Symfony\Component\HttpFoundation\RequestStack;
-use Drupal\daedalus_layout\SectionStorage\NestedAwareSectionStorage;
-use Drupal\layout_builder\LayoutTempstoreRepositoryInterface;
+use Drupal\Core\Entity\FieldableEntityInterface;
+use Drupal\Core\StringTranslation\StringTranslationTrait;
+use Drupal\daedalus_blueprint\BlueprintOperationsInterface;
+use Drupal\daedalus_blueprint\EntityStorageHandler;
+use Drupal\daedalus_blueprint\LayoutBuilder\DaedalusLayoutAdapter;
+use Drupal\daedalus_blueprint_api\Ajax\BlueprintApplyResponseCommand;
+use Drupal\daedalus_blueprint_api\MutationResponseBuilder;
+use Drupal\daedalus_tempstore\History\HistoryManager;
+use Drupal\daedalus_tempstore\History\HistoryRecorder;
+use Drupal\daedalus_ui\Event\LayoutBuilderReplaceMedia;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
+use Symfony\Component\HttpFoundation\RequestStack;
+use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
 
 /**
- * Daedalus UI replace media.
+ * The media drop on a placed block: one update_element op on the spine.
+ *
+ * A file dragged from the desktop onto a media block's drop target is
+ * uploaded by daedalus_ui's MediaUpload controller, which creates the media
+ * entity and dispatches LayoutBuilderReplaceMedia with the block context on
+ * the request query (blockUuid). This subscriber is where the drop meets the
+ * op spine: it runs `update_element {element: component uuid, properties:
+ * {media field: {target_id}}}` on the root's working copy through the
+ * existing reference handler, persists through the storage handler,
+ * annotates the history entry, and answers the standard mutation-response
+ * payload as one BlueprintApplyResponseCommand, applied client-side through
+ * the app's one applyResponse pipeline (the swap by key, the mirror, the
+ * timeline). Nothing here serializes a block or renders a layout: the drop
+ * is exactly the op an AI tool or the panel form would issue for the same
+ * change.
  */
 class DaedalusUiReplaceMedia implements EventSubscriberInterface {
 
+  use StringTranslationTrait;
+
   public function __construct(
     protected RequestStack $requestStack,
-    protected LayoutTempstoreRepositoryInterface $layoutBuilderTempstore,
+    protected BlueprintOperationsInterface $operations,
+    protected EntityStorageHandler $storageHandler,
+    protected MutationResponseBuilder $responseBuilder,
+    protected HistoryRecorder $historyRecorder,
+    protected HistoryManager $historyManager,
+    protected DaedalusLayoutAdapter $layoutAdapter,
   ) {}
 
   /**
    * {@inheritdoc}
    */
   public static function getSubscribedEvents(): array {
-    $events = [];
-    if (class_exists(LayoutBuilderReplaceMedia::class)) {
-      $events[LayoutBuilderReplaceMedia::class] = ['onReplace'];
-    }
-    return $events;
+    return [
+      LayoutBuilderReplaceMedia::class => ['onReplace'],
+    ];
   }
 
   /**
-   * On replace.
+   * Commits the replacement as an op and answers the mutation payload.
    *
-   * A user has dragged a Media Type compatible file from their desktop to a
-   * dropzone on an existing Media Block on the page. We then replace the media.
+   * The root entity the event carries is already the working copy (the
+   * controller resolved it through the entity tempstore); the langcode
+   * rides the request query as it does for the mutate endpoint, NULL for
+   * the default translation. A failed result (an unknown component, a field
+   * the block lacks, a refused reference) answers the same payload shape
+   * with success false and the spine's errors, which the client judges as
+   * any op failure.
    *
    * @param \Drupal\daedalus_ui\Event\LayoutBuilderReplaceMedia $event
    *   The replace media event.
-   *
-   * @throws \Drupal\Component\Plugin\Exception\ContextException
-   * @throws \Drupal\Component\Plugin\Exception\InvalidPluginDefinitionException
-   * @throws \Drupal\Component\Plugin\Exception\PluginNotFoundException
-   * @throws \Drupal\Core\TypedData\Exception\ReadOnlyException
    */
-  public function onReplace(LayoutBuilderReplaceMedia $event) {
-    $media = $event->getMedia();
-    $entity = $event->getEntity();
-    $media_reference_field = $event->getMediaReference();
-    $parameters = $this->requestStack->getCurrentRequest()->query->all();
-    $block_uuid = $parameters['blockUuid'];
-
-    // Get the storage from tempstore (where pending changes live).
-    $canonical_storage = NestedAwareSectionStorage::getSectionStorageForEntity($entity);
-    $section_storage = $this->layoutBuilderTempstore->get($canonical_storage);
-
-    $component = $section_storage->getComponent($block_uuid);
-    if (!$component) {
-      throw new \InvalidArgumentException(sprintf('Block with UUID "%s" not found', $block_uuid));
+  public function onReplace(LayoutBuilderReplaceMedia $event): void {
+    $request = $this->requestStack->getCurrentRequest();
+    $block_uuid = $request->query->get('blockUuid');
+    if (!is_string($block_uuid) || $block_uuid === '') {
+      throw new BadRequestHttpException('Daedalus Layout: a media replacement on a Layout Builder page names the block component (blockUuid).');
+    }
+    $langcode = $request->query->get('langcode') ?: NULL;
+    $field_name = $event->getMediaReference();
+    $root = $event->getEntity();
+    if (!$root instanceof FieldableEntityInterface) {
+      throw new BadRequestHttpException('Daedalus Layout: the media replacement targets a non-fieldable entity.');
     }
 
-    $media_block_plugin = $component->getPlugin();
-    $media_block_configuration = $media_block_plugin->getConfiguration();
-    $media_block = $section_storage->getBlockContentFromPlugin($media_block_plugin);
-    $event->setMediaBlock($media_block);
+    $result = $this->operations->batchOperations($root, [
+      [
+        'op' => 'update_element',
+        'element' => $block_uuid,
+        'properties' => [$field_name => ['target_id' => (int) $event->getMedia()->id()]],
+      ],
+    ], ['langcode' => $langcode]);
 
-    if (!$media_block->hasField($media_reference_field)) {
-      throw new \InvalidArgumentException(sprintf('Invalid media reference field "%s"', $media_reference_field));
+    $extra = [];
+    if ($result->isSuccess()) {
+      $this->historyRecorder->annotate((string) $this->t('Replaced @label', ['@label' => $this->fieldLabel($root, $block_uuid, $field_name)]), $result->getTargets());
+      $extra['persisted'] = $this->storageHandler->persist(
+        $result->getEntity(),
+        element_uuids: $result->getElementUuids(),
+      );
+      // Flush now (instead of the end-of-request fallback) so the response
+      // carries the timeline the drop just extended.
+      $this->historyRecorder->flush();
+      $extra['history'] = $this->historyManager->metadata($root);
     }
 
-    $media_block->get($media_reference_field)->setValue($media->id());
-    $media_block_configuration['block_serialized'] = serialize($media_block);
-    $media_block_plugin->setConfiguration($media_block_configuration);
-    $component->setConfiguration($media_block_plugin->getConfiguration());
-
-    $this->layoutBuilderTempstore->set($section_storage);
-
+    $json = $this->responseBuilder->build($request, $root, $result, $langcode, $extra, $event->getViewMode());
     $response = new AjaxResponse();
-    $response->addCommand(new RemoveCommand('[data-drupal-messages]'));
-    $layout = [
-      '#type' => 'layout_builder_plus',
-      '#section_storage' => $section_storage,
-    ];
-    $selector = sprintf('[data-layout-builder-block-uuid="%s"]', $component->getUuid());
-    $response->addCommand(new UpdateElement($layout, [$selector]));
-
+    $response->addCommand(new BlueprintApplyResponseCommand(Json::decode($json->getContent())));
     $event->setResponse($response);
+  }
+
+  /**
+   * The replaced field's label, for the history entry.
+   *
+   * Read off the placed block the op just wrote (the component located
+   * through the spine's own adapter), falling back to the field name when
+   * the block cannot be extracted.
+   */
+  protected function fieldLabel(FieldableEntityInterface $root, string $block_uuid, string $field_name): string {
+    $context = $this->layoutAdapter->locateElement($root, $block_uuid);
+    $block = $context?->isLbComponent() ? $this->layoutAdapter->extractBlockContent($context->target) : NULL;
+    if ($block?->hasField($field_name)) {
+      return (string) $block->getFieldDefinition($field_name)->getLabel();
+    }
+    return $field_name;
   }
 
 }

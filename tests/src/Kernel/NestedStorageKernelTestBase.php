@@ -46,13 +46,15 @@ abstract class NestedStorageKernelTestBase extends KernelTestBase {
     'layout_discovery',
     'layout_builder',
     'field',
+    'file',
     'text',
     'filter',
     'entity_test',
     'daedalus_tempstore',
     // daedalus_ui hard-depends on daedalus_blueprint_api (its services are
-    // autowired into daedalus_ui's container); kernel tests do not
-    // resolve info.yml dependencies, so the chain is listed explicitly.
+    // autowired into daedalus_ui's container) and on file (its file lane
+    // injects file.upload_handler); kernel tests do not resolve info.yml
+    // dependencies, so the chain is listed explicitly.
     'daedalus_blueprint',
     'daedalus_blueprint_api',
     'daedalus_ui',

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Drupal\Tests\daedalus_blueprint\Kernel\LayoutBuilder;
 
 use Drupal\daedalus_blueprint\LayoutBuilder\LayoutSerializer;
+use Drupal\layout_builder\Entity\LayoutBuilderEntityViewDisplay;
 use Drupal\layout_builder\Section;
 use Drupal\layout_builder\SectionComponent;
 use Drupal\Tests\daedalus\Kernel\BlueprintKernelTestBase;
@@ -45,15 +46,37 @@ class LayoutSerializerTest extends BlueprintKernelTestBase {
 
   /**
    * Tests serializing an entity with no layout.
+   *
+   * No override and a display with no sections is an empty page: the
+   * serializer invents no section, since the canvas renders none and a
+   * section a reader can name must be one a write can find.
    */
   public function testSerializeEmptyLayout(): void {
     $entity = $this->createTestEntity();
-    $result = $this->layoutSerializer->serialize($entity);
-    // LB-enabled entities get a default one-column section from the adapter.
-    $this->assertCount(1, $result);
-    $this->assertSame('layout_onecol', $result[0]['layout_id']);
-    $this->assertSame(['content' => []], $result[0]['regions']);
-    $this->assertSame(0, $result[0]['section_index']);
+    $this->assertSame([], $this->layoutSerializer->serialize($entity));
+  }
+
+  /**
+   * Tests core's blank placeholder serializes as no sections.
+   *
+   * The Page type's shipped display carries one layout_builder_blank
+   * section; core copies it into a fresh override on the first Edit Mode
+   * render and persists it on save. Core hides it behind count(), so the
+   * canvas renders the blank-page prompt; the serializer must agree, or
+   * the page elements tree lists a section nothing on the page is.
+   */
+  public function testBlankPlaceholderSerializesAsNoSections(): void {
+    $display = LayoutBuilderEntityViewDisplay::load('entity_test.entity_test.default');
+    $display->removeAllSections(TRUE)->save();
+
+    $entity = $this->createTestEntity();
+    $this->assertSame([], $this->layoutSerializer->serialize($entity), 'A blank-only display default reads as no sections.');
+
+    $entity->set('layout_builder__layout', [new Section('layout_builder_blank')]);
+    $entity->save();
+    $entity = $this->entityTypeManager->getStorage('entity_test')->load($entity->id());
+    $this->assertSame('layout_builder_blank', $entity->get('layout_builder__layout')->getSections()[0]->getLayoutId());
+    $this->assertSame([], $this->layoutSerializer->serialize($entity), 'A persisted blank placeholder reads as no sections.');
   }
 
   /**

@@ -16,7 +16,7 @@ use Symfony\Component\EventDispatcher\EventSubscriberInterface;
  * The form path has two endpoint kinds: the entity form (the default,
  * MultipleEntityFormController) and the Layout Builder block form
  * (BlockFormController), which edits a placement's block_content through
- * UpdateBlockFormForEditTool. Which kind a leaf fetches is the
+ * PanelUpdateBlockForm. Which kind a leaf fetches is the
  * placement's fact, so the placement declares it in its attribution:
  * data-daedalus-edit-form-endpoint="block-form" rides the block wrapper (for
  * composed blocks the hoisted-attribute bag carries it onto the composed

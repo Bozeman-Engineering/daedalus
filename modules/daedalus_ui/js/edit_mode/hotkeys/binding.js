@@ -22,6 +22,45 @@ const IS_MAC =
 const MOD_KEY = IS_MAC ? 'meta' : 'ctrl';
 
 /**
+ * How each modifier reads to a person on this platform: the Mac glyphs
+ * (joined bare, ⌘⇧C), spelled names with '+' elsewhere (Ctrl+Shift+C).
+ */
+const MODIFIER_LABELS = IS_MAC
+  ? { meta: '⌘', ctrl: '⌃', alt: '⌥', shift: '⇧' }
+  : { meta: 'Meta', ctrl: 'Ctrl', alt: 'Alt', shift: 'Shift' };
+
+/**
+ * Words a binding string for a person: the platform's modifier glyphs or
+ * names and the key capitalized ('mod+shift+c' reads ⌘⇧C on a Mac and
+ * Ctrl+Shift+C elsewhere; a bare 'mod' reads ⌘ or Ctrl). Tooltips and
+ * other chrome that name a binding go through here so no consumer
+ * hardcodes a platform glyph. Unbound (empty) reads as an empty string.
+ *
+ * @param {string} str
+ *   A binding string as register() stores it.
+ *
+ * @return {string}
+ */
+export const describeBinding = (str) => {
+  if (!str) {
+    return '';
+  }
+  const words = str
+    .toLowerCase()
+    .split('+')
+    .filter(Boolean)
+    .map((token) => (token === 'mod' ? MOD_KEY : token))
+    .map(
+      (token) =>
+        MODIFIER_LABELS[token] ??
+        (token.length === 1
+          ? token.toUpperCase()
+          : token.charAt(0).toUpperCase() + token.slice(1)),
+    );
+  return words.join(IS_MAC ? '' : '+');
+};
+
+/**
  * Maps KeyboardEvent.key modifier names to binding-string tokens.
  */
 const EVENT_KEY_MODIFIERS = {

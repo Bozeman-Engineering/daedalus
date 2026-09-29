@@ -291,11 +291,11 @@ test('analyzeStep: a media token is refused inside a step', () => {
 });
 
 test('analyzeStep: the island rules still hold (a selector, a condition, a token reference)', () => {
-  // Structure is chrome, never characters: a selector does not parse as
-  // declarations (a warning, nothing saves), a known condition errors
-  // toward its WHEN row.
-  assert.equal(analyze('.x { color: red; }').diagnostics[0].severity, 'warning');
-  assert.match(errorsOf(analyze('@hover { color: red; }'))[0].message, /Conditions are their own rows/);
+  // Structure is chrome, never characters, and a step has no door to
+  // hand a block to (it addresses no key on any page): a selector block
+  // and a condition block are errors here, nothing saves.
+  assert.match(errorsOf(analyze('.x { color: red; }'))[0].message, /holds declarations only/);
+  assert.match(errorsOf(analyze('@hover { color: red; }'))[0].message, /holds declarations only/);
   // A minted token resolves; on a strict site an unminted one errors.
   const materials = roster(tokenRecord('color', 'accent', '#1a1a2e'), swatchRecord('brand_red', 'color', '#b91c1c'));
   assert.deepEqual(errorsOf(analyze('color: var(--color-accent);', materials)), []);

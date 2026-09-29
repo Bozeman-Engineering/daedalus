@@ -56,8 +56,10 @@ class BlueprintOperationsSubtreeAddTest extends BlueprintKernelTestBase {
       'block',
       'block_content',
       'layout_builder',
+      'file',
       'daedalus_ui',
       'daedalus_tempstore',
+      'daedalus_blueprint_api',
       'daedalus_layout',
     ]);
     $this->installEntitySchema('block_content');

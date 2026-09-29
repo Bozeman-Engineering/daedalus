@@ -10,8 +10,12 @@
  * and mutated no page) leaves the mirror alone, an applied delta is
  * relayed over the `materials:<scope>` BroadcastChannel and a relayed
  * delta received from another window is applied without ringing back, the
- * armed edit session hears a response only after its piggybacked commands,
- * and the facade's reads and bound grammar answer from the store.
+ * armed edit session hears a response (payload in hand) only after its
+ * piggybacked commands, a job (a write answering the contract by its own
+ * transport, daedalus_edit's form commit) sequences FIFO with the ops
+ * around it and fails like one, the contract's Drupal AJAX command applies
+ * a carried payload through the same pipeline, and the facade's reads and
+ * bound grammar answer from the store.
  *
  * The queue imports the app store (webpack-style extensionless imports;
  * window, document, Drupal and drupalSettings globals; BroadcastChannel),
@@ -69,6 +73,12 @@ class FakeBroadcastChannel {
 }
 globalThis.BroadcastChannel = FakeBroadcastChannel;
 globalThis.window = globalThis;
+// The markup swap holds the window's scroll offsets across the swap
+// (preserve-scroll.js); a window stub without them would fail every
+// markup-applying case.
+globalThis.scrollX = 0;
+globalThis.scrollY = 0;
+globalThis.scrollTo = () => {};
 globalThis.document = {
   addEventListener: () => {},
   querySelector: () => null,
@@ -93,7 +103,8 @@ globalThis.drupalSettings = {
   daedalusUi: {
     blueprint: JSON.stringify({ entityType: 'node', entityId: '1', uuid: 'root-uuid', blueprint: { _tree: { kind: 'root' } } }),
     materials: JSON.stringify({ records: RECORDS }),
-    responsivePreview: { scope: SCOPE, url: '/preview' },
+    editSession: { scope: SCOPE },
+    responsivePreview: { url: '/preview' },
   },
 };
 
@@ -226,13 +237,13 @@ test('the facade reads from the store and binds the grammar to its roster', asyn
   unsubscribe();
 });
 
-test('the armed edit session hears a response only once it is FULLY applied', async () => {
+test('the armed edit session hears a response, with its payload, only once it is FULLY applied', async () => {
   const order = [];
   const ajax = Drupal.ajax;
   Drupal.ajax = () => ({ success: (commands) => { order.push(`commands:${commands.length}`); } });
   Drupal.Daedalus.EditSession = {
-    mutationApplied: () => {
-      order.push(`applied:${store.getState().blueprint.blueprint._tree.stamp}`);
+    mutationApplied: (payload) => {
+      order.push(`applied:${store.getState().blueprint.blueprint._tree.stamp}:${payload.targets.length}`);
     },
   };
   try {
@@ -241,15 +252,180 @@ test('the armed edit session hears a response only once it is FULLY applied', as
       entity_uuid: 'root-uuid',
       blueprint: { _tree: { kind: 'root', stamp: 'fresh' } },
       markup: {},
+      targets: [{ uuid: 'root-uuid', field_name: 'title' }],
       attachments: [{ command: 'add_css' }],
-      drupal_commands: [{ command: 'daedalusEditClearForm' }, { command: 'insert' }],
+      drupal_commands: [{ command: 'editModeMessage' }, { command: 'insert' }],
       materials: { upsert: [], remove: [] },
     });
   } finally {
     Drupal.ajax = ajax;
     delete Drupal.Daedalus.EditSession;
   }
-  // Assets, then the piggybacked commands (which may evict the form an open
-  // edit rides), and only then the session: the mirror is already fresh.
-  assert.deepEqual(order, ['commands:1', 'commands:2', 'applied:fresh']);
+  // Assets, then the piggybacked commands, and only then the session with
+  // the payload in hand: the mirror is already fresh.
+  assert.deepEqual(order, ['commands:1', 'commands:2', 'applied:fresh:1']);
+});
+
+test('a job sequences FIFO with ops, and a failed job rolls back what is queued behind it', async () => {
+  const order = [];
+  const applied = [];
+  const rolledBack = [];
+  const ajax = Drupal.ajax;
+  Drupal.ajax = () => ({ success: () => {} });
+  Drupal.url = (path) => `/${path}`;
+  Drupal.Daedalus.getCookieValue = () => 'edit';
+  drupalSettings.ajaxPageState = {};
+  const payloadFor = (stamp) => ({
+    success: true,
+    entity_uuid: 'root-uuid',
+    blueprint: { _tree: { kind: 'root', stamp } },
+    markup: {},
+    targets: [],
+    attachments: [],
+    drupal_commands: [],
+    materials: { upsert: [], remove: [] },
+  });
+  let sent = 0;
+  globalThis.fetch = async (url) => {
+    if (String(url).includes('session/token')) {
+      return { text: async () => 'token' };
+    }
+    sent += 1;
+    const stamp = `op-${sent}`;
+    order.push(`send:${stamp}`);
+    return { json: async () => payloadFor(stamp) };
+  };
+  Drupal.Daedalus.EditSession = {
+    mutationApplied: (payload) => { applied.push(payload.blueprint._tree.stamp); },
+  };
+  const { enqueueOperations, enqueueJob, isDraining, drained } = await import('../../js/edit_mode/ops/op-queue.js');
+  const context = { entityType: 'node', entityId: '1', operations: [], viewMode: 'full' };
+  try {
+    const first = enqueueOperations(context);
+    // The job's transport applies its own payload during the round (the
+    // command handler's job in the browser) and resolves with it.
+    const job = enqueueJob({
+      run: async () => {
+        order.push('job:run');
+        const payload = payloadFor('job');
+        await applyResponse(payload);
+        return payload;
+      },
+    });
+    const last = enqueueOperations(context);
+    assert.equal(isDraining(), true);
+    const results = await Promise.all([first, job, last]);
+    await drained();
+    assert.equal(isDraining(), false);
+    assert.deepEqual(order, ['send:op-1', 'job:run', 'send:op-2']);
+    assert.deepEqual(applied, ['op-1', 'job', 'op-2']);
+    assert.deepEqual(results.map((payload) => payload.blueprint._tree.stamp), ['op-1', 'job', 'op-2']);
+
+    // A job whose transport refuses (a form's validation errors) rejects
+    // with that refusal and rolls back the op queued behind it, newest
+    // first, exactly as a failed op does; the queue then drains.
+    const failing = enqueueJob({
+      run: async () => { throw new Error('invalid widget'); },
+    });
+    const behind = enqueueOperations({
+      ...context,
+      optimistic: { apply: () => {}, rollback: () => rolledBack.push('behind') },
+    });
+    await assert.rejects(failing, /invalid widget/);
+    await assert.rejects(behind, /preceding mutation failed/);
+    assert.deepEqual(rolledBack, ['behind']);
+    await drained();
+    assert.equal(isDraining(), false);
+  } finally {
+    Drupal.ajax = ajax;
+    delete Drupal.Daedalus.EditSession;
+  }
+});
+
+test('the daedalusBlueprintApplyResponse command applies a success and hands every payload to its carrier', async () => {
+  const applied = [];
+  Drupal.AjaxCommands = function AjaxCommands() {};
+  const { initApplyResponseCommand } = await import('../../js/edit_mode/ops/op-queue.js');
+  initApplyResponseCommand();
+  Drupal.Daedalus.EditSession = {
+    mutationApplied: (payload) => { applied.push(payload.blueprint._tree.stamp); },
+  };
+  try {
+    const handler = Drupal.AjaxCommands.prototype.daedalusBlueprintApplyResponse;
+    const carrier = {};
+    const success = {
+      success: true,
+      entity_uuid: 'root-uuid',
+      blueprint: { _tree: { kind: 'root', stamp: 'carried' } },
+      markup: {},
+      targets: [],
+      attachments: [],
+      drupal_commands: [],
+      materials: { upsert: [], remove: [] },
+    };
+    await handler(carrier, { command: 'daedalusBlueprintApplyResponse', payload: success });
+    assert.equal(carrier.daedalusBlueprintPayload, success);
+    assert.deepEqual(applied, ['carried']);
+    assert.equal(store.getState().blueprint.blueprint._tree.stamp, 'carried');
+
+    // A failed payload is handed over untouched and applies nothing.
+    const failure = { success: false, errors: [{ message: 'nope' }] };
+    const other = {};
+    await handler(other, { command: 'daedalusBlueprintApplyResponse', payload: failure });
+    assert.equal(other.daedalusBlueprintPayload, failure);
+    assert.deepEqual(applied, ['carried']);
+    assert.equal(store.getState().blueprint.blueprint._tree.stamp, 'carried');
+  } finally {
+    delete Drupal.Daedalus.EditSession;
+  }
+});
+
+test('a markup swap revalidates the styling target: a target whose key has no element clears, the selection stays', async () => {
+  const { setTarget } = await import('../../js/edit_mode/store/slices/selection-slice.js');
+  const Selection = Drupal.Daedalus.Selection;
+  // Only the selected element exists on the (stub) page: the target's
+  // ancestor rule names a container the swap has removed.
+  const elements = { 'block:kept': { tagName: 'DIV' } };
+  const querySelector = document.querySelector;
+  document.querySelector = (selector) => {
+    const match = /^\[data-selectable="(.+)"\]$/.exec(selector);
+    return match ? (elements[match[1]] ?? null) : null;
+  };
+  try {
+    Selection.clear();
+    Selection.select('block:kept');
+    // Seated through the slice: the facade's ancestry check has no
+    // projection index to consult in this suite.
+    store.dispatch(setTarget({ key: 'container:gone', selector: '> pb-text' }));
+    assert.deepEqual(Selection.getTarget(), { key: 'container:gone', selector: '> pb-text' });
+    await applyResponse({
+      success: true,
+      entity_uuid: 'root-uuid',
+      blueprint: { _tree: { kind: 'root' } },
+      markup: {},
+      targets: [],
+      attachments: [],
+      drupal_commands: [],
+      materials: { upsert: [], remove: [] },
+    });
+    assert.equal(Selection.getSelected(), 'block:kept');
+    assert.equal(Selection.getTarget(), null);
+    // A target on an element that survives the swap survives with it.
+    store.dispatch(setTarget({ key: 'block:kept', selector: '.icon' }));
+    await applyResponse({
+      success: true,
+      entity_uuid: 'root-uuid',
+      blueprint: { _tree: { kind: 'root' } },
+      markup: {},
+      targets: [],
+      attachments: [],
+      drupal_commands: [],
+      materials: { upsert: [], remove: [] },
+    });
+    assert.equal(Selection.getSelected(), 'block:kept');
+    assert.deepEqual(Selection.getTarget(), { key: 'block:kept', selector: '.icon' });
+  } finally {
+    document.querySelector = querySelector;
+    Selection.clear();
+  }
 });

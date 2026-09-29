@@ -9,6 +9,7 @@ use Drupal\daedalus_blueprint\Materials\Address;
 use Drupal\daedalus_blueprint\Materials\MaterialKind;
 use Drupal\daedalus_blueprint\Materials\MaterialRecord;
 use Drupal\daedalus_blueprint\Materials\MaterialsRoster;
+use Drupal\daedalus_blueprint\Materials\RelativeSelector;
 use Drupal\daedalus_blueprint\Materials\ValueGrammar;
 use Drupal\daedalus_blueprint\Materials\ValueReference;
 use Drupal\daedalus_blueprint\Materials\VocabularyProseInterface;
@@ -19,7 +20,8 @@ use Drupal\daedalus_blueprint\Materials\VocabularyRosterInterface;
  *
  * A pure data object: which block types exist and how their fields ride
  * attributes and bodies, which condition names map to which CSS wrappers,
- * which part classes and instance namespaces are declared, and the site's
+ * which parts and tags a relative selector's compounds may land on under
+ * each owner, which instance namespaces are declared, and the site's
  * MATERIALS roster (tokens, swatches, variants, stencils, animations). The
  * printer and
  * parser are grammar; this is the site's vocabulary, and it is passed in
@@ -68,9 +70,24 @@ use Drupal\daedalus_blueprint\Materials\VocabularyRosterInterface;
  *   ].
  * - $conditions: condition name => CSS wrapper, in canonical (axis
  *   declaration) order. A wrapper starting with ':' is a selector
- *   pseudo-class (a state); one starting with '@' is an at-rule prelude.
- *   Compound condition names order their parts by this list's order.
- * - $parts: declared part class => list of block-type tags that own it.
+ *   pseudo-class (a state, or a structural fact when $facts names it);
+ *   one starting with '@' is an at-rule prelude. Compound condition names
+ *   order their parts by this list's order.
+ * - $facts: the condition names that are structural FACTS (":first-child",
+ *   ":nth-child(odd)"): pseudo-classes that hold by the element's place in
+ *   the markup, spelled like states on the addressed element but taught
+ *   and corrected apart (stateConditions() / factConditions()).
+ * - $selectors: selector rosters per OWNER, the dialect tag of the
+ *   element a compound resolves against ("pb-container", "pb-text",
+ *   "pb-block" for any plugin block or undeclared type): owner =>
+ *   ['parts' => [selector => label], 'tags' => [tag, ...]]. The parts are
+ *   the owner's declared part classes (with the dot, as the style map
+ *   spells them); the tags are the base tags a tag compound may name
+ *   there, the styling layer's one declaration of a prose tag's
+ *   styleability (never the instance namespaces' identity tags). Which
+ *   TYPES may follow an owner is the spine's own fact (typesOf(): every
+ *   block type's tag plus pb-container and pb-block under a container,
+ *   nothing under a block), so it is derived here, never contributed.
  * - $instances: instance-namespace declarations from the spine's
  *   `instances:` lane, keyed by pattern selector ('.s-*'): each carries
  *   'label' and the declared 'tags' map (tag => label). These are the
@@ -79,11 +96,6 @@ use Drupal\daedalus_blueprint\Materials\VocabularyRosterInterface;
  *   resolves the classes by the same rule every other resolver speaks
  *   (exact part, then owner pattern part, then the site instance
  *   namespaces).
- * - $textTags: the addressable text-tag vocabulary, the tags a "#id tag"
- *   selector may style (the element-scoped tag tier), in declaration
- *   order. Contributed by the styling layer from its one declaration of
- *   a prose tag's styleability (daedalus_stylish's site base section); never
- *   derived from the instance namespaces, whose tags are identity.
  * - $stylable: element kind ('container', 'block', 'field') => the kind's
  *   VOCABULARY roster (VocabularyRosterInterface: the CSS property names
  *   the site names on that kind, in declaration order, and the
@@ -156,6 +168,22 @@ final class DialectCatalog {
   private array $conditionOrder = [];
 
   /**
+   * Pseudo-class wrapper (":hover", ":nth-child(odd)") => condition name.
+   *
+   * The parser's door for a pseudo-class on the addressed element: the
+   * dialect spells a state or a fact as the wrapper the printer emits, so
+   * the wrapper text, not the condition name, is what a selector carries.
+   */
+  private array $pseudoIndex = [];
+
+  /**
+   * Condition names that are structural facts, as a set.
+   *
+   * @var array<string, true>
+   */
+  private array $factSet = [];
+
+  /**
    * The materials roster (the empty roster when none was given).
    */
   private readonly MaterialsRoster $roster;
@@ -191,15 +219,15 @@ final class DialectCatalog {
     private readonly array $axes,
     private readonly array $blockTypes,
     private readonly array $conditions,
-    private readonly array $parts = [],
+    private readonly array $selectors = [],
     private readonly array $instances = [],
     private readonly array $stylable = [],
     ?MaterialsRoster $roster = NULL,
-    private readonly array $textTags = [],
     private readonly ?VocabularyProseInterface $prose = NULL,
     private readonly array $birthDefaults = [],
     private readonly array $dressedTags = [],
     private readonly ?string $skin = NULL,
+    private readonly array $facts = [],
   ) {
     foreach ($stylable as $kind => $vocabulary) {
       if (!$vocabulary instanceof VocabularyRosterInterface) {
@@ -213,6 +241,14 @@ final class DialectCatalog {
       $this->conditionOrder[$name] = $position++;
       if (str_starts_with($wrapper, '@')) {
         $this->wrapperIndex[self::normalizeWrapper($wrapper)] = $name;
+      }
+      elseif (str_starts_with($wrapper, ':')) {
+        $this->pseudoIndex[self::normalizeWrapper($wrapper)] ??= $name;
+      }
+    }
+    foreach ($facts as $name) {
+      if (isset($this->conditions[$name]) && str_starts_with($this->conditions[$name], ':')) {
+        $this->factSet[$name] = TRUE;
       }
     }
     $this->indexVariants($axes);
@@ -338,15 +374,15 @@ final class DialectCatalog {
         axes: $this->axes,
         blockTypes: $this->blockTypes,
         conditions: $this->conditions,
-        parts: $this->parts,
+        selectors: $this->selectors,
         instances: $this->instances,
         stylable: $this->stylable,
         roster: $roster,
-        textTags: $this->textTags,
         prose: $this->prose,
         birthDefaults: $this->birthDefaults,
         dressedTags: $this->dressedTags,
         skin: $this->skin,
+        facts: $this->facts,
       );
     }
     return $this->offered;
@@ -587,20 +623,48 @@ final class DialectCatalog {
   }
 
   /**
-   * Whether a condition is a state (its wrapper is a pseudo-class).
+   * Whether a condition is a posable STATE: a pseudo-class that is no fact.
    */
   public function isStateCondition(string $name): bool {
-    return isset($this->conditions[$name]) && str_starts_with($this->conditions[$name], ':');
+    return isset($this->conditions[$name]) && str_starts_with($this->conditions[$name], ':') && !isset($this->factSet[$name]);
   }
 
   /**
-   * The published state condition names (pseudo-class wrappers).
+   * Whether a condition is a structural FACT (a pseudo-class flagged so).
+   */
+  public function isFactCondition(string $name): bool {
+    return isset($this->factSet[$name]);
+  }
+
+  /**
+   * The published state condition names: pseudo-class wrappers, facts apart.
    */
   public function stateConditions(): array {
     return array_keys(array_filter(
       $this->conditions,
-      static fn (string $wrapper): bool => str_starts_with($wrapper, ':'),
+      fn (string $wrapper, string $name): bool => str_starts_with($wrapper, ':') && !isset($this->factSet[$name]),
+      ARRAY_FILTER_USE_BOTH,
     ));
+  }
+
+  /**
+   * The published structural fact names, in catalog order.
+   */
+  public function factConditions(): array {
+    return array_keys(array_intersect_key($this->conditions, $this->factSet));
+  }
+
+  /**
+   * The condition a pseudo-class on the addressed element spells.
+   *
+   * The dialect writes a state or a fact as its printed wrapper
+   * (":hover", ":first-child", ":nth-child(odd)"), so the parser resolves
+   * the wrapper text back to the condition name here, whitespace and case
+   * folded like at-rule preludes. NULL when no published state or fact
+   * prints that way.
+   */
+  public function pseudoClassCondition(string $pseudo): ?string {
+    return $this->pseudoIndex[self::normalizeWrapper($pseudo)] ?? NULL;
   }
 
   /**
@@ -698,10 +762,124 @@ final class DialectCatalog {
   }
 
   /**
-   * The declared part classes: class => owning block-type tags.
+   * The selector rosters per owner: dialect tag => {parts, tags}.
+   *
+   * @return array<string, array{parts: array<string, string>, tags: string[]}>
+   *   The contributed rosters, in contribution order.
+   */
+  public function selectors(): array {
+    return $this->selectors;
+  }
+
+  /**
+   * One owner's selector roster: what a compound may land on under it.
+   *
+   * The parts and tags the styling layer contributed for the owner (an
+   * owner no layer named has none), and the types the spine derives: a
+   * container's children are the page's elements, so every declared
+   * block type's tag plus pb-container and pb-block may follow it; a
+   * block has no child elements of the page, so nothing may.
+   *
+   * @param string $owner
+   *   The owner's dialect tag ("pb-container", "pb-text", "pb-block").
+   *
+   * @return array{parts: array<string, string>, tags: string[], types: string[]}
+   *   The owner's parts (selector => label), tags and types.
+   */
+  public function selectorsFor(string $owner): array {
+    $roster = $this->selectors[$owner] ?? [];
+    return [
+      'parts' => $roster['parts'] ?? [],
+      'tags' => $roster['tags'] ?? [],
+      'types' => $owner === RelativeSelector::TYPE_CONTAINER ? $this->types() : [],
+    ];
+  }
+
+  /**
+   * The declared parts of one owner: selector => label.
+   *
+   * @return array<string, string>
+   *   The parts, in declaration order; [] for an owner declaring none.
+   */
+  public function partsOf(string $owner): array {
+    return $this->selectors[$owner]['parts'] ?? [];
+  }
+
+  /**
+   * The owners declaring a part class, in contribution order.
+   *
+   * @param string $selector
+   *   The class selector, with its dot (".text-block-link").
+   *
+   * @return string[]
+   *   The owners' dialect tags; [] when no owner declares the part.
+   */
+  public function partOwners(string $selector): array {
+    $owners = [];
+    foreach ($this->selectors as $owner => $roster) {
+      if (isset($roster['parts'][$selector])) {
+        $owners[] = (string) $owner;
+      }
+    }
+    return $owners;
+  }
+
+  /**
+   * Every declared part across the owners: selector => owning dialect tags.
+   *
+   * The site-wide projection a corrective enumerates when the owner is
+   * not at hand.
+   *
+   * @return array<string, string[]>
+   *   Part selector => the owners declaring it, in contribution order.
    */
   public function parts(): array {
-    return $this->parts;
+    $parts = [];
+    foreach ($this->selectors as $owner => $roster) {
+      foreach (array_keys($roster['parts'] ?? []) as $selector) {
+        $parts[(string) $selector][] = (string) $owner;
+      }
+    }
+    return $parts;
+  }
+
+  /**
+   * The tags a tag compound may name under one owner.
+   *
+   * @return string[]
+   *   Tag names in declaration order; [] for an owner with no tag tier.
+   */
+  public function tagsOf(string $owner): array {
+    return $this->selectors[$owner]['tags'] ?? [];
+  }
+
+  /**
+   * The types a type compound may name under one owner.
+   *
+   * @return string[]
+   *   Dialect type tags; [] under a block (it has no child elements).
+   */
+  public function typesOf(string $owner): array {
+    return $this->selectorsFor($owner)['types'];
+  }
+
+  /**
+   * Every type a type compound may spell: the block types and the kinds.
+   *
+   * Spelled as the page language spells the element (pb-{block type},
+   * pb-container for any container, pb-block for any other block), the
+   * spine's own list: the declared block types in their order, then the
+   * two kinds.
+   *
+   * @return string[]
+   *   The type tags.
+   */
+  public function types(): array {
+    return [
+      ...array_map([self::class, 'tagForBlockType'], array_keys($this->blockTypes)),
+      RelativeSelector::TYPE_CONTAINER,
+      RelativeSelector::TYPE_BLOCK,
+    ];
   }
 
   /**
@@ -714,12 +892,21 @@ final class DialectCatalog {
   /**
    * The addressable text-tag vocabulary: the tags "#id tag" may style.
    *
+   * The union of the owners' tag rosters in contribution order (one
+   * base section declares them, so every owner names the same list).
+   *
    * @return string[]
    *   Tag names in declaration order; [] when the styling layer declares
    *   no prose-tag styleability (no tag tier exists on the site).
    */
   public function textTags(): array {
-    return $this->textTags;
+    $tags = [];
+    foreach ($this->selectors as $roster) {
+      foreach ($roster['tags'] ?? [] as $tag) {
+        $tags[(string) $tag] = TRUE;
+      }
+    }
+    return array_keys($tags);
   }
 
   /**
@@ -729,10 +916,11 @@ final class DialectCatalog {
    * else the first declared tag; NULL when no tag tier exists.
    */
   public function exampleTextTag(): ?string {
-    if ($this->textTags === []) {
+    $tags = $this->textTags();
+    if ($tags === []) {
       return NULL;
     }
-    return in_array('p', $this->textTags, TRUE) ? 'p' : $this->textTags[0];
+    return in_array('p', $tags, TRUE) ? 'p' : $tags[0];
   }
 
   /**

@@ -11,13 +11,13 @@ use Drupal\daedalus_layout\Plugin\Block\SectionBlock;
 use Drupal\daedalus_stylish\StyleMapSweepBase;
 
 /**
- * Converts a host's proportions grammar to mode + share (the row variant).
+ * Converts a host's proportions grammar to mode + share (the columns variant).
  *
  * Runs once per host AFTER the section walk and after the grammar sweep
  * (tag priority): by then the map speaks the container grammar and every
  * retiring reference has landed on its split_* spelling, so this sweep is
  * the one place worn split references and stepper-written explicit track
- * overrides become the `row` arrangement reference plus per-child
+ * overrides become the `columns` arrangement reference plus per-child
  * flex-grow overrides. The share half needs each container's children in
  * ORDER, which only the section tree knows - that is why this is its own
  * transform rather than more ContainerGrammarSweep: it reads the host's

@@ -8,25 +8,30 @@
  * media entity's inner fields, a single-region section's region) can never
  * become the selection: selecting something the UI cannot name, label, or
  * traverse from leads nowhere. Before the mirror boots the filter is inert
- * for BOUNDARY and LEAF (their fallback is the raw chain); EDITABLE fails
- * closed instead (see keyForEditableItem).
+ * for BOUNDARY and LEAF (their fallback is the raw chain); the editing gate
+ * fails closed instead (see keyForEditableItem).
  *
- * THE PROJECTION IS ALSO THE EDITING UNIVERSE. Attribution is host-blind
- * by design: a layout block hosted in a theme region renders its inner
- * components fully attributed (selectable keys, editable items) on every
- * page, because the same render is cached and shared across hosts and the
- * styling identity must land for visitors too. So a DOM attribute is an
- * ADDRESS and a capability descriptor, never authorization. What is
- * editable HERE is decided by membership in the root context's blueprint
- * projection, the same Map the Selector tool resolves within. Anything
- * outside it is inert to the armed edit session: no hover, no click, no
- * Tab stop. Its editing surface is its own root (the block_content edit
- * route), where it IS the main entity.
+ * THE EDITING UNIVERSE IS THE PROJECTION PLUS THE MIRROR'S SUBJECTS.
+ * Attribution is host-blind by design: a layout block hosted in a theme
+ * region renders its inner components fully attributed (selectable keys,
+ * editable items) on every page, because the same render is cached and
+ * shared across hosts and the styling identity must land for visitors too.
+ * So a DOM attribute is an ADDRESS and a capability descriptor, never
+ * authorization. What is editable HERE is decided against the root
+ * context's mirror: a leaf whose committed key the projection presents
+ * (the same Map the selection grammar resolves within), or whose key names a
+ * known field of a known subject on the mirror (blueprint/subject-field.js)
+ * even when the tree folds that field's row. Rendered evidence beats
+ * display inference: the projection says which fields earn a row, the
+ * leaf on the page says the field rendered. Anything outside both is
+ * inert to the editor door: no editor, no Tab stop. Its editing surface
+ * is its own root (the block_content edit route), where it IS the main
+ * entity.
  *
  * There is ONE resolver, parameterized by a stop-depth policy. Contexts
  * differ only in the policy they pass, never in mechanism:
  *
- * - BOUNDARY (the Selector tool's default): stop at the outermost presented
+ * - BOUNDARY (the default): stop at the outermost presented
  *   selectable within the current drill context — respect the grouping,
  *   like clicking a group in a design tool. Double-click drills the context
  *   one level; drill steps are PROJECTION steps, so inside a merged block
@@ -43,15 +48,17 @@
  *   under the cursor — skips the drill dance, never the presented
  *   structure (the design-tool convention: deep select reaches layers the
  *   panel shows, folded or not).
- * - EDITABLE (the armed edit session): the deepest editable leaf — "one
- *   click on the word you want" — EXCEPT inside a presentation root
- *   (data-presentation="unit|merged"), a subtree that presents as one
- *   element: there the root's boundary item wins (a media reference's inner
- *   image field is "the image"; editing it means changing the reference,
- *   not the shared media entity's file). A MERGED root additionally
- *   promotes the SELECTION KEY to the root's own key — the outermost
- *   carrier (the block placement, so move/trash/duplicate/drag all arm) —
- *   while the edit still routes to the inner leaf item.
+ *
+ * Editing is not a policy: the editor door (edit_session/edit-session.js)
+ * opens the leaf a KEY owns (or, for a pointer gesture, the leaf under
+ * the pointer that commits that key), resolved by the one grammar above, and inside
+ * a presentation root (data-presentation="unit|merged", a subtree that
+ * presents as one element) the root's boundary item is the leaf (a media
+ * reference's inner image field is "the image"; editing it means changing
+ * the reference, not the shared media entity's file), a MERGED root
+ * promoting the committed key to the root's own (the block placement, so
+ * move/trash/duplicate/drag all arm) while the edit still routes to the
+ * inner leaf item (presentationBoundaryItem, keyForEditableItem).
  *
  * The main entity wrapper (data-main-entity) is the canvas: it never
  * resolves. Selection starts at its direct selectable children.
@@ -59,32 +66,43 @@
 
 import store from '../store/store';
 import { projectionIndex } from '../components/page-elements/projection-index';
+import { isSubjectField } from '../blueprint/subject-field';
 
 export const POLICY = {
   BOUNDARY: 'boundary',
   LEAF: 'leaf',
-  EDITABLE: 'editable',
 };
 
 /**
- * The editable-leaf marker is the editing engine's vocabulary, not ours:
- * the edit session injects it here when an engine registers. Edit identity
- * rides the engine's per-delta field items, not the selectable wrappers
- * around them — a field WRAPPER is selectable, its ITEMS are editable —
- * so editable resolution works item-first. Until an engine registers,
- * nothing resolves as editable.
- */
-let editableItemSelector = null;
-
-/**
- * Injects the registered engine's editable-item selector.
+ * The editable leaves are the editing engine's vocabulary, not ours: the
+ * editor door injects a provider of the engine's CANVAS leaves (its
+ * items() member's canvas list, document order) when an engine registers,
+ * so nothing here names another module's attributes. Edit identity rides
+ * the engine's per-delta field items, not the selectable wrappers around
+ * them — a field WRAPPER is selectable, its ITEMS are editable — so the
+ * editing gate works item-first, by membership in that list. Until an
+ * engine registers, nothing is editable.
  *
- * @param {string} selector
- *   A CSS selector matching the engine's editable leaf elements.
+ * @type {?Function}
  */
-export const setEditableItemSelector = (selector) => {
-  editableItemSelector = selector;
+let editableItems = null;
+
+/**
+ * Injects the registered engine's canvas-leaf provider.
+ *
+ * @param {Function} provider
+ *   () => Element[], the engine's editable canvas leaves in document order.
+ */
+export const setEditableItems = (provider) => {
+  editableItems = provider;
 };
+
+/**
+ * The engine's canvas leaves, or null before an engine registers.
+ *
+ * @return {?Element[]}
+ */
+const canvasItems = () => (editableItems ? editableItems() : null);
 
 /**
  * Finds the outermost presentation root containing an element.
@@ -118,26 +136,35 @@ const outermostPresentationRoot = (element) => {
 /**
  * The item that edits when an editable item is inside a presentation root:
  * the outermost editable item the root contains. Outside a presentation
- * root an item edits as itself. The edit session filters Tab traversal
+ * root an item edits as itself. The editor door filters Tab traversal
  * with this so a presentation root's subtree is ONE stop — Tab never
- * enters what a click cannot reach.
+ * enters what the door cannot reach.
  *
  * @param {Element} item
- *   An editable item (matches the engine's item selector).
+ *   An editable item (one of the engine's canvas leaves).
+ * @param {?Set<Element>} items
+ *   The engine's canvas leaves as a set, for callers resolving many items
+ *   in one pass; built from the provider when omitted.
  *
  * @return {Element}
  */
-export const presentationBoundaryItem = (item) => {
+export const presentationBoundaryItem = (item, items = null) => {
   const root = outermostPresentationRoot(item);
   if (!root) {
     return item;
   }
-  let outer = item.parentElement?.closest(editableItemSelector);
-  while (outer && root.contains(outer)) {
-    item = outer;
-    outer = item.parentElement?.closest(editableItemSelector);
+  const set = items ?? new Set(canvasItems() ?? []);
+  let boundary = item;
+  for (
+    let node = item.parentElement;
+    node && root.contains(node);
+    node = node.parentElement
+  ) {
+    if (set.has(node)) {
+      boundary = node;
+    }
   }
-  return item;
+  return boundary;
 };
 
 /**
@@ -147,15 +174,20 @@ export const presentationBoundaryItem = (item) => {
  * ROOT row as the selection. The projection absorbed the label field's
  * row into the root row, so the field key has no row of its own;
  * selecting it would move the selection somewhere the panel cannot name.
- * This is a one-way mapping, leaf to row, never an edit route: the root
- * row has NO leaf of its own (its editor is the entity-form panel, which
- * the Edit verb opens without arming the session), and a theme that
- * prints the H1 as the label's leaf keeps it click-editable on its own.
- * This is the root-rule twin of the merged-root promotion via
+ * ONE mapping at both doors: the pointer chain (representedChainKeys, so
+ * hovering the theme's H1 names the root row, a click selects it and a
+ * double-click on it edits the title in place) and the editing gate
+ * (keyForEditableItem, so the Tab walk lands on the H1 as the root row's
+ * leaf). It is a leaf-to-row mapping, never a row-to-leaf one: the root
+ * ROW owns no leaf (its editor is the entity-form panel, which Enter and
+ * the Edit verb present), and the H1 sits outside the entity wrapper
+ * where no key search finds it, which is why a pointer gesture routes by
+ * the item it hit (edit-session.js) and only a keyless gesture by the
+ * key. This is the root-rule twin of the merged-root promotion via
  * data-presentation; the root's rule lives in the blueprint annotation,
  * so this reads the mirror where that one reads the DOM. Both run BEFORE
- * the projection gate in keyForEditableItem, which is why the absorbed
- * label leaf stays editable: the key it commits is the root row's.
+ * the projection gate, which is why the absorbed label leaf stays
+ * selectable and editable: the key it commits is the root row's.
  */
 const rootKeyForEditTarget = (key) => {
   const { root, blueprint } = store.getState().blueprint;
@@ -173,27 +205,40 @@ const rootKeyForEditTarget = (key) => {
  * commits the root entity key (rootKeyForEditTarget). Expects an item
  * already at its presentation boundary.
  *
- * THE GATE: the key is null unless the key it would COMMIT is in the
- * projection index. This is the one seam every editing door passes
- * through (click and hover via resolveEditable, editItem, and the edit
- * session's Tab traversal), so it is where the editing universe is
- * enforced. The test is on the committed key, never the raw wrapper key:
- * inside a merged root the inner wrappers are absent from the projection
- * BY DESIGN (the root absorbed them), and so is the root's label field;
- * testing raw keys would drop every merged block and the page title.
- * Testing the promoted key keeps those editable while a foreign host (a
- * theme-region layout block's inner components, attributed but outside
- * this root's blueprint) drops out. Fails CLOSED before the mirror boots:
- * the mirror boots synchronously from drupalSettings on the first
- * behavior attach, before any handler is armed, so a null index only ever
- * means "no editing universe on this page" and nothing is editable.
+ * THE GATE: the key is null unless the key it would COMMIT passes one of
+ * two doors, both read off the mirror: the projection index (the key
+ * presents as a row) or the subject-field rule (the key names a known
+ * field of a known subject, isSubjectField). This is the one seam every
+ * editing door passes through (the editor door's editItem and its Tab
+ * traversal), so it is where the editing universe is enforced. The test is on the committed key, never
+ * the raw wrapper key: inside a merged root the inner wrappers are absent
+ * from the projection BY DESIGN (the root absorbed them), and so is the
+ * root's label field; testing raw keys would drop every merged block and
+ * the page title. Testing the promoted key keeps those editable while a
+ * foreign host (a theme-region layout block's inner components, attributed
+ * but outside this root's blueprint) drops out of both doors. The second
+ * door is rendered evidence beating display inference: a field the tree
+ * folds (a non-preserved root field on a Layout Builder display that a
+ * theme prints anyway, a display-hidden block field a template renders)
+ * has no row, but a leaf carrying its key is proof it rendered, and the
+ * mirror vouches the field is the subject's. A field block placement
+ * takes the first door instead: it presents MERGED into the field it
+ * renders (data-presentation on the placement), so the leaf promotes to
+ * the placement key and edits in place under one row. When one field
+ * renders twice (preserved on the display AND placed as a field block),
+ * both leaves pass and each commits its own key; elementForKey answers
+ * with the first element in document order, the accepted resolution.
+ * Fails CLOSED before the mirror boots: the mirror boots synchronously
+ * from drupalSettings on the first behavior attach, before any handler is
+ * armed, so a null mirror only ever means "no editing universe on this
+ * page" and nothing is editable.
  *
  * @param {Element} item
- *   An editable item (matches the engine's item selector).
+ *   An editable item (one of the engine's canvas leaves).
  *
  * @return {?string}
  *   The selection key, or null when the item has no selectable wrapper or
- *   its committed key is outside the root context's projection.
+ *   its committed key is outside the root context's editing universe.
  */
 export const keyForEditableItem = (item) => {
   const wrapper = item.closest('[data-selectable]');
@@ -206,58 +251,11 @@ export const keyForEditableItem = (item) => {
     key = root.getAttribute('data-selectable') || key;
   }
   key = rootKeyForEditTarget(key);
-  return projectionIndex()?.has(key) ? key : null;
-};
-
-/**
- * Resolves a pointer target to the editable leaf it lands on.
- *
- * The exact delta item at or above the target wins — clicking the second
- * paragraph of a multi-value field edits that item, where the old per-field
- * indicators always opened the first — and it is the DEEPEST item: a nested
- * entity's attributed fields (a paragraph's text) edit directly. The one
- * exception is a presentation root (data-presentation): its subtree edits
- * as one element, so the item climbs to the outermost editable item inside
- * the root — clicking a media reference's inner image edits the reference
- * field — and a MERGED root promotes the selection key to the root itself.
- * A click on wrapper padding (between items) falls back to the innermost
- * selectable wrapper that owns an editable item, and yields that item
- * under the same presentation rule.
- *
- * @param {EventTarget} target
- *   The pointer event target.
- *
- * @return {?{item: Element, key: string}}
- *   The editable item and its wrapper's selectable key, or null when
- *   nothing editable is under the target.
- */
-export const resolveEditable = (target) => {
-  const element = target instanceof Element ? target : null;
-  if (!element || !editableItemSelector) {
-    return null;
+  if (projectionIndex()?.has(key)) {
+    return key;
   }
-  const ownedItem = (wrapper) =>
-    Array.from(wrapper.querySelectorAll(editableItemSelector)).find(
-      (candidate) => candidate.closest('[data-selectable]') === wrapper,
-    ) ?? null;
-
-  const withKey = (item) => {
-    item = presentationBoundaryItem(item);
-    const key = keyForEditableItem(item);
-    return key ? { item, key } : null;
-  };
-
-  const item = element.closest(editableItemSelector);
-  if (item) {
-    return withKey(item);
-  }
-  for (const wrapper of selectableChain(element)) {
-    const owned = ownedItem(wrapper);
-    if (owned) {
-      return withKey(owned);
-    }
-  }
-  return null;
+  const mirror = store.getState().blueprint;
+  return isSubjectField(mirror.blueprint, mirror.root, key) ? key : null;
 };
 
 /**
@@ -309,16 +307,21 @@ export const chainKeys = (target) => {
 
 /**
  * Collects the presented selectable keys above (and including) a target:
- * the raw chain filtered to the projection universe. Every pointer
- * policy picks its stop from THIS list, so a key the panel cannot show
- * never becomes the selection. Unfiltered before the mirror boots.
+ * the raw chain, each key promoted to the row that presents it
+ * (rootKeyForEditTarget: the root's label leaf presents AS the root row),
+ * then filtered to the projection universe. Every pointer policy picks
+ * its stop from THIS list, so a key the panel cannot show never becomes
+ * the selection, and the promotion runs BEFORE the filter for the same
+ * reason keyForEditableItem promotes first: the absorbed label leaf has
+ * no row of its own, but the row it presents under does. Unfiltered
+ * before the mirror boots.
  *
  * @return {string[]}
  *   Presented selectable keys, innermost first.
  */
 export const representedChainKeys = (target) => {
   const index = projectionIndex();
-  const keys = chainKeys(target);
+  const keys = chainKeys(target).map(rootKeyForEditTarget);
   return index ? keys.filter((key) => index.has(key)) : keys;
 };
 
@@ -344,10 +347,6 @@ export const resolve = (
   target,
   { policy = POLICY.BOUNDARY, drillKey = null, selectedKeys = [] } = {},
 ) => {
-  if (policy === POLICY.EDITABLE) {
-    return resolveEditable(target)?.key ?? null;
-  }
-
   const keys = representedChainKeys(target);
   if (keys.length === 0) {
     return null;
@@ -400,33 +399,4 @@ export const elementForKey = (key) => {
   // Keys contain no quotes or backslashes, so they are safe in a quoted
   // attribute selector.
   return key ? document.querySelector(`[data-selectable="${key}"]`) : null;
-};
-
-/**
- * Finds a selectable key's presented parent.
- *
- * The projection index's parent pointer, the same ancestry the panel and
- * the breadcrumb render. A key outside the projection (a programmatic
- * selection) falls back to its nearest presented DOM ancestor.
- *
- * @param {?string} key
- *   The selectable key whose parent is wanted.
- *
- * @return {?string}
- *   The parent key, or null at the top of the tree (the canvas).
- */
-export const parentKey = (key) => {
-  const index = projectionIndex();
-  if (index?.has(key)) {
-    return index.get(key).parent;
-  }
-  let element = elementForKey(key)?.parentElement?.closest('[data-selectable]');
-  while (element && !element.hasAttribute('data-main-entity')) {
-    const candidate = element.getAttribute('data-selectable');
-    if (!index || index.has(candidate)) {
-      return candidate;
-    }
-    element = element.parentElement?.closest('[data-selectable]');
-  }
-  return null;
 };

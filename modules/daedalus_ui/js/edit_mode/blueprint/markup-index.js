@@ -1,4 +1,5 @@
 import store from '../store/store';
+import { findInstance, findPart, markupPlacement } from './markup-presence';
 
 /**
  * THE markup index over the blueprint mirror: selectable key → the
@@ -113,40 +114,6 @@ export const markupForKey = (key) => {
 };
 
 /**
- * The instance row a selector addresses (descendants included), or null.
- */
-const findInstance = (rows, selector) => {
-  for (const row of Array.isArray(rows) ? rows : []) {
-    if (`.${row.class}` === selector) {
-      return row;
-    }
-    const nested = findInstance(row.children, selector);
-    if (nested) {
-      return nested;
-    }
-  }
-  return null;
-};
-
-/**
- * The resolved part node a selector addresses inside a parts tree, or
- * null. A matched key always yields an object (the resolver emits {tag,
- * attributes, parts} nodes) so callers can rely on truthiness.
- */
-const findPart = (parts, selector) => {
-  for (const [key, part] of Object.entries(parts ?? {})) {
-    if (key === selector) {
-      return part ?? {};
-    }
-    const nested = findPart(part?.parts, selector);
-    if (nested) {
-      return nested;
-    }
-  }
-  return null;
-};
-
-/**
  * WHERE one declared part landed for a key's element: the canonical
  * placement answer, read from the markup annotation. The model decided
  * the parts at serialize time from entity data, so the answer is the
@@ -161,6 +128,9 @@ const findPart = (parts, selector) => {
  * - null, the model does not speak (no annotation, or an instances-only
  *   field annotation with no matching carrier): consumers degrade to the
  *   declared sketch, never to an emptier one.
+ * The rule itself lives in markup-presence.js (markupPlacement), so a
+ * consumer holding the annotation already (the delivered tree in any
+ * window) reads the same answer without the store.
  *
  * Surfaces that PROJECT THE PAGE (the markup view's rows) gate on
  * placement-as-own-element; surfaces that STYLE or complete against the
@@ -174,24 +144,8 @@ const findPart = (parts, selector) => {
  *
  * @return {'element'|'root'|false|null}
  */
-export const partPlacement = (key, selector) => {
-  const markup = markupForKey(key);
-  if (!markup) {
-    return null;
-  }
-  if (
-    findPart(markup.parts, selector) ||
-    findInstance(markup.instances, selector)
-  ) {
-    return 'element';
-  }
-  if (Array.isArray(markup.hoisted) && markup.hoisted.includes(selector)) {
-    return 'root';
-  }
-  // An instances-only annotation (a field's markup) models no shell: it
-  // can vouch for its carriers but cannot deny a part.
-  return markup.parts === undefined ? null : false;
-};
+export const partPlacement = (key, selector) =>
+  markupPlacement(markupForKey(key), selector);
 
 /**
  * Whether one declared part selector is present on a key's element, the

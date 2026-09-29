@@ -6,25 +6,26 @@
  * preview printer, the picker's fit ranking) can speak the grammar without
  * a round trip. One key space:
  *
- *   key       = path? ("::." class)? ("::>")?
+ *   key       = path? ("::" selector)?
  *   path      = segment ("/" segment)*
  *   segment   = container(index) | block(type,index) | field(name)
  *   name/type = machine name [a-z0-9_]+
  *   index     = 1-based [1-9][0-9]*
- *   class     = [A-Za-z0-9_-]+
+ *   selector  = a canonical relative selector (relative-selector.js)
  *
  * Structural rules are parameterized by the ROOT KIND: container roots
  * start paths at container(index) or block(type,index) — a container's
  * children are ONE ordered flow, no region segments; block roots at
- * field(name); field, entity and region roots carry no paths, parts only.
- * container(...) is followed by container(index) or block(type,index) —
- * container(n), the nth nested container, is the recursion into nested
- * compositions (containers all the way down); field(...) follows any block
- * segment and terminates the path; the '::.class' part suffix may
- * terminate any key; the '::>' children pseudo-part suffix (the element's
- * direct children as one addressable) may terminate any key too, part
- * suffixes included, and is always last.
+ * field(name); field, entity and region roots carry no paths, selectors
+ * only. container(...) is followed by container(index) or
+ * block(type,index) — container(n), the nth nested container, is the
+ * recursion into nested compositions (containers all the way down);
+ * field(...) follows any block segment and terminates the path; the '::'
+ * selector suffix may terminate any key, admitted canonical only, and
+ * since a selector never contains '::' the first '::' always splits path
+ * from selector.
  */
+import { splitKey } from '../../../daedalus_ui/js/edit_mode/materials/relative-selector.js';
 
 /**
  * Segment types each root kind may START a path with (empty: parts only).
@@ -44,7 +45,6 @@ export const ROOT_KINDS = Object.keys(FIRST_SEGMENTS);
 
 const SEGMENT =
   /^(?:(field)\(([a-z0-9_]+)\)|(block)\(([a-z0-9_]+),([1-9][0-9]*)\)|(container)\(([1-9][0-9]*)\))$/;
-const PART = /^\.[A-Za-z0-9_-]+$/;
 
 /**
  * Parses an element-relative style key.
@@ -54,14 +54,14 @@ const PART = /^\.[A-Za-z0-9_-]+$/;
  * @param {?string} rootKind
  *   The root element's kind, one of ROOT_KINDS. null when unknown (an
  *   unresolvable scope), which permits only the path-less keys ('' and
- *   '::.class'). An unknown non-null kind throws: a caller bug, not bad
- *   data.
+ *   '::selector'). An unknown non-null kind throws: a caller bug, not
+ *   bad data.
  *
- * @return {?{segments: Array<{type: string, name?: string, index?: number}>, part: ?string, children: boolean}}
+ * @return {?{segments: Array<{type: string, name?: string, index?: number}>, selector: ?string}}
  *   The parsed key (segments outermost first; name on block/field
- *   segments, index on container and block segments; part in '.class'
- *   selector form; children true for keys carrying the trailing '::>'
- *   suffix), or null when it does not parse.
+ *   segments, index on container and block segments; selector the
+ *   canonical relative selector after the '::', null for the element
+ *   itself), or null when it does not parse.
  */
 export const parseSlotKey = (key, rootKind = null) => {
   if (rootKind !== null && !Object.hasOwn(FIRST_SEGMENTS, rootKind)) {
@@ -69,32 +69,14 @@ export const parseSlotKey = (key, rootKind = null) => {
       `"${rootKind}" is not a slot-key root kind (expected one of: ${ROOT_KINDS.join(', ')}).`,
     );
   }
-  if (typeof key !== 'string') {
+  // The first '::' splits the path from its selector (the one split every
+  // key grammar shares); the selector is admitted canonical only (PHP
+  // mirror: SlotKey::parse()).
+  const split = splitKey(key);
+  if (split === null) {
     return null;
   }
-
-  // The '::>' children suffix is the outermost (and always last) suffix:
-  // stripping it first leaves an ordinary element key, so '::.class::>'
-  // parses as the part's children and a doubled '::>::>' fails the part
-  // charset below like any malformed remainder (PHP mirror:
-  // SlotKey::parse()).
-  const children = key.endsWith('::>');
-  if (children) {
-    key = key.slice(0, -3);
-  }
-
-  let path = key;
-  let part = null;
-  const pos = key.indexOf('::');
-  if (pos !== -1) {
-    part = key.slice(pos + 2);
-    path = key.slice(0, pos);
-    // The part charset excludes ':', so matching the whole remainder also
-    // guarantees the key carries exactly one '::' suffix.
-    if (!PART.test(part)) {
-      return null;
-    }
-  }
+  const { root: path, selector } = split;
 
   const segments = [];
   if (path !== '') {
@@ -126,7 +108,7 @@ export const parseSlotKey = (key, rootKind = null) => {
     }
   }
 
-  return { segments, part, children };
+  return { segments, selector };
 };
 
 /**
@@ -136,7 +118,7 @@ export const parseSlotKey = (key, rootKind = null) => {
  * parseSlotKey stays the one validator, so builders producing structural
  * nonsense find out at the parse/validate seam, not here.
  */
-export const formatSlotKey = (segments, part = null, children = false) => {
+export const formatSlotKey = (segments, selector = null) => {
   const path = (segments ?? [])
     .map((segment) => {
       if (segment.name === undefined) {
@@ -148,9 +130,7 @@ export const formatSlotKey = (segments, part = null, children = false) => {
     })
     .join('/');
   return (
-    path +
-    (part !== null && part !== undefined ? `::${part}` : '') +
-    (children ? '::>' : '')
+    path + (selector !== null && selector !== undefined ? `::${selector}` : '')
   );
 };
 
@@ -187,15 +167,15 @@ export const compareSegments = (a, b) => {
  *
  * The shape a single {variant, fragment} reference delivers to its
  * carrying element (SlotKey::fragmentStyles): the fragment's own entry
- * reads as '' and its '::.class' part entries as their '::.class' suffix,
+ * reads as '' and its '::selector' entries as their '::selector' suffix,
  * so "{key}{suffix}" is the map key the styles belong to on the carrier.
  * Deeper slot paths under the fragment are OTHER fragments (their
  * elements carry their own references) and never read here. A fragment
  * the variant does not hold reads empty — valid but inert. The ONE
- * client fragment-lookup semantics: the printer, the edit-mode resolver
- * (effectiveEntry/effectiveElementMap) and the shadow badges all read
- * through here, so panel and canvas can never disagree about what a
- * reference delivers.
+ * client fragment-lookup semantics: the printer, the style stack
+ * (buildStack's reference layers) and the wear bar all read through
+ * here, so panel and canvas can never disagree about what a reference
+ * delivers.
  *
  * @param {object} styles
  *   The variant's element-relative styles.
@@ -203,7 +183,7 @@ export const compareSegments = (a, b) => {
  *   The fragment slot key ('' for the root element).
  *
  * @return {object}
- *   Style entries keyed by '' or '::.class' part suffix, in stored order.
+ *   Style entries keyed by '' or '::selector' suffix, in stored order.
  *   Non-object and empty entries are dropped, and each entry reads
  *   values-only: a nested "variants" reference list is stripped (it
  *   distributes at apply time, never through the carrier's lookup).

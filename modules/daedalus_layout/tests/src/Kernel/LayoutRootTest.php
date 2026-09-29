@@ -97,9 +97,10 @@ class LayoutRootTest extends NestedStorageKernelTestBase {
    * daedalus_layout declares the layout root as entity anatomy, with its box fact.
    *
    * The rendered class and the declared part key are one fact; the part's
-   * display: grid rides the declared-defaults tier (declared defaults
-   * follow markup ownership: the entity kind may default the anatomy it
-   * declares).
+   * flex column (display: flex; flex-direction: column, the container
+   * kind's own stacking model) rides the declared-defaults tier (declared
+   * defaults follow markup ownership: the entity kind may default the
+   * anatomy it declares).
    */
   public function testLayoutRootIsDeclaredEntityAnatomy(): void {
     $declarations = $this->container->get('daedalus_ui.page_builder_declarations');
@@ -112,9 +113,9 @@ class LayoutRootTest extends NestedStorageKernelTestBase {
       'The layout root is a declared div part of the entity kind, labeled Layout, claiming the section list.',
     );
     $this->assertSame(
-      ['default' => ['display' => 'grid']],
+      ['default' => ['display' => 'flex', 'flex-direction' => 'column']],
       $entity['defaults']['::' . $selector] ?? NULL,
-      'The layout root defaults to a grid: the arranging box fact ships with the markup, not the skin.',
+      'The layout root defaults to a flex column: the arranging box fact ships with the markup, not the skin, and packs the bands instead of stretching them.',
     );
 
     $resolved = $this->container->get('daedalus_ui.element_resolver')->resolve($entity);

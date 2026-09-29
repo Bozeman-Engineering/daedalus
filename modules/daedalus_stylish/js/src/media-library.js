@@ -51,6 +51,20 @@ const libraryUrl = () =>
 export const mediaLibraryAvailable = () => libraryUrl() !== null;
 
 /**
+ * The value a pick payload carries for the picked property until the
+ * selection fills it with the token.
+ *
+ * A pick's changes arrive at the source already routed (the widget
+ * pipeline's route() over the picked property and its companions, or the
+ * advanced row's one change), before any media is chosen, so the picked
+ * property needs a stand-in the routing treats as a set member and the
+ * source can find again once the token exists. A plain string, never a
+ * function: a satellite's pick crosses the broadcast wire as an intent,
+ * and the leader fills the same payload it would have built itself.
+ */
+export const MEDIA_PICK_PLACEHOLDER = 'media:pick';
+
+/**
  * Opens the media library modal, routing the selection to onSelect.
  *
  * @param {function({uuid: string, token: string, url: ?string}): void} onSelect

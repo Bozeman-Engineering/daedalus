@@ -53,6 +53,7 @@ class LinkAutocompleteTest extends KernelTestBase {
     'daedalus_tempstore',
     'daedalus_blueprint',
     'daedalus_blueprint_api',
+    'file',
     'daedalus_ui',
     'field_sample_value',
     'daedalus_edit',
@@ -71,7 +72,7 @@ class LinkAutocompleteTest extends KernelTestBase {
   }
 
   /**
-   * Builds the payload through the service, as the Edit tool attaches it.
+   * Builds the payload through the service, as the form panel attaches it.
    */
   protected function settings(): array {
     return \Drupal::service('daedalus_edit.link_autocomplete')->settings();

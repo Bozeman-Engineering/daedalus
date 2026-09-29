@@ -18,7 +18,8 @@ use Drupal\Core\StringTranslation\TranslatableMarkup;
  * map stores under, the validator accepts, and the AI schema documents —
  * one plugin powers all three.
  *
- * Every condition lives on one AXIS (width, scheme, motion, state): axes
+ * Every condition lives on one AXIS (state, structural, width, scheme,
+ * motion): axes
  * are the compound-condition lanes — a style entry may key on an "a+b"
  * compound holding at most one condition per axis ("narrow+dark"), exactly
  * as variants compose across variant axes. Conditions sharing an axis are
@@ -35,8 +36,8 @@ final class ConditionType extends AttributeBase {
    * @param \Drupal\Core\StringTranslation\TranslatableMarkup $label
    *   The condition type's human label ("Container breakpoint").
    * @param string $axis
-   *   The axis this type's conditions live on ("width", "scheme", "motion",
-   *   "state"). A compound condition holds at most one condition per axis,
+   *   The axis this type's conditions live on ("state", "structural",
+   *   "width", "scheme", "motion"). A compound condition holds at most one condition per axis,
    *   and the canonical part order is axis-declaration order — the order
    *   axes first appear across the (weight, id)-ordered condition types.
    * @param int $weight

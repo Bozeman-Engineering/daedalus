@@ -6,7 +6,7 @@ namespace Drupal\Tests\daedalus_edit_text_block\Kernel;
 
 use Drupal\block_content\Entity\BlockContent;
 use Drupal\Component\Serialization\Json;
-use Drupal\KernelTests\KernelTestBase;
+use Drupal\Tests\daedalus\Kernel\BlueprintKernelTestBase;
 use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 
 /**
@@ -20,12 +20,14 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  * anchor part carrying the stable text-block-link class and the href in
  * the linked shape, the typing-surface marker riding the DECLARED mount
  * element (the root unlinked, the anchor linked; no editing-only span),
- * the escaped text, and the edit-capable editor attribution.
+ * the escaped text, and the edit-capable editor attribution. It also pins
+ * the bundle's placement contract: a text block placed with sample
+ * population is an unlinked paragraph.
  *
  * @group daedalus_edit_text_block
  */
 #[RunTestsInSeparateProcesses]
-class TextBlockComposedRenderTest extends KernelTestBase {
+class TextBlockComposedRenderTest extends BlueprintKernelTestBase {
 
   /**
    * {@inheritdoc}
@@ -35,11 +37,6 @@ class TextBlockComposedRenderTest extends KernelTestBase {
    * must be listed explicitly or the container fails to compile.
    */
   protected static $modules = [
-    'system',
-    'user',
-    'field',
-    'text',
-    'filter',
     'link',
     'options',
     'editor',
@@ -53,13 +50,13 @@ class TextBlockComposedRenderTest extends KernelTestBase {
     'navigation',
     'twig_events',
     'daedalus_tempstore',
-    'daedalus_blueprint',
     'daedalus_blueprint_api',
     'daedalus_ui',
     'field_sample_value',
     'daedalus_edit',
-    // The shipped block type carries an daedalus_layout third-party palette icon,
-    // so installing the module's config needs daedalus_layout's TPS schema.
+    // The shipped block type carries a daedalus_layout third-party palette
+    // icon, so installing the module's config needs daedalus_layout's TPS
+    // schema.
     'daedalus_layout',
     'daedalus_edit_text_block',
   ];
@@ -69,8 +66,9 @@ class TextBlockComposedRenderTest extends KernelTestBase {
    */
   protected function setUp(): void {
     parent::setUp();
-    $this->installEntitySchema('user');
-    $this->installEntitySchema('block_content');
+    // The Layout Builder host for placement (installs block_content's schema
+    // before the bundle's field config lands on it).
+    $this->enableLayoutBuilder();
     $this->installConfig(['daedalus_edit_text_block']);
   }
 
@@ -167,11 +165,67 @@ class TextBlockComposedRenderTest extends KernelTestBase {
 
   /**
    * The declared fallback: a tag field with no value renders a paragraph.
+   *
+   * The tag field ships a p default, so a block created without the key
+   * would carry p as data; passing NULL explicitly skips the default and
+   * exercises the residual form.
    */
   public function testTagFallback(): void {
-    $block = $this->createBlock(['field_text_text' => 'Plain']);
+    $block = $this->createBlock(['field_text_text' => 'Plain', 'field_text_tag' => NULL]);
+    $this->assertTrue($block->get('field_text_tag')->isEmpty(), 'The fixture holds no tag value.');
     $html = trim($this->renderComposed($block));
     $this->assertMatchesRegularExpression('/^<p[^>]*>Plain<\/p>$/', $html, 'The residual root form carries the p fallback as declared data, not template code.');
+  }
+
+  /**
+   * Placement: a text block dropped with sample population is an unlinked p.
+   *
+   * The sample ladder's placement entrance fills a field from its default
+   * value, else its configured sample policy, else nothing: the tag field's
+   * p default answers, field_text_text's random_string policy answers, and
+   * the policy-less url field stays empty. Core's type-level sample (a random
+   * tag from the allowed values, a fabricated external link) is not a
+   * placement rung, so the render is a paragraph with no anchor.
+   */
+  public function testPlacementIsUnlinkedParagraph(): void {
+    $host = $this->createTestEntity([
+      'name' => 'Text block placement',
+      'layout_builder__layout' => [
+        $this->createSection('layout_onecol', [
+          [
+            'uuid' => '7a3f08ce-2f70-4c98-8f5b-3d1f6a9be0c4',
+            'region' => 'content',
+            'weight' => 0,
+            'configuration' => [
+              'id' => 'system_powered_by_block',
+              'provider' => 'system',
+              'label' => 'Anchor seed',
+              'label_display' => '0',
+            ],
+          ],
+        ]),
+      ],
+    ]);
+
+    $result = $this->container->get('daedalus_blueprint.operations')->addElement($host, [
+      'anchor' => '7a3f08ce-2f70-4c98-8f5b-3d1f6a9be0c4',
+      'placement' => 'after',
+    ], [
+      'block_type' => 'text',
+      'uuid' => 'f0f45ea4-c594-783b-9ccb-94c896ee4891',
+      'populate' => 'sample',
+    ]);
+    $this->assertTrue($result->isSuccess(), print_r($result->toArray()['errors'] ?? [], TRUE));
+
+    $components = $result->getEntity()->get('layout_builder__layout')->getSection(0)->getComponents();
+    $block = $this->unserializeBlock($components['f0f45ea4-c594-783b-9ccb-94c896ee4891']->get('configuration')['block_serialized']);
+    $this->assertSame('p', $block->get('field_text_tag')->value, 'The tag field\'s p default is the site\'s answer on placement.');
+    $this->assertTrue($block->get('field_text_url')->isEmpty(), 'The policy-less url field is left empty: core\'s random link is not a placement rung.');
+    $this->assertNotSame('', (string) $block->get('field_text_text')->value, 'The text field\'s configured random_string policy fills it.');
+
+    $html = trim($this->renderComposed($block));
+    $this->assertMatchesRegularExpression('/^<p[^>]*>.+<\/p>$/s', $html, 'A placed text block renders as a paragraph.');
+    $this->assertStringNotContainsString('<a', $html, 'A placed text block carries no anchor.');
   }
 
 }

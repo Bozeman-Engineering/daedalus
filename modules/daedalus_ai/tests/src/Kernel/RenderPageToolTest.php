@@ -6,10 +6,16 @@ namespace Drupal\Tests\daedalus_ai\Kernel;
 
 use Drupal\ai\Attribute\FunctionCall;
 use Drupal\ai\OperationType\GenericType\ImageFile;
+use Drupal\daedalus_ai\Attachments;
 use Drupal\daedalus_ai\Plugin\AiFunctionCall\RenderPage;
 use Drupal\daedalus_ai\Render\HeadlessRenderException;
 use Drupal\daedalus_ai\Render\HeadlessRendererInterface;
+use Drupal\daedalus_blueprint\Dialect\DialectAliasMap;
+use Drupal\daedalus_blueprint_ai\ConversationContext;
+use Drupal\daedalus_ui\File\FileLane;
+use Drupal\file\FileInterface;
 use Drupal\KernelTests\KernelTestBase;
+use Drupal\Tests\media\Traits\MediaTypeCreationTrait;
 use Drupal\Tests\user\Traits\UserCreationTrait;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
@@ -48,6 +54,7 @@ use Symfony\Component\HttpFoundation\Session\Storage\MockArraySessionStorage;
 class RenderPageToolTest extends KernelTestBase {
 
   use UserCreationTrait;
+  use MediaTypeCreationTrait;
 
   /**
    * {@inheritdoc}
@@ -58,12 +65,33 @@ class RenderPageToolTest extends KernelTestBase {
     'key',
     'ai',
     'entity_test',
+    // The kept shot: the lane over core's upload handler, and an image
+    // media type so the lane's accepted set includes png.
+    'file',
+    'field',
+    'image',
+    'media',
   ];
 
   /**
    * The recording renderer stub behind the tool.
    */
   protected object $stub;
+
+  /**
+   * The store the shot is held in.
+   */
+  protected Attachments $attachments;
+
+  /**
+   * The conversation the tool holds the shot for.
+   */
+  protected ConversationContext $conversation;
+
+  /**
+   * The conversation id the fixture stamps.
+   */
+  protected const THREAD = 'thread-render';
 
   /**
    * The entity whose page the tests render.
@@ -77,8 +105,34 @@ class RenderPageToolTest extends KernelTestBase {
     parent::setUp();
     $this->installEntitySchema('user');
     $this->installEntitySchema('entity_test');
+    $this->installEntitySchema('file');
+    $this->installSchema('file', ['file_usage']);
+    $this->installEntitySchema('media');
+    $this->installConfig(['field', 'system', 'file', 'image', 'media']);
 
     $this->setUpCurrentUser(['name' => 'editor'], ['view test entity']);
+    $this->createMediaType('image', ['id' => 'image', 'label' => 'Image']);
+
+    // The lane and the store as their service definitions wire them, and
+    // the conversation the agent runner would have stamped.
+    $this->container->set('daedalus_ui.file_lane', new FileLane(
+      $this->container->get('file.upload_handler'),
+      $this->container->get('file_system'),
+      $this->container->get('entity_type.manager'),
+    ));
+    $this->attachments = new Attachments(
+      $this->container->get('file.usage'),
+      new DialectAliasMap($this->container->get('tempstore.shared')),
+      $this->container->get('entity_type.manager'),
+      $this->container->get('current_user'),
+      $this->container->get('keyvalue.expirable'),
+      $this->container->get('database'),
+      $this->container->get('datetime.time'),
+    );
+    $this->container->set('daedalus_ai.attachments', $this->attachments);
+    $this->conversation = new ConversationContext();
+    $this->conversation->set(self::THREAD);
+    $this->container->set('daedalus_blueprint_ai.conversation_context', $this->conversation);
     $this->entity = $this->container->get('entity_type.manager')
       ->getStorage('entity_test')
       ->create(['name' => 'Rendered page']);
@@ -190,6 +244,68 @@ class RenderPageToolTest extends KernelTestBase {
     $this->assertInstanceOf(ImageFile::class, $images[0]);
     $this->assertSame('image/png', $images[0]->getMimeType());
     $this->assertNotFalse(getimagesizefromstring($images[0]->getBinary()));
+
+    // The kept shot: named by page and pose, saved through the lane into
+    // the store's directory, held for the conversation, and the result
+    // names it as the handle view_file re-opens.
+    $name = 'render-entity_test-' . $this->entity->id() . '-375-dark.png';
+    $this->assertSame($name, $images[0]->getFilename());
+    $this->assertStringContainsString("kept as \"$name\"", $output);
+    $this->assertStringContainsString("view_file(\"$name\")", $output);
+    $held = $this->attachments->resolve(self::THREAD, $name);
+    $this->assertInstanceOf(FileInterface::class, $held);
+    $this->assertStringStartsWith(Attachments::DIRECTORY . '/', (string) $held->getFileUri());
+    $this->assertSame('image/png', $held->getMimeType());
+    $this->assertSame($images[0]->getBinary(), file_get_contents($held->getFileUri()));
+    $this->assertSame(['daedalus_ai' => ['thread' => [self::THREAD => '1']]], $this->container->get('file.usage')->listUsage($held));
+
+    // The same pose rendered again collides; the lane renames and the
+    // result reports the saved name, which is the one that resolves.
+    $tool = $this->tool([
+      'entity_type' => 'entity_test',
+      'entity_id' => (string) $this->entity->id(),
+      'canvas_width' => '375',
+      'canvas_scheme' => 'dark',
+    ]);
+    $tool->execute();
+    $renamed = 'render-entity_test-' . $this->entity->id() . '-375-dark_0.png';
+    $this->assertStringContainsString("kept as \"$renamed\"", $tool->getReadableOutput());
+    $this->assertNotSame($held->id(), $this->attachments->resolve(self::THREAD, $renamed)?->id());
+    $this->assertSame($held->id(), $this->attachments->resolve(self::THREAD, $name)?->id());
+  }
+
+  /**
+   * A shot that cannot be held is still delivered, and says why.
+   *
+   * Outside a conversation (no runner stamped one) there is nothing to
+   * hold the file for; a lane refusal (here: no media type accepts png,
+   * so the accepted set is the textual kinds alone) is reported the same
+   * way. Either way the bytes still ride the image contract, since a
+   * render the model cannot see is worse than one it cannot re-open. The
+   * default pose names the shot by its page alone.
+   */
+  public function testUnkeptShotIsStillDelivered(): void {
+    $this->conversation->set('');
+    $tool = $this->tool(['entity_type' => 'entity_test', 'entity_id' => (string) $this->entity->id()]);
+    $tool->execute();
+    $output = $tool->getReadableOutput();
+    $this->assertStringContainsString('not kept for later: this run has no conversation', $output);
+    $this->assertStringNotContainsString('view_file', $output);
+    $images = $tool->getResult()->getContextValues()['_images'];
+    $this->assertSame('render-entity_test-' . $this->entity->id() . '.png', $images[0]->getFilename());
+    $this->assertSame([], $this->container->get('entity_type.manager')->getStorage('file')->loadMultiple());
+
+    $this->conversation->set(self::THREAD);
+    $this->container->get('entity_type.manager')->getStorage('media_type')->load('image')->delete();
+    $tool = $this->tool(['entity_type' => 'entity_test', 'entity_id' => (string) $this->entity->id()]);
+    $tool->execute();
+    $output = $tool->getReadableOutput();
+    $this->assertStringContainsString('not kept for later: ', $output);
+    $this->assertStringContainsString('extension', $output);
+    $this->assertStringNotContainsString('view_file', $output);
+    $this->assertNotNull($tool->getResult());
+    $this->assertSame([], $this->container->get('entity_type.manager')->getStorage('file')->loadMultiple());
+    $this->assertNull($this->attachments->resolve(self::THREAD, 'render-entity_test-' . $this->entity->id() . '.png'));
   }
 
   /**

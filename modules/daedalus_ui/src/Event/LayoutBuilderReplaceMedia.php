@@ -2,7 +2,6 @@
 
 namespace Drupal\daedalus_ui\Event;
 
-use Drupal\block_content\BlockContentInterface;
 use Drupal\media\Entity\Media;
 use Drupal\Core\Ajax\AjaxResponse;
 use Drupal\Core\Entity\EntityInterface;
@@ -12,7 +11,9 @@ use Drupal\Component\EventDispatcher\Event;
  * Layout Builder replace media.
  *
  * A user has dragged a Media Type compatible file from their browser to a
- * dropzone on an existing Media Block on the page. We then replace the media.
+ * dropzone on an existing Media Block on the page. The subscriber (the Layout
+ * Builder integration) commits the replacement as an op on the blueprint
+ * spine and answers the mutation-response payload.
  */
 class LayoutBuilderReplaceMedia extends Event {
 
@@ -20,11 +21,6 @@ class LayoutBuilderReplaceMedia extends Event {
    * The response a subscriber built.
    */
   protected AjaxResponse $response;
-
-  /**
-   * The media block the replacement targets.
-   */
-  protected BlockContentInterface $mediaBlock;
 
   public function __construct(
     protected Media $media,
@@ -85,26 +81,6 @@ class LayoutBuilderReplaceMedia extends Event {
    */
   public function getMedia(): Media {
     return $this->media;
-  }
-
-  /**
-   * Gets the media block the replacement targets.
-   *
-   * @return \Drupal\block_content\BlockContentInterface
-   *   The media block.
-   */
-  public function getMediaBlock(): BlockContentInterface {
-    return $this->mediaBlock;
-  }
-
-  /**
-   * Sets the media block the replacement targets.
-   *
-   * @param \Drupal\block_content\BlockContentInterface $mediaBlock
-   *   The media block.
-   */
-  public function setMediaBlock(BlockContentInterface $mediaBlock): void {
-    $this->mediaBlock = $mediaBlock;
   }
 
 }

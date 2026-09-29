@@ -1,3 +1,5 @@
+import { Transaction } from '@codemirror/state';
+
 /**
  * The island surface: one container, two postures, owned imperatively.
  *
@@ -13,15 +15,18 @@
  * What each line wears comes from the one marks model (line-marks.js) in
  * both postures: the printer here turns marks into static DOM, the live
  * view's redecorate turns the same marks into Decoration.line + widgets.
- * The winner chip and the pending mark are shared DOM builders below, so
- * the CodeMirror widgets and the printer cannot drift apart.
+ * The run label, the winner chip and the pending mark are shared DOM
+ * builders below, so the CodeMirror widgets and the printer cannot drift
+ * apart.
  *
  * Printed lines are `.daedalus-stylish-island__print > .daedalus-stylish-island__line`
  * (data-line = index) wearing the same decoration classes as the CM lines,
- * so the lost/variant/pending, winner, and pending-mark CSS applies
- * unchanged; inspector.css restates the shared metrics for both postures
- * (the parity contract daedalus_stylish owns). An empty island prints the
- * placeholder line exactly as CM's placeholder renders.
+ * so the lost/delivered/pending, winner, and pending-mark CSS applies
+ * unchanged, and a run label prints as a `.daedalus-stylish-island__run`
+ * block before the run's first line exactly where the live view puts its
+ * block widget; inspector.css restates the shared metrics for both
+ * postures (the parity contract daedalus_stylish owns). An empty island
+ * prints the placeholder line exactly as CM's placeholder renders.
  *
  * Wake triggers wired here: pointerdown on the print (caret from
  * caretPositionFromPoint, mapped to the clicked line's offset;
@@ -62,6 +67,39 @@ export const tooltipParent = (doc) => {
     doc.body.appendChild(parent);
   }
   return parent;
+};
+
+/**
+ * The run label: the block naming a layer run once above its first line
+ * (line-marks.js `run`), a hue dot in the layer's identity color and the
+ * layer's word. The label is the run's handle: it carries the layer id
+ * (data-layer) the island's contextmenu reads to open the layer's
+ * doorways (line-menu.js runMenuItems), and its run's hue as
+ * --daedalus-stylish-line-hue, the same custom property the lines carry,
+ * so the rail inspector.css draws from that hue runs through the label
+ * down its lines. Serves the CM block widget (RunWidget.toDOM) and the
+ * printer alike.
+ *
+ * @param {string} label
+ *   The layer's word.
+ * @param {string} color
+ *   The layer's identity color.
+ * @param {string} layer
+ *   The layer id.
+ *
+ * @return {HTMLElement}
+ *   The block.
+ */
+export const runLabel = (label, color, layer) => {
+  const run = document.createElement('div');
+  run.className = 'daedalus-stylish-island__run';
+  run.dataset.layer = layer;
+  run.setAttribute('style', `--daedalus-stylish-line-hue: ${color}`);
+  const dot = document.createElement('span');
+  dot.className = 'daedalus-stylish-island__run-dot daedalus-ui-dot';
+  dot.style.background = color;
+  run.append(dot, document.createTextNode(label));
+  return run;
 };
 
 /**
@@ -201,6 +239,31 @@ const printedOffset = (container, texts, x, y) => {
 };
 
 /**
+ * The one placement the surface resolves itself: the caret on an empty
+ * last line, after whatever the island already prints. A drafted island
+ * prints its landing's floor lines, so a wake at offset 0 would put the
+ * first typed declaration on the first floor line; this placement is
+ * the fresh line typing belongs on. It is the only placement that edits
+ * the document (a newline appended when the last line is not empty),
+ * which is why the island's resolveAnchor, an offset over a fixed
+ * document, does not own it. The newline is the wake's, not the user's:
+ * it stays out of the undo history.
+ */
+export const FRESH_LINE = 'freshLine';
+
+const freshLine = (state) => {
+  const end = state.doc.length;
+  if (state.doc.line(state.doc.lines).length === 0) {
+    return { selection: { anchor: end } };
+  }
+  return {
+    changes: { from: end, insert: '\n' },
+    selection: { anchor: end + 1 },
+    annotations: Transaction.addToHistory.of(false),
+  };
+};
+
+/**
  * Creates the surface owning one island's editor container.
  *
  * @param {HTMLElement} container
@@ -211,18 +274,33 @@ const printedOffset = (container, texts, x, y) => {
  *   - buildView(state): the EditorView over that state (the island wires
  *     its extensions in the state and its decorations here).
  *   - resolveAnchor(state, placement): a stitch placement resolved to an
- *     offset against the freshly built state.
+ *     offset against the freshly built state (every placement but the
+ *     fresh line, which the surface resolves itself, below).
  *   - onPark(view): derives the parked print from the dying view; returns
  *     {texts, marks} (or null to re-print the last print unchanged).
  *   - onPendingRun(id): the printed pending mark's gesture handler.
+ *   - onPosture(live): told after every posture swap (true once the
+ *     editor is mounted, false once the print is back or the surface is
+ *     destroyed), the island's one hook to wear the posture as a class
+ *     (`daedalus-stylish-island--live`, the lifted island) without
+ *     reaching into the container this surface owns.
  *
  * @return {object}
  *   {print(texts, marks), wake({anchor|placement}), park(), live,
- *   destroy()}.
+ *   destroy()}. wake() takes a document offset (clamped) or a placement
+ *   for resolveAnchor; the placement `{edge: FRESH_LINE}` is resolved
+ *   here (see freshLine).
  */
 export const createIslandSurface = (
   container,
-  { buildState, buildView, resolveAnchor, onPark = null, onPendingRun = null },
+  {
+    buildState,
+    buildView,
+    resolveAnchor,
+    onPark = null,
+    onPendingRun = null,
+    onPosture = null,
+  },
 ) => {
   let view = null;
   let texts = [];
@@ -241,6 +319,9 @@ export const createIslandSurface = (
     } else {
       texts.forEach((text, index) => {
         const mark = marks[index] ?? null;
+        if (mark?.run) {
+          print.append(runLabel(mark.run.label, mark.run.color, mark.run.layer));
+        }
         const line = document.createElement('div');
         line.className = [
           'daedalus-stylish-island__line',
@@ -280,26 +361,25 @@ export const createIslandSurface = (
       }
     },
     wake({ anchor = 0, placement = null } = {}) {
+      const spec = placement?.edge === FRESH_LINE
+        ? freshLine
+        : (state) => ({
+            selection: {
+              anchor: placement
+                ? resolveAnchor(state, placement)
+                : Math.min(anchor, state.doc.length),
+            },
+          });
       if (view) {
         view.focus();
-        view.dispatch({
-          selection: {
-            anchor: placement
-              ? resolveAnchor(view.state, placement)
-              : Math.min(anchor, view.state.doc.length),
-          },
-          scrollIntoView: true,
-        });
+        view.dispatch({ ...spec(view.state), scrollIntoView: true });
         return view;
       }
-      let state = buildState();
-      const head = placement
-        ? resolveAnchor(state, placement)
-        : Math.min(anchor, state.doc.length);
-      state = state.update({ selection: { anchor: head } }).state;
-      view = buildView(state);
+      const state = buildState();
+      view = buildView(state.update(spec(state)).state);
       container.replaceChildren(view.dom);
       view.focus();
+      onPosture?.(true);
       return view;
     },
     park() {
@@ -315,12 +395,16 @@ export const createIslandSurface = (
       }
       parked.destroy();
       renderPrint();
+      onPosture?.(false);
     },
     destroy() {
       const parked = view;
       view = null;
       parked?.destroy();
       container.replaceChildren();
+      if (parked) {
+        onPosture?.(false);
+      }
     },
   };
 
@@ -328,7 +412,9 @@ export const createIslandSurface = (
   // the event; preventDefault so the browser never starts selecting the
   // print (it also suppresses the compatibility mousedown; focus is
   // explicit in wake). Interactive line chrome (the pending mark) keeps
-  // its own gesture; secondary buttons keep the line menu's path.
+  // its own gesture; secondary buttons keep the line and run menus'
+  // path. A run label is not a line: a click on it wakes at the run's
+  // first line (the nearest line beneath the point).
   container.addEventListener('pointerdown', (event) => {
     if (view || event.button !== 0) {
       return;

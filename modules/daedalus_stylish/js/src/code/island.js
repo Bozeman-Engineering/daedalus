@@ -8,13 +8,9 @@ import {
   propertiesClosed,
   propertyGranted,
 } from '../style-guide.js';
-import { findVariant, orderedEntryRefs } from '../variant-scope.js';
-import {
-  DECLARED_LAYER,
-  ELEMENT_LAYER,
-  SKIN_LAYER,
-  variantLayerId,
-} from './layers.js';
+import { layerAt, layersAt } from '../style-stack.js';
+import { ELEMENT_LAYER } from './layers.js';
+import { blankChunks, structuralChunks } from './paste-door.js';
 
 /**
  * The island engine: the pure core of the islands code view.
@@ -28,14 +24,15 @@ import {
  * emits ONE update_style op per settled declaration (one op = one history
  * entry; an invalid line holds only itself).
  *
- * The print side reads the LAYERED document: an island's lines are every
- * layer's declarations for its condition in delivery order (the defaults
- * floor at the bottom when the caller hands one: ElementIslands hands it
- * for the SELECTED element's islands only, in every code scope, and the
- * tree's sparse rows print the map alone; variants above it; the
- * element's own layer on top), exactly how the CSS cascade reads a
- * duplicate: the last declaration of a property wins. Each line carries
- * its layer id (layers.js vocabulary) plus the shadowing facts
+ * The print side reads the LAYERED document: an island's lines are the
+ * style stack's lines at its exact condition (style-stack.js layersAt
+ * over the key's buildStack: the defaults floor's per-scope layers at
+ * the bottom when the stack was built with one, which ElementIslands
+ * does for the SELECTED element's islands only, in every code scope,
+ * while the tree's sparse rows build the map's layers alone; variants
+ * above it; the element's own layer on top), exactly how the CSS cascade
+ * reads a duplicate: the last declaration of a property wins. Each line
+ * carries its layer id (layers.js vocabulary) plus the shadowing facts
  * (lost/winner) the view renders as in-place strikethrough with a winner
  * dot. The diff runs against those same lines, so a formatting-only edit
  * diffs to nothing, editing the winning value commits an override (the
@@ -45,9 +42,6 @@ import {
  * is not in the map at all), and deleting the element's own winning line
  * unsets the override so the layer beneath resurfaces.
  */
-
-const isEntryObject = (value) =>
-  value !== null && typeof value === 'object' && !Array.isArray(value);
 
 /**
  * Collects identifier tokens as held property names.
@@ -80,10 +74,15 @@ const holdTokens = (slice, held) => {
  * csstree's embedded tables (the same pinned mdn-data the server's
  * generated groups derive from), hygiene-checked, grammar-linted — the
  * grammar is the client's whole value story there, the server's typed
- * definitions being server-only. Structural nodes (a pasted rule or
- * at-rule) are errors: selectors and condition wrappers are chrome rows,
- * not island text. Unparseable chunks are warnings; mid-typing is normal
- * life under per-declaration commit and holds only itself.
+ * definitions being server-only. Structural chunks (a pasted or typed
+ * nested rule, an at-rule wrapper, a whole `#id { }` block) are never
+ * island text and never errors here: they are pending the door
+ * (paste-door.js structuralChunks; the Island sends them to the spine's
+ * parse door and removes them), so they are reported as `structural`,
+ * their tokens held, and the declarations around them read as
+ * declarations. Unparseable chunks (a block still missing its brace
+ * included) are warnings; mid-typing is normal life under
+ * per-declaration commit and holds only itself.
  *
  * @param {string} text
  *   The island's buffer text.
@@ -93,16 +92,41 @@ const holdTokens = (slice, held) => {
  *     declarationForKey result, or the part's node for a '::.class'
  *     island): the roster whose grants and value spaces are the law
  *     mirrored here.
+ *   - lines: stackLines()'s result the buffer was printed from (an
+ *     element island; a document island passes none). The law judges what
+ *     an island commits, and a line beneath the own layer (a variant's,
+ *     the floor's) is never committed: its text standing or vanishing
+ *     changes no own value (islandDelta). So a declaration that still
+ *     says such a line verbatim is that layer's own text, not the user's:
+ *     not judged, not held, claimed first-fit the way matchLines pairs
+ *     it. Without this, a delivered line off the site's law (the declared
+ *     tier validates with constraints never law, so a strict guide's
+ *     closure can refuse its spelling) would read as the user's error and
+ *     hold its property, turning the own line's deletion (an UNSET) into
+ *     a SET to the text beneath.
  *
- * @return {{declarations: Array<object>, held: Set<string>, diagnostics: Array<object>}}
+ * @return {{declarations: Array<object>, held: Set<string>, diagnostics: Array<object>, structural: Array<object>}}
  *   declarations: {property, value, important, from, to, valueFrom,
  *   valueTo, valid} per parsed declaration, in buffer order (value is the
- *   trimmed raw slice, ' !important' folded in). held: property names
+ *   trimmed raw slice, ' !important' merged in). held: property names
  *   mentioned by content that cannot commit (see holdTokens). diagnostics:
  *   {from, to, severity, message, code?} spans, CM6-lint-shaped, sorted.
+ *   structural: the door chunks (paste-door.js structuralChunks), in
+ *   buffer order; never declarations, never diagnostics.
  */
-export const analyzeIsland = (text, { guide, materials, declaration } = {}) => {
+export const analyzeIsland = (
+  text,
+  { guide, materials, declaration, lines = [] } = {},
+) => {
   const closed = propertiesClosed(guide);
+  const delivered = new Map();
+  lines.forEach((line) => {
+    if (line.layer === ELEMENT_LAYER) {
+      return;
+    }
+    const id = `${line.property}: ${line.value}`;
+    delivered.set(id, (delivered.get(id) ?? 0) + 1);
+  });
   // The enforcement mirror's law switch: on an open-enforcement site the
   // server demotes every authored constraint to offer-shaping, so the
   // lint must not raise blocking constraint errors either (never block
@@ -131,9 +155,20 @@ export const analyzeIsland = (text, { guide, materials, declaration } = {}) => {
     });
   };
 
+  // The structural chunks leave the text before the declaration parse
+  // (blanked in place, so every offset below is a buffer offset): they
+  // are the door's, not the lint's, and the declarations around them
+  // must still read as declarations. Their tokens are held: a chunk
+  // that mentions a property is not that property's deletion.
+  const structural = structuralChunks(text);
+  structural.forEach((chunk) => holdTokens(chunk.text, held));
+
   let ast;
   try {
-    ast = parseCss(text, { context: 'declarationList', positions: true });
+    ast = parseCss(blankChunks(text, structural), {
+      context: 'declarationList',
+      positions: true,
+    });
   } catch {
     holdTokens(text, held);
     addDiagnostic(
@@ -142,7 +177,7 @@ export const analyzeIsland = (text, { guide, materials, declaration } = {}) => {
       'warning',
       'Does not parse as CSS declarations; nothing here will save until it does.',
     );
-    return { declarations, held, diagnostics };
+    return { declarations, held, diagnostics, structural };
   }
 
   ast.children.forEach((node) => {
@@ -150,51 +185,17 @@ export const analyzeIsland = (text, { guide, materials, declaration } = {}) => {
     const to = node.loc.end.offset;
 
     if (node.type !== 'Declaration') {
+      // What is left after the chunks leave is either a block still
+      // missing its closing brace (a Rule or Atrule csstree read to the
+      // end of the text: mid-typing, the door takes it once it closes)
+      // or text that is not CSS. Both hold their tokens and save nothing.
       holdTokens(text.slice(from, to), held);
-      if (node.type === 'Atrule') {
-        // Structure is chrome, never characters — and at-rules split only
-        // on which honest message applies: a known condition belongs to a
-        // WHEN row (the `@` gesture materializes it), while an at-rule
-        // outside the condition vocabulary is inexpressible in the model
-        // (there is no raw-CSS escape hatch).
-        if (
-          Object.prototype.hasOwnProperty.call(
-            guide?.conditions ?? {},
-            node.name,
-          )
-        ) {
-          addDiagnostic(
-            from,
-            to,
-            'error',
-            `Conditions are their own rows here, not island text. Type "@" on an empty line and pick "${node.name}" to add its WHEN row.`,
-          );
-        } else {
-          addDiagnostic(
-            from,
-            to,
-            'error',
-            `"@${node.name}" is not a condition this site declares; at-rules cannot be styled here.`,
-          );
-        }
-      } else if (node.type === 'Rule') {
-        // A typed or pasted selector cannot live in an island
-        // (materialization gestures create part/condition rows before text
-        // ever lands here).
-        addDiagnostic(
-          from,
-          to,
-          'error',
-          'Selectors and condition blocks cannot live here; this island holds plain declarations. Conditions and parts are added as their own rows.',
-        );
-      } else {
-        addDiagnostic(
-          from,
-          to,
-          'warning',
-          'Does not parse as a CSS declaration; it will not save until it does.',
-        );
-      }
+      addDiagnostic(
+        from,
+        to,
+        'warning',
+        'Does not parse as a CSS declaration; it will not save until it does.',
+      );
       return;
     }
 
@@ -216,6 +217,15 @@ export const analyzeIsland = (text, { guide, materials, declaration } = {}) => {
       valid: true,
     };
     declarations.push(record);
+
+    // A delivered line's own text (see the lines option): the layer
+    // beneath says it, the island never commits it, the law has no say.
+    const deliveredId = `${property}: ${value}`;
+    const standing = delivered.get(deliveredId) ?? 0;
+    if (standing > 0) {
+      delivered.set(deliveredId, standing - 1);
+      return;
+    }
 
     const fail = (spanFrom, spanTo, message, code) => {
       record.valid = false;
@@ -365,51 +375,42 @@ export const analyzeIsland = (text, { guide, materials, declaration } = {}) => {
     declarations,
     held,
     diagnostics: diagnostics.sort((a, b) => a.from - b.from),
+    structural,
   };
 };
 
 /**
- * One island's lines: the layered document with per-line provenance.
+ * One island's lines: the stack's layered document at one exact
+ * condition, in the code view's line shape.
  *
- * Every layer's declarations for the (key, condition) pair, in DELIVERY
- * order: the defaults floor first when the caller hands one (the
- * declaration's own defaults, then the active skin's, the order delivery
- * prints them), then each reference's fragment styles (orderedEntryRefs
- * order), the element's own layer last — so the buffer reads like the
- * cascade: a property set by several layers prints once per layer and the
- * LAST declaration wins. Each line carries its layer id (`layer`:
- * ELEMENT_LAYER, SKIN_LAYER, DECLARED_LAYER, or variantLayerId()), the
- * supplying reference (`variant`: the reference string on a variant line,
- * null on every other layer's line) and the shadowing facts: `lost` marks
- * a declaration a higher layer beats, and `winner` names that layer
- * ({layer, variant}, null on winning lines). The view renders lost lines
- * as in-place strikethrough with a dot naming the winner, the shadowing
- * display that replaced ghost rows.
+ * The one projection of layersAt() the code view's line consumers share
+ * (printIsland, islandDelta, matchLines, lineMarks, lineMenuItems,
+ * wearerWinners, the roster's occupancy and restore reads): the same
+ * lines in the same delivery order and with the same index winners, each
+ * carrying its layer's ID (`layer`: ELEMENT_LAYER, a floor id
+ * `declared:{scope}` / `skin:{scope}`, or variantLayerId()), the
+ * supplying reference (`variant`: the reference on a variant line, null
+ * on every other layer's line) and the shadowing facts: `lost` marks a
+ * declaration a higher layer beats, and `winner` names that layer
+ * ({layer, variant}, null on winning lines). Document islands print the
+ * same shape from the variant's own sheet (variant-document.js), which
+ * is why lines carry ids rather than the stack's indexes: a composition
+ * pair (two layers, one id) still wins by index inside layersAt, and its
+ * lines merely share a hue and a label.
  *
- * The floor is read at the island's EXACT condition, the way the map is
- * (never the cascade: the widget modes' ghost is the cascade reading, the
- * code view is the exact document), and it sits at the bottom, so a floor
- * line can never win over a map line: the skin beats the declaration, and
- * every worn or own line beats both.
+ * The stack is read at the island's EXACT condition, the way the map is
+ * stored (never the cascade: the rows' posed read is stackAt, the code
+ * view is the exact document), and the floor sits at the bottom, so a
+ * floor line can never win over a map line: the skin beats the
+ * declaration, and every worn or own line beats both.
  *
- * @param {object} map
- *   The style map (mirror view).
- * @param {string} key
- *   The island's full style-map key (root, '::.class' part, or block-field
- *   form).
+ * @param {object} stack
+ *   The island key's style stack (buildStack()): with the floor for the
+ *   selected element's islands, without it (floor: false) for the tree
+ *   scopes' sparse rows and the roster's occupancy read.
  * @param {string} condition
  *   'default' or a named condition. Never 'variants' (the reference list
  *   is not a condition layer).
- * @param {?Array<object>} variants
- *   The store's variant records.
- * @param {?Array<string>} axes
- *   The root scope's axis vocabulary for delivery-order resolution; null
- *   keeps stored-list order.
- * @param {?{skinEntry: ?object, declaredEntry: ?object}} floor
- *   The defaults floor for this island's key: the condition-keyed entries
- *   skinDefaultEntry() and declaredDefaultEntry() build (the same entries
- *   provenanceFor assembles), or null to print the map's lines only (the
- *   tree scopes' sparse rows, the roster's occupancy read).
  *
  * @return {Array<{property: string, value: string, layer: string,
  *   variant: ?string, lost: boolean, winner: ?{layer: string,
@@ -417,83 +418,19 @@ export const analyzeIsland = (text, { guide, materials, declaration } = {}) => {
  *   The island's lines in delivery order, empty when the pair holds
  *   nothing.
  */
-export const islandLines = (
-  map,
-  key,
-  condition,
-  variants,
-  axes = null,
-  floor = null,
-) => {
-  const pos = key.indexOf('::');
-  const rootKey = pos === -1 ? key : key.slice(0, pos);
-  const relative = key.slice(rootKey.length);
-  const refs = orderedEntryRefs(map?.[rootKey], variants, axes);
-  const own = isEntryObject(map?.[key]?.[condition]) ? map[key][condition] : {};
-  const floorValues = (entry) =>
-    isEntryObject(entry) && isEntryObject(entry[condition])
-      ? entry[condition]
-      : {};
-
-  const layers = [
-    {
-      layer: DECLARED_LAYER,
-      variant: null,
-      values: floorValues(floor?.declaredEntry),
-    },
-    { layer: SKIN_LAYER, variant: null, values: floorValues(floor?.skinEntry) },
-  ];
-  refs.forEach((ref) => {
-    const styles = findVariant(variants, ref.variant)?.value?.[
-      ref.fragment + relative
-    ];
-    const values =
-      isEntryObject(styles) && isEntryObject(styles[condition])
-        ? styles[condition]
-        : {};
-    layers.push({
-      layer: variantLayerId(ref.variant),
-      variant: ref.variant,
-      values,
-    });
+export const stackLines = (stack, condition) =>
+  layersAt(stack, condition).map((line) => {
+    const layer = layerAt(stack, line.layer);
+    const winning = layerAt(stack, line.winner);
+    return {
+      property: line.property,
+      value: line.value,
+      layer: layer.id,
+      variant: layer.variant,
+      lost: line.lost,
+      winner: winning ? { layer: winning.id, variant: winning.variant } : null,
+    };
   });
-  layers.push({ layer: ELEMENT_LAYER, variant: null, values: own });
-
-  // Per property, the LAST defining layer wins (delivery order; the own
-  // layer sits on top). Indexed, not by layer id: a composition pair
-  // (root + fragment ref of the same variant on one axis) is two distinct
-  // layers with one id.
-  const winnerIndex = new Map();
-  layers.forEach((layer, index) => {
-    Object.entries(layer.values).forEach(([property, value]) => {
-      if (value !== null && value !== undefined) {
-        winnerIndex.set(property, index);
-      }
-    });
-  });
-
-  const lines = [];
-  layers.forEach((layer, index) => {
-    Object.entries(layer.values).forEach(([property, value]) => {
-      if (value === null || value === undefined) {
-        return;
-      }
-      const lost = winnerIndex.get(property) !== index;
-      const winning = lost ? layers[winnerIndex.get(property)] : null;
-      lines.push({
-        property,
-        value: String(value).trim(),
-        layer: layer.layer,
-        variant: layer.variant,
-        lost,
-        winner: winning
-          ? { layer: winning.layer, variant: winning.variant }
-          : null,
-      });
-    });
-  });
-  return lines;
-};
 
 /**
  * Prints an island's buffer text from its lines.
@@ -536,7 +473,7 @@ export const printIsland = (lines) =>
  *   analyzeIsland()'s result for the buffer.
  * @param {Array<{property: string, value: string, layer: string,
  *   lost: boolean}>} lines
- *   islandLines()'s result the buffer was printed from.
+ *   stackLines()'s result the buffer was printed from.
  *
  * @return {{sets: Array<{property: string, value: string}>,
  *   unsets: Array<string>}}
@@ -625,7 +562,7 @@ export const islandDelta = (analysis, lines) => {
  * @param {{declarations: Array<object>, held: Set<string>}} analysis
  *   analyzeIsland()'s result for the settled buffer.
  * @param {Array<object>} lines
- *   islandLines()'s result the buffer was printed from.
+ *   stackLines()'s result the buffer was printed from.
  *
  * @return {Array<object>}
  *   Single-property update_style operations; empty when the buffer says
@@ -646,6 +583,51 @@ export const islandOps = (key, condition, analysis, lines) => {
 };
 
 /**
+ * The own lines an authoritative refresh brought that the live buffer has
+ * never shown: lines born elsewhere while the island holds the cursor.
+ *
+ * A live buffer is diffed against the truth (islandDelta), and a truth
+ * line the buffer does not mention reads as a deletion: right for a line
+ * the user saw and removed, wrong for a line the user never saw. Lines
+ * arrive that way whenever another door writes the island's key while
+ * it is live: the op spine's birth seed (a generated box's `content: ""`
+ * landing beneath the first typed declaration), a satellite's or an AI
+ * turn's write, another window's edit. Left out of the buffer, the next
+ * settle would unset every one of them. The view splices these into the
+ * live document instead (in truth order, above the user's text), so the
+ * buffer says what the truth says and the diff stays honest.
+ *
+ * A property with a write of the island's own in flight is never unseen:
+ * the truth still shows the line the buffer just deleted (or the old
+ * value it just replaced) until that write settles, and splicing it back
+ * would undo the user's edit under their cursor.
+ *
+ * @param {{declarations: Array<object>, held: Set<string>}} analysis
+ *   analyzeIsland()'s result for the live buffer.
+ * @param {Array<{property: string, value: string, layer: string}>} lines
+ *   stackLines()'s result the refresh delivered (the new truth).
+ * @param {Iterable<string>} [pending]
+ *   The properties whose commits the island itself has in flight.
+ *
+ * @return {Array<object>}
+ *   The unseen own lines, in truth order; empty when the buffer mentions
+ *   every own line.
+ */
+export const unseenOwnLines = (analysis, lines, pending = []) => {
+  const mentioned = new Set(analysis.held);
+  analysis.declarations.forEach((declaration) => {
+    mentioned.add(declaration.property);
+  });
+  const inFlight = new Set(pending);
+  return lines.filter(
+    (line) =>
+      line.layer === ELEMENT_LAYER &&
+      !mentioned.has(line.property) &&
+      !inFlight.has(line.property),
+  );
+};
+
+/**
  * Pairs buffer declarations with the baseline lines they still say.
  *
  * First-fit in order over (property, value): each declaration claims the
@@ -657,7 +639,7 @@ export const islandOps = (key, condition, analysis, lines) => {
  * @param {Array<object>} declarations
  *   analyzeIsland()'s declarations, buffer order.
  * @param {Array<object>} lines
- *   islandLines()'s result the buffer was printed from.
+ *   stackLines()'s result the buffer was printed from.
  *
  * @return {Array<?object>}
  *   Per declaration: the matched line, or null.

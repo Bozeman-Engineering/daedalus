@@ -12,6 +12,7 @@ use Drupal\Core\Form\FormPreprocess;
 use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\Hook\Attribute\LegacyModuleImplementsAlter;
 use Drupal\daedalus_blueprint_api\Render\SelectableKey;
+use Drupal\daedalus_edit\EditIdentity;
 
 /**
  * Implements hook_preprocess_HOOK().
@@ -66,11 +67,11 @@ function daedalus_edit_preprocess_block(&$variables) {
     'language' => $entity->language()->getId(),
     'view_mode' => $view_mode,
   ];
-  $variables['title_prefix']['#markup'] = sprintf('<div data-daedalus-edit-field-value-wrapper="%s::%s::label::block_property">', $entity->getEntityTypeId(), $id);
+  $variables['title_prefix']['#markup'] = sprintf('<div data-daedalus-edit-field-value-wrapper="%s">', EditIdentity::fieldWrapperId($entity, 'label', EditIdentity::LABEL_PROPERTY));
   $variables['title_suffix']['#markup'] = '</div>';
   $variables['title_attributes']['class'][] = 'daedalus-edit-field-value';
-  $variables['title_attributes']['data-daedalus-edit-id'] = sprintf('%s::%s::%s::%s::%s::%s::%s::%s::%s', $entity->getEntityTypeId(), $entity->bundle(), $id, 'label', 0, $entity->language()->getId(), 'string', 'string', 'block_property');
-  $variables['title_attributes']['data-daedalus-edit-page-element-id'] = sprintf('%s::%s::%s::%s::%s', $entity->getEntityTypeId(), $id, 'label', 0, 'block_property');
+  $variables['title_attributes']['data-daedalus-edit-id'] = EditIdentity::editId($entity, 'label', 0, $entity->language()->getId(), 'string', 'string', EditIdentity::LABEL_PROPERTY);
+  $variables['title_attributes']['data-daedalus-edit-page-element-id'] = EditIdentity::itemId($entity, 'label', 0, EditIdentity::LABEL_PROPERTY);
 }
 
 /**
@@ -124,7 +125,7 @@ function daedalus_edit_daedalus_blueprint_entity_persisted(EntityInterface $enti
  * Eager identity's universal backstop: whatever the write path (forms, REST,
  * migrations, blueprint persists), stored formatted text leaves this hook
  * with every vocabulary element carrying an s-* identity class. The
- * stage-time seam (IdentityMintingTextFieldHandler) covers blueprint
+ * stage-time seam (EventSubscriber\FieldAppliedMintIdentity) covers blueprint
  * mutations that stage into tempstore without a save; this hook is the
  * guarantee for everything that does save. A format that allows a vocabulary
  * tag but strips its class attribute leaves that tag unminted rather than
@@ -149,8 +150,11 @@ function daedalus_edit_form_alter(&$form, FormStateInterface $form_state, $form_
   }
   else {
     \Drupal::service('daedalus_edit.form_alter.entity_edit')->formAlter($form, $form_state);
-    if (\Drupal::hasService('daedalus_edit.form_alter.lb_block')) {
-      \Drupal::service('daedalus_edit.form_alter.lb_block')->formAlter($form, $form_state, $form_id);
+    // The Configure dialogs (registered with daedalus_layout).
+    foreach (['daedalus_edit.form_alter.lb_block', 'daedalus_edit.form_alter.lb_section'] as $dialog) {
+      if (\Drupal::hasService($dialog)) {
+        \Drupal::service($dialog)->formAlter($form, $form_state, $form_id);
+      }
     }
   }
 }

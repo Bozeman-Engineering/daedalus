@@ -1,0 +1,7 @@
+# Lists replace across the declaration layers, so this theme's testimonial
+# vocabulary is style, tone, emphasis: a "tone" variant delivers BEFORE an
+# "emphasis" one here, and sorts after every placed reference under a theme
+# that declares no "tone" axis.
+variant_axes:
+  - tone
+  - emphasis

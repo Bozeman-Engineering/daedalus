@@ -38,7 +38,6 @@ html[data-daedalus-ui-mode] .admin-toolbar__displace-placeholder {
 
 :is(#extra-specificity-hack, [data-drupal-admin-styles]),
 html {
-  .daedalus-ui-button,
   .daedalus-ui-mode-button,
   .daedalus-ui-mode-link {
     &.toolbar-button {

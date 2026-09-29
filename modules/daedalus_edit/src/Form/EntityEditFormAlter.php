@@ -44,7 +44,7 @@ class EntityEditFormAlter {
       '#type' => 'submit',
       '#submit' => [
         '::submitForm',
-        [$this, 'updateTempstore'],
+        [$this, 'stageEntity'],
       ],
       '#value' => $this->t('Update'),
       '#weight' => 30,
@@ -58,16 +58,18 @@ class EntityEditFormAlter {
   }
 
   /**
-   * Update tempstore.
+   * Stages the edited entity in tempstore.
    *
-   * Updates the Daedalus Edit tempstore for the currently edited entity.
+   * The core entity edit page's Update button: the whole form-built entity
+   * is staged (this is the page's own form, not the panel's one-field
+   * transport).
    *
    * @param array $form
    *   The entity form.
    * @param \Drupal\Core\Form\FormStateInterface $form_state
    *   The form state.
    */
-  public function updateTempstore(&$form, FormStateInterface $form_state) {
+  public function stageEntity(&$form, FormStateInterface $form_state) {
     $this->tempstoreRepository->set($form_state->getFormObject()->getEntity());
   }
 

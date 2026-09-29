@@ -5,9 +5,9 @@ import SelectionFrame from './components/selection-frame/selection-frame';
 import Portal from './components/portal/portal';
 import InsertionCaret from './components/insertion-caret/insertion-caret';
 import SelectionIndicator from './components/selection-indicator/selection-indicator';
-import bootToolManager from './tool_manager/tool-plugin-manager';
 import bootModeManager from '../mode_manager/mode-plugin-manager';
 import { initHotkeys } from './hotkeys/hotkeys';
+import { initPopoutRelay } from './hotkeys/popout-relay';
 import { initVerbs } from './verbs/verbs';
 import { registerRenameVerb } from './verbs/rename-verb';
 import { initHistory } from './history/history';
@@ -15,6 +15,7 @@ import { initEditSession } from './edit_session/edit-session';
 import { initSelectorEvents } from './selection/selector-events';
 import { initKeyboardTraversal } from './selection/keyboard-traversal';
 import { initSelectionFacade } from './selection/selection-facade';
+import { initApplyResponseCommand } from './ops/op-queue';
 import { initBlueprintMirror } from './blueprint/blueprint-mirror';
 import { initMaterialsStore } from './materials/materials-store';
 import { initDrag } from './drag/drag-controller';
@@ -23,7 +24,6 @@ import { initKeyboardLift } from './drag/keyboard-lift';
 import { initPageElementsTree } from './components/page-elements/page-elements-tree';
 import { initTopBar } from './tool_manager/top-bar';
 import { initEditModePlugin } from './edit-mode-plugin';
-import { initSelectorTool } from './tools/selector-tool-plugin';
 import { drainRegistrationQueue } from './registration';
 
 if (process.env.DEV_MODE) {
@@ -32,7 +32,7 @@ if (process.env.DEV_MODE) {
 
 /**
  * Boots the edit-mode app in dependency order: managers, then facades, then
- * the app's own mode/tool plugins, and finally the registration queue, so
+ * the app's own mode plugin, and finally the registration queue, so
  * contrib callbacks run against a complete app (see registration.js). This
  * in-file ordering is the only ordering the app relies on — script delivery
  * order is not a guarantee (big_pipe and AJAX-inserted scripts execute
@@ -40,16 +40,20 @@ if (process.env.DEV_MODE) {
  */
 const boot = () => {
   // Managers first: everything below may register plugins.
-  bootToolManager();
   bootModeManager();
-  // Hotkeys next: everything after it may register bindings.
+  // Hotkeys next: everything after it may register bindings. The pop-out
+  // keyboard wire feeds the dispatcher strokes from every pop-out window.
   initHotkeys();
+  initPopoutRelay();
   initVerbs();
   initHistory();
   initEditSession();
   initSelectorEvents();
   initKeyboardTraversal();
   initSelectionFacade();
+  // The contract's Drupal AJAX command, for writes that ride a form's
+  // own submit (daedalus_edit's form transport).
+  initApplyResponseCommand();
   initBlueprintMirror();
   initMaterialsStore();
   initDrag();
@@ -62,7 +66,6 @@ const boot = () => {
   registerRenameVerb();
   initTopBar();
   initEditModePlugin();
-  initSelectorTool();
   // Contrib registrations, last.
   drainRegistrationQueue();
 

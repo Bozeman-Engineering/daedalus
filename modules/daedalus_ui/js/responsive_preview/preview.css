@@ -1,21 +1,19 @@
 /*
  * The responsive preview shell.
  *
- * The root pins itself over the whole popup viewport so the shell owns the
- * window regardless of what page wrappers the active theme renders around
- * it: the route uses the simple_page variant, but themes still add their
- * own scaffolding, and page_top chrome (core navigation's toolbar, sidebar
- * FABs) renders outside the variant entirely. The z-index lifts the shell
- * over that chrome. The stage scrolls when the device viewport is larger
- * than the window; margin auto on the frame centers it while staying
- * scrollable (unlike align/justify center, which clips overflow).
+ * The route is a pop-out document (daedalus_ui/popout: no page chrome, the
+ * theme's wrappers around the mount neutralized), so the shell lays out in
+ * flow, a column at least the window tall. The stage scrolls when the
+ * device viewport is wider than the window; margin auto on the frame
+ * centers it while staying scrollable (unlike align/justify center, which
+ * clips overflow).
  */
 #daedalus-ui-responsive-preview-root {
-  position: fixed;
-  inset: 0;
-  z-index: 10000;
   display: flex;
   flex-direction: column;
+  /* stylelint-disable-next-line unit-allowed-list -- dvh follows the
+     browser's dynamic toolbar; vh would leave a gap below it. */
+  min-height: 100dvh;
   background: #e8e8e8;
   font-family: system-ui, sans-serif;
 }

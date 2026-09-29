@@ -17,7 +17,7 @@ elements:
         constraints:
           max-width:
             max: '80rem'
-    # The part's children pseudo-part ("{key}::.band-content::>").
+    # The part's children pseudo-part ("{key}::.band-content > *").
     children:
       property_groups:
         layout: {}

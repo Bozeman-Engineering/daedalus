@@ -75,7 +75,15 @@ services:
     class: Drupal\daedalus_blueprint\BlueprintOperations
     arguments:
       $layoutPluginManager: '@?plugin.manager.core.layout'
-      $sampleValueGenerator: '@?field_sample_value.generator'
+
+  # The one ladder that makes a field value up (the `_sample` request and
+  # add_element's populate: 'sample'). The generator is a hard dependency
+  # on a site; the optional reference serves kernel isolation only.
+  daedalus_blueprint.sample_filler:
+    class: Drupal\daedalus_blueprint\SampleFiller
+    arguments:
+      $generator: '@?field_sample_value.generator'
+  Drupal\daedalus_blueprint\SampleFiller: '@daedalus_blueprint.sample_filler'
 
   daedalus_blueprint.context_resolver:
     class: Drupal\daedalus_blueprint\BlueprintContextResolver
@@ -301,14 +309,17 @@ services:
       - '@daedalus_blueprint.dialect_printer'
   Drupal\daedalus_blueprint\Materials\MaterialsSchema: '@daedalus_blueprint.materials_schema'
 
-  # What one element wears and where it was placed from: its style entry's
-  # variant references and its node's stencil stamp resolved to roster
-  # records (the ACTIVE SELECTION block's read).
+  # What one element wears and where it was placed from: its style stack's
+  # reference layers (each wearing with its origin) and its node's stencil
+  # stamp resolved to roster records (the ACTIVE SELECTION block's read).
   daedalus_blueprint.element_materials:
     class: Drupal\daedalus_blueprint\Materials\ElementMaterials
     arguments:
       - '@daedalus_blueprint.node_tree_builder'
       - '@daedalus_blueprint.materials_roster_builder'
+      # The stack lives in daedalus_stylish (optional here): without it no
+      # entity carries a style map, so nothing wears anything.
+      - '@?daedalus_stylish.style_stack'
   Drupal\daedalus_blueprint\Materials\ElementMaterials: '@daedalus_blueprint.element_materials'
 
   # The distro lock: shipped materials are read-only on a consuming site
@@ -375,7 +386,23 @@ services:
       - !service_closure '@daedalus_blueprint.operations'
     tags:
       - { name: daedalus_blueprint.operation_handler }
+      # The seam that saves a batch's declared bytes (the file op, a
+      # document's <pb-file>): daedalus_ai tags its handler over the file
+      # lane and the attachment store; without one every declaration
+      # answers FILE_STORE_MISSING.
+      - { name: service_collector, tag: daedalus_blueprint.file_declaration_handler, call: setFileDeclarationHandler }
   Drupal\daedalus_blueprint\Dialect\DomOperationHandler: '@daedalus_blueprint.dom_operation_handler'
+
+  # The parse door: a CSS fragment read under one style key into the flat
+  # entries it means (the panel's paste, the variant document's staging),
+  # through the one parser the style op uses. A read that writes nothing;
+  # the client turns the entries into its own batch, judged at the write.
+  daedalus_blueprint.css_fragment_door:
+    class: Drupal\daedalus_blueprint\Dialect\CssFragmentDoor
+    arguments:
+      - '@daedalus_blueprint.node_tree_builder'
+      - '@daedalus_blueprint.dialect_catalog_builder'
+  Drupal\daedalus_blueprint\Dialect\CssFragmentDoor: '@daedalus_blueprint.css_fragment_door'
 
   daedalus_blueprint.layout_serializer:
     class: Drupal\daedalus_blueprint\LayoutBuilder\LayoutSerializer
@@ -434,6 +461,8 @@ services:
     arguments:
       - '@entity_type.manager'
       - '@module_handler'
+      - '@current_user'
+      - '@datetime.time'
       - '@?daedalus_tempstore.entity_tempstore_repository'
       - '@?daedalus_blueprint.layout_tempstore_helper'
       - '@?workspaces.manager'

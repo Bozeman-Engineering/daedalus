@@ -17,7 +17,7 @@
  *   register their container element and a focus handler; neighbor lookup
  *   sorts by document position, so the chain follows render order — in
  *   the page tree that IS pageNodes' layout order, with each element's
- *   islands (default, WHEN, parts) preceding its children's.
+ *   islands (default, conditions, parts) preceding its children's.
  *   The registry also carries the focus-restore memory: an island that
  *   unmounts focused parks its cursor here, and the remount claims it.
  */

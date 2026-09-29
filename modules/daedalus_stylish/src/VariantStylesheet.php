@@ -10,6 +10,7 @@ use Drupal\Core\File\FileSystemInterface;
 use Drupal\Core\State\StateInterface;
 use Drupal\Core\StreamWrapper\StreamWrapperManagerInterface;
 use Drupal\daedalus_blueprint\Materials\MaterialsRosterBuilder;
+use Drupal\daedalus_blueprint\Materials\RelativeSelector;
 use Drupal\workspaces\WorkspaceManagerInterface;
 
 /**
@@ -23,7 +24,7 @@ use Drupal\workspaces\WorkspaceManagerInterface;
  * the validator admits, the catalog parses and the prompt teaches, because
  * all of them read the one roster); the entity behind a record loads
  * through the same identity map validation resolves references with
- * (loadVariant()). The filename embeds a
+ * (StyleMapValidator::loadVariant()). The filename embeds a
  * content hash, so browsers cache it cross-page and every regeneration is a
  * new URL — the "daedalus_stylish/variants" library resolves the current file at
  * library-discovery time (hook_library_info_build()), which is why cached
@@ -49,6 +50,13 @@ use Drupal\workspaces\WorkspaceManagerInterface;
  * not a stylesheet: the CSS backend resolves references inline at their
  * data-selectable key roots instead (editModeInlineCss()) — see that
  * method for why class delivery never worked on the canvas.
+ *
+ * Cacheability rides the read: the three inline lanes resolve every
+ * reference through resolveWorn(), which attaches what that one read
+ * depends on at the read (the roster's metadata hit or miss, the
+ * variant's own tags on a hit). A map without references attaches no
+ * roster dependency and builds no roster; the compile path
+ * (rosterVariants()) is the one build here.
  *
  * The file mechanics (content-addressed name, state key, cache tag +
  * library reset, media-recompile bookkeeping, the accepted staleness
@@ -171,7 +179,8 @@ class VariantStylesheet extends CompiledStylesheetBase {
    * surface lists variants in) keeps the whole file stable. An axis the
    * scope no longer declares sorts after the placed axes, exactly like a
    * stale reference at stamping. Scope and axis are the record's facts;
-   * the styles are the entity's, loaded through loadVariant().
+   * the styles are the entity's, loaded through
+   * StyleMapValidator::loadVariant().
    */
   public function css(): string {
     $axes_by_scope = [];
@@ -277,20 +286,75 @@ class VariantStylesheet extends CompiledStylesheetBase {
    * @param array $cache_tags
    *   Accumulator the resolved media (and image style) tags merge into, so
    *   a media edit invalidates the host render.
+   * @param \Drupal\daedalus_blueprint\Materials\RelativeSelector|null $under
+   *   The rule the reference sits at (ruleWearCss()), or NULL at an
+   *   element: the fragment's suffixes then continue the rule by descent
+   *   (CssPrinter::printFragmentStyles()).
    *
    * @return string
    *   CSS text, '' when nothing printed.
    */
-  public function printFragment(DaedalusStylishVariantInterface $variant, string $fragment, string $scope_root, array &$cache_tags = []): string {
+  public function printFragment(DaedalusStylishVariantInterface $variant, string $fragment, string $scope_root, array &$cache_tags = [], ?RelativeSelector $under = NULL): string {
     $styles = $this->mediaValueResolver->resolveVariantStyles($variant->getStyles(), $variant->getScope(), $cache_tags);
-    return $this->printer->printFragmentStyles($scope_root, $variant->getScope(), $styles, $fragment);
+    return $this->printer->printFragmentStyles($scope_root, $variant->getScope(), $styles, $fragment, $under);
+  }
+
+  /**
+   * Inline CSS for a style map's variant references at RULE keys.
+   *
+   * The third delivery lane, the same in every mode: a reference on a
+   * rule entry ("container:X::> pb-text" wearing a text variant) has no
+   * one element to stamp a class on and no selectable attribute of its
+   * own, so its fragment prints inside the rule OWNER's @scope
+   * ([data-selectable="container:X"]) with the variant's suffixes
+   * continued under the rule by descent (printFragment() under the
+   * rule): the root entry at the rule's targets, a '::.link' entry at
+   * `> pb-text .link`, a '::> *' entry at `> pb-text > *`. Class delivery
+   * (the stamp, the compiled file, workspaceInlineCss()) and the edit-mode
+   * element lane (editModeInlineCss()) skip rule keys; this lane prints
+   * only them. The caller puts it before the map's own CSS so a rule's
+   * own properties beat what it wears by order, exactly as an element's
+   * do; a member's own entry beats both by @scope proximity.
+   *
+   * @param array $map
+   *   The host entity's style map.
+   * @param array $cache_tags
+   *   Cache tags accumulator; each reference's dependency merges in at its
+   *   resolution (resolveWorn()).
+   *
+   * @return string
+   *   CSS text, '' without printable rule references.
+   */
+  public function ruleWearCss(array $map, array &$cache_tags): string {
+    $blocks = [];
+    foreach ($map as $key => $entry) {
+      $key = (string) $key;
+      $parsed = $this->styleMapValidator->parseKey($key);
+      if ($parsed === NULL || $parsed['selector'] === NULL) {
+        continue;
+      }
+      $root = substr($key, 0, strpos($key, RelativeSelector::SUFFIX));
+      // Axis-declaration order, later beating earlier, as the element
+      // lanes deliver (orderedEntryRefs()).
+      foreach ($this->styleMapValidator->orderedEntryRefs($entry) as $ref) {
+        $variant = $this->resolveWorn($ref['variant'], $cache_tags);
+        if ($variant === NULL) {
+          continue;
+        }
+        $block = $this->printFragment($variant, $ref['fragment'], sprintf('[data-selectable="%s"]', $root), $cache_tags, $parsed['selector']);
+        if ($block !== '') {
+          $blocks[] = $block;
+        }
+      }
+    }
+    return implode("\n", $blocks);
   }
 
   /**
    * The distinct fragments a variant's styles hold, in stored key order.
    *
    * A fragment is a style key's element path — the key minus its
-   * '::.class' part suffix — so part entries ride their element's
+   * '::selector' suffix — so selector entries ride their element's
    * fragment rather than forming fragments of their own. No grammar gate
    * here: printFragmentStyles() drops unparseable fragments at the emit
    * gate, the same division of labor authored map keys get.
@@ -321,10 +385,10 @@ class VariantStylesheet extends CompiledStylesheetBase {
    * @param array $map
    *   The host entity's style map.
    * @param array $cache_tags
-   *   Cache tags accumulator; the printed variants' tags are merged in so
-   *   staged edits invalidate the workspace-context render cache entries,
-   *   and the materials roster's so a referenced draft becoming a material
-   *   (publish) invalidates them too.
+   *   Cache tags accumulator; each reference's dependency merges in at its
+   *   resolution (resolveWorn()), so staged edits invalidate the
+   *   workspace-context render cache entries and a referenced draft
+   *   becoming a material (publish) invalidates them too.
    *
    * @return string
    *   CSS text, '' outside an active workspace or without printable refs.
@@ -333,10 +397,15 @@ class VariantStylesheet extends CompiledStylesheetBase {
     if ($this->workspaceManager === NULL || !$this->workspaceManager->hasActiveWorkspace()) {
       return '';
     }
-    $cache_tags = Cache::mergeTags($cache_tags, $this->rosterBuilder->build()->getCacheableMetadata()->getCacheTags());
     $blocks = [];
     $uses_container = FALSE;
-    foreach ($map as $entry) {
+    foreach ($map as $key => $entry) {
+      // Rule keys are the rule-wear lane's (ruleWearCss()): no element
+      // carries their class, so their class-rooted CSS would reach
+      // nothing.
+      if (str_contains((string) $key, RelativeSelector::SUFFIX)) {
+        continue;
+      }
       // Axis-declaration order: each reference prints its own block, and a
       // later block beats an earlier one's identical selectors, so the
       // emission order is the deterministic vocabulary order, never the
@@ -350,11 +419,10 @@ class VariantStylesheet extends CompiledStylesheetBase {
         }
         // Loads resolve to the active workspace's revisions (workspaces
         // swaps storage handlers and alters entity queries).
-        $variant = $this->loadVariant($ref['variant']);
+        $variant = $this->resolveWorn($ref['variant'], $cache_tags);
         if ($variant === NULL) {
           continue;
         }
-        $cache_tags = Cache::mergeTags($cache_tags, $variant->getCacheTags());
         $block = $this->printFragment($variant, $ref['fragment'], '.' . $class, $cache_tags);
         if ($block !== '') {
           $blocks[] = $block;
@@ -391,27 +459,22 @@ class VariantStylesheet extends CompiledStylesheetBase {
    * @param array $map
    *   The host entity's style map.
    * @param array $cache_tags
-   *   Cache tags accumulator; the printed variants' tags are merged in so
-   *   variant edits invalidate the host's render cache entries (and the
-   *   materials roster's, see the body).
+   *   Cache tags accumulator; each reference's dependency merges in at its
+   *   resolution (resolveWorn()), so variant edits and publishes invalidate
+   *   the host's render cache entries.
    *
    * @return string
    *   CSS text, '' without printable references.
    */
   public function editModeInlineCss(array $map, array &$cache_tags): string {
-    // The roster's tags ride every inline render: a referenced variant that
-    // is not a material yet (a draft) prints nothing and loads nothing, so
-    // its own tag cannot bubble; the roster's list tag is what a publish
-    // invalidates.
-    $cache_tags = Cache::mergeTags($cache_tags, $this->rosterBuilder->build()->getCacheableMetadata()->getCacheTags());
     $blocks = [];
     foreach ($map as $key => $entry) {
       $key = (string) $key;
-      // Sub-element keys carry no stampable element live and no selectable
-      // attribute to root at here — skipped in every mode. The charset gate
-      // is the emit-side hygiene: the key lands inside the @scope prelude's
-      // attribute selector.
-      if (str_contains($key, '::') || !preg_match('/^[A-Za-z0-9:_-]+$/', $key)) {
+      // Rule keys are the rule-wear lane's (ruleWearCss(), every mode):
+      // they have no selectable attribute of their own to root at. The
+      // charset gate is the emit-side hygiene: the key lands inside the
+      // @scope prelude's attribute selector.
+      if (str_contains($key, RelativeSelector::SUFFIX) || !preg_match('/^[A-Za-z0-9:_-]+$/', $key)) {
         continue;
       }
       // Axis-declaration order: each reference prints its own block, and a
@@ -422,11 +485,10 @@ class VariantStylesheet extends CompiledStylesheetBase {
       // styles at the referencing key: composition children are ordinary
       // entries wearing their own {variant, fragment} references.
       foreach ($this->styleMapValidator->orderedEntryRefs($entry) as $ref) {
-        $variant = $this->loadVariant($ref['variant']);
+        $variant = $this->resolveWorn($ref['variant'], $cache_tags);
         if ($variant === NULL) {
           continue;
         }
-        $cache_tags = Cache::mergeTags($cache_tags, $variant->getCacheTags());
         $block = $this->printFragment($variant, $ref['fragment'], sprintf('[data-selectable="%s"]', $key), $cache_tags);
         if ($block !== '') {
           $blocks[] = $block;
@@ -437,14 +499,28 @@ class VariantStylesheet extends CompiledStylesheetBase {
   }
 
   /**
-   * Loads a variant by reference — machine name first, then uuid.
+   * Resolves one worn reference for delivery, attaching what the read owes.
    *
-   * Delegates to StyleMapValidator::loadVariant() so delivery and
-   * validation resolve references identically (published only: the
-   * roster is the published set).
+   * The inline lanes' one read of the roster, and the one place a render's
+   * dependency on it is merged: the roster's cache metadata on every call,
+   * hit or miss, because a reference the roster refuses today (a draft, a
+   * not-yet-minted name) prints nothing and loads nothing, so only the
+   * roster's list tag can reach the render that a publish must
+   * invalidate; then the variant's own tags on a hit, so its edits reach
+   * the render too. Resolution itself is StyleMapValidator::loadVariant()
+   * (identity map plus roster membership), so delivery and validation
+   * resolve references identically; the roster builds inside that
+   * membership read, and only there, so a map without references never
+   * builds it. The metadata is the builder's own derivation
+   * (MaterialsRosterBuilder::cacheMetadata()), answered without a build.
    */
-  protected function loadVariant(string $reference): ?DaedalusStylishVariantInterface {
-    return $this->styleMapValidator->loadVariant($reference);
+  protected function resolveWorn(string $reference, array &$cache_tags): ?DaedalusStylishVariantInterface {
+    $cache_tags = Cache::mergeTags($cache_tags, $this->rosterBuilder->cacheMetadata()->getCacheTags());
+    $variant = $this->styleMapValidator->loadVariant($reference);
+    if ($variant !== NULL) {
+      $cache_tags = Cache::mergeTags($cache_tags, $variant->getCacheTags());
+    }
+    return $variant;
   }
 
   /**
@@ -452,10 +528,11 @@ class VariantStylesheet extends CompiledStylesheetBase {
    *
    * The compile path's one read of the published set: each variant record
    * of the roster (built for the compile's window, the live one under
-   * executeOutsideWorkspace()) with the entity loadVariant() resolves for
-   * its id. A record whose entity fails to load is skipped: the roster and
-   * the identity map read the same storage in the same window, so that is
-   * a mid-request race, not a state to compile.
+   * executeOutsideWorkspace()) with the entity
+   * StyleMapValidator::loadVariant() resolves for its id. A record whose
+   * entity fails to load is skipped: the roster and the identity map read
+   * the same storage in the same window, so that is a mid-request race,
+   * not a state to compile.
    *
    * @return array<int, array{\Drupal\daedalus_blueprint\Materials\MaterialRecord, \Drupal\daedalus_stylish\DaedalusStylishVariantInterface}>
    *   [record, entity] pairs.
@@ -463,7 +540,7 @@ class VariantStylesheet extends CompiledStylesheetBase {
   protected function rosterVariants(): array {
     $pairs = [];
     foreach ($this->rosterBuilder->build()->variants() as $record) {
-      $variant = $this->loadVariant($record->id);
+      $variant = $this->styleMapValidator->loadVariant($record->id);
       if ($variant !== NULL) {
         $pairs[] = [$record, $variant];
       }

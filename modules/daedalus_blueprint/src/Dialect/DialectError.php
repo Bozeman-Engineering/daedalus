@@ -36,7 +36,9 @@ final class DialectError {
    *
    * The two doors answer with one shape: the context and hint ride
    * through, and the source line joins the message (the one fact a
-   * payload path cannot carry).
+   * payload path cannot carry) and rides the context as `line`, so a
+   * client that places correctives (the panel's island diagnostics)
+   * reads the number instead of parsing prose.
    *
    * @param string $path
    *   The payload path the dialect text arrived on ('html', 'css',
@@ -47,7 +49,7 @@ final class DialectError {
       $path,
       $this->code,
       $this->message . ($this->line !== NULL ? sprintf(' (line %d)', $this->line) : ''),
-      $this->context,
+      $this->line === NULL ? $this->context : $this->context + ['line' => $this->line],
       $this->hint,
     );
   }

@@ -9,9 +9,14 @@
  * is granted (the roster's family rule), so the row reads the shorthand
  * from the served names and never derives it. The padding row's pure
  * halves live in box-model.js (grantedSides, subsetCommit, the side-subset
- * uniformState, and uniformFieldText, the shorthand field's face) and
- * style-guide.js (propertyGranted, the served roster read); this file
- * locks them under plain node.
+ * uniformState over the model's stack, and uniformFieldText, the
+ * shorthand field's face),
+ * style-guide.js (propertyGranted, the served roster read) and
+ * widgets/lib/write-layer.js (writeLayer / ownLayerAt, the own layer a
+ * patch expands and collapses against, read per WRITE at the box the
+ * write lands on: its set members at the model's landing, a removal
+ * alone at the retired name's key); this file locks them under plain
+ * node.
  *
  * Run directly: `node tests/js/padding-row.test.mjs`. Exits non-zero on
  * failure.
@@ -19,11 +24,22 @@
 import { strict as assert } from 'node:assert';
 import {
   grantedSides,
+  sidesPatch,
   subsetCommit,
+  uniformCommit,
   uniformFieldText,
   uniformState,
 } from '../../js/src/widgets/lib/box-model.js';
+import {
+  fieldState,
+  openChrome,
+} from '../../js/src/widgets/lib/dimension-value.js';
+import {
+  ownLayerAt,
+  writeLayer,
+} from '../../js/src/widgets/lib/write-layer.js';
 import { propertyGranted } from '../../js/src/style-guide.js';
+import { stackOf, stacksOf } from './stack-fixture.mjs';
 
 const tests = [];
 const test = (name, run) => tests.push([name, run]);
@@ -95,7 +111,7 @@ test('subsetCommit unsets a legacy own shorthand in the same patch', () => {
 
 test('subset uniformState judges set-ness over the offered sides only', () => {
   assert.deepEqual(
-    uniformState({ 'padding-left': '3rem' }, { 'padding-left': '3rem' }, 'padding', ['top', 'bottom']),
+    uniformState(stacksOf({ own: { 'padding-left': '3rem' } }), 'padding', ['top', 'bottom']),
     { set: false, uniform: null, text: null },
     'a withheld side\'s value never lights the subset row',
   );
@@ -103,26 +119,25 @@ test('subset uniformState judges set-ness over the offered sides only', () => {
 
 test('subset uniformState lights the chip when the offered sides agree', () => {
   const own = { 'padding-top': '2rem', 'padding-bottom': '2rem', 'padding-left': '9rem' };
-  const state = uniformState(own, own, 'padding', ['top', 'bottom']);
+  const state = uniformState(stacksOf({ own }), 'padding', ['top', 'bottom']);
   assert.deepEqual(state, { set: true, uniform: '2rem', text: '2rem' });
 });
 
 test('subset uniformState reports differing offered sides per side', () => {
   const own = { 'padding-top': '2rem', 'padding-bottom': '4rem' };
-  const state = uniformState(own, own, 'padding', ['top', 'bottom']);
+  const state = uniformState(stacksOf({ own }), 'padding', ['top', 'bottom']);
   assert.equal(state.set, true);
   assert.equal(state.uniform, null);
   assert.equal(state.text, 'top 2rem, bottom 4rem', 'no shorthand spelling exists for a side subset');
 });
 
 test('subset uniformState reads variant-supplied sides like the full row', () => {
-  const state = uniformState(null, { 'padding-block': 'x', 'padding-top': '1rem', 'padding-bottom': '1rem' }, 'padding', ['top', 'bottom']);
+  const state = uniformState(stacksOf({ variants: [{ id: 'v', styles: { 'padding-block': 'x', 'padding-top': '1rem', 'padding-bottom': '1rem' } }] }), 'padding', ['top', 'bottom']);
   assert.deepEqual(state, { set: true, uniform: '1rem', text: '1rem' });
 });
 
 test('four-side uniformState behavior is unchanged by the default', () => {
-  const own = { padding: '1rem 2rem' };
-  const state = uniformState(own, own);
+  const state = uniformState(stacksOf({ own: { padding: '1rem 2rem' } }));
   assert.equal(state.set, true);
   assert.equal(state.uniform, null);
   assert.equal(state.text, '1rem 2rem');
@@ -131,40 +146,50 @@ test('four-side uniformState behavior is unchanged by the default', () => {
 // --- uniformFieldText (the shorthand field's face) -------------------------
 
 test('uniformFieldText is empty when nothing styles the offered sides', () => {
-  assert.equal(uniformFieldText(uniformState(null, null), undefined), '');
+  assert.equal(uniformFieldText(uniformState(stacksOf()), undefined), '');
 });
 
 test('uniformFieldText shows the one honest value in its committed spelling', () => {
-  const shorthand = { padding: '1rem' };
-  assert.equal(uniformFieldText(uniformState(shorthand, shorthand), '1rem'), '1rem');
-  const reference = { padding: 'var(--space-4)' };
+  assert.equal(uniformFieldText(uniformState(stacksOf({ own: { padding: '1rem' } })), '1rem'), '1rem');
   assert.equal(
-    uniformFieldText(uniformState(reference, reference), 'var(--space-4)'),
+    uniformFieldText(uniformState(stacksOf({ own: { padding: 'var(--space-4)' } })), 'var(--space-4)'),
     'var(--space-4)',
     'a whole-reference shorthand keeps its ref spelling — the field maps ref to display itself',
   );
 });
 
 test('uniformFieldText degrades per-side padding to the honest text', () => {
-  const axis = { padding: '1rem 2rem' };
-  assert.equal(uniformFieldText(uniformState(axis, axis), '1rem 2rem'), '1rem 2rem',
+  assert.equal(uniformFieldText(uniformState(stacksOf({ own: { padding: '1rem 2rem' } })), '1rem 2rem'), '1rem 2rem',
     'differing sides show the minimal shorthand; typing over it makes all sides equal');
-  const partial = { 'padding-top': '2rem' };
-  assert.equal(uniformFieldText(uniformState(partial, partial), undefined), 'top 2rem',
+  assert.equal(uniformFieldText(uniformState(stacksOf({ own: { 'padding-top': '2rem' } })), undefined), 'top 2rem',
     'partly-set sides list themselves');
 });
 
 test('uniformFieldText falls back to the raw spelling for the opaque case', () => {
-  const opaque = { padding: 'calc(1rem + 2px)' };
-  assert.equal(uniformFieldText(uniformState(opaque, opaque), 'calc(1rem + 2px)'), 'calc(1rem + 2px)',
+  assert.equal(uniformFieldText(uniformState(stacksOf({ own: { padding: 'calc(1rem + 2px)' } })), 'calc(1rem + 2px)'), 'calc(1rem + 2px)',
     'a set value always stays visible, even one only text can carry');
   assert.equal(uniformFieldText({ set: true, uniform: null, text: null }, undefined), '',
     'no raw spelling to fall back to — honestly empty');
 });
 
+test('a listing or an unsplittable face is text to the field, and text wears no dimension chrome', () => {
+  // The seam between the shorthand field's face and the DimensionField's
+  // chrome (dimension-value.js fieldState, openChrome): "left 1.41rem"
+  // beside a live rem well read as a number with a unit; a listing is
+  // neither, so the field renders it as plain text, no unit, no steppers.
+  const listing = uniformFieldText(uniformState(stacksOf({ own: { 'padding-left': '1.41rem' } })), undefined);
+  assert.equal(listing, 'left 1.41rem');
+  assert.equal(fieldState(listing).mode, 'text');
+  assert.deepEqual(openChrome({ spaceUnit: 'rem', mode: fieldState(listing).mode }), { unit: 'none', steppers: false });
+  const opaque = uniformFieldText(uniformState(stacksOf({ own: { padding: 'calc(1rem + 2px)' } })), 'calc(1rem + 2px)');
+  assert.deepEqual(openChrome({ spaceUnit: 'rem', mode: fieldState(opaque).mode }), { unit: 'none', steppers: false });
+  assert.deepEqual(openChrome({ spaceUnit: 'rem', mode: fieldState('1rem').mode }), { unit: 'label', steppers: true },
+    'the one honest value wears the space\'s unit as a label');
+});
+
 test('uniformFieldText judges a subset grant over its offered sides', () => {
   const own = { 'padding-top': '2rem', 'padding-bottom': '2rem', 'padding-left': '9rem' };
-  assert.equal(uniformFieldText(uniformState(own, own, 'padding', ['top', 'bottom']), undefined), '2rem',
+  assert.equal(uniformFieldText(uniformState(stacksOf({ own }), 'padding', ['top', 'bottom']), undefined), '2rem',
     'the withheld side never reaches the field');
 });
 
@@ -233,10 +258,105 @@ test('subsetCommit, uniformState and uniformFieldText speak a border family', ()
     'border-width': null, 'border-top-width': '2px', 'border-bottom-width': '2px',
   });
   const own = { 'border-top-width': '1px', 'border-bottom-width': '1px' };
-  const state = uniformState(own, null, 'border-width', ['top', 'bottom']);
+  const state = uniformState(stacksOf({ own }), 'border-width', ['top', 'bottom']);
   assert.deepEqual(state, { set: true, uniform: '1px', text: '1px' });
   assert.equal(uniformFieldText(state, null), '1px');
-  assert.deepEqual(uniformState(own, null, 'border-width'), { set: true, uniform: null, text: 'top 1px, bottom 1px' }, 'over all four sides the horizontal pair is unset');
+  assert.deepEqual(uniformState(stacksOf({ own }), 'border-width'), { set: true, uniform: null, text: 'top 1px, bottom 1px' }, 'over all four sides the horizontal pair is unset');
+});
+
+// --- the write layer (write-layer.js) --------------------------------------
+
+// A two-box binding as controlModels serves it: the shorthand's key names
+// the anchor (padding-top and the others resolve there too), while the
+// address rule lands any SET on the root, since the root wears the
+// authored padding. The model's landing records what it was asked so a
+// spec can pin that a removal never asks it.
+const ROOT = 'block:1';
+const ANCHOR = 'block:1::a';
+const twoBox = () => {
+  const asked = [];
+  const model = {
+    condition: 'default',
+    keys: {
+      padding: ANCHOR,
+      'padding-top': ANCHOR,
+      'padding-right': ANCHOR,
+      'padding-bottom': ANCHOR,
+      'padding-left': ANCHOR,
+    },
+    landing: (set) => {
+      asked.push(set);
+      return ROOT;
+    },
+  };
+  return { model, asked };
+};
+const TWO_BOX_MAP = {
+  [ROOT]: { default: { padding: '1rem 2rem', color: 'red' }, narrow: { padding: '0' } },
+  [ANCHOR]: { default: { 'padding-top': '4px' } },
+};
+
+test('ownLayerAt reads one box\'s block at the editing compound, order kept', () => {
+  assert.deepEqual(ownLayerAt(TWO_BOX_MAP, ROOT, 'default'), { padding: '1rem 2rem', color: 'red' });
+  assert.deepEqual(Object.keys(ownLayerAt(TWO_BOX_MAP, ROOT, 'default')), ['padding', 'color']);
+  assert.deepEqual(ownLayerAt(TWO_BOX_MAP, ROOT, 'narrow'), { padding: '0' });
+  assert.equal(ownLayerAt(TWO_BOX_MAP, ANCHOR, 'narrow'), null, 'no block at the pose');
+  assert.equal(ownLayerAt(TWO_BOX_MAP, 'block:9', 'default'), null, 'an unknown key');
+  assert.equal(ownLayerAt(TWO_BOX_MAP, null, 'default'), null, 'no key');
+  assert.equal(ownLayerAt(null, ROOT, 'default'), null, 'no map');
+  assert.equal(ownLayerAt({ [ROOT]: { default: 'oops' } }, ROOT, 'default'), null, 'a malformed entry is no layer');
+});
+
+test('writeLayer asks the landing for a write with set members, nulls left out of the set', () => {
+  const { model, asked } = twoBox();
+  assert.deepEqual(writeLayer(TWO_BOX_MAP, model, { padding: '2rem' }), { padding: '1rem 2rem', color: 'red' }, 'the shorthand write reads the root the set lands on, not keys.padding');
+  assert.deepEqual(asked, [['padding']]);
+  assert.deepEqual(
+    writeLayer(TWO_BOX_MAP, model, { 'padding-top': '3px', 'padding-bottom': null }),
+    { padding: '1rem 2rem', color: 'red' },
+  );
+  assert.deepEqual(asked[1], ['padding-top'], 'a null member is a removal riding beside the set, never in it');
+});
+
+test('writeLayer reads a removal alone at the retired name\'s key and never asks the landing', () => {
+  const { model, asked } = twoBox();
+  assert.deepEqual(writeLayer(TWO_BOX_MAP, model, { 'padding-top': null }), { 'padding-top': '4px' }, 'the anchor, where the pipeline lands the null');
+  assert.deepEqual(writeLayer(TWO_BOX_MAP, model, { padding: null, 'padding-top': null }), { 'padding-top': '4px' });
+  assert.deepEqual(asked, []);
+  assert.throws(() => writeLayer(TWO_BOX_MAP, model, {}), /empty write/, 'an empty write is the caller\'s probe to name');
+  assert.throws(() => writeLayer(TWO_BOX_MAP, model, null), /empty write/);
+});
+
+test('the padding row\'s patches expand and collapse against the layer of each write', () => {
+  const { model } = twoBox();
+  const ownFor = (write) => writeLayer(TWO_BOX_MAP, model, write);
+  // The field's shorthand write collapses the landing box's longhands
+  // (none on the root: a plain shorthand write), never the anchor's.
+  assert.deepEqual(uniformCommit(ownFor({ padding: '3rem' }), '3rem'), { padding: '3rem' });
+  // The ring's side write expands the root's own shorthand once.
+  const ringPatch = (bySide) => {
+    const write = Object.fromEntries(
+      Object.entries(bySide ?? {}).map(([side, value]) => [`padding-${side}`, value]),
+    );
+    const own = Object.keys(write).length
+      ? ownFor(write)
+      : ownLayerAt(TWO_BOX_MAP, model.landing(['padding-top', 'padding-right', 'padding-bottom', 'padding-left']), model.condition);
+    return sidesPatch(own, bySide, 'padding');
+  };
+  assert.deepEqual(ringPatch({ top: '3rem' }), {
+    padding: null, 'padding-top': '3rem', 'padding-right': '2rem', 'padding-bottom': '1rem', 'padding-left': '2rem',
+  });
+  // The ring's clear reads the anchor (the retired name's key), where a
+  // plain longhand sits: a plain unset, no expansion.
+  assert.deepEqual(ringPatch({ top: null }), { 'padding-top': null });
+  // The empty probe asks at the longhands' landing: the root's splittable
+  // shorthand does not block the ring.
+  assert.deepEqual(ringPatch({}), {});
+  assert.equal(
+    sidesPatch(ownLayerAt({ [ROOT]: { default: { padding: 'calc(1rem + 2px)' } } }, ROOT, 'default'), {}, 'padding'),
+    null,
+    'an unsplittable shorthand at the landing still blocks',
+  );
 });
 
 // --- runner ---------------------------------------------------------------

@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Drupal\Tests\daedalus_ai_memory\Unit;
 
 use Drupal\ai\OperationType\Chat\ChatMessage;
+use Drupal\ai\OperationType\GenericType\DocumentFile;
+use Drupal\ai\OperationType\GenericType\ImageFile;
 use Drupal\daedalus_ai_memory\Service\ChatMessageFileStripper;
 use Drupal\Tests\UnitTestCase;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -47,6 +49,30 @@ class ChatMessageFileStripperTest extends UnitTestCase {
 
     $this->stripper->stripFiles($agent);
     $this->assertEmpty($msg->getFiles());
+  }
+
+  /**
+   * Tests that the ATTACHMENTS block survives while the delivered bytes go.
+   *
+   * The block is the handle the model keeps across turns; the image and the
+   * PDF delivered beside it are the bytes the tempstore must not hold.
+   */
+  public function testBlockTextSurvivesWhileFilesGo(): void {
+    $text = "<system-reminder>\nATTACHMENTS\n- File 1: hero.png (image/png, 4 bytes)\n- File 2: brief.pdf (application/pdf, 4 bytes) cannot be re-opened later\n</system-reminder>\n\nBuild a hero from this.";
+    $msg = new ChatMessage('user', $text);
+    $msg->setImage(new ImageFile('png!', 'image/png', 'hero.png'));
+    $msg->setFile(new DocumentFile('pdf!', 'application/pdf', 'brief.pdf'));
+    $this->assertCount(2, $msg->getFiles());
+
+    $agent = $this->createMock(MockAgentInterface::class);
+    $agent->method('getChatHistory')->willReturn([$msg]);
+    $agent->expects($this->once())->method('setChatHistory')->with([$msg]);
+
+    $this->stripper->stripFiles($agent);
+    $this->assertSame([], $msg->getFiles());
+    $this->assertSame($text, $msg->getText());
+    $this->assertSame('user', $msg->getRole());
+    $this->assertSame([], $msg->toArray()['images'], 'A persisted record carries no file bytes.');
   }
 
   /**

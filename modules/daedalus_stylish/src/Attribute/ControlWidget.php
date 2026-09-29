@@ -42,7 +42,7 @@ final class ControlWidget extends AttributeBase {
    *   The widget's human label, the default control label when the controls:
    *   entry does not set one.
    * @param \Drupal\daedalus_stylish\ControlSection $section
-   *   The basic-mode section the widget files under (Text, Surface, Layout,
+   *   The basic-mode section the widget files under (Layout, Text, Surface,
    *   Motion) when the controls: entry does not move it with a section key.
    * @param string[] $properties
    *   The CSS property names this widget owns — the complete set of

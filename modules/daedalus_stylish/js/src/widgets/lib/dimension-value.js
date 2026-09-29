@@ -12,6 +12,16 @@
  * style-guide constraints (min/max), with the server's comparability rule
  * (px, pt, rem, em interconvert; anything else only against itself).
  *
+ * Two conversions live here and they deliberately differ in their root.
+ * A BOUND (min/max) converts through the server's PX_BASIS (a 16px
+ * root), because the server judges the same bound the same way and the
+ * client only predicts it. A MEASUREMENT (a computed placeholder read
+ * off the canvas) converts through the canvas's MEASURED bases
+ * (computed-read.js lengthBases: the document root's font size for rem,
+ * the element's own for em), because a placeholder is a fact about the
+ * page, and the page's root is whatever the theme set. The 16 never
+ * reaches a measurement.
+ *
  * Anything this module cannot parse — calc(), var(), keywords, multi-value
  * shorthands — returns null; the field degrades to plain text rather than
  * silently normalizing (the honesty rule).
@@ -46,9 +56,101 @@ export const UNITS = [
 export const DEFAULT_UNITS = ['px', 'em', 'rem', '%'];
 
 /**
- * Px-per-unit for the interconvertible units (server's PX_BASIS).
+ * Px-per-unit for the interconvertible units (server's PX_BASIS): the
+ * comparability twin of PropertyGroupBase::checkRange, used for BOUNDS
+ * only (boundInUnit). A measurement never converts through this table;
+ * it converts through the canvas's measured bases (convertLength).
  */
 const PX_BASIS = { px: 1, pt: 4 / 3, rem: 16, em: 16 };
+
+/**
+ * Px-per-unit for a measurement, from the canvas's measured bases: the
+ * physical units are fixed, the font-relative ones are whatever the
+ * page set. Null when the unit is not a length this module converts,
+ * or when the base it needs was not measured (no canvas: the
+ * satellite; a font-size the probe could not read).
+ *
+ * @param {string} unit
+ * @param {?{rootPx: ?number, fontPx: ?number}} bases
+ *
+ * @return {?number}
+ */
+const measuredPx = (unit, bases) => {
+  if (unit === 'px') {
+    return 1;
+  }
+  if (unit === 'pt') {
+    return 4 / 3;
+  }
+  const base =
+    unit === 'rem' ? bases?.rootPx : unit === 'em' ? bases?.fontPx : null;
+  return typeof base === 'number' && Number.isFinite(base) && base > 0
+    ? base
+    : null;
+};
+
+/**
+ * Converts a measured length into `unit` through the canvas's bases.
+ *
+ * The honest conversion behind every converted placeholder: a computed
+ * side read as `32px` beneath a rem scale is 2rem at a 16px root and
+ * 1.6rem at a 20px root, and the root is whatever the page measures
+ * (computed-read.js lengthBases), never an assumed 16. Identical units
+ * pass the number through; px, pt, rem and em interconvert through the
+ * bases; anything else (a percentage, a viewport unit, a bare number
+ * against a unit) is incomparable and answers null, as does a text
+ * outside the dimension grammar and a font-relative conversion whose
+ * base was not measured.
+ *
+ * @param {*} text
+ *   The measured length ('32px'), or nothing.
+ * @param {string} unit
+ *   The unit to express it in.
+ * @param {?{rootPx: ?number, fontPx: ?number}} bases
+ *   The canvas's measured bases (null off canvas).
+ *
+ * @return {?number}
+ *   The number in `unit`, unrounded, or null when incomparable.
+ */
+export const convertLength = (text, unit, bases = null) => {
+  const parsed = parseDimension(typeof text === 'string' ? text : '');
+  if (parsed === null) {
+    return null;
+  }
+  if (parsed.unit === unit) {
+    return parsed.number;
+  }
+  const from = measuredPx(parsed.unit, bases);
+  const to = measuredPx(unit, bases);
+  return from === null || to === null ? null : (parsed.number * from) / to;
+};
+
+/**
+ * A measured length re-spelled in `unit` for a face: '32px' beneath rem
+ * at a 16px root reads '2rem', rounded to the unit's precision (17px is
+ * '1.1rem', not '1.0625rem': the face shows what an unmodified gesture
+ * starts from); a text already in `unit` reads as itself
+ * (a face never rewrites what it can parse); an incomparable or
+ * unparseable text reads null, so the caller shows it whole and
+ * honest ('50%' stays '50%' beneath a rem select).
+ *
+ * @param {*} text
+ * @param {string} unit
+ * @param {?{rootPx: ?number, fontPx: ?number}} bases
+ *
+ * @return {?string}
+ */
+export const lengthIn = (text, unit, bases = null) => {
+  const parsed = parseDimension(typeof text === 'string' ? text : '');
+  if (parsed === null) {
+    return null;
+  }
+  if (parsed.unit === unit) {
+    return text.trim();
+  }
+  const number = convertLength(text, unit, bases);
+  return number === null ? null : formatDimension(quantize(number, unit), unit);
+};
 
 // Longest-first so 'rem' wins over 'em' ('4rem' is 4rem, not '4r' + 'em')
 // and 'vmin'/'svh' win over their prefixes.
@@ -121,27 +223,33 @@ export const numberFace = (text) => {
 const WHOLE_UNITS = ['px', 'pt'];
 
 /**
- * Units whose gesture-generated values carry hundredths: font-relative
- * units are small (one rem is sixteen pixels), so a tenth is a coarse
- * step and a hundredth (0.16px at the root) is finer than anyone can
- * see. Bare numbers (line-height) live here too.
+ * Units whose gesture-generated values carry tenths: font-relative
+ * units are small (one rem is sixteen pixels), so a whole step is too
+ * coarse to steer with, and a tenth (1.6px at the root) is as fine as a
+ * padding ever wants (1.4rem, never 1.41rem). Under the fine ladder
+ * (Alt, the DevTools 0.1 step over the grain) they carry hundredths
+ * for the rare case. Bare numbers (line-height) live here too.
  */
-const HUNDREDTH_UNITS = ['rem', 'em', 'ch', 'ex', ''];
+const TENTH_UNITS = ['rem', 'em', 'ch', 'ex', ''];
 
 /**
  * Decimal places a gesture-generated value may carry in a unit: 0 for
- * pixels and points, 2 for the font-relative units and bare numbers, 1
- * for everything else (percentages and the viewport units). Typed
- * values are the exact-value path and never pass through here.
+ * pixels and points, 1 for the font-relative units and bare numbers (2
+ * under `fine`, the Alt ladder), 1 for everything else (percentages
+ * and the viewport units, whose grain is already whole). Typed values
+ * are the exact-value path and never pass through here.
  *
  * @param {string} unit
+ * @param {boolean} fine
+ *   Whether the gesture holds the fine modifier (Alt in the field
+ *   editor; the ring never does, Alt is spread there).
  * @return {number}
  */
-export const unitPrecision = (unit) => {
+export const unitPrecision = (unit, fine = false) => {
   if (WHOLE_UNITS.includes(unit)) {
     return 0;
   }
-  return HUNDREDTH_UNITS.includes(unit) ? 2 : 1;
+  return fine && TENTH_UNITS.includes(unit) ? 2 : 1;
 };
 
 /**
@@ -149,20 +257,22 @@ export const unitPrecision = (unit) => {
  *
  * @param {number} number
  * @param {string} unit
+ * @param {boolean} fine
+ *   The gesture's fine modifier (unitPrecision).
  * @return {number}
  */
-export const quantize = (number, unit) =>
-  Number(number.toFixed(unitPrecision(unit)));
+export const quantize = (number, unit, fine = false) =>
+  Number(number.toFixed(unitPrecision(unit, fine)));
 
 /**
- * The unmodified step in a unit: 1 for whole and tenth units (a pixel, a
- * percent), 0.1 for the font-relative units and bare numbers (a whole
- * rem per press is too coarse to steer with).
+ * The unmodified step in a unit: 1 for whole and percent-like units (a
+ * pixel, a percent), 0.1 for the font-relative units and bare numbers
+ * (a whole rem per press is too coarse to steer with).
  *
  * @param {string} unit
  * @return {number}
  */
-export const unitGrain = (unit) => (unitPrecision(unit) === 2 ? 0.1 : 1);
+export const unitGrain = (unit) => (TENTH_UNITS.includes(unit) ? 0.1 : 1);
 
 /**
  * Converts a bound (a dimension string or bare number) into `unit`.
@@ -261,6 +371,38 @@ export const stepSize = (modifiers = {}, unit = 'px') => {
 };
 
 /**
+ * The detented scrub's twin of stepSize: a unit-independent travel-rate
+ * multiplier for the same modifier ladder (Cmd/Ctrl 100, Alt 0.1,
+ * Shift 10, none 1, in stepSize's precedence so a chord reads the same
+ * on both scrubs).
+ *
+ * stepSize is absolute (Shift is 10 units whether px or rem); the
+ * magnet scrub's base rate is already unit-scaled by the value space's
+ * feel factor, so its modifier must scale that base rather than replace
+ * it, or Shift on a rem row would be ten times coarser than on a px
+ * row. The caller hands the result to magnetAdvance as `rate`, which
+ * scales both the travel per pointer pixel and the magnet radius, so
+ * the stops keep capturing at every rate.
+ *
+ * @param {{metaKey?: boolean, ctrlKey?: boolean, altKey?: boolean, shiftKey?: boolean}} modifiers
+ *   Any object carrying the standard modifier flags (a pointer event
+ *   works as-is).
+ * @return {number}
+ */
+export const scrubRate = (modifiers = {}) => {
+  if (modifiers.metaKey || modifiers.ctrlKey) {
+    return 100;
+  }
+  if (modifiers.altKey) {
+    return 0.1;
+  }
+  if (modifiers.shiftKey) {
+    return 10;
+  }
+  return 1;
+};
+
+/**
  * Number of decimal places a value carries (float-noise-free, via the
  * formatted representation).
  */
@@ -290,7 +432,9 @@ export const applyStep = (number, direction, step) => {
 };
 
 /**
- * The unit list a dimension field offers.
+ * The unit list a dimension field's unit SELECT offers: the select
+ * renders only where the value space names no unit (openChrome), so
+ * this list serves free spaces and stops that disagree.
  *
  * Style-guide `units` when declared, else the default four; the value's
  * current unit is always included so an existing value never renders as an
@@ -311,30 +455,143 @@ export const unitOptions = (constraints = {}, currentUnit = null) => {
 
 /**
  * The unit an open field works in while its shown value carries none
- * (empty, mid-typing text): the one precedence for the select's face,
- * a bare number's settle, and every gesture's unit. An explicit pick
- * made while empty wins, then the unit the field last parsed (so `4/3`
- * typed over `16em` stays em), then the vocabulary's own unit (the
- * unit its stops share: rem stops open the select on rem), then the
- * ghost's (what the element wears beneath the unset row, shown whole
- * beside the select when the two disagree), then the first offered
- * unit. The vocabulary beats the ghost because the stops are what the
- * field magnetizes to and what the guide curated; a px computed default
- * beneath a rem scale is a fact to show, never the unit to type in.
+ * (empty, mid-typing text): the one precedence for the unit beside the
+ * number, a bare number's settle, and every gesture's unit. A value
+ * space that names a unit (the unit its stops share; the field shows
+ * it as a static label) IS the unit: the space's unit is the gesture's
+ * unit, and a basic gesture never generates a unit the space did not
+ * name, so `4/3` typed over a `10px` someone typed into a rem space
+ * settles in rem. Where the space names none (a free space, stops that
+ * disagree; the field offers a select) the select's memory speaks: an
+ * explicit pick made while empty, then the unit the field last parsed
+ * (so `4/3` typed over `16em` stays em), then the first offered unit.
+ * A placeholder (a value attributed to the field from outside the
+ * stack, the diagram's computed side) has no say: it is a measurement,
+ * and it converts INTO this unit for its face and its seed (lengthIn,
+ * seedAnchor), so a converted placeholder never disagrees with the unit
+ * beside it.
  *
- * @param {{picked?: ?string, last?: ?string, spaceUnit?: ?string,
- *   ghostUnit?: ?string, options?: Array<string>}} context
+ * @param {{spaceUnit?: ?string, picked?: ?string, last?: ?string,
+ *   options?: Array<string>}} context
  *
  * @return {string}
  */
 export const contextUnit = ({
+  spaceUnit = null,
   picked = null,
   last = null,
-  spaceUnit = null,
-  ghostUnit = null,
   options = [],
-} = {}) =>
-  picked ?? last ?? spaceUnit ?? ghostUnit ?? options[0] ?? DEFAULT_UNITS[0];
+} = {}) => spaceUnit || (picked ?? last ?? options[0] ?? DEFAULT_UNITS[0]);
+
+/**
+ * The chrome an open dimension field wears beside its number.
+ *
+ * The unit slot is a static LABEL when the value space names the one
+ * unit its stops share (every skin in reach mints its dimension scales
+ * in one unit, and a basic gesture never generates another; typed text
+ * keeps the whole grammar, so `10px` typed into a rem space commits as
+ * typed and the label then reads the value's own px), the unit SELECT
+ * only where the space names none (a free space, or stops that
+ * disagree; '' names none), and nothing on a unitless property. The
+ * steppers ride every dimension render. Degraded text (a per-side
+ * listing, a calc(), a keyword) wears none of it: a plain text input,
+ * no unit, no steppers, because a listing is not a number and chrome
+ * that says otherwise lies. Typing in flight is the one exception:
+ * mid-typed text (`16*`) is outside the grammar for a keystroke, and
+ * the chrome stays put (disabled) rather than jumping per key, the
+ * same in-flight rule unitMemory keeps.
+ *
+ * @param {{unitless?: boolean, spaceUnit?: ?string, mode?: string,
+ *   typing?: boolean}} context
+ *   Whether the property is unitless (definition type number), the
+ *   space's unit, the shown value's fieldState mode, and whether typed
+ *   text is in flight.
+ *
+ * @return {{unit: string, steppers: boolean}}
+ *   unit 'label' | 'select' | 'none'.
+ */
+export const openChrome = ({
+  unitless = false,
+  spaceUnit = null,
+  mode = 'dimension',
+  typing = false,
+} = {}) => {
+  if (mode === 'text' && !typing) {
+    return { unit: 'none', steppers: false };
+  }
+  return {
+    unit: unitless ? 'none' : spaceUnit ? 'label' : 'select',
+    steppers: true,
+  };
+};
+
+/**
+ * The unit SELECT's memory after a shown value arrives: what
+ * `contextUnit` reads as `last` and `picked` next, on a space that
+ * names no unit (a named unit needs no memory: it is the unit, and the
+ * field keeps none). A value that carries
+ * a unit context (a dimension with a unit, or a bare number where bare
+ * is a real context) is remembered and supersedes any pick made while
+ * empty. A value that carries none (empty, text outside the grammar, a
+ * bare number where bare is no context) keeps the memory only while
+ * typing is in flight (`4/3` typed over `16em` stays em, a clear typed
+ * in the field keeps its unit); arriving from OUTSIDE (the selection
+ * moved to an unset element or one wearing a per-side listing, an unset
+ * through the row's menu, an undo) it forgets both, because the last
+ * unit was another value's and keeping it would open the field on the
+ * px the previous element happened to wear, or settle a typed `3` as
+ * `3px` over "top 2rem". The first offered unit then takes over through
+ * contextUnit.
+ *
+ * @param {{mode: string, unit: ?string}} state
+ *   The shown value's fieldState.
+ * @param {{last?: ?string, picked?: ?string, bareContext?: boolean,
+ *   typing?: boolean}} memory
+ *   The memory before the arrival, whether bare ('') is a real unit
+ *   context for the property, and whether typed text is in flight.
+ *
+ * @return {{last: ?string, picked: ?string}}
+ */
+export const unitMemory = (
+  state,
+  { last = null, picked = null, bareContext = false, typing = false } = {},
+) => {
+  if (state.mode === 'dimension' && (state.unit !== '' || bareContext)) {
+    return { last: state.unit, picked: null };
+  }
+  return typing ? { last, picked } : { last: null, picked: null };
+};
+
+/**
+ * The number a gesture over an EMPTY field or cell starts from: the
+ * placeholder (a value attributed to the field from outside the stack,
+ * the diagram's computed side) converted into the gesture's unit
+ * through the canvas's measured bases (convertLength: a 16px computed
+ * side beneath a rem scale at a 16px root starts at 1rem, so the first
+ * tick nudges it to 1.1rem instead of collapsing the theme's padding to
+ * 0.1rem; at a 20px root the same side starts at 0.8rem), rounded to
+ * the unit's precision (17px is 1.1rem, 1.06rem under the fine
+ * modifier, never 1.0625rem). An
+ * incomparable placeholder (50% under rem, or rem with no measured
+ * root) and no placeholder at all seed 0. A seed, never a conversion of
+ * the value: magnets and equality still never unit-convert
+ * (value-space.js).
+ *
+ * @param {*} placeholder
+ *   The placeholder's display text ('16px'), or nothing.
+ * @param {string} unit
+ *   The unit the gesture works in (contextUnit).
+ * @param {?{rootPx: ?number, fontPx: ?number}} bases
+ *   The canvas's measured bases (computed-read.js lengthBases), null
+ *   off canvas.
+ * @param {boolean} fine
+ *   The gesture's fine modifier (unitPrecision): the seed carries the
+ *   precision the gesture will.
+ *
+ * @return {number}
+ */
+export const seedAnchor = (placeholder, unit, bases = null, fine = false) =>
+  quantize(convertLength(placeholder, unit, bases) ?? 0, unit, fine);
 
 /**
  * Horizontal pixels of pointer travel per scrub step (scrubAdvance).
@@ -347,8 +604,9 @@ export const SCRUB_PIXELS_PER_STEP = 3;
  * @param {*} text
  *   The shown value.
  * @return {{mode: string, number: ?number, unit: ?string}}
- *   - mode 'empty': nothing set; gestures start from 0 in the field's
- *     fallback unit (number 0, unit null).
+ *   - mode 'empty': nothing set (number 0, unit null); a gesture works
+ *     in the field's fallback unit (contextUnit) and starts from the
+ *     placeholder converted into it (seedAnchor), 0 without one.
  *   - mode 'dimension': within the grammar; number and unit ('' for a
  *     bare number) carry the parse.
  *   - mode 'text': outside the grammar (calc()/var(), keywords,

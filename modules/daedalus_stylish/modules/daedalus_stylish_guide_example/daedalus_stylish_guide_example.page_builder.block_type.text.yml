@@ -140,22 +140,13 @@ elements:
         properties:
           - transform
           - opacity
-# Basic-mode controls over the button part: each widget's owned
-# properties must be covered by the part's grants above.
-controls:
-  button_fill:
-    label: 'Button fill'
-    widget: background
-    element: '.text-block-link'
-  button_text_color:
-    label: 'Button text'
-    widget: text_color
-    element: '.text-block-link'
-  button_corners:
-    label: 'Button corners'
-    widget: corners_border
-    element: '.text-block-link'
-  button_padding:
-    label: 'Button padding'
-    widget: spacing_scale
-    element: '.text-block-link'
+# The link part's basic-mode rows are NOT declared here: the universal
+# block kind's ids (background, text_color, typography, corners_border,
+# spacing) are restated site-wide over the link-first candidate list
+# `['.text-block-link', '']` in daedalus_edit_text_block's own declaration,
+# beside the `button` variant they surface, and the package curates them
+# through the grants and stops above (the maps key-merge, and guide
+# validation covers a widget at the property group on every candidate,
+# so narrowing a group's properties keeps the shipped binding valid).
+# Restating a binding here would add nothing; restating only its label
+# would leave this package's standalone fixture with a widgetless control.

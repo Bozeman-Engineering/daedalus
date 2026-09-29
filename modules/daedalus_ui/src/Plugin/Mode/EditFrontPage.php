@@ -9,7 +9,6 @@ use Drupal\daedalus_ui\ModePluginBase;
 use Drupal\daedalus_ui\Attribute\Mode;
 use Drupal\daedalus_ui\DaedalusUi;
 use Drupal\Core\Routing\RouteMatchInterface;
-use Drupal\daedalus_ui\ToolPluginManager;
 use Drupal\Core\Extension\ModuleExtensionList;
 use Symfony\Component\HttpFoundation\RequestStack;
 use Drupal\Core\StringTranslation\TranslatableMarkup;
@@ -29,6 +28,7 @@ use Symfony\Contracts\EventDispatcher\EventDispatcherInterface;
   id: 'edit_front_page',
   label: new TranslatableMarkup('Edit Mode'),
   weight: 100,
+  per_bundle: FALSE,
 )]
 final class EditFrontPage extends ModePluginBase {
 
@@ -50,7 +50,6 @@ final class EditFrontPage extends ModePluginBase {
       $plugin_definition,
       $container->get('extension.list.module'),
       $container->get('event_dispatcher'),
-      $container->get('plugin.manager.tools'),
       $container->get('current_route_match'),
       $container->get('daedalus_ui.ui'),
       $container->get('request_stack'),
@@ -64,7 +63,6 @@ final class EditFrontPage extends ModePluginBase {
     $plugin_definition,
     protected ModuleExtensionList $extensionList,
     protected EventDispatcherInterface $eventDispatcher,
-    protected ToolPluginManager $toolManager,
     protected RouteMatchInterface $routeMatch,
     protected DaedalusUi $ui,
     private readonly RequestStack $requestStack,

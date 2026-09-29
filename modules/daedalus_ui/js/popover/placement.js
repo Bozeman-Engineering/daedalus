@@ -34,8 +34,16 @@ export const clampPosition = ({
 });
 
 /**
- * Places the surface against an anchor's rect: hanging below it, above
- * it when the viewport is short below but not above; clamped either way.
+ * Places the surface against an anchor's rect: on the preferred side
+ * ('below' by default), flipped to the other side only when the
+ * preferred one is short and the other fits; clamped either way.
+ *
+ * `side` is the vertical intent: 'below' hangs the surface under the
+ * anchor (a menu under a chip, the default), 'above' hangs it over the
+ * anchor (a widget popover over a selection chip, which must never
+ * cover the editing surface beneath the chip). The flip is symmetric:
+ * a surface that fits neither side stays on the preferred one and the
+ * clamp pulls it into the viewport.
  *
  * `align` is the horizontal intent, an explicit part of the open() call
  * and never inferred from layout: 'start' aligns the surface's left edge
@@ -46,7 +54,7 @@ export const clampPosition = ({
  *
  * @param {object} spec
  *   {rect: {left, right, top, bottom}, width, height, viewportWidth,
- *   viewportHeight, align?, gap?, margin?}.
+ *   viewportHeight, side?, align?, gap?, margin?}.
  *
  * @return {{left: number, top: number}}
  */
@@ -56,17 +64,24 @@ export const anchoredPosition = ({
   height,
   viewportWidth,
   viewportHeight,
+  side = 'below',
   align = 'start',
   gap = 2,
   margin = 4,
 }) => {
+  if (side !== 'below' && side !== 'above') {
+    throw new Error(`A surface sides 'below' or 'above', not "${side}".`);
+  }
   if (align !== 'start' && align !== 'end') {
     throw new Error(`A surface aligns 'start' or 'end', not "${align}".`);
   }
-  const fitsBelow = rect.bottom + gap + height + margin <= viewportHeight;
-  const fitsAbove = rect.top - gap - height >= margin;
-  const y =
-    !fitsBelow && fitsAbove ? rect.top - gap - height : rect.bottom + gap;
+  const fits = {
+    below: rect.bottom + gap + height + margin <= viewportHeight,
+    above: rect.top - gap - height >= margin,
+  };
+  const other = side === 'below' ? 'above' : 'below';
+  const landing = !fits[side] && fits[other] ? other : side;
+  const y = landing === 'above' ? rect.top - gap - height : rect.bottom + gap;
   const x = align === 'end' ? rect.right - width : rect.left;
   return clampPosition({
     x,

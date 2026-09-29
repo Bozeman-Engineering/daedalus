@@ -57,6 +57,7 @@ class ElementDiscoveryTest extends KernelTestBase {
     'twig_events',
     'daedalus_tempstore',
     'daedalus_blueprint_api',
+    'file',
     'daedalus_ui',
     'field_sample_value',
     'daedalus_stylish',
@@ -146,8 +147,10 @@ class ElementDiscoveryTest extends KernelTestBase {
     $this->assertSame('field:field_author', $card['contains']);
     $this->assertSame(['.discover-quote', '.discover-attribution'], array_keys($card['elements']));
     // Unlabeled-but-functional: every node carries its class-name label and
-    // every installed property group (unconstrained), at any depth.
-    $groups = array_keys($this->container->get('plugin.manager.daedalus_stylish_property_group')->getGroups());
+    // every installed property group a real element may name
+    // (unconstrained), at any depth.
+    $groups = array_keys($this->container->get('plugin.manager.daedalus_stylish_property_group')->getElementGroups());
+    $this->assertNotContains('generated_content', $groups);
     $quote = $card['elements']['.discover-quote'];
     $this->assertSame('discover-quote', $quote['label']);
     $this->assertSame($groups, array_keys($quote['property_groups']));
@@ -222,8 +225,11 @@ class ElementDiscoveryTest extends KernelTestBase {
     // the markup is, contains slots included.
     $parsed = Yaml::decode($display);
     // The scaffold offers the curated vocabulary only: the generated wide
-    // groups are a validation tier, not something to author into YAML.
-    $groups = array_keys($this->container->get('plugin.manager.daedalus_stylish_property_group')->getCuratedGroups());
+    // groups are a validation tier, not something to author into YAML. The
+    // pseudo-only groups stay out, since every line names a real element.
+    $manager = $this->container->get('plugin.manager.daedalus_stylish_property_group');
+    $groups = array_keys(array_intersect_key($manager->getCuratedGroups(), $manager->getElementGroups()));
+    $this->assertNotContains('generated_content', $groups);
     $this->assertSame($groups, array_keys($parsed['property_groups']));
     $card = $parsed['elements']['.discover-card'];
     $this->assertSame('discover-card', $card['label']);

@@ -3,15 +3,18 @@ import {
   setHover,
   setSelected,
   setSelectedSet,
+  setTarget,
   clearSelection,
 } from '../store/slices/selection-slice';
 import { blueprintReplaced } from '../store/slices/blueprint-slice';
 import { elementForKey } from '../selection/resolver';
+import { canonicalSelector } from '../materials/relative-selector';
 // Circular with history.js (it enqueues restores, we hand it timeline
 // updates); safe: both sides dereference only at call time.
 import { historyUpdated } from '../history/history';
 import { applyMaterialsDelta } from '../materials/materials-store';
 import { pingMutated } from '../../responsive_preview/ping';
+import { preserveScroll } from './preserve-scroll';
 
 /**
  * The mutation queue — the client half of the blueprint mutation contract.
@@ -21,21 +24,36 @@ import { pingMutated } from '../../responsive_preview/ping';
  * The response contract {blueprint, markup, targets, errors, attachments,
  * drupal_commands, history, materials} is applied uniformly: the timeline
  * and the materials delta first, then assets, then the markup subtree
- * swaps, the mirror, then any piggybacked AJAX commands; the armed edit
- * session hears the end of it all (mutationApplied) so an open edit can
- * re-project its draft over the swapped markup.
+ * swaps, the mirror, then any piggybacked AJAX commands; the open edit
+ * hears the end of it all (mutationApplied) so its draft can be
+ * re-projected over the swapped markup.
  *
  * Optimistic UI rides the queue: an op may carry {apply, rollback} hooks.
  * apply() runs the moment the op is enqueued (the user sees the change
  * instantly); rollback() runs if the server rejects it. Because ops are
  * FIFO, a failure also rolls back and rejects everything queued behind it —
  * later ops were built against state that no longer exists.
+ *
+ * Two kinds of entry ride the one queue. An OP is sent to the endpoint by
+ * the queue itself and its payload applied here. A JOB answers the same
+ * contract by its own transport (daedalus_edit's form commit: a Drupal
+ * form's AJAX submit whose response carries the payload as one
+ * daedalusBlueprintApplyResponse command, applied through the command
+ * handler below); the queue only sequences it, so a form commit and the
+ * ops around it stay FIFO and later ops see the page the job left. Either
+ * way an entry executes to a payload or throws, and the failure tail is
+ * the same.
  */
 
 let sequence = 0;
 let running = false;
 let csrfToken = null;
 const queue = [];
+
+/**
+ * Resolvers waiting for the queue to drain (see drained()).
+ */
+const drainWaiters = [];
 
 const getCsrfToken = async () => {
   if (csrfToken === null) {
@@ -91,28 +109,37 @@ const playCommands = (commands) => {
 
 /**
  * Swaps re-rendered subtree markup into the canvas by selectable key.
+ *
+ * The whole key loop runs inside one preserveScroll call: a response that
+ * replaces the entity root removes the page's main content for the span of
+ * the removal, and WebKit clamps the window scroll inside that removal
+ * (preserve-scroll.js). One save and one restore per response, never per
+ * key.
  */
 const swapMarkup = (markup) => {
-  Object.entries(markup ?? {}).forEach(([key, html]) => {
-    const element = elementForKey(key);
-    if (!element) {
-      // The mutation landed server-side but the canvas has nowhere to show
-      // it — a structural blind spot (an unattributed container, evicted
-      // nested-edit chrome), not a transient. Loud, because the symptom is
-      // "nothing happened" while tempstore says otherwise.
-      console.warn(
-        `Daedalus: no element on the page for mutation response markup "${key}"; the swap was skipped. The change is staged and appears on reload.`,
-      );
-      return;
-    }
-    Drupal.detachBehaviors(element, drupalSettings, 'unload');
-    // The rendered subtree has a single root (the wrapper carrying the key).
-    element.insertAdjacentHTML('afterend', html);
-    const replacement = element.nextElementSibling;
-    element.remove();
-    if (replacement) {
-      Drupal.attachBehaviors(replacement, drupalSettings);
-    }
+  preserveScroll(() => {
+    Object.entries(markup ?? {}).forEach(([key, html]) => {
+      const element = elementForKey(key);
+      if (!element) {
+        // The mutation landed server-side but the canvas has nowhere to
+        // show it — a structural blind spot (an unattributed container,
+        // evicted nested-edit chrome), not a transient. Loud, because the
+        // symptom is "nothing happened" while tempstore says otherwise.
+        console.warn(
+          `Daedalus: no element on the page for mutation response markup "${key}"; the swap was skipped. The change is staged and appears on reload.`,
+        );
+        return;
+      }
+      Drupal.detachBehaviors(element, drupalSettings, 'unload');
+      // The rendered subtree has a single root (the wrapper carrying the
+      // key).
+      element.insertAdjacentHTML('afterend', html);
+      const replacement = element.nextElementSibling;
+      element.remove();
+      if (replacement) {
+        Drupal.attachBehaviors(replacement, drupalSettings);
+      }
+    });
   });
 
   // A swap can delete the very elements the selection points at (e.g. a
@@ -130,6 +157,19 @@ const swapMarkup = (markup) => {
   } else if (hoverKey && !elementForKey(hoverKey)) {
     store.dispatch(setHover(null));
   }
+  // The styling target is revalidated the same way (a selection write
+  // above already cleared it): a target whose key no longer has an
+  // element (an ancestor rule's container removed under the selection)
+  // or whose selector the grammar no longer reads points at nothing and
+  // clears, so no surface keeps painting or writing at a vanished
+  // address.
+  const { target } = store.getState().selection;
+  if (
+    target &&
+    (!elementForKey(target.key) || canonicalSelector(target.selector) === null)
+  ) {
+    store.dispatch(setTarget(null));
+  }
 };
 
 /**
@@ -138,6 +178,9 @@ const swapMarkup = (markup) => {
  * swapped-in canvas (a bare uuid probes the placeable kinds, block then
  * container); values whose element never landed drop out, so a structural
  * blind spot skips selection instead of pointing at nothing.
+ *
+ * @return {string[]}
+ *   The keys that landed and were selected.
  */
 const applySelect = (select) => {
   const keys = (Array.isArray(select) ? select : [select])
@@ -152,6 +195,21 @@ const applySelect = (select) => {
     store.dispatch(setSelected(keys[0]));
   } else if (keys.length > 1) {
     store.dispatch(setSelectedSet({ keys }));
+  }
+  return keys;
+};
+
+/**
+ * Opens the editor of a landed selection when the request asked for it
+ * (the edit option): a landing that should start typing says so itself,
+ * and the one editor door (edit-session.js openEditor) decides what that
+ * means for the key. Only a single landed key has an editor; a set or a
+ * landing that never materialized opens nothing. Runs after applySelect,
+ * on the fully applied response, so the editor opens over settled markup.
+ */
+const applyEdit = (keys) => {
+  if (keys.length === 1) {
+    Drupal.Daedalus?.EditSession?.openEditor(keys[0]);
   }
 };
 
@@ -174,7 +232,7 @@ export const applyResponse = async (payload) => {
   await playCommands(payload.attachments);
   swapMarkup(payload.markup);
   // The response's blueprint replaces the mirror wholesale (the server owns
-  // the model; tools never write the mirror directly), AFTER the markup
+  // the model; clients never write the mirror directly), AFTER the markup
   // swap: "mirror replaced" means "this mutation has settled", model and
   // canvas together. Subscribers read the live canvas on this event
   // (daedalus_stylish's part-presence facts join the declared elements against the
@@ -205,7 +263,55 @@ export const applyResponse = async (payload) => {
   // resumes here over the fresh markup. The resume is the editor's own
   // flight (a form path may refetch), so it neither delays the op's
   // resolution nor can its failure roll back a mutation the server kept.
-  Drupal.Daedalus?.EditSession?.mutationApplied();
+  // The payload rides along: its targets say which fields the write
+  // changed, which the engine's panel reads to refresh the widgets the
+  // write left stale.
+  Drupal.Daedalus?.EditSession?.mutationApplied(payload);
+};
+
+/**
+ * Registers the mutation-response contract's Drupal AJAX command.
+ *
+ * A write that rides another transport (a Drupal form's own AJAX submit)
+ * answers a Drupal AJAX command list, and daedalus_blueprint_api's
+ * BlueprintApplyResponseCommand is how the payload rides it. The handler
+ * applies a successful payload through the one applyResponse pipeline,
+ * exactly as an endpoint response is applied, and hands the payload
+ * (success or failure) to the Drupal.Ajax instance that carried it, where
+ * the transport that asked reads it once the round has settled. A failed
+ * payload applies nothing: the transport judges it as any op error.
+ *
+ * Called once by the app entry, after the AJAX framework is on the page.
+ */
+export const initApplyResponseCommand = () => {
+  Drupal.AjaxCommands.prototype.daedalusBlueprintApplyResponse = function (
+    ajax,
+    response,
+  ) {
+    const { payload } = response;
+    ajax.daedalusBlueprintPayload = payload;
+    if (!payload?.success) {
+      return undefined;
+    }
+    return applyResponse(payload);
+  };
+};
+
+/**
+ * Applies a payload the queue sent for: the contract's failure shape (a
+ * 422 carries success false and the errors) throws with the payload
+ * attached, a success applies to the page.
+ */
+const applied = async (payload) => {
+  if (!payload.success) {
+    const error = new Error(
+      payload.errors?.[0]?.message ?? 'The mutation failed.',
+    );
+    error.payload = payload;
+    throw error;
+  }
+  await applyResponse(payload);
+  return payload;
 };
 
 const process = async () => {
@@ -218,21 +324,18 @@ const process = async () => {
   while (queue.length > 0) {
     const op = queue.shift();
     try {
+      // An entry executes to its applied payload (an op: sent and applied
+      // here; a job: applied by its own transport) or throws.
       // eslint-disable-next-line no-await-in-loop
-      const payload = await send(op);
-      if (!payload.success) {
-        const error = new Error(
-          payload.errors?.[0]?.message ?? 'The mutation failed.',
-        );
-        error.payload = payload;
-        throw error;
-      }
-      // eslint-disable-next-line no-await-in-loop
-      await applyResponse(payload);
+      const payload = await op.execute();
       // Select after the swap (the element must be on the page) and before
-      // resolve, so a caller's completion hook observes the selection.
+      // resolve, so a caller's completion hook observes the selection; the
+      // edit intent rides the landed selection.
       if (op.select) {
-        applySelect(op.select);
+        const landed = applySelect(op.select);
+        if (op.edit) {
+          applyEdit(landed);
+        }
       }
       op.resolve(payload);
     } catch (error) {
@@ -257,7 +360,31 @@ const process = async () => {
     }
   }
   running = false;
+  drainWaiters.splice(0).forEach((resolve) => resolve());
 };
+
+/**
+ * Queues an entry: its optimistic apply runs now, its execute() in turn.
+ */
+const enqueue = ({
+  execute,
+  optimistic = null,
+  select = null,
+  edit = false,
+}) =>
+  new Promise((resolve, reject) => {
+    optimistic?.apply?.();
+    queue.push({
+      seq: ++sequence,
+      execute,
+      optimistic,
+      select,
+      edit,
+      resolve,
+      reject,
+    });
+    process();
+  });
 
 /**
  * Queues a blueprint mutation.
@@ -275,6 +402,12 @@ const process = async () => {
  *     each a selectable key or a bare uuid (kind probed from the landed
  *     markup). Placement gestures pass what they placed so focus follows
  *     it; nothing is selected on failure or when the element never landed.
+ *   - edit: optional; true opens the landed selection's editor through the
+ *     one editor door once it is selected (a single landed key only). The
+ *     landing intent of a placement whose next act is typing: a fresh
+ *     block from the palette or the Add panel, a dropped media file. A
+ *     move, an element drop, Duplicate and the tree land a plain
+ *     selection.
  *
  * @return {Promise<Object>}
  *   Resolves with the full response payload after it has been applied to
@@ -289,25 +422,17 @@ export const enqueueOperations = ({
   viewMode = 'full',
   optimistic = null,
   select = null,
-}) => {
-  return new Promise((resolve, reject) => {
-    optimistic?.apply?.();
-    queue.push({
-      seq: ++sequence,
-      entityType,
-      entityId,
-      operations,
-      label,
-      langcode,
-      viewMode,
-      optimistic,
-      select,
-      resolve,
-      reject,
-    });
-    process();
+  edit = false,
+}) =>
+  enqueue({
+    execute: () =>
+      send({ entityType, entityId, operations, label, langcode, viewMode }).then(
+        applied,
+      ),
+    optimistic,
+    select,
+    edit,
   });
-};
 
 /**
  * Queues a history restore (undo/redo/jump).
@@ -333,24 +458,64 @@ export const enqueueHistoryRestore = ({
   restore,
   langcode = null,
   viewMode = 'full',
-}) => {
-  return new Promise((resolve, reject) => {
-    queue.push({
-      seq: ++sequence,
-      entityType,
-      entityId,
-      restore,
-      langcode,
-      viewMode,
-      optimistic: null,
-      resolve,
-      reject,
-    });
-    process();
+}) =>
+  enqueue({
+    execute: () =>
+      send({ entityType, entityId, restore, langcode, viewMode }).then(applied),
   });
-};
+
+/**
+ * Queues a job: a write that answers the mutation-response contract by
+ * its own transport.
+ *
+ * The job runs in its turn, FIFO with the ops around it, and its run()
+ * settles once its response has been applied to the page (a transport
+ * carrying the payload as a daedalusBlueprintApplyResponse command applies
+ * it through the command handler above during the round). It resolves
+ * with the applied payload, throws with a failed one (success false: the
+ * spine's errors, judged like an op's 422), or rejects when the transport
+ * itself refused (a form's validation errors, an HTTP failure); every
+ * failure rolls back the queue behind it exactly as an op's does.
+ *
+ * @param {Object} job
+ *   - run: () => Promise<Object> — the transport round trip, resolving
+ *     with the payload it carried back.
+ *   - optimistic: optional { apply, rollback } hooks, as for an op.
+ *
+ * @return {Promise<Object>}
+ *   Resolves with the applied payload; rejects with the failure.
+ */
+export const enqueueJob = ({ run, optimistic = null }) =>
+  enqueue({
+    execute: () =>
+      Promise.resolve(run()).then((payload) => {
+        if (!payload?.success) {
+          const error = new Error(
+            payload?.errors?.[0]?.message ?? 'The mutation failed.',
+          );
+          error.payload = payload;
+          throw error;
+        }
+        return payload;
+      }),
+    optimistic,
+  });
 
 /**
  * True while mutations are queued or in flight (undo waits for this).
  */
 export const isDraining = () => running || queue.length > 0;
+
+/**
+ * Resolves once nothing is queued or in flight (Save waits for this: a
+ * commit still on the wire must land in tempstore before the page
+ * navigates to the save route).
+ *
+ * @return {Promise<void>}
+ */
+export const drained = () =>
+  isDraining()
+    ? new Promise((resolve) => {
+        drainWaiters.push(resolve);
+      })
+    : Promise.resolve();

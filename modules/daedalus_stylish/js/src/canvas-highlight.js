@@ -1,4 +1,4 @@
-import { resolveTargets, flowChildRects } from './computed-read.js';
+import { pseudoOf, resolveTargets, flowChildRects } from './computed-read.js';
 import { highlightRects } from './canvas-painters.js';
 
 /**
@@ -26,14 +26,17 @@ import { highlightRects } from './canvas-painters.js';
  * (setCanvasHighlight), so panel widgets in BOTH hosts drive one
  * renderer: the in-page widgets set it directly, a satellite's intents
  * ride the BroadcastChannel and land in the leader source. The
- * highlight spec is property-keyed: null, or {key, sub, properties} —
- * a style target (selectable key + optional part selector) plus WHICH
- * PROPERTIES are being edited. The painter registry
+ * highlight spec is property-keyed: null, or {key, selector, properties}
+ * — a style target (selectable key + optional relative selector) plus
+ * WHICH PROPERTIES are being edited. The painter registry
  * (canvas-painters.js) owns how each property tints; painterless
  * properties no-op silently, so consumers hand over whatever they edit
- * without checking eligibility. Multi-match part selectors tint EVERY
- * match; a missing element paints nothing (honest and self-healing —
- * matches re-resolve when markup swaps).
+ * without checking eligibility. Multi-match selectors tint EVERY match;
+ * a missing element paints nothing (honest and self-healing — matches
+ * re-resolve when markup swaps). A generated box (a `::before` /
+ * `::after` target) paints nothing either: the bands are rect
+ * arithmetic and a box has no rect, only its hosts do, and tinting the
+ * host's padding for the box's would lie about where the value lives.
  */
 export const createCanvasHighlight = ({ app, source }) => {
   const root = document.getElementById('daedalus-root');
@@ -51,9 +54,15 @@ export const createCanvasHighlight = ({ app, source }) => {
   // the index name ('m:0'), and resolve re-queries the whole list on a
   // miss so a markup swap that replaces every match heals in one frame.
   let matches = [];
+  // The spec's measurable matches: none for a generated box (withheld,
+  // see the file doc), else every element the target hits.
+  const measurable = () =>
+    spec && pseudoOf(spec.selector) === null
+      ? resolveTargets(spec.key, spec.selector)
+      : [];
   const tracker = app.geometry.createTracker({
     resolve: (index) => {
-      matches = spec ? resolveTargets(spec.key, spec.sub) : [];
+      matches = measurable();
       return matches[Number(index)] ?? null;
     },
     // A cached node is stale the moment it is no longer THIS index's match
@@ -122,7 +131,7 @@ export const createCanvasHighlight = ({ app, source }) => {
       return;
     }
     // Fresh matches for the new target; drop cached elements beyond them.
-    matches = resolveTargets(spec.key, spec.sub);
+    matches = measurable();
     tracker.prune(matches.map((match, i) => `m:${i}`));
     container.hidden = false;
     tracker.start(frame);
@@ -134,7 +143,7 @@ export const createCanvasHighlight = ({ app, source }) => {
   // staleness alone would miss.
   source.onStyleMapChange(() => {
     if (spec) {
-      matches = resolveTargets(spec.key, spec.sub);
+      matches = measurable();
       tracker.prune(matches.map((match, i) => `m:${i}`));
     }
   });

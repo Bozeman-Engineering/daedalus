@@ -18,6 +18,10 @@ use Drupal\layout_builder\SectionComponent;
  * selectable keys name what to swap in render terms. The mapping picks the
  * smallest subtree whose markup fully reflects the change:
  * - A field change re-renders that field's wrapper.
+ * - A field that went from empty to valued or back (the PRESENCE sentinel)
+ *   re-renders its containing subtree: the block root for a block field,
+ *   the whole entity for a root or paragraph field, because an empty field
+ *   renders no wrapper and the page has nothing to swap into.
  * - An added or reordered item re-renders its parent container (the item's
  *   position only exists in the parent's markup).
  * - A removal or restructure re-renders the whole entity: the removed node has
@@ -96,6 +100,12 @@ class TargetKeyMapper {
       if (!TargetType::isSentinel($field_name)) {
         return SelectableKey::blockField($uuid, $field_name);
       }
+      if ($field_name === TargetType::PRESENCE) {
+        // A block field that appeared or disappeared has no wrapper of its
+        // own in one of the two states; the block root is the smallest
+        // subtree stamped in both.
+        return SelectableKey::block($uuid);
+      }
       if (in_array($field_name, [TargetType::ADDED, TargetType::REORDERED], TRUE)
         && $context->target instanceof SectionComponent
         && $context->section instanceof Section
@@ -129,7 +139,10 @@ class TargetKeyMapper {
       return $fallback;
     }
 
-    if ($context->isSection() && $field_name === TargetType::RESTRUCTURED) {
+    // A section's own properties (label, layout_settings) and a restructure
+    // of it both render inside its container: the smallest subtree that
+    // fully reflects the change.
+    if ($context->isSection() && (!TargetType::isSentinel($field_name) || $field_name === TargetType::RESTRUCTURED)) {
       return SelectableKey::container($uuid);
     }
 

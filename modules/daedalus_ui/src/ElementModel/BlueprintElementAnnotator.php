@@ -5,11 +5,15 @@ declare(strict_types=1);
 namespace Drupal\daedalus_ui\ElementModel;
 
 use Drupal\Component\Utility\Html;
+use Drupal\Core\Block\BlockManagerInterface;
 use Drupal\Core\Entity\EntityInterface;
 use Drupal\Core\Entity\EntityFieldManagerInterface;
+use Drupal\Core\Entity\EntityTypeBundleInfoInterface;
 use Drupal\Core\Entity\FieldableEntityInterface;
+use Drupal\Core\StringTranslation\StringTranslationTrait;
 use Drupal\daedalus_blueprint\LayoutBuilder\DaedalusLayoutAdapter;
 use Drupal\daedalus_blueprint\NodeTree\NodeTreeBuilder;
+use Drupal\daedalus_blueprint_api\Render\SelectableKey;
 use Drupal\layout_builder\Section;
 use Drupal\daedalus_ui\Presentation\Presentation;
 
@@ -26,6 +30,35 @@ use Drupal\daedalus_ui\Presentation\Presentation;
  * ONE annotation, `_element`, rides every owning node, the root blueprint
  * included, mirroring the declaration grammar so the client reads the same
  * vocabulary developers author:
+ * - name and type: the element-naming spine, two translated strings minted
+ *   HERE and delivered as data, never derived by a client. Every surface
+ *   that words an element (the page-elements tree, the canvas chips, the
+ *   stylish subject line and code tree in the leader page AND the
+ *   satellite, the explain tool in PHP, the AI's chips) reads these two
+ *   fields, so one element can never be worded two ways. `type` answers
+ *   what the element IS: a section at the root layout depth is a
+ *   "Section", a nested one a "Container" (the tree's <section>/<div>
+ *   tag is the same fact; the palette item stays "Container" because
+ *   what you drag is the kind, it becomes a Section when it lands at page
+ *   depth); an inline block its block type entity's label ("Text",
+ *   "Image"); a field block the field's label; any other plugin block (a
+ *   menu, the site branding) its block plugin's admin label, the Add
+ *   panel's word for it; the root its bundle label.
+ *   `name` answers what the element SAYS: a section's custom label
+ *   (layout_settings.label, surfaced by the serializer as the node's
+ *   `label`) else its type; a merged block's content excerpt (the edit
+ *   target's first line, capped at NAME_CAP) when that value is a string,
+ *   else the presentation's label, else the component's label when that
+ *   label is a NAME (label_display not visible: a visible label is
+ *   rendered content, the heading precedent, so it is never a name by
+ *   itself), else its type; a field block the field's label; a plugin
+ *   block its unrendered label else its type; the root its entity label.
+ *   An unrenamed element's name is therefore its type word, never a
+ *   humanized machine id. Both ride `_tree` nodes too (the tree copies
+ *   unknown keys), which is how the satellite reads them. Every component
+ *   is attributed on the canvas by its uuid (LayoutBuilderBlockAttributes)
+ *   and rows in the tree, so every component carries both words: a plugin
+ *   block's annotation is exactly these two.
  * - presentation: Presentation::toArray() ({mode, label?, edit_target?}).
  *   Components get the bundle tier of the one model; the root gets the
  *   derived entity rule (its label field presents AS the entity row, so the
@@ -85,15 +118,31 @@ use Drupal\daedalus_ui\Presentation\Presentation;
  * components stay unannotated — they present open, exactly as attribution
  * stamps nothing on them, and their bespoke templates keep DOM authority
  * (presence reads answer "unknown" and surfaces degrade to declarations).
+ * The one plugin exception is a Layout Builder FIELD BLOCK, which renders a
+ * root field: it carries `presentation` (MERGED into that field, the
+ * model's fieldBlockPresentation) and `presented_field` (the field's
+ * selectable key, the twin of the placement's data-presented-field stamp),
+ * so the projection folds the placement row and the field row as one and
+ * the leaf inside edits in place.
  */
 final class BlueprintElementAnnotator {
+
+  use StringTranslationTrait;
+
+  /**
+   * A merged element's content-excerpt name cap, in characters.
+   *
+   * A name, not a preview: a string_long can hold paragraphs, so the name
+   * is the first line clamped to this many characters (one fewer plus an
+   * ellipsis when it overruns).
+   */
+  private const NAME_CAP = 80;
 
   /**
    * Instance-excerpt cap, in characters.
    *
-   * The client's content-label convention truncates at 80; the stamped
-   * text only needs to cover that with headroom, not duplicate whole
-   * documents into the payload.
+   * Covers the NAME_CAP convention with headroom, not whole documents
+   * duplicated into the payload.
    */
   private const TEXT_CAP = 120;
 
@@ -107,6 +156,14 @@ final class BlueprintElementAnnotator {
    * @var array<string, \Drupal\Core\Entity\FieldableEntityInterface>
    */
   private array $componentEntities = [];
+
+  /**
+   * The root entity of the current annotate() call, when fieldable.
+   *
+   * A field block presents one of ITS fields; the component node carries
+   * only the plugin id, so the root supplies the uuid and the definition.
+   */
+  private ?FieldableEntityInterface $root = NULL;
 
   /**
    * The declared instance namespaces for the current call, keyed by prefix.
@@ -128,6 +185,8 @@ final class BlueprintElementAnnotator {
     private readonly ElementResolver $resolver,
     private readonly DaedalusLayoutAdapter $daedalusLayoutAdapter,
     private readonly NodeTreeBuilder $nodeTreeBuilder,
+    private readonly EntityTypeBundleInfoInterface $bundleInfo,
+    private readonly BlockManagerInterface $blockManager,
   ) {}
 
   /**
@@ -147,12 +206,19 @@ final class BlueprintElementAnnotator {
    *   The annotated blueprint.
    */
   public function annotate(array $blueprint, EntityInterface $root, string $view_mode): array {
-    $this->componentEntities = $root instanceof FieldableEntityInterface
-      ? $this->componentEntitiesOf($root)
+    $this->root = $root instanceof FieldableEntityInterface ? $root : NULL;
+    $this->componentEntities = $this->root !== NULL
+      ? $this->componentEntitiesOf($this->root)
       : [];
     $this->instanceNamespaces = $this->instanceNamespacesOf();
     if ($root instanceof FieldableEntityInterface) {
+      // The root's type is its bundle label ("Page"); its name the entity
+      // label, which is what its edit target (the label field) holds.
+      $type = $this->bundleLabel($root->getEntityTypeId(), $root->bundle());
+      $label = (string) $root->label();
       $annotation = [
+        'name' => $label !== '' ? $label : $type,
+        'type' => $type,
         'presentation' => $this->elementModel
           ->rootPresentation($root->getEntityTypeId(), $root->bundle(), $view_mode)
           ->toArray(),
@@ -211,7 +277,20 @@ final class BlueprintElementAnnotator {
    *   The annotated section nodes.
    */
   private function annotateSections(array $sections, string $depth): array {
+    // The layout vocabulary: a section of the root layout is a Section of
+    // the page, one reached through a component list a grouping Container.
+    // Depth is the one fact that decides it, the same fact that picks the
+    // <section>/<div> root form below.
+    $type = $depth === ElementResolver::DEPTH_ROOT
+      ? (string) $this->t('Section')
+      : (string) $this->t('Container');
     foreach ($sections as &$section) {
+      // The custom label (layout_settings.label, the serializer's top-level
+      // `label`) is the section's name when set; an unrenamed section is
+      // called by its type, never by its humanized layout id.
+      $label = $section['label'] ?? NULL;
+      $section['_element']['name'] = is_string($label) && trim($label) !== '' ? $label : $type;
+      $section['_element']['type'] = $type;
       // The section's markup: the layout's effective declaration (the
       // universal container kind layered under any layout-specific file)
       // resolved at this depth. Sections carry no entity of their own, so
@@ -298,16 +377,19 @@ final class BlueprintElementAnnotator {
     // `plugin_id` for everything else.
     $block_type = $component['block_type'] ?? NULL;
     if ($block_type === NULL) {
+      $this->annotatePluginBlock($component);
       return;
     }
     // label_display is the raw stored value; an absent key means 'visible'
     // (core's block plugin default) — the same fallback the serializer and
     // LayoutBuilderBlockAttributes use.
     $label_visible = ($component['label_display'] ?? 'visible') === 'visible';
+    $presentation = $this->elementModel->bundlePresentation('block_content', $block_type, $label_visible);
+    $type = $this->bundleLabel('block_content', $block_type);
     $annotation = [
-      'presentation' => $this->elementModel
-        ->bundlePresentation('block_content', $block_type, $label_visible)
-        ->toArray(),
+      'name' => $this->componentName($component, $presentation, $label_visible, $type),
+      'type' => $type,
+      'presentation' => $presentation->toArray(),
     ];
     $composed = $this->elementModel->isComposedInlineBlock($block_type);
     if ($composed) {
@@ -340,6 +422,141 @@ final class BlueprintElementAnnotator {
       $annotation['fields'] = $fields;
     }
     $component['_element'] = $annotation;
+  }
+
+  /**
+   * Annotates a plugin component (anything that is not an inline block).
+   *
+   * A field block of the root presents MERGED into the root field it
+   * renders (ElementModel::fieldBlockPresentation) and names that field by
+   * its selectable key. Any other plugin block (a menu, the site branding,
+   * a field block of some other bundle) is not a fieldable bundle: no
+   * presentation, no compose, no markup, no field facts, it presents open.
+   * It is still an element on the canvas (attributed by its uuid) with a
+   * row in the tree, so it carries the naming spine's two words: its type
+   * is the block plugin's admin label, the same word the Add panel shows
+   * for it, and its name the configured label when that label is a name
+   * (not rendered as content), else the type.
+   */
+  private function annotatePluginBlock(array &$component): void {
+    $plugin_id = $component['plugin_id'] ?? NULL;
+    if (!is_string($plugin_id)) {
+      return;
+    }
+    $definition = $this->root !== NULL
+      ? $this->elementModel->presentedField($plugin_id, $this->root)
+      : NULL;
+    if ($definition !== NULL) {
+      // A field block IS the field it renders: the field's label is both
+      // what it is and what it is called.
+      $label = (string) $definition->getLabel();
+      $component['_element'] = [
+        'name' => $label,
+        'type' => $label,
+        'presentation' => $this->elementModel->fieldBlockPresentation($definition)->toArray(),
+        'presented_field' => SelectableKey::field($this->root->uuid(), $definition->getName()),
+      ];
+      return;
+    }
+    $type = $this->pluginLabel($plugin_id);
+    $label_visible = ($component['label_display'] ?? 'visible') === 'visible';
+    $component['_element'] = [
+      'name' => $this->labelAsName($component, $label_visible) ?? $type,
+      'type' => $type,
+    ];
+  }
+
+  /**
+   * A block plugin's admin label as the type word.
+   *
+   * A plugin the manager no longer knows (its module uninstalled under a
+   * placed block, a derivative whose menu is gone) still needs a word: the
+   * plugin id, the one fact left, the same degrade as bundleLabel().
+   */
+  private function pluginLabel(string $plugin_id): string {
+    $definition = $this->blockManager->getDefinition($plugin_id, FALSE);
+    $label = $definition['admin_label'] ?? NULL;
+    $label = $label === NULL ? '' : (string) $label;
+    return $label !== '' ? $label : $plugin_id;
+  }
+
+  /**
+   * A component's configuration label when it is a NAME, else NULL.
+   *
+   * A visible label is rendered content (the heading precedent), never a
+   * name by itself; a hidden, non-empty label is what the editor called
+   * the block.
+   */
+  private static function labelAsName(array $component, bool $label_visible): ?string {
+    $label = $component['label'] ?? NULL;
+    return !$label_visible && is_string($label) && trim($label) !== '' ? $label : NULL;
+  }
+
+  /**
+   * An inline-block component's name: what the element SAYS.
+   *
+   * In order: a merged block reads its content (the edit target's value:
+   * the configuration label itself when the target is 'label', the
+   * heading precedent, else the target block field) as a first-line
+   * excerpt when that value is a non-empty string; else the presentation's
+   * own label (the absorbed field's definition label); else the component's
+   * configuration label when it is a NAME, which it is only when not
+   * rendered as content; else the type word. Never empty.
+   *
+   * @param array $component
+   *   The serialized component node.
+   * @param \Drupal\daedalus_ui\Presentation\Presentation $presentation
+   *   The node's presentation decision.
+   * @param bool $label_visible
+   *   Whether the configuration label renders as page content.
+   * @param string $type
+   *   The node's type word, the last resort.
+   */
+  private function componentName(array $component, Presentation $presentation, bool $label_visible, string $type): string {
+    if ($presentation->mode === Presentation::MERGED && $presentation->editTarget !== NULL) {
+      $value = $presentation->editTarget === 'label'
+        ? ($component['label'] ?? NULL)
+        : ($component['block_fields'][$presentation->editTarget] ?? NULL);
+      if (is_string($value)) {
+        $excerpt = self::excerpt($value);
+        if ($excerpt !== NULL) {
+          return $excerpt;
+        }
+      }
+    }
+    if ($presentation->label !== NULL && $presentation->label !== '') {
+      return $presentation->label;
+    }
+    return self::labelAsName($component, $label_visible) ?? $type;
+  }
+
+  /**
+   * A content value as a name: its first line, clamped to NAME_CAP.
+   *
+   * @return string|null
+   *   The excerpt, or NULL for an empty (whitespace-only) value.
+   */
+  private static function excerpt(string $value): ?string {
+    $value = trim($value);
+    if ($value === '') {
+      return NULL;
+    }
+    $line = explode("\n", $value)[0];
+    return mb_strlen($line) > self::NAME_CAP
+      ? mb_substr($line, 0, self::NAME_CAP - 1) . '…'
+      : $line;
+  }
+
+  /**
+   * A bundle's label as the type word, translated config cast to a string.
+   *
+   * A bundle the info service no longer knows (its type deleted under a
+   * placed block) still needs a word: the machine name, the one fact left.
+   */
+  private function bundleLabel(string $entity_type_id, string $bundle): string {
+    $label = $this->bundleInfo->getBundleInfo($entity_type_id)[$bundle]['label'] ?? NULL;
+    $label = $label === NULL ? '' : (string) $label;
+    return $label !== '' ? $label : $bundle;
   }
 
   /**

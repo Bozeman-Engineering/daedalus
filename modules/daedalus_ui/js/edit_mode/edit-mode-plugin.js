@@ -1,16 +1,14 @@
 /**
  * The Edit mode plugin and the Edit Mode boot behavior.
  *
- * Part of the app bundle: initEditModePlugin() runs after the mode/tool
- * managers boot, so the manager reads below are ordered by code, not by
+ * Part of the app bundle: initEditModePlugin() runs after the mode
+ * manager boots, so the manager reads below are ordered by code, not by
  * script delivery.
  */
-import { scheduleRegistrationDiagnostics } from './registration';
 import { warnMissingEntityUi } from './utilities/warn';
 
 export const initEditModePlugin = () => {
   const modeManager = Drupal.Daedalus.ModeManager;
-  const toolManager = Drupal.Daedalus.ToolManager;
 
   Drupal.behaviors.DaedalusUiEditMode = {
     attach: (context, settings) => {
@@ -20,8 +18,8 @@ export const initEditModePlugin = () => {
       // subtree contexts — leaving Edit Mode's client state (hotkeys, mode
       // flags) silently uninitialized. Idempotent re-assertion on every
       // attach is load-order-proof; the edit_mode class is the "done" flag.
-      // The infallible state flags come first so a tool-activation failure
-      // cannot take Edit Mode's state down with it.
+      // The mode slice is what the selection grammar and its chrome gate
+      // on (Edit Mode on or off).
       if (
         Drupal.Daedalus.getCookieValue('navigationMode') === 'edit' &&
         !document.documentElement.classList.contains('edit_mode')
@@ -30,23 +28,7 @@ export const initEditModePlugin = () => {
         window.setMode('edit');
         window.setHotKey(true);
         window.setFileDrag(true);
-        modeManager.getPlugin('edit').activateTool();
       }
-
-      once(
-        'DaedalusUiEditMode',
-        '#edit-mode-toolbar .daedalus-ui-button',
-        context,
-      ).forEach((toolButton) => {
-        // Listen for tool activation clicks.
-        toolButton.addEventListener('click', (event) => {
-          const nextTool = event.currentTarget.dataset.tool;
-          modeManager.getPlugin('edit').changeTool(nextTool);
-        });
-        // The toolbar (re)arrived — its buttons' tool scripts may still be in
-        // flight, so restart the not-yet-registered settle check.
-        scheduleRegistrationDiagnostics();
-      });
     },
   };
 
@@ -56,18 +38,14 @@ export const initEditModePlugin = () => {
   class EditModePlugin extends Drupal.Daedalus.ModePluginBase {
     id = 'edit';
 
-    activationTicket = 0;
-
     enable = () => {
       this.ReloadPageElements()
         .then(async (response, status) => {
           document.querySelector('html').classList.add('edit_mode');
-          // Clean slate: clear any panel left open from outside Edit Mode (the
-          // chat) so the chat reflects the active tool. The active tool's enable
-          // reopens it only if that tool owns it (the AI tool).
+          // Clean slate: clear any panel left open from outside Edit Mode
+          // (the chat), then open the mode's default-open panels.
           await Drupal.Daedalus.SidebarManager.closeAll();
           this.openDefaultSidebars();
-          this.activateTool();
           window.setHotKey(true);
           window.setFileDrag(true);
         })
@@ -98,122 +76,18 @@ export const initEditModePlugin = () => {
         });
     };
 
-    disable = (editModeDisabled = false) => {
+    disable = () => {
       document.querySelector('html').classList.remove('edit_mode');
       window.setHotKey(false);
       window.setFileDrag(false);
-      this.removeMouse();
       // Close the mode-bound panels but leave the always-on chat, which becomes
       // user-owned again outside Edit Mode.
       Drupal.Daedalus.SidebarManager.closeEphemeral();
-      const activeTool =
-        Drupal.Daedalus.getCookieValue('activeTool') ?? 'selector';
-      if (toolManager.hasPlugin(activeTool)) {
-        toolManager.getPlugin(activeTool).disable(true);
-      }
+      // Leaving the mode must not leave an open editor behind: the open
+      // edit commits through its one commit door (an invalid widget keeps
+      // it and surfaces its own feedback).
+      Drupal.Daedalus.EditSession.commit();
       return this.ReloadPageElements();
-    };
-
-    removeMouse = () => {
-      document
-        .querySelectorAll('.daedalus-ui-button.active')
-        .forEach((button) => {
-          document.querySelector('html').classList.remove(button.dataset.tool);
-          button.classList.remove('active');
-        });
-    };
-
-    changeMouse = (pluginId) => {
-      this.removeMouse();
-      if (!pluginId) {
-        return;
-      }
-      document
-        .querySelector(`[data-tool="${pluginId}"]`)
-        ?.classList.add('active');
-      document.querySelector('html').classList.add(pluginId);
-      sessionStorage.setItem('mouseState', pluginId);
-    };
-
-    activateTool = (toolPluginId = null) => {
-      if (!toolPluginId) {
-        const defaultTool =
-          drupalSettings.daedalusUi.defaultTool ?? 'selector';
-        toolPluginId =
-          Drupal.Daedalus.getCookieValue('activeTool') || defaultTool;
-      }
-
-      // Tool scripts arrive dynamically (big_pipe placeholders, AJAX add_js),
-      // so the tool being activated may not have registered yet when the edit
-      // chrome lands — activation waits for it instead of racing it. The
-      // ticket discards a superseded activation: if the user switches tools
-      // while an earlier activation is still waiting, the earlier one must
-      // not enable its tool over the newer one when its script finally runs.
-      const ticket = ++this.activationTicket;
-      toolManager
-        .whenRegistered(toolPluginId)
-        .then((tool) => {
-          if (ticket !== this.activationTicket) {
-            return;
-          }
-          this.changeMouse(toolPluginId);
-          tool.enable().then(() => {
-            Drupal.Daedalus.setCookieValue('activeTool', toolPluginId);
-
-            const ToolChangeEvent = new CustomEvent(
-              'Daedalus.EditModeToolChangeEvent',
-              {
-                detail: {
-                  active: toolPluginId,
-                },
-                bubbles: true,
-                cancelable: true,
-              },
-            );
-            document.dispatchEvent(ToolChangeEvent);
-          });
-        })
-        .catch((error) => {
-          // The tool never registered — a stale cookie or settings naming an
-          // uninstalled tool. Fall back to the configured default, then to the
-          // always-present selector, so Edit Mode still has a working tool; the
-          // registration diagnostics warn about the missing script separately.
-          if (ticket !== this.activationTicket || toolPluginId === 'selector') {
-            return;
-          }
-          const defaultTool =
-            drupalSettings.daedalusUi.defaultTool ?? 'selector';
-          const fallback =
-            toolPluginId === defaultTool ? 'selector' : defaultTool;
-          console.warn(
-            `Daedalus: could not activate the "${toolPluginId}" tool (${error.message}); falling back to "${fallback}".`,
-          );
-          this.activateTool(fallback);
-        });
-    };
-
-    changeTool = (nextTool = null) => {
-      const activeTool =
-        Drupal.Daedalus.getCookieValue('activeTool') ?? 'selector';
-
-      // A tool that never registered has no state to disable (its cookie is
-      // stale — activateTool only writes the cookie after a successful
-      // enable), so skip straight to activating the next tool.
-      const disabled = toolManager.hasPlugin(activeTool)
-        ? toolManager.getPlugin(activeTool).disable()
-        : Promise.resolve();
-      disabled
-        .then(() => {
-          modeManager.getPlugin('edit').activateTool(nextTool);
-        })
-        .catch((error) => {
-          if (error) {
-            this.message(error.message, 'warning', {
-              duration: 3000,
-              scroll: false,
-            });
-          }
-        });
     };
 
     /**
@@ -352,20 +226,19 @@ export const initEditModePlugin = () => {
       });
     };
 
+    /**
+     * Reveals a canvas element a message or an editor points at (the
+     * notifications sidebar, daedalus_edit's invalid-input reveal) by the
+     * one selection reveal rule (Drupal.Daedalus.scrollReveal): the whole
+     * element in view, centered when it fits, never moved when it already
+     * is. The fixed chrome's offset is the canvas's scroll-margin-top
+     * (css/edit-mode.css), no math here.
+     *
+     * @param element
+     *   The canvas element.
+     */
     scrollToElement = (element) => {
-      // Check if element is visible in viewport.
-      const rect = element.getBoundingClientRect();
-      const viewportHeight = window.innerHeight;
-      const viewportTop = 0;
-      const isVisible = rect.top < viewportHeight && rect.bottom > viewportTop;
-
-      if (!isVisible) {
-        element.style.scrollMarginTop =
-          'var(--daedalus-ui-scroll-offset-top, var(--drupal-displace-offset-top, 0))';
-        element.scrollIntoView({
-          behavior: 'smooth',
-        });
-      }
+      Drupal.Daedalus.scrollReveal(element, { behavior: 'smooth' });
     };
 
     /**

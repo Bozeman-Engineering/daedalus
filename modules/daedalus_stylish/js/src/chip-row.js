@@ -4,10 +4,12 @@ import { useMenu } from './menu.js';
 import { chipFaces, chipMenuItems, systemScheme } from './chip-row-model.js';
 
 /**
- * The chip row: the inspector's pose, one row in the styling place.
+ * The chip row: the inspector's pose, the pose group's first line.
  *
- * State · Width · Scheme · Motion under the chrome row, standard across
- * basic, advanced, and code (the Materials catalog poses nothing, so the
+ * State · Width · Scheme · Motion, pinned under the subject line and
+ * above the mode row (inspector.js; the Styled at line, styled-at.js,
+ * sits beneath it in the widget modes), standard across basic,
+ * advanced, and code (the Materials catalog poses nothing, so the
  * inspector renders no row there) and the satellite window, which
  * renders this same component (its source relays the writes over the
  * BroadcastChannel). Each chip mirrors its axis of the canvas state
@@ -18,8 +20,8 @@ import { chipFaces, chipMenuItems, systemScheme } from './chip-row-model.js';
  * descriptors to translated strings and dispatches the picked actions:
  * force state through the source, vector poses as partial writes through
  * the source's canvas-vector seam, and the preview-window tail as the
- * popout window.open (leader page only — the satellite host carries no
- * responsivePreview payload, so the tail honestly stays away there).
+ * popout window.open (leader page only — the satellite host composes no
+ * previewWindow opener, so the tail honestly stays away there).
  */
 
 /**
@@ -98,8 +100,9 @@ const CHIP_TITLES = () => ({
  * @param {boolean} props.hasSelection
  *   Whether an element is selected (gates the state chip).
  * @param {?object} props.previewWindow
- *   drupalSettings.daedalusUi.responsivePreview ({url, scope}), or
- *   null where the host has none (the satellite window).
+ *   The preview-window opener {url, scope} (the preview route's URL and
+ *   the edit session's scope, forwarded as ?scope per the pop-out route
+ *   contract), or null where the host has none (the satellite window).
  */
 export const ChipRow = ({
   source,

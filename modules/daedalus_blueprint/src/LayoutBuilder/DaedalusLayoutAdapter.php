@@ -304,12 +304,61 @@ class DaedalusLayoutAdapter {
   }
 
   /**
+   * Whether a section list is core's blank placeholder.
+   *
+   * Core marks a layout that has never been instantiated with one
+   * layout_builder_blank section at delta 0 (SectionListTrait::
+   * hasBlankSection()) and hides it behind count(): the section renders
+   * nothing and no core consumer ever sees it as a section. Every Daedalus
+   * read of a section list answers the same way through this one predicate,
+   * so a blank placeholder never surfaces as an element a client can name,
+   * anchor or style.
+   *
+   * @param \Drupal\layout_builder\Section[] $sections
+   *   A section list, root or display.
+   *
+   * @return bool
+   *   TRUE when the list is the blank placeholder.
+   */
+  public function isBlankSectionList(array $sections): bool {
+    $first = reset($sections);
+    return $first instanceof Section && $first->getLayoutId() === 'layout_builder_blank';
+  }
+
+  /**
+   * The sections an entity's own layout field holds.
+   *
+   * A blank placeholder list (core's marker, copied from the display into
+   * a fresh override's tempstore by core's PrepareLayout subscriber and
+   * persisted on save) reads as empty, so the field's own sections are the
+   * ones a client can actually see on the canvas.
+   *
+   * @param \Drupal\Core\Entity\FieldableEntityInterface $entity
+   *   The entity.
+   *
+   * @return \Drupal\layout_builder\Section[]
+   *   The field's sections, or an empty array without a layout field or
+   *   with only the blank placeholder.
+   */
+  public function getFieldSections(FieldableEntityInterface $entity): array {
+    if (!$entity->hasField('layout_builder__layout')) {
+      return [];
+    }
+    $sections = [];
+    foreach ($entity->get('layout_builder__layout') as $item) {
+      $sections[] = $item->section;
+    }
+    return $this->isBlankSectionList($sections) ? [] : $sections;
+  }
+
+  /**
    * Gets the default layout sections for a Layout Builder entity.
    *
    * When a Layout Builder entity has no overridden layout, sections come from
-   * the entity view display. This method loads those defaults and returns them.
-   * If the default is only the blank placeholder section, a usable one-column
-   * layout is returned instead.
+   * the entity view display. A display whose default is only the blank
+   * placeholder has no sections: a reader sees an empty page, exactly what
+   * the canvas renders, and the first placement mints the page's first
+   * section through the ladder in createDefaultSection().
    *
    * @param \Drupal\Core\Entity\FieldableEntityInterface $entity
    *   The entity to get default sections for.
@@ -332,17 +381,7 @@ class DaedalusLayoutAdapter {
     }
 
     $sections = $display->getSections();
-
-    // If the default only has a blank placeholder section, replace it with a
-    // usable section so the AI has one to work with — the same ladder the
-    // palette's add-section uses. When no layout is mintable, reads degrade
-    // to "no sections"; the write paths surface NO_ALLOWED_LAYOUTS loudly.
-    if (empty($sections) || (count($sections) === 1 && $sections[0]->getLayoutId() === 'layout_builder_blank')) {
-      $default = $this->createDefaultSection($entity);
-      return $default === NULL ? [] : [$default];
-    }
-
-    return $sections;
+    return $this->isBlankSectionList($sections) ? [] : $sections;
   }
 
   /**

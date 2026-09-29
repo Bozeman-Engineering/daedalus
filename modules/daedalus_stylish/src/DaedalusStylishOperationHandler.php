@@ -7,10 +7,12 @@ namespace Drupal\daedalus_stylish;
 use Drupal\Core\Entity\FieldableEntityInterface;
 use Drupal\daedalus_blueprint\Access\BlueprintAccessChecker;
 use Drupal\daedalus_blueprint\Dialect\PageOnlyOperationsInterface;
+use Drupal\daedalus_blueprint\Materials\RelativeSelector;
 use Drupal\daedalus_blueprint\Result\BlueprintError;
 use Drupal\daedalus_blueprint\Result\BlueprintResult;
 use Drupal\daedalus_blueprint\Result\BlueprintWarning;
 use Drupal\daedalus_stylish\Plugin\Field\FieldType\StyleMapItem;
+use Drupal\daedalus_stylish\Plugin\PropertyGroup\GeneratedContent;
 
 /**
  * Registers Daedalus Stylish's batch operations with daedalus_blueprint.
@@ -22,7 +24,11 @@ use Drupal\daedalus_stylish\Plugin\Field\FieldType\StyleMapItem;
  * - update_style: a PATCH against one selectable key's styles. Values merge
  *   into the keyed entry under a condition, null values unset. The entry's
  *   variant references stay untouched — the write lands as overrides on
- *   top of them.
+ *   top of them. The one birth default of the op spine lives here: a
+ *   pseudo-element entry ("::&::before", "::> pb-text::after") that the
+ *   patch creates is born with content: "" at default, the existence
+ *   switch of a generated box, unless the write sets content there
+ *   itself; an existing entry is never re-seeded.
  * - apply_variant: dresses the element in a variant. Every variant lives on
  *   one axis and an element wears at most one variant per axis, so the
  *   reference replaces the entry's existing same-axis reference and
@@ -151,7 +157,7 @@ class DaedalusStylishOperationHandler implements PageOnlyOperationsInterface {
     }
 
     return match ($operation['op']) {
-      'update_style' => $this->updateStyle($entity, $key, $operation),
+      'update_style' => $this->updateStyle($entity, $key, $operation, $options),
       'apply_variant' => $this->applyVariant($entity, $key, $operation),
       'remove_variant' => $this->removeVariant($entity, $key, $operation),
       'detach_variant' => $this->detachVariant($entity, $key, $operation),
@@ -163,17 +169,27 @@ class DaedalusStylishOperationHandler implements PageOnlyOperationsInterface {
    */
   public function getGuidance(): array {
     return [
-      'update_style' => 'with "key" (selectable key; ::.class-name for parts) and "properties" {css-property: value; null unsets}, optional "condition"; patches the element\'s own overrides (the page language\'s style op is the taught form)',
-      'apply_variant' => 'with "key" and "variant" (a machine name from the schema\'s materials.variants roster); dresses the element, replacing its same-axis reference (the page language\'s class and axis attributes are the taught form)',
-      'remove_variant' => 'with "key" and "variant" (a reference the entry carries); undresses the element WITHOUT materializing, so its look changes (dropping the class or nulling the axis attribute is the taught form)',
-      'detach_variant' => 'with "key" and "variant"; materializes the reference\'s styles into the element\'s own properties and unlinks it, keeping the look (set\'s detach list is the taught form)',
+      'update_style' => 'with "key" (an element or rule key: "::" plus a relative selector, e.g. ::.class-name, ::> *, ::> pb-text) and "properties" {css-property: value; null unsets}, optional "condition" (the style op is the taught form)',
+      'apply_variant' => 'with "key" (an element or rule key; a rule wears at its matches, never a composition or root-only axis) and "variant"; dresses it, replacing its same-axis reference (the class and axis attributes are the taught form)',
+      'remove_variant' => 'with "key" (an element or rule key) and "variant" (a reference the entry carries); undresses it WITHOUT materializing, so the look changes (dropping the class or nulling the axis attribute is the taught form)',
+      'detach_variant' => 'with "key" (an element or rule key) and "variant"; materializes its styles into the entry\'s own properties (a rule\'s parts continue under it) and unlinks it, keeping the look (set\'s detach list is the taught form)',
     ];
   }
 
   /**
    * Applies an update_style operation.
+   *
+   * @param \Drupal\Core\Entity\FieldableEntityInterface $entity
+   *   The entity whose style map is patched.
+   * @param string $key
+   *   The element or rule key the patch lands on.
+   * @param array $operation
+   *   The operation.
+   * @param array $options
+   *   The batch options; 'conversation' reaches the style value seam so a
+   *   handled value naming something the conversation holds resolves.
    */
-  protected function updateStyle(FieldableEntityInterface $entity, string $key, array $operation): BlueprintResult {
+  protected function updateStyle(FieldableEntityInterface $entity, string $key, array $operation, array $options = []): BlueprintResult {
     $errors = [];
     $condition = $operation['condition'] ?? 'default';
     if (!is_string($condition) || $condition === '') {
@@ -191,6 +207,23 @@ class DaedalusStylishOperationHandler implements PageOnlyOperationsInterface {
       return BlueprintResult::structuralFailure($errors);
     }
 
+    // The birth seed: a generated box exists only while the cascade sets
+    // its content, so a pseudo-element entry this op CREATES is born with
+    // content: "" at default unless the write itself sets content there.
+    // Seeded here and nowhere else (no validator corrective, no client
+    // seed), because this handler is the one door every lane's writes
+    // pass; the seed validates with the write below, so a site that
+    // refuses the box (strict, undeclared) refuses the whole patch and
+    // mints nothing. An existing entry is never re-seeded: deleting the
+    // content line later is a deliberate act, and the box honestly
+    // disappears. Variant wear never births a box (a generated box lands
+    // on no element scope, so no reference is accepted at its key) and
+    // detach materializes a fragment's authored content verbatim.
+    $map = $this->getStyleMap($entity);
+    $seed = !isset($map[$key]) && RelativeSelector::splitKey($key)[1]?->pseudo !== NULL
+      ? ['default' => [GeneratedContent::CONTENT => GeneratedContent::BOX]]
+      : [];
+
     // Validate exactly what is being set through the one validation engine,
     // as a one-key map rooted at this element. The input tier resolves
     // first (CHECK): handled-value objects and layers lists become sound
@@ -199,9 +232,9 @@ class DaedalusStylishOperationHandler implements PageOnlyOperationsInterface {
     // mints nothing.
     $resolution_warnings = [];
     $setting = array_filter($properties, static fn ($value) => $value !== NULL);
-    $entry_to_validate = $setting ? [$condition => $setting] : [];
+    $entry_to_validate = $setting ? StyleEntry::merge([$condition => $setting], $seed) : [];
     if ($entry_to_validate) {
-      $resolution = $this->valueResolver->check([$key => $entry_to_validate], $entity);
+      $resolution = $this->valueResolver->check([$key => $entry_to_validate], $entity, (string) ($options['conversation'] ?? ''));
       if ($resolution->getErrors()) {
         return BlueprintResult::semanticFailure(array_map(
           fn (BlueprintError $error) => $error->withPath($this->operationPath($error->getPath(), $key, $condition)),
@@ -234,7 +267,6 @@ class DaedalusStylishOperationHandler implements PageOnlyOperationsInterface {
     // and "narrow+dark" patch the same block.
     $condition = $this->conditionTypes->canonicalizeCondition($condition);
 
-    $map = $this->getStyleMap($entity);
     // The patch lands as OVERRIDES (layered entry model): the entry's
     // variant references stay untouched, and the written properties layer
     // over them, winning on conflict. Detaching is its own explicit
@@ -251,6 +283,12 @@ class DaedalusStylishOperationHandler implements PageOnlyOperationsInterface {
     }
     if (isset($entry[$condition]) && $entry[$condition] === []) {
       unset($entry[$condition]);
+    }
+    // The box is born only when the write leaves an entry behind (an
+    // unset-only patch at a key that never existed mints nothing); the
+    // write's own content at default beats the seed.
+    if ($entry !== []) {
+      $entry = StyleEntry::merge($entry, $seed);
     }
 
     if ($entry === []) {
@@ -398,7 +436,11 @@ class DaedalusStylishOperationHandler implements PageOnlyOperationsInterface {
       $this->removeDistributedReferences($entity, $map, $key, $replaced);
     }
 
-    // Slot paths resolve once, per element (part suffixes stripped).
+    // Slot paths resolve once, per element (part suffixes stripped). A
+    // rule key distributes nothing: its matches are many and bind no
+    // subtree (the validator refuses a composition at a rule by its keys,
+    // and a nested composition reaching a rule binds nothing, forever).
+    $is_rule = RelativeSelector::splitKey($key)[1] !== NULL;
     $fragments = [];
     foreach (array_keys($styles) as $relative) {
       $path = strstr($relative, '::', TRUE);
@@ -407,7 +449,7 @@ class DaedalusStylishOperationHandler implements PageOnlyOperationsInterface {
         $fragments[$path] = TRUE;
       }
     }
-    $resolved = $fragments === []
+    $resolved = $fragments === [] || $is_rule
       ? []
       : $this->subtreeSlotKeys->resolveSlotKeys($entity, $key, array_keys($fragments));
 
@@ -422,19 +464,58 @@ class DaedalusStylishOperationHandler implements PageOnlyOperationsInterface {
     }
 
     // Part entries carry nested references of their own; they land on the
-    // carrier's part key (parts ride their element). An unresolved slot's
-    // part binds nothing, exactly like its element.
+    // carrier's part key (parts ride their element; under a rule the part
+    // continues by descent, carrierKey()). An unresolved slot's part, or
+    // a part the rule's grammar refuses, binds nothing, exactly like its
+    // element.
     foreach ($styles as $relative => $entry) {
       $path = strstr($relative, '::', TRUE);
       if ($path === FALSE) {
         continue;
       }
       $suffix = substr($relative, strlen($path));
-      $carrier = $path === '' ? $key . $suffix : (isset($resolved[$path]) ? $resolved[$path] . $suffix : NULL);
+      $carrier = $path === '' ? static::carrierKey($key, $suffix) : (isset($resolved[$path]) ? $resolved[$path] . $suffix : NULL);
       if ($carrier !== NULL) {
         $this->distributeEntryRefs($entity, $map, $carrier, $entry, $chain, $warnings);
       }
     }
+  }
+
+  /**
+   * The map key a worn variant's suffix lands on under a wearing key.
+   *
+   * The one continuation shared by apply's part carrier and detach's
+   * materialization: under an element key the suffix appends
+   * ("{key}::.cls"); under a rule key the suffix continues the rule by
+   * descent (RelativeSelector::under(): "container:X::> pb-text" wearing
+   * a "::.link" entry lands at "container:X::> pb-text .link"), the same
+   * rebase delivery prints (CssPrinter::printFragmentStyles() under the
+   * rule), so what detach writes is exactly what the reference delivered.
+   * A key never carries "::" twice. NULL when the rule's grammar refuses
+   * the suffix (it delivered nothing, so nothing lands).
+   *
+   * @param string $key
+   *   The wearing key, an element key or a rule key.
+   * @param string $suffix
+   *   The variant's suffix: '' (the root) or '::selector'.
+   *
+   * @return string|null
+   *   The carrier key, or NULL when the suffix cannot continue the rule.
+   */
+  protected static function carrierKey(string $key, string $suffix): ?string {
+    if ($suffix === '') {
+      return $key;
+    }
+    [$root, $rule] = RelativeSelector::splitKey($key) ?? [$key, NULL];
+    if ($rule === NULL) {
+      return $key . $suffix;
+    }
+    $split = RelativeSelector::splitKey($suffix);
+    if ($split === NULL || $split[1] === NULL) {
+      return NULL;
+    }
+    $under = RelativeSelector::under($rule, $split[1]);
+    return $under === NULL ? NULL : $root . RelativeSelector::SUFFIX . $under;
   }
 
   /**
@@ -968,7 +1049,8 @@ class DaedalusStylishOperationHandler implements PageOnlyOperationsInterface {
    * pure LOCAL lookup: the fragment names the variant entry the element
    * wears ('' for the root), and that entry's styles plus its '::.class'
    * part styles (parts ride their element) land on the element's own keys
-   * ("{key}" and "{key}::.class"). No slot resolution happens here; slot
+   * ("{key}" and "{key}::.class"; under a rule key the part continues the
+   * rule by descent, carrierKey()). No slot resolution happens here; slot
    * paths resolve to identity at APPLY time only, and a composition's
    * other fragments belong to the elements carrying them (see
    * detachDistributedReferences()). A fragment the variant no longer
@@ -996,7 +1078,13 @@ class DaedalusStylishOperationHandler implements PageOnlyOperationsInterface {
   protected function materializeReference(array &$map, string $key, string $reference, string $fragment): void {
     $styles = $this->deliveredStyles($this->fragmentStyles($reference, $fragment), $map[$key] ?? NULL, $reference);
     foreach ($styles as $suffix => $entry_styles) {
-      $target = $key . $suffix;
+      // Under a rule the part suffix continues by descent, exactly as
+      // delivery printed it; a suffix the rule refused delivered nothing
+      // and materializes nothing.
+      $target = static::carrierKey($key, (string) $suffix);
+      if ($target === NULL) {
+        continue;
+      }
       $existing = $map[$target] ?? NULL;
       $map[$target] = is_array($existing) ? $this->mergeEntry($existing, $entry_styles) : $entry_styles;
     }
@@ -1088,7 +1176,7 @@ class DaedalusStylishOperationHandler implements PageOnlyOperationsInterface {
     }
     if (!is_string($key) || $this->validator->parseKey($key) === NULL) {
       return [
-        new BlueprintError('key', 'INVALID_STYLE_KEY', sprintf('"%s" is not a valid style map key.', is_scalar($key) ? (string) $key : gettype($key)), [], 'Keys are selectable keys: entity:{uuid}, field:{uuid}:{field_name}, container:{uuid}, block:{component_uuid}, or block:{component_uuid}:{field_name} — optionally followed by ::.class-name for a sub-element. Sections are containers (container:{uuid}); regions are not addressable.'),
+        new BlueprintError('key', 'INVALID_STYLE_KEY', sprintf('"%s" is not a valid style map key.', is_scalar($key) ? (string) $key : gettype($key)), [], StyleMapValidator::KEY_GRAMMAR_HINT),
       ];
     }
     if (!$this->accessChecker->fieldEditable($entity->get(DaedalusStylishFieldManager::FIELD_NAME))) {

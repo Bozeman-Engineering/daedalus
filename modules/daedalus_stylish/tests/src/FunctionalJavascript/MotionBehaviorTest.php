@@ -76,12 +76,13 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  *   logs `CSS.supports('animation-trigger', 'none')` so it says which
  *   path (native or polyfill) it locked.
  * - A wear row renders POSED and never retargets (seam: the State chip's
- *   force state -> the vector-derived editing compound -> wearAtPose
- *   over the worn variant's own blocks -> the row's sub-line -> the
- *   doorway opening the editing session while the canvas stays posed).
- *   Fade in sets nothing at Hover; Lift worn on the hover axis lists its
- *   hover block and the forced state shows the 4px lift on the canvas,
- *   while the block's own map entry gains no hover block.
+ *   force state -> the vector-derived editing compound -> the layer
+ *   stack's variant tier at the pose -> the property rows' provenance,
+ *   while the wear row reads the same at every pose). Lift worn on the
+ *   hover axis: the forced state shows the 4px lift on the canvas, the
+ *   Effects section's Transform row reads its origin as Lift, and the
+ *   block's own map entry gains no hover block. The wear row's one
+ *   trigger is the swap (the picker preset to the row's axis).
  * Satellite parity stays smoke-only: representative-of-class is already
  * locked by the gradient scenario over the same relay seams.
  *
@@ -467,13 +468,15 @@ class MotionBehaviorTest extends WebDriverTestBase {
    *   Motion section (a direct animation-name, no trigger) carries no
    *   pill; the inspector flips back to Basic.
    * - Posed wear rows: B swaps its wear to Fade in (the picker's same-axis
-   *   pick replaces Rise in place); the State chip poses Hover (the forced
-   *   state on B's canvas element); the Animation row's sub-line reads
-   *   "Fade in sets nothing at Hover"; Lift picked under the picker's Hover
-   *   group lists `transform: translateY(-4px)` in the Hover row's sub-line and
-   *   the canvas shows the lift as computed transform, while B's own map
-   *   entry gains no hover block; clicking the sub-line opens the editing
-   *   session on Lift with the canvas still posed at Hover.
+   *   pick replaces Rise in place) and the Animation row is one trigger
+   *   (dot, axis, variant label) with no other button; the State chip
+   *   poses Hover (the forced state on B's canvas element) and the row
+   *   reads the same; Lift picked under the picker's Hover group wears the
+   *   Hover row, the canvas shows the lift as computed transform, the
+   *   advanced Effects section's Transform row reads its origin as Lift at
+   *   the pose, while B's own map entry gains no hover block; the Hover
+   *   row's click opens the picker preset to the Hover axis (the axis
+   *   chip, Lift marked worn) and a second press closes it.
    * - Staged, not committed: the saved node holds no style map, and the
    *   whole scenario ran in one document.
    */
@@ -522,7 +525,7 @@ class MotionBehaviorTest extends WebDriverTestBase {
     // under `narrow` instead of `default`.
     $session->resizeWindow(1920, 1200);
 
-    $this->enterEditModeViaCookies($node->toUrl(), 'selector');
+    $this->enterEditModeViaCookies($node->toUrl());
     $this->assertJsCondition(
       'window.Drupal && Drupal.Daedalus && Drupal.Daedalus.Blueprint && !!Drupal.Daedalus.Blueprint.getRoot()',
       20000,
@@ -1149,8 +1152,10 @@ class MotionBehaviorTest extends WebDriverTestBase {
 
     // ----- Posed wear rows: a wear renders at the pose, never retargets. -----
     // Block B (in view, at the default width band on this wide window)
-    // switches its Animation wear to Fade in, so the sub-line names the
-    // entrance the task reads.
+    // switches its Animation wear to Fade in: the same-axis pick replaces
+    // Rise in place, and the row is ONE trigger (dot, axis, variant
+    // label): the swap. It says nothing about the pose; what a variant
+    // contributes there is the property rows' provenance story.
     $session->executeScript("Drupal.Daedalus.Selection.select('$block_b_key');");
     $this->assertJsCondition(
       "($animation_row_js)?.querySelector('.daedalus-stylish-wear-bar__variant-label')?.textContent.trim() === 'Rise'",
@@ -1165,15 +1170,19 @@ class MotionBehaviorTest extends WebDriverTestBase {
       'Block B now wears block_fade_in in place of block_rise (one axis, one wear).',
     );
     $this->assertJsCondition(
-      "!document.querySelector('#daedalus_stylish_inspector .daedalus-stylish-wear-bar__row--posed')",
+      "(() => { const row = $animation_row_js; if (!row) { return false; }"
+      . " const trigger = row.querySelector('button.daedalus-stylish-wear-bar__trigger');"
+      . " return !!trigger && trigger.getAttribute('aria-expanded') === 'false'"
+      . " && trigger.querySelector('.daedalus-stylish-wear-bar__label')?.textContent.trim() === 'Animation'"
+      . " && trigger.querySelector('.daedalus-stylish-wear-bar__variant-label')?.textContent.trim() === 'Fade in'"
+      . " && row.querySelectorAll('button').length === 1; })()",
       20000,
-      'At the default pose no wear row carries a sub-line.',
+      'The Animation row is one closed trigger reading Animation · Fade in, with no other button on the row (no doorway, no sub-line).',
     );
 
     // The State chip poses Hover: the force state stamps the selected
-    // canvas element, the editing compound becomes hover, and the
-    // Animation row SAYS what its wear contributes there: Fade in's
-    // only other block is reduced-motion, so nothing at Hover.
+    // canvas element and the editing compound becomes hover. A wear is
+    // unconditioned by construction, so the row reads exactly as before.
     $this->clickPanel('#daedalus_stylish_inspector .daedalus-stylish-chip-row .daedalus-stylish-chip--state');
     $this->assertJsCondition(
       "!!document.querySelector('.daedalus-ui-menu .daedalus-ui-menu__label')",
@@ -1185,23 +1194,25 @@ class MotionBehaviorTest extends WebDriverTestBase {
       . ".find((item) => item.querySelector('.daedalus-ui-menu__label')?.textContent.trim() === 'Hover').click();"
     );
     $this->assertJsCondition(
-      'document.querySelector(' . json_encode($canvas_b) . ").getAttribute('data-force-state') === 'hover'",
+      'document.querySelector(' . json_encode($canvas_b) . ").getAttribute('data-force-state') === 'hover'"
+      . " && (() => { const chip = document.querySelector('#daedalus_stylish_inspector .daedalus-stylish-chip--state');"
+      . " return !!chip && chip.classList.contains('daedalus-stylish-chip--lit') && chip.textContent.includes('Hover'); })()",
       20000,
-      'The State chip forced hover on the selected canvas element.',
+      'The State chip forced hover on the selected canvas element and wears Hover, lit.',
     );
-    $animation_pose = $animation_row . '[contains(@class, "daedalus-stylish-wear-bar__row--posed")]/button[contains(@class, "daedalus-stylish-wear-bar__pose")]';
     $this->assertJsCondition(
-      '(() => { const pose = document.evaluate(' . json_encode($animation_pose) . ', document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue;'
-      . " return !!pose && pose.classList.contains('daedalus-stylish-wear-bar__pose--nothing')"
-      . " && pose.textContent.trim() === 'Fade in sets nothing at Hover'; })()",
+      "(() => { const row = $animation_row_js; if (!row) { return false; }"
+      . " return row.querySelector('.daedalus-stylish-wear-bar__variant-label')?.textContent.trim() === 'Fade in'"
+      . " && row.querySelectorAll('button').length === 1; })()",
       20000,
-      'Posed at Hover, the Animation row\'s sub-line reads "Fade in sets nothing at Hover".',
+      'Posed at Hover, the Animation row still reads Fade in as its one trigger: the pose adds nothing to a wear row.',
     );
 
     // Lift picked under the picker's Hover group wears the Hover row: the
     // wear itself stays unconditioned (the material owns its hover block),
-    // the row's sub-line lists that block's declarations, and the forced
-    // state makes the canvas show it (the 4px lift as computed transform).
+    // the forced state makes the canvas show it (the 4px lift as computed
+    // transform), and the pose's story is the property rows': in advanced
+    // mode the Effects section's Transform row reads its origin as Lift.
     $hover_row = $this->wornRowXpath('Hover');
     $this->pickVariant('Hover', 'Lift');
     $this->assertJsCondition(
@@ -1213,16 +1224,6 @@ class MotionBehaviorTest extends WebDriverTestBase {
       $assert_session->waitForElement('xpath', $hover_row),
       'The wear bar renders the worn Hover row for the selected block.',
     );
-    $hover_pose = $hover_row . '[contains(@class, "daedalus-stylish-wear-bar__row--posed")]/button[contains(@class, "daedalus-stylish-wear-bar__pose")]';
-    $this->assertJsCondition(
-      '(() => { const pose = document.evaluate(' . json_encode($hover_pose) . ', document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue;'
-      . " if (!pose || pose.classList.contains('daedalus-stylish-wear-bar__pose--nothing')) { return false; }"
-      . " const text = pose.querySelector('.daedalus-stylish-wear-bar__pose-text')?.textContent.trim();"
-      . " const declarations = pose.querySelector('.daedalus-stylish-wear-bar__pose-declarations')?.textContent ?? '';"
-      . " return text === 'Lift at Hover:' && declarations.includes('transform: translateY(-4px)'); })()",
-      20000,
-      'The Hover row\'s sub-line lists Lift\'s hover block, transform included.',
-    );
     $this->assertJsCondition(
       'getComputedStyle(document.querySelector(' . json_encode($canvas_b) . ")).transform === 'matrix(1, 0, 0, 1, 0, -4)'",
       20000,
@@ -1233,26 +1234,40 @@ class MotionBehaviorTest extends WebDriverTestBase {
       20000,
       'The wear never retargeted: block B\'s map entry gained no hover block of its own.',
     );
-
-    // The doorway: the sub-line opens the editing session on Lift at
-    // the canvas's pose. The session has no condition of its own; its
-    // rows address the canvas's compound, so "at Hover" is the forced
-    // state staying on while the session names Lift.
-    $this->clickPanelXpath($hover_pose);
+    $this->switchMode('Advanced');
     $this->assertJsCondition(
-      "(() => { const frame = document.querySelector('#daedalus_stylish_inspector .daedalus-stylish-session'); if (!frame) { return false; }"
-      . " const switcher = frame.querySelector('.daedalus-stylish-session__switcher');"
-      . " const label = frame.querySelector('.daedalus-stylish-session__label');"
-      . " return (switcher ? switcher.value === 'block_lift' : label?.textContent.trim() === 'Lift'); })()",
+      '(() => { const section = ' . $this->sectionJs('Effects') . '; if (!section) { return false; }'
+      . " const row = Array.from(section.querySelectorAll('.daedalus-stylish-inspector__property'))"
+      . ".find((candidate) => candidate.querySelector('.daedalus-stylish-inspector__property-label')?.textContent.trim() === 'Transform');"
+      . " const title = row?.querySelector('.daedalus-stylish-inspector__mark')?.title ?? '';"
+      . " return title.startsWith('translateY(-4px) from Lift'); })()",
       20000,
-      'The sub-line opened the editing session on Lift.',
+      'At the Hover pose the Effects section\'s Transform row reads its origin as Lift (the mark titled "translateY(-4px) from Lift"): the pose story lives on the property rows.',
     );
+    $this->switchMode('Basic');
+
+    // The row's click is the swap: the Hover row's trigger opens the
+    // picker preset to its axis (the axis chip reads Hover, the worn Lift
+    // marked), and a second press on the open trigger closes it without
+    // applying anything.
+    $hover_trigger = $hover_row . '/button[contains(@class, "daedalus-stylish-wear-bar__trigger")]';
+    $hover_trigger_js = 'document.evaluate(' . json_encode($hover_trigger) . ', document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue';
+    $this->clickPanelXpath($hover_trigger);
     $this->assertJsCondition(
-      'document.querySelector(' . json_encode($canvas_b) . ").getAttribute('data-force-state') === 'hover'"
-      . " && (() => { const chip = document.querySelector('#daedalus_stylish_inspector .daedalus-stylish-chip--state');"
-      . " return !!chip && chip.classList.contains('daedalus-stylish-chip--lit') && chip.textContent.includes('Hover'); })()",
+      "(() => { const trigger = $hover_trigger_js;"
+      . " const chip = document.querySelector('.daedalus-ui-popover .daedalus-stylish-variant-picker__chip');"
+      . " return trigger?.getAttribute('aria-expanded') === 'true' && chip?.firstElementChild?.textContent.trim() === 'Hover'"
+      . " && !!document.querySelector('.daedalus-ui-popover .daedalus-stylish-variant-picker__option--worn'); })()",
       20000,
-      'The session opened AT Hover: the forced state stays on the canvas and the State chip wears Hover, lit.',
+      'The Hover row\'s click opened the variant picker preset to the Hover axis (the axis chip, the worn Lift marked), the trigger expanded.',
+    );
+    $this->clickPanelXpath($hover_trigger);
+    $this->assertJsCondition(
+      "!document.querySelector('.daedalus-ui-popover .daedalus-stylish-variant-picker')"
+      . " && ($hover_trigger_js)?.getAttribute('aria-expanded') === 'false'"
+      . " && JSON.stringify($entry_b?.variants ?? []).includes('block_lift')",
+      20000,
+      'A second press on the open trigger closed the picker; the wear is unchanged.',
     );
 
     // ----- Staged, not committed, and truly no reload. -----

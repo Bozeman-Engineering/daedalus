@@ -1,5 +1,4 @@
 import { configureStore } from '@reduxjs/toolkit';
-import toolReducer from './slices/tool-slice';
 import hotKeyReducer from './slices/hot-key-slice';
 import fileDragReducer from './slices/file-drag-slice';
 import modeReducer from './slices/mode-slice';
@@ -11,7 +10,6 @@ import materialsReducer from './slices/materials-slice';
 
 const store = configureStore({
   reducer: {
-    tool: toolReducer,
     hotKey: hotKeyReducer,
     fileDrag: fileDragReducer,
     mode: modeReducer,
@@ -47,23 +45,33 @@ export default store;
  *   The redux state selector.
  * @param callback
  *   The callback for when the state changes.
+ *
+ * @return {Function}
+ *   Unsubscribes the listener (the store's own unsubscribe), so a
+ *   consumer that comes and goes (a host that runs while its panel is
+ *   open) can drop it.
  */
 export const listenToStateChange = (selector, callback) => {
   let previousValue = selector(store.getState());
 
-  store.subscribe(() => {
+  return store.subscribe(() => {
     const currentState = store.getState();
     const currentValue = selector(currentState);
 
     if (currentValue !== previousValue) {
-      callback(currentValue);
+      // The change is recorded BEFORE the callback runs: a callback that
+      // dispatches (the edit session dropping the styling target on arm,
+      // the hover cleared on leaving it) re-enters this subscriber
+      // synchronously, and with the previous value still stale the same
+      // change would fire the callback again, without end.
       previousValue = currentValue;
+      callback(currentValue);
     }
   });
 };
 // The window bridge remains for the app's own externally-loaded scripts;
 // contrib subscribes through the registration seam's curated events
-// (app.onToolChange etc.) so the store shape stays private.
+// (app.onSelectionChange etc.) so the store shape stays private.
 window.listenToStateChange = listenToStateChange;
 
 /**
@@ -73,11 +81,11 @@ window.listenToStateChange = listenToStateChange;
  *
  * listenToMultipleStates(
  *   [
- *     state => state.tool.currentTool,
+ *     state => state.mode.mode,
  *     state => state.drag.active
  *   ],
- *   (currentTool, active) => {
- *     console.log('currentTool ', currentTool, 'drag active ', active);
+ *   (mode, active) => {
+ *     console.log('mode ', mode, 'drag active ', active);
  *   }
  * );
  *

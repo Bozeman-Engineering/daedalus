@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Drupal\Tests\daedalus_blueprint\Unit\Materials;
 
 use Drupal\daedalus_blueprint\Materials\Address;
+use Drupal\daedalus_blueprint\Materials\RelativeSelector;
 use Drupal\Tests\UnitTestCase;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Group;
@@ -16,20 +17,20 @@ use PHPUnit\Framework\Attributes\Group;
 class AddressTest extends UnitTestCase {
 
   /**
-   * Every family parses and prints back byte-identical, suffixes included.
+   * Every family parses and prints back byte-identical, selectors included.
    */
   #[DataProvider('printed')]
-  public function testParseAndPrint(string $printed, string $family, string $id, ?string $part, bool $children): void {
+  public function testParseAndPrint(string $printed, string $family, string $id, ?string $selector): void {
     $address = Address::parse($printed);
     $this->assertNotNull($address, "$printed parses.");
     $this->assertSame($family, $address->family);
     $this->assertSame($id, $address->id);
-    $this->assertSame($part, $address->part);
-    $this->assertSame($children, $address->children);
+    $this->assertSame($selector, $address->selector?->__toString());
     $this->assertSame($printed, (string) $address, 'The print is the parse\'s inverse.');
     $this->assertSame($printed, (string) Address::fromString($printed));
-    $this->assertSame($part === NULL && !$children, $address->isRoot());
+    $this->assertSame($selector === NULL, $address->isRoot());
     $this->assertSame($family . ':' . $id, (string) $address->root());
+    $this->assertSame($printed, (string) $address->root()->withSelector($address->selector));
   }
 
   /**
@@ -37,15 +38,16 @@ class AddressTest extends UnitTestCase {
    */
   public static function printed(): array {
     return [
-      'kind' => ['kind:container', 'kind', 'container', NULL, FALSE],
-      'block type' => ['block_type:text', 'block_type', 'text', NULL, FALSE],
-      'block plugin' => ['block_plugin:system_menu_block', 'block_plugin', 'system_menu_block', NULL, FALSE],
-      'layout' => ['layout:layout_onecol', 'layout', 'layout_onecol', NULL, FALSE],
-      'base' => ['base:h2', 'base', 'h2', NULL, FALSE],
-      'class part' => ['kind:container::.inner', 'kind', 'container', '.inner', FALSE],
-      'tag part' => ['block_type:text::p', 'block_type', 'text', 'p', FALSE],
-      'children' => ['layout:layout_onecol::>', 'layout', 'layout_onecol', NULL, TRUE],
-      'part children' => ['kind:block::.Card_1::>', 'kind', 'block', '.Card_1', TRUE],
+      'kind' => ['kind:container', 'kind', 'container', NULL],
+      'block type' => ['block_type:text', 'block_type', 'text', NULL],
+      'block plugin' => ['block_plugin:system_menu_block', 'block_plugin', 'system_menu_block', NULL],
+      'layout' => ['layout:layout_onecol', 'layout', 'layout_onecol', NULL],
+      'base' => ['base:h2', 'base', 'h2', NULL],
+      'class part' => ['kind:container::.inner', 'kind', 'container', '.inner'],
+      'tag' => ['block_type:text::p', 'block_type', 'text', 'p'],
+      'children' => ['layout:layout_onecol::> *', 'layout', 'layout_onecol', '> *'],
+      'part children' => ['kind:block::.Card_1 > *', 'kind', 'block', '.Card_1 > *'],
+      'type chain' => ['kind:container::> pb-text .link', 'kind', 'container', '> pb-text .link'],
     ];
   }
 
@@ -70,9 +72,12 @@ class AddressTest extends UnitTestCase {
       'empty id' => ['kind:'],
       'bad id charset' => ['layout:Bad-Name'],
       'uuid element key' => ['container:aaaaaaaa-1111-2222-3333-444444444444'],
-      'bad part' => ['kind:container::.a b'],
+      'bad part' => ['kind:container::.a .b'],
+      'retired children spelling' => ['kind:container::>'],
+      'retired part children spelling' => ['kind:container::.a::>'],
       'doubled children' => ['kind:container::>::>'],
       'two parts' => ['kind:container::.a::.b'],
+      'non-canonical spelling' => ['kind:container::>*'],
     ];
   }
 
@@ -85,7 +90,10 @@ class AddressTest extends UnitTestCase {
     $this->assertSame('block_plugin:menu', (string) Address::blockPlugin('menu'));
     $this->assertSame('layout:layout_twocol_section', (string) Address::layout('layout_twocol_section'));
     $this->assertSame('base:a', (string) Address::base('a'));
-    $this->assertSame('kind:container::.inner::>', (string) Address::of('kind', 'container', '.inner', TRUE));
+    $this->assertSame('kind:container::.inner > *', (string) Address::of('kind', 'container', '.inner > *'));
+    // A selector given as text canonicalizes; as an object it rides as is.
+    $this->assertSame('kind:container::.inner > *', (string) Address::of('kind', 'container', '.inner>*'));
+    $this->assertSame('kind:container::> pb-text', (string) Address::of('kind', 'container', RelativeSelector::fromString('> pb-text')));
     $this->assertTrue(Address::kind('block')->equals(Address::fromString('kind:block')));
     $this->assertFalse(Address::kind('block')->equals(Address::blockType('block')));
     foreach ([['kind', 'Bad-Name'], ['nope', 'x'], ['layout', '']] as [$family, $id]) {
@@ -98,7 +106,7 @@ class AddressTest extends UnitTestCase {
       }
     }
     $this->expectException(\InvalidArgumentException::class);
-    Address::of('kind', 'container', 'a b');
+    Address::of('kind', 'container', 'a b c!');
   }
 
   /**
@@ -145,7 +153,7 @@ class AddressTest extends UnitTestCase {
       'an element scope is never a base wildcard' => ['block_type:cta', 'base:a', FALSE],
       'unknown families pair only exactly' => ['kind:field', 'kind:entity', FALSE],
       'unknown family exact' => ['kind:field', 'kind:field', TRUE],
-      'parts ride their element' => ['kind:container', 'layout:layout_onecol::.inner', TRUE],
+      'selectors ride their element' => ['kind:container', 'layout:layout_onecol::> pb-text', TRUE],
       'a part never pairs across families' => ['kind:block::.title', 'kind:container', FALSE],
     ];
   }

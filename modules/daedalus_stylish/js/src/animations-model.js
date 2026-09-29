@@ -42,7 +42,7 @@ const STEP_ANIMATION_PROPERTIES = ['animation-timing-function'];
 /**
  * Whether a property describes the element wearing the animation rather
  * than a step: the animation shorthand, every animation-* longhand but the
- * per-step easing, and timeline-trigger (the WHEN of the animation, the
+ * per-step easing, and timeline-trigger (the trigger of the animation, the
  * wearer's business exactly as animation-trigger is). The client twin of
  * validateAnimationSteps()'s refused set.
  *
@@ -395,7 +395,11 @@ export const stepDeclaration = (guide) => {
  * the wearer's business, never a step's), and a media token is refused
  * (INVALID_STYLE_VALUE: the compiled keyframes file records no media and
  * the validator refuses it), each marking its declaration invalid so a
- * settle drops it. Diagnostics stay CM6-lint-shaped.
+ * settle drops it. A structural chunk (a nested rule, an at-rule) is an
+ * error here rather than a door chunk: a step is one keyframe's
+ * declarations at an offset, addressing no key on any page, so there is
+ * no parse door to hand a block to and nothing a block could become.
+ * Diagnostics stay CM6-lint-shaped.
  *
  * @param {string} text
  * @param {{guide: object, materials: object}} options
@@ -409,6 +413,16 @@ export const analyzeStep = (text, { guide, materials } = {}) => {
     declaration: stepDeclaration(guide),
   });
   const diagnostics = [...analysis.diagnostics];
+  (analysis.structural ?? []).forEach((chunk) => {
+    diagnostics.push({
+      from: chunk.from,
+      to: chunk.to,
+      severity: 'error',
+      message:
+        'A keyframe step holds declarations only; a nested rule or at-rule has no place in a step.',
+      code: 'INVALID_ANIMATION_STEP',
+    });
+  });
   analysis.declarations.forEach((record) => {
     if (!record.valid) {
       return;

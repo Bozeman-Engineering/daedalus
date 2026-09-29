@@ -12,7 +12,7 @@ import {
  * themselves for it. A verb is registered once, keyed by the semantic
  * selection kinds it applies to (entity | field | section | region |
  * block); the floating verb menu and the verb hotkeys are two faces of
- * this one registry. This is the extension point tools and contrib use
+ * this one registry. This is the extension point sub-modules and contrib use
  * instead of owning their own canvas chrome: daedalus_layout registers Duplicate /
  * Trash / Configure here, daedalus_edit's Edit verb and the undo verbs follow.
  *

@@ -95,6 +95,10 @@ window.DaedalusUiQueue.push((app) => {
   // add_element op server-side.
   app.drag.registerSource('new_block', {
     targets: 'block',
+    // A fresh block with sample content is the one landing whose next act
+    // is always typing: the drop opens the placed block's editor (the op
+    // queue's edit intent beside its select).
+    edit: true,
     // A plain block lands anywhere a block gap is; a block-rooted stencil
     // item answers the stencil predicate.
     acceptsTarget: (target, data) =>
@@ -284,16 +288,6 @@ window.DaedalusUiQueue.push((app) => {
     insertHotkeys.forEach((binding) => app.Hotkeys.unregister(binding.id));
   };
 
-  // Landing on a tool disarms click-to-place: entering the Edit session (or
-  // any future tool) is a new committed task. changeTool passes through null
-  // between the old tool's disable and the new tool's enable, so only a
-  // REAL tool landing disarms.
-  app.onToolChange((currentTool) => {
-    if (currentTool !== null) {
-      disarm();
-    }
-  });
-
   app.verbs.register({
     id: 'daedalus_layout.insert',
     label: Drupal.t('Block'),
@@ -451,12 +445,15 @@ window.DaedalusUiQueue.push((app) => {
     try {
       // select lands focus on the placed element; the expectation keeps the
       // session's disarm-on-selection-change from reading it as a new
-      // intent.
+      // intent. A placed BLOCK is new content whose next act is typing, so
+      // the request opens its editor too (the op queue's edit intent); a
+      // section has no editor.
       expectPlacement(placedKey);
       await Drupal.Daedalus.Blueprint.mutate({
         ...context,
         operations,
         select: placedKey,
+        edit: !placingSection,
       });
       setPendingAnchor(placedKey);
     } catch (error) {

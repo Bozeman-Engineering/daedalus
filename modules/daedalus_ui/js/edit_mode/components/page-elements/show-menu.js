@@ -1,8 +1,13 @@
 import { h } from 'preact';
 import { useSelector, useDispatch } from 'react-redux';
 import { useEffect, useRef, useState } from 'preact/hooks';
-import { setPartVisibility } from '../../store/slices/view-slice';
-import { subscribeTreeViews, viewToggles } from './view-registry';
+import { setViewVisibility } from '../../store/slices/view-slice';
+import {
+  showMenuItems,
+  subscribeTreeViews,
+  viewToggles,
+} from './view-registry';
+import { showMenuEntries } from './show-menu-entries';
 
 /**
  * The Show menu: what the page-elements tree displays.
@@ -13,26 +18,30 @@ import { subscribeTreeViews, viewToggles } from './view-registry';
  * control), opening the shared menu primitive (daedalus_ui/menu)
  * anchored to the button, one checked item per tree view provider (the
  * built-in markup view, plus any contrib views), default off; on, the
- * provider's view replaces the tree's projection.
+ * provider's view replaces the tree's projection. After the toggles,
+ * behind a separator, the registered Show-menu items (view-registry.js
+ * registerShowMenuItem): another module's entry that belongs in this
+ * menu without being a view of the tree.
  *
- * The kebab renders only when it has entries: no providers means no menu
- * at all.
+ * The kebab renders only when it has entries: no providers and no
+ * registered items means no menu at all.
  */
 
 export const ShowMenu = () => {
   const dispatch = useDispatch();
-  const partVisibility = useSelector((state) => state.view.parts);
+  const viewVisibility = useSelector((state) => state.view.views);
   // Whether OUR menu is the open one (aria-expanded); the primitive's
   // onClose clears it however the menu closes.
   const [expanded, setExpanded] = useState(false);
-  // Providers register at any point after mount; re-read their toggles.
+  // Providers and items register at any point after mount; re-read them.
   const [, bump] = useState(0);
   useEffect(() => subscribeTreeViews(() => bump((count) => count + 1)), []);
   const menuRef = useRef(null);
 
   const toggles = viewToggles();
+  const registered = showMenuItems();
   // An empty menu is no menu.
-  const rendered = toggles.length > 0;
+  const rendered = toggles.length > 0 || registered.length > 0;
 
   // Secondary chrome: hidden from minimal density up until the pointer
   // nears.
@@ -52,20 +61,6 @@ export const ShowMenu = () => {
     return null;
   }
 
-  // The entries as checked items in the shared menu grammar: activating
-  // one flips its axis (the menu closes first, as any activation does).
-  const items = toggles.map((toggle) => ({
-    label: toggle.label,
-    checked: partVisibility[toggle.id] === true,
-    run: () =>
-      dispatch(
-        setPartVisibility({
-          id: toggle.id,
-          visible: partVisibility[toggle.id] !== true,
-        }),
-      ),
-  }));
-
   // The kebab toggles: the anchor counts as inside the menu's dismissal
   // boundary, so a click on it while open closes rather than reopens.
   // The kebab sits at the inline end of the panel header, so the menu
@@ -76,6 +71,18 @@ export const ShowMenu = () => {
       Drupal.Daedalus.menu.close();
       return;
     }
+    // The entries in the shared menu grammar (show-menu-entries.js),
+    // composed as the menu opens: the toggles as checked items whose
+    // activation flips their axis (the menu closes first, as any
+    // activation does), then the registered items, whose checked state is
+    // read right now (a registered item answers from its owner's own
+    // state, so the menu shows the truth at open time).
+    const items = showMenuEntries(
+      toggles,
+      viewVisibility,
+      (change) => dispatch(setViewVisibility(change)),
+      registered,
+    );
     setExpanded(
       Drupal.Daedalus.menu.open({
         anchor: menuRef.current.querySelector('.daedalus-ui-show-menu__button'),

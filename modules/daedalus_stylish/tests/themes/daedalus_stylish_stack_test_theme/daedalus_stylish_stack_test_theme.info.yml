@@ -1,0 +1,6 @@
+name: 'Daedalus Stylish stack test theme'
+type: theme
+description: 'Declares a third testimonial axis and a container default, so a stack read can prove both resolve through the one theme passed in.'
+core_version_requirement: '*'
+base theme: false
+hidden: true

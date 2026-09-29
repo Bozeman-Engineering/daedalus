@@ -51,6 +51,7 @@ class PromptRosterOrderTest extends KernelTestBase {
     'daedalus_tempstore',
     'daedalus_blueprint_api',
     'daedalus_blueprint_ai',
+    'file',
     'daedalus_ui',
     'daedalus_stylish',
   ];

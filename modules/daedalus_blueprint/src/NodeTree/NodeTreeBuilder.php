@@ -51,9 +51,11 @@ use Drupal\daedalus_blueprint\LayoutBuilder\LayoutSerializer;
  * identity (`block:{uuid}` / `container:{uuid}`) is stripped:
  * - '' — the element's own entry,
  * - ':{field_name}' — a block field's entry,
- * - '::.class' — a sub-element (part) entry,
- * - '::>' — the all-direct-children entry,
- * and compounds of those, exactly as the map spells them. Entries are
+ * - '::{selector}' — a relative selector under the element ('::.class'
+ *   a part, '::> *' its direct children, '::p' its paragraphs,
+ *   '::> pb-text .link' a compound), in its canonical spelling,
+ * and the field-scoped compounds of those, exactly as the map spells
+ * them. Entries are
  * carried verbatim (condition-keyed property maps plus any `variants`
  * reference list), so the flat map is exactly reconstructible from the
  * tree. Keys addressing the root entity or root fields (`entity:`,
@@ -212,6 +214,36 @@ class NodeTreeBuilder {
     if (!empty($entries)) {
       $node['styles'] = $entries;
     }
+  }
+
+  /**
+   * Finds the node an element uuid identifies, at any depth.
+   *
+   * Region nodes are transparent. The node comes back with its subtree
+   * (children included); a consumer wanting the element alone prunes it.
+   *
+   * @param array $nodes
+   *   Lean nodes (a tree, or any node list).
+   * @param string $uuid
+   *   The element uuid.
+   *
+   * @return array|null
+   *   The node, or NULL when no node carries the uuid.
+   */
+  public static function find(array $nodes, string $uuid): ?array {
+    foreach ($nodes as $node) {
+      if (!is_array($node)) {
+        continue;
+      }
+      if (($node['kind'] ?? '') !== 'region' && (string) ($node['uuid'] ?? '') === $uuid) {
+        return $node;
+      }
+      $found = self::find($node['children'] ?? [], $uuid);
+      if ($found !== NULL) {
+        return $found;
+      }
+    }
+    return NULL;
   }
 
   /**

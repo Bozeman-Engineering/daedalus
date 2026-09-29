@@ -12,13 +12,15 @@
   position: fixed;
   /* A pop-up is the transient top of whatever it opens from, so it stacks
      above every surface that can anchor one: the canvas chrome (selection
-     frame 940, caret 941), the sidebars (100), the canvas width handles
-     (1259, which run along the stage edge exactly where a sidebar row's
-     menu hangs), the modal floor (1260) and the top bar with its split
-     dropdown (1261, 1262). Below the messenger (1265) and tooltips (1300),
-     which must read over an open menu. Dismissal on any outside
-     pointerdown keeps it from lingering over a dialog it did not open
-     from. */
+     frame 940, its chip anchors and the caret 941, which the edit
+     widgets' popovers open from and which cap anything INSIDE them at
+     941, the reason a pop-up rides this body-level surface instead), the
+     sidebars (100), the canvas width handles (1259, which run along the
+     stage edge exactly where a sidebar row's menu hangs), the modal
+     floor (1260) and the top bar with its split dropdown (1261, 1262).
+     Below the messenger (1265) and tooltips (1300), which must read over
+     an open menu. Dismissal on any outside pointerdown keeps it from
+     lingering over a dialog it did not open from. */
   z-index: 1263;
   overflow: auto;
   box-sizing: border-box;

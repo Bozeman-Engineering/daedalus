@@ -10,8 +10,10 @@ use Drupal\daedalus_blueprint\Materials\Address;
 use Drupal\daedalus_blueprint\Materials\MaterialKind;
 use Drupal\daedalus_blueprint\Materials\MaterialRecord;
 use Drupal\daedalus_blueprint\Materials\MaterialsRoster;
+use Drupal\daedalus_blueprint\Materials\RelativeSelector;
 use Drupal\daedalus_blueprint\Materials\VocabularyRosterInterface;
 use Drupal\daedalus_stylish\StyleGuide;
+use Drupal\daedalus_ui\ElementModel\PageBuilderDeclarations;
 
 /**
  * The vocabulary roster: what one address may style, resolved.
@@ -26,9 +28,9 @@ use Drupal\daedalus_stylish\StyleGuide;
  * of deriving the answer for itself, so the answers can never disagree.
  *
  * What it holds, for the address (a root: "kind:container",
- * "block_type:text", "layout:layout_onecol", "base:a"; or a part, tag
- * tier or children pseudo-part of one: "kind:block::.part",
- * "kind:block::p", "layout:x::.part::>"):
+ * "block_type:text", "layout:layout_onecol", "base:a"; or a relative
+ * selector under one: "kind:block::.part", "kind:block::p",
+ * "layout:x::> pb-text .link"):
  * - grants: the declared property groups with their allowlists resolved,
  *   group id => the property names it grants, in declaration order;
  *   granted() flattens them. A grant is a function of the declaration
@@ -70,9 +72,13 @@ use Drupal\daedalus_stylish\StyleGuide;
  *   materials roster is memoized per request and workspace and reset by
  *   the material hooks on its own; reading it at call time keeps this
  *   roster's memo free of a workspace key and never stale after a
- *   mid-request mint). Variants pair by scope (Address::pairsWith()),
- *   every other kind applies everywhere; depth and ownership are stamps
- *   on the records, not filters here.
+ *   mid-request mint). Variants pair by scope (Address::pairsWith())
+ *   against the address's LANDING (landingScope(): the element the
+ *   selector's last compound names, the root itself for a root address;
+ *   none for a part, the children or a subjectless compound, where no
+ *   variant pairs: variants are worn by elements, and a rule wears one
+ *   at its matches), every other kind applies everywhere; depth and
+ *   ownership are stamps on the records, not filters here.
  * - enforcement: the site's mode and the two predicates every write asks
  *   (propertiesClosed(), constraintsAreLaw()).
  * - cache metadata: what a cached product of the roster (the client
@@ -87,10 +93,15 @@ use Drupal\daedalus_stylish\StyleGuide;
  *
  * declared() says whether the address names a declared place at all: a
  * root address always does (an undeclared refinement degrades to its
- * kind, a legal undeclared base tag to an empty declaration), a part,
- * tag tier or children address only when the declaration carries it.
- * The posture toward an undeclared place (rejected strict, grammar-only
- * open) is the validator's, not the roster's.
+ * kind, a legal undeclared base tag to an empty declaration), a selector
+ * address only when every compound of the roster walk landed on a
+ * declaration and its terminal pseudo-element, if any, is declared by
+ * its host's `pseudo` section; undeclared() names the first compound
+ * that did not (a pseudo-element as a compound of kind KIND_PSEUDO). The
+ * posture toward an undeclared place (rejected strict, grammar-only
+ * open) is the validator's, not the roster's; an undeclared
+ * pseudo-element alone still carries a grant, the derivation from its
+ * host (the builder's walk), since existence is universal.
  *
  * Immutable after construction and stringable through its address.
  */
@@ -100,6 +111,17 @@ final class VocabularyRoster implements VocabularyRosterInterface {
    * The roster-home sentence every property corrective ends with.
    */
   public const ROSTER_HOME = 'The full roster this element may style is in the catalog (the STYLES lines of your instructions).';
+
+  /**
+   * The undeclared() kind of a pseudo-element no host declares.
+   *
+   * Beside RelativeSelector's compound kinds: the walk reports a derived
+   * (undeclared) generated box as a compound of this kind named by the
+   * pseudo ("before", "after"), positioned after the chain, so the
+   * validator's strict corrective can name it (STYLE_PSEUDO_NOT_DECLARED)
+   * while the roster still carries the derived grant for open sites.
+   */
+  public const KIND_PSEUDO = 'pseudo';
 
   /**
    * Constructs a roster; VocabularyRosterBuilder is the live source.
@@ -122,9 +144,17 @@ final class VocabularyRoster implements VocabularyRosterInterface {
    * @param array<string, string> $parts
    *   Declared part selector => label, under the address.
    * @param bool $childrenDeclared
-   *   Whether the address declares the '::>' children pseudo-part.
+   *   Whether the address declares the '> *' children section.
    * @param bool $declared
    *   Whether the address names a declared place.
+   * @param array{combinator: ?string, kind: string, name: string, qualifiers: array, position: int}|null $undeclared
+   *   The first selector compound the roster walk found no declaration
+   *   for, anywhere in the selector (its RelativeSelector compound plus
+   *   its position in its own chain), NULL when the address is declared.
+   * @param array|null $landing
+   *   The declaration a class part resolves against at the end of the
+   *   walk: the owner's root, or the last type compound's declaration.
+   *   What a corrective enumerates the declared parts of.
    * @param string $enforcement
    *   The site's enforcement mode (StyleGuide::ENFORCEMENT_*).
    * @param \Closure|null $materials
@@ -153,6 +183,8 @@ final class VocabularyRoster implements VocabularyRosterInterface {
     private readonly ?\Closure $materials = NULL,
     private readonly ?CacheableMetadata $cacheMetadata = NULL,
     private readonly array $shorthands = [],
+    private readonly ?array $undeclared = NULL,
+    private readonly ?array $landing = NULL,
   ) {
     if (!in_array($enforcement, [
       StyleGuide::ENFORCEMENT_OPEN,
@@ -382,17 +414,85 @@ final class VocabularyRoster implements VocabularyRosterInterface {
   }
 
   /**
-   * Whether the address declares the '::>' children pseudo-part.
+   * Whether the address declares the '> *' children section.
    */
   public function childrenDeclared(): bool {
     return $this->childrenDeclared;
   }
 
   /**
+   * The first selector compound the walk found undeclared, or NULL.
+   *
+   * @return array{combinator: ?string, kind: string, name: string, qualifiers: array, position: int}|null
+   *   The compound (RelativeSelector's shape plus its position in its
+   *   own chain), NULL when the address names a declared place.
+   */
+  public function undeclared(): ?array {
+    return $this->undeclared;
+  }
+
+  /**
+   * The declared parts of the walk's landing owner: selector => label.
+   *
+   * The owner a class part resolves against where the walk ended (the
+   * address's root, or the last type compound's declaration), flattened
+   * at every depth of its elements tree: what a corrective for an
+   * undeclared part enumerates.
+   *
+   * @return array<string, string>
+   */
+  public function landingParts(): array {
+    $parts = [];
+    foreach (PageBuilderDeclarations::flattenElements($this->landing ?? []) as $selector => $part) {
+      $parts[(string) $selector] = (string) ($part['label'] ?? $selector);
+    }
+    return $parts;
+  }
+
+  /**
+   * The element scope a variant worn at the address pairs against.
+   *
+   * The landing: for a root address the root itself (an element wears a
+   * variant on its own box); for a selector address the element its LAST
+   * compound names, since a rule's wear is delivered at the rule's
+   * targets: a type compound's root address (`> pb-text` lands on
+   * block_type:text, `> pb-container` on kind:container:
+   * RelativeSelector::typeAddress()), a tag compound's base tag (`a` on
+   * base:a, `> p + p` on base:p). NULL where the targets are no element
+   * scope: a part (`.cls`, `> pb-text .link`: a part is its element's
+   * anatomy, and variants are worn by elements), the children (`> *`,
+   * `> *:not(pb-image)`), a `:not()`-only compound and a generated box
+   * (`&::before`, `> pb-text::after`: a pseudo-element is a box of its
+   * host, no element, and the anchor names no compound at all). There
+   * no variant pairs, and the validator refuses a reference with a
+   * corrective naming it. Derived from the address alone: the walk's
+   * declaration landing decides grants, this decides pairing, and both
+   * read the same last compound.
+   *
+   * @return \Drupal\daedalus_blueprint\Materials\Address|null
+   *   The landing's root address, or NULL when no variant pairs here.
+   */
+  public function landingScope(): ?Address {
+    if ($this->address->isRoot()) {
+      return $this->address;
+    }
+    if ($this->address->selector->pseudo !== NULL) {
+      return NULL;
+    }
+    $last = $this->address->selector->last();
+    return match ($last['kind']) {
+      RelativeSelector::TYPE => RelativeSelector::typeAddress($last['name']),
+      RelativeSelector::TAG => Address::base($last['name']),
+      default => NULL,
+    };
+  }
+
+  /**
    * The materials applicable at the address, in roster order.
    *
-   * Variants whose scope pairs with the address's root (the family
-   * rule), and every token, swatch, animation and stencil; each record
+   * Variants whose scope pairs with the address's landing (the family
+   * rule at landingScope(); none pairs where the landing is no element
+   * scope), and every token, swatch, animation and stencil; each record
    * carries its own depth and ownership stamps for the placement-aware
    * consumers.
    *
@@ -400,10 +500,10 @@ final class VocabularyRoster implements VocabularyRosterInterface {
    *   The records.
    */
   public function materials(): array {
-    $root = $this->address->root();
+    $landing = $this->landingScope();
     return array_values(array_filter(
       $this->materialsRoster()->all(),
-      static fn (MaterialRecord $record): bool => $record->kind !== MaterialKind::Variant || ($record->scope?->pairsWith($root) ?? FALSE),
+      static fn (MaterialRecord $record): bool => $record->kind !== MaterialKind::Variant || ($landing !== NULL && ($record->scope?->pairsWith($landing) ?? FALSE)),
     ));
   }
 

@@ -18,6 +18,21 @@ services:
           priority: 10,
         }
 
+  # The file handle on media reference fields ({_file: name}, the page
+  # language's file=""): above the generation handler in the chain and
+  # falling through to it, so one media field keeps one handler order
+  # (file, generate, plain reference).
+  daedalus_ai.field_handler.file_reference:
+    class: Drupal\daedalus_ai\FieldHandler\FileReferenceHandler
+    arguments:
+      $logger: '@logger.channel.daedalus_ai'
+    tags:
+      - {
+          name: daedalus_blueprint.field_handler,
+          field_types: 'entity_reference',
+          priority: 20,
+        }
+
   daedalus_ai.route_entity_resolver:
     class: Drupal\daedalus_ai\RouteEntityResolver
     arguments:
@@ -46,6 +61,16 @@ services:
       $tempStoreFactory: '@tempstore.private'
   Drupal\daedalus_ai\PendingMedia\GenerationJobStore: '@daedalus_ai.generation_job_store'
 
+  # The one road from a managed file to media: the bundle is read off the
+  # file's MIME type against the media types' source fields (raster to
+  # image, SVG to vector), never chosen by a caller. The pending minter and
+  # the file handles the model places both mint through it.
+  daedalus_ai.media_minter:
+    class: Drupal\daedalus_ai\MediaMinter
+    arguments:
+      $mimeTypeGuesser: '@file.mime_type.guesser'
+  Drupal\daedalus_ai\MediaMinter: '@daedalus_ai.media_minter'
+
   # The one capability behind every image-generation surface: mints a media
   # entity with a placeholder file synchronously and queues the generation
   # job that later fills the file behind its uuid.
@@ -62,6 +87,15 @@ services:
   # and the service never instantiates, so no hard dependency exists.
   daedalus_ai.style_value_handler.generate:
     class: Drupal\daedalus_ai\StyleValue\GenerateStyleValueHandler
+    tags:
+      - { name: daedalus_stylish.style_value_handler }
+
+  # The style grammar's file surface: `_file` as a handled value on the
+  # same seam (the dialect's url('file:<name>') lands here), resolving the
+  # conversation's held file to the canonical url('media:<uuid>') token
+  # through the shared minter. Soft wiring like the generate handler.
+  daedalus_ai.style_value_handler.file:
+    class: Drupal\daedalus_ai\StyleValue\FileStyleValueHandler
     tags:
       - { name: daedalus_stylish.style_value_handler }
 
@@ -159,3 +193,29 @@ services:
     class: Drupal\daedalus_ai\EventSubscriber\GenerateImagesSettings
     arguments:
       $imageGenerationGate: '@daedalus_ai.image_generation_gate'
+
+  # The attachment store: the files a conversation holds under their names
+  # (file.usage type thread against temporary-file GC, the filename as the
+  # conversation-scoped alias), resolved only for their owner, released on
+  # Clear History and by the cron sweep of threads whose session is gone.
+  daedalus_ai.attachments:
+    class: Drupal\daedalus_ai\Attachments
+    arguments:
+      $fileUsage: '@file.usage'
+      $aliasMap: '@daedalus_blueprint.dialect_alias_map'
+      $keyValueExpirable: '@keyvalue.expirable'
+      $database: '@database'
+      $time: '@datetime.time'
+  Drupal\daedalus_ai\Attachments: '@daedalus_ai.attachments'
+
+  # Bytes the model authors in a batch (the page language's file op and a
+  # document's <pb-file> declaration): saved through daedalus_ui's file lane
+  # as a temporary file narrowed to the textual kinds, and held by the
+  # conversation under the declared name on the alias overlay the batch
+  # settles (Attachments::hold(), never persist()).
+  daedalus_ai.file_declaration_handler:
+    class: Drupal\daedalus_ai\FileDeclarationHandler
+    arguments:
+      $lane: '@daedalus_ui.file_lane'
+    tags:
+      - { name: daedalus_blueprint.file_declaration_handler }

@@ -13,6 +13,7 @@ are its roles. Enable the roles a site needs; every one of them depends on
 | `daedalus_blueprint` | Bidirectional JSON entity serialization for AI workflows. Ships `daedalus_blueprint_api` (the HTTP endpoint editing clients use), `daedalus_blueprint_stencil` (reusable composed sections and blocks), `daedalus_blueprint_config` and `daedalus_blueprint_config_ai` (config entities), `daedalus_blueprint_ai` (agent tools), `daedalus_blueprint_ai_anthropic`, `daedalus_blueprint_ai_dev_tools` and `daedalus_blueprint_ai_log_repair`. |
 | `daedalus_ai` | The AI assistant chat panel that edits the page through blueprints. Ships `daedalus_ai_anthropic`, `daedalus_ai_gemini` and `daedalus_ai_memory` (agent state across conversation turns). |
 | `daedalus_stylish` | Style anything on the page: browser widgets and AI sharing one style model, validated against a style guide. Ships `daedalus_stylish_layouts` (the container layout), `daedalus_stylish_layers`, `daedalus_stylish_discover`, and the `daedalus_stylish_starter_skin`, `daedalus_stylish_olivero_skin`, `daedalus_stylish_carbon` and `daedalus_stylish_guide_example` design systems. |
+| `daedalus_explode` | The Explode panel: the edit-mode canvas as a tilted, exploded 3D stack, every element lifted by its depth in the page hierarchy, with the real page content on each layer. An orientation view for editors and the shot for teaching the hierarchy on video. |
 
 Each sub-module's own README documents it.
 
@@ -51,8 +52,8 @@ to drive it.
 
 ## Development
 
-The JavaScript for `daedalus_ui` and `daedalus_stylish` is built by webpack
-from one root `package.json`:
+The JavaScript for `daedalus_ui`, `daedalus_stylish` and `daedalus_explode`
+is built by webpack from one root `package.json`:
 
 ```
 npm install

@@ -27,8 +27,10 @@
  *
  * @param array &$params
  *   The deep-chat style parameters, keyed as deep-chat expects (e.g.
- *   'messageStyles', 'textInput', 'submitButtonStyles', 'avatars', 'names').
- *   Modify nested values to restyle messages, the input, and so on.
+ *   'messageStyles', 'textInput', 'submitButtonStyles', 'avatars', 'names',
+ *   'mixedFiles' for the attach button and its accepted formats,
+ *   'dragAndDrop' for the drop zone). Modify nested values to restyle
+ *   messages, the input, the attach button, and so on.
  * @param string &$auxiliary_style
  *   CSS injected into deep-chat's shadow DOM. Append rules to it; later rules
  *   of equal specificity win, so same-selector overrides of the base layout

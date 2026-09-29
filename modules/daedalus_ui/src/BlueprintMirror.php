@@ -24,12 +24,9 @@ use Symfony\Component\HttpFoundation\RequestStack;
  * from it) goes stale until a full reload:
  * - the entity view build: boot and LoadEditablePage AJAX re-renders, where
  *   the settings merge refreshes it (EntityViewAlter),
- * - form-pipeline AJAX responses, the write path that bypasses the
- *   daedalus_blueprint op spine (the configure dialog, inline field edits):
- *   the envelope rides the UpdateElement content's attachments and the
- *   mirror re-syncs from settings on behavior attach
- *   (DaedalusEditFormTrait::updatePage),
- * - spine mutation responses carry the blueprint in the response BODY
+ * - spine mutation responses (the endpoint's, and every form the edit mode
+ *   hosts answering the same payload through daedalus_edit's FormCommit,
+ *   the Configure dialogs included) carry the blueprint in the response BODY
  *   instead, replacing the mirror wholesale (the
  *   BlueprintElementAnnotations subscriber annotates that seam). Their
  *   whole-entity render runs through the same entity view build as boot,

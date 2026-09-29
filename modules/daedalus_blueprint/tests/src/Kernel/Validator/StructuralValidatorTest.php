@@ -533,6 +533,33 @@ class StructuralValidatorTest extends BlueprintKernelTestBase {
   }
 
   /**
+   * Tests the reserved `_sample` request is refused in a blueprint's fields.
+   *
+   * A blueprint carries values; the sample request is an op-time word
+   * (update_element resolves it), and no owner on the blueprint road would.
+   * Refusing it here keeps a handler from misreading the marker as an item.
+   */
+  public function testSampleRequestRefusedInFields(): void {
+    $data = [
+      'entity_type' => 'entity_test',
+      'bundle' => 'entity_test',
+      'fields' => [
+        'field_subtitle' => ['_sample' => TRUE],
+        'field_description' => ['_sample' => TRUE, 'format' => 'plain_text'],
+        'field_count' => 3,
+      ],
+    ];
+
+    $errors = $this->validator->validate($data);
+    $this->assertCount(2, $errors);
+    $this->assertSame('fields.field_subtitle', $errors[0]->getPath());
+    $this->assertSame('SAMPLE_REQUEST_NOT_A_VALUE', $errors[0]->getCode());
+    $this->assertStringContainsString('update_element', $errors[0]->getHint());
+    $this->assertSame('fields.field_description', $errors[1]->getPath());
+    $this->assertSame('SAMPLE_REQUEST_NOT_A_VALUE', $errors[1]->getCode());
+  }
+
+  /**
    * Tests multi-value field with valid sequential array.
    */
   public function testMultiValueFieldValid(): void {

@@ -10,6 +10,7 @@ use Drupal\daedalus_ai\Plugin\Sidebar\ChatSidebar;
 use Drupal\Component\Serialization\Json;
 use Drupal\Core\StringTranslation\TranslatableMarkup;
 use Drupal\KernelTests\KernelTestBase;
+use Drupal\daedalus_ui\File\FileLane;
 use Drupal\daedalus_ui\ModePluginManager;
 use Drupal\Tests\user\Traits\UserCreationTrait;
 use PHPUnit\Framework\Attributes\Group;
@@ -80,6 +81,10 @@ class ChatSidebarTest extends KernelTestBase {
     'ai',
     'ai_assistant_api',
     'ai_chatbot',
+    // The attachment lane the sidebar reads its accepted formats and size
+    // ceiling from is built on core's upload handler.
+    'field',
+    'file',
   ];
 
   /**
@@ -170,6 +175,14 @@ class ChatSidebarTest extends KernelTestBase {
         $this->container->get('cache.discovery'),
         $this->container->get('module_handler'),
       ),
+      // The REAL lane (daedalus_ui is not enabled, so its service is not
+      // in this container) over core's upload handler: with no media
+      // module, its accepted set is exactly the textual kinds.
+      new FileLane(
+        $this->container->get('file.upload_handler'),
+        $this->container->get('file_system'),
+        $this->container->get('entity_type.manager'),
+      ),
     );
 
     // The gate is the 'use ai assistant' permission and nothing else.
@@ -216,6 +229,20 @@ class ChatSidebarTest extends KernelTestBase {
     $this->assertSame('chatbot', $settings['assistant_id']);
     $this->assertSame('thread-xyz', $settings['thread_id']);
     $this->assertTrue($settings['session_exists'], 'A started session is reported to the client.');
+
+    // Attachments: the widget's attach button and drop zone take the lane's
+    // accepted formats (the textual kinds alone here, with no media type
+    // installed) and the client reads the same formats and the lane's size
+    // ceiling from drupalSettings for its pre-upload refusal.
+    $attributes = $build['chat']['deep_chat']['#attributes'];
+    $expected_formats = implode(',', array_map(static fn (string $extension): string => ".$extension", FileLane::TEXTUAL_EXTENSIONS));
+    $mixed_files = Json::decode($attributes['mixedfiles']);
+    $this->assertSame($expected_formats, $mixed_files['files']['acceptedFormats'], 'The attach button accepts exactly what the lane accepts.');
+    $this->assertSame('inside-left', $mixed_files['button']['position']);
+    $this->assertTrue(Json::decode($attributes['draganddrop']), 'The chat is a drop zone.');
+    $attachments = $build['#attached']['drupalSettings']['daedalus_ai']['attachments'];
+    $this->assertSame($expected_formats, $attachments['accepted_formats']);
+    $this->assertSame(FileLane::SIZE_LIMIT, $attachments['size_limit']);
 
     // History filter: the >1-day message is dropped; the fresh one survives and
     // its markdown is rendered to HTML.

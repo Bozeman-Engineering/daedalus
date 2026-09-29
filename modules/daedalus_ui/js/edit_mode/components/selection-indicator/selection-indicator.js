@@ -1,12 +1,14 @@
 import { h } from 'preact';
 import { useSelector, useDispatch } from 'react-redux';
 import {
-  setSelected,
+  setTarget,
   setDrill,
   removeSelected,
 } from '../../store/slices/selection-slice';
+import { commitAddress } from '../../selection/commit-address';
 import { elementForKey } from '../../selection/resolver';
 import { projectionIndex } from '../page-elements/projection-index';
+import { reachPredicate } from '../page-elements/reach';
 import { labelFor } from '../../selection/label-for-key';
 import { ancestryOf } from '../../selection/ancestry';
 
@@ -15,15 +17,24 @@ import { ancestryOf } from '../../selection/ancestry';
  * ONE selection slice.
  *
  * The BREADCRUMB answers "how deep am I?": the ancestry of the PRIMARY
- * selection, the {selectedKey, selectedPart} pair read as one address over
- * the shared projection index (ancestry.js: the same map that labels the
- * tree, the chat chips, and keyboard traversal — unison by construction,
- * no cross-wiring), so a selected part (Raster, a list item) trails through
- * its markup parents up to its owner and on to the root. Ancestor crumbs
- * are clickable to climb: a crumb click commits what the crumb addresses
- * (the element key, or the {key, part} pair for a part crumb) and re-seats
- * the drill context on the crumb's element parent (the owner's parent for
- * a part), exactly the shape Escape's step-up and ArrowLeft commit.
+ * selection and its styling target, read as one address over the shared
+ * projection index (ancestry.js: the same map that labels the tree, the
+ * chat chips, and keyboard traversal — unison by construction, no
+ * cross-wiring) through reach (reach.js: the rows the panel currently
+ * draws), so a targeted drawn part (Raster with the Markup view on, a
+ * list item in every view) trails through its drawn markup parents up
+ * to its owner and on to the root, and any other target (a tag tier, a
+ * chain, an ancestor rule, a shell part the Markup view is not drawing)
+ * ends the trail as a target crumb after the element's ("Welcome › every
+ * link"). Ancestor
+ * crumbs are clickable to climb: a crumb click commits what the crumb
+ * addresses (the element key, plus the part's selector as the target for
+ * a part crumb) and re-seats the drill context on the crumb's element
+ * parent (the owner's parent for a part), exactly the shape ArrowLeft
+ * commits (the crumb click and ArrowLeft are the step-up gestures; Escape
+ * deselects and never climbs). While a target stands, the CURRENT crumb
+ * is clickable too: it drops the target back to the bare element, the
+ * same drop Escape's target rung makes.
  *
  * The CHIPS answer "what all is selected?": one chip per member of the
  * multi-select set, in selection order, each dismissible (dismiss IS
@@ -34,7 +45,7 @@ import { ancestryOf } from '../../selection/ancestry';
  * While a drag or lift holds the caret, the breadcrumb answers the same
  * "how deep am I?" for the CARET instead: the trail of the container the
  * current drop location inserts into (state.drag.dropContainerKey — per
- * gap transition, the same identity the tree's drop-unfold consumes), so
+ * gap transition, the same identity the tree's drop reveal consumes), so
  * arrowing or dragging through nested layouts always names the level the
  * drop would land at. The drop trail is read-only — clicking a crumb
  * mid-gesture would cancel the very gesture it describes.
@@ -47,12 +58,12 @@ import { ancestryOf } from '../../selection/ancestry';
 const Breadcrumb = ({
   index,
   primaryKey,
-  primaryPart = null,
+  target = null,
   interactive = true,
   label = null,
 }) => {
   const dispatch = useDispatch();
-  const trail = ancestryOf(index, primaryKey, primaryPart);
+  const trail = ancestryOf(index, reachPredicate(), primaryKey, target);
 
   return (
     <nav
@@ -68,7 +79,23 @@ const Breadcrumb = ({
                 ›
               </span>
             )}
-            {current || !interactive ? (
+            {current && interactive && target ? (
+              <button
+                type="button"
+                className="daedalus-ui-breadcrumb__crumb daedalus-ui-breadcrumb__crumb--current daedalus-ui-breadcrumb__crumb--target"
+                aria-current
+                title={Drupal.t('Back to the whole element')}
+                onClick={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  // The target crumb drops the target: the selection
+                  // stays, styling goes back to the element itself.
+                  dispatch(setTarget(null));
+                }}
+              >
+                {crumb.label}
+              </button>
+            ) : current || !interactive ? (
               <span
                 className={`daedalus-ui-breadcrumb__crumb${current ? ' daedalus-ui-breadcrumb__crumb--current' : ''}`}
                 aria-current={current || undefined}
@@ -83,23 +110,16 @@ const Breadcrumb = ({
                 onClick={(event) => {
                   event.preventDefault();
                   event.stopPropagation();
-                  // The step-up shape (ArrowLeft / Escape): the crumb becomes
-                  // the selection (the {key, part} pair for a part crumb, the
+                  // The step-up shape (ArrowLeft's): the crumb becomes
+                  // the selection (its part the target for a part crumb, the
                   // tree row's own commit), its element parent the drill
                   // context (crumb.key is the owner for a part, so this is
                   // the owner's parent), so pointer resolution keeps working
                   // at the climbed-to level. The canvas reveals the owner
                   // element: a part has no key of its own to look up.
-                  dispatch(
-                    setSelected(
-                      crumb.part
-                        ? { key: crumb.key, part: crumb.part }
-                        : crumb.key,
-                    ),
-                  );
+                  commitAddress(crumb.key, crumb.selector);
                   dispatch(setDrill(index?.get(crumb.key)?.parent ?? null));
-                  elementForKey(crumb.key)?.scrollIntoView({
-                    block: 'nearest',
+                  Drupal.Daedalus.scrollReveal(elementForKey(crumb.key), {
                     behavior: 'smooth',
                   });
                 }}
@@ -156,16 +176,19 @@ const Chips = ({ index, keys, primaryKey }) => {
 
 const SelectionIndicator = () => {
   const primaryKey = useSelector((state) => state.selection.selectedKey);
-  const primaryPart = useSelector((state) => state.selection.selectedPart);
+  const target = useSelector((state) => state.selection.target);
   const selectedKeys = useSelector((state) => state.selection.selectedKeys);
-  const currentTool = useSelector((state) => state.tool.currentTool);
+  const mode = useSelector((state) => state.mode.mode);
   const dragActive = useSelector((state) => state.drag.active);
   const dropContainerKey = useSelector((state) => state.drag.dropContainerKey);
   // Re-render on mirror replacement so labels and ancestry re-derive from
-  // the fresh projection (the index itself is read at render time).
+  // the fresh projection (the index itself is read at render time), and
+  // on a view flip so the trail re-derives from the rows now drawn (the
+  // reach predicate is taken at render time too).
   useSelector((state) => state.blueprint.blueprint);
+  useSelector((state) => state.view.views);
 
-  // A drag or lift owns the indicator regardless of tool: the breadcrumb
+  // A drag or lift owns the indicator: the breadcrumb
   // becomes the caret's depth — the container the drop would land in. No
   // target under the cursor, no trail.
   if (dragActive) {
@@ -181,9 +204,8 @@ const SelectionIndicator = () => {
     ) : null;
   }
 
-  // The indicator serves the Selector's grammar, like the verb menu: the
-  // armed edit session owns its own feedback.
-  if (currentTool !== 'selector' || !primaryKey) {
+  // The indicator serves the selection's grammar, like the verb menu.
+  if (mode !== 'edit' || !primaryKey) {
     return null;
   }
 
@@ -194,11 +216,7 @@ const SelectionIndicator = () => {
       {selectedKeys.length > 1 && (
         <Chips index={index} keys={selectedKeys} primaryKey={primaryKey} />
       )}
-      <Breadcrumb
-        index={index}
-        primaryKey={primaryKey}
-        primaryPart={primaryPart}
-      />
+      <Breadcrumb index={index} primaryKey={primaryKey} target={target} />
     </div>
   );
 };

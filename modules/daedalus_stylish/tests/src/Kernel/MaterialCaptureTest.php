@@ -486,6 +486,8 @@ class MaterialCaptureTest extends NestedStorageKernelTestBase {
       'container:{sec}::.inner' => ['default' => ['margin' => '0']],
       'container:{sec}::.s-abc12' => ['default' => ['color' => 'red']],
       'container:{sec}::p' => ['default' => ['color' => 'blue']],
+      'container:{sec}::> *' => ['default' => ['gap' => '2rem']],
+      'container:{sec}::> pb-basic .s-zz9' => ['default' => ['color' => 'green']],
       'block:{b1}' => ['default' => ['text-align' => 'center']],
       'block:{b2}' => ['default' => ['padding' => '1rem'], 'variants' => [['variant' => 'card', 'fragment' => '']]],
       'block:{b2}::.quote' => ['default' => ['font-style' => 'italic']],
@@ -531,9 +533,12 @@ class MaterialCaptureTest extends NestedStorageKernelTestBase {
       // The root: its override on top of the folded band, the band's
       // untouched value beneath.
       '' => ['default' => ['padding' => '2rem', 'background-color' => 'aliceblue']],
-      // Its class part, over the band's part; instance and tag parts stay
-      // behind.
+      // Its class part, over the band's part; its tag and children
+      // selectors travel (structure transfers); instance parts stay
+      // behind wherever they stand in a selector.
       '::.inner' => ['default' => ['gap' => '2rem', 'margin' => '0']],
+      '::p' => ['default' => ['color' => 'blue']],
+      '::> *' => ['default' => ['gap' => '2rem']],
       // The children by slot path (the plugin placement is transparent),
       // shallow first; a child's own worn root reference travels as a
       // reference, its part and field ride the same slot.
@@ -632,15 +637,57 @@ class MaterialCaptureTest extends NestedStorageKernelTestBase {
   }
 
   /**
+   * A rule's references travel with the capture, own and a child's alike.
+   *
+   * The section's `> pb-basic` rule wears "card" (delivered at every
+   * basic child) over its own margin, and the nested section's rule wears
+   * it too: both travel as the captured '::selector' entry's reference
+   * list, the origin stripped, exactly as a child's root references do;
+   * a fragment reference at a rule never travels.
+   */
+  public function testCaptureKeepsRuleReferences(): void {
+    DaedalusStylishVariant::create(['label' => 'Card', 'machine_name' => 'card', 'scope' => 'block_type:basic'])->setStyles([
+      '' => ['default' => ['border-radius' => '8px']],
+    ])->save();
+    DaedalusStylishVariant::create(['label' => 'Band', 'machine_name' => 'band', 'scope' => 'kind:container'])->setStyles([
+      '' => ['default' => ['padding' => '4rem']],
+    ])->save();
+    [$entity, $ids] = $this->buildComposition([
+      'container:{sec}' => ['default' => ['padding' => '2rem']],
+      'container:{sec}::> pb-basic' => [
+        'variants' => [['variant' => 'card', 'fragment' => '', 'via' => 'band'], ['variant' => 'band', 'fragment' => 'container(1)']],
+        'default' => ['margin' => '0'],
+      ],
+      'container:{nsec}::> pb-basic' => ['variants' => [['variant' => 'card', 'fragment' => '']]],
+    ]);
+    $this->delta();
+
+    $result = $this->batch($entity, [
+      [
+        'op' => 'save_material',
+        'kind' => 'variant',
+        'label' => 'Framed band',
+        'element' => $ids['sec'],
+      ],
+    ], [MaterialGestureOperationHandler::ORIGIN_OPTION => 'ai']);
+    $this->assertTrue($result->isSuccess(), json_encode($result->toArray()));
+    $this->assertSame([
+      '' => ['default' => ['padding' => '2rem']],
+      '::> pb-basic' => ['variants' => [['variant' => 'card', 'fragment' => '']], 'default' => ['margin' => '0']],
+      'container(1)::> pb-basic' => ['variants' => [['variant' => 'card', 'fragment' => '']]],
+    ], $this->delta()['upsert'][0]['value']);
+  }
+
+  /**
    * A distributed wear captures origin-less: the strip is the capture's.
    *
-   * THE card scenario: Card Left's apply nested "row" onto the card
+   * THE card scenario: Card Left's apply nested "columns" onto the card
    * wrapper, stamped "via card_left" in the map (the map lane records
    * placement facts). A capture from the section writes the wrapper's
    * root references as {variant, fragment} only: a variant's nested list
    * says what to distribute, never who did, and the variant-styles lane
    * rejects "via", so an unstripped capture would refuse to save. Here
-   * the save succeeds and the minted variant nests a plain "row" on
+   * the save succeeds and the minted variant nests a plain "columns" on
    * container(1); the composition's own fragment reference on the wrapper
    * folds beneath the wrapper's overrides (the same-axis re-attach
    * replaces it), as ever. The map keeps its origin: the strip is the
@@ -649,8 +696,8 @@ class MaterialCaptureTest extends NestedStorageKernelTestBase {
    */
   public function testCaptureStripsProvenance(): void {
     DaedalusStylishVariant::create([
-      'label' => 'Row',
-      'machine_name' => 'row',
+      'label' => 'Columns',
+      'machine_name' => 'columns',
       'scope' => 'kind:container',
       'axis' => 'container_layout',
     ])->setStyles([
@@ -658,7 +705,7 @@ class MaterialCaptureTest extends NestedStorageKernelTestBase {
     ])->save();
     DaedalusStylishVariant::create(['label' => 'Card Left', 'machine_name' => 'card_left', 'scope' => 'kind:container'])->setStyles([
       '' => ['default' => ['padding' => '2rem']],
-      'container(1)' => ['variants' => [['variant' => 'row', 'fragment' => '']], 'default' => ['margin' => '1px']],
+      'container(1)' => ['variants' => [['variant' => 'columns', 'fragment' => '']], 'default' => ['margin' => '1px']],
     ])->save();
     [$entity, $ids] = $this->buildComposition([
       'container:{nsec}' => ['default' => ['gap' => '1rem']],
@@ -669,9 +716,9 @@ class MaterialCaptureTest extends NestedStorageKernelTestBase {
     $this->assertTrue($result->isSuccess(), json_encode($result->toArray()));
     $wrapper = $entity->get(DaedalusStylishFieldManager::FIELD_NAME)->first()->getStyleMap()["container:{$ids['nsec']}"];
     $this->assertEquals([
-      ['variant' => 'row', 'fragment' => '', 'via' => 'card_left'],
+      ['variant' => 'columns', 'fragment' => '', 'via' => 'card_left'],
       ['variant' => 'card_left', 'fragment' => 'container(1)'],
-    ], $wrapper['variants'], 'The wrapper wears row via Card Left before the capture.');
+    ], $wrapper['variants'], 'The wrapper wears columns via Card Left before the capture.');
     $this->delta();
 
     $result = $this->batch($entity, [
@@ -679,11 +726,11 @@ class MaterialCaptureTest extends NestedStorageKernelTestBase {
     ]);
     $this->assertTrue($result->isSuccess(), json_encode($result->toArray()));
     $value = $this->delta()['upsert'][0]['value'];
-    $this->assertSame([['variant' => 'row', 'fragment' => '']], $value['container(1)']['variants'], 'The nested row travels without its origin.');
+    $this->assertSame([['variant' => 'columns', 'fragment' => '']], $value['container(1)']['variants'], 'The nested columns travels without its origin.');
     $this->assertEquals(['gap' => '1rem', 'margin' => '1px'], $value['container(1)']['default'], 'The wrapper keeps its override over the folded Card Left fragment.');
     $this->assertArrayNotHasKey('block(basic,1)', $value);
     $this->assertEquals([
-      ['variant' => 'row', 'fragment' => '', 'via' => 'card_left'],
+      ['variant' => 'columns', 'fragment' => '', 'via' => 'card_left'],
       ['variant' => 'card_left', 'fragment' => 'container(1)'],
     ], $entity->get(DaedalusStylishFieldManager::FIELD_NAME)->first()->getStyleMap()["container:{$ids['nsec']}"]['variants'], 'The map keeps its origin: the strip is the capture\'s.');
   }

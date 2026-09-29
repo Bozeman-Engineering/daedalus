@@ -14,10 +14,11 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 /**
  * The pop-out page variant over the _daedalus_ui.popout route option.
  *
- * A route that declares the option renders as simple_page (no block
- * chrome); every other route keeps whatever variant was selected before
- * the subscriber ran. The responsive preview is the module's own opt-in;
- * daedalus_stylish's inspector pop-out is asserted in daedalus_stylish's tier.
+ * A route that declares the option renders as the daedalus_ui_popout
+ * variant (no block chrome, no page title); every other route keeps
+ * whatever variant was selected before the subscriber ran. The responsive
+ * preview is the module's own opt-in; daedalus_stylish's inspector pop-out
+ * is asserted in daedalus_stylish's tier.
  */
 #[Group('daedalus_ui')]
 #[RunTestsInSeparateProcesses]
@@ -71,10 +72,18 @@ class PopoutPageVariantTest extends KernelTestBase {
   }
 
   /**
-   * The responsive preview route declares the option and gets simple_page.
+   * The responsive preview route declares the option and gets the variant.
+   *
+   * The plugin must also exist: a selected id the display variant manager
+   * cannot instantiate is a fatal at render time, not a wrong variant.
    */
-  public function testResponsivePreviewSelectsSimplePage(): void {
-    $this->assertSame('simple_page', $this->selectVariantFor('daedalus_ui.responsive_preview'));
+  public function testResponsivePreviewSelectsPopoutVariant(): void {
+    $this->assertSame('daedalus_ui_popout', $this->selectVariantFor('daedalus_ui.responsive_preview'));
+    $variant = $this->container->get('plugin.manager.display_variant')->createInstance('daedalus_ui_popout');
+    $build = $variant->setTitle('Responsive preview')->setMainContent(['#markup' => 'shell'])->build();
+    $this->assertArrayHasKey('messages', $build['content']);
+    $this->assertArrayHasKey('main_content', $build['content']);
+    $this->assertArrayNotHasKey('page_title', $build['content']);
   }
 
   /**

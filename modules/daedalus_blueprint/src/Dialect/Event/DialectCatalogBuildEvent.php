@@ -6,6 +6,7 @@ namespace Drupal\daedalus_blueprint\Dialect\Event;
 
 use Drupal\Component\EventDispatcher\Event;
 use Drupal\daedalus_blueprint\Materials\Address;
+use Drupal\daedalus_blueprint\Materials\RelativeSelector;
 use Drupal\daedalus_blueprint\Materials\VocabularyProseInterface;
 use Drupal\daedalus_blueprint\Materials\VocabularyRosterInterface;
 
@@ -21,11 +22,14 @@ use Drupal\daedalus_blueprint\Materials\VocabularyRosterInterface;
  * or whatever declares conditions and axes on a site) can contribute the
  * declarations no material record carries: each variant scope's axis
  * attribute order with each axis's description and the properties it
- * owns, the condition vocabulary with its CSS wrappers, the declared part
- * classes, the instance namespaces, the addressable text-tag vocabulary,
- * the vocabulary rosters per element kind with the prose that teaches
- * them, the birth defaults each placement scope stamps and the base tags
- * the active skin dresses. Nothing here names a material by spelling: a
+ * owns, the condition vocabulary with its CSS wrappers (the structural
+ * facts among them named), the selector rosters per owner (the declared
+ * part classes and the addressable base tags a relative selector's
+ * compounds may land on under a container, a block type or any other
+ * block), the instance namespaces, the vocabulary rosters per element
+ * kind with the prose that teaches them, the birth defaults each
+ * placement scope stamps and the base tags the active skin dresses.
+ * Nothing here names a material by spelling: a
  * material reaches the catalog through the roster or not at all (a birth
  * default names a variant by id, which the roster resolves), so the
  * catalog, the cached prompt, the schema and the validators never
@@ -70,21 +74,23 @@ final class DialectCatalogBuildEvent extends Event {
   private array $conditions = [];
 
   /**
-   * Declared part class => owning dialect tags.
+   * Condition names declared as structural facts.
+   *
+   * @var string[]
    */
-  private array $parts = [];
+  private array $facts = [];
+
+  /**
+   * Selector rosters per owner: dialect tag => {parts, tags}.
+   *
+   * @var array<string, array{parts: array<string, string>, tags: string[]}>
+   */
+  private array $selectors = [];
 
   /**
    * Instance-namespace declarations: pattern selector => {label, tags}.
    */
   private array $instances = [];
-
-  /**
-   * The addressable text-tag vocabulary, in declaration order.
-   *
-   * @var string[]
-   */
-  private array $textTags = [];
 
   /**
    * Vocabulary rosters per element kind: kind => the roster.
@@ -291,21 +297,88 @@ final class DialectCatalogBuildEvent extends Event {
   }
 
   /**
-   * Contributes part declarations (part class => owning dialect tags).
+   * Contributes the condition names that are structural FACTS.
    *
-   * Tags merge per class, so several layers may own one part class.
+   * A fact is a pseudo-class condition that holds by the element's place
+   * in the markup (":first-child") rather than by interaction (":hover"):
+   * the dialect spells both as pseudo-classes on the addressed element
+   * but teaches and corrects them apart. Names accumulate across layers;
+   * a name no layer declared as a condition is ignored by the catalog.
+   *
+   * @param string[] $names
+   *   Condition names.
    */
-  public function addParts(array $parts): void {
-    foreach ($parts as $class => $tags) {
-      $this->parts[$class] = array_values(array_unique(array_merge($this->parts[$class] ?? [], $tags)));
-    }
+  public function addFacts(array $names): void {
+    $this->facts = array_values(array_unique(array_merge($this->facts, array_values($names))));
   }
 
   /**
-   * The declared parts, part class => owning dialect tags.
+   * The condition names declared as structural facts.
+   *
+   * @return string[]
+   *   Condition names.
    */
-  public function getParts(): array {
-    return $this->parts;
+  public function getFacts(): array {
+    return $this->facts;
+  }
+
+  /**
+   * Contributes one owner's selector roster: its parts and its tags.
+   *
+   * The owner is a dialect tag ("pb-container", "pb-text", "pb-block" for
+   * any plugin block or undeclared type): what the compounds of a
+   * relative selector under "#id" may land on when that element, or a
+   * type compound naming it, is the owner. 'parts' are the declared part
+   * classes (with the leading dot, as the style map spells them) with
+   * their labels; 'tags' the base tags a tag compound may name there
+   * (the styling layer's one declaration of a prose tag's styleability,
+   * the same list its validator resolves the tag tier through). Which
+   * TYPES may follow an owner is the spine's fact (a container's children
+   * are the page's elements; a block has none), derived by the catalog,
+   * never contributed. Layers merge per owner: a part keeps its first
+   * label, tags accumulate in order.
+   *
+   * @param string $owner
+   *   The owner's dialect tag.
+   * @param array{parts?: array<string, string>, tags?: string[]} $roster
+   *   The owner's parts (selector => label) and tags.
+   */
+  public function addSelectors(string $owner, array $roster): void {
+    if (!preg_match(RelativeSelector::TYPE_PATTERN, $owner)) {
+      throw new \InvalidArgumentException(sprintf('Selector rosters are declared per owner, a dialect tag ("pb-container", "pb-text", "pb-block"); "%s" is not one.', $owner));
+    }
+    if (array_diff_key($roster, ['parts' => TRUE, 'tags' => TRUE]) !== []) {
+      throw new \InvalidArgumentException(sprintf('The selector roster of %s carries parts and tags only (types are the spine\'s).', $owner));
+    }
+    $parts = $roster['parts'] ?? [];
+    $tags = $roster['tags'] ?? [];
+    if (!is_array($parts) || !is_array($tags) || !array_is_list($tags)) {
+      throw new \InvalidArgumentException(sprintf('The selector roster of %s is parts (selector => label) and tags (a list of tag names).', $owner));
+    }
+    $entry = $this->selectors[$owner] ?? ['parts' => [], 'tags' => []];
+    foreach ($parts as $selector => $label) {
+      if (!is_string($selector) || !preg_match(RelativeSelector::CLASS_PATTERN, $selector) || !is_string($label)) {
+        throw new \InvalidArgumentException(sprintf('A part of %s is a class selector (".class-name") mapped to its label.', $owner));
+      }
+      $entry['parts'][$selector] ??= $label;
+    }
+    foreach ($tags as $tag) {
+      if (!is_string($tag) || !preg_match(RelativeSelector::TAG_PATTERN, $tag)) {
+        throw new \InvalidArgumentException(sprintf('A tag of %s is a base tag name.', $owner));
+      }
+    }
+    $entry['tags'] = array_values(array_unique(array_merge($entry['tags'], $tags)));
+    $this->selectors[$owner] = $entry;
+  }
+
+  /**
+   * The selector rosters per owner: dialect tag => {parts, tags}.
+   *
+   * @return array<string, array{parts: array<string, string>, tags: string[]}>
+   *   The contributed rosters, in contribution order.
+   */
+  public function getSelectors(): array {
+    return $this->selectors;
   }
 
   /**
@@ -315,8 +388,8 @@ final class DialectCatalogBuildEvent extends Event {
    * namespace's 'label' plus its declared 'tags' map (tag => label): the
    * content-borne identity classes rich-text bodies wear and the tags
    * the identity minter mints, with their labels. Identity only: which
-   * tags a "#id tag" selector may style is the text-tag vocabulary
-   * (addTextTags()), declared where a prose tag's styleability lives.
+   * tags a "#id tag" selector may style is each owner's selector roster
+   * (addSelectors()), declared where a prose tag's styleability lives.
    */
   public function addInstances(array $instances): void {
     $this->instances += $instances;
@@ -327,34 +400,6 @@ final class DialectCatalogBuildEvent extends Event {
    */
   public function getInstances(): array {
     return $this->instances;
-  }
-
-  /**
-   * Contributes the addressable text-tag vocabulary.
-   *
-   * The tags an element-scoped "#id tag" selector may address (the tag
-   * tier: "{key}::tag" on the style map), in declaration order — the
-   * styling layer's one declaration of a prose tag's styleability, the
-   * same list its validator resolves the tier through, so the parser's
-   * corrective and the validator's verdict stay one fact. Distinct from
-   * the instance namespaces' identity tags: a tag may mint without being
-   * styleable, or be styleable without ever minting.
-   *
-   * @param string[] $tags
-   *   Tag names.
-   */
-  public function addTextTags(array $tags): void {
-    $this->textTags = array_values(array_unique(array_merge($this->textTags, array_map(strval(...), $tags))));
-  }
-
-  /**
-   * The addressable text-tag vocabulary.
-   *
-   * @return string[]
-   *   The contributed text tags.
-   */
-  public function getTextTags(): array {
-    return $this->textTags;
   }
 
   /**

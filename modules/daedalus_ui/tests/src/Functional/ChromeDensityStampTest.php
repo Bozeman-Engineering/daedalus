@@ -14,7 +14,7 @@ use Drupal\Tests\daedalus\Traits\DaedalusFixtureTrait;
  *
  * The per-user "Editing chrome" preference reaches CSS and the reveal engine
  * as one html attribute, data-daedalus-ui-chrome-density, stamped server-side in
- * daedalus_ui_preprocess_html. The edit chrome (top bar, sidebar panels)
+ * DaedalusUiHooks::preprocessHtml. The edit chrome (top bar, sidebar panels)
  * is server-rendered present-but-hidden on every page where Edit mode is
  * available, and the client-side toggle reveals it by flipping the mode
  * stamp alone. So the density stamp must be present on that same set of

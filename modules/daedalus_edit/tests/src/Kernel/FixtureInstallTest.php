@@ -35,7 +35,7 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  *   media.js) is keyed to.
  * - form_block declares NO composed content class (no
  *   page_builder.block_type file ships composed: true for it), so its
- *   placements ride the sidebar block form (UpdateBlockFormForEditTool).
+ *   placements ride the sidebar block form (PanelUpdateBlockForm).
  *
  * @group daedalus_edit
  */

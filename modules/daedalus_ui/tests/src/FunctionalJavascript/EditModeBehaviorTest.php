@@ -17,32 +17,30 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 /**
  * Drives daedalus_ui's Edit Mode session on a real page.
  *
- * Navigation_plus is the UI framework the rest of the Daedalus plugs into:
- * a mode system, a tool system, and the chrome (toolbar, sidebars, top bar)
- * that hosts them. This test carries the framework's wiring end to end: the
- * two doors into Edit Mode (the toggle button's enable/persist/disable cycle
- * and the cookie-arrival render), the hotkey system (a headline feature:
- * per-tool keyboard shortcuts), tool *switching* between an already-
- * registered set of tools, selection, the keyboard model, history, and the
- * canvas vector.
+ * daedalus_ui is the UI framework the rest of the Daedalus plugs into: a
+ * mode system and the chrome (sidebars, top bar) that hosts it, over ONE
+ * pointer and ONE keyboard grammar on the one selection. This test carries
+ * the framework's wiring end to end: the two doors into Edit Mode (the
+ * toggle button's enable/persist/disable cycle and the cookie-arrival
+ * render), the hotkey system (the binding registry, remapping, the settings
+ * tray), selection, the keyboard model, editing as a state of the
+ * selection, history, and the canvas vector.
  *
- * The scenario is deliberately cross-module: it switches by hotkey between
- * daedalus_ui's own 'selector' tool ('v') and daedalus_edit's 'edit' tool
- * ('e'). A keypress dispatching to a tool owned by a different module, with the
- * active-tool cookie and the toolbar's active button both following, is exactly
- * what daedalus_ui exists to provide: a framework that routes input to
- * whichever module contributed the tool. (Those two are the tools the JS-entry
- * path registers; daedalus_layout's tools need the server-rendered cookie path, which
- * does not reliably activate Edit Mode in the JS runtime on a cold load, so it
- * is unsuitable for a hotkey test that must drive live JS.)
+ * The scenario is deliberately cross-module: editing is daedalus_edit's
+ * engine (registered through the app's edit-session facade), while the
+ * gestures that open, walk and end an edit are daedalus_ui's: Enter on the
+ * selection, a double-click at a leaf, Escape's one ladder, Cmd+Enter's
+ * commit, the tree row's Enter, the landing intent of a placement. A key
+ * pressed in daedalus_ui's dispatcher reaching daedalus_edit's editor is
+ * exactly what daedalus_ui exists to provide.
  *
  * The fixture is DaedalusFixtureTrait: the site the daedalus recipe
  * installs (no profile), daedalus_edit_test_fixture's non-LB 'plain' bundle
  * installed on top, and the whole scenario run as daedalus_editor. The
  * recipe is daedalus_ui's require-dev dependency, the point of the
  * per-module harness: a contributor's merge request exercises the real
- * recipe site with the machinery-derived fixture bundle (whose toolbar
- * registers the daedalus_edit tool). daedalus_ui is a page-builder module,
+ * recipe site with the machinery-derived fixture bundle (which installs
+ * daedalus_edit's editing engine). daedalus_ui is a page-builder module,
  * so it requires the base daedalus, not the AI superset.
  *
  * One fixture, one scenario. A full site install from the recipe is by far
@@ -50,8 +48,8 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  * per method), so all behavior lives in the single test method. The recipe
  * ships its footer layout block in daedalus_theme's footer region: a
  * foreign, fully attributed host on the node page, for the editing-universe
- * step (the armed edit session ignores what the root blueprint's projection
- * does not contain).
+ * step (the editor door and the Tab walk ignore what the root blueprint's
+ * projection does not contain).
  *
  * Step order is cookie-driven. The toggle cycle runs FIRST: its enable half
  * needs a page arriving outside Edit Mode, which an API-created node gives
@@ -85,7 +83,7 @@ class EditModeBehaviorTest extends WebDriverTestBase {
   private const FOOTER_COMPONENT_UUID = '1832e9b4-502a-4711-a5df-4c62de02d13f';
 
   /**
-   * The Edit Mode session: entry, hotkeys, tools, selection, history.
+   * The Edit Mode session: entry, hotkeys, selection, editing, history.
    *
    * One fixture (the applied base recipe) drives daedalus_ui's Edit Mode
    * wiring end to end:
@@ -96,27 +94,45 @@ class EditModeBehaviorTest extends WebDriverTestBase {
    * - Edit Mode + hotkeys: a node is opened in Edit Mode through the mode
    *   manager (the JS-entry path, which reliably activates Edit Mode in the JS
    *   runtime and enables the keydown hotkey listener). The hotkey map
-   *   (drupalSettings.daedalusUi.hotKeys) is populated from each applicable
-   *   tool's hot_key attribute.
-   * - Baseline: the Edit tool (daedalus_edit's) is activated, so it is the active
-   *   tool and its toolbar button carries the active state.
-   * - Hotkey to daedalus_ui's own tool: pressing 'v' (the Selector tool's
-   *   hot_key) routes through daedalus_ui's keydown handler to changeTool,
-   *   so the active-tool cookie becomes selector and the Selector toolbar
-   *   button becomes active while the Edit tool's clears.
-   * - Hotkey to a contributed tool: pressing 'e' (the Edit tool's hot_key)
-   *   switches to a tool owned by a different module, proving the handler is
-   *   general and routes across module boundaries, not a one-way jump.
-   * - The live-edit dress: on a page-built page (a real Layout Builder
-   *   section and text block added through the mutation spine), every
-   *   armed selection with no OPEN edit is a plain selection (solid
-   *   stroke, verbs on the chip face) — a container, and an editable
-   *   leaf alike; the dash and the name-only chip appear only while a
-   *   live edit lands on the primary (the store's editingKey, written by
-   *   the engine's editChanged report), and Escape's cancel restores the
-   *   solid verb-carrying chip.
+   *   (drupalSettings.daedalusUi.hotKeys) is populated from the sidebar
+   *   plugins' hotkeys, and a panel binding remapped in the settings tray
+   *   applies live and persists per user.
+   * - The editing universe and the Tab walk: a foreign host's leaf hovers,
+   *   clicks and Tabs to nothing; from the last in-universe leaf's open
+   *   edit, Tab lands on the subject's own panel widget.
+   * - The one keyboard grammar over the one selection, on a page-built page
+   *   (a real Layout Builder section and text block added through the
+   *   mutation spine): a selection is plain until a gesture opens its
+   *   editor. (a) Enter on a selected leaf opens its editor through the
+   *   engine (daedalus_ui's dispatcher reaching daedalus_edit's editor);
+   *   (b) Escape cancels the open edit and the next Escape clears the
+   *   selection, the mode and its chrome unchanged; (c) Cmd+Enter commits
+   *   and the selection survives with no edit open; (d) the arrows after a
+   *   cancel move the selection and open nothing; (g) the tree row's Enter
+   *   opens the primary's edit, while a row click only selects.
+   * - The live-edit dress rides the same legs: every selection with no OPEN
+   *   edit is a plain selection (solid stroke, verbs on the chip face), a
+   *   container and an editable leaf alike; the dash and the edit's widget
+   *   verbs appear only while a live edit lands on the primary (the store's
+   *   editingKey, written by the engine's editChanged report).
+   * - The element picker: the page elements root row's picker toggle (and
+   *   its mod+shift+c hotkey) arms the depth policy, so the next canvas
+   *   hover resolves the deepest presented element as a Cmd/Ctrl gesture
+   *   does; (e) the picker followed by a double-click on a nested leaf
+   *   edits it (the click consumes the arming, the deepen rule keeps the
+   *   leaf through the second click, the dblclick is the door), and
+   *   Cmd+double-click does the same in one gesture; a press on the toggle
+   *   over an open edit commits the edit and arms; Escape drops the picker
+   *   first.
+   * - The collapse controls: the page elements root row's collapse-all
+   *   and expand-all pair and the `4` hotkey act on the tree's one outline
+   *   at once, and selecting a deep leaf over a collapsed outline reveals
+   *   its path only, the row clear of the pinned root row.
+   * - The Page form's toggle presents the root through the editor door:
+   *   the panel opens on the top-level form with its first revealed widget
+   *   as the open edit.
    * - The cookie-arrival render: a page arriving with the navigationMode
-   *   and activeTool cookies (what daedalus_ui's InitialMode subscriber
+   *   cookie (what daedalus_ui's InitialMode subscriber
    *   writes onto a new node's post-creation redirect) renders the Edit Mode
    *   chrome server-side, visible on arrival.
    */
@@ -173,14 +189,17 @@ class EditModeBehaviorTest extends WebDriverTestBase {
     $this->assertJsCondition("!document.querySelector('.daedalus-ui-mode-button[data-mode=\\'edit\\']').classList.contains('active')", 20000, 'Clicking the toggle again cleared the button\'s active state.');
     $this->assertJsCondition("document.documentElement.getAttribute('data-daedalus-ui-mode') !== 'edit'", 20000, 'Clicking the toggle again disabled Edit Mode: the mode attribute is gone.');
 
-    // The fixture's 'plain' type registers both daedalus_ui's
-    // Selector tool and daedalus_edit's Edit tool in its Edit Mode toolbar: the
-    // two-tool surface this hotkey test switches between.
+    // The fixture's 'plain' type: a node whose body edits inline with no
+    // Layout Builder, the simplest editing surface. The body is stored as
+    // the paragraph CKEditor normalizes to, so a commit that changes
+    // nothing (the Tab walk below commits the open edit at its edge)
+    // diffs empty and posts no mutation: the history step further down
+    // counts exactly two entries over the baseline.
     $node = Node::create([
       'type' => 'plain',
-      'title' => 'Hotkey tool-switching test node',
+      'title' => 'Keyboard grammar test node',
       'body' => [
-        'value' => 'Body text.',
+        'value' => '<p>Body text.</p>',
         'format' => 'daedalus_edit_formatted_text',
       ],
     ]);
@@ -234,7 +253,7 @@ class EditModeBehaviorTest extends WebDriverTestBase {
       'The mirror booted with the root identity envelope.',
     );
     $this->assertJsCondition(
-      "Drupal.Daedalus.Blueprint.getBlueprint()?.fields?.title === 'Hotkey tool-switching test node'",
+      "Drupal.Daedalus.Blueprint.getBlueprint()?.fields?.title === 'Keyboard grammar test node'",
       20000,
       'The mirror holds the serialized blueprint of the routed entity.',
     );
@@ -337,22 +356,11 @@ class EditModeBehaviorTest extends WebDriverTestBase {
       'Re-entering Edit Mode re-opened the deliberately closed default-open panel.',
     );
 
-    // The binding map is rendered server-side from the applicable tools'
-    // hot_key attributes (merged with any user remaps). Asserting it carries
-    // both keys confirms both tools registered (and gives the keypresses below
-    // something to match); a missing entry would mean the toolbar did not
-    // register the tool, not a hotkey bug.
+    // The binding map is rendered server-side from the sidebar plugins'
+    // hotkeys (merged with any user remaps).
     $this->assertJsCondition(
-      "drupalSettings.daedalusUi && drupalSettings.daedalusUi.hotKeys && drupalSettings.daedalusUi.hotKeys.selector.key === 'v' && drupalSettings.daedalusUi.hotKeys.edit.key === 'e'",
+      "drupalSettings.daedalusUi && drupalSettings.daedalusUi.hotKeys && 'sidebar.page_elements' in drupalSettings.daedalusUi.hotKeys",
       20000,
-    );
-
-    // Baseline: activate the Edit tool through the mode manager (the proven,
-    // deterministic path), so the starting active tool is known.
-    $this->activateTool('edit');
-    $this->assertTrue(
-      $assert_session->elementExists('css', '#edit-mode-toolbar [data-tool="edit"]')->hasClass('active'),
-      'The Edit tool button is active before any hotkey is pressed.',
     );
 
     // --- The editing universe: a foreign host is inert (off-canvas). ---
@@ -361,14 +369,14 @@ class EditModeBehaviorTest extends WebDriverTestBase {
     // attribution is host-blind by design: the same render is cached and
     // shared across hosts, and daedalus_stylish's styling identity must land for
     // visitors too. So attribution is an address, never authorization. The
-    // armed edit session's universe is the ROOT blueprint's projection (the
-    // same Map the Selector resolves within), enforced at one seam
-    // (keyForEditableItem, node-tested), and this step locks its WIRING into
-    // the three doors only a real page with both trees can exercise: hover
-    // names no key, click opens nothing (and throws nothing: core's
-    // console-error check would fail the run on the mirror-miss error this
-    // used to raise) and sends no request, and Tab from the last in-universe
-    // leaf never lands in the foreign host. Its editing surface is its own
+    // editing universe is the ROOT blueprint's projection (the same Map the
+    // pointer resolves within), enforced at one seam (keyForEditableItem,
+    // node-tested), and this step locks its WIRING into the three doors
+    // only a real page with both trees can exercise: hover names no key, a
+    // click opens nothing (and throws nothing: core's console-error check
+    // would fail the run on the mirror-miss error this used to raise) and
+    // sends no request, and Tab from the last in-universe leaf's open
+    // edit never lands in the foreign host. Its editing surface is its own
     // root (the block_content edit route).
     $footer_leaf = "[data-selectable='block:" . self::FOOTER_COMPONENT_UUID . "'][data-daedalus-edit-editor]";
     $this->assertNotNull(
@@ -400,7 +408,7 @@ class EditModeBehaviorTest extends WebDriverTestBase {
     $this->assertJsCondition(
       sprintf("Drupal.Daedalus.Selection.getHovered() === 'field:%s:body'", $node->uuid()),
       20000,
-      'Hovering an in-universe leaf with the armed Edit tool names its key.',
+      'Hovering an in-universe leaf names its key.',
     );
     $this->getSession()->executeScript($hover($footer_leaf));
     $this->assertJsCondition(
@@ -408,8 +416,14 @@ class EditModeBehaviorTest extends WebDriverTestBase {
       20000,
       'Hovering the foreign host\'s leaf names no key: it is outside the editing universe.',
     );
-    // Click: dispatched, because a real pointer click at this viewport can
-    // land on the floating toolbar pill instead of the leaf.
+    // Click: a SINGLE click, dispatched because a real pointer at this
+    // viewport can land on the fixed chrome instead of the leaf. The click
+    // resolves no key (nothing to select, and the keyless clear applies
+    // inside the canvas only), so no editor door is reached. Not a
+    // double-click: the footer is a portal, and a double-click inside a
+    // portal is the drill gesture crossing the entity boundary (it
+    // navigates to the footer's editing route), pinned by the portal step
+    // below.
     $this->getSession()->executeScript(sprintf(
       "performance.clearResourceTimings();"
       . "document.querySelector(\"%s\").dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));",
@@ -425,24 +439,72 @@ class EditModeBehaviorTest extends WebDriverTestBase {
     );
     // Tab: from the LAST in-universe leaf (document order, the footer sits
     // after the canvas) the next stop would be the foreign leaf; the gated
-    // traversal has no next stop and leaves the session where it was.
+    // traversal has no next stop. The origin is selected through the
+    // facade, which lands a PLAIN selection (no edit opens from a
+    // selection write: a landing opens an editor only when its request
+    // says so), and Enter, the editor door, opens the leaf's edit, waited
+    // for until its editor is live (the door's editItem is asynchronous).
+    // The Tab walk starts from an OPEN edit only (with no edit open Tab is
+    // the browser's), and Tab at the edit's edge commits it: the fixture
+    // stores the body as the paragraph CKEditor normalizes to, so the
+    // commit diffs empty and posts nothing, and the history step below (a
+    // baseline plus exactly two entries) reads what it was written
+    // against.
     $this->getSession()->executeScript(
       "const leaves = Array.from(document.querySelectorAll('[data-main-entity] :is([data-daedalus-edit-id], [data-daedalus-edit-editor])'));"
       . "window.__lastKey = leaves[leaves.length - 1].closest('[data-selectable]').getAttribute('data-selectable');"
       . "Drupal.Daedalus.Selection.select(window.__lastKey);"
     );
     $this->assertJsCondition(
-      'Drupal.Daedalus.Selection.getSelected() === window.__lastKey',
+      'Drupal.Daedalus.Selection.getSelected() === window.__lastKey'
+      . ' && Drupal.Daedalus.Edit.CurrentlyEditingElement === null'
+      . ' && Drupal.Daedalus.EditSession.isEditing() === false',
       20000,
-      'The last in-universe leaf is selected as the Tab origin.',
+      'Selecting the last in-universe leaf through the facade lands a plain selection: no edit opens from a selection write.',
+    );
+    $this->pressHotkey('Enter');
+    $this->assertJsCondition(
+      "(() => { const editing = Drupal.Daedalus.Edit.CurrentlyEditingElement;"
+      . " const wrapper = document.querySelector(\"[data-selectable='\" + window.__lastKey + \"']\");"
+      . " const leaf = editing?.getPageElement() ?? null;"
+      . " return Drupal.Daedalus.Selection.getSelected() === window.__lastKey"
+      . " && !!wrapper && !!leaf && wrapper.contains(leaf)"
+      . " && (leaf.classList.contains('daedalus-edit-inline-editing')"
+      . " || leaf.classList.contains('daedalus-edit-text-editing')"
+      . " || wrapper.contains(document.activeElement)); })()",
+      20000,
+      'Enter on the selected last leaf opened its edit through the editor door, live: the Tab origin.',
     );
     $this->pressHotkey('Tab');
     $this->getSession()->wait(1500);
+    // The door's edit showed the subject's entity-form panel, and its
+    // revealed widgets (this node's fields with no canvas leaf) are
+    // traversal stops after the last canvas leaf, so the press commits
+    // the edit at its edge and lands on the panel's first widget: an edit
+    // INSIDE the panel, on the node's own form. The foreign leaf is
+    // untouched and never selected.
     $this->assertJsCondition(
-      'Drupal.Daedalus.Edit.CurrentlyEditingElement === null'
-      . ' && Drupal.Daedalus.Selection.getSelected() === window.__lastKey',
+      sprintf(
+        "(() => { const editing = Drupal.Daedalus.Edit.CurrentlyEditingElement;"
+        . " const footer = document.querySelector(\"%s\");"
+        . " const landed = editing?.getPageElement() ?? null;"
+        . " return !!editing && !!landed"
+        . " && document.getElementById('daedalus_edit_entity_form').contains(landed)"
+        . " && !footer.contains(landed) && !footer.classList.contains('daedalus-edit-editing')"
+        . " && Drupal.Daedalus.Selection.getSelected() !== '%s'; })()",
+        $footer_leaf,
+        'block:' . self::FOOTER_COMPONENT_UUID,
+      ),
       20000,
-      'Tab past the last in-universe leaf never enters the foreign host.',
+      'Tab past the last in-universe leaf never enters the foreign host: it lands on the subject\'s own panel widget.',
+    );
+    // Escape cancels the panel widget's edit so the portal step below
+    // inherits no open edit.
+    $this->pressHotkey('Escape');
+    $this->assertJsCondition(
+      "Drupal.Daedalus.Edit.CurrentlyEditingElement === null",
+      20000,
+      'Escape cancelled the panel widget edit the Tab opened.',
     );
     $this->getSession()->executeScript('Drupal.Daedalus.Selection.clear();');
 
@@ -455,17 +517,14 @@ class EditModeBehaviorTest extends WebDriverTestBase {
     // reads those two attributes to paint a hover chip beside the selection
     // frame: the label and one Edit link. This step locks the seam (the
     // stamp to the chip) and the two ways through: the link's href and the
-    // double-click drill applied across the entity boundary. The chip is a
-    // Selector-tool affordance (a portal has no key, so the armed Edit tool
-    // has nothing to do with it); the Edit tool is restored at the end so
-    // the hotkey step below starts from the baseline it asserts.
+    // double-click drill applied across the entity boundary (a portal has
+    // no key, so the editor door has nothing to open there).
     $footer_block_content = \Drupal::service('entity.repository')->loadEntityByUuid(
       'block_content',
       Block::load('daedalus_theme_footer')->getPlugin()->getDerivativeId(),
     );
     $footer_editing_url = \Drupal::service('daedalus_ui.ui')->getEditingUrl($footer_block_content)->toString();
     $footer_portal = '#block-daedalus-theme-footer[data-daedalus-ui-portal-url]';
-    $this->activateTool('selector');
     $this->assertJsCondition(
       sprintf(
         "document.querySelector(\"%s\")?.getAttribute('data-daedalus-ui-portal-url') === %s"
@@ -518,64 +577,38 @@ class EditModeBehaviorTest extends WebDriverTestBase {
       'The editing route renders the footer as the main entity, its leaf inside the universe.',
     );
     // Back to the node: Edit Mode persists across the reload (its cookie is
-    // not path-scoped to the editing route), and the Edit tool is restored
-    // for the hotkey step below.
+    // not path-scoped to the editing route).
     $this->drupalGet($node->toUrl());
     $this->assertJsCondition("document.documentElement.getAttribute('data-daedalus-ui-mode') === 'edit'", 20000, 'Returning to the node keeps Edit Mode.');
     $this->assertJsCondition(
       "window.Drupal && Drupal.Daedalus && Drupal.Daedalus.Hotkeys && typeof Drupal.Daedalus.Hotkeys.register === 'function'",
       20000,
     );
-    $this->activateTool('edit');
-    $this->assertTrue(
-      $assert_session->elementExists('css', '#edit-mode-toolbar [data-tool="edit"]')->hasClass('active'),
-      'The Edit tool is active again before the hotkey step.',
-    );
 
-    // Press 'v': daedalus_ui's keydown handler matches it to its own
-    // Selector tool and routes through changeTool, switching the active tool.
-    $this->pressHotkey('v');
-    $this->assertJsCondition("Drupal.Daedalus.getCookieValue('activeTool') === 'selector'", 20000);
-    $this->assertTrue(
-      $assert_session->elementExists('css', '#edit-mode-toolbar [data-tool="selector"]')->hasClass('active'),
-      'Pressing the Selector hotkey activated the Selector tool.',
-    );
-    $this->assertFalse(
-      $assert_session->elementExists('css', '#edit-mode-toolbar [data-tool="edit"]')->hasClass('active'),
-      'Switching tools cleared the Edit tool button\'s active state.',
-    );
-
-    // Press 'e': the same handler switches to daedalus_edit's Edit tool, a tool
-    // owned by a different module, proving the routing crosses module
-    // boundaries rather than being a one-way jump.
-    $this->pressHotkey('e');
-    $this->assertJsCondition("Drupal.Daedalus.getCookieValue('activeTool') === 'edit'", 20000);
-    $this->assertTrue(
-      $assert_session->elementExists('css', '#edit-mode-toolbar [data-tool="edit"]')->hasClass('active'),
-      'Pressing the Edit tool hotkey switched the active tool back to edit.',
-    );
-
-    // Selector behavior: the same fixture is the selection surface (see the
-    // class doc for why this test carries it). With the Selector tool active,
-    // hovering an attributed field draws the shared hover outline, clicking
-    // commits the selection — readable through the public Selection facade,
-    // the same API non-app consumers use — and Escape clears it.
-    $this->pressHotkey('v');
-    $this->assertJsCondition("Drupal.Daedalus.getCookieValue('activeTool') === 'selector'", 20000);
+    // Selection behavior: the same fixture is the selection surface (see the
+    // class doc for why this test carries it). Hovering an attributed field
+    // draws the shared hover outline, clicking commits the selection —
+    // readable through the public Selection facade, the same API non-app
+    // consumers use — and Escape clears it.
     $body_field = $assert_session->elementExists('css', sprintf('[data-selectable="field:%s:body"]', $node->uuid()));
 
     $body_field->mouseOver();
     $this->assertJsCondition(
       "document.querySelector('.daedalus-ui-frame__stroke--hover') && !document.querySelector('.daedalus-ui-frame__stroke--hover').hidden",
       20000,
-      'Hovering an attributed field with the Selector tool draws the hover outline.',
+      'Hovering an attributed field draws the hover outline.',
     );
 
     $body_field->click();
     $this->assertJsCondition(
       sprintf("Drupal.Daedalus.Selection.getSelected() === 'field:%s:body'", $node->uuid()),
       20000,
-      'Clicking with the Selector tool commits the field as the selection.',
+      'Clicking commits the field as the selection.',
+    );
+    $this->assertJsCondition(
+      'Drupal.Daedalus.EditSession.isEditing() === false',
+      20000,
+      'A single click is a selection gesture: it opens no edit.',
     );
     $this->assertJsCondition(
       "document.querySelector('.daedalus-ui-frame__stroke--primary') && !document.querySelector('.daedalus-ui-frame__stroke--primary').hidden",
@@ -583,17 +616,37 @@ class EditModeBehaviorTest extends WebDriverTestBase {
       'The committed selection draws the selected outline.',
     );
 
+    // Escape presses with a drill context standing: the field's parent (the
+    // page's main entity) seated through the facade's drill(), the same
+    // slice write every ArrowLeft/ArrowRight step and a double-click make.
+    // The global Escape reads that slice, and the seam under test is
+    // that a standing context never keeps the press from clearing: one
+    // press drops the selection AND the context (clearSelection nulls
+    // both), never climbing to the context's key. The earlier arrow steps
+    // land on or under the root, whose parent is null, so this is the one
+    // Escape in the class that presses with a non-null context.
+    $entity_key = sprintf('entity:%s', $node->uuid());
+    $this->getSession()->executeScript("Drupal.Daedalus.Selection.drill('$entity_key');");
+    $this->assertJsCondition(
+      sprintf(
+        "Drupal.Daedalus.Selection.getDrill() === '%s' && Drupal.Daedalus.Selection.getSelected() === 'field:%s:body'",
+        $entity_key,
+        $node->uuid(),
+      ),
+      20000,
+      'A drill context stands on the field\'s parent with the field still selected.',
+    );
     $this->pressHotkey('Escape');
     $this->assertJsCondition(
-      'Drupal.Daedalus.Selection.getSelected() === null',
+      'Drupal.Daedalus.Selection.getSelected() === null && Drupal.Daedalus.Selection.getDrill() === null',
       20000,
-      'Escape clears the selection.',
+      'Escape clears the selection and the standing drill context in one press.',
     );
 
     // The pointer twin of that Escape: a KEYLESS click inside the canvas.
     // The canvas — the data-main-entity carrier — never resolves as a
     // selection (the doc'd resolver invariant), so a click landing on it
-    // resolves no key, and the Selector treats a keyless click inside the
+    // resolves no key, and the pointer grammar treats a keyless click inside the
     // canvas as "select nothing" while leaving clicks outside the canvas
     // (toolbar, sidebars) alone. Nothing else exercises this clear path.
     $this->getSession()->executeScript(sprintf(
@@ -624,7 +677,8 @@ class EditModeBehaviorTest extends WebDriverTestBase {
     // walked is the two-tier selection index (projection-index.js): the
     // panel's data rows (the [data-tree-key] rows read below) AND its
     // markup part rows, which carry no tree key but are stops of their
-    // own, so the drill below lands on a part before the first field.
+    // own, gated by REACH (reach.js): a stop is offered only while the
+    // panel draws its row, and a shell row rides the Markup view.
     $tree_rows = 'Array.from(document.querySelectorAll(".daedalus-ui-tree [data-tree-key]")).map((row) => row.getAttribute("data-tree-key"))';
     $row_keys = $this->getSession()->evaluateScript($tree_rows);
     $this->assertGreaterThanOrEqual(3, count($row_keys), 'The tree renders the root and at least two field rows.');
@@ -657,31 +711,83 @@ class EditModeBehaviorTest extends WebDriverTestBase {
       20000,
       'ArrowLeft climbs to the parent (the root entity row).',
     );
-    // Right drills into the root's first row. With daedalus_layout installed that
-    // row is the part tier's: the entity kind declares the layout root
-    // (div.daedalus-layout-layout, daedalus_layout.page_builder.yml, since daedalus_layout 5c211b4)
-    // as an unconditional shell part, so the index seats it first under
-    // the root, ahead of the fields, and the step commits the part FACET on
-    // the root key (getSelected() stays the root, getSelectedPart() names
-    // the shell) exactly as Right from a linked Image lands on its Raster.
-    // The shell claims the section list (`contains: sections`, since
-    // daedalus_layout 31cce42), so the section rows are the shell's own rows and
-    // the fields, unclaimed, stay its siblings in the root's rows: Down
-    // from it reaches the first field row, never a section.
+    // Right drills into the root's first DRAWN row. With daedalus_layout
+    // installed the index's first row under the root is the part tier's:
+    // the entity kind declares the layout root (div.daedalus-layout-layout,
+    // daedalus_layout.page_builder.yml, since daedalus_layout 5c211b4) as an
+    // unconditional shell part, seated first under the root, ahead of the
+    // fields. A shell row's source is the Markup view's, and the view
+    // slice seeds every view OFF (absent = off, no localStorage in a
+    // fresh session), so the panel is not drawing the shell here and the
+    // walk passes through it (reachableRows hoists an undrawn row's own
+    // rows into its place): the shell claims the section list
+    // (`contains: sections`, since daedalus_layout 31cce42), the fixture has
+    // no sections, so Right lands on the first field row, bare.
+    // Seam: the keyboard's reach gate, the same predicate the tree draws
+    // through (the tree rows read above hold no shell row).
     $layout_root_part = '.' . LayoutBuilderEntityViewDisplay::LAYOUT_ROOT_CLASS;
+    $shell_row_js = "document.querySelector('.daedalus-ui-tree [data-tree-address=\"$root_key::$layout_root_part\"]')";
+    $this->assertJsCondition(
+      "$shell_row_js === null",
+      20000,
+      'With the Markup view off the panel draws no layout-root shell row.',
+    );
+    $this->pressHotkey('ArrowRight');
+    $this->assertJsCondition(
+      "Drupal.Daedalus.Selection.getSelected() === '$first_child'"
+      . ' && Drupal.Daedalus.Selection.getTarget() === null',
+      20000,
+      'ArrowRight with the Markup view off drills past the undrawn layout-root shell to the root\'s first field row.',
+    );
+    // The Markup view on, through the Show menu's real toggle (the view
+    // slice's setViewVisibility): the panel draws the shell row and the
+    // same Right from the root now lands on it, a styling target on the
+    // root key (getSelected() stays the root, getTarget() names the
+    // shell's selector under it) exactly as Right from a linked Image
+    // lands on its Raster. Down from it reaches the first field row, its
+    // sibling in the root's rows, never a section. Then the toggle back
+    // off: the rest of the class runs over the default tree.
+    $markup_item_js = "Array.from(document.querySelectorAll('.daedalus-ui-popover > .daedalus-ui-menu .daedalus-ui-menu__item'))"
+      . ".find((item) => item.querySelector('.daedalus-ui-menu__label')?.textContent === 'Markup') ?? null";
+    $this->getSession()->executeScript("document.querySelector('.daedalus-ui-show-menu__button').click();");
+    $this->assertJsCondition(
+      "(() => { const item = $markup_item_js; return !!item && item.getAttribute('role') === 'menuitemcheckbox' && item.getAttribute('aria-checked') === 'false'; })()",
+      20000,
+      'The Show menu lists the Markup view as an unchecked item.',
+    );
+    $this->getSession()->executeScript("($markup_item_js).click();");
+    $this->assertJsCondition(
+      "!document.querySelector('.daedalus-ui-popover') && $shell_row_js !== null",
+      20000,
+      'Activating the Markup item closed the Show menu and the panel drew the layout-root shell row.',
+    );
+    $this->getSession()->executeScript("Drupal.Daedalus.Selection.select('$root_key');");
     $this->pressHotkey('ArrowRight');
     $this->assertJsCondition(
       "Drupal.Daedalus.Selection.getSelected() === '$root_key'"
-      . " && Drupal.Daedalus.Selection.getSelectedPart() === '$layout_root_part'",
+      . " && Drupal.Daedalus.Selection.getTarget()?.key === '$root_key'"
+      . " && Drupal.Daedalus.Selection.getTarget()?.selector === '$layout_root_part'",
       20000,
-      'ArrowRight drills to the root\'s first row: the entity kind\'s declared layout-root shell, a part facet on the root key.',
+      'ArrowRight with the Markup view on drills to the root\'s first row: the entity kind\'s declared layout-root shell, a styling target on the root key.',
     );
     $this->pressHotkey('ArrowDown');
     $this->assertJsCondition(
       "Drupal.Daedalus.Selection.getSelected() === '$first_child'"
-      . ' && Drupal.Daedalus.Selection.getSelectedPart() === null',
+      . ' && Drupal.Daedalus.Selection.getTarget() === null',
       20000,
       'ArrowDown from the shell part steps to the first field row, its sibling in the root\'s rows.',
+    );
+    $this->getSession()->executeScript("document.querySelector('.daedalus-ui-show-menu__button').click();");
+    $this->assertJsCondition(
+      "(() => { const item = $markup_item_js; return !!item && item.getAttribute('aria-checked') === 'true'; })()",
+      20000,
+      'The reopened Show menu shows the Markup view checked.',
+    );
+    $this->getSession()->executeScript("($markup_item_js).click();");
+    $this->assertJsCondition(
+      "!document.querySelector('.daedalus-ui-popover') && $shell_row_js === null",
+      20000,
+      'Activating the Markup item again closed the Show menu and the panel dropped the shell row.',
     );
 
     // The panel is THE accessible surface: a real ARIA tree with
@@ -729,22 +835,31 @@ class EditModeBehaviorTest extends WebDriverTestBase {
 
     // The panel's own keyboard entry: with no selection F6 falls back to
     // the first row (the root — also the roving-tabindex Tab stop), and
-    // Enter on a focused row commits it as the selection, the keyboard
-    // twin of the row click. Dispatched on the focused row, not document:
-    // the handler is the row's.
+    // Space on a focused row commits it as the selection, the ARIA
+    // treeitem activation key and the keyboard twin of the row click.
+    // Dispatched on the focused row, not document: the handler is the
+    // row's. (Enter is NOT the row's: it is the dispatcher's editor door,
+    // proven on the page-built page below, so a focused-but-unselected
+    // row's Enter opens nothing and selects nothing.)
     $this->pressHotkey('F6');
     $this->assertJsCondition(
       "document.activeElement?.getAttribute('data-tree-key') === '$root_key'",
       20000,
       'With no selection, F6 focuses the root row.',
     );
-    $this->getSession()->executeScript(
-      "document.activeElement.dispatchEvent(new KeyboardEvent('keydown', {key: 'Enter', bubbles: true, cancelable: true}));"
+    $this->pressKeyOnFocused('Enter');
+    $this->getSession()->wait(500);
+    $this->assertJsCondition(
+      'Drupal.Daedalus.Selection.getSelected() === null'
+      . ' && Drupal.Daedalus.EditSession.isEditing() === false',
+      20000,
+      'Enter on a focused, unselected tree row neither selects it nor opens an edit: Enter is the editor door, not the row activation.',
     );
+    $this->pressKeyOnFocused(' ');
     $this->assertJsCondition(
       "Drupal.Daedalus.Selection.getSelected() === '$root_key'",
       20000,
-      'Enter on a focused tree row commits it as the selection.',
+      'Space on a focused tree row commits it as the selection.',
     );
     $this->getSession()->executeScript('Drupal.Daedalus.Selection.clear();');
 
@@ -779,12 +894,63 @@ class EditModeBehaviorTest extends WebDriverTestBase {
       'A single selection renders no chips.',
     );
     // Crumbs are clickable to climb: clicking the root crumb selects it —
-    // the same step-up shape ArrowLeft and Escape commit.
+    // the same step-up shape ArrowLeft commits.
     $this->getSession()->executeScript("document.querySelector('button.daedalus-ui-breadcrumb__crumb').click();");
     $this->assertJsCondition(
       "Drupal.Daedalus.Selection.getSelected() === '$root_key'",
       20000,
       'Clicking an ancestor crumb climbs the selection to it.',
+    );
+    // The target crumb: a styling target the index does not place (a tag
+    // tier seated through the public facade, the road the styling
+    // module's switcher and Cmd-click take) sits on the selected element
+    // and ends the trail with one more crumb, a button worded through the
+    // part behavior's label seam (Blueprint.targetLabel, the same words
+    // the AI chat's chip reads) that drops the target and keeps the
+    // selection. Escape drops the target first, the selection staying,
+    // and only a second press clears it.
+    $target_crumb = '.daedalus-ui-breadcrumb .daedalus-ui-breadcrumb__crumb--target';
+    $this->getSession()->executeScript("Drupal.Daedalus.Selection.select('$first_child'); Drupal.Daedalus.Selection.target('$first_child', 'a');");
+    $this->assertJsCondition(
+      "(() => { const crumb = document.querySelector('$target_crumb');"
+      . " const crumbs = document.querySelectorAll('.daedalus-ui-breadcrumb .daedalus-ui-breadcrumb__crumb');"
+      . " return Drupal.Daedalus.Selection.getSelected() === '$first_child'"
+      . " && Drupal.Daedalus.Selection.getTarget()?.key === '$first_child'"
+      . " && Drupal.Daedalus.Selection.getTarget()?.selector === 'a'"
+      . " && crumbs.length === 3 && !!crumb && crumb.tagName === 'BUTTON' && crumbs[2] === crumb"
+      . " && crumb.textContent.trim() !== ''"
+      . " && crumb.textContent.trim() === Drupal.Daedalus.Blueprint.targetLabel('$first_child', 'a'); })()",
+      20000,
+      'A tag target seated on the field ends the breadcrumb with a third crumb, a target button worded through the label seam, the selection unchanged.',
+    );
+    $this->pressHotkey('Escape');
+    $this->assertJsCondition(
+      "Drupal.Daedalus.Selection.getSelected() === '$first_child'"
+      . ' && Drupal.Daedalus.Selection.getTarget() === null'
+      . " && !document.querySelector('$target_crumb')"
+      . " && document.querySelectorAll('.daedalus-ui-breadcrumb .daedalus-ui-breadcrumb__crumb').length === 2",
+      20000,
+      'Escape drops the target first: the field stays selected and the target crumb is gone.',
+    );
+    $this->getSession()->executeScript("Drupal.Daedalus.Selection.target('$first_child', 'a');");
+    $this->assertJsCondition(
+      "!!document.querySelector('$target_crumb')",
+      20000,
+      'The target was re-seated for the crumb-click leg.',
+    );
+    $this->getSession()->executeScript("document.querySelector('$target_crumb').click();");
+    $this->assertJsCondition(
+      "Drupal.Daedalus.Selection.getSelected() === '$first_child'"
+      . ' && Drupal.Daedalus.Selection.getTarget() === null'
+      . " && !document.querySelector('$target_crumb')",
+      20000,
+      'Clicking the target crumb drops the target and keeps the selection: back to the whole element.',
+    );
+    $this->pressHotkey('Escape');
+    $this->assertJsCondition(
+      'Drupal.Daedalus.Selection.getSelected() === null',
+      20000,
+      'A second Escape, with no target left, clears the selection.',
     );
 
     // Chips are the multi-select set: one chip per member, in
@@ -884,7 +1050,7 @@ class EditModeBehaviorTest extends WebDriverTestBase {
     $this->assertNotContains('Remove', $menu_labels, 'The chevron menu never repeats a face verb. Labels: ' . implode(', ', $menu_labels));
     // pressHotkey dispatches on document, so the menu's focus-scoped
     // keydown handler never sees an Escape from it; on document the key
-    // is the Selector's clear-selection hotkey, which would empty the
+    // is the global clear-selection binding, which would empty the
     // chip the next assertion reads. Dismiss the menu on its real
     // outside-pointerdown path instead; the selection survives.
     $this->getSession()->executeScript(
@@ -1032,11 +1198,17 @@ class EditModeBehaviorTest extends WebDriverTestBase {
     // from the binding registry, clicking a row's key enters capture mode,
     // and the captured key rebinds live and persists per-user. Synthetic
     // events reach the capture input regardless of the collapsed details
-    // element, so the sidebar does not need to be opened.
+    // element, so the sidebar does not need to be opened. The subject is
+    // the Page elements panel's toggle binding: a server-declared panel
+    // binding (HotkeySettings lists every sidebar definition, bound or
+    // not) that ships UNBOUND, so the remap is what gives it a key, and
+    // the panel is on this page, so the remapped key has a visible effect
+    // (the toggle hides and shows the panel).
     $this->assertJsCondition(
-      "document.querySelector('.hotkeys-list .configured-hotkey[data-binding-id=\"selector\"]')?.textContent === 'V'",
+      "!!document.querySelector('.hotkeys-list .configured-hotkey[data-binding-id=\"sidebar.page_elements\"]')"
+      . " && drupalSettings.daedalusUi.hotKeys['sidebar.page_elements'].key === ''",
       20000,
-      'The settings tray lists the Selector binding from the registry.',
+      'The settings tray lists the Page elements panel binding from the registry, unbound.',
     );
 
     // The tray follows the registry, not a one-time snapshot: verb hotkeys
@@ -1053,28 +1225,37 @@ class EditModeBehaviorTest extends WebDriverTestBase {
       'A binding registered after the tray rendered re-renders the list with its row.',
     );
 
-    // Move off the Selector tool so the remapped key can prove a switch.
-    $this->pressHotkey('e');
-    $this->assertJsCondition("Drupal.Daedalus.getCookieValue('activeTool') === 'edit'", 20000);
-
-    // Click the Selector row and press 'm' in the capture input. The input
-    // is a typing surface, so this also exercises the typing guard: the
-    // keystroke must rebind, not dispatch.
+    // Click the Page elements row and press 'm' in the capture input. The
+    // input is a typing surface, so this also exercises the typing guard:
+    // the keystroke must rebind, not dispatch.
     $this->getSession()->executeScript(
-      "const display = document.querySelector('.hotkeys-list .configured-hotkey[data-binding-id=\"selector\"]');"
+      "const display = document.querySelector('.hotkeys-list .configured-hotkey[data-binding-id=\"sidebar.page_elements\"]');"
       . "display.click();"
       . "display.nextElementSibling.dispatchEvent(new KeyboardEvent('keydown', { key: 'm', bubbles: true, cancelable: true }));"
     );
     $this->assertJsCondition(
-      "document.querySelector('.hotkeys-list .configured-hotkey[data-binding-id=\"selector\"]').textContent === 'M'"
-      . " && drupalSettings.daedalusUi.hotKeys.selector.key === 'm'",
+      "document.querySelector('.hotkeys-list .configured-hotkey[data-binding-id=\"sidebar.page_elements\"]').textContent === 'M'"
+      . " && drupalSettings.daedalusUi.hotKeys['sidebar.page_elements'].key === 'm'",
       20000,
       'Capturing a key rebinds the binding client-side.',
     );
 
-    // The rebind applies immediately: 'm' now switches to the Selector tool.
+    // The rebind applies immediately: 'm' now toggles the Page elements
+    // panel (the binding's action clicks the panel's own toggle button,
+    // so the press rides the exact pointer path). Pressed twice, so the
+    // panel is open again for the legs below.
     $this->pressHotkey('m');
-    $this->assertJsCondition("Drupal.Daedalus.getCookieValue('activeTool') === 'selector'", 20000);
+    $this->assertJsCondition(
+      "document.getElementById('page_elements').classList.contains('daedalus-ui-hidden')",
+      20000,
+      'The remapped key toggled the Page elements panel closed.',
+    );
+    $this->pressHotkey('m');
+    $this->assertJsCondition(
+      "!document.getElementById('page_elements').classList.contains('daedalus-ui-hidden')",
+      20000,
+      'The remapped key toggled the Page elements panel open again.',
+    );
 
     // Wait out the save round-trip, then prove persistence: a fresh page
     // render (the edit cookie is still set, so the chrome and its binding
@@ -1082,7 +1263,7 @@ class EditModeBehaviorTest extends WebDriverTestBase {
     $this->assertJsCondition('jQuery.active === 0', 20000);
     $this->drupalGet($node->toUrl());
     $this->assertJsCondition(
-      "drupalSettings.daedalusUi && drupalSettings.daedalusUi.hotKeys && drupalSettings.daedalusUi.hotKeys.selector.key === 'm'",
+      "drupalSettings.daedalusUi && drupalSettings.daedalusUi.hotKeys && drupalSettings.daedalusUi.hotKeys['sidebar.page_elements'].key === 'm'",
       20000,
       'The remap persisted per-user and survives a fresh page render.',
     );
@@ -1508,17 +1689,19 @@ class EditModeBehaviorTest extends WebDriverTestBase {
       'The band ruler leaves with edit mode.',
     );
 
-    // --- The live-edit dress on a page-built page. ---
-    // The frame's dash and name-only chip follow the LIVE edit, never a
-    // prediction: the store's editingKey (written only by the engine's
-    // editChanged report through the one setter) IS the primary, or the
-    // selection is plain — solid stroke, verbs on the face — no matter
-    // the tool. A CONTAINER under the armed session is plain because no
-    // edit can land on it; an EDITABLE leaf under the same tool is plain
-    // too until its edit actually opens. This leg runs on a Layout
-    // Builder page with a section and a text block added through the same
-    // mutation batch a palette drop enqueues (client-named UUIDs, so the
-    // assertions never race the response).
+    // --- The one keyboard grammar on a page-built page. ---
+    // Editing is a state of the ONE selection, entered by a gesture that
+    // means "edit this" (Enter, a double-click at a leaf, the tree row's
+    // Enter) and never by the selection landing. The frame's dash and the
+    // edit's widget verbs follow the LIVE edit, never a prediction: the
+    // store's editingKey (written only by the engine's editChanged report
+    // through the one setter) IS the primary, or the selection is plain,
+    // solid stroke, verbs on the face. A CONTAINER is plain because no
+    // edit can land on it; an EDITABLE leaf is plain too until its edit
+    // actually opens. This leg runs on a Layout Builder page with a
+    // section and a text block added through the same mutation batch a
+    // palette drop enqueues (client-named UUIDs, so the assertions never
+    // race the response).
     $lb_node = Node::create([
       'type' => 'page',
       'title' => 'Editability gate test page',
@@ -1619,9 +1802,8 @@ class EditModeBehaviorTest extends WebDriverTestBase {
       20000,
       'No per-link click handler accrued on the clones\' links across two mutations: the guard is one delegated listener.',
     );
-    // The Selector is current, so the click is a selection gesture on the
-    // clone and never opens an edit that would outlive this leg.
-    $this->activateTool('selector');
+    // The click is a selection gesture on the clone and never opens an
+    // edit that would outlive this leg.
     $session->executeScript(
       "(() => { const link = $second_clone_link;"
       . " window.__linkClickHref = link.getAttribute('href');"
@@ -1637,10 +1819,9 @@ class EditModeBehaviorTest extends WebDriverTestBase {
     // base path (d.o CI serves the site at /web).
     $this->assertSame(Url::fromUserInput('/user')->toString(), $session->evaluateScript('window.__linkClickHref'), "The clone's link carries the placed URL as its href.");
     $this->getSession()->executeScript('Drupal.Daedalus.Selection.clear();');
-    $this->activateTool('edit');
-    // The armed session with a container primary: no armed edit can land
-    // on a container, so it is a plain selection: no dash, and the face
-    // carries the container's tab verbs.
+    // A container primary: no edit can land on a container, so it is a
+    // plain selection: no dash, and the face carries the container's tab
+    // verbs.
     $this->getSession()->executeScript("Drupal.Daedalus.Selection.select('container:$section_uuid');");
     $this->assertJsCondition(
       "(() => { const frame = document.querySelector('.daedalus-ui-frame');"
@@ -1649,18 +1830,111 @@ class EditModeBehaviorTest extends WebDriverTestBase {
       . " return frame && !frame.classList.contains('daedalus-ui-frame--editing')"
       . " && labels.includes('Duplicate') && labels.includes('Remove'); })()",
       20000,
-      'An armed container selection is a plain selection: no dash, verbs on the face.',
+      'A container selection is a plain selection: no dash, verbs on the face.',
     );
-    // The same tool with an editable primary but NO open edit: still a
-    // plain selection — the dash never predicts from the tool plus
-    // editability; it waits for the live edit.
+    // An editable primary landed by a selection write (the facade, the
+    // popped-out inspector's road) is a plain selection too: no edit opens
+    // from a landing unless its request says so, so the block sits
+    // selected with the selection verbs (the Edit verb among them) on its
+    // face and no dash.
     $this->getSession()->executeScript("Drupal.Daedalus.Selection.select('block:$component_uuid');");
     $this->assertJsCondition(
       "(() => { const frame = document.querySelector('.daedalus-ui-frame');"
-      . " return frame && !frame.classList.contains('daedalus-ui-frame--editing')"
+      . " const labels = Array.from(document.querySelectorAll('.daedalus-ui-frame__chip--primary .daedalus-ui-frame__verb:not(.daedalus-ui-frame__more)'))"
+      . ".map((button) => button.getAttribute('aria-label'));"
+      . " return Drupal.Daedalus.Selection.getSelected() === 'block:$component_uuid'"
+      . " && Drupal.Daedalus.EditSession.isEditing() === false"
+      . " && Drupal.Daedalus.Edit.CurrentlyEditingElement === null"
+      . " && frame && !frame.classList.contains('daedalus-ui-frame--editing')"
+      . " && labels.includes('Edit'); })()",
+      20000,
+      'A programmatic selection of an editable block lands a plain selection: no edit, no dash, the Edit verb on the face.',
+    );
+    // (a) Enter on the selected leaf opens its editor through the engine:
+    // daedalus_ui's dispatcher (the `edit.enter` binding, selection
+    // context) calls the one editor door, which finds the merged block's
+    // canvas leaf and asks daedalus_edit's engine to edit it. The LIVE
+    // edit dresses the frame: the setter's report drove the store's
+    // editingKey onto the primary, so the stroke dashes and the current
+    // edit sits on this block's leaf.
+    $this->pressHotkey('Enter');
+    $this->assertJsCondition(
+      "(() => { const frame = document.querySelector('.daedalus-ui-frame');"
+      . " const editing = Drupal.Daedalus.Edit.CurrentlyEditingElement;"
+      . " return Drupal.Daedalus.EditSession.isEditing() === true"
+      . " && frame && frame.classList.contains('daedalus-ui-frame--editing')"
+      . " && !!editing && !!document.querySelector(\"[data-selectable='block:$component_uuid']\")?.contains(editing.getPageElement()); })()",
+      20000,
+      'Enter on the selected block opened its edit through the engine: the frame wears the dash and the current edit sits on the block\'s leaf.',
+    );
+    // (b) Escape cancels the open edit and only that: the selection
+    // stands, the frame is plain again with the selection verbs on its
+    // face (the dash never predicts from editability; it follows the live
+    // edit), and the mode is untouched.
+    $this->pressHotkey('Escape');
+    $this->assertJsCondition(
+      "(() => { const frame = document.querySelector('.daedalus-ui-frame');"
+      . " return Drupal.Daedalus.Edit.CurrentlyEditingElement === null"
+      . " && Drupal.Daedalus.EditSession.isEditing() === false"
+      . " && Drupal.Daedalus.Selection.getSelected() === 'block:$component_uuid'"
+      . " && frame && !frame.classList.contains('daedalus-ui-frame--editing')"
       . " && document.querySelectorAll('.daedalus-ui-frame__chip--primary .daedalus-ui-frame__verb').length > 0; })()",
       20000,
-      'An armed editable selection with no open edit stays a plain selection: no dash, verbs on the face.',
+      'Escape cancels the open edit: the block stays selected as a plain selection, no dash, verbs on the face.',
+    );
+    // (d) The arrows after a cancel move the selection and open nothing:
+    // the traversal bindings are global, so they work whether or not an
+    // edit was just open (the bug this topic started from: arrows dead
+    // after an edit). Down steps to the next placed block in the section
+    // (the linked block, placed right after this one), Up steps back.
+    $this->pressHotkey('ArrowDown');
+    $this->assertJsCondition(
+      "Drupal.Daedalus.Selection.getSelected() === 'block:$link_uuid'"
+      . ' && Drupal.Daedalus.EditSession.isEditing() === false',
+      20000,
+      'ArrowDown after the cancel moved the selection to the next block and opened nothing.',
+    );
+    $this->pressHotkey('ArrowUp');
+    $this->assertJsCondition(
+      "Drupal.Daedalus.Selection.getSelected() === 'block:$component_uuid'"
+      . ' && Drupal.Daedalus.EditSession.isEditing() === false',
+      20000,
+      'ArrowUp moved the selection back to the first block and opened nothing.',
+    );
+    // (b), the next rung: with no edit open, Escape clears the selection.
+    // The mode and its chrome are unchanged: Escape never switches
+    // anything.
+    $this->pressHotkey('Escape');
+    $this->assertJsCondition(
+      'Drupal.Daedalus.Selection.getSelected() === null'
+      . ' && Drupal.Daedalus.EditSession.isEditing() === false'
+      . " && document.documentElement.getAttribute('data-daedalus-ui-mode') === 'edit'"
+      . " && document.documentElement.classList.contains('edit_mode')"
+      . " && !document.getElementById('page_elements').classList.contains('daedalus-ui-hidden')",
+      20000,
+      'The next Escape clears the selection with Edit Mode and its chrome unchanged.',
+    );
+    // (c) Cmd+Enter commits and STAYS: the edit closes, the selection
+    // survives, the frame is plain. Ctrl on the Linux runner ('mod'). The
+    // press lands in the editing context (nothing typing: the key is
+    // dispatched on document), the twin the edit registers for the typing
+    // context is InlineEditBehaviorTest's.
+    $this->getSession()->executeScript("Drupal.Daedalus.Selection.select('block:$component_uuid');");
+    $this->pressHotkey('Enter');
+    $this->assertJsCondition(
+      'Drupal.Daedalus.EditSession.isEditing() === true',
+      20000,
+      'Enter re-opened the block\'s edit for the Cmd+Enter leg.',
+    );
+    $this->pressHotkey('Enter', ['ctrlKey' => TRUE]);
+    $this->assertJsCondition(
+      "(() => { const frame = document.querySelector('.daedalus-ui-frame');"
+      . " return Drupal.Daedalus.EditSession.isEditing() === false"
+      . " && Drupal.Daedalus.Edit.CurrentlyEditingElement === null"
+      . " && Drupal.Daedalus.Selection.getSelected() === 'block:$component_uuid'"
+      . " && frame && !frame.classList.contains('daedalus-ui-frame--editing'); })()",
+      20000,
+      'Cmd+Enter committed the edit and stayed: no edit open, the block still selected, the frame plain.',
     );
     // Two named reads of one projection (the seam, visible only where both
     // render): the merged text block's TREE row reads its content string
@@ -1673,8 +1947,10 @@ class EditModeBehaviorTest extends WebDriverTestBase {
       20000,
       "A text block's canvas chip reads its type while its tree row reads its content.",
     );
-    // The tool defines the gesture on every surface: an armed plain click
-    // on a CONTAINER row falls through to plain selection (no editor)...
+    // The page-elements tree is the same grammar on another surface: a row
+    // click is a plain selection, a container row and an editable row
+    // alike (no editor opens from a click), and Enter on the focused
+    // primary row is the editor door (g).
     $this->getSession()->executeScript(
       "document.querySelector('.daedalus-ui-tree__row[data-tree-key=\"container:$section_uuid\"]').click();"
     );
@@ -1682,19 +1958,39 @@ class EditModeBehaviorTest extends WebDriverTestBase {
       "Drupal.Daedalus.Selection.getSelected() === 'container:$section_uuid'"
       . " && Drupal.Daedalus.Edit.CurrentlyEditingElement === null",
       20000,
-      'An armed click on a container row falls through to plain selection.',
+      'A click on a container row is a plain selection.',
     );
-    // ...while an armed plain click on an EDITABLE row opens its editor,
-    // the same gesture a canvas click commits (editItemForKey, the armed
-    // gesture's programmatic twin the row activation routes through).
     $this->getSession()->executeScript(
       "document.querySelector('.daedalus-ui-tree__row[data-tree-key=\"block:$component_uuid\"]').click();"
     );
     $this->assertJsCondition(
-      "Drupal.Daedalus.Edit.CurrentlyEditingElement !== null"
-      . " && Drupal.Daedalus.Selection.getSelected() === 'block:$component_uuid'",
+      "Drupal.Daedalus.Selection.getSelected() === 'block:$component_uuid'"
+      . ' && Drupal.Daedalus.Edit.CurrentlyEditingElement === null'
+      . ' && Drupal.Daedalus.EditSession.isEditing() === false',
       20000,
-      'An armed click on an editable tree row opens its editor.',
+      'A click on an editable tree row is a plain selection too: no editor opens from a click.',
+    );
+    // (g) The tree row's Enter opens the edit. The row is a treeitem in a
+    // role=tree widget, which the keyboard sensor's focused-control rule
+    // exempts, so a real press on the focused row reaches the dispatcher,
+    // where Enter in the selection context is the editor door; the row
+    // handles no Enter of its own. Dispatched on the focused row, as a
+    // keyboard sends it.
+    $this->getSession()->executeScript(
+      "document.querySelector('.daedalus-ui-tree__row[data-tree-key=\"block:$component_uuid\"]').focus();"
+    );
+    $this->assertJsCondition(
+      "document.activeElement?.getAttribute('data-tree-key') === 'block:$component_uuid'",
+      20000,
+      'The primary block\'s tree row holds focus for the Enter press.',
+    );
+    $this->pressKeyOnFocused('Enter');
+    $this->assertJsCondition(
+      "Drupal.Daedalus.Edit.CurrentlyEditingElement !== null"
+      . " && Drupal.Daedalus.Selection.getSelected() === 'block:$component_uuid'"
+      . " && !!document.querySelector(\"[data-selectable='block:$component_uuid']\")?.contains(Drupal.Daedalus.Edit.CurrentlyEditingElement.getPageElement())",
+      20000,
+      'Enter on the focused tree row opened the primary block\'s editor through the dispatcher.',
     );
     // The LIVE edit dresses the frame: the setter's report drove the
     // store's editingKey onto the primary, so NOW the stroke dashes and
@@ -1709,31 +2005,20 @@ class EditModeBehaviorTest extends WebDriverTestBase {
       "The open edit wears the dash and the face swaps to the edit's widget verbs.",
     );
     // --- The press decision: one owner for "does this click end the edit".
-    // The session's click handler is the single decider; chrome that keeps
-    // an edit declares data-keeps-edit on its own root, everything else
-    // commits it. The seam — a chrome-declared keep vs the session's
-    // commit default — is visible only where both surfaces render with an
-    // edit open, read through the facade's isEditing (the session's own
-    // answer, not daedalus_edit's global).
+    // The open edit's click handler is the single decider; chrome that
+    // keeps an edit declares data-keeps-edit on its own root, everything
+    // else commits it. The seam — a chrome-declared keep vs the commit
+    // default — is visible only where both surfaces render with an edit
+    // open, read through the facade's isEditing (the edit's own answer,
+    // not daedalus_edit's global).
     $this->assertJsCondition(
       'Drupal.Daedalus.EditSession.isEditing() === true',
       20000,
       'The facade reports the tree-opened edit as an open edit.',
     );
-    // A press on the Edit Mode toolbar (its data-keeps-edit root, not a
-    // tool button) keeps the edit open.
-    $this->getSession()->executeScript(
-      "document.getElementById('edit-mode-toolbar')"
-      . ".dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));"
-    );
-    $this->assertJsCondition(
-      'Drupal.Daedalus.EditSession.isEditing() === true',
-      20000,
-      'A press on the Edit Mode toolbar keeps the open edit.',
-    );
-    // A press on the page-elements panel's NON-ROW surface (armed row
-    // clicks open editors) declares nothing, so it commits the edit; the
-    // press is outside the canvas, so the selection stays.
+    // A press on the page-elements panel's NON-ROW surface declares
+    // nothing, so it commits the edit; the press is outside the canvas, so
+    // the selection stays. There is no session to leave.
     $this->getSession()->executeScript(
       "document.getElementById('page_elements')"
       . ".dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));"
@@ -1744,27 +2029,26 @@ class EditModeBehaviorTest extends WebDriverTestBase {
       20000,
       "A press on the panel's non-row surface commits the edit and keeps the selection.",
     );
-    // Re-open the edit for the Escape leg.
-    $this->getSession()->executeScript(
-      "document.querySelector('.daedalus-ui-tree__row[data-tree-key=\"block:$component_uuid\"]').click();"
-    );
+    // Re-open the edit for the Escape leg through the door: Enter on the
+    // still-selected block.
+    $this->pressHotkey('Enter');
     $this->assertJsCondition(
       'Drupal.Daedalus.EditSession.isEditing() === true',
       20000,
-      'The editable row re-opened its editor for the Escape leg.',
+      'Enter with the block still selected re-opened its editor for the Escape leg.',
     );
     $this->pressHotkey('Escape');
     $this->assertJsCondition(
       'Drupal.Daedalus.Edit.CurrentlyEditingElement === null',
       20000,
-      'Escape ends the tree-opened edit.',
+      'Escape ends the re-opened edit.',
     );
     // The seam: the setter's null report reaching the frame on a path
-    // the session did not initiate through the frame — Escape's cancel
-    // runs inside the engine's blur, whose one setter reports the end,
-    // the store's editingKey clears, and the still-armed, still-selected
-    // primary gets its solid chip and selection verbs back (the old
-    // armed-and-editable prediction kept it name-only forever).
+    // the edit did not initiate through the frame — Escape's cancel runs
+    // inside the engine's blur, whose one setter reports the end, the
+    // store's editingKey clears, and the still-selected primary gets its
+    // solid chip and selection verbs back (the old armed-and-editable
+    // prediction kept it name-only forever).
     $this->assertJsCondition(
       "(() => { const frame = document.querySelector('.daedalus-ui-frame');"
       . " return frame && !frame.classList.contains('daedalus-ui-frame--editing')"
@@ -1775,9 +2059,284 @@ class EditModeBehaviorTest extends WebDriverTestBase {
     );
     $this->getSession()->executeScript('Drupal.Daedalus.Selection.clear();');
 
+    // --- The element picker: the DevTools "select an element" toggle. ---
+    // The page elements tree's picker button (page-elements/
+    // picker-toggle.js, first of the tools at the end of the pinned root
+    // row) arms the selection slice's pickerArmed, the
+    // SECOND source of the one depth policy (selection/depth-policy.js):
+    // armed, canvas hover and click resolve the deepest presented element
+    // exactly as holding Cmd/Ctrl does, and the first canvas click the
+    // pointer grammar handles disarms it. The button exists for
+    // discoverability (nothing else in the chrome names the modifier), so
+    // the proof walks the user's path through the button, never the
+    // facade. The seams, each visible only where the panel, the canvas
+    // and the open edit render together: the flag on the slice
+    // (aria-pressed follows it), the policy reading the flag (the same
+    // hover resolves the section bare and the block armed), (e) the
+    // picker followed by a double-click on the nested leaf editing it (the
+    // click consumes the arming and deep-selects, the deepen rule keeps
+    // the leaf through the second click, the dblclick at chain index 0 is
+    // the editor door: no rule of its own, the resolver's), the press on
+    // the toggle over an open edit (the toggle keeps nothing, so the edit
+    // commits and the picker arms), Escape's first rung (the picker drops,
+    // the selection stays), and Cmd+double-click editing the same nested
+    // leaf in one gesture with the picker never involved.
+    $picker_button = "document.querySelector('.daedalus-ui-tree__row--root .daedalus-ui-tree__tools .daedalus-ui-picker-toggle')";
+    // The pointer lands on the deepest text-carrying element inside the
+    // placed text block: its chain carries the block, then the section, so
+    // the BOUNDARY policy stops at the section and only a deep gesture
+    // reaches the block.
+    $session->executeScript(<<<JS
+      window.__pickerLeaf = () => {
+        const block = document.querySelector('[data-layout-builder-block-uuid="$component_uuid"]');
+        const leaves = Array.from(block.querySelectorAll('*'))
+          .filter((el) => el.childElementCount === 0 && el.textContent.includes('Gate probe'));
+        return leaves[leaves.length - 1] ?? block;
+      };
+      window.__pickerPointer = (type, init = {}) => {
+        const el = window.__pickerLeaf();
+        el.scrollIntoView({ block: 'center' });
+        const r = el.getBoundingClientRect();
+        el.dispatchEvent(new MouseEvent(type, Object.assign({ bubbles: true, cancelable: true, clientX: r.left + 4, clientY: r.top + 4 }, init)));
+      };
+      // A double-click as a pointer sends it: click, click, dblclick on
+      // the same point.
+      window.__pickerDoubleClick = (init = {}) => {
+        ['click', 'click', 'dblclick'].forEach((type) => window.__pickerPointer(type, init));
+      };
+      JS);
+    $this->assertJsCondition(
+      "$picker_button?.getAttribute('aria-pressed') === 'false'",
+      20000,
+      'The picker button renders among the root row\'s tools, unpressed.',
+    );
+    // The contrast: a bare hover on the leaf stops at the section, the
+    // boundary policy's outermost presented stop.
+    $session->executeScript("window.__pickerPointer('mousemove');");
+    $this->assertJsCondition(
+      "Drupal.Daedalus.Selection.getHovered() === 'container:$section_uuid'",
+      20000,
+      'A bare hover inside the text block stops at its section: the boundary policy.',
+    );
+    // (a) Press the picker: the flag arms and the button shows it.
+    $session->executeScript("$picker_button.click();");
+    $this->assertJsCondition(
+      "$picker_button.getAttribute('aria-pressed') === 'true'",
+      20000,
+      'Pressing the picker button arms it: aria-pressed follows the slice flag.',
+    );
+    // (b) The same hover now resolves the leaf: the policy reads the flag.
+    $session->executeScript("window.__pickerPointer('mousemove');");
+    $this->assertJsCondition(
+      "Drupal.Daedalus.Selection.getHovered() === 'block:$component_uuid'",
+      20000,
+      'With the picker armed the same hover resolves the deepest presented element, the block.',
+    );
+    // (c) (e) The picker then a double-click on the nested leaf edits it:
+    // the first click commits the leaf (resolved at picker depth) and
+    // consumes the arming; the second click, bare, still resolves the
+    // leaf because it is selected (the resolver's deepen rule: pointing at
+    // the selection means the selection); the dblclick finds the leaf at
+    // chain index 0 and calls the editor door.
+    $session->executeScript('window.__pickerDoubleClick();');
+    $this->assertJsCondition(
+      "(() => { const editing = Drupal.Daedalus.Edit.CurrentlyEditingElement;"
+      . " return Drupal.Daedalus.Selection.getSelected() === 'block:$component_uuid'"
+      . " && $picker_button.getAttribute('aria-pressed') === 'false'"
+      . " && Drupal.Daedalus.EditSession.isEditing() === true"
+      . " && !!editing && !!document.querySelector(\"[data-selectable='block:$component_uuid']\")?.contains(editing.getPageElement()); })()",
+      20000,
+      'The picker then a double-click on the nested leaf selected it, disarmed the picker and opened its edit.',
+    );
+    // (d) From an open inline edit the button still works: the toggle
+    // lives in the page-elements panel, which keeps no edit, so the press
+    // commits the edit (the selection stays), and the toggle arms.
+    $session->executeScript("$picker_button.click();");
+    $this->assertJsCondition(
+      'Drupal.Daedalus.EditSession.isEditing() === false'
+      . " && $picker_button.getAttribute('aria-pressed') === 'true'"
+      . " && Drupal.Daedalus.Selection.getSelected() === 'block:$component_uuid'",
+      20000,
+      'Pressing the picker over an open edit commits the edit, keeps the selection and arms the picker.',
+    );
+    // (e) Escape's first rung drops the picker and nothing else.
+    $this->pressHotkey('Escape');
+    $this->assertJsCondition(
+      "$picker_button.getAttribute('aria-pressed') === 'false'"
+      . " && Drupal.Daedalus.Selection.getSelected() === 'block:$component_uuid'",
+      20000,
+      'Escape disarms the picker first and keeps the selection.',
+    );
+    // The hotkey is the same toggle: mod+shift+c (ctrl on the Linux
+    // runner, DevTools' binding) arms, and a second press disarms.
+    $this->pressHotkey('c', ['ctrlKey' => TRUE, 'shiftKey' => TRUE]);
+    $this->assertJsCondition(
+      "$picker_button.getAttribute('aria-pressed') === 'true'",
+      20000,
+      'The selector.picker hotkey arms the picker.',
+    );
+    $this->pressHotkey('c', ['ctrlKey' => TRUE, 'shiftKey' => TRUE]);
+    $this->assertJsCondition(
+      "$picker_button.getAttribute('aria-pressed') === 'false'",
+      20000,
+      'A second press of the hotkey disarms the picker.',
+    );
+    // (e) Cmd+double-click is the same one gesture with the modifier as
+    // the depth signal: from nothing selected, the deep clicks resolve the
+    // leaf under the pointer directly and the dblclick edits it.
+    $this->getSession()->executeScript('Drupal.Daedalus.Selection.clear();');
+    $session->executeScript('window.__pickerDoubleClick({ metaKey: true });');
+    $this->assertJsCondition(
+      "(() => { const editing = Drupal.Daedalus.Edit.CurrentlyEditingElement;"
+      . " return Drupal.Daedalus.Selection.getSelected() === 'block:$component_uuid'"
+      . " && $picker_button.getAttribute('aria-pressed') === 'false'"
+      . " && Drupal.Daedalus.EditSession.isEditing() === true"
+      . " && !!editing && !!document.querySelector(\"[data-selectable='block:$component_uuid']\")?.contains(editing.getPageElement()); })()",
+      20000,
+      'Cmd+double-click on the nested leaf deep-selected it and opened its edit in one gesture.',
+    );
+    $this->pressHotkey('Escape');
+    $this->assertJsCondition(
+      'Drupal.Daedalus.EditSession.isEditing() === false'
+      . " && Drupal.Daedalus.Selection.getSelected() === 'block:$component_uuid'",
+      20000,
+      'Escape cancelled the Cmd+double-click edit with the block still selected.',
+    );
+    $this->getSession()->executeScript('Drupal.Daedalus.Selection.clear();');
+
+    // --- The collapse controls over the page elements outline. ---
+    // The tree's rows collapse and expand through daedalus_ui's one
+    // collapse model (outline/collapse.js): the pair of controls at the
+    // end of the pinned root row and the `3`/`4` hotkeys act on the whole
+    // outline at once, and the selection rule reveals the selected row's
+    // path over a collapsed outline (reading B: the picker's road, no
+    // third button). Node tests pin the posture math; the seam only a
+    // browser proves is the root row's controls reaching the Outline's
+    // posture and out to the rows' aria-expanded, a press on a control
+    // staying the control's (the root row under it never selects), and
+    // the dispatcher's `4` reaching an outline registered from inside a
+    // Preact mount. The
+    // page-built page holds the section, its block and the block's field
+    // rows under the root, so a leaf sits at least three levels down.
+    $collapse_all = "document.querySelector('.daedalus-ui-tree__row--root .daedalus-ui-tree__tools .daedalus-ui-collapse-all')";
+    $expand_all = "document.querySelector('.daedalus-ui-tree__row--root .daedalus-ui-tree__tools .daedalus-ui-expand-all')";
+    $foldable_rows = "Array.from(document.querySelectorAll('.daedalus-ui-tree [role=\"treeitem\"][aria-expanded]'))";
+    // From everything open: expand all renders every row, so the deepest
+    // keyed row and the chain above it can be read off the DOM (a row's
+    // group follows its row inside the parent item).
+    $session->executeScript("$expand_all.click();");
+    $this->assertJsCondition(
+      "$foldable_rows.length > 0"
+      . " && $foldable_rows.every((row) => row.getAttribute('aria-expanded') === 'true')"
+      . " && $expand_all.disabled && !$collapse_all.disabled"
+      . " && Drupal.Daedalus.Selection.getSelected() === null",
+      20000,
+      'Expand all opened every foldable row through the root row\'s control: expand all disables, collapse all enables, and the press selected nothing.',
+    );
+    $session->executeScript(<<<JS
+      (() => {
+        const rows = Array.from(document.querySelectorAll('.daedalus-ui-tree [data-tree-key]'));
+        const level = (row) => Number(row.getAttribute('aria-level'));
+        const leaf = rows.reduce((deepest, row) => (level(row) > level(deepest) ? row : deepest), rows[0]);
+        const chain = [];
+        for (let group = leaf.parentElement.closest('ul[role="group"]'); group; group = group.parentElement.closest('ul[role="group"]')) {
+          chain.push(group.previousElementSibling.getAttribute('data-tree-key'));
+        }
+        window.__collapseLeaf = leaf.getAttribute('data-tree-key');
+        window.__collapseLeafLevel = level(leaf);
+        window.__collapseChain = chain;
+      })();
+      JS);
+    $this->assertGreaterThanOrEqual(3, (int) $session->evaluateScript('window.__collapseLeafLevel'), 'The page-built page renders a row at least three levels under the root for the reveal leg.');
+    // Collapse all through the control: every foldable row closes, so no
+    // grandchild row renders (the root never collapses, its children
+    // stay), and the pair flips.
+    $session->executeScript("$collapse_all.click();");
+    $this->assertJsCondition(
+      "$foldable_rows.length > 0"
+      . " && $foldable_rows.every((row) => row.getAttribute('aria-expanded') === 'false')"
+      . " && !document.querySelector('.daedalus-ui-tree [role=\"treeitem\"][aria-level=\"3\"]')"
+      . " && $collapse_all.disabled && !$expand_all.disabled",
+      20000,
+      'Collapse all closed every foldable row through the root row\'s control: no grandchild row renders, collapse all disables and expand all enables.',
+    );
+    // The selection rule over the collapsed outline: selecting the deep
+    // leaf (the facade, the picker's road) opens its ancestors and nothing
+    // else, and the one reveal rule scrolls the row into the panel's
+    // scrollport, under the pinned root row (the rows' scroll margin).
+    $session->executeScript('Drupal.Daedalus.Selection.select(window.__collapseLeaf);');
+    $this->assertJsCondition(
+      "(() => {"
+      . " const leaf = document.querySelector('.daedalus-ui-tree [data-tree-key=\"' + window.__collapseLeaf + '\"]');"
+      . " if (!leaf) { return false; }"
+      . " const chain = window.__collapseChain;"
+      . " const rows = $foldable_rows;"
+      . " const onPath = rows.filter((row) => chain.includes(row.getAttribute('data-tree-key')));"
+      . " const offPath = rows.filter((row) => !chain.includes(row.getAttribute('data-tree-key')));"
+      . " const port = leaf.closest('.daedalus-ui-panel__body').getBoundingClientRect();"
+      . " const head = document.querySelector('.daedalus-ui-tree__row--root').getBoundingClientRect();"
+      . " const box = leaf.getBoundingClientRect();"
+      . " return onPath.every((row) => row.getAttribute('aria-expanded') === 'true')"
+      . " && offPath.every((row) => row.getAttribute('aria-expanded') === 'false')"
+      . " && head.top >= port.top - 1 && box.top >= head.bottom - 1 && box.bottom <= port.bottom + 1;"
+      . " })()",
+      20000,
+      'Selecting a deep leaf over the collapsed outline reveals its path only: the ancestors open, every foldable row off the path stays collapsed, and the row sits inside the panel\'s scrollport, below the pinned root row.',
+    );
+    // The hotkey wire: `4` (expand all, the Panels section, remappable)
+    // reaches the outline the tree registered from inside its mount.
+    $this->pressHotkey('4');
+    $this->assertJsCondition(
+      "$foldable_rows.every((row) => row.getAttribute('aria-expanded') === 'true') && $expand_all.disabled",
+      20000,
+      'The expand-all hotkey (4) reached the outline registered from inside the tree mount: every row open, expand all disabled.',
+    );
+    $this->getSession()->executeScript('Drupal.Daedalus.Selection.clear();');
+
+    // --- The Page form presents the root through the editor door. ---
+    // The root entity's editor is the entity-form panel (daedalus_edit's
+    // "Page form" icon), never a canvas leaf: opening it selects the root
+    // row and presents the root through the one editor door, which, with
+    // no canvas leaf to edit, asks the engine to present the root's
+    // subject (this panel) and opens its first revealed widget as the
+    // edit, so the selection moves to that widget's field key (as the Tab
+    // walk into the panel always did) and the rest of the panel joins the
+    // walk. The seam: the sidebar plugin's open() into the door and the
+    // engine's presentSubject, which only a browser runs end to end. The
+    // canvas-panel Tab seam itself is daedalus_edit's
+    // InlineEditBehaviorTest's.
+    $this->getSession()->executeScript(
+      "document.querySelector('[data-sidebar-button-for=\"#daedalus_edit_entity_form\"]')"
+      . ".dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));"
+    );
+    $this->assertJsCondition(
+      "(() => {"
+      . " const panel = document.getElementById('daedalus_edit_entity_form');"
+      . " const root = Drupal.Daedalus.Blueprint.getRoot();"
+      . " const editing = Drupal.Daedalus.Edit.CurrentlyEditingElement;"
+      . " return !!panel && !panel.classList.contains('daedalus-ui-hidden')"
+      . " && !!root && (Drupal.Daedalus.Selection.getSelected() ?? '').startsWith('field:' + root.uuid + ':')"
+      . " && Drupal.Daedalus.EditSession.isEditing() === true"
+      . " && !!editing && editing.plugin.id === 'panel_widget'"
+      . " && panel.contains(editing.getPageElement());"
+      . " })()",
+      20000,
+      'Opening the Page form presented the root through the door: the panel shows the top-level form with its first revealed widget as the open edit, the selection on that field.',
+    );
+    $this->pressHotkey('Escape');
+    $this->assertJsCondition(
+      'Drupal.Daedalus.EditSession.isEditing() === false',
+      20000,
+      'Escape cancelled the panel widget edit the Page form opened.',
+    );
+    $this->getSession()->executeScript(
+      "Drupal.Daedalus.SidebarManager.closeSidebar('daedalus_edit_entity_form');"
+    );
+    $this->getSession()->executeScript('Drupal.Daedalus.Selection.clear();');
+
     // --- The cookie-arrival render. ---
     // Last, because the cookies are domain-wide (see the class doc). A page
-    // arriving with the navigationMode/activeTool cookies renders the Edit
+    // arriving with the navigationMode cookie renders the Edit
     // Mode chrome server-side and, because the cookie says 'edit', the html
     // element carries the mode attribute that reveals it: what a new node's
     // post-creation redirect gives a real user.
@@ -1786,7 +2345,7 @@ class EditModeBehaviorTest extends WebDriverTestBase {
       'title' => 'Edit mode chrome test page',
     ]);
     $chrome_node->save();
-    $this->enterEditModeViaCookies($chrome_node->toUrl(), 'selector');
+    $this->enterEditModeViaCookies($chrome_node->toUrl());
     $assert_session->elementExists('css', '#edit-mode-top-bar');
     $this->assertJsCondition("document.documentElement.getAttribute('data-daedalus-ui-mode') === 'edit'", 20000, 'The Edit Mode chrome arrived visible from the cookie render.');
   }

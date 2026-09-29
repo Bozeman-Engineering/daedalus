@@ -5,6 +5,7 @@ namespace Drupal\daedalus_edit;
 use Drupal\daedalus_edit\Routing\DaedalusLayoutRouteSubscriber;
 use Drupal\Core\DependencyInjection\ContainerBuilder;
 use Drupal\daedalus_edit\Form\LayoutBuilderBlockFormAlter;
+use Drupal\daedalus_edit\Form\LayoutBuilderSectionFormAlter;
 use Drupal\daedalus_edit\EventSubscriber\BlockFormEndpoint;
 use Drupal\Core\DependencyInjection\ServiceProviderBase;
 use Symfony\Component\DependencyInjection\Reference;
@@ -12,7 +13,7 @@ use Symfony\Component\DependencyInjection\Reference;
 /**
  * Registers the services that depend on optional modules.
  *
- * The Layout Builder block form services need daedalus_layout and the media library
+ * The Layout Builder form services need daedalus_layout and the media library
  * opener needs media_library; neither is a hard dependency of daedalus_edit.
  */
 class DaedalusEditServiceProvider extends ServiceProviderBase {
@@ -23,11 +24,16 @@ class DaedalusEditServiceProvider extends ServiceProviderBase {
   public function alter(ContainerBuilder $container) {
     $modules = $container->getParameter('container.modules');
     if (isset($modules['daedalus_layout'])) {
+      // The Configure dialogs on the form transport: core's block and
+      // section forms, opened by daedalus_layout's Configure verb.
       $container->register('daedalus_edit.form_alter.lb_block', LayoutBuilderBlockFormAlter::class)
         ->setAutoconfigured(TRUE)
         ->setAutowired(TRUE);
+      $container->register('daedalus_edit.form_alter.lb_section', LayoutBuilderSectionFormAlter::class)
+        ->setAutoconfigured(TRUE)
+        ->setAutowired(TRUE);
 
-      // Route subscriber to add the Edit tool route for Layout Builder
+      // Route subscriber to add the block-form endpoint for Layout Builder
       // blocks when daedalus_layout is available.
       $container->register('daedalus_edit.daedalus_layout_route_subscriber', DaedalusLayoutRouteSubscriber::class)
         ->addTag('event_subscriber');

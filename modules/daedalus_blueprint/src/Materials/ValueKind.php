@@ -10,9 +10,10 @@ namespace Drupal\daedalus_blueprint\Materials;
  * The answer the value grammar gives for any string a consumer holds in
  * a known slot. The material cases mirror MaterialKind by value (so
  * a reference's kind converts to the roster's kind without a table); the
- * three inline cases are the values a writer may spell without minting
+ * four inline cases are the values a writer may spell without minting
  * anything (a literal CSS value, an existing media item by uuid, a
- * generation request); Unknown is a reference-shaped value the roster
+ * generation request, a file the conversation holds by its name); Unknown
+ * is a reference-shaped value the roster
  * does not carry (a var() naming no material, a class no variant spells,
  * a stencil name nothing publishes), kept apart from Literal so a
  * consumer never lets an unrostered reference through as plain CSS.
@@ -26,6 +27,7 @@ enum ValueKind: string {
   case Animation = 'animation';
   case Media = 'media';
   case Generate = 'generate';
+  case File = 'file';
   case Literal = 'literal';
   case Unknown = 'unknown';
 
@@ -54,7 +56,7 @@ enum ValueKind: string {
    * Whether the value is an inline value (spelled without a mint).
    */
   public function isInline(): bool {
-    return in_array($this, [self::Media, self::Generate, self::Literal], TRUE);
+    return in_array($this, [self::Media, self::Generate, self::File, self::Literal], TRUE);
   }
 
 }

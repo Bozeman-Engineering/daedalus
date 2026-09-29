@@ -1,31 +1,35 @@
 /**
  * The layout widget's pure logic (mode + share).
  *
- * Arrangement is one count-independent `row` variant on the container plus
- * per-child flex-grow overrides only where the user deviates from equal —
- * no track string exists anywhere. This module is everything the widget
- * computes and every batch it fires, kept Drupal-free so
- * tests/js/layout-widget.test.mjs can lock it under plain node: the layout
- * tree reads (a container's children, an element's row parent), the
- * arrangement state (stack / row / custom honesty), the proportion strip
- * math (snap scale, pair-preserving drag), the count-aware preset recipes
- * (generated here, never entities), the alignment axes (the folded-in
- * Arrange control: mode-scoped rows whose first stack pick rides in with
- * the canonical display: grid upgrade), and the exact spine-op batches
- * (mode flip, preset with minting, drag commit, count step, alignment
- * pick, gap override/reset — the gap field row's one value-level
- * primitive).
+ * Arrangement is two count-independent variants on the container's
+ * `container_layout` axis (`columns`: equal shares; `row`: natural widths,
+ * wrapping) plus per-child flex-grow overrides only where the user
+ * deviates from equal under Columns — no track string exists anywhere.
+ * This module is everything the widget computes and every batch it
+ * fires, kept Drupal-free so tests/js/layout-widget.test.mjs can lock it
+ * under plain node: the layout tree reads (a container's children, an
+ * element's row parent), the arrangement state (stack / row / columns /
+ * custom honesty), the proportion strip math (snap scale, pair-preserving
+ * drag), the count-aware preset recipes (generated here, never entities),
+ * the alignment axes (the folded-in Arrange control: mode-scoped rows
+ * over the flex vocabulary, since a container is a flex column by
+ * declaration and a flex row under either worn variant, so no pick ever
+ * writes a display), and the exact
+ * spine-op batches (mode flip, preset with minting, drag commit, count
+ * step, alignment pick, gap override/reset — the gap field row's one
+ * value-level primitive; the row's VALUE is the container stack's winner
+ * at the pose, style-stack.js stackAt, read by the surface).
  * The Preact surface (layout-section.js) renders these facts and forwards
  * these batches through the state source; it adds no vocabulary of its
  * own, which is what makes satellite parity free.
  *
- * The pose doctrine, both halves. The Stack | Columns segment is a WEAR
- * surface: `wearing` is the unconditioned arrangement reference and the
- * mode flip applies or removes it with no condition. Everything else is
- * a PROPERTY surface and takes the editing compound the canvas pose
+ * The pose doctrine, both halves. The Stack | Row | Columns segment is a
+ * WEAR surface: `wearing` is the unconditioned arrangement reference and
+ * the mode flip applies or removes it with no condition. Everything else
+ * is a PROPERTY surface and takes the editing compound the canvas pose
  * derives: `mode` is the EFFECTIVE arrangement at that compound (the
  * root's own layers through the condition cascade, overlaid by the worn
- * variant's own posed blocks through wearAtPose, so a row wear whose
+ * variant's own posed blocks through posedBlock, so a Columns wear whose
  * narrow block sets flex-direction: column reads stack there, `via`
  * naming the variant and the compound), the alignment, grow and gap
  * reads happen at the compound, and every update_style they fire lands
@@ -43,18 +47,32 @@ import {
 } from './style-guide.js';
 import { entryRefs } from './variant-scope.js';
 import { normalizeValue, segmentState } from './widget-values.js';
-import { inheritedValue, valueAtPose } from './condition-cascade.js';
-import { wearAtPose } from './wear-bar-model.js';
+import {
+  inheritedValue,
+  posedBlock,
+  valueAtPose,
+} from './condition-cascade.js';
+import { wornRootStyles } from './wear-bar-model.js';
 import { compoundOperations } from './controls.js';
 
 /** The shipped variant (labeled "Columns") the Columns mode applies. */
+export const COLUMNS_VARIANT = 'columns';
+
+/** The shipped variant (labeled "Row") the Row mode applies. */
 export const ROW_VARIANT = 'row';
 
 /** The variant axis (labeled "Layout") that means "arrangement mode". */
 export const CONTAINER_LAYOUT_AXIS = 'container_layout';
 
-/** The fallback site-default gap when no variant value resolves (px). */
-export const DEFAULT_GAP = 16;
+/**
+ * The worn modes by their variant: the mode id IS the shipped variant's
+ * machine name, so the segment, the AI's apply_variant and the map all
+ * speak one word per arrangement. Stack is the absence of a wear.
+ */
+const MODE_VARIANTS = {
+  row: ROW_VARIANT,
+  columns: COLUMNS_VARIANT,
+};
 
 /**
  * The snap scale a divider drag lands on: simple ratios of the pair's
@@ -87,7 +105,7 @@ const findSection = (nodes, uuid) => {
 /**
  * A container's ordered children as widget descriptors.
  *
- * Blocks as direct row children just work (the `::>` rule styles them), so
+ * Blocks as direct row children just work (the `> *` rule styles them), so
  * both node flavors are first-class columns: {key, uuid, kind, empty} —
  * empty only ever true for a childless container (the silent-remove case).
  * Only the container FLOW qualifies (an ordered `children` list); a
@@ -175,13 +193,15 @@ export const parentContainerOf = (layout, key) => {
 };
 
 /**
- * The own display values the widget itself writes: the canonical stack
- * upgrade (the Position widget's grid precedent). Recognized state, never
- * Custom — this is the Arrange fold-in's vocabulary rule, and it is also
- * what lets containers the old root-bound Arrange control arranged
- * (display: grid on the container root) surface in the alignment rows.
+ * The properties whose own value on the container root claims the
+ * arrangement by hand (arrangementState's Custom), keyed by the carrier
+ * name the state reports and the takeover clears (modeOps).
  */
-const STACK_DISPLAYS = ['grid', 'inline-grid'];
+const CUSTOM_PROPERTIES = {
+  display: 'display',
+  direction: 'flex-direction',
+  tracks: 'grid-template-columns',
+};
 
 const isBlock = (value) =>
   value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -243,16 +263,17 @@ const ownAtPose = (map, target, property, condition, conditions) =>
 /**
  * The worn arrangement-axis reference on a container, or null: the
  * reference whose variant the store's records resolve to the axis (the
- * shipped row name is the fallback for a record the store lacks).
+ * two shipped names are the fallback for a record the store lacks).
  */
 const arrangementRef = (map, key, variants) => {
   const byName = Object.fromEntries(
     (variants ?? []).map((variant) => [variant.id, variant]),
   );
+  const shipped = Object.values(MODE_VARIANTS);
   for (const ref of entryRefs(map?.[key])) {
     const axis =
       byName[ref.variant]?.group ??
-      (ref.variant === ROW_VARIANT ? CONTAINER_LAYOUT_AXIS : null);
+      (shipped.includes(ref.variant) ? CONTAINER_LAYOUT_AXIS : null);
     if (axis === CONTAINER_LAYOUT_AXIS) {
       return ref;
     }
@@ -262,48 +283,63 @@ const arrangementRef = (map, key, variants) => {
 
 /**
  * Whether the worn arrangement variant stacks its children at the posed
- * compound: its own posed blocks (wearAtPose, the default block is the
- * wear itself) deliver flex-direction: column there. Nothing is posed at
- * the default compound.
+ * compound: its own posed blocks deliver flex-direction: column there.
+ * The wear's slice root (wornRootStyles) less its default block (the
+ * default block is the wear itself, not a pose) merges through the
+ * cascade's posedBlock, so every block the compound covers lands in
+ * structural order and the later wins. Nothing is posed at the default
+ * compound, and an unresolved wearing stacks nothing.
  */
-const stacksAtPose = (ref, variants, condition, conditions) =>
-  ref !== null &&
-  condition !== 'default' &&
-  normalizeValue(
-    wearAtPose(ref, variants, condition, conditions).declarations[
-      'flex-direction'
-    ],
-  ) === 'column';
+const stacksAtPose = (ref, variants, condition, conditions) => {
+  if (ref === null || condition === 'default') {
+    return false;
+  }
+  const posed = Object.fromEntries(
+    Object.entries(wornRootStyles(variants, ref) ?? {}).filter(
+      ([block]) => block !== 'default',
+    ),
+  );
+  return (
+    normalizeValue(
+      posedBlock(posed, condition, conditions)?.['flex-direction'],
+    ) === 'column'
+  );
+};
 
 /**
- * A container's arrangement state: stack, row, or the honest Custom.
+ * A container's arrangement state: stack, row, columns, or the honest
+ * Custom.
  *
  * `wearing` is the worn arrangement-axis reference, unconditioned by
  * construction (the wear surface's fact: the segment reflects it at
  * every pose, and it is reported even under Custom so a takeover knows
  * what the entry already wears). `mode` is the EFFECTIVE arrangement at
- * the posed compound: a wear whose own posed blocks stack the children
- * (the shipped row variant's narrow block) reads as stack with `via`
- * naming the variant and the compound, the property rows then render
- * for the stack and the surface says who decided; `via` is null
- * otherwise.
+ * the posed compound, and its id is the worn shipped variant's machine
+ * name (`row` or `columns`, MODE_VARIANTS): a wear whose own posed
+ * blocks stack the children (the shipped Columns variant's narrow
+ * block) reads as stack with `via` naming the variant and the compound,
+ * the property rows then render for the stack and the surface says who
+ * decided; `via` is null otherwise. A wear on the axis the widget does
+ * not ship (a design system's own arrangement) reads as stack with
+ * `wearing` reporting it: the segment lights nothing and the takeover
+ * replaces it within the axis.
  *
  * Custom means hand-written layout styles claim the mode at this pose:
- * an own grid-template-columns reaching the compound (explicit tracks
- * are the advanced path), an own display OUTSIDE the widget's stack
- * vocabulary (STACK_DISPLAYS — display: grid is the widget's own upgrade
- * write, so it reads as an aligned stack, not Custom), or a stack
- * display under a worn arrangement reference that still arranges a row
- * here (two authorities over one mode; under a wear that stacks at the
- * pose the grid IS the widget's upgrade for that stack). Own values read
- * through the condition cascade (ownAtPose), so a default-block claim
- * still claims at Narrow. The widget never silently rewrites custom
- * styles: customKeys lists the carrying keys so clicking Stack/Columns
- * can be the explicit takeover gesture, `displayKeys` lists the root
- * when it carries a recognized stack display so a flip to Columns can
- * clear the upgrade that would otherwise shadow the row variant's flex,
- * and `carriers` names the condition block each claim lives in (null
- * when unset) so those clears land where the value actually is.
+ * any own display, own flex-direction or own grid-template-columns
+ * reaching the compound. The widget itself never writes any of the
+ * three (the container kind's declaration makes every container a flex
+ * column and either worn variant flips the direction, so a pick or a
+ * gap write needs no display of its own), which is what makes every own
+ * value a hand claim: a display re-arranges the box outside the
+ * declared model, a direction claims what the arrangement axis owns
+ * (the axis's `owns` line steers the AI to the wear), explicit tracks
+ * are the advanced path. Own values read through the condition cascade
+ * (ownAtPose), so a default-block claim still claims at Narrow. The
+ * widget never silently rewrites custom styles: customKeys lists the
+ * carrying keys so clicking Stack, Row or Columns can be the explicit
+ * takeover gesture, and `carriers` names the condition block each claim
+ * lives in (null when unset) so the takeover's clears land where the
+ * value actually is.
  *
  * @param {Object} map
  *   The style map.
@@ -317,8 +353,8 @@ const stacksAtPose = (ref, variants, condition, conditions) =>
  *   The condition table (guide.conditions), for cascade order.
  *
  * @return {{mode: string, wearing: ?string, via: ?{variant: string,
- *   condition: string}, customKeys: string[], displayKeys: string[],
- *   carriers: {display: ?string, tracks: ?string}}}
+ *   condition: string}, customKeys: string[], carriers: {display:
+ *   ?string, direction: ?string, tracks: ?string}}}
  */
 export const arrangementState = (
   map,
@@ -331,100 +367,84 @@ export const arrangementState = (
   const wearing = ref?.variant ?? null;
   const stacks = stacksAtPose(ref, variants, condition, conditions);
   // One box: the container root is the only carrier the widget reads.
-  const customKeys = [];
-  const displayKeys = [];
-  const display = ownAtPose(map, key, 'display', condition, conditions);
-  const tracks = ownAtPose(
-    map,
-    key,
-    'grid-template-columns',
-    condition,
-    conditions,
+  const claims = Object.fromEntries(
+    Object.entries(CUSTOM_PROPERTIES).map(([carrier, property]) => [
+      carrier,
+      ownAtPose(map, key, property, condition, conditions),
+    ]),
   );
-  const carriers = {
-    display: display?.condition ?? null,
-    tracks: tracks?.condition ?? null,
-  };
-  const displayValue = normalizeValue(display?.value);
-  if (
-    tracks !== null ||
-    (displayValue !== null &&
-      (!STACK_DISPLAYS.includes(displayValue) || (wearing !== null && !stacks)))
-  ) {
-    customKeys.push(key);
-  } else if (displayValue !== null) {
-    displayKeys.push(key);
-  }
+  const carriers = Object.fromEntries(
+    Object.entries(claims).map(([carrier, own]) => [
+      carrier,
+      own?.condition ?? null,
+    ]),
+  );
+  const customKeys = Object.values(claims).some((own) => own !== null)
+    ? [key]
+    : [];
   if (customKeys.length) {
-    return {
-      mode: 'custom',
-      wearing,
-      via: null,
-      customKeys,
-      displayKeys,
-      carriers,
-    };
+    return { mode: 'custom', wearing, via: null, customKeys, carriers };
   }
+  const worn = Object.keys(MODE_VARIANTS).find(
+    (mode) => MODE_VARIANTS[mode] === wearing,
+  );
   return {
-    mode: wearing !== null && !stacks ? 'row' : 'stack',
+    mode: worn !== undefined && !stacks ? worn : 'stack',
     wearing,
     via: stacks ? { variant: wearing, condition } : null,
     customKeys,
-    displayKeys,
     carriers,
   };
 };
 
 /**
- * The alignment stop tables, one per property the Layout section's
- * alignment rows write (the folded-in Arrange control's vocabulary,
- * value tables carried over verbatim). Canonical writes prefer the modern
- * start/end spellings for the grid/stack properties and the flex-legacy
- * spellings for the row cross-axis; `matches` are the equivalent
+ * One alignment stop table over the flex vocabulary, labeled for the
+ * screen axis it faces (the same three flex stops read Left / Center /
+ * Right on the stack's cross axis and Top / Middle / Bottom on either
+ * main axis). Canonical writes use the flex-legacy spellings every
+ * browser honors on a flex container; `matches` are the equivalent
  * spellings a stop honestly represents (an AI or advanced-mode write of
- * an alias lights the button, clicking never rewrites it).
+ * the modern start/end alias lights the button, clicking never rewrites
+ * it).
  */
-const ALIGNMENT_STOPS = {
-  'justify-items': [
-    { id: 'start', value: 'start', matches: ['start', 'left'], label: 'Left' },
-    { id: 'center', value: 'center', matches: ['center'], label: 'Center' },
-    { id: 'end', value: 'end', matches: ['end', 'right'], label: 'Right' },
-  ],
-  'align-content': [
-    {
-      id: 'start',
-      value: 'start',
-      matches: ['start', 'flex-start'],
-      label: 'Top',
-    },
-    { id: 'center', value: 'center', matches: ['center'], label: 'Middle' },
-    { id: 'end', value: 'end', matches: ['end', 'flex-end'], label: 'Bottom' },
-  ],
-  'align-items': [
-    {
-      id: 'start',
-      value: 'flex-start',
-      matches: ['flex-start', 'start'],
-      label: 'Top',
-    },
-    { id: 'center', value: 'center', matches: ['center'], label: 'Middle' },
-    {
-      id: 'end',
-      value: 'flex-end',
-      matches: ['flex-end', 'end'],
-      label: 'Bottom',
-    },
-  ],
-};
+const flexStops = ([start, center, end]) => [
+  { id: 'start', value: 'flex-start', matches: ['flex-start', 'start'], label: start },
+  { id: 'center', value: 'center', matches: ['center'], label: center },
+  { id: 'end', value: 'flex-end', matches: ['flex-end', 'end'], label: end },
+];
+
+const HORIZONTAL_STOPS = flexStops(['Left', 'Center', 'Right']);
+const VERTICAL_STOPS = flexStops(['Top', 'Middle', 'Bottom']);
 
 /**
- * The Layout section's alignment axes for a mode, mode-scoped:
- * - stack: both screen axes over the grid vocabulary — justify-items
- *   horizontal (per-item, caps at the track so text still wraps),
- *   align-content vertical (packs the rows). The pair the canonical
- *   display: grid upgrade unlocks, which is why the first stack pick
- *   rides in with it (alignOps).
- * - row: only the cross axis, align-items on the flex row — main-axis
+ * The fourth stop a Row's main axis earns: the children pushed to both
+ * edges with the free space between them. Only a main axis whose items
+ * keep their own size can distribute anything, so it rides the Row's
+ * Horizontal row alone (a stack's vertical main axis has no free space
+ * to spread, a Columns' children fill theirs).
+ */
+const SPREAD_STOP = {
+  id: 'spread',
+  value: 'space-between',
+  matches: ['space-between'],
+  label: 'Spread',
+};
+
+const ROW_HORIZONTAL_STOPS = [...HORIZONTAL_STOPS, SPREAD_STOP];
+
+/**
+ * The Layout section's alignment axes for a mode, mode-scoped. A
+ * container is a flex box at every pose (a column by the kind's
+ * declaration, a row under either worn variant), so every mode speaks
+ * flex and no pick needs a display of its own:
+ * - stack: both screen axes on the flex column — align-items horizontal
+ *   (the cross axis: per-item, so text still wraps at the box), and
+ *   justify-content vertical (the main axis: packs the children to the
+ *   top, middle or bottom of a band taller than its content).
+ * - row: both screen axes on the flex row — justify-content horizontal
+ *   (the main axis: natural-width children packed left, center, right
+ *   or spread to the edges), and align-items vertical (the cross axis).
+ * - columns: only the cross axis, align-items on the flex row — main-axis
  *   distribution is meaningless while columns fill (flex: 1 1 0).
  * - custom: no rows; the pill owns the story.
  *
@@ -440,24 +460,40 @@ export const alignmentAxes = (mode) => {
       {
         orientation: 'horizontal',
         label: 'Horizontal',
-        property: 'justify-items',
-        stops: ALIGNMENT_STOPS['justify-items'],
+        property: 'align-items',
+        stops: HORIZONTAL_STOPS,
       },
       {
         orientation: 'vertical',
         label: 'Vertical',
-        property: 'align-content',
-        stops: ALIGNMENT_STOPS['align-content'],
+        property: 'justify-content',
+        stops: VERTICAL_STOPS,
       },
     ];
   }
   if (mode === 'row') {
     return [
       {
+        orientation: 'horizontal',
+        label: 'Horizontal',
+        property: 'justify-content',
+        stops: ROW_HORIZONTAL_STOPS,
+      },
+      {
         orientation: 'vertical',
         label: 'Vertical',
         property: 'align-items',
-        stops: ALIGNMENT_STOPS['align-items'],
+        stops: VERTICAL_STOPS,
+      },
+    ];
+  }
+  if (mode === 'columns') {
+    return [
+      {
+        orientation: 'vertical',
+        label: 'Vertical',
+        property: 'align-items',
+        stops: VERTICAL_STOPS,
       },
     ];
   }
@@ -465,58 +501,43 @@ export const alignmentAxes = (mode) => {
 };
 
 /**
- * One alignment axis's row state: the axis property's own value mapped
- * onto its stops, with the custom-state honesty rule (an unrepresentable
- * committed value renders as the explicit custom pill, never as nothing).
+ * One alignment axis's row state: the axis property's winner at the
+ * pose mapped onto its stops, with the custom-state honesty rule (an
+ * unrepresentable value renders as the explicit custom pill, never as
+ * nothing).
  *
  * The container root is the one carrier (the one-box model: the root IS
- * the box that lays out the children, at every depth), read at the
- * compound's own block, exactly as a ControlWidget's segments read
- * (controls.js `values`): a segment row has no ghost face, so what it
- * lights is what this compound commits.
+ * the box that lays out the children, at every depth), and the read is
+ * the root's layer stack at the pose (style-stack.js stackAt, the read
+ * the Gap row beside these rows and every choice row make): the own
+ * default block reaching Narrow through the condition cascade, a worn
+ * arrangement variant's alignment, the skin's, each lights its stop, so
+ * what the row lights is what the canvas shows, in the delivering
+ * layer's hue. The pick still lands at the compound's own block
+ * (alignOps), and Unset is offered only while that block delivers.
  *
- * @param {Object} map
- *   The style map.
- * @param {string} key
- *   The container's selectable key.
- * @param {{property: string, stops: Array}} axis
+ * @param {?{winner: ?{value: string}}} read
+ *   The axis property's stack read at the pose (stackAt), or null when
+ *   the row has no stack.
+ * @param {{stops: Array}} axis
  *   An alignmentAxes() axis.
- * @param {string} condition
- *   The editing compound ('default' when unposed).
  *
  * @return {{selected: ?string, custom: boolean, value: ?string}}
  */
-export const alignmentState = (map, key, axis, condition = 'default') => {
-  const value = ownAt(map, key, axis.property, condition);
+export const alignmentState = (read, axis) => {
+  const value = read?.winner?.value ?? null;
   const state = segmentState(value, axis.stops);
   return { ...state, value: state.custom ? value : null };
 };
 
 /**
- * The canonical stack upgrade for a first stack-mode write, as property
- * additions: when no own display reaches the posed compound, the root
- * gains display: grid there (the Position widget's compound-commit
- * pattern — grid on a column of blocks is visually a near-no-op and
- * unlocks both axes; under a wear that stacks at the pose it takes the
- * variant's flex column over as the widget's own stack, children rules
- * inert). A display already reaching the pose needs nothing: a
- * recognized stack display already serves, and anything else reads as
- * Custom before a stack write exists.
- */
-const stackUpgrade = (map, key, condition, conditions) =>
-  ownAtPose(map, key, 'display', condition, conditions) !== null
-    ? {}
-    : { display: 'grid' };
-
-/**
  * The batch an alignment pick (stop value) or unset (null) fires.
  *
- * Writes land on the container root (the one box) at the posed compound.
- * In stack mode a pick also carries the canonical display: grid upgrade
- * as ONE compound commit when no own display reaches the pose yet;
- * unsetting never adds companions (the Position precedent: unset is a
- * local statement) and retires only what the compound's own block
- * carries.
+ * Writes land on the container root (the one box) at the posed compound,
+ * the axis property alone: the container is a flex box at every pose by
+ * declaration, so a pick never carries a display. Unsetting retires only
+ * what the compound's own block carries (an empty batch when it carries
+ * nothing).
  *
  * @param {Object} map
  *   The style map.
@@ -526,38 +547,18 @@ const stackUpgrade = (map, key, condition, conditions) =>
  *   An alignmentAxes() axis.
  * @param {?string} value
  *   The picked stop's canonical value, or null to unset.
- * @param {string} mode
- *   The arrangement mode ('stack' or 'row').
  * @param {string} condition
  *   The editing compound ('default' when unposed).
- * @param {Object} conditions
- *   The condition table (guide.conditions).
  *
  * @return {Object[]}
  */
-export const alignOps = (
-  map,
-  key,
-  axis,
-  value,
-  mode,
-  condition = 'default',
-  conditions = {},
-) => {
-  const properties = {};
-  if (value === null) {
-    if (ownAt(map, key, axis.property, condition) !== null) {
-      properties[axis.property] = null;
-    }
-  } else {
-    properties[axis.property] = value;
-    if (mode === 'stack') {
-      Object.assign(properties, stackUpgrade(map, key, condition, conditions));
-    }
+export const alignOps = (map, key, axis, value, condition = 'default') => {
+  if (value === null && ownAt(map, key, axis.property, condition) === null) {
+    return [];
   }
-  return Object.keys(properties).length
-    ? compoundOperations([{ key, condition, properties }])
-    : [];
+  return compoundOperations([
+    { key, condition, properties: { [axis.property]: value } },
+  ]);
 };
 
 /**
@@ -577,7 +578,7 @@ export const growOf = (
 
 /**
  * The children's effective grow weights at the posed compound (unset
- * reads as 1, the `::>` rule's equal fill).
+ * reads as 1, the `> *` rule's equal fill).
  */
 export const childGrows = (
   map,
@@ -632,7 +633,7 @@ export const dragPair = (grows, leftIndex, fraction) => {
  * The update_style ops that land a grow assignment.
  *
  * Writes land at the posed compound. Weight 1 normalizes to UNSET (equal
- * is the `::>` rule's job — per-child CSS exists only where the user
+ * is the `> *` rule's job — per-child CSS exists only where the user
  * deviates) unless another own layer still delivers a weight at this
  * pose (a default 2 posed Narrow), where an unset would change nothing
  * and equal is written out as 1; unchanged children emit nothing, and
@@ -732,7 +733,7 @@ export const presetActive = (grows, weights) => {
 
 /**
  * The batch a preset pick fires: mint the missing columns (pure
- * add_section — equal fill is the `::>` rule, no per-child seeding
+ * add_section — equal fill is the `> *` rule, no per-child seeding
  * exists), then the grow writes where the recipe deviates from equal.
  * Later batch operations see the sections earlier ones added, so minted
  * children are keyed by their minted uuids.
@@ -785,34 +786,32 @@ export const presetPlan = ({
 /**
  * The batch a mode flip fires.
  *
- * Custom keys clear first (clicking Stack/Columns IS the explicit
- * takeover gesture — d: Custom pill, no remove button), then the
- * arrangement axis changes hands: Columns applies the shipped row variant
- * (within-axis replace covers a foreign arrangement variant) and clears
- * any recognized stack display (the widget's own upgrade, which would
- * otherwise shadow the variant's flex — the alignment properties stay in
- * the map, inert, exactly like grows stay inert under Stack), Stack
- * REMOVES the worn reference without materializing (remove_variant) so
- * the children's grow overrides stay in the map, inert — flipping back
- * restores the proportions. An empty batch means the click changed
- * nothing.
+ * Custom keys clear first (clicking Stack, Row or Columns IS the
+ * explicit takeover gesture — d: Custom pill, no remove button; the
+ * clear retires every hand claim, display, flex-direction and
+ * grid-template-columns, while the alignment properties stay in the
+ * map, inert, exactly like grows stay inert under Stack), then the
+ * arrangement axis changes hands: Row and Columns each apply their
+ * shipped variant (within-axis replace covers the other mode's wear and
+ * a foreign arrangement variant alike), Stack REMOVES the worn
+ * reference without materializing (remove_variant) so the children's
+ * grow overrides stay in the map, inert — flipping back restores the
+ * proportions. An empty batch means the click changed nothing.
  *
  * The flip is a WEAR gesture: apply_variant / remove_variant carry no
  * condition. Its clears retire the claims the state found at the pose,
  * and land where each claim lives (state.carriers, the wear bar's Reset
- * overrides precedent): a default-block grid claims at Narrow too, and
- * unsetting it at Narrow would change nothing. The upgrade clear rides
- * only with an apply (Columns on a wear that already stacks at the pose
- * changes no wear and leaves its posed upgrade alone).
+ * overrides precedent): a default-block claim claims at Narrow too, and
+ * unsetting it at Narrow would change nothing.
  *
  * @param {string} key
  *   The container's selectable key.
  * @param {{mode: string, wearing: ?string, customKeys: string[],
- *   displayKeys: string[], carriers: {display: ?string, tracks:
+ *   carriers: {display: ?string, direction: ?string, tracks:
  *   ?string}}} state
  *   The current arrangement state (arrangementState()).
  * @param {string} mode
- *   'row' or 'stack'.
+ *   'stack', 'row' or 'columns'.
  *
  * @return {Object[]}
  */
@@ -833,73 +832,24 @@ export const modeOps = (key, state, mode) => {
       });
     }
   };
-  // A property no block carries rides the claiming block's op (one
+  // A property no block carries rides a claiming block's op (one
   // takeover op per claiming block, never a no-op unset on another).
-  const { display, tracks } = state.carriers;
+  const { display, direction, tracks } = state.carriers;
+  const claiming = display ?? direction ?? tracks ?? 'default';
   for (const customKey of state.customKeys) {
-    clear(customKey, 'display', display ?? tracks ?? 'default');
-    clear(customKey, 'grid-template-columns', tracks ?? display ?? 'default');
+    Object.entries(CUSTOM_PROPERTIES).forEach(([carrier, property]) => {
+      clear(customKey, property, state.carriers[carrier] ?? claiming);
+    });
   }
-  const applies = mode === 'row' && state.wearing !== ROW_VARIANT;
-  if (applies) {
-    for (const displayKey of state.displayKeys) {
-      clear(displayKey, 'display', display ?? 'default');
-    }
-  }
+  const variant = MODE_VARIANTS[mode] ?? null;
   const operations = compoundOperations(changes);
-  if (applies) {
-    operations.push({ op: 'apply_variant', key, variant: ROW_VARIANT });
+  if (variant !== null && state.wearing !== variant) {
+    operations.push({ op: 'apply_variant', key, variant });
   }
   if (mode === 'stack' && state.wearing !== null) {
     operations.push({ op: 'remove_variant', key, variant: state.wearing });
   }
   return operations;
-};
-
-/**
- * The container's gap state for the gap field row — offered in BOTH modes
- * (Stack-mode gap is the spacing between stacked children, which the old
- * Arrange control used to own).
- *
- * `raw` is the container root's own gap at the compound's own block,
- * verbatim (the field's committed value; null when nothing is written
- * there). `ghost` is what the layer stack delivers at the pose while
- * that block says nothing, as a CSS value: another own layer reaching
- * the pose first (a default gap posed Narrow), else the worn arrangement
- * variant's gap as it reads there (its default overlaid by its own posed
- * blocks through wearAtPose, so a variant's narrow gap shows at Narrow;
- * read from the store's record so a push-restyled site default reads
- * true, the built-in px when the record sets none), else zero under a
- * plain stack (grid's initial gap — nothing spaces stacked children
- * until you say so).
- *
- * @return {{raw: ?string, ghost: string}}
- */
-export const gapState = (
-  map,
-  key,
-  variants = [],
-  condition = 'default',
-  conditions = {},
-) => {
-  const ref = arrangementRef(map, key, variants);
-  const inherited = inheritedValue(
-    ownLayers(map, key, 'gap'),
-    condition,
-    conditions,
-  );
-  let ghost = '0px';
-  if (inherited !== null) {
-    ghost = inherited.value;
-  } else if (ref !== null) {
-    const worn = (variants ?? []).find((variant) => variant.id === ref.variant);
-    const posed = wearAtPose(ref, variants, condition, conditions).declarations
-      .gap;
-    const resting = worn?.value?.['']?.default?.gap;
-    ghost =
-      posed ?? (typeof resting === 'string' ? resting : `${DEFAULT_GAP}px`);
-  }
-  return { raw: ownAt(map, key, 'gap', condition), ghost };
 };
 
 /**
@@ -923,8 +873,7 @@ export const layoutOwnsGap = (layout, key) => {
   return (
     parsed !== null &&
     parsed.kind === 'container' &&
-    !parsed.sub &&
-    !parsed.children &&
+    !parsed.selector &&
     containerChildren(layout, parsed.uuid) !== null
   );
 };
@@ -933,42 +882,24 @@ export const layoutOwnsGap = (layout, key) => {
  * The batch a gap write fires — the ONE value-level primitive behind the
  * gap field row (a stop pick commits its var() reference, a scrub or a
  * typed value its literal, a settle value-matching a minted token the
- * captured reference); null is the unset/reset gesture, back to the
- * pose's ghost. An override lands on the container root (the one box)
- * at the posed compound, and in stack mode a write carries the canonical
- * display: grid upgrade exactly like an alignment pick (gap only acts
- * once the container actually lays out its children). Unset never adds
- * companions.
+ * captured reference); null is the unset/reset gesture, back to whatever
+ * the layers beneath deliver at the pose (the row's placeholder hint when
+ * nothing does). An override lands on the container root (the one box)
+ * at the posed compound, the gap alone in both modes: the container
+ * lays its children out as a flex box at every pose by declaration, so
+ * the gap acts the moment it is written and no display rides along.
  *
- * @param {Object} map
- *   The style map.
  * @param {string} key
  *   The container's selectable key.
  * @param {?string} value
  *   The CSS value, or null for the unset gesture.
- * @param {string} mode
- *   The arrangement mode ('stack' or 'row').
  * @param {string} condition
  *   The editing compound ('default' when unposed).
- * @param {Object} conditions
- *   The condition table (guide.conditions).
  *
  * @return {Object[]}
  */
-export const gapValueOps = (
-  map,
-  key,
-  value,
-  mode,
-  condition = 'default',
-  conditions = {},
-) => {
-  const properties = { gap: value };
-  if (value !== null && mode === 'stack') {
-    Object.assign(properties, stackUpgrade(map, key, condition, conditions));
-  }
-  return compoundOperations([{ key, condition, properties }]);
-};
+export const gapValueOps = (key, value, condition = 'default') =>
+  compoundOperations([{ key, condition, properties: { gap: value } }]);
 
 /**
  * A Layout section row's value-space facts for one property on the

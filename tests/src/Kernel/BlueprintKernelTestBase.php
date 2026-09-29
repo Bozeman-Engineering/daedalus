@@ -37,6 +37,10 @@ abstract class BlueprintKernelTestBase extends KernelTestBase {
     'system',
     'user',
     'field',
+    // daedalus_ui (enabled by many subclasses) hard-depends on file: its
+    // file lane injects file.upload_handler at container compile, and kernel
+    // tests do not resolve info.yml dependencies.
+    'file',
     'text',
     'filter',
     'entity_test',

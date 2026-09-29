@@ -255,6 +255,8 @@ class FieldHandlerManager {
    *     (MediaGenerationInterface): its door-neutral 'guidance', and the
    *     active provider's 'dimension_key' + 'dimension_values' when it
    *     takes sizing.
+   *   - 'file': For a handler that places a file the conversation holds
+   *     (MediaFromFileInterface): its door-neutral 'guidance'.
    */
   public function inspectFieldDefinition(FieldDefinitionInterface $definition): array {
     $storage_definition = $definition->getFieldStorageDefinition();
@@ -299,6 +301,9 @@ class FieldHandlerManager {
         $info['generation']['dimension_key'] = $key;
         $info['generation']['dimension_values'] = $handler->getDimensionValues();
       }
+    }
+    if ($handler instanceof MediaFromFileInterface) {
+      $info['file'] = ['guidance' => $handler->getFileGuidance()];
     }
 
     return $info;

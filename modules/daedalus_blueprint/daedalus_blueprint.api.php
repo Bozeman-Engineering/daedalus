@@ -369,8 +369,9 @@ function hook_daedalus_blueprint_processable_fields_alter(
 /**
  * Reacts to an entity being persisted by the storage handler.
  *
- * Called after EntityStorageHandler successfully saves an entity or writes it
- * to tempstore. Allows modules to perform lightweight side effects (e.g.,
+ * Called after EntityStorageHandler successfully stages an entity (persist()
+ * wrote it to tempstore) or commits it (commit() saved it to the database and
+ * cleared its stage). Allows modules to perform lightweight side effects (e.g.,
  * change-detection timestamps) without coupling to specific consumers.
  *
  * @param \Drupal\Core\Entity\FieldableEntityInterface $entity

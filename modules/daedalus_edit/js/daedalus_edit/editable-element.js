@@ -1,8 +1,17 @@
+import { formTransport } from './transports.js';
+
 /**
  * Editable Element.
  *
- * This class is a state object that represents the relationship of the currently
- * edited page element to the form element.
+ * The state object for a form-edited leaf: the relationship of a rendered
+ * field item (the page element carrying the 9-part edit identity) to its
+ * form item in the subject's cached entity form. Its VALUE STORE is the
+ * widget itself (the real Drupal widget holds the value; the editor reads
+ * and writes it through the editing surface) and its COMMIT TRANSPORT is
+ * the form transport (transports.js): the cached form's own submit,
+ * naming this leaf's field.
+ *
+ * @see plugins/editor-plugin-base.js
  */
 export class EditableElement {
   /**
@@ -32,16 +41,23 @@ export class EditableElement {
   isCancelingEdit = false;
 
   /**
-   * The mirror value of the leaf's field at edit open (mirror-value.js),
-   * cloned; the base of the three-way rule a resume applies. Null when
-   * the leaf has no mirror value. Per-edit state lives here because editor
-   * plugin instances are registry singletons shared across leaves.
+   * The editor's snapshot of the widget's values at edit open (the base of
+   * the three-way rule a resume applies), cloned. Per-edit state lives here
+   * because editor plugin instances are registry singletons shared across
+   * leaves.
    *
-   * @type {*}
+   * @type {?Object<string, *>}
    *
-   * @see plugins/form-editor-base.js
+   * @see plugins/editor-plugin-base.js
    */
   snapshot = null;
+
+  /**
+   * The commit transport: the subject form's own submit.
+   *
+   * @type {Object}
+   */
+  transport = formTransport;
 
   /**
    * The draft captured as a markup swap detached the editing surface,
@@ -58,6 +74,38 @@ export class EditableElement {
 
   constructor(id) {
     this.info = this.parseMarkupId(id);
+  }
+
+  /**
+   * The committed values of the edited properties: the widget's own.
+   *
+   * A form-edited leaf's store IS its widget (the value leaves it only
+   * through the form's submit, and a refetched form's widget holds the
+   * remote), so the store reads through the editing surface.
+   *
+   * @param {string[]} names
+   *   The property names the editor reads.
+   * @param {Function} surface
+   *   The editor's readProperties() over this item.
+   *
+   * @return {Object<string, *>}
+   */
+  committedValues(names, surface) {
+    return surface();
+  }
+
+  /**
+   * The selectable key the leaf's placement or field wrapper carries, for
+   * the mutation-failure display; null for an unaddressed render.
+   *
+   * @return {?string}
+   */
+  get selectableKey() {
+    return (
+      this.getPageElement()
+        ?.closest('[data-selectable]')
+        ?.getAttribute('data-selectable') ?? null
+    );
   }
 
   /**

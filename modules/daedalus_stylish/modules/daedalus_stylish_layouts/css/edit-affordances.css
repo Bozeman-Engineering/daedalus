@@ -23,6 +23,17 @@
  * `data-container-empty` marker prints in every mode and styles nothing).
  * currentColor, not an admin palette value: the affordance sits on PAGE
  * content, whose scheme is the theme's.
+ *
+ * The hint asserts its own box. A container's `&::before` is a styling
+ * address of the map (a generated box), and the map's CSS is an inline
+ * <style> later in the document than this sheet, so on a specificity tie
+ * the page's box would win and the hint would lose. The hint's rule
+ * therefore carries the edit stage's id (`#daedalus-ui-stage`, the canvas's
+ * edit-mode wrapper) to outrank any map rule, and opens with `all: initial`
+ * so the properties it does not set (a width, an inset, a transform the
+ * page gave its box) win too, with the page's color and font restored by
+ * inheritance right after. The page's box is exactly hidden behind the hint
+ * for exactly as long as the hint exists.
  */
 
 /* The dashed box is the CONTENT box, never the border box: a page band is
@@ -40,7 +51,12 @@
   min-height: 4em;
 }
 
-[data-container-empty-hint]::before {
+#daedalus-ui-stage [data-container-empty-hint]::before {
+  all: initial;
+  /* The page's font back after the reset; its color comes back through the
+     `color` line below (currentColor on `color` itself reads the inherited
+     value), so the affordance still wears the theme's scheme. */
+  font: inherit;
   display: flex;
   align-items: center;
   justify-content: center;

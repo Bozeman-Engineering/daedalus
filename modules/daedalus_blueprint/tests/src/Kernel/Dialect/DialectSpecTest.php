@@ -55,7 +55,7 @@ class DialectSpecTest extends BlueprintKernelTestBase {
 <style>
   #hero-title:hover { color: var(--color-accent); }
   @container (max-width: 767px) { #hero-title { text-align: left; } }
-  #hero .text-block-link { padding: var(--space-2) var(--space-4); }
+  #hero pb-text .text-block-link { padding: var(--space-2) var(--space-4); }
 </style>
 HTML;
 
@@ -113,6 +113,7 @@ HTML;
           'attributes' => [
             'alt' => ['field' => 'field_image', 'key' => 'alt_text'],
             'generate' => ['field' => 'field_image', 'key' => '_generate'],
+            'file' => ['field' => 'field_image', 'key' => '_file'],
             'media' => ['field' => 'field_image', 'kind' => 'ref'],
             'url' => ['field' => 'field_image_url', 'kind' => 'link'],
             'aspect-ratio' => [
@@ -149,12 +150,29 @@ HTML;
         'focus-within' => ':focus-within',
         'focus-visible' => ':focus-visible',
         'active' => ':active',
+        'first-child' => ':first-child',
+        'last-child' => ':last-child',
+        'only-child' => ':only-child',
+        'empty' => ':empty',
+        'odd' => ':nth-child(odd)',
+        'even' => ':nth-child(even)',
+        'not-first-child' => ':not(:first-child)',
+        'not-last-child' => ':not(:last-child)',
+        'not-only-child' => ':not(:only-child)',
+        'not-empty' => ':not(:empty)',
       ],
-      parts: ['text-block-link' => ['pb-text']],
+      // The structural facts: spelled like states on the addressed
+      // element, taught and corrected apart; a negation is a fact of the
+      // same shape, identified by its :not() wrapper.
+      facts: ['first-child', 'last-child', 'only-child', 'empty', 'odd', 'even', 'not-first-child', 'not-last-child', 'not-only-child', 'not-empty'],
+      // The selector rosters per owner: the text block's declared part
+      // and, on every owner, the tag tier's vocabulary (the styling
+      // layer's base section, the one declaration of a prose tag's
+      // styleability); the types a container's children may be named by
+      // are the spine's (the block types above plus the two kinds).
+      selectors: static::selectorRosters(['pb-text' => ['.text-block-link' => 'Link'], 'pb-image' => [], 'pb-formatted-text' => [], 'pb-teaser' => []]),
       // v0.5: the spine's instance namespace and its identity tags (the
-      // rich-text identity classes and what the minter mints); the tag
-      // tier's vocabulary is the styling layer's base section (textTags
-      // below), the one declaration of a prose tag's styleability.
+      // rich-text identity classes and what the minter mints).
       instances: [
         '.s-*' => [
           'label' => 'Text element',
@@ -171,7 +189,6 @@ HTML;
         ],
       ],
       roster: static::materials(),
-      textTags: ['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p', 'a', 'ul', 'ol', 'li', 'blockquote', 'pre', 'code', 'img'],
     );
   }
 
@@ -214,7 +231,7 @@ HTML;
     foreach (['full', 'site', '2xl', 'xl', 'lg', 'md', 'sm'] as $width) {
       $records[] = new MaterialRecord(kind: MaterialKind::Variant, id: "container_$width", label: ucfirst($width), group: 'width', spellings: [MaterialRecord::attrSlot('kind:container', 'width') => $width], scope: Address::fromString('kind:container'), applies: [MaterialRecord::APPLIES_DEPTH => MaterialRecord::DEPTH_ROOT], origin: MaterialRecord::ORIGIN_SHIPPED);
     }
-    $records[] = new MaterialRecord(kind: MaterialKind::Variant, id: 'row', label: 'Columns', group: 'container_layout', spellings: [MaterialRecord::attrSlot('kind:container', 'layout') => 'columns'], scope: Address::fromString('kind:container'), origin: MaterialRecord::ORIGIN_SHIPPED);
+    $records[] = new MaterialRecord(kind: MaterialKind::Variant, id: 'columns', label: 'Columns', group: 'container_layout', spellings: [MaterialRecord::attrSlot('kind:container', 'layout') => 'columns'], scope: Address::fromString('kind:container'), origin: MaterialRecord::ORIGIN_SHIPPED);
     $records[] = new MaterialRecord(kind: MaterialKind::Variant, id: 'button', label: 'Button', description: 'Dress the link as a solid button.', group: 'style', spellings: [MaterialRecord::SLOT_CLASS => 'button'], scope: Address::fromString('block_type:text'), origin: MaterialRecord::ORIGIN_SHIPPED);
     $records[] = new MaterialRecord(kind: MaterialKind::Variant, id: 'band', label: 'Band', group: 'style', spellings: [MaterialRecord::SLOT_CLASS => 'band'], scope: Address::fromString('kind:container'));
     $records[] = new MaterialRecord(kind: MaterialKind::Variant, id: 'lead', label: 'Lead', group: 'style', spellings: [MaterialRecord::SLOT_CLASS => 'lead'], scope: Address::fromString('base:h2'));
@@ -238,6 +255,17 @@ HTML;
   protected static function acceptDocuments(): array {
     return [
       'ideal document (every grammar tier, pb- spelling)' => static::IDEAL,
+      'a file declaration beside the style block (write-only, never printed)' => <<<HTML
+<pb-container id="band" width="site">
+  <pb-image id="mark" file="logo.svg" alt="The mark" />
+</pb-container>
+<pb-file name="logo.svg" type="image/svg+xml">
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 8 8"><circle cx="4" cy="4" r="3"/></svg>
+</pb-file>
+<style>
+  #band { padding-block: var(--space-16); }
+</style>
+HTML,
       'a band stencil at the document\'s top level' => '<pb-stencil name="full_bleed" />',
       'published @media wrappers are legal (dark, reduced-motion)' => <<<HTML
 <pb-container id="band" width="site">
@@ -262,6 +290,16 @@ HTML,
 <style>
   @container (max-width: 767px) { #cta:hover { color: var(--color-accent-hover); } }
   #outer > * { align-self: center; }
+</style>
+HTML,
+      'generated boxes: the element\'s own, under a state, and a child type\'s' => <<<HTML
+<pb-container id="band" width="site">
+  <pb-text id="t" tag="h2">Hi</pb-text>
+</pb-container>
+<style>
+  #t::after { content: ""; }
+  #t:hover::before { content: ""; background-color: var(--color-accent); }
+  #band > pb-text::after { content: none; }
 </style>
 HTML,
       'v0.3: class by scope on a container and a base treatment, media token in CSS' => <<<HTML
@@ -300,6 +338,64 @@ HTML,
   #copy .s-b2 > * { padding-block: var(--space-1); }
 </style>
 HTML,
+      'child selectors: the children, a type among them, a chain into a type\'s part, a tag inside a type' => <<<HTML
+<pb-container id="band" width="site">
+  <pb-text id="a" tag="p">One</pb-text>
+  <pb-text id="b" tag="p">Two</pb-text>
+  <pb-image id="pic" media="Sunrise" alt="Sunrise" aspect-ratio="4:3" />
+</pb-container>
+<style>
+  #band > * { margin: 0; }
+  #band > pb-text { color: var(--color-accent); }
+  #band > pb-text:hover { color: var(--color-accent-hover); }
+  #band > pb-text .text-block-link { padding: var(--space-2); }
+  #band pb-image { border-radius: var(--space-2); }
+  #band p { font-size: var(--text-lg); }
+</style>
+HTML,
+      'relations: sibling combinators, :has(), :not(), a negated fact and a state after the qualifiers' => <<<HTML
+<pb-container id="band" width="site">
+  <pb-text id="a" tag="p">One</pb-text>
+  <pb-text id="b" tag="p">Two</pb-text>
+  <pb-image id="pic" media="Sunrise" alt="Sunrise" aspect-ratio="4:3" />
+</pb-container>
+<style>
+  #band > p + p { margin-top: var(--space-2); }
+  #band > pb-text ~ pb-image { margin-top: var(--space-1); }
+  #band > pb-text:has(a) { color: var(--color-accent); }
+  #band > pb-text:has(a):hover { color: var(--color-accent-hover); }
+  #band > pb-text:has(+ pb-image) { margin-bottom: 0; }
+  #band > pb-text:not(:has(a)) { color: var(--color-surface); }
+  #band > pb-text .text-block-link ~ .text-block-link { padding: var(--space-1); }
+  #band > *:not(pb-image):not(:last-child) { margin-bottom: var(--space-2); }
+</style>
+HTML,
+      'position facts: a pseudo-class on the addressed element, alone, beside a state, on the root' => <<<HTML
+<pb-container id="band" width="site">
+  <pb-text id="a" tag="p">One</pb-text>
+  <pb-text id="b" tag="p">Two</pb-text>
+</pb-container>
+<style>
+  #band > pb-text:first-child { margin-top: 0; }
+  #band > *:nth-child(odd) { background-color: var(--color-surface); }
+  #band > pb-text:hover:last-child { color: var(--color-accent); }
+  #a:empty { display: none; }
+  @container (max-width: 767px) { #b:only-child { padding: var(--space-1); } }
+</style>
+HTML,
+      'nesting is sugar: a nested rule, a state, a wrapper, all flattened' => <<<HTML
+<pb-container id="band" width="site">
+  <pb-text id="a" tag="p">One</pb-text>
+</pb-container>
+<style>
+  #band {
+    margin: 0;
+    > pb-text { color: var(--color-accent); &:hover { color: var(--color-accent-hover); } }
+    :hover { padding: var(--space-2); }
+    @container (max-width: 767px) { margin: var(--space-1); }
+  }
+</style>
+HTML,
     ];
   }
 
@@ -320,6 +416,30 @@ HTML,
   protected static function rejectDocuments(): array {
     return [
       '<div> is not a dialect element' => ['<div class="hero"><pb-text id="t">Hi</pb-text></div>', 'SUGAR_TAG'],
+      'a file declaration without a name' => [
+        '<pb-container id="c"></pb-container><pb-file type="image/svg+xml"><svg xmlns="http://www.w3.org/2000/svg"/></pb-file>',
+        'FILE_DECLARATION',
+      ],
+      'a file declaration without a type' => [
+        '<pb-container id="c"></pb-container><pb-file name="logo.svg"><svg xmlns="http://www.w3.org/2000/svg"/></pb-file>',
+        'FILE_DECLARATION',
+      ],
+      'a file declaration with an empty body' => [
+        '<pb-container id="c"></pb-container><pb-file name="logo.svg" type="image/svg+xml"></pb-file>',
+        'FILE_DECLARATION',
+      ],
+      'a file declaration naming a path' => [
+        '<pb-container id="c"></pb-container><pb-file name="icons/logo.svg" type="image/svg+xml"><svg xmlns="http://www.w3.org/2000/svg"/></pb-file>',
+        'FILE_DECLARATION',
+      ],
+      'a file declaration wearing an attribute it does not take' => [
+        '<pb-container id="c"></pb-container><pb-file name="logo.svg" type="image/svg+xml" alt="x"><svg xmlns="http://www.w3.org/2000/svg"/></pb-file>',
+        'ILLEGAL_ATTR',
+      ],
+      'a file declaration inside a container (a declaration is the document\'s)' => [
+        '<pb-container id="c"><pb-file name="logo.svg" type="image/svg+xml"><svg xmlns="http://www.w3.org/2000/svg"/></pb-file></pb-container>',
+        'ILLEGAL_CONTAINMENT',
+      ],
       '<section> sugar' => ['<section><pb-text id="t">Hi</pb-text></section>', 'SUGAR_TAG'],
       '<h2> sugar at element position' => ['<pb-container id="c"><h2>Hello</h2></pb-container>', 'SUGAR_TAG'],
       '<img src> raw image is sugar naming <pb-image>' => [
@@ -362,16 +482,40 @@ HTML,
         "<pb-container id=\"c\"><pb-text id=\"t\">Hi</pb-text></pb-container>\n<style>.button { padding: var(--space-2); }</style>",
         'BAD_SELECTOR',
       ],
-      'element selector descent (v0.5: a single tag is the tag tier, so the true descent case is two deep)' => [
+      'element selector descent into an undeclared tag (a chain of tags is grammar; div is not a declared tag)' => [
         "<pb-container id=\"c\"><pb-text id=\"t\">Hi</pb-text></pb-container>\n<style>#c div span { color: red; }</style>",
+        'STYLE_TAG_NOT_DECLARED',
+      ],
+      'a state on #id while addressing a descendant' => [
+        "<pb-container id=\"c\"><pb-text id=\"t\">Hi</pb-text></pb-container>\n<style>#c:hover p { color: red; }</style>",
         'BAD_SELECTOR',
+      ],
+      'a leading sibling combinator (the owner\'s siblings are outside its subtree; between compounds + is grammar)' => [
+        "<pb-container id=\"c\"><pb-text id=\"t\">Hi</pb-text></pb-container>\n<style>#c + p { color: red; }</style>",
+        'BAD_SELECTOR',
+      ],
+      'a qualifier on the id itself (a qualifier narrows a compound after #id)' => [
+        "<pb-container id=\"c\"><pb-text id=\"t\">Hi</pb-text></pb-container>\n<style>#c:has(pb-text) { color: red; }</style>",
+        'BAD_SELECTOR',
+      ],
+      'a state before a qualifier (states and facts come last)' => [
+        "<pb-container id=\"c\"><pb-text id=\"t\">Hi</pb-text></pb-container>\n<style>#c > pb-text:hover:has(a) { color: red; }</style>",
+        'BAD_SELECTOR',
+      ],
+      'children on a block' => [
+        "<pb-container id=\"c\"><pb-text id=\"t\">Hi</pb-text></pb-container>\n<style>#t > * { color: red; }</style>",
+        'BAD_SELECTOR',
+      ],
+      'an element type no block type declares' => [
+        "<pb-container id=\"c\"><pb-text id=\"t\">Hi</pb-text></pb-container>\n<style>#c > pb-ghost { color: red; }</style>",
+        'UNKNOWN_TYPE',
       ],
       'selector list' => [
         "<pb-container id=\"c\"><pb-text id=\"t\">Hi</pb-text></pb-container>\n<style>#c, #t { color: red; }</style>",
         'SELECTOR_LIST',
       ],
       'url() in a value' => ['<pb-container id="c" style="background: url(/x.png)"></pb-container>', 'URL_FUNCTION'],
-      'external image url() (v0.3: only media: and generate: urls exist)' => [
+      'external image url() (only media:, generate: and file: urls exist)' => [
         '<pb-container id="c" style="background-image: url(\'https://example.com/x.jpg\')"></pb-container>',
         'URL_FUNCTION',
       ],
@@ -381,6 +525,14 @@ HTML,
       ],
       'generate: with an empty prompt' => [
         '<pb-container id="c" style="background-image: url(generate:)"></pb-container>',
+        'BAD_DECLARATION',
+      ],
+      'file: nested inside another function is not a layer' => [
+        '<pb-container id="c" style="background-image: cross-fade(url(file:hero.svg), black)"></pb-container>',
+        'BAD_DECLARATION',
+      ],
+      'file: with an empty name' => [
+        '<pb-container id="c" style="background-image: url(file:)"></pb-container>',
         'BAD_DECLARATION',
       ],
       'a class no published style variant spells' => [
@@ -473,8 +625,16 @@ HTML,
         'UNTERMINATED_ATTR',
       ],
       'unknown state pseudo-class' => [
-        "<pb-container id=\"c\"><pb-text id=\"t\">Hi</pb-text></pb-container>\n<style>#t:visited { color: red; } #t::after { content: \"\"; }</style>",
-        'UNKNOWN_STATE|BAD_SELECTOR',
+        "<pb-container id=\"c\"><pb-text id=\"t\">Hi</pb-text></pb-container>\n<style>#t:visited { color: red; }</style>",
+        'UNKNOWN_STATE',
+      ],
+      'pseudo-elements other than the two generated boxes' => [
+        "<pb-container id=\"c\"><pb-text id=\"t\">Hi</pb-text></pb-container>\n<style>#t::marker { color: red; }</style>",
+        'BAD_SELECTOR',
+      ],
+      'a state after the generated box (the box is terminal)' => [
+        "<pb-container id=\"c\"><pb-text id=\"t\">Hi</pb-text></pb-container>\n<style>#t::after:hover { color: red; }</style>",
+        'BAD_SELECTOR',
       ],
       'v0.5: instance class the body does not carry' => [
         "<pb-container id=\"c\"><pb-formatted-text id=\"copy\"><p class=\"s-a1\">Lead</p></pb-formatted-text></pb-container>\n<style>#copy .s-zz { color: red; }</style>",
@@ -503,6 +663,10 @@ HTML,
       '<style> inside an op payload' => [
         '<pb-text id="t">Hi</pb-text><style>#t { color: red; }</style>',
         'STYLE_IN_FRAGMENT',
+      ],
+      '<pb-file> inside an op payload (the file op is the batch\'s declaration)' => [
+        '<pb-file name="logo.svg" type="image/svg+xml"><svg xmlns="http://www.w3.org/2000/svg"/></pb-file><pb-image file="logo.svg" alt="x" />',
+        'FILE_IN_FRAGMENT',
       ],
       'link as a child element instead of url=' => [
         '<pb-text id="t">Hi <a href="/x">there</a></pb-text>',
@@ -581,6 +745,46 @@ HTML,
       }
     }
     $this->assertSame([], $failures, implode("\n", $failures));
+  }
+
+  /**
+   * A <pb-file> declaration parses to the result's files, never the tree.
+   *
+   * The body is RAWTEXT (an SVG's own tags are opaque to the dialect),
+   * trimmed at both ends; name and type ride as written; the line is the
+   * declaration's; the tree holds the elements only and the print never
+   * carries the declaration (after commit a declared file is media). A
+   * fragment never carries files.
+   */
+  public function testFileDeclarationParsesToFiles(): void {
+    $document = "<pb-container id=\"band\"></pb-container>\n<pb-file name=\"logo.svg\" type=\"image/svg+xml\">\n  <svg xmlns=\"http://www.w3.org/2000/svg\"><g><circle r=\"3\"/></g></svg>\n</pb-file>\n<pb-file name=\"data.csv\" type=\"text/csv\">a,b\n1,2</pb-file>";
+    $result = $this->parser->parseDocument($document, $this->catalog);
+    $this->assertTrue($result->isValid(), implode('; ', array_map('strval', $result->errors)));
+    $this->assertSame([
+      [
+        'name' => 'logo.svg',
+        'type' => 'image/svg+xml',
+        'content' => '<svg xmlns="http://www.w3.org/2000/svg"><g><circle r="3"/></g></svg>',
+        'line' => 2,
+      ],
+      ['name' => 'data.csv', 'type' => 'text/csv', 'content' => "a,b\n1,2", 'line' => 5],
+    ], $result->files);
+    $this->assertCount(1, $result->tree, 'The declaration is not an element.');
+    $this->assertSame('container', $result->tree[0]['kind']);
+    $this->assertStringNotContainsString('pb-file', $this->printer->print($result->tree, $this->catalog));
+
+    $fragment = $this->parser->parseFragment('<pb-file name="logo.svg" type="image/svg+xml"><svg/></pb-file>', $this->catalog);
+    $this->assertFalse($fragment->isValid());
+    $this->assertSame('FILE_IN_FRAGMENT', $fragment->errors[0]->code);
+    $this->assertStringContainsString('file op', $fragment->errors[0]->message);
+    $this->assertSame([], $fragment->files);
+
+    // The grammar errors name the declaration and its line.
+    $bad = $this->parser->parseDocument("<pb-container id=\"c\"></pb-container>\n<pb-file type=\"image/svg+xml\"></pb-file>", $this->catalog);
+    $codes = array_map(static fn ($e) => $e->code, $bad->errors);
+    $this->assertSame(['FILE_DECLARATION', 'FILE_DECLARATION'], $codes, 'The missing name and the empty body are two facts in one round.');
+    $this->assertSame(2, $bad->errors[0]->line);
+    $this->assertSame([], $bad->files, 'A declaration whose grammar failed is not carried.');
   }
 
   /**
@@ -781,7 +985,7 @@ HTML;
    * included, so the child's layout attribute has no print. Printing it
    * would let page_create's tree-order apply re-place it as the child's
    * own authored wear, which a later switch of the composition could not
-   * reap (the card wrapper keeping "row" from Card Left to Stacked). The
+   * reap (the card wrapper keeping "columns" from Card Left to Stacked). The
    * same wear worn directly, no origin, is the editor's and still prints.
    */
   public function testDerivedWearsPrintNothing(): void {
@@ -799,7 +1003,7 @@ HTML;
             'styles' => [
               '' => [
                 'variants' => [
-                  ['variant' => 'row', 'fragment' => '', 'via' => 'band'],
+                  ['variant' => 'columns', 'fragment' => '', 'via' => 'band'],
                   ['variant' => 'band', 'fragment' => 'container(1)'],
                 ],
               ],
@@ -810,7 +1014,7 @@ HTML;
             'kind' => 'container',
             'layout_id' => 'daedalus_stylish_container',
             'uuid' => 'e12f04b1-289f-4a33-a7f9-d506411a67f7',
-            'styles' => ['' => ['variants' => [['variant' => 'row', 'fragment' => '']]]],
+            'styles' => ['' => ['variants' => [['variant' => 'columns', 'fragment' => '']]]],
             'children' => [],
           ],
         ],
@@ -839,7 +1043,7 @@ HTML;
     $container = $reparse->tree[0];
     $this->assertSame([['variant' => 'band', 'fragment' => '']], $container['styles']['']['variants']);
     $this->assertArrayNotHasKey('styles', $container['children'][0]);
-    $this->assertSame([['variant' => 'row', 'fragment' => '']], $container['children'][1]['styles']['']['variants']);
+    $this->assertSame([['variant' => 'columns', 'fragment' => '']], $container['children'][1]['styles']['']['variants']);
   }
 
   /**
@@ -969,6 +1173,20 @@ HTML;
         ['op' => 'remove', 'ref' => 'old-band'],
         ['op' => 'save_material', 'ref' => 'hero2', 'name' => 'hero'],
       ],
+      'a file declaration ahead of the ops that place it' => [
+        [
+          'op' => 'file',
+          'name' => 'logo.svg',
+          'type' => 'image/svg+xml',
+          'content' => '<svg xmlns="http://www.w3.org/2000/svg"/>',
+        ],
+        [
+          'op' => 'insert',
+          'html' => '<pb-image id="mark" file="logo.svg" alt="The mark" />',
+          'at' => ['ref' => 'hero', 'position' => 'beforeend'],
+        ],
+        ['op' => 'style', 'css' => "#hero { background-image: url('file:logo.svg'); }"],
+      ],
       'bare op object is a one-element batch' => [
         'op' => 'set',
         'ref' => 'hero-title',
@@ -1012,6 +1230,18 @@ HTML;
    */
   protected static function rejectBatches(): array {
     return [
+      'a file op without its bytes' => [
+        [
+          ['op' => 'file', 'name' => 'logo.svg', 'type' => 'image/svg+xml'],
+        ],
+        'BAD_OP',
+      ],
+      'a file op whose name is not a string' => [
+        [
+          ['op' => 'file', 'name' => 42, 'type' => 'image/svg+xml', 'content' => '<svg/>'],
+        ],
+        'BAD_OP',
+      ],
       'bad position (an unknown op beside it is the tool surface\'s to refuse)' => [
         [
           ['op' => 'insert', 'html' => '<pb-text id="t">Hi</pb-text>', 'at' => ['ref' => 'c', 'position' => 'inside']],
@@ -1036,11 +1266,11 @@ HTML;
         ],
         'UNSUPPORTED_VALUE',
       ],
-      'fluency spill: multi-element descent into rich text (one declared tag deep is the tag-tier gesture)' => [
+      'fluency spill: multi-element descent into rich text (a chain of tags is grammar; span is no declared tag)' => [
         [
           ['op' => 'style', 'css' => '#hero h2 span { font-size: var(--text-3xl); }'],
         ],
-        'BAD_SELECTOR',
+        'STYLE_TAG_NOT_DECLARED',
       ],
       'fluency spill: compound #id.class selector' => [
         [
@@ -1106,13 +1336,13 @@ HTML;
     $this->assertSame([], $failures, implode("\n", $failures));
 
     // The fluency-spill correctives name the dialect gesture, not just the
-    // grammar (the corrective channel is what measurably teaches). One
-    // declared tag deep IS the tag-tier gesture, so the spill is the
-    // deeper descent, and its corrective teaches the tag tier.
+    // grammar (the corrective channel is what measurably teaches). A chain
+    // of tags is grammar now (a paragraph's links), so the spill is the
+    // undeclared tag in it, and its corrective names the declared tags.
     $spill = $handler->validateBatch([
       ['op' => 'style', 'css' => '#hero h2 span { font-size: var(--text-3xl); }'],
     ], $this->catalog);
-    $this->assertStringContainsString('Arbitrary descendant selectors are not accepted', $spill[0]->message);
+    $this->assertStringContainsString('span is not an addressable text tag', $spill[0]->message);
     $tag_tier = $handler->validateBatch([
       ['op' => 'style', 'css' => '#hero h2 { font-size: var(--text-3xl); }'],
     ], $this->catalog);
@@ -1287,6 +1517,68 @@ HTML;
   }
 
   /**
+   * The file url is the CSS spelling of the {_file} handled value.
+   *
+   * The file handle rides the same translation as the generation request
+   * through parseDeclarations, so every CSS entry point lands the {_file}
+   * value daedalus_ai's style handler resolves: alone as the bare handled
+   * value, as one layer of a media-capable value in the layer list, quote
+   * and prefix-case agnostic with the name kept exact, refused with a
+   * corrective when the name is empty or the call is nested inside
+   * another function, and taught in the url() corrective.
+   */
+  public function testFileUrlTranslatesToTheHandledValue(): void {
+    $css = new DialectCssParser($this->catalog);
+    $errors = [];
+    $properties = $css->parseDeclarations("background-image: url('file: Hero.svg '); color: var(--color-text)", NULL, 'test', $errors);
+    $this->assertSame([], array_map('strval', $errors));
+    $this->assertSame(['_file' => 'Hero.svg'], $properties['background-image'], 'The name is trimmed and kept case-exact: file aliases are exact-match.');
+    $this->assertSame('var(--color-text)', $properties['color']);
+
+    $errors = [];
+    $properties = $css->parseDeclarations(str_replace("'", '"', "background-image: url('FILE:hero.svg')"), NULL, 'test', $errors);
+    $this->assertSame([], array_map('strval', $errors));
+    $this->assertSame(['_file' => 'hero.svg'], $properties['background-image'], 'Either quote and any prefix case read.');
+
+    $errors = [];
+    $properties = $css->parseDeclarations("background-image: linear-gradient(rgb(0 0 0 / 0.5), rgb(0 0 0 / 0.5)), url('file:hero.svg')", NULL, 'test', $errors);
+    $this->assertSame([], array_map('strval', $errors));
+    $this->assertSame([
+      'linear-gradient(rgb(0 0 0 / 0.5), rgb(0 0 0 / 0.5))',
+      ['_file' => 'hero.svg'],
+    ], $properties['background-image'], 'A gradient over a file handle is the layer list, like a gradient over a generation request.');
+
+    $errors = [];
+    $properties = $css->parseDeclarations("background-image: url('file:texture.png'), url('generate:a matching sky')", NULL, 'test', $errors);
+    $this->assertSame([], array_map('strval', $errors));
+    $this->assertSame([['_file' => 'texture.png'], ['_generate' => 'a matching sky']], $properties['background-image'], 'The two handled kinds compose as layers of one value.');
+
+    $errors = [];
+    $css->parseDeclarations("background-image: url('file:')", NULL, 'test', $errors);
+    $this->assertCount(1, $errors);
+    $this->assertSame('BAD_DECLARATION', $errors[0]->code);
+    $this->assertStringContainsString("url('file:') in background-image needs a name", $errors[0]->message);
+
+    $errors = [];
+    $css->parseDeclarations("background-image: cross-fade(url('file:hero.svg'), black)", NULL, 'test', $errors);
+    $this->assertCount(1, $errors);
+    $this->assertSame('BAD_DECLARATION', $errors[0]->code);
+    $this->assertStringContainsString("url('file:...') in background-image must be its own comma layer", $errors[0]->message);
+
+    $errors = [];
+    $css->parseDeclarations("background-image: url('/x.png')", NULL, 'test', $errors);
+    $this->assertCount(1, $errors);
+    $this->assertSame('URL_FUNCTION', $errors[0]->code);
+    $this->assertStringContainsString("url('file:<name>') (a file this conversation holds, by its name)", $errors[0]->message, 'The url() corrective teaches the third scheme.');
+
+    // The whole document path lands the file handle on the node's styles.
+    $document = '<pb-container id="c" style="background-image: url(file:hero.svg)"></pb-container>';
+    $result = $this->parser->parseDocument($document, $this->catalog);
+    $this->assertSame([], array_map('strval', $result->errors));
+    $this->assertSame(['_file' => 'hero.svg'], $result->tree[0]['styles']['']['default']['background-image']);
+  }
+
+  /**
    * V0.5: the instance selector grammar, its mappings and correctives.
    *
    * The dialect lane's selector cases: `#id .s-x` (one identified
@@ -1316,7 +1608,7 @@ HTML;
     $this->assertSame(['id' => 'copy', 'local' => '::.s-a1', 'states' => []], $css->parseSelector('#copy .s-a1', NULL, $known, $errors));
     $this->assertSame(['id' => 'copy', 'local' => '::p', 'states' => []], $css->parseSelector('#copy p', NULL, $known, $errors));
     $this->assertSame(['id' => 'copy', 'local' => '::p', 'states' => ['hover']], $css->parseSelector('#copy p:hover', NULL, $known, $errors));
-    $this->assertSame(['id' => 'copy', 'local' => '::.s-b2::>', 'states' => []], $css->parseSelector('#copy .s-b2 > *', NULL, $known, $errors));
+    $this->assertSame(['id' => 'copy', 'local' => '::.s-b2 > *', 'states' => []], $css->parseSelector('#copy .s-b2 > *', NULL, $known, $errors));
     // Li is a declared tag (universal minting), so #id li is plain
     // bare-tag grammar: ALL of the element's list items, any depth,
     // present and future. #id .s-x > * stays the ONE-list gesture.
@@ -1344,12 +1636,186 @@ HTML;
     $this->assertStringContainsString('h1, h2, h3, h4, h5, h6, p, a, ul, ol, li, blockquote, pre, code, img', $errors[0]->message);
     $this->assertStringContainsString('ONE list\'s items are #id .s-x > *', $errors[0]->message);
 
-    // The descendant corrective teaches the tag-tier gesture now.
+    // A chain of tags is grammar (a paragraph's links, say); an
+    // undeclared tag in it is judged by the tag tier's vocabulary.
     $errors = [];
     $this->assertNull($css->parseSelector('#copy div span', NULL, $known, $errors));
+    $this->assertSame('STYLE_TAG_NOT_DECLARED', $errors[0]->code);
+    $this->assertSame(['id' => 'copy', 'local' => '::p a', 'states' => ['hover']], $css->parseSelector('#copy p a:hover', NULL, $known, $errors));
+    // A sibling combinator between compounds is grammar: the p right
+    // after a p inside the body, the p resolving where its predecessor
+    // did (the tag tier of the same owner).
+    $errors = [];
+    $this->assertSame(['id' => 'copy', 'local' => '::p + p', 'states' => []], $css->parseSelector('#copy p + p', NULL, $known, $errors));
+    $this->assertSame([], array_map('strval', $errors));
+    // What the grammar refuses outright names the grammar: a pseudo-class
+    // off the addressed element, an attribute, a chained instance class.
+    foreach (['#copy p:hover a', '#copy [x]', '#copy .s-a1 .s-b2'] as $selector) {
+      $errors = [];
+      $this->assertNull($css->parseSelector($selector, NULL, $known, $errors), $selector);
+      $this->assertSame('BAD_SELECTOR', $errors[0]->code, $selector);
+      $this->assertStringContainsString('is not a relative selector the grammar accepts', $errors[0]->message, $selector);
+    }
+    // A state on #id while addressing a descendant is refused with the
+    // spelling that means it (the state belongs on the addressed element).
+    $errors = [];
+    $this->assertNull($css->parseSelector('#copy:hover p', NULL, $known, $errors));
     $this->assertSame('BAD_SELECTOR', $errors[0]->code);
-    $this->assertStringContainsString('#id p', $errors[0]->message);
-    $this->assertStringContainsString('Arbitrary descendant selectors are not accepted', $errors[0]->message);
+    $this->assertStringContainsString('#copy p:hover', $errors[0]->message);
+    // Children, types and chains on a container; a block has no children
+    // to address; an undeclared type names the declared ones.
+    $known['band'] = ['container' => TRUE, 'block_type' => NULL, 'plugin_id' => NULL, 'body' => NULL];
+    $errors = [];
+    $this->assertSame(['id' => 'band', 'local' => '::> *', 'states' => []], $css->parseSelector('#band > *', NULL, $known, $errors));
+    $this->assertSame(['id' => 'band', 'local' => '::> pb-text', 'states' => ['hover']], $css->parseSelector('#band > pb-text:hover', NULL, $known, $errors));
+    $this->assertSame(['id' => 'band', 'local' => '::> pb-text .text-block-link', 'states' => []], $css->parseSelector('#band>pb-text .text-block-link', NULL, $known, $errors));
+    $this->assertSame(['id' => 'band', 'local' => '::pb-container > *', 'states' => []], $css->parseSelector('#band pb-container > *', NULL, $known, $errors));
+    $this->assertSame(['id' => 'band', 'local' => '::> pb-block', 'states' => []], $css->parseSelector('#band > pb-block', NULL, $known, $errors));
+    // Position facts ride the pseudo-class slot like states, resolved by
+    // their printed wrapper (":nth-child(odd)" is the fact named odd);
+    // a state and a fact compose on the addressed element.
+    $this->assertSame(['id' => 'band', 'local' => '::> pb-text', 'states' => ['first-child']], $css->parseSelector('#band > pb-text:first-child', NULL, $known, $errors));
+    $this->assertSame(['id' => 'band', 'local' => '::> *', 'states' => ['odd']], $css->parseSelector('#band > *:nth-child(odd)', NULL, $known, $errors));
+    $this->assertSame(['id' => 'band', 'local' => '::> pb-text', 'states' => ['hover', 'last-child']], $css->parseSelector('#band > pb-text:hover:last-child', NULL, $known, $errors));
+    $this->assertSame(['id' => 'band', 'local' => '', 'states' => ['empty']], $css->parseSelector('#band:empty', NULL, $known, $errors));
+    $this->assertSame([], array_map('strval', $errors));
+    // A parameterized structural pseudo-class is no published fact: the
+    // corrective names the states and the facts apart.
+    $errors = [];
+    $this->assertNull($css->parseSelector('#band > *:nth-child(3n+1)', NULL, $known, $errors));
+    $this->assertSame('UNKNOWN_STATE', $errors[0]->code);
+    $this->assertSame(['first-child', 'last-child', 'only-child', 'empty', 'odd', 'even', 'not-first-child', 'not-last-child', 'not-only-child', 'not-empty'], $errors[0]->context['published_facts']);
+    $this->assertStringContainsString('Legal states: :hover, :focus, :focus-within, :focus-visible, :active.', $errors[0]->hint);
+    $this->assertStringContainsString('Position facts: :first-child, :last-child, :only-child, :empty, :nth-child(odd), :nth-child(even), :not(:first-child), :not(:last-child), :not(:only-child), :not(:empty).', $errors[0]->hint);
+    // The catalog resolves a negation's printed wrapper to its fact the
+    // way it resolves the base fact's (the parser's reading of the
+    // nested pseudo-class is the dialect task's).
+    $this->assertSame('not-last-child', static::catalog()->pseudoClassCondition(':not(:last-child)'));
+    $this->assertSame('last-child', static::catalog()->pseudoClassCondition(':last-child'));
+    $errors = [];
+    $this->assertNull($css->parseSelector('#plain > pb-text', NULL, $known, $errors));
+    $this->assertSame('BAD_SELECTOR', $errors[0]->code);
+    $this->assertStringContainsString('containers only', $errors[0]->message);
+    $errors = [];
+    $this->assertNull($css->parseSelector('#band > pb-ghost', NULL, $known, $errors));
+    $this->assertSame('UNKNOWN_TYPE', $errors[0]->code);
+    $this->assertStringContainsString('pb-text', $errors[0]->hint);
+    // A part after a type is owned by that type, not by the container.
+    $errors = [];
+    $this->assertNull($css->parseSelector('#band > pb-image .text-block-link', NULL, $known, $errors));
+    $this->assertSame('UNKNOWN_PART', $errors[0]->code);
+
+    // The relations. The peel takes the trailing states and facts off
+    // the last compound and stops at its qualifiers: a state after a
+    // :has(), a negated fact after a :not() compound, a :not() whose
+    // argument is a compound with an implied subject; a sibling compound
+    // resolves in its predecessor's context, a :has() argument from the
+    // compound it narrows.
+    $errors = [];
+    $this->assertSame(['id' => 'band', 'local' => '::> pb-text:has(a)', 'states' => ['hover']], $css->parseSelector('#band > pb-text:has(a):hover', NULL, $known, $errors));
+    $this->assertSame(['id' => 'band', 'local' => '::> *:not(pb-image)', 'states' => ['not-last-child']], $css->parseSelector('#band > *:not(pb-image):not(:last-child)', NULL, $known, $errors));
+    $this->assertSame(['id' => 'band', 'local' => '::> pb-text:not(:has(a))', 'states' => []], $css->parseSelector('#band > pb-text:not(:has(a))', NULL, $known, $errors));
+    $this->assertSame(['id' => 'band', 'local' => '::> p + p', 'states' => []], $css->parseSelector('#band > p + p', NULL, $known, $errors));
+    $this->assertSame(['id' => 'band', 'local' => '::> pb-text + pb-image', 'states' => ['first-child']], $css->parseSelector('#band > pb-text + pb-image:first-child', NULL, $known, $errors));
+    $this->assertSame(['id' => 'band', 'local' => '::> pb-text:has(+ pb-image)', 'states' => []], $css->parseSelector('#band > pb-text:has(+ pb-image)', NULL, $known, $errors));
+    $this->assertSame(['id' => 'band', 'local' => '::> pb-container:has(> pb-image) > *', 'states' => []], $css->parseSelector('#band > pb-container:has(> pb-image) > *', NULL, $known, $errors));
+    $this->assertSame(['id' => 'band', 'local' => '::> pb-text:has(.text-block-link)', 'states' => []], $css->parseSelector('#band > pb-text:has(.text-block-link)', NULL, $known, $errors));
+    $this->assertSame(['id' => 'band', 'local' => '::> pb-text .text-block-link ~ .text-block-link', 'states' => []], $css->parseSelector('#band > pb-text .text-block-link ~ .text-block-link', NULL, $known, $errors));
+    $this->assertSame(['id' => 'band', 'local' => '::> pb-text:has(a):not(pb-image)', 'states' => []], $css->parseSelector('#band > pb-text:not(pb-image):has(a)', NULL, $known, $errors), 'canonical order; the negated type is judged at the same position');
+    $this->assertSame(['id' => 'band', 'local' => '', 'states' => ['not-last-child']], $css->parseSelector('#band:not(:last-child)', NULL, $known, $errors));
+    $this->assertSame([], array_map('strval', $errors));
+    // The generated boxes. The pseudo-element peels first (so "after"
+    // never reads as a state), the element's own box is the anchor's
+    // local, a chain's box rides its last compound, and the states go
+    // before the box as CSS spells them; a part's box is the part's.
+    $errors = [];
+    $this->assertSame(['id' => 'band', 'local' => '::&::after', 'states' => []], $css->parseSelector('#band::after', NULL, $known, $errors));
+    $this->assertSame(['id' => 'band', 'local' => '::&::before', 'states' => ['hover']], $css->parseSelector('#band:hover::before', NULL, $known, $errors));
+    $this->assertSame(['id' => 'band', 'local' => '::> pb-text::after', 'states' => []], $css->parseSelector('#band > pb-text::after', NULL, $known, $errors));
+    $this->assertSame(['id' => 'band', 'local' => '::> pb-text::before', 'states' => ['hover', 'first-child']], $css->parseSelector('#band > pb-text:hover:first-child::before', NULL, $known, $errors));
+    $this->assertSame(['id' => 'band', 'local' => '::> pb-text:has(a)::after', 'states' => ['hover']], $css->parseSelector('#band > pb-text:has(a):hover::after', NULL, $known, $errors));
+    $this->assertSame(['id' => 'band', 'local' => '::> pb-text .text-block-link::before', 'states' => []], $css->parseSelector('#band > pb-text .text-block-link::before', NULL, $known, $errors));
+    $this->assertSame(['id' => 'copy', 'local' => '::.s-a1::after', 'states' => []], $css->parseSelector('#copy .s-a1::after', NULL, $known, $errors));
+    $this->assertSame(['id' => 'plain', 'local' => '::&::before', 'states' => ['hover']], $css->parseSelector('#plain:hover::before', NULL, $known, $errors), 'A block has no children to address, but every element has its own boxes.');
+    $this->assertSame([], array_map('strval', $errors));
+    // Only the two boxes exist; the corrective names them.
+    $errors = [];
+    $this->assertNull($css->parseSelector('#band::marker', NULL, $known, $errors));
+    $this->assertSame('BAD_SELECTOR', $errors[0]->code);
+    $this->assertStringContainsString('::marker is not an addressable pseudo-element; the generated boxes are ::before and ::after (#band::before, #band::after)', $errors[0]->message);
+    $this->assertSame(['before', 'after'], $errors[0]->context['pseudo_elements']);
+    // The box is terminal and one per selector: a state after it, a
+    // compound after it, and a second box are refused with the order.
+    foreach (['#band::after:hover', '#band::before .text-block-link', '#band::before::after', '#band > pb-text::after > *'] as $selector) {
+      $errors = [];
+      $this->assertNull($css->parseSelector($selector, NULL, $known, $errors), $selector);
+      $this->assertSame('BAD_SELECTOR', $errors[0]->code, $selector);
+      $this->assertStringContainsString('a pseudo-element is terminal and one per selector; the states and position facts go before it (#band:hover::', $errors[0]->message, $selector);
+    }
+    // A "::" behind a space is every descendant's box in CSS: refused
+    // with the glued spelling.
+    $errors = [];
+    $this->assertNull($css->parseSelector('#band ::after', NULL, $known, $errors));
+    $this->assertSame('BAD_SELECTOR', $errors[0]->code);
+    $this->assertStringContainsString('a pseudo-element is glued to the compound whose box it is (#band::after', $errors[0]->message);
+    // Inside a qualifier the pseudo-element is the relative grammar's
+    // refusal; the compound before a box is still judged.
+    $errors = [];
+    $this->assertNull($css->parseSelector('#band > pb-text:has(a::before)', NULL, $known, $errors));
+    $this->assertSame('BAD_SELECTOR', $errors[0]->code);
+    $this->assertStringContainsString('is not a relative selector the grammar accepts', $errors[0]->message);
+    $errors = [];
+    $this->assertNull($css->parseSelector('#band > pb-ghost::after', NULL, $known, $errors));
+    $this->assertSame('UNKNOWN_TYPE', $errors[0]->code);
+    // A leading sibling combinator addresses the owner's siblings, outside
+    // its subtree: refused with the spelling from the parent.
+    foreach (['#band + p', '#band ~ p', '#band+p'] as $selector) {
+      $errors = [];
+      $this->assertNull($css->parseSelector($selector, NULL, $known, $errors), $selector);
+      $this->assertSame('BAD_SELECTOR', $errors[0]->code, $selector);
+      $this->assertStringContainsString('#band\'s siblings are outside it', $errors[0]->message, $selector);
+      $this->assertStringContainsString('#parent > pb-text + pb-text', $errors[0]->message, $selector);
+    }
+    // A qualifier on #id itself is a condition with a parameter, which no
+    // condition is: refused naming the compound it narrows instead.
+    foreach (['#band:has(a)', '#band:not(pb-image)', '#band:has(> pb-image)', '#band:not(.text-block-link)', '#band:has(a) > pb-text'] as $selector) {
+      $errors = [];
+      $this->assertNull($css->parseSelector($selector, NULL, $known, $errors), $selector);
+      $this->assertSame('BAD_SELECTOR', $errors[0]->code, $selector);
+      $this->assertStringContainsString('never #band itself', $errors[0]->message, $selector);
+    }
+    // States and facts come last: a state before a qualifier is outside
+    // the grammar.
+    $errors = [];
+    $this->assertNull($css->parseSelector('#band > pb-text:hover:has(a)', NULL, $known, $errors));
+    $this->assertSame('BAD_SELECTOR', $errors[0]->code);
+    $this->assertStringContainsString('after them, the published states', $errors[0]->message);
+    // A :not() of an unpublished pseudo-class is no fact.
+    $errors = [];
+    $this->assertNull($css->parseSelector('#band > *:not(:hover)', NULL, $known, $errors));
+    $this->assertSame('UNKNOWN_STATE', $errors[0]->code);
+    // The vocabulary inside an argument: a :has() part resolves against
+    // the type it narrows, a :not() class where the narrowed compound
+    // stands (the container's parts, never the type's), a type inside
+    // :has() on a block type has no children to name.
+    $errors = [];
+    $this->assertNull($css->parseSelector('#band > pb-image:has(.text-block-link)', NULL, $known, $errors));
+    $this->assertSame('UNKNOWN_PART', $errors[0]->code);
+    $this->assertStringContainsString('not a part of <pb-image>', $errors[0]->message);
+    $errors = [];
+    $this->assertNull($css->parseSelector('#band > pb-text:not(.text-block-link)', NULL, $known, $errors));
+    $this->assertSame('UNKNOWN_PART', $errors[0]->code);
+    $this->assertStringContainsString('not a part of <pb-container>', $errors[0]->message);
+    $errors = [];
+    $this->assertNull($css->parseSelector('#band > pb-text:has(> pb-image)', NULL, $known, $errors));
+    $this->assertSame('BAD_SELECTOR', $errors[0]->code);
+    $this->assertStringContainsString('pb-text is a block, so no type follows it', $errors[0]->message);
+    $errors = [];
+    $this->assertNull($css->parseSelector('#band > pb-container:has(pb-ghost)', NULL, $known, $errors));
+    $this->assertSame('UNKNOWN_TYPE', $errors[0]->code);
+    $errors = [];
+    $this->assertNull($css->parseSelector('#band > *:not(pb-ghost)', NULL, $known, $errors));
+    $this->assertSame('UNKNOWN_TYPE', $errors[0]->code);
 
     // With no declared namespaces the pre-v0.5 correctives hold: the
     // vocabulary grows by data, never by promise.
@@ -1364,8 +1830,196 @@ HTML;
   }
 
   /**
+   * A relation rule prints back as the line that was written.
+   *
+   * The done-when of the dialect's relations: the key carries the
+   * qualifiers, the condition carries the state or the negated fact, and
+   * the printer spells the two back in the parser's order (qualifiers on
+   * the compound, states last).
+   */
+  public function testRelationsPrintBack(): void {
+    $document = <<<HTML
+<pb-container id="band" width="site">
+  <pb-text id="a" tag="p">One</pb-text>
+  <pb-image id="pic" media="Sunrise" alt="Sunrise" aspect-ratio="4:3" />
+</pb-container>
+<style>
+  #band > pb-text:has(a):hover { color: red; }
+  #band > *:not(pb-image):not(:last-child) { margin-bottom: 0; }
+  #band > pb-text:not(:has(a)) { color: blue; }
+  #band > p + p { margin-top: 0; }
+  #band::after { content: ""; }
+  #band:hover::before { content: ""; background-color: var(--color-accent); }
+  #band > pb-text:first-child::after { content: none; }
+</style>
+HTML;
+    $result = $this->parser->parseDocument($document, $this->catalog);
+    $this->assertTrue($result->isValid(), implode('; ', array_map('strval', $result->errors)));
+    $styles = $result->tree[0]['styles'];
+    $this->assertSame(['color' => 'red'], $styles['::> pb-text:has(a)']['hover']);
+    $this->assertSame(['margin-bottom' => '0'], $styles['::> *:not(pb-image)']['not-last-child']);
+    $this->assertSame(['color' => 'blue'], $styles['::> pb-text:not(:has(a))']['default']);
+    $this->assertSame(['margin-top' => '0'], $styles['::> p + p']['default']);
+    // A generated box is a rule at the box's key: the anchor's for the
+    // element's own, the chain's with the pseudo glued for a child's; the
+    // state is the entry's condition, never selector text.
+    $this->assertSame(['content' => '""'], $styles['::&::after']['default']);
+    $this->assertSame(['content' => '""', 'background-color' => 'var(--color-accent)'], $styles['::&::before']['hover']);
+    $this->assertSame(['content' => 'none'], $styles['::> pb-text::after']['first-child']);
+    $print = $this->printer->print($result->tree, $this->catalog);
+    $this->assertStringContainsString('#band > pb-text:has(a):hover { color: red; }', $print);
+    $this->assertStringContainsString('#band > *:not(pb-image):not(:last-child) { margin-bottom: 0; }', $print);
+    $this->assertStringContainsString('#band > pb-text:not(:has(a)) { color: blue; }', $print);
+    $this->assertStringContainsString('#band > p + p { margin-top: 0; }', $print);
+    $this->assertStringContainsString('#band::after { content: ""; }', $print);
+    $this->assertStringContainsString('#band:hover::before { content: ""; background-color: var(--color-accent); }', $print);
+    $this->assertStringContainsString('#band > pb-text:first-child::after { content: none; }', $print);
+  }
+
+  /**
+   * A rule wears variants as declarations, the attribute's twin.
+   *
+   * A `::` local's references print inside the rule's plain block before
+   * its properties: an axis variant as `{axis}: {value}` (in reference
+   * order), the style classes as one `class: a b`, through the catalog
+   * lookups the element's attributes use; a wear-only rule prints its
+   * declarations alone; the rule's other conditions print as they did.
+   * The parser reads them back as the entry's reference list (axis wear
+   * first, then class wear), so print(parse(x)) == x. Refused at parse:
+   * wear on the element itself (the attributes' and the set op's
+   * spelling), wear under a state or a wrapper, an unpublished class, and
+   * a top-level-only axis (a rule's matches are never top-level); an axis
+   * name whose value spells none of the axis's variants is CSS and lands
+   * as a property.
+   */
+  public function testRuleWearPrintsAndParsesAsDeclarations(): void {
+    $tree = [
+      [
+        'kind' => 'container',
+        'layout_id' => 'daedalus_stylish_container',
+        'uuid' => 'c0d89921-04a5-48d1-8720-d7508da565f6',
+        'children' => [
+          [
+            'kind' => 'block',
+            'uuid' => '66f39f31-8735-431e-9848-0db7e34e81ff',
+            'block_type' => 'text',
+            'block_fields' => ['field_text_tag' => 'p', 'field_text_text' => 'Hi'],
+          ],
+        ],
+        'styles' => [
+          '::> pb-text' => [
+            'variants' => [['variant' => 'button', 'fragment' => ''], ['variant' => 'text_loud', 'fragment' => '']],
+            'default' => ['color' => 'red'],
+            'hover' => ['color' => 'blue'],
+          ],
+          '::h2' => ['variants' => [['variant' => 'lead', 'fragment' => '']]],
+        ],
+      ],
+    ];
+    $expected = <<<HTML
+<pb-container id="c0d89921-04a5-48d1-8720-d7508da565f6">
+  <pb-text id="66f39f31-8735-431e-9848-0db7e34e81ff" tag="p">Hi</pb-text>
+</pb-container>
+<style>
+  #c0d89921-04a5-48d1-8720-d7508da565f6 > pb-text { tone: loud; class: button; color: red; }
+  #c0d89921-04a5-48d1-8720-d7508da565f6 > pb-text:hover { color: blue; }
+  #c0d89921-04a5-48d1-8720-d7508da565f6 h2 { class: lead; }
+</style>
+
+HTML;
+    $print = $this->printer->print($tree, $this->catalog);
+    $this->assertSame($expected, $print);
+
+    $reparse = $this->parser->parseDocument($print, $this->catalog);
+    $this->assertSame([], array_map('strval', $reparse->errors));
+    $styles = $reparse->tree[0]['styles'];
+    $this->assertSame([['variant' => 'text_loud', 'fragment' => ''], ['variant' => 'button', 'fragment' => '']], $styles['::> pb-text']['variants'], 'Axis wear reads back first, then class wear.');
+    $this->assertSame(['color' => 'red'], $styles['::> pb-text']['default']);
+    $this->assertSame(['color' => 'blue'], $styles['::> pb-text']['hover']);
+    $this->assertSame([['variant' => 'lead', 'fragment' => '']], $styles['::h2']['variants']);
+    $this->assertSame($print, $this->printer->print($reparse->tree, $this->catalog), 'print(parse(x)) == x');
+
+    $codes = function (string $css): array {
+      $document = "<pb-container id=\"band\"><pb-text id=\"t\" tag=\"p\">Hi</pb-text></pb-container>\n<style>$css</style>";
+      $result = $this->parser->parseDocument($document, $this->catalog);
+      return array_map(static fn ($error): string => $error->code, $result->errors);
+    };
+    $this->assertSame(['WEAR_ON_ELEMENT'], $codes('#t { class: button; }'), 'The element wears on its own tag, never in a rule.');
+    $this->assertSame(['WEAR_ON_ELEMENT'], $codes('#band { width: full; }'), 'An axis on the element itself is its attribute.');
+    $this->assertSame(['WEAR_UNDER_CONDITION'], $codes('#band > pb-text:hover { class: button; }'), 'A wear has no state.');
+    $this->assertSame(['WEAR_UNDER_CONDITION'], $codes('@container (max-width: 767px) { #band > pb-text { tone: loud; } }'), 'A wear has no wrapper.');
+    $this->assertSame(['AXIS_NOT_TOP_LEVEL'], $codes('#band > pb-container { width: full; }'), 'A top-level-only axis never wears at a rule.');
+    $this->assertSame(['UNKNOWN_CLASS'], $codes('#band > pb-text { class: nope; }'), 'The class corrective is the element\'s.');
+
+    // An axis name whose value is none of the axis's values is CSS.
+    $result = $this->parser->parseDocument("<pb-container id=\"band\"></pb-container>\n<style>#band > pb-container { width: 100%; }</style>", $this->catalog);
+    $this->assertSame([], array_map('strval', $result->errors));
+    $this->assertSame(['width' => '100%'], $result->tree[0]['styles']['::> pb-container']['default']);
+    $this->assertArrayNotHasKey('variants', $result->tree[0]['styles']['::> pb-container']);
+  }
+
+  /**
+   * Nesting is sugar: nested rules flatten to the rules they mean.
+   *
+   * A nested prelude composes with the parent selector by CSS nesting's
+   * relative rule (`&` the parent, a bare prelude relative to it, a
+   * leading `:` the parent's own state), a nested `@wrapper` adds its
+   * condition, and the declarations outside the nested blocks stay the
+   * parent's; the assignments come out exactly as the flat document would
+   * produce them, and the print is always flat.
+   */
+  public function testNestingFlattens(): void {
+    $css = new DialectCssParser($this->catalog);
+    $known = ['band' => ['container' => TRUE, 'block_type' => NULL, 'plugin_id' => NULL, 'body' => NULL]];
+    $errors = [];
+    $nested = $css->parseStyleBlock(<<<'CSS'
+#band {
+  margin: 0;
+  > pb-text { color: red; &:hover { color: blue; } }
+  :hover { padding: 1rem; }
+  & > * { gap: 1rem; }
+  @container (max-width: 767px) { margin: 1rem; p { color: green; } }
+}
+CSS, 1, $known, $errors);
+    $this->assertSame([], array_map('strval', $errors));
+    $flat = $css->parseStyleBlock(<<<'CSS'
+#band { margin: 0; }
+#band > pb-text { color: red; }
+#band > pb-text:hover { color: blue; }
+#band:hover { padding: 1rem; }
+#band > * { gap: 1rem; }
+@container (max-width: 767px) { #band { margin: 1rem; } #band p { color: green; } }
+CSS, 1, $known, $errors);
+    $this->assertSame($flat, $nested);
+    $this->assertSame(['band', '::> pb-text', 'hover', ['color' => 'blue']], $nested[2]);
+    $this->assertSame(['band', '::p', 'narrow', ['color' => 'green']], $nested[6]);
+  }
+
+  /**
    * The spec catalog with no instance namespaces declared.
    */
+  /**
+   * The selector rosters the fixture's styling layer would contribute.
+   *
+   * Every owner (the container, each block type given, any other block)
+   * carries the base section's tags; the parts are the given owners'.
+   *
+   * @param array<string, array<string, string>> $parts
+   *   Block type owner (dialect tag) => its parts (selector => label), in
+   *   the catalog's block type order.
+   *
+   * @return array<string, array{parts: array<string, string>, tags: string[]}>
+   *   The lane, in the subscriber's order.
+   */
+  protected static function selectorRosters(array $parts): array {
+    $tags = ['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p', 'a', 'ul', 'ol', 'li', 'blockquote', 'pre', 'code', 'img'];
+    $rosters = [];
+    foreach (['pb-container', ...array_keys($parts), 'pb-block'] as $owner) {
+      $rosters[$owner] = ['parts' => $parts[$owner] ?? [], 'tags' => $tags];
+    }
+    return $rosters;
+  }
+
   protected static function bareCatalog(): DialectCatalog {
     return new DialectCatalog(
       containerLayoutId: 'daedalus_stylish_container',
@@ -1448,7 +2102,7 @@ HTML;
         ],
       ],
       conditions: ['hover' => ':hover', 'narrow' => '@container (max-width: 767px)'],
-      parts: ['text-block-link' => ['pb-text']],
+      selectors: static::selectorRosters(['pb-text' => ['.text-block-link' => 'Link']]),
       stylable: [
         'container' => new VocabularyRoster(Address::kind('container'), 'spec', [
           'spacing' => [
@@ -1680,6 +2334,94 @@ HTML;
   }
 
   /**
+   * A container's name prints and parses on the section's label slot.
+   *
+   * The element-naming spine's one renamable word reaches the AI door: a
+   * section carrying a label prints name="..." after its provenance and
+   * before its axes, the parser lands it back on the node's label key
+   * (the serializer's, so a stored stencil tree and a parsed tree share
+   * one shape) and the round trip is byte-stable, escaping included. The
+   * attribute is the container's alone: a block's name is derived from
+   * its content, so name on a block tag is ILLEGAL_ATTR with the block's
+   * own legal roster, and an empty name is no name.
+   */
+  public function testContainerNamePrintsAndParses(): void {
+    $tree = [
+      [
+        'kind' => 'container',
+        'layout_id' => 'daedalus_stylish_container',
+        'uuid' => 'c0d89921-04a5-48d1-8720-d7508da565f6',
+        'label' => 'Welcome & "hello"',
+        'stencil' => 'hero',
+        'children' => [
+          [
+            'kind' => 'container',
+            'layout_id' => 'daedalus_stylish_container',
+            'uuid' => 'd1e2f3a4-b5c6-4d7e-8f90-a1b2c3d4e5f6',
+            'label' => 'Pricing',
+            'children' => [],
+          ],
+          [
+            'kind' => 'container',
+            'layout_id' => 'daedalus_stylish_container',
+            'uuid' => 'e2f3a4b5-c6d7-4e8f-9a01-b2c3d4e5f6a7',
+            'children' => [],
+          ],
+          [
+            'kind' => 'block',
+            'uuid' => '66f39f31-8735-431e-9848-0db7e34e81ff',
+            'block_type' => 'text',
+            'label' => 'Front page title',
+            'block_fields' => ['field_text_tag' => 'h2', 'field_text_text' => 'Hi'],
+          ],
+        ],
+        'styles' => ['' => ['variants' => [['variant' => 'container_lg', 'fragment' => '']]]],
+      ],
+    ];
+    $expected = <<<HTML
+<pb-container id="c0d89921-04a5-48d1-8720-d7508da565f6" stencil="hero" name="Welcome &amp; &quot;hello&quot;" width="lg">
+  <pb-container id="d1e2f3a4-b5c6-4d7e-8f90-a1b2c3d4e5f6" name="Pricing">
+  </pb-container>
+  <pb-container id="e2f3a4b5-c6d7-4e8f-9a01-b2c3d4e5f6a7">
+  </pb-container>
+  <pb-text id="66f39f31-8735-431e-9848-0db7e34e81ff" tag="h2">Hi</pb-text>
+</pb-container>
+
+HTML;
+    $print = $this->printer->print($tree, $this->catalog);
+    $this->assertSame($expected, $print);
+
+    $reparse = $this->parser->parseDocument($print, $this->catalog);
+    $this->assertSame([], array_map('strval', $reparse->errors));
+    $this->assertSame($print, $this->printer->print($reparse->tree, $this->catalog), 'print(parse(x)) == x');
+    $container = $reparse->tree[0];
+    $this->assertSame('Welcome & "hello"', $container['label'], 'The name lands on the serializer\'s label key, unescaped.');
+    $this->assertSame('Pricing', $container['children'][0]['label'], 'Nested containers name the same way.');
+    $this->assertArrayNotHasKey('label', $container['children'][1], 'An unnamed container carries no label.');
+    $this->assertArrayNotHasKey('label', $container['children'][2], 'A block\'s label is residue: never printed, never parsed.');
+
+    // The fragment door speaks the same grammar; an empty name is no name.
+    $result = $this->parser->parseFragment('<pb-container id="band" name="Pricing"></pb-container><pb-container id="bare" name=""></pb-container>', $this->catalog);
+    $this->assertTrue($result->isValid(), implode('; ', array_map('strval', $result->errors)));
+    $this->assertSame('Pricing', $result->tree[0]['label']);
+    $this->assertArrayNotHasKey('label', $result->tree[1]);
+
+    // Container-only: a block's name is derived, so its tags refuse the
+    // attribute with their own legal rosters, and the container's roster
+    // names it.
+    $result = $this->parser->parseDocument('<pb-container id="c"><pb-text id="t" name="Title">Hi</pb-text></pb-container>', $this->catalog);
+    $this->assertSame(['ILLEGAL_ATTR'], array_map(static fn ($e) => $e->code, $result->errors));
+    $this->assertSame('name is not an attribute of <pb-text>', $result->errors[0]->message);
+    $this->assertNotContains('name', $result->errors[0]->context['legal']);
+    $result = $this->parser->parseDocument('<pb-container id="c"><pb-block id="b" plugin="system_branding_block" name="Brand" /></pb-container>', $this->catalog);
+    $this->assertSame(['ILLEGAL_ATTR'], array_map(static fn ($e) => $e->code, $result->errors));
+    $this->assertSame('name is not an attribute of <pb-block>', $result->errors[0]->message);
+    $result = $this->parser->parseDocument('<pb-container id="c" title="Hero"></pb-container>', $this->catalog);
+    $this->assertSame(['ILLEGAL_ATTR'], array_map(static fn ($e) => $e->code, $result->errors));
+    $this->assertSame(['class', 'id', 'layout', 'name', 'stencil', 'style', 'width'], $result->errors[0]->context['legal']);
+  }
+
+  /**
    * The catalog records the dialect version (a public contract).
    *
    * Durable artifacts never freeze dialect text (stencils store the lean
@@ -1787,7 +2529,19 @@ HTML;
     // The attribute is legal only where the axis view carries it.
     $result = $this->parser->parseDocument('<pb-container id="c"><pb-image alt="x" tone="loud" /></pb-container>', $this->catalog);
     $this->assertSame('ILLEGAL_ATTR', $result->errors[0]->code);
-    $this->assertSame(['alt', 'aspect-ratio', 'class', 'emphasis', 'generate', 'id', 'media', 'stencil', 'style', 'url'], $result->errors[0]->context['legal']);
+    $this->assertSame([
+      'alt',
+      'aspect-ratio',
+      'class',
+      'emphasis',
+      'file',
+      'generate',
+      'id',
+      'media',
+      'stencil',
+      'style',
+      'url',
+    ], $result->errors[0]->context['legal']);
   }
 
   /**

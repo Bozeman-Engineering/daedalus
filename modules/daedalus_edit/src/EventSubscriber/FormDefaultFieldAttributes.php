@@ -8,6 +8,7 @@ use Drupal\Core\Render\Element;
 use Drupal\Core\Template\Attribute;
 use Drupal\Core\Entity\EntityInterface;
 use Drupal\Core\Form\FormStateInterface;
+use Drupal\daedalus_edit\EditIdentity;
 use Drupal\daedalus_edit\Event\FieldAttributes;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 
@@ -30,19 +31,24 @@ class FormDefaultFieldAttributes implements EventSubscriberInterface {
    * empty or unplaced Layout Builder field renders nothing) the server
    * cannot see, and the view display's hidden list was a proxy that
    * failed exactly there. The client reveals the wrappers with no canvas
-   * leaf and binds their changes to the tempstore auto-save.
+   * leaf; their widgets commit through the form transport.
    *
-   * @see js/daedalus_edit/panel-widget-visibility.js
+   * The wrapper id is the field's main property through EditIdentity, the
+   * minter the render side uses: the client looks the wrapper up by the
+   * property it parsed from the leaf's edit id, so a base reference field
+   * (uid, target_id) finds its widget exactly as a text field does.
    *
    * @param \Drupal\daedalus_edit\Event\FieldAttributes $event
    *   The event.
+   *
+   * @see js/daedalus_edit/panel-widget-visibility.js
    */
   public function addFormItemAttributesAlter(FieldAttributes $event) {
     $field_name = $event->getFieldName();
     $form = $event->getForm();
     $form_item = &$form[$field_name];
     $entity = $event->getEntity();
-    $form_item['#attributes']['data-daedalus-edit-form-item-wrapper-id'] = sprintf('%s::%s::%s::%s', $entity->getEntityTypeId(), daedalus_ui_entity_identifier($entity), $field_name, 'value');
+    $form_item['#attributes']['data-daedalus-edit-form-item-wrapper-id'] = EditIdentity::fieldWrapperId($entity, $field_name, EditIdentity::mainProperty($entity->getFieldDefinition($field_name)));
     $form_item['#attributes']['data-daedalus-edit-form-item-widget'] = self::getWidget($event);
     $form_item['#attributes']['class'][] = 'daedalus-edit-form-item-wrapper';
     $form_item['#attributes']['class'][] = 'daedalus-edit-hidden';
@@ -62,6 +68,14 @@ class FormDefaultFieldAttributes implements EventSubscriberInterface {
     $entity = $event->getEntity();
     $field_name = $event->getFieldName();
     $form_item = &$form[$field_name];
+
+    // A field's form item is its widget. An element under a field name with
+    // no widget (the hidden `changed` input ContentEntityForm adds) is not
+    // one, and hanging a wrapper child on it here, after the build, would
+    // leave an unbuilt element for the form error walk to trip on.
+    if (!isset($form_item['widget'])) {
+      return;
+    }
 
     $properties = $entity->getFieldDefinition($field_name)->getFieldStorageDefinition()->getPropertyNames();
 
@@ -95,7 +109,7 @@ class FormDefaultFieldAttributes implements EventSubscriberInterface {
    * Adds attributes that associate the form element with the page markup.
    */
   private function addFormItemAttributes(FormStateInterface $form_state, &$form_item, EntityInterface $entity, $field_name, $delta, $property) {
-    $form_item_id = sprintf('%s::%s::%s::%s::%s', $entity->getEntityTypeId(), daedalus_ui_entity_identifier($entity), $field_name, $delta, $property);
+    $form_item_id = EditIdentity::itemId($entity, $field_name, $delta, $property);
 
     $form_item['#wrapper_attributes'] = new Attribute([
       'class' => ['daedalus-edit-form-item'],
@@ -103,14 +117,6 @@ class FormDefaultFieldAttributes implements EventSubscriberInterface {
     ]);
     if (!empty($form_item['#format'])) {
       $form_item['#wrapper_attributes']->setAttribute('data-daedalus-edit-format', $form_item['#format']);
-    }
-    // Add an effect to fields that were just added to the page.
-    if ($form_state->get('added_to_page') === $field_name) {
-      $definition = $entity->getFieldDefinition($field_name);
-      $main_property = method_exists($definition, 'getMainPropertyName') ? $definition->getMainPropertyName() : 'value';
-      if ($main_property === $property) {
-        $form_item['#wrapper_attributes']->addClass('daedalus-edit-field-added-to-page');
-      }
     }
     return $form_item;
   }

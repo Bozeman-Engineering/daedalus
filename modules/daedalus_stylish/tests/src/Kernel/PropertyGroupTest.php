@@ -4,9 +4,14 @@ declare(strict_types=1);
 
 namespace Drupal\Tests\daedalus_stylish\Kernel;
 
+use Drupal\daedalus_stylish\MediaToken;
+use Drupal\daedalus_stylish\Plugin\PropertyGroup\GeneratedContent;
 use Drupal\daedalus_stylish\PropertyGroupBase;
+use Drupal\file\Entity\File;
 use Drupal\KernelTests\KernelTestBase;
+use Drupal\media\Entity\Media;
 use Drupal\daedalus_stylish\PropertyGroupPluginManager;
+use Drupal\Tests\media\Traits\MediaTypeCreationTrait;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 
@@ -17,6 +22,8 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 #[RunTestsInSeparateProcesses]
 class PropertyGroupTest extends KernelTestBase {
 
+  use MediaTypeCreationTrait;
+
   /**
    * {@inheritdoc}
    */
@@ -25,6 +32,9 @@ class PropertyGroupTest extends KernelTestBase {
     'daedalus_blueprint',
     'user',
     'field',
+    'file',
+    'image',
+    'media',
     'layout_discovery',
     'layout_builder',
     'navigation',
@@ -54,18 +64,22 @@ class PropertyGroupTest extends KernelTestBase {
   public function testDiscoveryAndOwnership(): void {
     // Effects and Motion share weight 80; the id tie-break seats Effects
     // (what a treatment moves) before Motion (how it moves).
-    $curated = ['spacing', 'typography', 'background', 'border', 'shadow', 'sizing', 'layout', 'effects', 'motion'];
+    $curated = ['spacing', 'typography', 'background', 'border', 'shadow', 'sizing', 'layout', 'effects', 'motion', 'generated_content'];
     $groups = $this->manager->getGroups();
-    // Curated groups first (weights 10-80); the generated wide tier
+    // Curated groups first (weights 10-90); the generated wide tier
     // (weight 100, one derivative per CSS spec area) sorts after them all.
-    $this->assertSame($curated, array_slice(array_keys($groups), 0, 9));
-    $generated = array_slice(array_keys($groups), 9);
+    $this->assertSame($curated, array_slice(array_keys($groups), 0, 10));
+    $generated = array_slice(array_keys($groups), 10);
     $this->assertNotEmpty($generated);
     foreach ($generated as $id) {
       $this->assertStringStartsWith('wide:', $id);
       $this->assertTrue((bool) ($groups[$id]->getPluginDefinition()['generated'] ?? FALSE));
     }
     $this->assertSame($curated, array_keys($this->manager->getCuratedGroups()));
+    // The pseudo-only groups are the ones a real element may not name.
+    $this->assertSame(['generated_content'], $this->manager->getPseudoGroups());
+    $real = array_values(array_diff(array_keys($groups), ['generated_content']));
+    $this->assertSame($real, array_keys($this->manager->getElementGroups()));
 
     $this->assertSame('spacing', $this->manager->getGroupIdForProperty('padding'));
     $this->assertSame('typography', $this->manager->getGroupIdForProperty('font-size'));
@@ -474,6 +488,89 @@ class PropertyGroupTest extends KernelTestBase {
       }
 
     };
+  }
+
+  /**
+   * The generated box's existence switch: "", none, or one media token.
+   *
+   * The grammar of content (GeneratedContent): the two keywords, or
+   * exactly one media reference as the whole value, which the base
+   * class's media gates judge before it lands on the keyword grammar
+   * as none. Everything else, a token beside anything included, is
+   * refused with the three spellings. The property carries the media
+   * flag, so it is media-capable at the manager, the one seam every
+   * media consumer reads.
+   */
+  public function testGeneratedContent(): void {
+    $this->installEntitySchema('user');
+    $this->installEntitySchema('file');
+    $this->installSchema('file', ['file_usage']);
+    $this->installEntitySchema('media');
+    $this->installConfig(['field', 'system', 'image', 'file', 'media']);
+    $image_type = $this->createMediaType('image');
+    $source_field = $image_type->getSource()->getSourceFieldDefinition($image_type)->getName();
+    $this->container->get('file_system')->copy($this->root . '/core/misc/druplicon.png', 'public://box.png');
+    $file = File::create(['uri' => 'public://box.png', 'filename' => 'box.png']);
+    $file->save();
+    $media = Media::create(['bundle' => $image_type->id(), 'name' => 'Box', $source_field => ['target_id' => $file->id()]]);
+    $media->save();
+    $file_type = $this->createMediaType('file');
+    $document = Media::create(['bundle' => $file_type->id(), 'name' => 'Document']);
+    $document->save();
+    $token = MediaToken::build($media->uuid());
+
+    $group = $this->manager->createInstance('generated_content');
+    $this->assertSame(['content'], array_keys($group->getProperties()));
+    $this->assertTrue($this->manager->isMediaCapable('content'));
+    $this->assertSame(['""', 'none'], $group->getProperties()['content']['keywords']);
+
+    // The three accepts, trimmed, the keyword case-insensitive, the token
+    // in either quoting.
+    $this->assertValid($group, 'content', '""');
+    $this->assertValid($group, 'content', 'none');
+    $this->assertValid($group, 'content', ' NONE ');
+    $this->assertValid($group, 'content', $token);
+    $this->assertValid($group, 'content', " url(media:{$media->uuid()}) ");
+    $this->assertValid($group, 'content', $token, ['image_style' => 'thumbnail']);
+
+    // One token as the whole value, nothing beside it: two tokens, a
+    // token beside text or a keyword, a layer list, image-set() and the
+    // alt form are all refused with content's own corrective.
+    foreach ([
+      "$token, $token",
+      "$token $token",
+      "\"x\" $token",
+      "none $token",
+      "$token / \"alt\"",
+      "image-set($token 1x)",
+      "linear-gradient(#000, #fff), $token",
+      'url(x.svg)',
+      'url("x.png")',
+      'linear-gradient(#000, #fff)',
+      '"hi"',
+      "''",
+      'attr(title)',
+      'counter(item)',
+      'open-quote',
+      'normal',
+      'var(--x)',
+      'inherit',
+      'none none',
+    ] as $value) {
+      $errors = $group->validate('content', $value);
+      $this->assertCount(1, $errors, $value);
+      $this->assertSame('INVALID_STYLE_VALUE', $errors[0]->getCode(), $value);
+      $this->assertSame(['keywords' => GeneratedContent::VALUES], $errors[0]->getContext(), $value);
+      $this->assertStringContainsString('one media reference', $errors[0]->getHint(), $value);
+      $this->assertStringContainsString('Text belongs in a field', $errors[0]->getHint(), $value);
+    }
+
+    // The one token is judged by the base class's media gates: a payload
+    // that is no uuid, a media that does not exist, a media whose source
+    // is no image.
+    $this->assertCode('INVALID_MEDIA_REFERENCE', $group, 'content', "url('media:not-a-uuid')");
+    $this->assertCode('MEDIA_NOT_FOUND', $group, 'content', MediaToken::build('11111111-1111-1111-1111-111111111111'));
+    $this->assertCode('MEDIA_NOT_IMAGE', $group, 'content', MediaToken::build($document->uuid()));
   }
 
   /**

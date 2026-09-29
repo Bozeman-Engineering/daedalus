@@ -4,7 +4,8 @@ declare(strict_types=1);
 
 namespace Drupal\Tests\daedalus_edit\Kernel;
 
-use Drupal\daedalus_edit\FieldHandler\IdentityMintingTextFieldHandler;
+use Drupal\daedalus_blueprint\ExtractedValue;
+use Drupal\daedalus_blueprint\FieldHandler\TextFieldHandler;
 use Drupal\daedalus_edit\IdentityMinter;
 use Drupal\field\Entity\FieldConfig;
 use Drupal\field\Entity\FieldStorageConfig;
@@ -23,10 +24,11 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  * the three wires of the canonical guarantee: the hook_entity_presave()
  * backstop (every saving write path leaves storage minted, byte-stable on
  * re-save, and a format that allows a tag without class still saves with
- * that tag skipped), the blueprint stage-time seam (daedalus_edit's handler
- * outranks daedalus_blueprint's for formatted text and mints at deserialize,
- * skipping the same tags without erroring), and the backfill (legacy
- * identity-less content is found, minted, and saved exactly once).
+ * that tag skipped), the blueprint stage-time seam (a FieldAppliedEvent
+ * subscriber mints whatever the spine applies, a grammar value and an
+ * ExtractedValue alike, with no save and no handler of daedalus_edit's own,
+ * skipping the same tags without failing the operation), and the backfill
+ * (legacy identity-less content is found, minted, and saved exactly once).
  *
  * @group daedalus_edit
  */
@@ -59,6 +61,7 @@ class IdentityMintingWiringTest extends KernelTestBase {
     'daedalus_tempstore',
     'daedalus_blueprint',
     'daedalus_blueprint_api',
+    'file',
     'daedalus_ui',
     'field_sample_value',
     'daedalus_edit',
@@ -194,30 +197,91 @@ class IdentityMintingWiringTest extends KernelTestBase {
   }
 
   /**
-   * The stage-time seam outranks the parent handler and mints on stage.
+   * Stages one value onto the node's body through the spine, no save.
+   *
+   * @param \Drupal\node\NodeInterface $node
+   *   The subject.
+   * @param mixed $value
+   *   A grammar value or an ExtractedValue for field_body.
    */
-  public function testBlueprintStageSeamMints(): void {
-    $definition = FieldConfig::load('node.page.field_body');
-    $handler = $this->container->get('daedalus_blueprint.field_handler_manager')->getHandler($definition);
-    $this->assertInstanceOf(IdentityMintingTextFieldHandler::class, $handler, "daedalus_edit's handler supersedes daedalus_blueprint's for formatted text.");
-
-    $result = $handler->deserialize(['value' => '<p>Staged</p>', 'format' => 'identity'], $definition);
-    $this->assertFalse($result->hasErrors());
-    $this->assertCount(1, $this->ids($result->getValue()['value']), 'The staged value carries identity without any save.');
+  protected function stage(NodeInterface $node, mixed $value): void {
+    $result = $this->container->get('daedalus_blueprint.operations')->batchOperations($node, [
+      ['op' => 'update_element', 'element' => $node->uuid(), 'properties' => ['field_body' => $value]],
+    ]);
+    $this->assertTrue($result->isSuccess(), print_r($result->toArray(), TRUE));
   }
 
   /**
-   * The stage-time seam skips class-less tags without failing the mutation.
+   * An ExtractedValue for field_body, built the way a form submit builds one.
    */
-  public function testBlueprintStageSeamSkipsUnmintableTags(): void {
+  protected function extracted(string $html, string $format): ExtractedValue {
+    $source = Node::create([
+      'type' => 'page',
+      'title' => 'Source',
+      'field_body' => ['value' => $html, 'format' => $format],
+    ]);
+    return new ExtractedValue($source->get('field_body'));
+  }
+
+  /**
+   * A saved node whose stored body is already minted and byte-stable.
+   */
+  protected function savedNode(): NodeInterface {
+    $node = Node::create([
+      'type' => 'page',
+      'title' => 'Subject',
+      'field_body' => ['value' => '<p>Saved</p>', 'format' => 'identity'],
+    ]);
+    $node->save();
+    return $this->reload($node);
+  }
+
+  /**
+   * The stage-time seam mints a grammar value the spine applies, unsaved.
+   */
+  public function testStageSeamMintsGrammarValue(): void {
+    // daedalus_edit ships no text handler of its own any more: the grammar
+    // path runs daedalus_blueprint's handler and the seam is the event.
     $definition = FieldConfig::load('node.page.field_body');
     $handler = $this->container->get('daedalus_blueprint.field_handler_manager')->getHandler($definition);
+    $this->assertSame(TextFieldHandler::class, $handler::class, "The spine's own text handler serves formatted text; identity rides the applied seam.");
 
-    $result = $handler->deserialize(['value' => '<p>Staged</p><h2>Title</h2>', 'format' => 'broken'], $definition);
-    $this->assertFalse($result->hasErrors(), 'The mutation stages; the format is not an error.');
-    $staged = $result->getValue()['value'];
-    $this->assertCount(1, $this->ids($staged), 'Only the heading minted at stage time.');
-    $this->assertStringContainsString('<p>Staged</p>', $staged);
+    $node = $this->savedNode();
+    $stored = $node->get('field_body')->value;
+    $this->stage($node, ['value' => '<p>Staged</p><h2>Two</h2>', 'format' => 'identity']);
+
+    $staged = $node->get('field_body')->value;
+    $this->assertCount(2, $this->ids($staged), 'Both vocabulary elements carry identity at stage time.');
+    $this->assertSame($stored, $this->reload($node)->get('field_body')->value, 'Nothing was saved: the presave backstop did not run.');
+  }
+
+  /**
+   * The stage-time seam mints an ExtractedValue the spine applies, unsaved.
+   */
+  public function testStageSeamMintsExtractedValue(): void {
+    $node = $this->savedNode();
+    $stored = $node->get('field_body')->value;
+    $this->stage($node, $this->extracted('<p>Extracted</p><blockquote>Quote</blockquote>', 'identity'));
+
+    $staged = $node->get('field_body')->value;
+    $this->assertCount(2, $this->ids($staged), 'An ExtractedValue is minted although no handler ever saw it.');
+    $this->assertSame($stored, $this->reload($node)->get('field_body')->value, 'Nothing was saved: the presave backstop did not run.');
+  }
+
+  /**
+   * The stage-time seam skips class-less tags without failing the operation.
+   */
+  public function testStageSeamSkipsUnmintableTags(): void {
+    $node = $this->savedNode();
+    foreach ([
+      'grammar' => ['value' => '<p>Staged</p><h2>Title</h2>', 'format' => 'broken'],
+      'extracted' => $this->extracted('<p>Staged</p><h2>Title</h2>', 'broken'),
+    ] as $kind => $value) {
+      $this->stage($node, $value);
+      $staged = $node->get('field_body')->value;
+      $this->assertCount(1, $this->ids($staged), "Only the heading minted at stage time ($kind).");
+      $this->assertStringContainsString('<p>Staged</p>', $staged, "The class-less paragraph was left untouched ($kind).");
+    }
   }
 
   /**

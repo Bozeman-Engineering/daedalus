@@ -151,9 +151,10 @@ declare(strict_types=1);
  *   token-free; never against grants or constraints), so a declaration
  *   cannot name a design token whatever design system is active or which
  *   enforcement mode it carries. The law's reason: a mechanic the markup
- *   needs (a container root's `display: grid`, without which its gap is
- *   dead) is code and belongs with the declaration, where no skin can
- *   forget it; a look is the skin's.
+ *   needs (a container root's `display: flex; flex-direction: column`,
+ *   the stack, without which its gap is dead and its Columns variant has
+ *   no direction to flip) is code and belongs with the declaration,
+ *   where no skin can forget it; a look is the skin's.
  * - SKIN defaults: the active skin's site defaults per scope (data, the
  *   design system's look; token-bearing box defaults belong here, on the
  *   skin's block_type:/block_plugin:/layout: scopes).
@@ -172,9 +173,9 @@ declare(strict_types=1);
  * guide serves the tier as `declaredDefaults` beside `skinDefaults`; the
  * inspector shows a declared value in the defaults posture with the
  * declaring scope named and no edit doorway, and the AI's
- * explain_element_styles prints both tiers beneath the stack for the
- * element's scope (StyleStack::floor()), naming the skin's base:{tag}
- * tier as the half only the rendered tag resolves.
+ * explain_element_styles prints both tiers as the lowest layers of the
+ * element's stack for its scope (StyleStack::stack()), naming the skin's
+ * base:{tag} tier as the half only the rendered tag resolves.
  *
  * @code
  * # my_module.page_builder.block_type.image.yml
@@ -194,7 +195,8 @@ declare(strict_types=1);
  *   defaults:
  *     '':
  *       default:
- *         display: grid
+ *         display: flex
+ *         flex-direction: column
  * entity:
  *   elements:
  *     '.daedalus-layout-layout':
@@ -203,12 +205,185 @@ declare(strict_types=1);
  *   defaults:
  *     '::.daedalus-layout-layout':
  *       default:
- *         display: grid
+ *         display: flex
+ *         flex-direction: column
  * @endcode
  *
  * A theme restating one property merges per property through the shared
  * layering (a NULL removes it): the theme owns the markup model, so this
  * is the one override doorway; there is no alter hook of its own.
+ */
+
+/**
+ * Generated boxes: the terminal pseudo-element, its vocabulary, its content.
+ *
+ * The relative selector (\Drupal\daedalus_blueprint\Materials\RelativeSelector,
+ * JS twin daedalus_ui/js/edit_mode/materials/relative-selector.js) admits
+ * one terminal pseudo-element, `::before` or `::after`, after the last
+ * compound and nowhere else (never inside `:has()` or `:not()`, never
+ * followed by a compound, one per selector). The owner's own box is the
+ * CSS nesting anchor `&::before`, the one place `&` is admitted (the
+ * whole selector; `& > p` is not one); a part's box `.quote::after`; a
+ * descendant rule's `> pb-text::before`. The pseudo lives on the selector
+ * record (RelativeSelector::$pseudo), not on a compound: a box is a WHERE
+ * with no node, the doctrine of `> *`, so it is neither a condition
+ * (`:is(::before)` is invalid CSS) nor a markup part (a decorative
+ * element would cost a DOM node on every element and cannot reach a
+ * template-rendered block). Style map keys read `{key}::&::before`,
+ * `{key}::.quote::after`, `{key}::> pb-text::before`; the first `::` of a
+ * key still splits root from selector because the anchor or a compound
+ * always precedes the box's own `::`. A rule ending in a box admits no
+ * continuation (RelativeSelector::under()); a worn fragment's `&::before`
+ * under `> pb-text` continues as `> pb-text::before`. Printed, the box
+ * comes after the condition suffixes and the animation hold
+ * (`:scope:is(:hover, [data-force-state~="hover"])::before`), because a
+ * pseudo-element is the last thing a CSS selector may carry; `:where()`
+ * cannot wrap it, so every rule addressing a box weighs +0-0-1 on its
+ * host's, own and ancestor alike, and the tie-and-proximity discipline
+ * holds by construction.
+ *
+ * EXISTENCE IS UNIVERSAL, VOCABULARY IS DECLARED OR DERIVED. Every element
+ * has both boxes in CSS, so no declaration says an element has one; a
+ * `pseudo` section on any element declaration (a kind, block type, block
+ * plugin, layout, base tag, or any part at any depth; NOT the children
+ * section, whose `> *::before` is always derived, and NOT an instance
+ * namespace) declares what may be styled there, and only that:
+ *
+ * @code
+ * # my_module.page_builder.block_type.testimonial.yml
+ * pseudo:
+ *   before:
+ *     property_groups:
+ *       background: {}
+ *       sizing: {}
+ *       border: {}
+ *   after:
+ *     property_groups:
+ *       background:
+ *         properties: [background-color]
+ * elements:
+ *   '.quote':
+ *     label: 'Quote'
+ *     tag: blockquote
+ *     pseudo:
+ *       after:
+ *         property_groups:
+ *           typography: {}
+ * @endcode
+ *
+ * The grammar (StyleGuide::validatePseudoSections(), at guide build): a
+ * map keyed by `before` and `after` only, each a map carrying exactly
+ * `property_groups` in the ordinary grant grammar (allowlists,
+ * constraints and referenced sets ride along and are walked like any
+ * node's); no `pseudo` inside a pseudo (a box is terminal). The roster
+ * walk (\Drupal\daedalus_stylish\Vocabulary\VocabularyRosterBuilder::walk())
+ * runs the chain, then lands the box on the chain's landing: the host's
+ * declared section is the node when it names the box, else the box
+ * DERIVES its host's property groups and is reported undeclared as a
+ * pseudo "compound" (VocabularyRoster::KIND_PSEUDO) that still carries the
+ * derived grant, the one undeclared shape with one. So an open or guarded
+ * site grants the derivation and a strict site refuses it
+ * (STYLE_PSEUDO_NOT_DECLARED at the key); a design system that wants a
+ * closed world runs strict and declares its boxes. VocabularyRoster::
+ * landingScope() is NULL for a box (no variant pairs land on one; a
+ * reference at a box key is STYLE_VARIANT_SCOPE_MISMATCH, as for a part).
+ * The client payload serves a DECLARED box under its host node as
+ * `pseudo.before` / `pseudo.after` and lets style-guide.js derive an
+ * undeclared one from the served host, so the JS twin (landingForKey,
+ * declaredForKey) answers what the roster answers without a second
+ * derivation.
+ *
+ * `content` IS THE EXISTENCE SWITCH, CLOSED TO `none | "" | ONE MEDIA
+ * REFERENCE`. A box exists exactly while the cascade sets its `content`,
+ * and that fact is owned by one curated group, `generated_content`
+ * (\Drupal\daedalus_stylish\Plugin\PropertyGroup\GeneratedContent, attribute
+ * flag `pseudo: TRUE`, PropertyGroupPluginManager::getPseudoGroups()):
+ * granted last at every box landing, declared or derived, and nowhere
+ * else. Naming it in a real element's, part's or children's
+ * property_groups fails the guide build (a `pseudo` section may name it,
+ * to constrain `content`); a `content` write outside a box is
+ * STYLE_PROPERTY_PSEUDO_ONLY in every enforcement mode. Its grammar
+ * (GeneratedContent::validate()) is exactly three spellings: `""` (the
+ * box present and empty, GeneratedContent::BOX), `none` (no box,
+ * GeneratedContent::NONE), or ONE media reference as the whole value,
+ * `url('media:<uuid>')`, the token `background-image` takes. The
+ * property carries `media: TRUE` beside `type: keyword`, and that flag is
+ * the one seam every media consumer reads, so `content` joins the media
+ * machinery with no road of its own: StyleGuide::mediaProperties() lists
+ * it beside `background-image` (the pseudo-only groups are folded into the
+ * referenced set, since no declaration references them) and the AI
+ * guidance derives from that; PropertyGroupBase::validate()'s token gates
+ * judge the token (uuid shape, the media exists, its source is an image
+ * or vector) and substitute `none` before the keyword grammar sees it;
+ * MediaValueResolver delivers it property-blind; a `_generate` object
+ * stands in as `none` and commits the token; the client's media control
+ * (the library chip, the thumbnail, the text field) rides
+ * `definition.media`, while the offers follow the type (the two keywords,
+ * never the gradient swatches a free image slot takes). None of the base
+ * class's pass-throughs (no CSS-wide keyword, `var()` or `calc()`, since a
+ * token of text shape could smuggle a string); no strings, `attr()`,
+ * counters or `quotes`, because text is content and belongs in a field,
+ * where it is translated, searched and read aloud, while generated text
+ * is read by screen readers and invisible to every content surface; and
+ * no plain `url()`, gradient, `image-set()`, `/ "alt"` suffix, second
+ * token or anything beside the one: each is INVALID_STYLE_VALUE with the
+ * three spellings in the hint (a malformed or missing token is the media
+ * machinery's own corrective, INVALID_MEDIA_REFERENCE, MEDIA_NOT_FOUND or
+ * MEDIA_NOT_IMAGE, at the same path). Two costs are accepted and
+ * documented rather than guarded. A content image is replaced content at
+ * its intrinsic size, so an image style is the way to size it: a declared
+ * box's `generated_content: {constraints: {content: {image_style: …}}}`,
+ * else the site default `media_image_style`, exactly as a background
+ * resolves (MediaValueResolver::imageStyleFor() reads the box's roster
+ * node), while `background-image` on the same box remains the road that
+ * sizes, positions and layers. And a content image is exposed to
+ * assistive technology as an unlabelled image, where a background is not.
+ * A media that no longer exists delivers `content: none`, which on a box
+ * means no box: the honest degradation, the same word the seed's
+ * opposite uses.
+ *
+ * A BOX IS BORN WITH `content: ""`, SEEDED AT THE OP SPINE. A box without
+ * content is invisible, so a first write that seeded nothing would look
+ * like a no-op to every lane. DaedalusStylishOperationHandler's
+ * `update_style` is the one door every lane's writes pass (the inspector's
+ * rows and chip, the code view's islands, the AI's dialect) and the one
+ * seed site: a patch that CREATES a pseudo-element entry merges
+ * `{default: {content: ""}}` beneath the validated patch in the same op,
+ * whatever condition the write lands on, unless the write sets content at
+ * default itself (the author's `content: none` stands, and so does a
+ * first write of `content: url('media:…')`: the token, nothing beneath
+ * it; the seed is unchanged by the media road). The seed
+ * validates with the write, so a strict site's undeclared box refuses the
+ * whole patch and mints nothing; an unset-only patch at a box that never
+ * existed mints nothing; an existing entry is never re-seeded, so
+ * deleting the content line is a deliberate act and the box honestly
+ * disappears (explain_element_styles and the code view show why). There
+ * is no validator corrective for a contentless box (the validator cannot
+ * read the stack, and a variant or ancestor rule may legitimately supply
+ * the content) and no client-side seed (an optimistic mirror is replaced
+ * by the server's result). Variants and skins are AUTHORED, not born: a
+ * variant fragment or a skin default at a box key (`'::&::before'` in the
+ * same relative-key grammar as parts) carries its own `content`, and a
+ * look worn on a rule continues its box under it; apply_variant mints no
+ * box entry and detach_variant materializes a fragment verbatim.
+ *
+ * Seating is a doorway, the first write births: "+ Before" / "+ After" on
+ * the inspector's address chip (advanced mode; basic mode mounts no rows
+ * at a box and offers no doorway), a "Before" / "After" row in the Page
+ * elements tree (listed once the cascade delivers content at the box; see
+ * daedalus_ui.api.php, the part-behavior contract's generated()), or
+ * `&::before {` on the code view's root island only target the box.
+ * Selection never lands on one (a pointer hits the host; a box has no
+ * node), computed reads pass the box to getComputedStyle(host, '::before'),
+ * a forced state stamps the host, and rect-measured chrome withholds (a
+ * box has no rect). Edit-mode chrome that itself paints on a `::before`
+ * (daedalus_explode's plane label chips, daedalus_stylish_layouts' empty
+ * container hint) asserts its own box, `all: initial` first under the
+ * `#daedalus-ui-stage` id, rather than moving off pseudo-elements, so it
+ * wins exactly while it exists and the page's box returns when it leaves.
+ * `::marker`, `::placeholder`, `::selection`, `::first-letter` and
+ * `::first-line` are refused: each has its own property law and lands
+ * separately if ever.
  */
 
 /**

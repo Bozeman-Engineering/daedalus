@@ -12,9 +12,9 @@ use Drupal\daedalus_ui\ElementModel\PageBuilderDeclarations;
 /**
  * Implements hook_page_builder_declarations_alter().
  *
- * Layers state-injected kind and block type declarations over the YAML ones
- * so tests can exercise guide validation failure cases without shipping
- * YAML that would break every other declarations build.
+ * Layers state-injected kind, block type, and block plugin declarations
+ * over the YAML ones so tests can exercise guide validation failure cases
+ * without shipping YAML that would break every other declarations build.
  */
 function daedalus_stylish_control_test_page_builder_declarations_alter(array &$declarations, string $theme): void {
   foreach (\Drupal::state()->get('daedalus_stylish_control_test.kinds', []) as $kind => $declaration) {
@@ -22,6 +22,9 @@ function daedalus_stylish_control_test_page_builder_declarations_alter(array &$d
   }
   foreach (\Drupal::state()->get('daedalus_stylish_control_test.block_types', []) as $bundle => $declaration) {
     $declarations['block_types'][$bundle] = PageBuilderDeclarations::merge($declarations['block_types'][$bundle] ?? [], $declaration);
+  }
+  foreach (\Drupal::state()->get('daedalus_stylish_control_test.block_plugins', []) as $plugin_id => $declaration) {
+    $declarations['block_plugins'][$plugin_id] = PageBuilderDeclarations::merge($declarations['block_plugins'][$plugin_id] ?? [], $declaration);
   }
   foreach (\Drupal::state()->get('daedalus_stylish_control_test.instances', []) as $pattern => $declaration) {
     $declarations['instances'][$pattern] = PageBuilderDeclarations::merge($declarations['instances'][$pattern] ?? [], $declaration);

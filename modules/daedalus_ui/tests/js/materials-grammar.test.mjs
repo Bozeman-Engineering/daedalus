@@ -11,7 +11,7 @@
 import { strict as assert } from 'node:assert';
 import { test } from 'node:test';
 import {
-  KIND, SLOT, attrSlot, canonical, isInlineKind, isMaterialKind, isSlot, references, resolveValue, slotAttribute, slotScope, spell, spellGenerate, spellMedia,
+  KIND, SLOT, attrSlot, canonical, isInlineKind, isMaterialKind, isSlot, references, resolveValue, slotAttribute, slotScope, spell, spellFile, spellGenerate, spellMedia,
 } from '../../js/edit_mode/materials/grammar.js';
 import { createRoster, rootOnly, scopesPair, wears } from '../../js/edit_mode/materials/roster.js';
 
@@ -72,6 +72,8 @@ test('a resolved material carries its record; inline values carry none', () => {
   const media = resolveValue('url("media:ABC-123")', SLOT.STYLE, r);
   assert.deepEqual(media, { kind: KIND.MEDIA, id: 'abc-123', spelling: "url('media:abc-123')", record: null });
   assert.equal(resolveValue("url('generate: a calm lake ')", SLOT.STYLE, r).id, 'a calm lake');
+  assert.deepEqual(resolveValue('url("File: Hero.svg ")', SLOT.STYLE, r), { kind: KIND.FILE, id: 'Hero.svg', spelling: "url('file:Hero.svg')", record: null }, 'the prefix reads case-agnostic, the name stays case-exact (file aliases are exact-match)');
+  assert.equal(resolveValue("url('file:')", SLOT.STYLE, r).id, '', 'an empty name is still a file reference; acceptability is the consumer\'s rule');
   assert.equal(resolveValue('url(https://x/y.png)', SLOT.STYLE, r).kind, KIND.LITERAL, 'a file url is a literal the parser may refuse; it is no reference');
   assert.deepEqual(resolveValue('', SLOT.CLASS, r), { kind: KIND.LITERAL, id: null, spelling: '', record: null });
   assert.equal(resolveValue(null, SLOT.STYLE, r).spelling, '');
@@ -101,9 +103,9 @@ test('the animation slot resolves a keyframes name by its prefixed ident; the st
 
 test('references walks a compound style value and a class list in source order', () => {
   const r = roster();
-  const refs = references("1px solid var(--swatch-lime_green), linear-gradient(var(--color-accent, red), url(x.png)), url('media:M1'), url('generate:sky')", SLOT.STYLE, r);
+  const refs = references("1px solid var(--swatch-lime_green), linear-gradient(var(--color-accent, red), url(x.png)), url('media:M1'), url('generate:sky'), url('file:hero.svg')", SLOT.STYLE, r);
   assert.deepEqual(refs.map((ref) => [ref.kind, ref.id]), [
-    ['swatch', 'lime_green'], ['token', 'color/accent'], ['media', 'm1'], ['generate', 'sky'],
+    ['swatch', 'lime_green'], ['token', 'color/accent'], ['media', 'm1'], ['generate', 'sky'], ['file', 'hero.svg'],
   ]);
   assert.deepEqual(references('button  nope hero_glow', SLOT.CLASS, r).map((ref) => ref.kind), ['variant', 'unknown', 'variant']);
   assert.deepEqual(references('  ', SLOT.CLASS, r), []);
@@ -122,6 +124,7 @@ test('spell reads the provider spelling and refuses a slot the material lacks', 
   assert.throws(() => spell(record({ kind: 'variant', id: 'axis_only' }), SLOT.CLASS), /it spells in: \(no slot\)/);
   assert.equal(spellMedia(' ABC '), "url('media:abc')");
   assert.equal(spellGenerate('  a dog  '), "url('generate:a dog')");
+  assert.equal(spellFile('  hero.svg  '), "url('file:hero.svg')");
 });
 
 test('the roster index: read surface and loud refusals', () => {
@@ -233,6 +236,7 @@ test('canonical rewrites references only, byte-identical elsewhere', () => {
   assert.equal(canonical('linear-gradient(red, blue), url("media:ABC")', SLOT.STYLE, r), "linear-gradient(red, blue), url('media:abc')");
   assert.equal(canonical('var( --color-accent, red) url(x.png)', SLOT.STYLE, r), 'var(--color-accent, red) url(x.png)', 'a var() head normalizes, its fallback and a file url() stay');
   assert.equal(canonical("url(generate: a dog )", SLOT.STYLE, r), "url('generate:a dog')");
+  assert.equal(canonical('url("file: hero.svg ")', SLOT.STYLE, r), "url('file:hero.svg')");
   assert.equal(canonical('  button   nope ', SLOT.CLASS, r), 'button nope', 'a class list is its tokens, unknown ones kept');
   assert.equal(canonical(' hero ', SLOT.STENCIL, r), 'hero');
   assert.equal(canonical('', SLOT.STYLE, r), '');

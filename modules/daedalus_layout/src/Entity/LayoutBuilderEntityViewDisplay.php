@@ -13,6 +13,7 @@ use Drupal\layout_builder\Entity\LayoutBuilderEntityViewDisplay as BaseEntityVie
 use Drupal\daedalus_layout\NestedSectionStorageInterface;
 use Drupal\daedalus_layout\Plugin\Block\SectionBlock;
 use Drupal\daedalus_blueprint_api\Render\SelectableKey;
+use Drupal\daedalus_ui\Render\ElementAddress;
 
 /**
  * Provides an entity view display entity that has a layout.
@@ -243,6 +244,14 @@ class LayoutBuilderEntityViewDisplay extends BaseEntityViewDisplay {
       $build['#attributes']['data-layout-builder-section-storage-type'] = $storage->getStorageType();
       $build['#attributes']['data-layout-builder-section-storage-id'] = $storage->getStorageId();
     }
+    // The section's element address (daedalus_ui ElementAddress), in every
+    // mode and for every visitor, at every depth: the layout declaration
+    // the section resolves through. It rides the layout template's
+    // {{ attributes }} exactly like the selectable key below, and a
+    // composed layout hoists the same bag onto its composed root.
+    if ($section !== NULL) {
+      $build['#attributes'][ElementAddress::ATTRIBUTE] = ElementAddress::layout($section->getLayoutId());
+    }
 
     // Stamp the section's selection identity (its selectable key). $build is
     // the section's layout render array, so the container key rides the
@@ -285,7 +294,7 @@ class LayoutBuilderEntityViewDisplay extends BaseEntityViewDisplay {
    *
    * Fields configured in the "Daedalus Edit: Preserved Fields" section will not be
    * removed from the render array, allowing them to be edited inline with
-   * the Edit tool while Layout Builder manages the rest of the page structure.
+   * in Edit Mode while Layout Builder manages the rest of the page structure.
    */
   public function buildMultiple(array $entities) {
     $fields_that_should_render = $this->getThirdPartySetting('daedalus_layout', 'preserved_fields', []);

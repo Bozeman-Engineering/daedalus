@@ -8,7 +8,7 @@ import { createSlice } from '@reduxjs/toolkit';
  * capabilities, move computes anchors, the AI chat describes the selection.
  * Consumers project; nobody gets a bespoke read shape.
  *
- * The server keeps authority — tools never write the mirror. It boots from
+ * The server keeps authority: clients never write the mirror. It boots from
  * drupalSettings (delivered with the same render that produced the
  * attributed markup, so mirror and canvas are consistent by construction)
  * and is replaced wholesale by the blueprint half of every mutation

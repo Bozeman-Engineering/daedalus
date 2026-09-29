@@ -3,7 +3,6 @@ import { useSelector } from 'react-redux';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { createSelectableTracker } from '../../selection/selectable-tracker';
 import { documentPosition } from '../../utilities/geometry-tracker';
-import { isArmed } from '../../edit_session/edit-session';
 import { typeForKey } from '../../selection/type-for-key';
 import { verbsForSet, runVerbOn, onChange } from '../../verbs/verbs';
 import { verbMenuItems } from '../../verbs/verb-menu-items';
@@ -24,9 +23,9 @@ import { chipPlacement, chipFace, frameEditing } from './selection-frame-model';
  * compositor scroll). The stroke is DASHED while a LIVE edit lands on
  * the primary (daedalus-ui-frame--editing): the store's editingKey IS the
  * primary (frameEditing), a reactive fact the engine's editChanged
- * report writes — never a prediction from the armed tool plus
- * editability, so ending an edit any way (Escape included) restores
- * the solid stroke and the chip's verbs.
+ * report writes — never a prediction from editability, so ending an
+ * edit any way (Escape included) restores the solid stroke and the
+ * chip's verbs.
  *
  * Chips: every member wears `N Type` above its top-left corner (flipped
  * below when there is no room above, never inside, clamped to the
@@ -97,7 +96,7 @@ const SelectionFrame = () => {
   const primaryKey = useSelector((state) => state.selection.selectedKey);
   const selectedKeys = useSelector((state) => state.selection.selectedKeys);
   const editingKey = useSelector((state) => state.selection.editingKey);
-  const currentTool = useSelector((state) => state.tool.currentTool);
+  const mode = useSelector((state) => state.mode.mode);
   // Chips name members through the type resolver's projection read, so
   // a mirror replacement (e.g. a block-type change on re-place) must
   // re-render them.
@@ -106,18 +105,15 @@ const SelectionFrame = () => {
   const [, bump] = useState(0);
   useEffect(() => onChange(() => bump((version) => version + 1)), []);
 
-  // The frame serves both selection grammars: the Selector's and the
-  // armed edit session's (isArmed derives from currentTool, so this
-  // re-evaluates on every tool switch). EDITING is the LIVE edit, read
-  // reactively from the store's editingKey (frameEditing): the dash
-  // appears when an edit actually opens on the primary and retires the
-  // moment it ends — never a prediction from the tool plus editability.
-  // verbsForSet runs while editing too: the registry's applies gate
-  // (appliesTo reads the same editingKey) decides whether the face
-  // holds selection verbs or the edit's own, and this component
+  // The frame serves the one selection, with or without an open edit.
+  // EDITING is the LIVE edit, read reactively from the store's editingKey
+  // (frameEditing): the dash appears when an edit actually opens on the
+  // primary and retires the moment it ends — never a prediction from
+  // editability. verbsForSet runs while editing too: the registry's
+  // applies gate (appliesTo reads the same editingKey) decides whether
+  // the face holds selection verbs or the edit's own, and this component
   // re-renders on every editingKey change, so the swap is reactive.
-  const armed = isArmed();
-  const active = currentTool === 'selector' || armed;
+  const active = mode === 'edit';
   const editing = frameEditing({ editingKey, primary: primaryKey });
   const verbs = primaryKey ? verbsForSet(selectedKeys) : [];
 

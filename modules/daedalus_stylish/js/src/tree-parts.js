@@ -1,6 +1,30 @@
 import { parseKey } from './style-guide.js';
-import { partsForKey, PART_SELECTOR, INSTANCE_PART } from './parts.js';
-import { CONTAINER_SCOPE_LIMIT } from './printer.js';
+import { BOX_LABELS, partsForKey, selectorLabel, INSTANCE_PART } from './parts.js';
+import { scopeTargets, donutLimit } from './printer.js';
+import { pseudoOf, resolveTargets } from './computed-read.js';
+import { buildStack, deliveredEntry } from './style-stack.js';
+import { axisVocabulary } from './variant-scope.js';
+import {
+  ANCHOR,
+  PSEUDOS,
+  SUFFIX,
+  isCanonicalSelector,
+} from '../../../daedalus_ui/js/edit_mode/materials/relative-selector.js';
+
+/**
+ * Whether a delivered entry (deliveredEntry: condition → property →
+ * winning value) materializes a generated box under any condition: the
+ * box exists iff the cascade sets `content` to something other than
+ * `none` there (the GeneratedContent group's two spellings, `""` and
+ * `none`; a box born at the op spine carries `""` at default, an author
+ * may switch it off with `none` and on again under a state).
+ */
+const deliversBox = (entry) =>
+  Object.values(entry).some(
+    (values) =>
+      typeof values.content === 'string' &&
+      values.content.trim().toLowerCase() !== 'none',
+  );
 
 /**
  * Daedalus Stylish's part behavior for the page-elements markup view.
@@ -13,13 +37,19 @@ import { CONTAINER_SCOPE_LIMIT } from './printer.js';
  * shell-row UX:
  *
  * (Row interaction is not a behavior concern anymore: a part row's click
- * and hover commit the part as selection FACETS on the spine
- * (daedalus_ui selection slice), the row reads its active and hot
- * state back from the store, and the canvas paint adapter
- * (canvas-part-paint.js) renders the facets — so panel, canvas, and
- * inspector all follow the one shared selection.)
+ * and hover commit the part's selector as the styling TARGET and the
+ * hover facet on the spine (daedalus_ui selection slice), the row reads
+ * its active and hot state back from the store, and the canvas paint
+ * adapter (canvas-selector-paint.js) renders both — so panel, canvas,
+ * and inspector all follow the one shared selection.)
  *
- * The two halves are the behavior's RESOLUTION seam (view-registry.js
+ * The third half is the LABEL seam: label(key, selector) words a
+ * relative selector under an owner the way the inspector's own chip does
+ * (parts.js selectorLabel, "Every link", "Raster"), so daedalus_ui's
+ * breadcrumb can name a target crumb in this module's vocabulary
+ * without learning the grammar.
+ *
+ * The two other halves are the behavior's RESOLUTION seam (view-registry.js
  * contract): resolve(domTarget) is the canvas→part lookup — closest()
  * from the pointer target against the enclosing types' declared part
  * selectors, innermost scope root first, INSTANCE parts (an
@@ -27,50 +57,70 @@ import { CONTAINER_SCOPE_LIMIT } from './printer.js';
  * under the innermost-selectable ownership rule) joining the same walk,
  * every candidate gated on the registry's injected `presented` (owner in
  * the selection universe) and `placed` (part is a row of it) predicates,
- * and selectorFor(parentKey, id, declarations) the part→scoped-CSS rule
- * builder: literally the selector the styles will use, so anything
- * painted through it is a truthful preview of what @scope will hit
- * (every match in the owner's scope root, or nothing when template and
- * YAML have drifted — a silent affordance is a diagnostic, not a bug to
- * paper over). Daedalus Stylish owns that grammar; spine consumers call the seam.
+ * and selectorFor(parentKey, selector, declarations) the
+ * selector→scoped-CSS rule builder: literally the targets the styles will
+ * use (the printers' scopeTargets and donutLimit for any relative
+ * selector, a part's '.cls', the children '> *', a type '> pb-text'),
+ * so anything painted through it is a truthful preview of what @scope
+ * will hit (every match in the owner's scope root, or nothing when
+ * template and YAML have drifted — a silent affordance is a diagnostic,
+ * not a bug to paper over). Daedalus Stylish owns that grammar; spine
+ * consumers call the seam.
+ *
+ * A generated box (`&::before`, `.quote::after`) is one more address of
+ * the grammar with no node behind it: selectorFor prints it (the paint
+ * outlines the generated box itself, the browser's own geometry for
+ * it), matches(parentKey, selector) answers its HOSTS plus the pseudo
+ * name (computed-read's law: the box rides getComputedStyle's pseudo
+ * argument, and rect-measuring consumers withhold), no pointer resolves
+ * one (a click lands on the host; seating a box is a doorway, like a
+ * rule), and generated(key) lists the owner's own boxes the style stack
+ * materializes, the rows the page-elements tree renders under the
+ * element since anatomy cannot know them (existence is a cascade fact:
+ * the box exists iff something delivers `content` there).
  */
 export const createPartBehavior = ({ source, guide }) => {
-  // ---- Part → scoped CSS: the @scope rule builder. -------------------------
+  // ---- Selector → scoped CSS: the @scope rule builder. ---------------------
 
   /**
-   * Builds the scoped CSS rule applying `declarations` to a part.
+   * Builds the scoped CSS rule applying `declarations` to a selector's
+   * matches under an owner.
    *
-   * The seam's selectorFor: the rule addresses EVERY instance of the part
-   * in its owner's scope with the same selector grammar delivered part
-   * styles use, so anything painted through it is a truthful preview of
-   * what @scope will hit. Null when id is not a part selector.
+   * The seam's selectorFor: the rule addresses EVERY match of the
+   * relative selector in its owner's scope with the printers' own targets
+   * (scopeTargets: the hoisted dual for a part, `:where(:scope) > […]`
+   * for the children and types) and the printers' donut for a
+   * container-owned part-first selector (donutLimit), so anything painted
+   * through it is a truthful preview of what the delivered @scope rule
+   * hits: the CSS twin of computed-read's resolveTargets, which queries
+   * the same targets. Null when the selector is outside the grammar.
    *
    * @param {string} parentKey
    *   The owning element's selection key.
-   * @param {string} id
-   *   The part id (a '.class' selector — declared or instance).
+   * @param {string} selector
+   *   A canonical relative selector ('.quote', '.s-ab', '> *',
+   *   '> pb-text', 'p').
    * @param {string} declarations
-   *   CSS declarations text, nested verbatim inside the part's rule block.
+   *   CSS declarations text, nested verbatim inside the rule block.
    *
    * @return {?string}
-   *   The @scope rule, or null when id is not a part selector.
+   *   The @scope rule, or null when the selector is outside the grammar.
    */
-  const selectorFor = (parentKey, id, declarations = '') => {
-    if (!PART_SELECTOR.test(id)) {
+  const selectorFor = (parentKey, selector, declarations = '') => {
+    if (!isCanonicalSelector(selector)) {
       return null;
     }
     // Keys carry a validated charset, but the attribute value is quoted
     // text either way — escape the two characters that could break out.
     const escapedKey = parentKey.replace(/[\\"]/g, '\\$&');
     // Container outlines get the printers' donut so the highlight previews
-    // exactly what the styles will hit — never a nested container's markup.
-    const limit =
-      parseKey(parentKey)?.kind === 'container'
-        ? ` to (${CONTAINER_SCOPE_LIMIT})`
-        : '';
-    // The dual selector mirrors the printers: a collapsed container wears
-    // the part class ON the scope root itself, so :scope must match too.
-    return `@scope ([data-selectable="${escapedKey}"])${limit} {\n  :scope${id}, ${id} {\n    ${declarations}\n  }\n}`;
+    // exactly what the styles will hit — never a nested container's markup
+    // for a part-first selector; the children, tags and types reach
+    // their whole subtree, as delivered.
+    const donut =
+      parseKey(parentKey)?.kind === 'container' ? donutLimit(selector) : null;
+    const limit = donut === null ? '' : ` to (${donut})`;
+    return `@scope ([data-selectable="${escapedKey}"])${limit} {\n  ${scopeTargets(selector).join(', ')} {\n    ${declarations}\n  }\n}`;
   };
 
   // ---- Canvas → part: the resolution walk. ---------------------------------
@@ -125,7 +175,7 @@ export const createPartBehavior = ({ source, guide }) => {
     while (root) {
       const key = root.getAttribute('data-selectable');
       const parsed = parseKey(key);
-      if (parsed && !parsed.sub && presented(key)) {
+      if (parsed && !parsed.selector && presented(key)) {
         let best = null;
         // Offers one candidate; true when it became the best so far. The
         // closure runs inside this iteration only, before root advances.
@@ -188,8 +238,121 @@ export const createPartBehavior = ({ source, guide }) => {
     return null;
   };
 
+  /**
+   * The words for a relative selector under an owner, the inspector
+   * chip's own wording (parts.js selectorLabel): the label seam
+   * daedalus_ui's target crumb reads.
+   *
+   * @param {string} key
+   *   The owning element's selection key.
+   * @param {string} selector
+   *   A canonical relative selector.
+   *
+   * @return {string}
+   */
+  const label = (key, selector) =>
+    selectorLabel(
+      guide,
+      key,
+      selector,
+      source.getBlockTypes(),
+      source.getSectionLayouts(),
+      source.getMarkup?.(key),
+    );
+
+  /**
+   * The live canvas elements a selector hits under its owner, and the
+   * generated box it addresses on them.
+   *
+   * The seam's matches, the DOM twin of selectorFor: computed-read's
+   * resolveTargets (the same host targets and donut the printers use),
+   * so a consumer measuring the matches before it prints through
+   * selectorFor measures exactly what the rule will reach. For a box
+   * the elements are its HOSTS (the owner's root for `&::before`, every
+   * `.quote` for `.quote::after`) and `pseudo` names the box; the
+   * box's computed style is getComputedStyle(host, '::before'), and it
+   * has no rect, so a consumer that measures geometry withholds for a
+   * non-null pseudo instead of measuring the host as the box.
+   *
+   * @param {string} parentKey
+   *   The owning element's selection key.
+   * @param {string} selector
+   *   A canonical relative selector.
+   *
+   * @return {{elements: Element[], pseudo: ?string}}
+   *   Every match in document order (the root first when it matches),
+   *   empty when the owner is off the canvas or the selector outside
+   *   the grammar; `pseudo` 'before' / 'after' for a box, else null.
+   */
+  const matches = (parentKey, selector) => ({
+    elements: resolveTargets(parentKey, selector),
+    pseudo: pseudoOf(selector),
+  });
+
+  /**
+   * The owner's own generated boxes the style stack materializes.
+   *
+   * Existence is a cascade fact, never an anatomy fact: `&::before`
+   * exists on an element iff something delivers `content` at it under
+   * some condition, the element's own entry (born with `content: ""` at
+   * the op spine), a worn look's box fragment, a skin default, or an
+   * ancestor rule ending in the same box that reaches the element
+   * (`> pb-text::before` on its section), so the answer is the box's
+   * full stack (style-stack.js buildStack at `key::&::before`, floor
+   * and ancestor tier included) read for a delivered `content` other
+   * than `none`. The page-elements tree renders one row per box under
+   * the element, id the box's selector so the row seats it as the
+   * styling target exactly as a part row seats its part. Pure over the
+   * source's current map, materials and tree; nothing is cached.
+   *
+   * @param {string} key
+   *   The owning element's selection key (a root key: a key already
+   *   carrying a selector owns no boxes of its own, since a
+   *   pseudo-element is terminal).
+   *
+   * @return {Array<{id: string, pseudo: string, label: string}>}
+   *   The delivered boxes in grammar order (before, after): `id` the
+   *   selector ('&::before'), `pseudo` its name, `label` the row's
+   *   words. [] for a key that owns no delivered box, or no element.
+   */
+  const generated = (key) => {
+    const parsed = parseKey(key);
+    if (!parsed || parsed.selector) {
+      return [];
+    }
+    const blockTypes = source.getBlockTypes();
+    const sectionLayouts = source.getSectionLayouts();
+    const map = source.getStyleMap();
+    const variants = source.getMaterials().ofKind('variant');
+    const axes = axisVocabulary(guide, key, blockTypes, sectionLayouts, source.getLayout());
+    const tree = source.getTree();
+    return PSEUDOS.filter((pseudo) =>
+      deliversBox(
+        deliveredEntry(
+          buildStack({
+            guide,
+            map,
+            key: `${key}${SUFFIX}${ANCHOR}${SUFFIX}${pseudo}`,
+            variants,
+            axes,
+            blockTypes,
+            sectionLayouts,
+            tree,
+          }),
+        ),
+      ),
+    ).map((pseudo) => ({
+      id: `${ANCHOR}${SUFFIX}${pseudo}`,
+      pseudo,
+      label: BOX_LABELS[pseudo](),
+    }));
+  };
+
   return {
     resolve,
     selectorFor,
+    matches,
+    generated,
+    label,
   };
 };

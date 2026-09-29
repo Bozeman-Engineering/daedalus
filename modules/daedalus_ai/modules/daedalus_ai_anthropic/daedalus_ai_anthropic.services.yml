@@ -14,3 +14,11 @@ services:
 
   daedalus_ai_anthropic.design_posture_context_subscriber:
     class: Drupal\daedalus_ai_anthropic\EventSubscriber\DesignPostureContextSubscriber
+
+  # The turn's attached files, resolved through the attachment store and
+  # handed to the model once: an ATTACHMENTS block on the last user message
+  # naming each file, textual bodies inlined, images and PDFs on the message.
+  daedalus_ai_anthropic.attachments_context_subscriber:
+    class: Drupal\daedalus_ai_anthropic\EventSubscriber\AttachmentsContextSubscriber
+    arguments:
+      $logger: '@logger.channel.daedalus_ai'

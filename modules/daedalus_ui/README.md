@@ -6,17 +6,20 @@ over the Navigation sidebar.
 ## Edit mode
 
 Daedalus UI provides Edit mode. When a user enters Edit mode the Navigation
-sidebar is replaced with a Photoshop like toolbar. Edit Mode is the foundation
-of the Daedalus. It provides a Tool plugin manager so that other modules can
-provide tools like [Daedalus Layout](https://www.drupal.org/project/daedalus) and
-[Daedalus Edit](https://www.drupal.org/project/daedalus). The goal is remove the need
-for Edit and Layout tabs to create content. Daedalus enables in place
-editing.
+sidebar is replaced with the editing chrome: a top bar of panel toggles and
+document actions, and sidebar panels. Edit Mode is the foundation of the
+Daedalus. It has one pointer and one keyboard grammar over the one selection;
+editing is a state of the selection, opened by gesture (double-click a leaf,
+Enter, the Edit chip), and other modules such as [Daedalus Layout](https://www.drupal.org/project/daedalus)
+and [Daedalus Edit](https://www.drupal.org/project/daedalus) plug into it through
+sidebar plugins, verbs, the editing engine and the registration seam. The goal
+is remove the need for Edit and Layout tabs to create content. Daedalus enables
+in place editing.
 
 ### Hotkeys
-You can change tools with hotkeys. Hover over the tool in the toolbar. It will
-show a tooltip with the hotkey for the tool. Hotkeys can be remapped per user
-from the Settings sidebar in Edit Mode.
+Panel toggles, verbs and the selection grammar's keys are hotkeys. Hover over a
+top bar button to see its hotkey in the tooltip. Hotkeys can be remapped per
+user from the Settings sidebar in Edit Mode.
 
 ### The selection frame
 One frame (`js/edit_mode/components/selection-frame/`) owns everything anchored
@@ -24,12 +27,16 @@ to the selection: the strokes, a chip per member of the multi-select set reading
 `N Type` (N is the member's set-order number, shown for a real set; Type comes
 from the one type resolver, `js/edit_mode/selection/type-for-key.js`: what the
 element IS ("Text", "Section"), since the canvas already shows what it says,
-while the tree, breadcrumb, and AI chips keep the content-derived label
-resolver), and on the primary's chip the verb face, which follows the
+while the tree, breadcrumb, and AI chips read the one label resolver,
+`selection/label-for-key.js`, what the element SAYS; neither resolver derives
+a word: each reads the delivered field, `_element.type` and `_element.name`,
+that `BlueprintElementAnnotator` mints once on the server with `t()`, see "The
+element model", so every surface in every host words an element the same
+way), and on the primary's chip the verb face, which follows the
 chrome-density ladder: at full density every verb as icon plus text label, at
 minimal the same verbs as icons only, at clean the registry's `tab`-flagged
 verbs as icon buttons plus a chevron opening the context menu with the rest. The
-stroke is dashed while the Edit tool is current. Other modules anchor chrome to
+stroke is dashed while an edit is open on the primary. Other modules anchor chrome to
 the selection by registering verbs
 (`Drupal.Daedalus.Verbs.register(spec)`), never with a positioning loop of
 their own; an edit-scoped verb (`editScoped: true`) applies only while the
@@ -76,6 +83,18 @@ root-field existence from its preserved fields). Delivered blueprints carry
 the result as one uniform `_element` annotation on every owning node, the
 root included, and client code consumes only that annotation, never
 hardcoded field lists.
+
+The annotation also carries the element's two words, minted once with `t()`
+by `BlueprintElementAnnotator` and never derived by a client: `_element.type`
+(what the element IS: "Section" for a container at the root layout,
+"Container" nested, an inline block's block type label, a field block's field
+label, the root's bundle label) and `_element.name` (what it SAYS: a
+section's custom label else its type, a merged block's content excerpt else
+its presentation label else its unrendered configured label else its type, the
+root's entity label). Both ride the lean `_tree`, so the Page elements tree,
+the canvas chips, the breadcrumb, the stylish inspector in every host (leader
+page, satellite pop-out, node specs), the explain tool and the AI dialect all
+read the same delivered field.
 
 ### Field presentation UI
 

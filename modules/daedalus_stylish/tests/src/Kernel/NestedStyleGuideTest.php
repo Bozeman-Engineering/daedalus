@@ -62,6 +62,7 @@ class NestedStyleGuideTest extends KernelTestBase {
     'twig_events',
     'daedalus_tempstore',
     'daedalus_blueprint_api',
+    'file',
     'daedalus_ui',
     'daedalus_stylish',
     'daedalus_stylish_nested_test',
@@ -447,11 +448,11 @@ class NestedStyleGuideTest extends KernelTestBase {
     // Every entry is a prose phrase at a flat label: a root
     // (kinds.block, block_types.card, layouts.layout_onecol), one part
     // suffix at most ("::.class-name"), an optional children suffix
-    // ("::>"). A nested part is labeled by its own class alone, never by
+    // ("::> *"). A nested part is labeled by its own class alone, never by
     // its ancestry, exactly as the style map keys it.
     foreach ($entries as $label => $phrase) {
       $this->assertIsString($phrase, $label);
-      $this->assertMatchesRegularExpression('/^(kinds|block_types|block_plugins|layouts)\.[a-z0-9_]+(::\.[a-z0-9_-]+)?(::>)?$/', $label);
+      $this->assertMatchesRegularExpression('/^(kinds|block_types|block_plugins|layouts)\.[a-z0-9_]+(::\.[a-z0-9_-]+)?(::> \*)?$/', $label);
     }
     // The card refines its kind (typography on top of the block's
     // spacing), so its root and each of its four parts are taught; the

@@ -3,15 +3,15 @@
    * Hotkeys settings tray.
    *
    * Renders every labeled binding from the hotkey registry
-   * (Drupal.Daedalus.Hotkeys), grouped by section — the server only
+   * (Drupal.Daedalus.Hotkeys), grouped by section: the server only
    * provides the empty .hotkeys-list container, so anything registered
-   * client-side (tools, verbs, contrib bindings) is listed with no
-   * server-side knowledge of it. The tray doubles as the documentation of
-   * what exists: non-remappable bindings render locked rather than being
-   * hidden. Clicking a remappable binding enters capture mode: the next
-   * key combo becomes the binding. A bare modifier (for hold-style
-   * bindings) is committed on its keyup, so modifier+key combos can still
-   * be formed.
+   * client-side (the selection grammar, verbs, contrib bindings) is listed
+   * with no server-side knowledge of it. The tray doubles as the
+   * documentation of what exists: non-remappable bindings render locked
+   * rather than being hidden. Clicking a remappable binding enters capture
+   * mode: the next key combo becomes the binding. A bare modifier (for
+   * hold-style bindings) is committed on its keyup, so modifier+key combos
+   * can still be formed.
    */
 
   const MODIFIER_KEYS = ['alt', 'meta', 'control', 'shift', 'os'];
@@ -139,10 +139,9 @@
         groups.get(section).push(binding);
       });
     // The core sections render in a fixed order regardless of registration
-    // timing (server tool bindings often arrive late via AJAX merge);
+    // timing (the server's panel bindings often arrive late via AJAX merge);
     // contrib sections follow in encounter order, the catch-all last.
     const preferred = [
-      Drupal.t('Tools'),
       Drupal.t('Selection'),
       Drupal.t('Editing'),
       Drupal.t('Actions'),
@@ -186,7 +185,7 @@
           // not guaranteed (AJAX/big_pipe) — so the list re-renders on
           // registry changes instead of snapshotting once. Renders coalesce
           // on a microtask: getBindings() lazily registers the server's
-          // tool bindings, and a synchronous re-render inside render()
+          // panel bindings, and a synchronous re-render inside render()
           // would duplicate rows.
           let queued = false;
           const scheduleRender = () => {

@@ -1,6 +1,7 @@
 import { h } from 'preact';
-import { controlWidgets } from '../../controls.js';
+import { controlWidgets, litValues } from '../../controls.js';
 import { ChoiceRow } from '../lib/choice-row.js';
+import { styleTarget } from '../lib/use-highlight.js';
 import { widgetClasses } from '../lib/widget-classes.js';
 
 /**
@@ -19,6 +20,7 @@ const Width = ({
   model,
   guide,
   materials,
+  source,
   onPreview,
   onRelease,
   onCommit,
@@ -29,14 +31,18 @@ const Width = ({
     <ChoiceRow
       guide={guide}
       materials={materials}
+      source={source}
+      highlight={styleTarget(model.keys.width)}
       condition={model.condition}
       label={model.label}
       property="width"
-      value={model.values.width}
+      value={litValues(model.reads).width}
       definition={model.propertyDefinitions?.width ?? {}}
       constraints={model.constraints?.width ?? {}}
-      entry={model.entry}
-      provenance={model.provenance}
+      stack={model.stacks.width}
+      read={model.reads.width}
+      disabled={Boolean(model.withheld?.['width'])}
+      disabledTitle={model.withheld?.['width'] ?? null}
       onPickCondition={onPickCondition}
       onOpenDocument={onOpenDocument}
       onPreview={onPreview}

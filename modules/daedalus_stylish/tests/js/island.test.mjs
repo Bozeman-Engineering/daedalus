@@ -8,8 +8,9 @@
  * non-zero on the first failure with a readable diff.
  */
 import { strict as assert } from 'node:assert';
-import { analyzeIsland, islandLines, islandOps, matchLines, printIsland } from '../../js/src/code/island.js';
-import { DECLARED_LAYER, ELEMENT_LAYER, SKIN_LAYER, variantLayerId } from '../../js/src/code/layers.js';
+import { analyzeIsland, islandOps, matchLines, printIsland, stackLines, unseenOwnLines } from '../../js/src/code/island.js';
+import { ELEMENT_LAYER, declaredLayerId, skinLayerId, variantLayerId } from '../../js/src/code/layers.js';
+import { buildStack } from '../../js/src/style-stack.js';
 import { validateValue } from '../../js/src/code/validate-value.js';
 import { EMPTY_MATERIALS, animationRecord, roster } from './materials-fixture.mjs';
 
@@ -95,16 +96,32 @@ test('a half-typed chunk is a warning that holds its tokens, not an error', () =
   assert.ok(result.held.has('color'));
 });
 
-test('pasted structure is an error: islands hold declarations only', () => {
+test('pasted structure is a door chunk: never a declaration, never an error', () => {
   const result = analyze('&:hover { color: red; }\npadding: 1rem;');
-  const errors = errorsOf(result);
-  assert.equal(errors.length, 1);
-  assert.match(errors[0].message, /island holds plain declarations/);
+  assert.deepEqual(errorsOf(result), []);
+  // The chunk is pending the door (the Island sends it and removes it).
+  assert.deepEqual(result.structural.map((chunk) => chunk.text), ['&:hover { color: red; }']);
   // The rule's inner properties are held, never read as deletions.
   assert.ok(result.held.has('color'));
   // The declaration beside it still parses and stays valid.
   assert.deepEqual(result.declarations.map((declaration_) => declaration_.property), ['padding']);
   assert.equal(result.declarations[0].valid, true);
+});
+
+test('a block still missing its brace is a warning that holds, not a chunk', () => {
+  const result = analyze('&:hover { color: red;');
+  assert.deepEqual(result.structural, []);
+  assert.deepEqual(errorsOf(result), []);
+  assert.ok(result.diagnostics.some((diagnostic) => diagnostic.severity === 'warning' && /will not save/.test(diagnostic.message)));
+  assert.ok(result.held.has('color'));
+});
+
+test('a copied #id block does not swallow the declarations after it', () => {
+  const result = analyze('#22222222-2222-2222-2222-222222222222 { color: red; }\npadding: 1rem;');
+  assert.equal(result.structural.length, 1);
+  assert.equal(result.structural[0].root, true);
+  assert.deepEqual(result.declarations.map((declaration_) => [declaration_.property, declaration_.valid]), [['padding', true]]);
+  assert.deepEqual(errorsOf(result), []);
 });
 
 test('a lost semicolon merges lines into one invalid declaration that holds both', () => {
@@ -213,6 +230,28 @@ test('csstree grammar misses are warnings, never errors', () => {
 });
 
 // --- The resolved layers: lines with provenance -------------------------------
+// The island prints its key's style stack (buildStack) at one exact
+// condition through stackLines: the map's layers alone (floor: false, the
+// tree's sparse rows and the occupancy read) unless a guide is handed,
+// which joins the defaults floor the way the selected element's islands
+// do.
+
+const UUID = KEY.slice('block:'.length);
+const BLOCK_TYPES = { [UUID]: 'testimonial' };
+const linesOf = (map, key, condition, variants, axes = null, floorGuide = null, tree = null) =>
+  stackLines(buildStack({
+    guide: floorGuide,
+    map,
+    key,
+    variants,
+    axes,
+    blockTypes: BLOCK_TYPES,
+    floor: floorGuide !== null,
+    tree,
+  }), condition);
+// The block alone in a tree, rendering as a paragraph: the read subject's
+// tag the base layer keys by.
+const P_ROOTED = [{ kind: 'block', uuid: UUID, block_type: 'testimonial', _element: { markup: { tag: 'p' } } }];
 
 const VARIANTS = [{
   id: 'aqua',
@@ -226,19 +265,19 @@ const VARIANTS = [{
 
 test('lines are the layered document: variant layers first, own additions last', () => {
   const map = { [KEY]: { variants: [{ variant: 'aqua', fragment: '' }], default: { gap: '1rem' } } };
-  assert.deepEqual(islandLines(map, KEY, 'default', VARIANTS), [
+  assert.deepEqual(linesOf(map, KEY, 'default', VARIANTS), [
     { property: 'padding', value: '2rem', layer: variantLayerId('aqua'), variant: 'aqua', lost: false, winner: null },
     { property: 'color', value: '#1a1a2e', layer: variantLayerId('aqua'), variant: 'aqua', lost: false, winner: null },
     { property: 'gap', value: '1rem', layer: ELEMENT_LAYER, variant: null, lost: false, winner: null },
   ]);
-  assert.deepEqual(islandLines(map, KEY, 'hover', VARIANTS), [
+  assert.deepEqual(linesOf(map, KEY, 'hover', VARIANTS), [
     { property: 'color', value: 'var(--brand)', layer: variantLayerId('aqua'), variant: 'aqua', lost: false, winner: null },
   ]);
 });
 
 test('an own override prints AFTER the variant line it shadows, which is lost', () => {
   const map = { [KEY]: { variants: [{ variant: 'aqua', fragment: '' }], default: { color: 'var(--brand)' } } };
-  assert.deepEqual(islandLines(map, KEY, 'default', VARIANTS), [
+  assert.deepEqual(linesOf(map, KEY, 'default', VARIANTS), [
     { property: 'padding', value: '2rem', layer: variantLayerId('aqua'), variant: 'aqua', lost: false, winner: null },
     { property: 'color', value: '#1a1a2e', layer: variantLayerId('aqua'), variant: 'aqua', lost: true, winner: { layer: ELEMENT_LAYER, variant: null } },
     { property: 'color', value: 'var(--brand)', layer: ELEMENT_LAYER, variant: null, lost: false, winner: null },
@@ -247,7 +286,7 @@ test('an own override prints AFTER the variant line it shadows, which is lost', 
 
 test('a part island resolves through the root wearing at its own suffix', () => {
   const map = { [KEY]: { variants: [{ variant: 'aqua', fragment: '' }] } };
-  assert.deepEqual(islandLines(map, SUB, 'default', VARIANTS), [
+  assert.deepEqual(linesOf(map, SUB, 'default', VARIANTS), [
     { property: 'font-size', value: '1.25rem', layer: variantLayerId('aqua'), variant: 'aqua', lost: false, winner: null },
   ]);
 });
@@ -255,7 +294,7 @@ test('a part island resolves through the root wearing at its own suffix', () => 
 test('a distributed {variant, fragment} reference resolves its fragment', () => {
   const child = 'region:33333333-3333-3333-3333-333333333333';
   const map = { [child]: { variants: [{ variant: 'aqua', fragment: 'region(first)' }] } };
-  assert.deepEqual(islandLines(map, child, 'default', VARIANTS), [
+  assert.deepEqual(linesOf(map, child, 'default', VARIANTS), [
     { property: 'gap', value: '1rem', layer: variantLayerId('aqua'), variant: 'aqua', lost: false, winner: null },
   ]);
 });
@@ -266,42 +305,56 @@ test('delivery order decides the winner when axes overlap; the loser is lost', (
     { id: 'zz_calm', group: 'style', value: { '': { default: { color: 'var(--brand)', padding: '1rem' } } } },
   ];
   const map = { [KEY]: { variants: [{ variant: 'aa_pop', fragment: '' }, { variant: 'zz_calm', fragment: '' }] } };
-  const lines = islandLines(map, KEY, 'default', library, ['style', 'emphasis']);
+  const lines = linesOf(map, KEY, 'default', library, ['style', 'emphasis']);
   assert.deepEqual(lines, [
     { property: 'color', value: 'var(--brand)', layer: variantLayerId('zz_calm'), variant: 'zz_calm', lost: true, winner: { layer: variantLayerId('aa_pop'), variant: 'aa_pop' } },
     { property: 'padding', value: '1rem', layer: variantLayerId('zz_calm'), variant: 'zz_calm', lost: false, winner: null },
     { property: 'color', value: '#1a1a2e', layer: variantLayerId('aa_pop'), variant: 'aa_pop', lost: false, winner: null },
   ]);
   // Without the vocabulary the stored list decides.
-  const stored = islandLines(map, KEY, 'default', library);
+  const stored = linesOf(map, KEY, 'default', library);
   assert.deepEqual(stored[0], { property: 'color', value: '#1a1a2e', layer: variantLayerId('aa_pop'), variant: 'aa_pop', lost: true, winner: { layer: variantLayerId('zz_calm'), variant: 'zz_calm' } });
   assert.deepEqual(stored[1], { property: 'color', value: 'var(--brand)', layer: variantLayerId('zz_calm'), variant: 'zz_calm', lost: false, winner: null });
 });
 
 // --- The defaults floor: the bottom layers ------------------------------------
-// The caller hands the floor as the raw condition-keyed entries
-// skinDefaultEntry() / declaredDefaultEntry() build; the engine prints
-// them beneath every map line, declared under skin, at the exact
-// condition. A floor line is display only: no op ever addresses it.
+// The stack reads the floor from the guide payload, one layer per
+// declaring scope of each tier (the family kind's block beneath the
+// refinement's: declared:kind:block, declared:block_type:testimonial,
+// skin:kind:block, skin:block_type:testimonial), unmerged, so a floor
+// line names the scope that supplies it; the island prints them beneath
+// every map line, declared under skin, at the exact condition. A floor
+// line is display only: no op ever addresses it.
 
 const FLOOR = {
-  declaredEntry: { default: { margin: '0', gap: '0.5rem' }, hover: { color: 'gray' } },
-  skinEntry: { default: { gap: 'var(--space-gutter)', padding: '1rem' }, narrow: { padding: '0' } },
+  declaredDefaults: {
+    'kind:block': { '': { default: { margin: '0' } } },
+    'block_type:testimonial': { '': { default: { gap: '0.5rem' }, hover: { color: 'gray' } } },
+  },
+  skinDefaults: {
+    'base:p': { '': { default: { 'line-height': '1.6' } } },
+    'kind:block': { '': { default: { gap: 'var(--space-gutter)' } } },
+    'block_type:testimonial': { '': { default: { padding: '1rem' }, narrow: { padding: '0' } } },
+  },
 };
+const DECLARED_KIND = declaredLayerId('kind:block');
+const DECLARED_TYPE = declaredLayerId('block_type:testimonial');
+const SKIN_KIND = skinLayerId('kind:block');
+const SKIN_TYPE = skinLayerId('block_type:testimonial');
 
-test('the floor prints at the bottom: declared under skin, both under every map line', () => {
+test('the floor prints at the bottom: declared under skin, both under every map line, one layer per scope', () => {
   const map = { [KEY]: { variants: [{ variant: 'aqua', fragment: '' }], default: { gap: '1rem' } } };
-  const lines = islandLines(map, KEY, 'default', VARIANTS, null, FLOOR);
+  const lines = linesOf(map, KEY, 'default', VARIANTS, null, FLOOR);
   assert.deepEqual(lines.map((line) => [line.layer, line.property, line.lost]), [
-    [DECLARED_LAYER, 'margin', false],
-    [DECLARED_LAYER, 'gap', true],
-    [SKIN_LAYER, 'gap', true],
-    [SKIN_LAYER, 'padding', true],
+    [DECLARED_KIND, 'margin', false],
+    [DECLARED_TYPE, 'gap', true],
+    [SKIN_KIND, 'gap', true],
+    [SKIN_TYPE, 'padding', true],
     [variantLayerId('aqua'), 'padding', false],
     [variantLayerId('aqua'), 'color', false],
     [ELEMENT_LAYER, 'gap', false],
   ]);
-  assert.deepEqual(lines[0], { property: 'margin', value: '0', layer: DECLARED_LAYER, variant: null, lost: false, winner: null });
+  assert.deepEqual(lines[0], { property: 'margin', value: '0', layer: DECLARED_KIND, variant: null, lost: false, winner: null });
   // Both floor gaps lose to the element's own; the skin's padding loses
   // to the worn variant's.
   assert.deepEqual(lines[1].winner, { layer: ELEMENT_LAYER, variant: null });
@@ -309,30 +362,42 @@ test('the floor prints at the bottom: declared under skin, both under every map 
   assert.deepEqual(lines[3].winner, { layer: variantLayerId('aqua'), variant: 'aqua' });
 });
 
-test('a declared line the skin beats strikes with the skin as its winner', () => {
-  assert.deepEqual(islandLines({}, KEY, 'default', [], null, FLOOR), [
-    { property: 'margin', value: '0', layer: DECLARED_LAYER, variant: null, lost: false, winner: null },
-    { property: 'gap', value: '0.5rem', layer: DECLARED_LAYER, variant: null, lost: true, winner: { layer: SKIN_LAYER, variant: null } },
-    { property: 'gap', value: 'var(--space-gutter)', layer: SKIN_LAYER, variant: null, lost: false, winner: null },
-    { property: 'padding', value: '1rem', layer: SKIN_LAYER, variant: null, lost: false, winner: null },
+test('a declared line the skin beats strikes with the skin layer as its winner', () => {
+  assert.deepEqual(linesOf({}, KEY, 'default', [], null, FLOOR), [
+    { property: 'margin', value: '0', layer: DECLARED_KIND, variant: null, lost: false, winner: null },
+    { property: 'gap', value: '0.5rem', layer: DECLARED_TYPE, variant: null, lost: true, winner: { layer: SKIN_KIND, variant: null } },
+    { property: 'gap', value: 'var(--space-gutter)', layer: SKIN_KIND, variant: null, lost: false, winner: null },
+    { property: 'padding', value: '1rem', layer: SKIN_TYPE, variant: null, lost: false, winner: null },
   ]);
+});
+
+test('the skin\'s base:{tag} layer prints beneath every scoped block, only when the tree names the subject\'s tag', () => {
+  const withTag = linesOf({}, KEY, 'default', [], null, FLOOR, P_ROOTED);
+  assert.deepEqual(withTag.map((line) => [line.layer, line.property]), [
+    [DECLARED_KIND, 'margin'],
+    [DECLARED_TYPE, 'gap'],
+    [skinLayerId('base:p'), 'line-height'],
+    [SKIN_KIND, 'gap'],
+    [SKIN_TYPE, 'padding'],
+  ]);
+  assert.equal(linesOf({}, KEY, 'default', [], null, FLOOR).some((line) => line.layer === skinLayerId('base:p')), false);
 });
 
 test('the floor is read at the exact condition, never the cascade', () => {
-  assert.deepEqual(islandLines({}, KEY, 'hover', [], null, FLOOR), [
-    { property: 'color', value: 'gray', layer: DECLARED_LAYER, variant: null, lost: false, winner: null },
+  assert.deepEqual(linesOf({}, KEY, 'hover', [], null, FLOOR), [
+    { property: 'color', value: 'gray', layer: DECLARED_TYPE, variant: null, lost: false, winner: null },
   ]);
-  assert.deepEqual(islandLines({}, KEY, 'narrow', [], null, FLOOR), [
-    { property: 'padding', value: '0', layer: SKIN_LAYER, variant: null, lost: false, winner: null },
+  assert.deepEqual(linesOf({}, KEY, 'narrow', [], null, FLOOR), [
+    { property: 'padding', value: '0', layer: SKIN_TYPE, variant: null, lost: false, winner: null },
   ]);
-  // No floor handed (a sparse tree row, the roster's occupancy read): the
-  // map's lines only.
-  assert.deepEqual(islandLines({}, KEY, 'default', []), []);
-  assert.deepEqual(islandLines({}, KEY, 'default', [], null, { skinEntry: null, declaredEntry: null }), []);
+  // No floor in the stack (a sparse tree row, the roster's occupancy
+  // read): the map's lines only; a guide defaulting nothing prints none.
+  assert.deepEqual(linesOf({}, KEY, 'default', []), []);
+  assert.deepEqual(linesOf({}, KEY, 'default', [], null, { declaredDefaults: {}, skinDefaults: {} }), []);
 });
 
 test('the printed floor round-trips to zero ops', () => {
-  const lines = islandLines({}, KEY, 'default', [], null, FLOOR);
+  const lines = linesOf({}, KEY, 'default', [], null, FLOOR);
   const text = printIsland(lines);
   assert.equal(text, 'margin: 0;\ngap: 0.5rem;\ngap: var(--space-gutter);\npadding: 1rem;');
   assert.deepEqual(errorsOf(analyze(text)), []);
@@ -343,7 +408,7 @@ test('the printed floor round-trips to zero ops', () => {
 
 test('the printed island round-trips to zero ops, variant lines included', () => {
   const map = { [KEY]: { variants: [{ variant: 'aqua', fragment: '' }], default: { gap: '1rem' } } };
-  const lines = islandLines(map, KEY, 'default', VARIANTS);
+  const lines = linesOf(map, KEY, 'default', VARIANTS);
   const text = printIsland(lines);
   assert.equal(text, 'padding: 2rem;\ncolor: #1a1a2e;\ngap: 1rem;');
   const analysis = analyze(text);
@@ -353,7 +418,7 @@ test('the printed island round-trips to zero ops, variant lines included', () =>
 
 test('a shadowed pair round-trips to zero ops (the cascade reads last-wins)', () => {
   const map = { [KEY]: { variants: [{ variant: 'aqua', fragment: '' }], default: { color: 'var(--brand)' } } };
-  const lines = islandLines(map, KEY, 'default', VARIANTS);
+  const lines = linesOf(map, KEY, 'default', VARIANTS);
   const text = printIsland(lines);
   assert.equal(text, 'padding: 2rem;\ncolor: #1a1a2e;\ncolor: var(--brand);');
   assert.deepEqual(islandOps(KEY, 'default', analyze(text), lines), []);
@@ -390,6 +455,36 @@ test('a named condition rides every op; default stays bare', () => {
   ]);
 });
 
+test('a truth line born elsewhere while the island is live is unseen, never a deletion', () => {
+  // The op spine's birth seed: the first typed declaration at a generated
+  // box lands with `content: ""` beneath it. The buffer says only what
+  // was typed; the seed is an unseen own line the view splices in, so the
+  // next settle diffs an honest buffer instead of unsetting the seed.
+  const seeded = [
+    { property: 'content', value: '""', layer: ELEMENT_LAYER, variant: null, lost: false, winner: null },
+    { property: 'background-color', value: 'gold', layer: ELEMENT_LAYER, variant: null, lost: false, winner: null },
+  ];
+  const typed = analyze('background-color: gold;');
+  assert.deepEqual(unseenOwnLines(typed, seeded), [seeded[0]]);
+  // Without the splice the seed would read as a deletion: the diff the
+  // splice exists to prevent.
+  assert.deepEqual(islandOps(KEY, 'default', typed, seeded).map((op) => op.properties), [{ content: null }]);
+  // Mentioned is enough: a held (invalid, half-typed) line counts as seen.
+  assert.deepEqual(unseenOwnLines(analyze('background-color: gold;\ncontent: ;'), seeded), []);
+  // A non-own line is the layer's, never unseen (a variant's line vanishing
+  // is a no-op, and the floor is not in the map at all).
+  const worn = [{ property: 'gap', value: '1rem', layer: variantLayerId('aqua'), variant: 'aqua', lost: false, winner: null }];
+  assert.deepEqual(unseenOwnLines(analyze(''), worn), []);
+  // A property with the island's own write in flight is not unseen: the
+  // truth still shows the line the buffer just deleted until the unset
+  // settles, and splicing it back would undo the deletion.
+  const own = [{ property: 'gap', value: '1rem', layer: ELEMENT_LAYER, variant: null, lost: false, winner: null }];
+  assert.deepEqual(unseenOwnLines(analyze(''), own, ['gap']), []);
+  assert.deepEqual(unseenOwnLines(analyze(''), own), own);
+  // Truth order is kept: the splice prints them as the island would.
+  assert.equal(printIsland(unseenOwnLines(analyze(''), seeded)), 'content: "";\nbackground-color: gold;');
+});
+
 test('deleting an own line unsets it; deleting a variant line honestly no-ops', () => {
   const lines = [
     { property: 'padding', value: '2rem', layer: variantLayerId('aqua'), variant: 'aqua', lost: false, winner: null },
@@ -402,7 +497,7 @@ test('deleting an own line unsets it; deleting a variant line honestly no-ops', 
 
 test('editing a variant line commits an override; the reference stays untouched', () => {
   const map = { [KEY]: { variants: [{ variant: 'aqua', fragment: '' }] } };
-  const lines = islandLines(map, KEY, 'default', VARIANTS);
+  const lines = linesOf(map, KEY, 'default', VARIANTS);
   const text = printIsland(lines).replace('color: #1a1a2e;', 'color: var(--brand);');
   const ops = islandOps(KEY, 'default', analyze(text), lines);
   assert.deepEqual(ops, [
@@ -412,7 +507,7 @@ test('editing a variant line commits an override; the reference stays untouched'
 
 test('deleting a shadowed pair entirely unsets the override', () => {
   const map = { [KEY]: { variants: [{ variant: 'aqua', fragment: '' }], default: { color: 'var(--brand)' } } };
-  const lines = islandLines(map, KEY, 'default', VARIANTS);
+  const lines = linesOf(map, KEY, 'default', VARIANTS);
   const text = printIsland(lines.filter((line) => line.property !== 'color'));
   assert.deepEqual(islandOps(KEY, 'default', analyze(text), lines), [
     { op: 'update_style', key: KEY, properties: { color: null } },
@@ -424,7 +519,7 @@ test('deleting only the own winner lifts the override; the struck variant text s
   // variant's line, so the diff reads an unset, never an override set to
   // the variant's own value.
   const map = { [KEY]: { variants: [{ variant: 'aqua', fragment: '' }], default: { color: 'var(--brand)' } } };
-  const lines = islandLines(map, KEY, 'default', VARIANTS);
+  const lines = linesOf(map, KEY, 'default', VARIANTS);
   const text = printIsland(lines.filter((line) => !(line.property === 'color' && line.layer === ELEMENT_LAYER)));
   assert.equal(text, 'padding: 2rem;\ncolor: #1a1a2e;');
   assert.deepEqual(islandOps(KEY, 'default', analyze(text), lines), [
@@ -434,14 +529,14 @@ test('deleting only the own winner lifts the override; the struck variant text s
 
 test('editing only a LOST line diffs to nothing: the cascade still shows the winner', () => {
   const map = { [KEY]: { variants: [{ variant: 'aqua', fragment: '' }], default: { padding: '3rem' } } };
-  const lines = islandLines(map, KEY, 'default', VARIANTS);
+  const lines = linesOf(map, KEY, 'default', VARIANTS);
   const text = printIsland(lines).replace('padding: 2rem;', 'padding: 1rem;');
   assert.equal(text, 'padding: 1rem;\ncolor: #1a1a2e;\npadding: 3rem;');
   assert.deepEqual(islandOps(KEY, 'default', analyze(text), lines), []);
 });
 
 test('editing a floor line is a SET on the own layer; its text vanishing is a no-op; never an unset', () => {
-  const lines = islandLines({}, KEY, 'default', [], null, FLOOR);
+  const lines = linesOf({}, KEY, 'default', [], null, FLOOR);
   const text = printIsland(lines);
   assert.deepEqual(islandOps(KEY, 'default', analyze(text.replace('padding: 1rem;', 'padding: 2rem;')), lines), [
     { op: 'update_style', key: KEY, properties: { padding: '2rem' } },
@@ -452,12 +547,46 @@ test('editing a floor line is a SET on the own layer; its text vanishing is a no
 
 test('deleting the own winner over a floor line lifts the override; the floor line stands', () => {
   const map = { [KEY]: { default: { gap: '1rem' } } };
-  const lines = islandLines(map, KEY, 'default', [], null, FLOOR);
+  const lines = linesOf(map, KEY, 'default', [], null, FLOOR);
   const text = printIsland(lines.filter((line) => line.layer !== ELEMENT_LAYER));
   assert.equal(text, 'margin: 0;\ngap: 0.5rem;\ngap: var(--space-gutter);\npadding: 1rem;');
   assert.deepEqual(islandOps(KEY, 'default', analyze(text), lines), [
     { op: 'update_style', key: KEY, properties: { gap: null } },
   ]);
+});
+
+test('a delivered line off the site\'s law is never the user\'s error; deleting the own winner over it still lifts the override', () => {
+  // The floor's gap is `0px` (the container kind's declaration validates
+  // with constraints never law) while the strict closure admits `0` and
+  // the scale's references only; the skin's gap is a reference off the
+  // fixture roster. Neither line is the user's writing.
+  const strict = {
+    grants: { spacing: SPACING },
+    valueSpaces: { gap: { scale: 'space', allowed: ['0'] } },
+  };
+  const lines = [
+    { property: 'gap', value: '0px', layer: declaredLayerId('kind:container'), variant: null, lost: true, winner: { layer: ELEMENT_LAYER, variant: null } },
+    { property: 'gap', value: 'var(--space-gutter)', layer: skinLayerId('kind:container'), variant: null, lost: true, winner: { layer: ELEMENT_LAYER, variant: null } },
+    { property: 'gap', value: 'var(--space-4)', layer: ELEMENT_LAYER, variant: null, lost: false, winner: null },
+  ];
+  const options = { guide: strictGuide, declaration: strict, lines };
+  const printed = analyze(printIsland(lines), options);
+  assert.deepEqual(printed.declarations.map((declaration) => declaration.valid), [true, true, false], 'only the own line (a reference off the fixture roster) is judged');
+  assert.deepEqual(errorsOf(printed).map((diagnostic) => diagnostic.from), [printed.declarations[2].valueFrom], 'the one error sits on the own line: the delivered lines raise none');
+  assert.ok(printed.held.has('gap'), 'the own line holds its property');
+  const deleted = analyze('gap: 0px;\ngap: var(--space-gutter);', options);
+  assert.deepEqual(errorsOf(deleted), []);
+  assert.equal(deleted.held.size, 0);
+  assert.deepEqual(islandOps(KEY, 'default', deleted, lines), [
+    { op: 'update_style', key: KEY, properties: { gap: null } },
+  ], 'the own winner deleted over two struck floor lines is an UNSET, not a SET to the skin\'s text');
+  // The same text typed a second time is the user's: judged under the
+  // closure (the first-fit claim covers one line per delivered line).
+  const typed = analyze('gap: 0px;\ngap: var(--space-gutter);\ngap: 0px;', options);
+  assert.deepEqual(typed.declarations.map((declaration) => declaration.valid), [true, true, false]);
+  assert.equal(errorsOf(typed).length, 1);
+  // Without the lines the same floor text is judged, the way it was.
+  assert.equal(errorsOf(analyze('gap: 0px;', { guide: strictGuide, declaration: strict })).length, 1);
 });
 
 test('an invalid line holds only itself; settled neighbors still commit', () => {
@@ -520,22 +649,17 @@ test('matchLines pairs declarations with lines first-fit; edits pair with nothin
   assert.equal(twice[1], null);
 });
 
-// --- At-rules: honest errors, never island text ------------------------------
+// --- At-rules: door chunks, never island text --------------------------------
 
-test('a known-condition at-rule errors toward its WHEN row', () => {
-  const result = analyze('@hover { color: #1a1a2e; }');
-  const errors = errorsOf(result);
-  assert.equal(errors.length, 1);
-  assert.match(errors[0].message, /pick "hover"/);
-  assert.ok(result.held.has('color'));
-});
-
-test('an unknown at-rule is an honest error (no raw-CSS escape hatch)', () => {
-  const result = analyze('@supports (display: grid) { gap: 1rem; }');
-  const errors = errorsOf(result);
-  assert.equal(errors.length, 1);
-  assert.match(errors[0].message, /@supports.*not a condition/);
-  assert.ok(result.held.has('gap'));
+test('an at-rule block is a door chunk whatever its name; the door names what it cannot read', () => {
+  const known = analyze('@hover { color: #1a1a2e; }');
+  assert.deepEqual(errorsOf(known), []);
+  assert.deepEqual(known.structural.map((chunk) => chunk.kind), ['atrule']);
+  assert.ok(known.held.has('color'));
+  const unknown = analyze('@supports (display: grid) { gap: 1rem; }');
+  assert.deepEqual(errorsOf(unknown), []);
+  assert.deepEqual(unknown.structural.map((chunk) => chunk.prelude), ['@supports (display: grid)']);
+  assert.ok(unknown.held.has('gap'));
 });
 
 // --- validate-value parity spot checks ---------------------------------------

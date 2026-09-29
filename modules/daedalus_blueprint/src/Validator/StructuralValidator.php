@@ -17,6 +17,7 @@ use Drupal\daedalus_blueprint\LayoutBuilder\ContainerLayout;
 use Drupal\daedalus_blueprint\LayoutBuilder\PlacementRestrictionsInterface;
 use Drupal\daedalus_blueprint\Result\BlueprintError;
 use Drupal\daedalus_blueprint\Utility\FormOnlyStub;
+use Drupal\daedalus_blueprint\Utility\SampleRequest;
 
 /**
  * Phase A structural validator for entity blueprints.
@@ -595,6 +596,20 @@ class StructuralValidator {
       // completeness), never data: write paths ignore them, so their shape
       // is not held to the field's value format.
       if (FormOnlyStub::isStub($value)) {
+        continue;
+      }
+
+      // A sample request is an op-time word (update_element resolves it
+      // into a value); a blueprint carries values, and no owner on this
+      // road would resolve it, so Phase A refuses it rather than admit it
+      // as handler vocabulary and let a handler misread the marker.
+      if (SampleRequest::isRequest($value)) {
+        $errors[] = new BlueprintError(
+          path: $field_path,
+          code: 'SAMPLE_REQUEST_NOT_A_VALUE',
+          message: "Field '$field_name' asks for a sample, but a blueprint carries values.",
+          hint: 'Write the entity with values (or omit the field), then fill it with update_element {"' . SampleRequest::KEY . '": true} on the field.',
+        );
         continue;
       }
 

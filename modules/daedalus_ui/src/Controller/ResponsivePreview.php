@@ -23,14 +23,20 @@ use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
  * The iframe loads the edited page's own URL with ?navigationMode=preview:
  * edits stage in tempstore keyed to the user session (+ workspace), and
  * preview mode activates the tempstore entity swap (see
- * DaedalusUiActivationVoter) while suppressing the editing
- * chrome, which only renders in edit mode proper (ModeState reads the query
- * parameter before the cookie). The popup never mutates anything; it is a
- * projection of the edit session, never a second writer.
+ * DaedalusUiActivationVoter) without the editor: the Edit mode is vetoed
+ * in preview mode (ShouldNotEditMode) and the framed page is a chromeless
+ * document (Chromeless), the staged page as a visitor sees it. ModeState
+ * reads the query parameter before the cookie. The popup never mutates
+ * anything; it is a projection of the edit session, never a second writer
+ * (and never a second leader on the edit session's BroadcastChannel scope).
  *
- * The route is declared a pop-out (_daedalus_ui.popout), so
- * PopoutPageVariant forces the simple_page display variant and the window
- * gets no block chrome (headers, menus, footers).
+ * The route is declared a pop-out (_daedalus_ui.popout), so the shell is a
+ * chromeless document too: no block chrome (PopoutPageVariant), no
+ * page_top/page_bottom chrome (DaedalusUiHooks::preprocessHtml), and the
+ * pop-out document's own settings (DaedalusUiHooks::pageAttachments: the
+ * edit-session scope the opener forwards as ?scope, delivered as
+ * daedalusUi.popout.scope, which the shell pairs its live-update wire on).
+ * Nothing here is per-pop-out.
  */
 final class ResponsivePreview extends ControllerBase {
 
@@ -105,10 +111,6 @@ final class ResponsivePreview extends ControllerBase {
           'daedalusUi' => [
             'responsivePreview' => [
               'src' => $src,
-              // The edit-session scope rides along for the BroadcastChannel
-              // pairing (prefix 'preview'): the live-update layer opens the
-              // wire here to hear the leader's mutated pings.
-              'scope' => $request->query->get('scope'),
               'devices' => self::DEVICES,
               'userDevices' => self::sanitizeUserDevices(
                 $this->editorSettings->get('daedalus_ui', self::DEVICES_SETTING, []),
@@ -121,7 +123,7 @@ final class ResponsivePreview extends ControllerBase {
         // The user context (not just permissions) because the device list is
         // a per-user preference; the user tag re-renders the shell when a
         // device is added or removed (EditorSettings saves the user entity).
-        'contexts' => ['user', 'url.query_args:url', 'url.query_args:scope'],
+        'contexts' => ['user', 'url.query_args:url'],
         'tags' => ['user:' . $this->currentUser()->id()],
       ],
     ];

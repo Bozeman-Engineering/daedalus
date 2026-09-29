@@ -10,6 +10,7 @@ use Drupal\daedalus_layout\DaedalusLayoutToolTrait;
 use Drupal\daedalus_layout\DaedalusLayoutSettingsTrait;
 use Drupal\daedalus_ui\Attribute\Sidebar;
 use Drupal\daedalus_layout\DaedalusLayoutEntityHelperTrait;
+use Drupal\daedalus_layout\Plugin\Block\SectionBlock;
 use Drupal\daedalus_ui\ButtonBuilderTrait;
 use Drupal\daedalus_blueprint\IconResolver;
 use Drupal\daedalus_ui\DaedalusUi;
@@ -273,7 +274,11 @@ final class PlaceBlock extends SidebarPluginBase implements ContainerFactoryPlug
     ];
     // Let users place an empty section. Always offered: the Container is
     // placeable whether or not any block is promoted, and the client's
-    // stencil items join this same list after the blocks.
+    // stencil items join this same list after the blocks. The item's word
+    // is the section block plugin's admin label: what you drag is the kind
+    // (a Section once it lands at page depth, a Container nested), and the
+    // plugin definition is the one source for the kind's word.
+    $container_definition = $this->blockManager->getDefinition(SectionBlock::PLUGIN_ID);
     $build['promoted_blocks']['blocks'][] = [
       '#type' => 'container',
       '#attributes' => [
@@ -292,7 +297,7 @@ final class PlaceBlock extends SidebarPluginBase implements ContainerFactoryPlug
       ],
       // The one noun, every depth: the panel's container drops as a page row
       // OR nests into any region (the drag layer offers both).
-      'label' => ['#markup' => $this->t("<div class='daedalus-ui-panel-item__label'>Container</div>")],
+      'label' => ['#markup' => "<div class='daedalus-ui-panel-item__label'>{$container_definition['admin_label']}</div>"],
     ];
     $build['promoted_blocks']['blocks'] = array_merge($build['promoted_blocks']['blocks'], $blocks);
     if (empty($blocks)) {

@@ -13,14 +13,16 @@
    * single source of truth) and exactly the subject's form is shown.
    *
    * The subject's writers:
-   * - The toggle icon (and any plain open) is DUMB: it opens the panel on
-   *   the TOP-LEVEL entity's form under any tool, fetching it if it is not
-   *   cached yet.
+   * - The toggle icon (and any plain open) opens the panel on the
+   *   TOP-LEVEL entity's form, fetching it if it is not cached yet, and
+   *   presents the root through the editor door (open()).
    * - Form-path edits retarget the subject (openOn(), called by the form
    *   engine's getForm()).
-   * - Subject death (the subject's cached form leaves the DOM: an edit
-   *   canceled, a cache eviction, the block deleted) REVERTS the subject to
-   *   the top-level entity while the panel is open.
+   * - A refetch (refetch(): a mutation response left the subject's widgets
+   *   stale, or a panel-widget edit was canceled) replaces the cached form
+   *   with a fresh one and keeps it the subject; a refetch that fails on
+   *   the subject REVERTS the subject to the top-level entity while the
+   *   panel is open.
    * Blueprint edits never touch the panel: nothing in the blueprint path
    * calls into this model.
    */
@@ -211,10 +213,9 @@
     /**
      * The in-flight top-level form fetch, or null when idle.
      *
-     * For callers that must see the refetched form before acting on the
-     * cache: a form-path edit resuming across a mutation that evicted the
-     * root form (the eviction's revert started this fetch) waits on it
-     * instead of racing a second fetch of the same form.
+     * For callers that must see the top-level form before acting on the
+     * cache, so they wait on a fetch already in flight instead of racing
+     * a second fetch of the same form.
      *
      * @return {?Promise}
      */
@@ -246,56 +247,95 @@
     }
 
     /**
-     * Removes a cached form — the subject-death entry point.
+     * Replaces a cached form with a freshly fetched one.
      *
-     * Every path that takes a cached form out of the DOM (a canceled edit
-     * discarding unknowable values, a blueprint mutation evicting a stale
-     * form, a deleted block) routes through here so the subject model can
-     * react: when the removed form was the subject of an OPEN panel, the
-     * subject reverts to the top-level entity (re-fetched if its form was
-     * the one removed). A closed panel needs no revert — plain open()
-     * defaults to the top-level subject anyway.
+     * The client-side successor of server-side form eviction: a mutation
+     * response whose targets name a field the panel shows left the cached
+     * form's widget stale, or a canceled panel-widget edit left its staged
+     * state unknowable, so the form is fetched again (quietly: the user
+     * did not ask for a form load) and, when it was the subject, stays
+     * the subject. A subject whose fresh form cannot be fetched (its
+     * placement left the page) reverts the open panel to the top-level
+     * entity; a closed panel needs no revert, plain open() defaults to
+     * the top-level subject anyway.
      *
      * @param {Element} form
-     *   The cached form element to remove.
+     *   The cached form element to replace.
      *
-     * @return {Promise}
-     *   Resolves once any revert has settled.
+     * @return {Promise<Element>}
+     *   Resolves with the fresh form element once it is in the cache.
      */
-    async removeForm(form) {
+    async refetch(form) {
       const mount = this.mount();
+      const formId = form.dataset.daedalusEditFormId;
       const wasSubject =
-        !!mount &&
-        form.dataset.daedalusEditFormId === mount.dataset.daedalusEditSubject;
+        !!mount && formId === mount.dataset.daedalusEditSubject;
       form.remove();
-      if (!wasSubject) {
-        return;
-      }
-      delete mount.dataset.daedalusEditSubject;
-      const panel = this.panel();
-      if (!panel || panel.classList.contains('daedalus-ui-hidden')) {
-        return;
-      }
+      const fresh = () =>
+        mount?.querySelector(
+          `:scope > [data-daedalus-edit-form-id="${formId}"]`,
+        ) ?? null;
       try {
-        await this.ensureTopLevelSubject(true);
+        if (formId === this.topLevelSubjectId()) {
+          // The top-level fetch is shared, so a concurrent door (the boot
+          // restore, a revert) never appends the same form twice.
+          if (!this.topLevelFetch) {
+            this.topLevelFetch = Drupal.Daedalus.Edit.FetchMainEntityForm({
+              quiet: true,
+            }).finally(() => {
+              this.topLevelFetch = null;
+            });
+          }
+          await this.topLevelFetch;
+        } else {
+          await Drupal.Daedalus.Edit.FetchForm(formId, { quiet: true });
+        }
+        const replacement = fresh();
+        if (!replacement) {
+          throw new Error(
+            `Daedalus Edit: the refetched form ${formId} did not arrive in the form cache.`,
+          );
+        }
+        if (wasSubject) {
+          this.setSubject(replacement);
+        }
+        return replacement;
       } catch (error) {
-        // No top-level form to revert to (no main entity, fetch failed): an
-        // open panel with nothing to show closes.
-        console.error(
-          'Daedalus Edit: could not revert the form panel to the top-level entity.',
-          error,
-        );
-        this.closeSidebar(DaedalusEditSidebar.PANEL_ID);
+        if (!wasSubject) {
+          throw error;
+        }
+        delete mount.dataset.daedalusEditSubject;
+        const panel = this.panel();
+        if (panel && !panel.classList.contains('daedalus-ui-hidden')) {
+          try {
+            await this.ensureTopLevelSubject(true);
+          } catch (revertError) {
+            // No top-level form to revert to (no main entity, fetch
+            // failed): an open panel with nothing to show closes.
+            console.error(
+              'Daedalus Edit: could not revert the form panel to the top-level entity.',
+              revertError,
+            );
+            this.closeSidebar(DaedalusEditSidebar.PANEL_ID);
+          }
+        }
+        throw error;
       }
     }
 
     /**
      * Open the panel.
      *
-     * The plain open (toggle icon, hotkey, boot restore) is the DUMB door:
-     * it opens on the top-level entity's form under any tool, regardless of
-     * selection — fetching the form when it is not cached. The form-path
-     * door (openOn) pre-sets its subject, which is respected.
+     * The plain open (toggle icon, hotkey) is the ROOT's editing door: it
+     * opens on the top-level entity's form, fetching it when it is not
+     * cached, selects the root entity's row and presents the root through
+     * the one editor door (daedalus_ui edit-session.js openEditor), so the
+     * panel's first revealed widget is the open edit and the rest join the
+     * Tab walk (Cmd+Enter and the Update button commit). An edit already
+     * open is left as it is (its selection and edit stand; the panel merely
+     * shows). The form-path door (openOn) pre-sets its subject, which is
+     * respected, and presents nothing: it is called from inside an edit
+     * the session already holds.
      *
      * @param {string|null} id
      *   The panel id.
@@ -305,12 +345,37 @@
      *   be established.
      */
     async open(id = null) {
+      let presenting = false;
       if (this.pendingSubject) {
         this.setSubject(this.pendingSubject);
       } else {
         await this.ensureTopLevelSubject();
+        presenting = !Drupal.Daedalus.EditSession.isEditing();
       }
-      return super.open(id ?? DaedalusEditSidebar.PANEL_ID);
+      await super.open(id ?? DaedalusEditSidebar.PANEL_ID);
+      if (presenting) {
+        this.presentRoot();
+      }
+    }
+
+    /**
+     * Presents the root entity through the editor door: the root row
+     * selected, then openEditor on its key. The door, finding no canvas
+     * leaf for the root, asks the engine to present the root's subject,
+     * which this already-open panel is, and opens its first revealed
+     * widget as the edit, so nothing else moves.
+     */
+    presentRoot() {
+      const { Blueprint, Selection, EditSession } = Drupal.Daedalus;
+      const root = Blueprint.getRoot();
+      if (!root) {
+        return;
+      }
+      const key = `entity:${root.uuid}`;
+      if (Selection.getSelected() !== key) {
+        Selection.select(key);
+      }
+      EditSession.openEditor(key);
     }
 
     /**

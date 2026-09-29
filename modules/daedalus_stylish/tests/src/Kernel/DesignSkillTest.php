@@ -54,6 +54,7 @@ class DesignSkillTest extends KernelTestBase {
     'twig_events',
     'daedalus_tempstore',
     'daedalus_blueprint_api',
+    'file',
     'daedalus_ui',
     'daedalus_stylish',
     'daedalus_stylish_layouts',
@@ -125,9 +126,24 @@ class DesignSkillTest extends KernelTestBase {
     $this->assertStringContainsString('Think, then commit (above)', $instructions);
     $this->assertStringContainsString('which stencils filled, built beside, or placed as is', $flat);
     // The centering recipe moved here from the styling skill: the
-    // container arranges its contents, so the write lands on it.
-    $this->assertStringContainsString('display: grid; justify-items: center', $instructions);
-    $this->assertStringContainsString('align-content: center', $instructions);
+    // container arranges its contents, so the write lands on it. A
+    // container is born a flex column, so the recipe is the flex one and
+    // no display is ever written on a container.
+    // The children rule: one selector on the container, never the look
+    // copied onto each child (the grammar itself is the cached STYLES
+    // line's; the skill carries the doctrine).
+    $this->assertStringContainsString("Style a container's children with a selector on the container", $flat);
+    $this->assertStringContainsString('never by copying the look onto each child', $flat);
+    // The relations narrow the set and a position fact rides the last
+    // compound as a pseudo-class; the skill names no block type (the
+    // grammar and the site's types are the cached STYLES line's).
+    $this->assertStringContainsString('A relation narrows the set further (`+`, `~`, `:has()`, `:not()`', $flat);
+    $this->assertStringContainsString('a position fact (`:not(:last-child)`) is a pseudo-class on the last compound, after the qualifiers', $flat);
+    $this->assertStringNotContainsString('pb-', $instructions, 'The skill names no block type.');
+    $this->assertStringContainsString('never write a display on a container', $flat);
+    $this->assertStringContainsString('#hero { align-items: center }', $instructions);
+    $this->assertStringContainsString('justify-content: center', $instructions);
+    $this->assertStringContainsString('margin-top: auto', $instructions);
     $this->assertStringContainsString('align-items: center', $instructions);
 
     // Part one, the thinking step: five questions (subject, audience, the
@@ -266,7 +282,8 @@ class DesignSkillTest extends KernelTestBase {
     foreach (['daedalus_stylish', 'daedalus_stylish_layouts'] as $module) {
       $ids = [...$ids, ...array_keys($importer->getShippedDefinitions($module))];
     }
-    $this->assertContains('row', $ids, 'The fixture reads the suite\'s shipped variants.');
+    $this->assertContains('columns', $ids, 'The fixture reads the suite\'s shipped variants.');
+    $this->assertContains('row', $ids, 'The Row arrangement ships: the doctrine may say Row and Columns, never the lowercase ids.');
     $this->assertContains('block_fade_in', $ids);
     foreach ($ids as $id) {
       $this->assertDoesNotMatchRegularExpression('/\b' . preg_quote($id, '/') . '\b/', $instructions, "Doctrine must not name the material {$id}.");

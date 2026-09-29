@@ -34,7 +34,7 @@ const fakeStorage = (initial = {}) => {
 const tests = [];
 const test = (name, run) => tests.push([name, run]);
 
-test('the vocabulary is element | subtree | page in segment order', () => {
+test('the vocabulary is element | subtree | page in menu order', () => {
   assert.deepEqual(CODE_SCOPES, ['element', 'subtree', 'page']);
   assert.equal(CODE_SCOPE_STORAGE_KEY, 'daedalusStylishCodeScope');
 });

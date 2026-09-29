@@ -601,7 +601,7 @@ abstract class DaedalusBlueprintToolBase extends FunctionCallBase implements Exe
     return implode("\n", [
       'Key-annotated markup (the element model\'s print format, not rendered output):',
       '- data-key is the element\'s selectable key; data-type is its type.',
-      '- an inner element\'s class composes a sub-element key: KEY::.class-name.',
+      '- an inner element\'s class composes a sub-element key: KEY::.class-name (the "::" suffix is a relative selector; KEY::> * is every direct child, KEY::p every paragraph).',
       '- wrappers with no declared tag print as <div>; text is excerpted, not complete.',
       '',
       $html,

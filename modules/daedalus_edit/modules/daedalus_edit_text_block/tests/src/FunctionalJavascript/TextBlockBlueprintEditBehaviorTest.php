@@ -51,10 +51,11 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  *   MutationObserver, the completion reads live presence facts at
  *   keystroke time, and only a browser can watch all three surfaces agree
  *   across one link toggle.
- * - Links are selection surfaces, not navigation: with the edit session
- *   armed, a real click on the rendered anchor must open the leaf's edit
- *   instead of leaving the page (the session's capture-phase click handler
- *   preventDefaults anything resolving to an editable leaf).
+ * - Links are selection surfaces, not navigation: a real double-click on
+ *   the rendered anchor of the selected block must open the leaf's edit
+ *   instead of leaving the page (the pointer grammar's capture-phase click
+ *   handler preventDefaults anything resolving to a selectable, and the
+ *   dblclick at the leaf is the editor door).
  * - The commit grammar: type into the contenteditable surface, blur, and
  *   exactly ONE update_element op rides the queue; the response replaces
  *   the mirror and swaps the canvas markup; the change is staged in
@@ -91,6 +92,19 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  *   (remote != base) wins, the surface shows the server text, the
  *   snapshot re-baselines to it, and nothing commits. A swap that removes
  *   the component drops the edit without committing.
+ * - The landing intent (a drop lands you typing): a placement that carries
+ *   the drop's `select: <uuid>, edit: true` opens the landed leaf's editor
+ *   once the selection lands (the op queue's select-after-apply, then the
+ *   one editor door, then the engine's beginEdit), while a bare
+ *   Selection.select(key) (the popped-out inspector's road) lands a PLAIN
+ *   selection with no edit open: a landing opens an editor only when its
+ *   request says so. Escape leaves the drop's edit with the selection
+ *   standing and nothing sent.
+ * - The widget popovers ride the chrome's one floating surface: with the
+ *   edited block scrolled past the top edge, the tag picker mounts at body
+ *   level outside the chip anchor's stacking context, paints ABOVE the
+ *   top bar where the two overlap (the reported bug had it under the
+ *   bar), and flips below the chip when above the toggle is short.
  *
  * The fixture is DaedalusFixtureTrait (the daedalus recipe's site, as
  * daedalus_editor); the recipe's text block ingredient installs this
@@ -133,7 +147,7 @@ class TextBlockBlueprintEditBehaviorTest extends WebDriverTestBase {
     // (every tool's JS, the blueprint mirror boot).
     $this->drupalGet($node->toUrl());
     $session->resizeWindow(1200, 1600);
-    $this->enterEditModeViaCookies($node->toUrl(), 'selector');
+    $this->enterEditModeViaCookies($node->toUrl());
     $this->assertJsCondition(
       'window.Drupal && Drupal.Daedalus && Drupal.Daedalus.Blueprint && !!Drupal.Daedalus.Blueprint.getRoot()',
       20000,
@@ -274,9 +288,6 @@ class TextBlockBlueprintEditBehaviorTest extends WebDriverTestBase {
       'The worn button variant styles the ANCHOR: background, display, color, and no underline landed on the part.',
     );
 
-    // Arm the edit session.
-    $this->activateTool('edit');
-
     // A navigation sentinel: any page navigation produces a fresh JS context
     // without this property, so its presence proves the click stayed on the
     // page. The counter proxies window.fetch to count blueprint POSTs, the
@@ -293,12 +304,17 @@ class TextBlockBlueprintEditBehaviorTest extends WebDriverTestBase {
       };
       JS);
 
-    // The headline anchor check: a REAL pointer click on the rendered link
-    // (the anchor inside the root). The armed session's capture-phase click
-    // handler resolves it to the editable leaf and prevents its default, so
-    // the click must open the edit instead of navigating to example.com.
+    // The headline anchor check: a REAL pointer double-click on the
+    // rendered link (the anchor inside the root) with the block selected
+    // (the facade's plain selection, the state a prior click on it or a
+    // tree row leaves). The pointer grammar's capture-phase click handler
+    // resolves each click to the selected block (the deepen rule) and
+    // prevents its default, so the clicks must not navigate to
+    // example.com, and the dblclick at the leaf (chain index 0) calls the
+    // editor door: the gesture opens the edit instead of leaving the page.
+    $session->executeScript("Drupal.Daedalus.Selection.select('block:$component_uuid');");
     $session->executeScript("document.querySelector(\"$leaf\").scrollIntoView({ block: 'center' });");
-    $session->getPage()->find('css', "$leaf a")->click();
+    $session->getPage()->find('css', "$leaf a")->doubleClick();
     $this->assertJsCondition(
       <<<JS
       (() => {
@@ -310,11 +326,11 @@ class TextBlockBlueprintEditBehaviorTest extends WebDriverTestBase {
       })()
       JS,
       20000,
-      'Clicking the rendered link did not navigate; it opened the in-place edit with its widget verbs.',
+      'Double-clicking the rendered link did not navigate; it opened the in-place edit with its widget verbs.',
     );
 
     // The edit's controls ride the chip's verb face as widget verbs: while
-    // the armed frame wears --editing, the primary chip renders the Tag and
+    // the frame wears --editing, the primary chip renders the Tag and
     // Link entries in widget slots, and at FULL density (the default) the
     // Tag entry carries a TEXT label — the seam is the frame renderer's
     // density ladder now reaching daedalus_edit's entries, which the old
@@ -366,19 +382,21 @@ class TextBlockBlueprintEditBehaviorTest extends WebDriverTestBase {
     // buttons inside the popover activate on mousedown so a pick keeps the
     // caret too. The pick previews the tag swap in place and the edit
     // stays open through it.
-    $session->getPage()->find('css', "$leaf [data-daedalus-edit-text]")->click();
+    $this->reopenEdit("block:$component_uuid", "$leaf [data-daedalus-edit-text]");
     $this->assertJsCondition(
       "Drupal.Daedalus.Edit.CurrentlyEditingElement !== null && !!document.querySelector(\"[data-daedalus-edit-toggle='tags']\")",
       20000,
-      'Re-clicking the leaf re-opened its edit.',
+      'Double-clicking the leaf re-opened its edit.',
     );
     $session->executeScript(<<<JS
       document.querySelector("[data-daedalus-edit-toggle='tags']").click();
       JS);
+    // The picker rides the chrome's floating surface: a closed popover is
+    // absent from the document, an open one is mounted in it.
     $this->assertJsCondition(
-      "!document.querySelector(\"[data-daedalus-edit-popover='tags']\").hidden",
+      "!!document.querySelector(\"[data-daedalus-edit-popover='tags']\")",
       20000,
-      'The </> toggle opened the tag picker popover.',
+      'The </> toggle opened the tag picker popover on the surface.',
     );
     // The picker offers the whole shipped ladder, h1 included: a text
     // block may be the page's one h1.
@@ -407,12 +425,34 @@ class TextBlockBlueprintEditBehaviorTest extends WebDriverTestBase {
       20000,
       'The tag picker previewed h3 to h2 in place (root retagged, nested anchor kept as the live surface) without ending the edit.',
     );
+    // The picker is the kit's segmented control: the pressed tag wears the
+    // kit's active modifier beside its aria-pressed, the others neither.
+    // The class is what paints the raised pill, so this is the one place
+    // the recipe's emission is seen in a browser.
+    $this->assertJsCondition(
+      <<<JS
+      (() => {
+        const picker = document.querySelector("[data-daedalus-edit-popover='tags'] .daedalus-ui-segments");
+        const h2 = picker?.querySelector("button[data-tag='h2']");
+        const h3 = picker?.querySelector("button[data-tag='h3']");
+        return !!h2 && !!h3
+          && h2.classList.contains('daedalus-ui-segment')
+          && h2.getAttribute('aria-pressed') === 'true'
+          && h2.classList.contains('daedalus-ui-segment--active')
+          && h3.getAttribute('aria-pressed') === 'false'
+          && !h3.classList.contains('daedalus-ui-segment--active');
+      })()
+      JS,
+      20000,
+      'The pressed tag wears the kit segment active class on the segments track; the unpressed tag does not.',
+    );
 
     // The open picker is a roving-focus group: arrows/Tab cycle its
     // buttons, and Escape from INSIDE it closes only the popover — the
-    // popover's own handler stops the event before the document-level
-    // hotkey dispatcher, so the edit survives. Real presses bubble from the
-    // focused button, so the events dispatch there, not on document.
+    // surface takes Escape at document capture and stops it before the
+    // document-level hotkey dispatcher, so the edit survives, and restores
+    // focus to the opener (the text). Real presses bubble from the focused
+    // button, so the events dispatch there, not on document.
     $session->executeScript(<<<JS
       document.querySelector("[data-daedalus-edit-popover='tags'] button[data-tag='h2']").focus();
       document.activeElement.dispatchEvent(
@@ -430,7 +470,7 @@ class TextBlockBlueprintEditBehaviorTest extends WebDriverTestBase {
     $this->assertJsCondition(
       <<<JS
       (() => {
-        return document.querySelector("[data-daedalus-edit-popover='tags']").hidden
+        return !document.querySelector("[data-daedalus-edit-popover='tags']")
           && Drupal.Daedalus.Edit.CurrentlyEditingElement !== null
           && document.activeElement === document.querySelector("$leaf [data-daedalus-edit-text]");
       })()
@@ -461,11 +501,21 @@ class TextBlockBlueprintEditBehaviorTest extends WebDriverTestBase {
     // the mount back onto the root per the mounting rule, so the user
     // keeps typing through the unlink. The seam is pure wiring (twin
     // resolve, DOM morph, marker migration) only a browser can see.
-    $session->getPage()->find('css', "$leaf [data-daedalus-edit-text]")->click();
+    $this->reopenEdit("block:$component_uuid", "$leaf [data-daedalus-edit-text]");
     $this->assertJsCondition(
-      "Drupal.Daedalus.Edit.CurrentlyEditingElement !== null && !!document.querySelector(\".daedalus-edit-link-input\")",
+      "Drupal.Daedalus.Edit.CurrentlyEditingElement !== null && !!document.querySelector(\"[data-daedalus-edit-toggle='link']\")",
       20000,
-      'Re-clicking the leaf opened the edit for the unlink gesture.',
+      'Double-clicking the leaf opened the edit for the unlink gesture.',
+    );
+    // The link input lives on the floating surface, absent until the Link
+    // toggle opens it.
+    $session->executeScript(<<<JS
+      document.querySelector("[data-daedalus-edit-toggle='link']").click();
+      JS);
+    $this->assertJsCondition(
+      "!!document.querySelector(\".daedalus-edit-link-input\")",
+      20000,
+      'The Link toggle opened the link popover on the surface for the unlink gesture.',
     );
     $session->executeScript(<<<JS
       (() => {
@@ -523,11 +573,11 @@ class TextBlockBlueprintEditBehaviorTest extends WebDriverTestBase {
     // it as null — a stub kept in the snapshot gets spread into the sent
     // value, which the server treats as "leave this field alone", silently
     // dropping the link the user just typed.
-    $session->getPage()->find('css', "$leaf")->click();
+    $this->reopenEdit("block:$component_uuid", $leaf);
     $this->assertJsCondition(
-      "Drupal.Daedalus.Edit.CurrentlyEditingElement !== null && !!document.querySelector(\".daedalus-edit-link-input\")",
+      "Drupal.Daedalus.Edit.CurrentlyEditingElement !== null && !!document.querySelector(\"[data-daedalus-edit-toggle='link']\")",
       20000,
-      'Re-clicking the leaf opened the edit for the relink gesture.',
+      'Double-clicking the leaf opened the edit for the relink gesture.',
     );
     $this->assertJsCondition(
       "Drupal.Daedalus.Edit.CurrentlyEditingElement.snapshot.field_text_url === null",
@@ -549,7 +599,7 @@ class TextBlockBlueprintEditBehaviorTest extends WebDriverTestBase {
       <<<JS
       (() => {
         const input = document.querySelector(".daedalus-edit-link-input");
-        return !document.querySelector("[data-daedalus-edit-popover='link']").hidden
+        return !!document.querySelector("[data-daedalus-edit-popover='link']")
           && !!input && document.activeElement === input
           && input.value === '';
       })()
@@ -634,11 +684,11 @@ class TextBlockBlueprintEditBehaviorTest extends WebDriverTestBase {
     // local text back on a rebuilt surface (contenteditable, editing
     // class, the chip's widgets standing), the snapshot still the remote
     // text, and the scrubbed font-size landed on the block.
-    $session->getPage()->find('css', "$leaf [data-daedalus-edit-text]")->click();
+    $this->reopenEdit("block:$component_uuid", "$leaf [data-daedalus-edit-text]");
     $this->assertJsCondition(
       'Drupal.Daedalus.Edit.CurrentlyEditingElement !== null',
       20000,
-      'Re-clicking the leaf re-opened its edit for the draft steps.',
+      'Double-clicking the leaf re-opened its edit for the draft steps.',
     );
     $session->executeScript(<<<JS
       (() => {
@@ -671,7 +721,7 @@ class TextBlockBlueprintEditBehaviorTest extends WebDriverTestBase {
           && getComputedStyle(root).fontSize === '32px'
           && text.textContent === 'Local draft'
           && text.isContentEditable
-          && root.classList.contains('daedalus-edit-blueprint-editing')
+          && root.classList.contains('daedalus-edit-editing')
           && !!document.querySelector("[data-daedalus-edit-toggle='tags']")
           && editing.snapshot.field_text_text === 'Edited on the canvas'
           && window.__blueprintPosts === 4;
@@ -709,11 +759,11 @@ class TextBlockBlueprintEditBehaviorTest extends WebDriverTestBase {
     // the server text, the snapshot re-baselines to it (Escape would now
     // restore server truth), the edit stays open, and nothing commits (the
     // count grows by the foreign op alone).
-    $session->getPage()->find('css', "$leaf [data-daedalus-edit-text]")->click();
+    $this->reopenEdit("block:$component_uuid", "$leaf [data-daedalus-edit-text]");
     $this->assertJsCondition(
       'Drupal.Daedalus.Edit.CurrentlyEditingElement !== null',
       20000,
-      'Re-clicking the leaf re-opened its edit for the remote-wins step.',
+      'Double-clicking the leaf re-opened its edit for the remote-wins step.',
     );
     $session->executeScript(<<<JS
       (() => {
@@ -744,7 +794,7 @@ class TextBlockBlueprintEditBehaviorTest extends WebDriverTestBase {
         return !!editing && editing === window.__draftEdit && !!text
           && text.textContent === 'Server swapped text'
           && text.isContentEditable
-          && editing.getPageElement().classList.contains('daedalus-edit-blueprint-editing')
+          && editing.getPageElement().classList.contains('daedalus-edit-editing')
           && editing.snapshot.field_text_text === 'Server swapped text'
           && window.__blueprintPosts === 6;
       })()
@@ -779,6 +829,153 @@ class TextBlockBlueprintEditBehaviorTest extends WebDriverTestBase {
       20000,
       'Removing the edited component dropped the edit without a commit.',
     );
+
+    // The landing intent: a drop lands you typing because the drop asks
+    // for it. The drag controller's gap drop of a palette source requests
+    // `select: <bare uuid>, edit: true` on the op it enqueues
+    // (drag-controller.js, the source spec's `edit`); the op queue commits
+    // that selection only after the response has applied (applySelect
+    // probes block: then container: against the swapped-in canvas) and
+    // then, for a request carrying the intent, calls the one editor door
+    // on the landed key (applyEdit), which asks the engine to edit the
+    // leaf. A landing never opens an editor by itself (the inspector's
+    // road below lands a plain selection); the request says so. The seam
+    // is the intent riding the queue across three modules (op queue,
+    // editor door, engine.beginEdit) after a real response; nothing below
+    // a browser sees it. This one mutate call with the drop's request
+    // shape stands for every writer that asks (the palette drop, the Add
+    // panel's placement, a media file drop: all reach applyEdit). The
+    // production bundle exposes no store, so the store's editingKey is
+    // read through its derived truths: the facade's isEditing()
+    // (editingKey !== null), the engine's current edit sitting on this
+    // leaf, and the frame's --editing, which the frame model grants only
+    // when editingKey === the primary key.
+    $component3_uuid = $uuid_service->generate();
+    $wrapper3 = "[data-selectable='block:$component3_uuid']";
+    $leaf3 = "{$wrapper3}[data-daedalus-edit-editor='text_composite']";
+    $session->executeScript(<<<JS
+      (() => {
+        const Blueprint = Drupal.Daedalus.Blueprint;
+        Blueprint.mutate(Object.assign({}, Blueprint.rootContext(), {
+          operations: [{
+            op: 'add_element',
+            uuid: '$component3_uuid',
+            block_type: 'text',
+            properties: {
+              field_text_text: 'Dropped to type',
+              field_text_tag: 'h3',
+              field_text_url: { uri: 'https://example.com/' },
+            },
+            location: { anchor: '$section_uuid', placement: 'inside' },
+          }],
+          select: '$component3_uuid',
+          edit: true,
+        })).catch((error) => {
+          window.__dropSelectError = error.message;
+        });
+      })();
+      JS);
+    // Loud: the leaf rendered AND an edit is open is the "door fired"
+    // signal; a failed placement surfaces as the recorded error rather
+    // than a blind timeout.
+    $this->assertJsCondition(
+      "window.__dropSelectError !== undefined"
+      . " || (!!document.querySelector(\"h3{$leaf3} > a[data-daedalus-edit-text]\")"
+      . " && Drupal.Daedalus.EditSession.isEditing() === true)",
+      20000,
+      'The drop-shaped placement (select and edit on the request) resolved and an edit opened behind it.',
+    );
+    $drop_select_error = $session->evaluateScript('window.__dropSelectError ?? null');
+    $this->assertNull($drop_select_error, 'The drop-shaped placement failed: ' . ($drop_select_error ?? ''));
+    // The store's editingKey is the placed block: the selection the queue
+    // committed is block:<uuid>, the facade reports an edit open, and the
+    // engine's current edit sits on exactly this leaf (the intent opened
+    // the landed element, not some other item).
+    $this->assertJsCondition(
+      <<<JS
+      (() => {
+        const leaf = document.querySelector("$leaf3");
+        const editing = Drupal.Daedalus.Edit.CurrentlyEditingElement;
+        return !!leaf
+          && Drupal.Daedalus.Selection.getSelected() === 'block:$component3_uuid'
+          && Drupal.Daedalus.EditSession.isEditing() === true
+          && !!editing && editing.getPageElement() === leaf;
+      })()
+      JS,
+      20000,
+      "The landing intent opened the landed block's editor: the selection is block:<uuid>, an edit is open, and the current edit sits on that leaf (editingKey is block:<uuid>).",
+    );
+    // The selection frame wears its editing state: --editing is granted
+    // only when editingKey === the primary key, and the face swapped to
+    // the edit's widget verbs (the Tag entry) instead of the inert Edit
+    // button the bug showed.
+    $this->assertJsCondition(
+      <<<JS
+      (() => {
+        const frame = document.querySelector('.daedalus-ui-frame');
+        return !!frame && frame.classList.contains('daedalus-ui-frame--editing')
+          && !!frame.querySelector(".daedalus-ui-frame__chip--primary .daedalus-ui-frame__widget [data-daedalus-edit-toggle='tags']");
+      })()
+      JS,
+      20000,
+      "The selection frame wears --editing for the dropped block (editingKey is its primary key) and its face carries the edit's widget verbs.",
+    );
+    // The active element sits inside the leaf: the editor focused the
+    // typing surface (the nested anchor, linked), so the drop leaves the
+    // user typing with no further click.
+    $this->assertJsCondition(
+      <<<JS
+      (() => {
+        const leaf = document.querySelector("$leaf3");
+        const active = document.activeElement;
+        return !!leaf && !!active && leaf !== active && leaf.contains(active)
+          && active.matches('a[data-daedalus-edit-text]') && active.isContentEditable;
+      })()
+      JS,
+      20000,
+      "The drop landed the user typing: the active element is the dropped block's contenteditable surface inside the leaf.",
+    );
+    // Leave the edit so the legs below start where they did before this
+    // step: Escape cancels the open edit (one press cancels, the next
+    // would clear the selection), the selection stands, the frame is
+    // plain again, and nothing was sent (the counter holds the placement
+    // alone: the door's opening posts no op and the cancel posts none).
+    $this->pressHotkey('Escape');
+    $this->assertJsCondition(
+      <<<JS
+      (() => {
+        const frame = document.querySelector('.daedalus-ui-frame');
+        return Drupal.Daedalus.Edit.CurrentlyEditingElement === null
+          && Drupal.Daedalus.EditSession.isEditing() === false
+          && Drupal.Daedalus.Selection.getSelected() === 'block:$component3_uuid'
+          && !!frame && !frame.classList.contains('daedalus-ui-frame--editing')
+          && window.__blueprintPosts === 8;
+      })()
+      JS,
+      20000,
+      'Escape left the door-opened edit with the dropped block still selected, the frame plain, and only the placement posted.',
+    );
+    // Remove the dropped block: the fixture below is one section with one
+    // fresh block, so the tree and geometry legs read what they were
+    // written against.
+    $session->executeScript(<<<JS
+      (() => {
+        const Blueprint = Drupal.Daedalus.Blueprint;
+        Blueprint.mutate(Object.assign({}, Blueprint.rootContext(), {
+          operations: [{ op: 'remove_element', element: '$component3_uuid' }],
+        })).catch((error) => {
+          window.__dropRemoveError = error.message;
+        });
+      })();
+      JS);
+    $this->assertJsCondition(
+      "window.__dropRemoveError !== undefined"
+      . " || (document.querySelector(\"$wrapper3\") === null && window.__blueprintPosts === 9)",
+      20000,
+      'The dropped block was removed again before the part-gating legs.',
+    );
+    $drop_remove_error = $session->evaluateScript('window.__dropRemoveError ?? null');
+    $this->assertNull($drop_remove_error, 'Removing the dropped block failed: ' . ($drop_remove_error ?? ''));
 
     // ——— Phase 2: part gating across the three surfaces. ———
     // Element projections project the PAGE, each by its own question: the
@@ -857,10 +1054,32 @@ class TextBlockBlueprintEditBehaviorTest extends WebDriverTestBase {
     // the shared menu primitive: its entries are labelled
     // menuitemcheckbox buttons (.daedalus-ui-menu__item > .daedalus-ui-menu__label), and
     // activating one closes the menu before flipping the axis.
-    $session->executeScript(<<<JS
-      Drupal.Daedalus.Selection.select('block:$component2_uuid');
-      Drupal.Daedalus.SidebarManager.openSidebar('page_elements');
-      JS);
+    //
+    // The select is the popped-out inspector's road (app.Selection.select,
+    // the daedalus_stylish leader's write): a landing that carries no
+    // intent, so it lands a PLAIN selection and opens nothing, the
+    // counterpart of the drop's `edit: true` above (the two writers, one
+    // door, only the one that asks gets an editor). No edit is open when
+    // the chrome below is clicked, so the Show menu press (the
+    // page-elements panel declares no data-keeps-edit; the open edit's
+    // press decision would commit an edit on such a press) is inert.
+    $session->executeScript("Drupal.Daedalus.Selection.select('block:$component2_uuid');");
+    $this->assertJsCondition(
+      <<<JS
+      (() => {
+        const leaf = document.querySelector("$leaf2");
+        const frame = document.querySelector('.daedalus-ui-frame');
+        return !!leaf
+          && Drupal.Daedalus.Selection.getSelected() === 'block:$component2_uuid'
+          && Drupal.Daedalus.Edit.CurrentlyEditingElement === null
+          && Drupal.Daedalus.EditSession.isEditing() === false
+          && !!frame && !frame.classList.contains('daedalus-ui-frame--editing');
+      })()
+      JS,
+      20000,
+      "Selection.select (the inspector's road) landed a plain selection on the linked block: no edit open, the frame plain.",
+    );
+    $session->executeScript("Drupal.Daedalus.SidebarManager.openSidebar('page_elements');");
     $this->assertJsCondition(
       "!!document.querySelector('.daedalus-ui-tree') && !!document.querySelector('.daedalus-ui-show-menu__button')",
       20000,
@@ -878,13 +1097,14 @@ class TextBlockBlueprintEditBehaviorTest extends WebDriverTestBase {
 
     // Linked: the markup view mounts the Link shell row (placement-gated
     // by compose through its live canvas channel: the anchor resolved as
-    // its own element). Rows fold; the poll
-    // unfolds any folded disclosure on the way, the keyboard-free twin of
-    // a user expanding the tree.
+    // its own element). Rows collapse; the poll presses expand all (the
+    // page elements root row's control over the tree's one outline) on
+    // the way, the keyboard-free twin of a user expanding the tree.
+    $expand_all = "document.querySelector('.daedalus-ui-tree__tools .daedalus-ui-expand-all')?.click()";
     $link_row = "[...document.querySelectorAll('.daedalus-ui-tree__row--part .daedalus-ui-tree__label')].some((el) => el.textContent === 'Link')";
     $this->assertJsCondition(
       "(() => {"
-      . " document.querySelectorAll(\".daedalus-ui-tree__disclosure[aria-expanded='false']\").forEach((b) => b.click());"
+      . " $expand_all;"
       . " return $link_row; })()",
       20000,
       'Linked: the markup view mounts the Link part row.',
@@ -1030,7 +1250,7 @@ class TextBlockBlueprintEditBehaviorTest extends WebDriverTestBase {
     $this->assertTrue(
       $session->evaluateScript(<<<JS
         (() => {
-          document.querySelectorAll(".daedalus-ui-tree__disclosure[aria-expanded='false']").forEach((b) => b.click());
+          $expand_all;
           const linkRow = $link_row;
           const storedRow = document.querySelector("$part_row");
           const storedLine = !!storedRow
@@ -1098,7 +1318,7 @@ class TextBlockBlueprintEditBehaviorTest extends WebDriverTestBase {
     $this->assertNull($presence_error, 'Relinking the presence-gating block failed: ' . ($presence_error ?? ''));
     $this->assertJsCondition(
       "(() => {"
-      . " document.querySelectorAll(\".daedalus-ui-tree__disclosure[aria-expanded='false']\").forEach((b) => b.click());"
+      . " $expand_all;"
       . " return $link_row; })()",
       20000,
       'Relinked: the markup view Link row remounted with no manual refresh.',
@@ -1110,12 +1330,11 @@ class TextBlockBlueprintEditBehaviorTest extends WebDriverTestBase {
     // server-side, and its JSON response feeds the dropdown — so the whole
     // chain (target-type default ['node'], key minting, payload delivery,
     // debounced fan-out, structural pick) runs with no mock. ———
-    $session->executeScript("document.querySelector(\"$leaf2\").scrollIntoView({ block: 'center' });");
-    $session->getPage()->find('css', "$leaf2 [data-daedalus-edit-text]")->click();
+    $this->reopenEdit("block:$component2_uuid", "$leaf2 [data-daedalus-edit-text]");
     $this->assertJsCondition(
-      "Drupal.Daedalus.Edit.CurrentlyEditingElement !== null && !!document.querySelector(\".daedalus-edit-link-input\")",
+      "Drupal.Daedalus.Edit.CurrentlyEditingElement !== null && !!document.querySelector(\"[data-daedalus-edit-toggle='link']\")",
       20000,
-      'Re-clicking the leaf opened the edit for the autocomplete gesture.',
+      'Double-clicking the leaf opened the edit for the autocomplete gesture.',
     );
     // Open the link popover through the Link entry's toggle (click, like
     // every face button); the input autofocuses showing the DISPLAYABLE
@@ -1127,7 +1346,7 @@ class TextBlockBlueprintEditBehaviorTest extends WebDriverTestBase {
       <<<JS
       (() => {
         const input = document.querySelector(".daedalus-edit-link-input");
-        return !document.querySelector("[data-daedalus-edit-popover='link']").hidden
+        return !!document.querySelector("[data-daedalus-edit-popover='link']")
           && !!input && input.value === 'https://drupal.org/';
       })()
       JS,
@@ -1190,13 +1409,149 @@ class TextBlockBlueprintEditBehaviorTest extends WebDriverTestBase {
     // The displayable round trip: a fresh edit's input shows the committed
     // entity uri as the spine's "Label (id)" enrichment, never the storage
     // uri.
-    $session->getPage()->find('css', "$leaf2 [data-daedalus-edit-text]")->click();
+    $this->reopenEdit("block:$component2_uuid", "$leaf2 [data-daedalus-edit-text]");
+    $this->assertJsCondition(
+      "Drupal.Daedalus.Edit.CurrentlyEditingElement !== null && !!document.querySelector(\"[data-daedalus-edit-toggle='link']\")",
+      20000,
+      'Double-clicking the leaf opened a fresh edit for the displayable round trip.',
+    );
+    $session->executeScript(<<<JS
+      document.querySelector("[data-daedalus-edit-toggle='link']").click();
+      JS);
     $this->assertJsCondition(
       "document.querySelector(\".daedalus-edit-link-input\")?.value"
       . " === 'Text block behavior page ($nid)'",
       20000,
       'A fresh edit shows the entity link as its displayable "Label (id)", not the storage uri.',
     );
+
+    // ——— The widget popovers ride the chrome's one floating surface. The
+    // reported bug: the Tag and Link popovers painted UNDER the top bar
+    // when the edited block sat near the top of the viewport, trapped in
+    // the chip anchor's stacking context (941 against the bar's 1261)
+    // and hung from a fixed bottom edge that never flipped. Stacking and
+    // flip are browser facts no lower tier sees: the node cases prove the
+    // placement math, only a real paint proves the surface reaches above
+    // the bar. The geometry is forced so every margin is a chrome
+    // constant: the fixture page is one block tall and never scrolls, so
+    // the body gets a viewport of scroll room and the edited block
+    // scrolls up past the viewport's top edge (its bottom edge at 0). The
+    // chip model then flips the chip under the block (no room above the
+    // rail), the chip sits in the bar's band, and the surface, preferring
+    // ABOVE the toggle, finds 2px there and flips below the chip, so the
+    // popover straddles the bar's bottom edge. The scroll itself
+    // dismisses the open link popover (outside-scroll dismissal is the
+    // accepted outcome), the edit staying open; the settle beat is one
+    // frame after the scroll so that dismissal has fired before the
+    // picker opens (a scroll event lands before the next animation
+    // frame). Facts ride the assertion messages, never printed. ———
+    $session->executeScript(<<<JS
+      (() => {
+        document.body.style.paddingBottom = '100vh';
+        window.scrollBy(0, document.querySelector("$leaf2").getBoundingClientRect().bottom);
+        window.__scrollSettled = false;
+        requestAnimationFrame(() => { window.__scrollSettled = true; });
+      })();
+      JS);
+    $this->assertJsCondition(
+      <<<JS
+      (() => {
+        return window.__scrollSettled === true
+          && !document.querySelector('.daedalus-ui-popover')
+          && Drupal.Daedalus.Edit.CurrentlyEditingElement !== null
+          && !!document.querySelector("[data-daedalus-edit-toggle='tags']");
+      })()
+      JS,
+      20000,
+      'Scrolling the edited block past the top edge dismissed the link popover and kept the edit open with its widget verbs.',
+    );
+    $session->executeScript(<<<JS
+      document.querySelector("[data-daedalus-edit-toggle='tags']").click();
+      JS);
+    // The chip flipped under the block (the anchor wears --below) and the
+    // picker is open: the state the geometry reads.
+    $this->assertJsCondition(
+      <<<JS
+      (() => {
+        return !!document.querySelector(".daedalus-ui-frame--editing .daedalus-ui-frame__anchor--below [data-daedalus-edit-toggle='tags']")
+          && !!document.querySelector("[data-daedalus-edit-popover='tags']");
+      })()
+      JS,
+      20000,
+      'With the block scrolled past the top edge the chip flipped below it and the Tag toggle opened the picker.',
+    );
+    $geometry = json_decode($session->evaluateScript(<<<JS
+      (() => {
+        const picker = document.querySelector("[data-daedalus-edit-popover='tags']");
+        const surface = picker.closest('.daedalus-ui-popover');
+        const chip = document.querySelector(".daedalus-ui-frame--editing .daedalus-ui-frame__chip--primary");
+        const toggle = document.querySelector("[data-daedalus-edit-toggle='tags']");
+        const bar = document.querySelector('#edit-mode-top-bar');
+        const rect = (el) => el.getBoundingClientRect();
+        const popover = rect(surface);
+        const barRect = rect(bar);
+        // The paint probe goes where the popover and the bar overlap: the
+        // popover's own center falls below the bar's bottom edge here,
+        // and only a point inside both rects is a stacking fact at all.
+        const overlap = {
+          top: Math.max(popover.top, barRect.top),
+          bottom: Math.min(popover.bottom, barRect.bottom),
+        };
+        const at = document.elementFromPoint(
+          (popover.left + popover.right) / 2,
+          (overlap.top + overlap.bottom) / 2,
+        );
+        const px = (n) => Math.round(n);
+        return JSON.stringify({
+          mountedOnBody: surface.parentElement === document.body,
+          inAnchor: !!picker.closest('.daedalus-ui-frame__anchor'),
+          overlapsBar: overlap.bottom > overlap.top,
+          paintsAboveBar: !!at && at.closest('.daedalus-ui-popover') === surface,
+          aboveIsShort: rect(toggle).top - 2 < popover.height,
+          belowChip: popover.top >= rect(chip).bottom,
+          facts: 'popover ' + px(popover.top) + '..' + px(popover.bottom)
+            + ', chip ' + px(rect(chip).top) + '..' + px(rect(chip).bottom)
+            + ', toggle top ' + px(rect(toggle).top)
+            + ', bar ' + px(barRect.top) + '..' + px(barRect.bottom)
+            + ', probe hit ' + (at ? at.tagName + '.' + at.className : 'nothing'),
+        });
+      })()
+      JS), TRUE);
+    $facts = $geometry['facts'];
+    $this->assertTrue(
+      $geometry['mountedOnBody'] && !$geometry['inAnchor'],
+      "The tag picker mounts on the surface at body level, outside the chip anchor's stacking context ($facts).",
+    );
+    $this->assertTrue(
+      $geometry['overlapsBar'] && $geometry['paintsAboveBar'],
+      "Where the popover overlaps the top bar, the point resolves inside the popover: it paints above the bar ($facts).",
+    );
+    $this->assertTrue(
+      $geometry['aboveIsShort'] && $geometry['belowChip'],
+      "Above the toggle is short, so the surface flipped the picker below the chip ($facts).",
+    );
+  }
+
+  /**
+   * Re-opens a block's edit the way a pointer does: select, double-click.
+   *
+   * The block is selected through the facade (a plain selection, the state
+   * a prior click on it or its tree row leaves; a block inside a section
+   * would otherwise need a drill first, since a bare click stops at the
+   * section), then its leaf is double-clicked with a REAL pointer: each
+   * click keeps the selected block by the resolver's deepen rule and the
+   * dblclick at the leaf (chain index 0) calls the editor door.
+   *
+   * @param string $key
+   *   The block's selectable key.
+   * @param string $css
+   *   A CSS selector for the leaf element to double-click.
+   */
+  private function reopenEdit(string $key, string $css): void {
+    $session = $this->getSession();
+    $session->executeScript("Drupal.Daedalus.Selection.select('$key');");
+    $session->executeScript("document.querySelector(" . json_encode($css) . ").scrollIntoView({ block: 'center' });");
+    $session->getPage()->find('css', $css)->doubleClick();
   }
 
 }

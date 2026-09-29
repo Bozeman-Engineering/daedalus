@@ -79,9 +79,9 @@ const load = () => {
 
 test('a write is site-wide and session-long unless told otherwise', () => {
   const { api, writes } = load();
-  api.setCookieValue('activeTool', 'edit');
+  api.setCookieValue('navigationMode', 'edit');
   assert.deepEqual(writes, [
-    { name: 'activeTool', value: 'edit', attributes: { path: '/' } },
+    { name: 'navigationMode', value: 'edit', attributes: { path: '/' } },
   ]);
 });
 
@@ -97,8 +97,8 @@ test('a write honours an explicit path and lifetime', () => {
 
 test('set and delete share the path, by default and when given one', () => {
   const { api, writes } = load();
-  api.setCookieValue('activeTool', 'edit');
-  api.deleteCookieValue('activeTool');
+  api.setCookieValue('navigationMode', 'edit');
+  api.deleteCookieValue('navigationMode');
   api.setCookieValue('navigationMode', 'edit', { path: '/node/1' });
   api.deleteCookieValue('navigationMode', { path: '/node/1' });
   assert.equal(writes.length, 4);
@@ -115,10 +115,10 @@ test('set and delete share the path, by default and when given one', () => {
 
 test('a delete removes what a write at the same path set', () => {
   const { api, jar } = load();
-  api.setCookieValue('activeTool', 'edit');
-  assert.equal(api.getCookieValue('activeTool'), 'edit');
-  api.deleteCookieValue('activeTool');
-  assert.equal(api.getCookieValue('activeTool'), null);
+  api.setCookieValue('navigationMode', 'edit');
+  assert.equal(api.getCookieValue('navigationMode'), 'edit');
+  api.deleteCookieValue('navigationMode');
+  assert.equal(api.getCookieValue('navigationMode'), null);
   assert.equal(jar.size, 0);
 });
 
@@ -143,9 +143,9 @@ test('an empty value is a write, not a delete', () => {
 
 test('the reader finds a cookie among others and misses an absent one', () => {
   const { api } = load();
-  api.setCookieValue('activeTool', 'selector');
+  api.setCookieValue('left_top_sidebar', 'page_elements');
   api.setCookieValue('navigationMode', 'edit', { path: '/node/1' });
-  assert.equal(api.getCookieValue('activeTool'), 'selector');
+  assert.equal(api.getCookieValue('left_top_sidebar'), 'page_elements');
   assert.equal(api.getCookieValue('navigationMode'), 'edit');
   assert.equal(api.getCookieValue('missing'), null);
 });

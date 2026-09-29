@@ -7,6 +7,7 @@ namespace Drupal\daedalus_stylish;
 use Drupal\Core\Theme\ThemeManagerInterface;
 use Drupal\daedalus_blueprint\DesignSystem\ActiveDesignSystem;
 use Drupal\daedalus_blueprint\DesignSystem\DesignSystemInterface;
+use Drupal\daedalus_blueprint\Materials\RelativeSelector;
 use Drupal\daedalus_ui\ElementModel\PageBuilderDeclarations;
 use Drupal\daedalus_stylish\Exception\StyleGuideException;
 
@@ -49,13 +50,28 @@ use Drupal\daedalus_stylish\Exception\StyleGuideException;
  *   them is addressable in the markup view but offers no declared controls.
  *   An element declaration (a kind, block type, layout, or any part) may
  *   additionally carry a children section ({property_groups}) declaring the
- *   '::>' children pseudo-part: the element's direct children as ONE
+ *   '> *' children selector: the element's direct children as ONE
  *   addressable, declared like a part but WITHOUT an anatomy shell (it
  *   lives beside the elements tree, not inside it, because "all direct
  *   children" is a styling addressable, never a markup wrapper). Its
- *   property_groups are what "{key}::>" entries may style; an element
+ *   property_groups are what "{key}::> *" entries may style; an element
  *   declaring none follows the undeclared-part posture (rejected strict,
  *   grammar-only open).
+ *   An element declaration (a kind, block type, block plugin, layout, a
+ *   base tag or any part) may also carry a pseudo section, {pseudo:
+ *   {before: {property_groups}, after: {property_groups}}}, declaring the
+ *   element's two generated boxes ("{key}::&::before" on the element
+ *   itself, "{key}::.part::after" on a part, "{key}::> pb-text::before"
+ *   on the type's roster). Existence is universal (every element has
+ *   both boxes in CSS; the box shows once its `content` is set), so the
+ *   section declares VOCABULARY only: what may be styled there. Undeclared,
+ *   the box derives its host's property_groups (rejected strict as
+ *   STYLE_PSEUDO_NOT_DECLARED, granted open and guarded); declared, its
+ *   own. The `generated_content` group (`content`, closed to `none | ""`)
+ *   is granted at every generated box, declared or derived, and nowhere
+ *   else: naming it on a real element fails the build
+ *   (validatePseudoSections()), and a `content` write outside a
+ *   pseudo-element is refused in every mode.
  *   A group declaration may carry `properties`, an allowlist narrowing the
  *   grant to a subset of the group's own property names ({properties:
  *   [padding-top, padding-bottom, ...]}); omitted, the whole group is
@@ -244,26 +260,37 @@ use Drupal\daedalus_stylish\Exception\StyleGuideException;
  *   likewise; declaredDefaults() is the tier's read.
  * - controls: curated basic-mode bindings keyed by control name, each a {label,
  *   widget, element, section} map naming a ControlWidget plugin and the
- *   declared part it drives. The element key is optional: omitting it binds the
- *   control to the element root. The section key is optional too: it moves the
- *   control out of its widget's default basic-mode section into another of the
- *   ControlSection roster. A kind may bind a part its own declaration declares
- *   (the entity kind's `.daedalus-layout-layout`, the layout root daedalus_layout renders in
- *   every template and mode); the control renders only while the part is
+ *   addresses it drives. The element key is an ORDERED CANDIDATE LIST: each
+ *   entry is '' (the element root, the declared-defaults grammar's spelling)
+ *   or a declared part's selector, and the client resolves each property the
+ *   widget owns to ONE candidate (the first whose stack delivers it from an
+ *   authored layer, else the first delivering it at any tier, else the first
+ *   present one) and reads and writes that candidate, so a block with more
+ *   than one box (a text block's tag and its link) shows one row per binding
+ *   with no tag exposed. Two shorthands exist for authoring only: a string is
+ *   the one-candidate list, and omitting the key is [''] (the root). The
+ *   guide normalizes every binding through controlCandidates() before
+ *   validating and serving it, so the client and the validator see lists
+ *   only. The section key is optional: it moves the control out of its
+ *   widget's default basic-mode section into another of the ControlSection
+ *   roster. A kind may bind a part its own declaration declares (the entity
+ *   kind's `.daedalus-layout-layout`, the layout root daedalus_layout renders
+ *   in every template and mode); a binding renders while any candidate is
  *   present, so a part a template never prints simply offers nothing.
  *   Instance-namespace controls stay root-bound: instances are content and
  *   declare no parts.
  *
  * Control declarations are validated when the guide is first read for a theme
  * (widget plugin exists, the section, when given, is in the roster, the
- * element, when given, is a declared part, and the bound target's property
- * groups cover the widget's owned properties: the part's groups for an element
- * binding, the element's effective groups for a root binding, the kind's own
- * groups for a kind control) and a bad binding throws StyleGuideException —
- * failing loudly beats shipping a control whose writes the validator would
- * bounce at runtime. A control whose whole value is FALSE is a tombstone
- * suppressing an inherited control and is valid as-is; unlike NULL, scalar
- * FALSE survives merge(), so a lower layer's version cannot resurface.
+ * element key is a well-formed candidate list, every candidate is '' or a
+ * declared part, and every candidate's property groups cover the widget's
+ * owned properties: the part's groups for a part candidate, the element's
+ * effective groups for the root candidate, the kind's own groups for a kind
+ * control) and a bad binding throws StyleGuideException — failing loudly
+ * beats shipping a control whose writes the validator would bounce at
+ * runtime. A control whose whole value is FALSE is a tombstone suppressing an
+ * inherited control and is valid as-is; unlike NULL, scalar FALSE survives
+ * merge(), so a lower layer's version cannot resurface.
  *
  * @see \Drupal\daedalus_ui\ElementModel\PageBuilderDeclarations
  */
@@ -319,6 +346,56 @@ class StyleGuide {
     'figure', 'figcaption', 'hr',
     'table', 'caption', 'thead', 'tbody', 'tfoot', 'tr', 'th', 'td',
     'img',
+  ];
+
+  /**
+   * The word for each closed base tag, as prose speaks it.
+   *
+   * One label per BASE_TAGS entry, the word a surface uses where a tag
+   * tier is spelled in a sentence ("Every link in Welcome", a tag row's
+   * name, the completion's tag offer). The tag set is closed and the
+   * word for a tag is not a design opinion, so the words are code beside
+   * the tags; a site's base declaration overrides one with its own
+   * `label:` (baseTagLabels() resolves the two). The instance lane's tag
+   * words (instanceTags()) are identity words for MINTED tags; the tag
+   * tier resolves to the base declaration for every owner, so the base
+   * word wins over the instance word for the same tag.
+   */
+  public const BASE_TAG_LABELS = [
+    'h1' => 'Heading 1',
+    'h2' => 'Heading 2',
+    'h3' => 'Heading 3',
+    'h4' => 'Heading 4',
+    'h5' => 'Heading 5',
+    'h6' => 'Heading 6',
+    'p' => 'Paragraph',
+    'a' => 'Link',
+    'ul' => 'Bulleted list',
+    'ol' => 'Numbered list',
+    'li' => 'List item',
+    'dl' => 'Definition list',
+    'dt' => 'Term',
+    'dd' => 'Definition',
+    'blockquote' => 'Block quote',
+    'pre' => 'Preformatted text',
+    'code' => 'Code',
+    'em' => 'Emphasis',
+    'strong' => 'Strong',
+    'small' => 'Small print',
+    'sub' => 'Subscript',
+    'sup' => 'Superscript',
+    'figure' => 'Figure',
+    'figcaption' => 'Caption',
+    'hr' => 'Rule',
+    'table' => 'Table',
+    'caption' => 'Table caption',
+    'thead' => 'Table head',
+    'tbody' => 'Table body',
+    'tfoot' => 'Table foot',
+    'tr' => 'Table row',
+    'th' => 'Header cell',
+    'td' => 'Cell',
+    'img' => 'Image',
   ];
 
   /**
@@ -748,6 +825,28 @@ class StyleGuide {
   }
 
   /**
+   * The word for every closed base tag, the site's declared labels applied.
+   *
+   * Every BASE_TAGS entry in vocabulary order, mapped to the site's base
+   * declaration `label:` for the tag when it declares one, else the
+   * shipped word (BASE_TAG_LABELS). Declared or not, styleable or not:
+   * a surface spelling a tag in prose reads its word here and never
+   * falls through to the tag itself for a closed tag.
+   *
+   * @return array<string, string>
+   *   Tag names mapped to their words.
+   */
+  public function baseTagLabels(?string $theme = NULL): array {
+    $declared = $this->getBaseElements($theme);
+    $labels = [];
+    foreach (self::BASE_TAGS as $tag) {
+      $label = $declared[$tag]['label'] ?? NULL;
+      $labels[$tag] = is_string($label) ? $label : self::BASE_TAG_LABELS[$tag];
+    }
+    return $labels;
+  }
+
+  /**
    * The declared defaults tier: every declaration's own defaults, by scope.
    *
    * The validated `defaults` sections of the theme's layered kind, block
@@ -804,11 +903,16 @@ class StyleGuide {
    * referenced sets grant no media slot is never taught the token. Only
    * groups some declaration in the theme's layered guide references
    * count: root sections, parts at any depth in elements trees, children
-   * pseudo-part sections, instance namespaces, and the site declaration's
-   * base tags are all referencing declarations, and a referenced group no
-   * installed module provides is skipped, matching reference emission
-   * (propertySetRefs())
-   * and what validation can enforce. Memoized per theme.
+   * pseudo-part sections, pseudo sections, instance namespaces, and the
+   * site declaration's base tags are all referencing declarations, and a
+   * referenced group no installed module provides is skipped, matching
+   * reference emission (propertySetRefs()) and what validation can
+   * enforce. The pseudo-only groups
+   * (PropertyGroupPluginManager::getPseudoGroups(): `generated_content`,
+   * whose `content` carries the flag) count as referenced on every site:
+   * no declaration may name them (the guide build refuses it), the roster
+   * walk grants them at every generated box, so their media slot is
+   * always in the granted vocabulary. Memoized per theme.
    *
    * @return string[]
    *   Sorted CSS property names; [] when no referenced set grants a
@@ -840,6 +944,13 @@ class StyleGuide {
       if (is_array($declaration)) {
         $this->collectReferencedSets($declaration, $referenced);
       }
+    }
+    // The pseudo-only groups are granted by the walk at every generated
+    // box and can be named by no declaration, so the referencing walk
+    // above never sees them; fold them in or their media slot (content)
+    // would be granted everywhere and taught nowhere.
+    foreach ($this->propertyGroupManager->getPseudoGroups() as $group_id) {
+      $referenced[$group_id] = TRUE;
     }
     $media = [];
     foreach ($this->propertyGroupManager->getGroups() as $id => $group) {
@@ -949,8 +1060,9 @@ class StyleGuide {
    * Collects the set ids one declaration references, recursing into parts.
    *
    * The catalog's referencing walk: a node references sets through its own
-   * property_groups, its children pseudo-part section, and every part of
-   * its elements tree at any depth. Only installed groups count, matching
+   * property_groups, its children pseudo-part section, its declared
+   * generated boxes (the pseudo section) and every part of its elements
+   * tree at any depth. Only installed groups count, matching
    * propertySetRefs().
    *
    * @param array $declaration
@@ -968,6 +1080,9 @@ class StyleGuide {
     $children = $declaration['children'] ?? NULL;
     if (is_array($children)) {
       $this->collectReferencedSets($children, $referenced);
+    }
+    foreach (static::pseudoNodes($declaration) as $box) {
+      $this->collectReferencedSets($box, $referenced);
     }
     $elements = $declaration['elements'] ?? [];
     foreach (is_array($elements) ? $elements : [] as $part) {
@@ -1285,8 +1400,8 @@ class StyleGuide {
    * scope (getBase()) and the element tag tier by tag (baseTagElement()).
    *
    * @return array
-   *   Declarations ({property_groups, optionally elements}) keyed by tag,
-   *   [] when none are declared.
+   *   Declarations ({property_groups, optionally elements and label})
+   *   keyed by tag, [] when none are declared.
    */
   public function getBaseElements(?string $theme = NULL): array {
     $this->ensureValidated($theme);
@@ -1491,6 +1606,7 @@ class StyleGuide {
     $this->validatePropertyAllowlists($declarations, $errors);
     $this->validateConstraintDefaults($declarations, $errors);
     $this->validateChildrenSections($declarations, $errors);
+    $this->validatePseudoSections($declarations, $errors);
     if ($errors !== []) {
       throw new StyleGuideException(implode("\n", $errors));
     }
@@ -1638,23 +1754,31 @@ class StyleGuide {
   }
 
   /**
-   * Validates every kind's, block type's, layout's, and namespace's controls.
+   * Validates every kind's, refinement's, and namespace's controls.
    *
    * The first read with problems throws once, listing all of them. Three checks
    * per control, mirroring what a control needs to actually work: the named
-   * ControlWidget plugin exists, the bound element (when the control declares
-   * one) is a declared part of the block type, and the bound target's property
-   * groups cover every CSS property the widget owns, otherwise the widget's
-   * writes would be outside what the guide declares stylable there. A fourth,
-   * presentational one: a section key, when declared, names a ControlSection,
-   * or basic mode would have no header to file the control under. A control
-   * without an element key binds the block root, so the covering groups are the
-   * block's effective property groups.
+   * ControlWidget plugin exists, every candidate of the element key (a
+   * well-formed list, controlCandidates()) is '' or a declared part of the
+   * declaration, and every candidate's property groups cover every CSS
+   * property the widget owns, otherwise a write the resolver routes to that
+   * candidate would be outside what the guide declares stylable there. A
+   * fourth, presentational one: a section key, when declared, names a
+   * ControlSection, or basic mode would have no header to file the control
+   * under. The root candidate ('' or the omitted key) is covered by the
+   * declaration's effective property groups.
    *
-   * Kind controls follow the same rule as block types and layouts: an
-   * element key binds a part the kind's OWN effective declaration declares
+   * Every refinement of the block kind is walked: block types AND block
+   * plugins, each as the effective declaration getBlockType() and
+   * getBlockPlugin() serve (the kind layered underneath), so a theme's
+   * plugin bindings (the header blocks) are vouched for before the client
+   * ever receives them, and an inherited kind control is re-checked
+   * against the refinement's effective groups.
+   *
+   * Kind controls follow the same rule as the refinements: a part
+   * candidate binds a part the kind's OWN effective declaration declares
    * (found anywhere in its elements tree), covered by that part's property
-   * groups; no element key binds the kind root, covered by the kind's own
+   * groups; the root candidate binds the kind root, covered by the kind's own
    * groups. Kinds may bind parts because declared anatomy is asserted by
    * its declarer: the entity kind's layout root is markup daedalus_layout renders
    * in every template and mode, so a control bound to it renders wherever
@@ -1687,6 +1811,14 @@ class StyleGuide {
       // control needs fails the build unless it tombstones the control too.
       $effective = PageBuilderDeclarations::merge($declarations['kinds']['block'] ?? [], $declaration);
       $this->validateDeclarationControls($effective, sprintf('block type "%s"', $bundle), 'the block root', 'the block type', $errors);
+    }
+    foreach ($declarations['block_plugins'] ?? [] as $plugin_id => $declaration) {
+      // The block kind's other refinement, the same effective view
+      // getBlockPlugin() serves and ClientStyleGuide delivers: a theme's
+      // plugin declaration (curation shipped beside its template override)
+      // binds parts only the effective declaration declares.
+      $effective = PageBuilderDeclarations::merge($declarations['kinds']['block'] ?? [], $declaration);
+      $this->validateDeclarationControls($effective, sprintf('block plugin "%s"', $plugin_id), 'the block root', 'the block plugin', $errors);
     }
     foreach ($declarations['layouts'] as $layout_id => $declaration) {
       // Same effective view getLayout() serves: the universal container
@@ -2073,7 +2205,9 @@ class StyleGuide {
    * Grammar: a map of HTML tag => declaration, tags from the closed
    * BASE_TAGS vocabulary — a tag outside it fails the build loudly with
    * the legal set, because base defaults print tags into live selectors
-   * and a typo'd tag would otherwise ship a scope no page can wear. Like
+   * and a typo'd tag would otherwise ship a scope no page can wear. A
+   * declaration may carry a `label:` (the word prose spells the tag by,
+   * overriding BASE_TAG_LABELS); it must be a non-empty string. Like
    * token_scales, the section is site vocabulary: declaring it inside any
    * kind, block type, or layout declaration is a misplacement error, never
    * silently dead grammar.
@@ -2107,7 +2241,11 @@ class StyleGuide {
         continue;
       }
       if (!is_array($declaration) || array_is_list($declaration)) {
-        $errors[] = sprintf('The base element "%s" must be a declaration map (property_groups, optionally elements).', $tag);
+        $errors[] = sprintf('The base element "%s" must be a declaration map (property_groups, optionally elements and label).', $tag);
+        continue;
+      }
+      if (array_key_exists('label', $declaration) && (!is_string($declaration['label']) || trim($declaration['label']) === '')) {
+        $errors[] = sprintf('The base element "%s" sets its label to %s; a base element label must be a non-empty string (omit it to use the shipped word "%s").', $tag, var_export($declaration['label'], TRUE), self::BASE_TAG_LABELS[$tag]);
       }
     }
   }
@@ -2211,10 +2349,10 @@ class StyleGuide {
   /**
    * Validates every declaration's children sections, appending errors.
    *
-   * The '::>' children pseudo-part's grammar gate: a children section,
+   * The '> *' children selector's grammar gate: a children section,
    * legal on any element declaration (kinds, block types, layouts, parts
    * at any depth, base elements), must be a map carrying at most a
-   * property_groups map, the groups its "::>" entries accept. The
+   * property_groups map, the groups its "> *" entries accept. The
    * vocabulary is deliberately closed (like every owned grammar here): the
    * children pseudo-part is styling-only, so an anatomy-shaped key inside
    * it (label, contains, nested elements) is a category error caught at
@@ -2250,7 +2388,7 @@ class StyleGuide {
     if (array_key_exists('children', $declaration)) {
       $children = $declaration['children'];
       if (!is_array($children) || (array_is_list($children) && $children !== [])) {
-        $errors[] = sprintf('The children declaration of %s must be a map declaring the property_groups the element\'s direct children ("::>") may style, or be omitted entirely.', $where);
+        $errors[] = sprintf('The children declaration of %s must be a map declaring the property_groups the element\'s direct children ("> *") may style, or be omitted entirely.', $where);
       }
       else {
         if ($unknown = array_diff(array_keys($children), ['property_groups'])) {
@@ -2268,6 +2406,132 @@ class StyleGuide {
         $this->checkChildrenSections($part, sprintf('part "%s" of %s', $selector, $where), $errors);
       }
     }
+  }
+
+  /**
+   * Validates every declaration's pseudo sections, appending errors.
+   *
+   * The generated-box grammar gate: a `pseudo` section is a map keyed by
+   * the pseudo-element names the relative selector admits
+   * (RelativeSelector::PSEUDOS: before, after), each a map carrying
+   * exactly a property_groups map, on a kind, block type, block plugin,
+   * layout, base tag or any part of their elements trees (the nodes the
+   * roster walk can land a pseudo-element on). Its complement: the
+   * pseudo-only groups (PropertyGroupPluginManager::getPseudoGroups(),
+   * `generated_content`) are granted on every generated box by the walk
+   * and mean nothing on a real box, so a declaration naming one on an
+   * element, a part or the children fails the build instead of promising
+   * a grant the validator refuses at write time.
+   */
+  protected function validatePseudoSections(array $declarations, array &$errors): void {
+    $dimensions = [
+      'kinds' => 'kind',
+      'block_types' => 'block type',
+      'block_plugins' => 'block plugin',
+      'layouts' => 'layout',
+    ];
+    foreach ($dimensions as $dimension => $noun) {
+      foreach ($declarations[$dimension] ?? [] as $name => $declaration) {
+        if (is_array($declaration)) {
+          $this->checkPseudoSections($declaration, sprintf('%s "%s"', $noun, $name), $errors);
+        }
+      }
+    }
+    $site = $declarations['site'] ?? [];
+    $base = is_array($site) ? ($site['base'] ?? []) : [];
+    foreach (is_array($base) ? $base : [] as $tag => $declaration) {
+      if (is_array($declaration)) {
+        $this->checkPseudoSections($declaration, sprintf('base element "%s"', $tag), $errors);
+      }
+    }
+  }
+
+  /**
+   * Checks one declaration's pseudo section and its parts', appending errors.
+   *
+   * @param array $declaration
+   *   The declaration node (an element, a part, the children section).
+   * @param string $where
+   *   Names the node in errors.
+   * @param string[] $errors
+   *   The error list, appended to.
+   * @param bool $generated
+   *   TRUE when the node is itself a generated box (a pseudo section's
+   *   entry), where the pseudo-only groups belong.
+   */
+  protected function checkPseudoSections(array $declaration, string $where, array &$errors, bool $generated = FALSE): void {
+    $groups = $declaration['property_groups'] ?? [];
+    if (!$generated) {
+      foreach (is_array($groups) ? array_keys($groups) : [] as $group_id) {
+        if (is_string($group_id) && $this->propertyGroupManager->isPseudoOnly($group_id)) {
+          $errors[] = sprintf('The property_groups of %s name the "%s" group, which is granted only at a generated box ("&::before", ".part::after") and means nothing on a real one; the roster grants it at every pseudo-element by itself, so drop it here (a pseudo section, {pseudo: {before: {property_groups: …}}}, declares what else the box may style).', $where, $group_id);
+        }
+      }
+    }
+    if (array_key_exists('pseudo', $declaration)) {
+      $section = $declaration['pseudo'];
+      if ($generated) {
+        $errors[] = sprintf('The pseudo declaration of %s is not valid there: a generated box has no generated boxes of its own (a pseudo-element is terminal).', $where);
+      }
+      elseif (!is_array($section) || (array_is_list($section) && $section !== [])) {
+        $errors[] = sprintf('The pseudo declaration of %s must be a map keyed by pseudo-element (%s), each declaring the property_groups that generated box may style, or be omitted entirely.', $where, implode(', ', RelativeSelector::PSEUDOS));
+      }
+      else {
+        foreach ($section as $pseudo => $box) {
+          $at = sprintf('the ::%s pseudo-element of %s', $pseudo, $where);
+          if (!in_array($pseudo, RelativeSelector::PSEUDOS, TRUE)) {
+            $errors[] = sprintf('The pseudo declaration of %s keys by "%s", which is not a pseudo-element the relative selector admits; the generated boxes are %s.', $where, $pseudo, implode(' and ', RelativeSelector::PSEUDOS));
+            continue;
+          }
+          if (!is_array($box) || (array_is_list($box) && $box !== [])) {
+            $errors[] = sprintf('The declaration of %s must be a map declaring the property_groups the generated box may style.', $at);
+            continue;
+          }
+          if ($unknown = array_diff(array_keys($box), ['property_groups'])) {
+            $errors[] = sprintf('The declaration of %s has unknown key(s) %s; a generated box is styling-only, carrying exactly a property_groups map.', $at, implode(', ', array_map(static fn ($key) => var_export($key, TRUE), $unknown)));
+          }
+          if (array_key_exists('property_groups', $box)
+            && (!is_array($box['property_groups']) || (array_is_list($box['property_groups']) && $box['property_groups'] !== []))) {
+            $errors[] = sprintf('The declaration of %s must declare property_groups as a map of group id => optional {constraints, defaults}, like any element\'s.', $at);
+          }
+          $this->checkPseudoSections($box, $at, $errors, TRUE);
+        }
+      }
+    }
+    $elements = $declaration['elements'] ?? [];
+    foreach (is_array($elements) ? $elements : [] as $selector => $part) {
+      if (is_array($part)) {
+        $this->checkPseudoSections($part, sprintf('part "%s" of %s', $selector, $where), $errors);
+      }
+    }
+    $children = $declaration['children'] ?? [];
+    if (is_array($children) && !array_is_list($children)) {
+      $this->checkPseudoSections($children, sprintf('the children of %s', $where), $errors);
+    }
+  }
+
+  /**
+   * The declared generated boxes of a node: pseudo name => its declaration.
+   *
+   * The shared read of the recursing build checks and of the client
+   * payload's serving walk: a `pseudo` section's well-formed entries (a
+   * map per pseudo-element the grammar admits), each a node like a
+   * part's, carrying property_groups the allowlist and scale checks judge
+   * as any node's. Malformed sections are the pseudo-section check's
+   * business and are skipped here.
+   *
+   * @return array<string, array>
+   *   Pseudo-element name => its declaration node.
+   */
+  public static function pseudoNodes(array $declaration): array {
+    $section = $declaration['pseudo'] ?? NULL;
+    $nodes = [];
+    foreach (is_array($section) ? $section : [] as $pseudo => $box) {
+      if (in_array($pseudo, RelativeSelector::PSEUDOS, TRUE) && is_array($box) && !array_is_list($box)) {
+        $nodes[$pseudo] = $box;
+      }
+    }
+    return $nodes;
   }
 
   /**
@@ -2294,10 +2558,14 @@ class StyleGuide {
     }
     // The children pseudo-part carries property_groups like any element's,
     // so its scale constraints are checked the same way (it declares no
-    // elements of its own, so the recursion terminates there).
+    // elements of its own, so the recursion terminates there); a declared
+    // generated box likewise.
     $children = $declaration['children'] ?? [];
     if (is_array($children) && !array_is_list($children)) {
       $this->checkScaleConstraints($children, sprintf('the children of %s', $where), $scales, $errors);
+    }
+    foreach (static::pseudoNodes($declaration) as $pseudo => $box) {
+      $this->checkScaleConstraints($box, sprintf('the ::%s pseudo-element of %s', $pseudo, $where), $scales, $errors);
     }
   }
 
@@ -2387,6 +2655,9 @@ class StyleGuide {
     if (is_array($children) && !array_is_list($children)) {
       $this->checkPropertyAllowlists($children, sprintf('the children of %s', $where), $errors);
     }
+    foreach (static::pseudoNodes($declaration) as $pseudo => $box) {
+      $this->checkPropertyAllowlists($box, sprintf('the ::%s pseudo-element of %s', $pseudo, $where), $errors);
+    }
   }
 
   /**
@@ -2441,15 +2712,63 @@ class StyleGuide {
   }
 
   /**
+   * A control binding's element key as its ordered candidate list.
+   *
+   * The one place the binding grammar's shorthands are read: an omitted
+   * key is [''] (the element root), a string is the one-candidate list,
+   * and a list rides as authored. '' spells the root, the declared-defaults
+   * grammar's spelling, so a list may put the root after a part
+   * (['.text-block-link', '']: the link when it carries the value, else
+   * the tag). Validation checks each candidate of the list this returns
+   * and the client is served the list, so neither ever sees a shorthand
+   * and the resolver (controls.js resolveCandidates()) has one input.
+   *
+   * @param array $control
+   *   A control declaration map ({label, widget, element?, section?}).
+   *
+   * @return string[]
+   *   The candidates in authored order, each '' or a part selector.
+   *
+   * @throws \InvalidArgumentException
+   *   When the element key is neither absent, a string, nor a non-empty list
+   *   of distinct strings; the message says what a well-formed key is, for
+   *   the guide validator to attribute to the control.
+   */
+  public static function controlCandidates(array $control): array {
+    if (!array_key_exists('element', $control)) {
+      return [''];
+    }
+    $element = $control['element'];
+    if (is_string($element)) {
+      return [$element];
+    }
+    $well_formed = is_array($element) && array_is_list($element) && $element !== []
+      && array_filter($element, 'is_string') === $element
+      && count(array_unique($element)) === count($element);
+    if (!$well_formed) {
+      throw new \InvalidArgumentException(sprintf(
+        'has %s under its element key, which is not a candidate list: the key is a part selector, a non-empty list of distinct part selectors in priority order (\'\' spelling the root), or omitted to bind the root.',
+        var_export($element, TRUE),
+      ));
+    }
+    return $element;
+  }
+
+  /**
    * Validates one effective declaration's control bindings, appending errors.
    *
-   * The shared half of validateControls() for the three declaration-shaped
-   * guide dimensions (kinds, block types and layouts): each may bind
-   * controls to a declared part via an element key — found anywhere in the
-   * declaration's elements tree, since parts nest — or to the element root
-   * by omitting it. $where names the declaration in errors ('block type
-   * "media"'), $root the root binding ("the block root"), $owner the
-   * declaring owner ("the block type").
+   * The shared half of validateControls() for the declaration-shaped guide
+   * dimensions (kinds, block types, block plugins and layouts): each binds
+   * controls to an ordered candidate list (controlCandidates()), every
+   * candidate '' for the element root or a declared part found anywhere in
+   * the declaration's elements tree, since parts nest. Each candidate is
+   * checked on its own and the error names it, so a list whose second
+   * entry is undeclared or uncovered fails as loudly as a single binding
+   * would: the resolver may route any owned property to any candidate, so
+   * every candidate must be a target the guide vouches for. $where names
+   * the declaration in errors ('block type "media"'), $root the root
+   * binding ("the block root"), $owner the declaring owner ("the block
+   * type").
    */
   protected function validateDeclarationControls(array $effective, string $where, string $root, string $owner, array &$errors): void {
     $controls = $effective['controls'] ?? [];
@@ -2468,29 +2787,35 @@ class StyleGuide {
       }
       $this->validateControlSection($at, $control, $errors);
       $widget_id = $this->validateControlWidgetId($at, $control, $errors);
-      $element = $control['element'] ?? NULL;
-      $groups = NULL;
-      if ($element === NULL) {
-        // No element key: the control binds the element root, so the
-        // effective property groups are what must cover the widget.
-        $groups = $effective['property_groups'] ?? [];
+      try {
+        $candidates = static::controlCandidates($control);
       }
-      elseif (!is_string($element) || $element === '') {
-        $errors[] = "$at must name a part selector under its element key, or omit the key to bind $root.";
-      }
-      elseif (($part = PageBuilderDeclarations::findElement($effective, $element)) === NULL) {
-        $errors[] = sprintf('%s binds element "%s", which is not a declared part of %s.', $at, $element, $owner);
-      }
-      else {
-        $groups = $part['property_groups'] ?? [];
-      }
-      if ($widget_id === NULL || $groups === NULL) {
+      catch (\InvalidArgumentException $e) {
+        // The grammar error is the normalizer's; this build attributes it
+        // to the control and keeps collecting, so one bad key never hides
+        // the errors beside it.
+        $errors[] = "$at {$e->getMessage()}";
         continue;
       }
-      [$binding, $owner_label] = $element === NULL
-        ? ["to $root", $owner]
-        : [sprintf('to element "%s"', $element), 'the part'];
-      $this->validateControlCoverage($at, $widget_id, $groups, $binding, $owner_label, $errors);
+      foreach ($candidates as $candidate) {
+        if ($candidate === '') {
+          // The root candidate: the effective property groups are what
+          // must cover the widget.
+          $groups = $effective['property_groups'] ?? [];
+          [$binding, $owner_label] = ["to $root", $owner];
+        }
+        elseif (($part = PageBuilderDeclarations::findElement($effective, $candidate)) === NULL) {
+          $errors[] = sprintf('%s binds element "%s", which is not a declared part of %s.', $at, $candidate, $owner);
+          continue;
+        }
+        else {
+          $groups = $part['property_groups'] ?? [];
+          [$binding, $owner_label] = [sprintf('to element "%s"', $candidate), 'the part'];
+        }
+        if ($widget_id !== NULL) {
+          $this->validateControlCoverage($at, $widget_id, $groups, $binding, $owner_label, $errors);
+        }
+      }
     }
   }
 

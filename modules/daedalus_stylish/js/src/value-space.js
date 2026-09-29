@@ -426,7 +426,7 @@ export const valueSpaceFor = (
     // material stop's name rides its tokens instead (stopsFor labels a
     // token by name on non-numeric scales; here that name is the
     // token's, never a literal's), and a label that only respells the
-    // value is no name (gap's px steps, a keyword definition's own
+    // value is no name (gap's rem steps, a keyword definition's own
     // keywords).
     const name =
       token === null &&
@@ -629,6 +629,17 @@ export const detentsFor = (stops, unit) =>
  * first token the settle commits (magneticCapture doctrine: scrubbing
  * onto a stop IS reaching the token).
  *
+ * The scrub's modifiers (Cmd/Ctrl, Shift, Alt) reach it as `rate`, the
+ * multiplier dimension-value's scrubRate derives from them per tick:
+ * the rate changes how much value one pointer pixel is worth, never
+ * whether the magnets capture. Both the travel per pixel AND the
+ * magnet radius scale by it, so a stop stays the same pointer distance
+ * wide at every rate (0.12 rem at 0.006 rem/px is 20 pointer pixels,
+ * and so is 12 rem at 0.6 rem/px under Cmd). A radius fixed in value
+ * space would let a x100 tick step over the stops between two events
+ * and the magnets would stop capturing, which the rate must never do.
+ * Bounds and precision are untouched by the rate.
+ *
  * @param {number} raw
  *   The running accumulator (starts at the current numeric value).
  * @param {number} movementX
@@ -636,12 +647,14 @@ export const detentsFor = (stops, unit) =>
  * @param {Array<{number: number, stop: object}>} detents
  *   The space's magnets (detentsFor).
  * @param {{min: ?number, max: ?number, perPixel: number,
- *   magnet: number, precision: ?number}} options
- *   Bounds pin the accumulator; perPixel/magnet override the feel knobs;
- *   precision rounds the shown number BETWEEN magnets to that many
- *   decimals (the unit's precision, dimension-value's unitPrecision:
- *   whole pixels, hundredths of a rem), null keeping the raw travel. A
- *   magnet's number is always the stop's own.
+ *   magnet: number, precision: ?number, rate: number}} options
+ *   Bounds pin the accumulator; perPixel/magnet override the feel knobs
+ *   (the unit-scaled base, feelFactor); rate multiplies both (the
+ *   modifier ladder, scrubRate; 1 when no modifier is held); precision
+ *   rounds the shown number BETWEEN magnets to that many decimals (the
+ *   unit's precision, dimension-value's unitPrecision: whole pixels,
+ *   hundredths of a rem), null keeping the raw travel. A magnet's
+ *   number is always the stop's own.
  *
  * @return {{raw: number, number: number, stop: ?object}}
  */
@@ -652,8 +665,10 @@ export const magnetAdvance = (raw, movementX, detents, options = {}) => {
     perPixel = SCRUB_PER_PIXEL,
     magnet = MAGNET_RADIUS,
     precision = null,
+    rate = 1,
   } = options;
-  let advanced = raw + movementX * perPixel;
+  const reach = magnet * rate;
+  let advanced = raw + movementX * perPixel * rate;
   if (min !== null && advanced < min) {
     advanced = min;
   }
@@ -662,7 +677,7 @@ export const magnetAdvance = (raw, movementX, detents, options = {}) => {
   }
   const near = detents.reduce((best, detent) => {
     const distance = Math.abs(advanced - detent.number);
-    return distance < magnet && (best === null || distance < best.distance)
+    return distance < reach && (best === null || distance < best.distance)
       ? { detent, distance }
       : best;
   }, null);

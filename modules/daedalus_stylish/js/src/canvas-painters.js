@@ -11,7 +11,7 @@ import { paddingPx, borderPx, marginPx, gapPx } from './computed-read.js';
  * The canvas-highlight painter registry: property → painter.
  *
  * The canvas highlight spec is property-keyed — consumers say WHAT they
- * are editing ({key, sub, properties}), never how to paint it. This
+ * are editing ({key, selector, properties}), never how to paint it. This
  * module owns the HOW: which painter tints a property's invisible
  * geometry, and the pure per-frame arithmetic each painter runs over
  * one measured match. The renderer measures; painters compute; nothing

@@ -75,10 +75,11 @@ class StencilGestureAliasTest extends StencilKernelTestBase {
       'move',
       'set',
       'style',
+      'file',
       'save_material',
       'update_material',
       'remove_material',
-    ], $registry->getPageLanguageOperations(), 'The page language op set is the DOM vocabulary plus the material gesture family.');
+    ], $registry->getPageLanguageOperations(), 'The page language op set is the DOM vocabulary, the file declaration and the material gesture family.');
 
     $result = $this->operations()->batchOperations($entity, [
       [

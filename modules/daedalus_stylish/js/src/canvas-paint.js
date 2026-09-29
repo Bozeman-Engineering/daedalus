@@ -1,4 +1,4 @@
-import { resolveTargets } from './computed-read.js';
+import { pseudoOf, resolveTargets } from './computed-read.js';
 import { paintCoverage } from './code/layers.js';
 
 /**
@@ -80,7 +80,14 @@ export const createCanvasPaint = ({ app, source }) => {
         // in the tree's selection universe.
         marks.add(target.key);
       }
-      resolveTargets(target.key, target.sub).forEach((element) => {
+      // A generated box's coverage marks its owner's row but rings no
+      // element: the ring is rect chrome and the box has no rect, only
+      // its host does, and a ring on the host would name a layer that
+      // covers the box, not the host.
+      if (pseudoOf(target.selector) !== null) {
+        return;
+      }
+      resolveTargets(target.key, target.selector).forEach((element) => {
         let ids = covered.get(element);
         if (!ids) {
           ids = [];

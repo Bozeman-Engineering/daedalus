@@ -3,3 +3,10 @@ services:
     class: Drupal\daedalus_blueprint_test\TestOperationHandler
     tags:
       - { name: daedalus_blueprint.operation_handler }
+  daedalus_blueprint_test.file_declaration_handler:
+    class: Drupal\daedalus_blueprint_test\TestFileDeclarationHandler
+    arguments:
+      - '@daedalus_blueprint.dialect_alias_map'
+      - '@uuid'
+    tags:
+      - { name: daedalus_blueprint.file_declaration_handler }

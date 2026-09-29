@@ -13,14 +13,14 @@ use Symfony\Component\EventDispatcher\EventSubscriberInterface;
  * Mints identity on sample-populated inline blocks at placement time.
  *
  * The palette flow's add operation fills fields the caller didn't provide
- * via field_sample_value generators, outside the field-handler deserialize
- * pipeline, so the stage-time seam (IdentityMintingTextFieldHandler) never
- * sees those values; and placement stages without a save, so the presave
- * backstop doesn't run either. This subscriber closes that gap: it mints
- * the freshly created block's formatted text fields before the element
- * is inserted, completing eager identity's three seams (deserialize-time
- * for authored values, element-created for sample values, presave as the
- * universal backstop).
+ * via field_sample_value generators, outside validateAndApplyFields(), so
+ * the stage-time seam (FieldAppliedMintIdentity, riding the spine's
+ * FieldAppliedEvent) never sees those values; and placement stages without
+ * a save, so the presave backstop doesn't run either. This subscriber
+ * closes that gap: it mints the freshly created block's formatted text
+ * fields before the element is inserted, completing eager identity's three
+ * seams (field-applied for authored values, element-created for sample
+ * values, presave as the universal backstop).
  *
  * Runs at low priority, after daedalus_layout's PlaceBlockEvent bridge and any
  * block-type sample-content subscribers, so whatever block they left in

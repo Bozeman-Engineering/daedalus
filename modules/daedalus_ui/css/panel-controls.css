@@ -43,11 +43,17 @@
 
 /* The header's action cluster (SidebarPluginBase::buildPanelHeader): the
    panel's own actions (pills, segments, a kebab) in one 0.5rem rhythm,
-   the close control always last. */
+   the close control always last, at the header's inline END. The
+   header wraps, and space-between only ends a cluster that shares the
+   title's line: a cluster too wide for that line (a long title on a
+   narrowed rail) wraps under the title, where a lone item would sit at
+   the start and its end-aligned menu would have no panel to hang inward
+   over. The auto margin keeps the cluster at the end on either line. */
 .daedalus-ui-panel__actions {
   display: flex;
   align-items: center;
   gap: 0.5rem;
+  margin-inline-start: auto;
 }
 
 /* A slot the header lends to client-rendered chrome (the Page Elements
@@ -427,6 +433,16 @@ The main consumers of daedalus-ui-panel-item are the lb block panel and the hist
   background: color-mix(in sRGB, var(--daedalus-ui-chip-color) 10%, transparent);
 }
 
+/* A chip that is on (the Styled-at chip of the current condition, the
+   library card's outline toggle): full text color on the selection wash
+   with an inset 1px selection ring. The one kit recipe for a lit chip;
+   choosing one of N is the segment's job, not a chip's. */
+.daedalus-ui-chip--active {
+  color: var(--daedalus-text);
+  background: var(--daedalus-selection-background);
+  box-shadow: inset 0 0 0 1px var(--daedalus-selection);
+}
+
 /* Only genuinely interactive chips take the shared hover wash. */
 button.daedalus-ui-chip {
   cursor: pointer;
@@ -489,6 +505,17 @@ button.daedalus-ui-chip:focus-visible {
 
 .daedalus-ui-icon-button:hover:not(:disabled) {
   color: var(--daedalus-text);
+  background: var(--daedalus-selection-background);
+}
+
+/* A toggle's pressed state (aria-pressed, the page tree's element picker):
+   the selection color on the selection wash, so the next toggle in a
+   header gets it for nothing. Declared after the hover rule and repeated
+   at hover specificity so a pressed button under the pointer keeps the
+   selection color instead of the hover's text color. */
+.daedalus-ui-icon-button[aria-pressed="true"],
+.daedalus-ui-icon-button[aria-pressed="true"]:hover:not(:disabled) {
+  color: var(--daedalus-selection);
   background: var(--daedalus-selection-background);
 }
 

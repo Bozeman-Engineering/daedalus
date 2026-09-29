@@ -130,6 +130,41 @@ class TargetKeyMapperTest extends UnitTestCase {
   }
 
   /**
+   * A block field that appeared or disappeared re-renders the block root.
+   *
+   * Beside the field's own target, which the renderer's missing-subtree
+   * fallback would also degrade to the block root; the sentinel makes the
+   * containing subtree the answer whether the field filled or emptied.
+   */
+  public function testLbComponentPresenceMapsToBlockKey(): void {
+    $mapper = $this->buildMapper([
+      self::COMPONENT_UUID => $this->lbElementContext(),
+    ]);
+    $keys = $mapper->map($this->rootEntity, [
+      ['uuid' => self::COMPONENT_UUID, 'field_name' => 'field_body'],
+      ['uuid' => self::COMPONENT_UUID, 'field_name' => TargetType::PRESENCE],
+    ]);
+    $this->assertSame([
+      SelectableKey::blockField(self::COMPONENT_UUID, 'field_body'),
+      SelectableKey::block(self::COMPONENT_UUID),
+    ], $keys);
+  }
+
+  /**
+   * A root field that appeared or disappeared re-renders the whole entity.
+   */
+  public function testRootPresenceFallsBackToEntityKey(): void {
+    $keys = $this->buildMapper()->map($this->rootEntity, [
+      ['uuid' => self::ROOT_UUID, 'field_name' => 'field_subtitle'],
+      ['uuid' => self::ROOT_UUID, 'field_name' => TargetType::PRESENCE],
+    ]);
+    $this->assertSame([
+      SelectableKey::field(self::ROOT_UUID, 'field_subtitle'),
+      SelectableKey::entity(self::ROOT_UUID),
+    ], $keys);
+  }
+
+  /**
    * An added component re-renders its container when the section has a UUID.
    */
   public function testAddedLbComponentMapsToContainerKey(): void {
@@ -211,6 +246,29 @@ class TargetKeyMapperTest extends UnitTestCase {
     ]);
     $keys = $mapper->map($this->rootEntity, [
       ['uuid' => self::SECTION_UUID, 'field_name' => TargetType::RESTRUCTURED],
+    ]);
+    $this->assertSame([SelectableKey::container(self::SECTION_UUID)], $keys);
+  }
+
+  /**
+   * A section's own properties (update_element on a section) map to its key.
+   *
+   * Layout settings (column widths and the like) and the label render
+   * inside the container, so the container is the subtree to swap, never
+   * the whole entity.
+   */
+  public function testSectionPropertyMapsToSectionKey(): void {
+    $mapper = $this->buildMapper([
+      self::SECTION_UUID => new ElementContext(
+        type: ElementContext::TYPE_SECTION,
+        target: new Section('layout_twocol_section'),
+        parentEntity: $this->rootEntity,
+        path: 'layout_builder__layout.0',
+      ),
+    ]);
+    $keys = $mapper->map($this->rootEntity, [
+      ['uuid' => self::SECTION_UUID, 'field_name' => 'layout_settings'],
+      ['uuid' => self::SECTION_UUID, 'field_name' => 'label'],
     ]);
     $this->assertSame([SelectableKey::container(self::SECTION_UUID)], $keys);
   }

@@ -1,10 +1,17 @@
 // cspell:ignore paddington
 /**
  * Self-asserting tests for the box-model value logic behind the spacing
- * diagram: shorthand expansion (the CSS 1/2/3/4 rule, the server's
- * structural pass-throughs honored), per-side effective resolution
- * (last-declaration-wins within a layer), four-state provenance
- * (authored / variant with its supplying reference / skin / computed),
+ * diagram: shorthand expansion (the CSS 1/2/3/4 rule, a lone token
+ * reference onto every side, the server's other structural
+ * pass-throughs honored as opaque), per-side effective resolution
+ * (last-declaration-wins within a layer, the logical longhands read
+ * onto their physical pair), five-state provenance over
+ * the style stack (authored / variant with its supplying reference /
+ * skin / declared / computed: the per-side read of the stack's layers
+ * at a pose),
+ * the family row's one origin over its offered sides (sidesOrigin: one
+ * (layer, at-pose) group reads as a row's mark, a split is hollow in the
+ * topmost hue, no set side lends the topmost author's hue),
  * the per-side commit shapes (plain
  * longhand write vs the one-time shorthand expansion), the Figma
  * modifier split (Shift coarse, Alt mirror, Alt+Shift all four), and the
@@ -17,6 +24,7 @@
  */
 import { strict as assert } from 'node:assert';
 import { materialsFrom } from './materials-fixture.mjs';
+import { layerColor } from '../../js/src/code/layers.js';
 import {
   BOX_FAMILIES,
   OPPOSITE_SIDE,
@@ -30,19 +38,24 @@ import {
   propertySides,
   resolveSides,
   settleSpelling,
+  sideAnchor,
   sideCommit,
   sideLonghands,
+  sideMeasured,
   sideProvenance,
   sideScrubMove,
   sideScrubSeed,
   sideStepValue,
   sharesGrain,
+  sidesOrigin,
   sidesPatch,
   spreadSides,
   uniformCommit,
   uniformState,
 } from '../../js/src/widgets/lib/box-model.js';
-import { SCRUB_BAND, valueSpaceFor } from '../../js/src/value-space.js';
+import { SCRUB_BAND, SCRUB_PER_PIXEL, valueSpaceFor } from '../../js/src/value-space.js';
+import { COMPUTED, layer, stackOf, stacksOf } from './stack-fixture.mjs';
+import { ancestorLayerId, ancestorWearLayerId } from '../../js/src/code/layers.js';
 
 const tests = [];
 const test = (name, run) => tests.push([name, run]);
@@ -78,12 +91,22 @@ test('expandShorthand keeps the value\'s own spelling', () => {
   }, 'keyword components pass through (margin\'s auto)');
 });
 
+test('expandShorthand splits a lone token reference into four copies of itself', () => {
+  // One var(--name) addresses every side identically: the one splitter
+  // the read (resolveSides) and the write (sideCommit) share.
+  assert.deepEqual(expandShorthand('var(--space-m)'), { top: 'var(--space-m)', right: 'var(--space-m)', bottom: 'var(--space-m)', left: 'var(--space-m)' });
+  assert.deepEqual(expandShorthand('  var( --space-m )  '), { top: 'var( --space-m )', right: 'var( --space-m )', bottom: 'var( --space-m )', left: 'var( --space-m )' }, 'trimmed, its own inner spelling kept');
+});
+
 test('expandShorthand refuses what it cannot split honestly', () => {
   // The server's structural pass-throughs (case-sensitive, mirroring
-  // PropertyGroupBase): one opaque value, spaces and all.
+  // PropertyGroupBase) beyond the lone reference: one opaque value,
+  // spaces and all.
   assert.equal(expandShorthand('calc(100% - 2rem)'), null);
-  assert.equal(expandShorthand('var(--space-m)'), null);
   assert.equal(expandShorthand('1rem var(--space-m)'), null);
+  assert.equal(expandShorthand('var(--a) var(--b)'), null, 'a multi-component var() stays opaque');
+  assert.equal(expandShorthand('var(--s, 1rem)'), null, 'a reference with a fallback tail is not a lone reference');
+  assert.equal(expandShorthand('max(var(--g), 1rem)'), null, 'a function over a reference is not a lone reference');
   assert.equal(expandShorthand('1px 2px 3px 4px 5px'), null, 'beyond repeat: 4');
   assert.equal(expandShorthand(''), null);
   assert.equal(expandShorthand('   '), null);
@@ -204,11 +227,56 @@ test('resolveSides marks an unsplittable shorthand set-but-unshowable', () => {
   SIDES.forEach((side) => {
     assert.deepEqual(sides[side], { value: null, property: 'padding' }, side);
   });
+  assert.deepEqual(resolveSides({ padding: 'var(--a) var(--b)' }).left, { value: null, property: 'padding' }, 'a multi-component var() stays opaque');
   // A later longhand still overrides its side.
   assert.deepEqual(
-    resolveSides({ padding: 'var(--s)', 'padding-top': '1rem' }).top,
+    resolveSides({ padding: 'calc(1rem + 2px)', 'padding-top': '1rem' }).top,
     { value: '1rem', property: 'padding-top' },
   );
+});
+
+test('resolveSides reads a lone reference shorthand as the reference on every side', () => {
+  // The one splitter: the read answers what sideCommit writes.
+  const sides = resolveSides({ padding: 'var(--s)' });
+  SIDES.forEach((side) => {
+    assert.deepEqual(sides[side], { value: 'var(--s)', property: 'padding' }, side);
+  });
+  const later = resolveSides({ padding: 'var(--s)', 'padding-top': '1rem' });
+  assert.deepEqual(later.top, { value: '1rem', property: 'padding-top' }, 'a later longhand still wins its side');
+  assert.deepEqual(later.right, { value: 'var(--s)', property: 'padding' }, 'the other sides keep the reference');
+});
+
+test('resolveSides expands a logical longhand onto its physical pair', () => {
+  const inset = 'max(var(--space-gutter), calc((100% - var(--layout-max-width)) / 2))';
+  assert.deepEqual(resolveSides({ 'padding-inline': inset }), {
+    top: null,
+    right: { value: inset, property: 'padding-inline' },
+    bottom: null,
+    left: { value: inset, property: 'padding-inline' },
+  }, 'padding-inline is right and left, its whole value on each, top and bottom untouched');
+  assert.deepEqual(resolveSides({ 'padding-block': '2rem' }), {
+    top: { value: '2rem', property: 'padding-block' },
+    right: null,
+    bottom: { value: '2rem', property: 'padding-block' },
+    left: null,
+  }, 'padding-block is top and bottom');
+  assert.deepEqual(resolveSides({ 'margin-inline': 'auto' }, 'margin').left, { value: 'auto', property: 'margin-inline' });
+  assert.deepEqual(resolveSides({ 'margin-block': '0' }, 'margin').bottom, { value: '0', property: 'margin-block' });
+  assert.deepEqual(resolveSides({ 'padding-inline': '1rem' }, 'margin'), { top: null, right: null, bottom: null, left: null }, 'a padding logical never leaks into a margin read');
+  assert.deepEqual(resolveSides({ 'padding-inline-start': '1rem' }), { top: null, right: null, bottom: null, left: null }, 'the -start/-end spellings stay outside the vocabulary');
+  assert.deepEqual(resolveSides({ 'padding-inline': null }).left, null, 'a null draft unsets the pair');
+});
+
+test('resolveSides: a physical longhand after a logical one wins its side, and a logical one after a physical resets the pair', () => {
+  const later = resolveSides({ 'padding-inline': '1rem', 'padding-left': '3rem' });
+  assert.deepEqual(later.left, { value: '3rem', property: 'padding-left' });
+  assert.deepEqual(later.right, { value: '1rem', property: 'padding-inline' });
+  const reset = resolveSides({ 'padding-left': '3rem', 'padding-inline': '1rem' });
+  assert.deepEqual(reset.left, { value: '1rem', property: 'padding-inline' });
+  assert.deepEqual(reset.right, { value: '1rem', property: 'padding-inline' });
+  // The shorthand after a logical longhand resets all four.
+  assert.deepEqual(resolveSides({ 'padding-inline': '1rem', padding: '2rem' }).left, { value: '2rem', property: 'padding' });
+  assert.deepEqual(resolveSides({ padding: '2rem', 'padding-inline': '1rem' }).top, { value: '2rem', property: 'padding' }, 'a logical longhand after the shorthand leaves the other pair alone');
 });
 
 test('resolveSides handles other box properties via the parameter', () => {
@@ -222,33 +290,65 @@ test('resolveSides handles other box properties via the parameter', () => {
   }, 'padding never leaks into a margin read');
 });
 
-// --- sideProvenance -------------------------------------------------------
+// --- sideProvenance (the per-side read of the stack) -----------------------
+
+// A member's stack under a section rule that wears a variant (T10's
+// group: the worn ancestor layer beneath the rule's own), served for
+// every box family the way stacksOf serves a hand-built stack.
+const OWNER = 'container:cccccccc-1111-2222-3333-444444444444';
+const RULE_OWN = ancestorLayerId(OWNER, '> pb-text');
+const RULE_WORN = ancestorWearLayerId(OWNER, '> pb-text', 'button');
+const underRule = (ownEntry, wornEntry, own = null) => {
+  const stack = {
+    ...stackOf(),
+    layers: [
+      layer(RULE_WORN, 'ancestor', wornEntry, { scope: OWNER, variant: 'button', label: 'Button', carrier: { key: OWNER, selector: '> pb-text' } }),
+      layer(RULE_OWN, 'ancestor', ownEntry, { scope: OWNER, label: 'Hero' }),
+      layer('element', 'element', own),
+    ],
+  };
+  return Object.fromEntries(
+    Object.keys(BOX_FAMILIES)
+      .flatMap((family) => [family, ...SIDES.map((side) => familyLonghand(family, side))])
+      .map((name) => [name, stack]),
+  );
+};
+
+test('sideProvenance: a variant an ancestor\'s rule wears reads as a VARIANT side with the variant as its reference; the rule\'s own entry reads as the floor', () => {
+  const states = sideProvenance(underRule({ 'padding-top': '2rem' }, { padding: '1rem' }));
+  assert.deepEqual(states.top, { state: 'skin', layer: 1, id: RULE_OWN, reference: null, condition: 'default', atPose: true, value: '2rem', property: 'padding-top' }, 'own beats worn inside the group, as the floor');
+  const worn = { state: 'variant', layer: 0, id: RULE_WORN, reference: 'button', condition: 'default', atPose: true, value: '1rem', property: 'padding' };
+  ['right', 'bottom', 'left'].forEach((side) => {
+    assert.deepEqual(states[side], worn, side);
+  });
+  // The element's own longhand beats both.
+  assert.equal(sideProvenance(underRule({ 'padding-top': '2rem' }, { padding: '1rem' }, { 'padding-left': '4px' })).left.state, 'authored');
+});
 
 test('sideProvenance is computed when no layer styles a side', () => {
-  const states = sideProvenance(null, null);
+  const states = sideProvenance(stacksOf());
   SIDES.forEach((side) => {
-    assert.deepEqual(states[side], { state: 'computed', reference: null, condition: null, value: null, property: null }, side);
+    assert.deepEqual(states[side], COMPUTED, side);
   });
+  assert.deepEqual(sideProvenance(null).top, COMPUTED, 'no stack at all reads computed');
 });
 
 test('sideProvenance splits authored from variant-supplied per side', () => {
-  // Variant supplies the shorthand; the element authored one override.
-  const own = { 'padding-top': '2rem' };
-  const effective = { padding: '1rem', 'padding-top': '2rem' };
-  const states = sideProvenance(own, effective);
-  assert.deepEqual(states.top, { state: 'authored', reference: null, condition: 'default', value: '2rem', property: 'padding-top' });
-  assert.deepEqual(states.right, { state: 'variant', reference: null, condition: 'default', value: '1rem', property: 'padding' });
-  assert.deepEqual(states.bottom, { state: 'variant', reference: null, condition: 'default', value: '1rem', property: 'padding' });
-  assert.deepEqual(states.left, { state: 'variant', reference: null, condition: 'default', value: '1rem', property: 'padding' });
+  // The variant supplies the shorthand; the element authored one override.
+  const stack = stacksOf({ variants: [{ id: 'stuff', styles: { padding: '1rem' } }], own: { 'padding-top': '2rem' } });
+  const states = sideProvenance(stack);
+  assert.deepEqual(states.top, { state: 'authored', layer: 1, id: 'element', reference: null, condition: 'default', atPose: true, value: '2rem', property: 'padding-top' });
+  const supplied = { state: 'variant', layer: 0, id: 'variant:stuff', reference: 'stuff', condition: 'default', atPose: true, value: '1rem', property: 'padding' };
+  ['right', 'bottom', 'left'].forEach((side) => {
+    assert.deepEqual(states[side], supplied, side);
+  });
 });
 
 test('sideProvenance lets an own shorthand beat variant longhands', () => {
-  // The own entry's declarations land after the variant's in the
-  // cascade, so an own `padding` resets a variant's `padding-top`
-  // exactly as CSS would — every side reads authored.
-  const own = { padding: '1rem' };
-  const effective = { 'padding-top': '3rem', padding: '1rem' };
-  const states = sideProvenance(own, effective);
+  // The own layer is the topmost: an own `padding` resets a variant's
+  // `padding-top` exactly as CSS would — every side reads authored.
+  const stack = stacksOf({ variants: [{ id: 'stuff', styles: { 'padding-top': '3rem' } }], own: { padding: '1rem' } });
+  const states = sideProvenance(stack);
   SIDES.forEach((side) => {
     assert.equal(states[side].state, 'authored', side);
     assert.equal(states[side].value, '1rem', side);
@@ -256,41 +356,74 @@ test('sideProvenance lets an own shorthand beat variant longhands', () => {
 });
 
 test('sideProvenance reports a wholly variant-supplied ring', () => {
-  const states = sideProvenance({}, { padding: '1rem 2rem' });
-  assert.deepEqual(states.top, { state: 'variant', reference: null, condition: 'default', value: '1rem', property: 'padding' });
-  assert.deepEqual(states.left, { state: 'variant', reference: null, condition: 'default', value: '2rem', property: 'padding' });
+  const states = sideProvenance(stacksOf({ variants: [{ id: 'stuff', styles: { padding: '1rem 2rem' } }] }));
+  assert.deepEqual(states.top, { state: 'variant', layer: 0, id: 'variant:stuff', reference: 'stuff', condition: 'default', atPose: true, value: '1rem', property: 'padding' });
+  assert.deepEqual(states.left, { state: 'variant', layer: 0, id: 'variant:stuff', reference: 'stuff', condition: 'default', atPose: true, value: '2rem', property: 'padding' });
 });
 
 test('sideProvenance keeps unsplittable authored shorthand honest', () => {
-  const states = sideProvenance({ padding: 'var(--s)' }, { padding: 'var(--s)' });
+  const states = sideProvenance(stacksOf({ own: { padding: 'calc(1rem + 2px)' } }));
   SIDES.forEach((side) => {
-    assert.deepEqual(states[side], { state: 'authored', reference: null, condition: 'default', value: null, property: 'padding' }, side);
+    assert.deepEqual(states[side], { state: 'authored', layer: 0, id: 'element', reference: null, condition: 'default', atPose: true, value: null, property: 'padding' }, side);
   });
 });
 
-test('sideProvenance names the supplying reference per resolving declaration', () => {
-  // Two worn variants: `stuff` supplies the shorthand, `big` a top
-  // longhand on top of it (the suppliers table names the delivery
-  // winner per property); the element authors the left side. Each
-  // side's reference is the supplier of the DECLARATION that resolved
-  // it, so top wears big's hue and right/bottom stuff's.
-  const own = { 'padding-left': '4px' };
-  const effective = { padding: '1rem', 'padding-top': '2rem', 'padding-left': '4px' };
-  const suppliers = { default: { padding: 'stuff', 'padding-top': 'big' }, medium: { padding: 'other' } };
-  const states = sideProvenance(own, effective, 'padding', { suppliers, condition: 'default' });
-  assert.deepEqual(states.top, { state: 'variant', reference: 'big', condition: 'default', value: '2rem', property: 'padding-top' });
-  assert.deepEqual(states.right, { state: 'variant', reference: 'stuff', condition: 'default', value: '1rem', property: 'padding' });
-  assert.deepEqual(states.bottom, { state: 'variant', reference: 'stuff', condition: 'default', value: '1rem', property: 'padding' });
-  assert.deepEqual(states.left, { state: 'authored', reference: null, condition: 'default', value: '4px', property: 'padding-left' });
+test('sideProvenance reads a lone reference shorthand as the reference on every side', () => {
+  // The read and the write share expandShorthand, so the ring's cells
+  // show the token where the field wears it blessed (nuance 2 of the
+  // padding-box-model-widget note: one rule, one answer).
+  const states = sideProvenance(stacksOf({ own: { padding: 'var(--s)' } }));
+  SIDES.forEach((side) => {
+    assert.deepEqual(states[side], { state: 'authored', layer: 0, id: 'element', reference: null, condition: 'default', atPose: true, value: 'var(--s)', property: 'padding' }, side);
+  });
 });
 
-test('sideProvenance reads the supplier at the editing condition only', () => {
-  // The diagram edits one compound; a variant attributed only at Base
-  // says nothing about a Medium read (the effective input is already
-  // the pose's resolution).
-  const suppliers = { default: { padding: 'stuff' } };
-  const states = sideProvenance(null, { padding: '1rem' }, 'padding', { suppliers, condition: 'medium' });
-  assert.deepEqual(states.top, { state: 'variant', reference: null, condition: 'medium', value: '1rem', property: 'padding' });
+test('sideProvenance reads the Site width variant\'s padding-inline as the variant on right and left', () => {
+  // The container_site variant (daedalus_stylish_layouts variants.yml)
+  // insets the band with one logical longhand: the ring's inline cells
+  // read it as supplied by the variant, with its reference, never as
+  // "computed from the theme"; top and bottom stay computed.
+  const inset = 'max(var(--space-gutter), calc((100% - var(--layout-max-width)) / 2))';
+  const states = sideProvenance(stacksOf({ variants: [{ id: 'container_site', label: 'Site width', styles: { 'padding-inline': inset } }] }));
+  const supplied = { state: 'variant', layer: 0, id: 'variant:container_site', reference: 'container_site', condition: 'default', atPose: true, value: inset, property: 'padding-inline' };
+  assert.deepEqual(states.right, supplied, 'right');
+  assert.deepEqual(states.left, supplied, 'left');
+  assert.deepEqual(states.top, COMPUTED, 'top');
+  assert.deepEqual(states.bottom, COMPUTED, 'bottom');
+  // An own physical longhand beats the worn logical one on its side only
+  // (the decision: a dialed-in padding beats the width variant, and the
+  // wear bar, not the ring, announces it).
+  const dialed = sideProvenance(stacksOf({ variants: [{ id: 'container_site', styles: { 'padding-inline': inset } }], own: { 'padding-left': '2rem' } }));
+  assert.deepEqual(dialed.left, { state: 'authored', layer: 1, id: 'element', reference: null, condition: 'default', atPose: true, value: '2rem', property: 'padding-left' });
+  assert.deepEqual(dialed.right, supplied, 'the right side still reads the variant');
+  // A worn logical pair beneath a variant-supplied shorthand: the
+  // topmost layer wins the whole pair.
+  const layered = sideProvenance(stacksOf({ variants: [{ id: 'container_site', styles: { 'padding-inline': inset } }, { id: 'tight', styles: { padding: '1rem' } }] }));
+  assert.equal(layered.left.reference, 'tight');
+  assert.equal(layered.left.value, '1rem');
+});
+
+test('sideProvenance names the delivering layer per resolving declaration', () => {
+  // Two worn variants in delivery order: `stuff` supplies the shorthand,
+  // `big` a top longhand over it; the element authors the left side.
+  // Each side's layer is the one whose declaration resolved it, so top
+  // wears big's hue and right/bottom stuff's.
+  const stack = stacksOf({
+    variants: [{ id: 'stuff', styles: { padding: '1rem' } }, { id: 'big', styles: { 'padding-top': '2rem' } }],
+    own: { 'padding-left': '4px' },
+  });
+  const states = sideProvenance(stack);
+  assert.deepEqual(states.top, { state: 'variant', layer: 1, id: 'variant:big', reference: 'big', condition: 'default', atPose: true, value: '2rem', property: 'padding-top' });
+  assert.deepEqual(states.right, { state: 'variant', layer: 0, id: 'variant:stuff', reference: 'stuff', condition: 'default', atPose: true, value: '1rem', property: 'padding' });
+  assert.deepEqual(states.bottom, { state: 'variant', layer: 0, id: 'variant:stuff', reference: 'stuff', condition: 'default', atPose: true, value: '1rem', property: 'padding' });
+  assert.deepEqual(states.left, { state: 'authored', layer: 2, id: 'element', reference: null, condition: 'default', atPose: true, value: '4px', property: 'padding-left' });
+  // A later reference's shorthand resets an earlier one's longhand, as
+  // the printed document does.
+  const reset = sideProvenance(stacksOf({ variants: [{ id: 'big', styles: { 'padding-top': '2rem' } }, { id: 'stuff', styles: { padding: '1rem' } }] }));
+  SIDES.forEach((side) => {
+    assert.equal(reset[side].reference, 'stuff', side);
+    assert.equal(reset[side].value, '1rem', side);
+  });
 });
 
 const CONDITIONS = {
@@ -299,71 +432,77 @@ const CONDITIONS = {
   dark: { label: 'Dark', axis: 'scheme' },
 };
 
-test('sideProvenance classifies a skin default as the weakest layer, read at the pose through the cascade', () => {
-  const skinEntry = { default: { padding: '1rem 2rem' }, medium: { 'padding-top': '3rem' } };
-  const states = sideProvenance(null, null, 'padding', { skinEntry, condition: 'default', conditions: CONDITIONS });
-  assert.deepEqual(states.top, { state: 'skin', reference: null, condition: 'default', value: '1rem', property: 'padding' });
-  assert.deepEqual(states.left, { state: 'skin', reference: null, condition: 'default', value: '2rem', property: 'padding' });
+test('sideProvenance reads every layer through the cascade at the pose', () => {
+  // An own Base shorthand still delivers at Medium (the canvas paints it
+  // there), lit as the own layer's from Base; Medium's longhand
+  // overrides top alone. The Unset gestures read the delivering
+  // condition against the pose, so the Base sides are not clearable
+  // at Medium (box-model-diagram.js).
+  const stack = stacksOf({ own: { default: { padding: '1rem 2rem' }, medium: { 'padding-top': '3rem' } } });
+  assert.deepEqual(sideProvenance(stack, 'padding', 'default', CONDITIONS).top, { state: 'authored', layer: 0, id: 'element', reference: null, condition: 'default', atPose: true, value: '1rem', property: 'padding' });
+  const medium = sideProvenance(stack, 'padding', 'medium', CONDITIONS);
+  assert.deepEqual(medium.top, { state: 'authored', layer: 0, id: 'element', reference: null, condition: 'medium', atPose: true, value: '3rem', property: 'padding-top' });
+  assert.deepEqual(medium.left, { state: 'authored', layer: 0, id: 'element', reference: null, condition: 'default', atPose: false, value: '2rem', property: 'padding' });
+  // Posed at Narrow, Medium's block is not applicable: every side from Base.
+  assert.equal(sideProvenance(stack, 'padding', 'narrow', CONDITIONS).top.value, '1rem');
+  // A variant's Base block delivers at Medium too, as the variant's from Base.
+  const worn = sideProvenance(stacksOf({ variants: [{ id: 'stuff', styles: { padding: '1rem' } }] }), 'padding', 'medium', CONDITIONS);
+  assert.deepEqual(worn.top, { state: 'variant', layer: 0, id: 'variant:stuff', reference: 'stuff', condition: 'default', atPose: false, value: '1rem', property: 'padding' });
+});
+
+test('sideProvenance classifies a skin default as a lit layer beneath the map, read at the pose through the cascade', () => {
+  const skin = { default: { padding: '1rem 2rem' }, medium: { 'padding-top': '3rem' } };
+  const states = sideProvenance(stacksOf({ skin }), 'padding', 'default', CONDITIONS);
+  assert.deepEqual(states.top, { state: 'skin', layer: 0, id: 'skin:block_type:text', reference: null, condition: 'default', atPose: true, value: '1rem', property: 'padding' });
+  assert.deepEqual(states.left, { state: 'skin', layer: 0, id: 'skin:block_type:text', reference: null, condition: 'default', atPose: true, value: '2rem', property: 'padding' });
   // Posed at Medium the skin's Base shorthand still delivers (the
   // canvas paints it there); Medium's longhand overrides top alone, so
   // top is the skin's from Medium and the other sides from Base.
-  const medium = sideProvenance(null, null, 'padding', { skinEntry, condition: 'medium', conditions: CONDITIONS });
-  assert.deepEqual(medium.top, { state: 'skin', reference: null, condition: 'medium', value: '3rem', property: 'padding-top' });
-  assert.deepEqual(medium.left, { state: 'skin', reference: null, condition: 'default', value: '2rem', property: 'padding' });
-  assert.deepEqual(medium.right, { state: 'skin', reference: null, condition: 'default', value: '2rem', property: 'padding' });
-  assert.deepEqual(medium.bottom, { state: 'skin', reference: null, condition: 'default', value: '1rem', property: 'padding' });
+  const medium = sideProvenance(stacksOf({ skin }), 'padding', 'medium', CONDITIONS);
+  assert.deepEqual(medium.top, { state: 'skin', layer: 0, id: 'skin:block_type:text', reference: null, condition: 'medium', atPose: true, value: '3rem', property: 'padding-top' });
+  assert.deepEqual(medium.left, { state: 'skin', layer: 0, id: 'skin:block_type:text', reference: null, condition: 'default', atPose: false, value: '2rem', property: 'padding' });
+  assert.equal(medium.right.value, '2rem');
+  assert.equal(medium.bottom.value, '1rem');
   // Posed at Narrow, Medium's block is not applicable: every side from Base.
-  const narrow = sideProvenance(null, null, 'padding', { skinEntry, condition: 'narrow', conditions: CONDITIONS });
-  assert.deepEqual(narrow.top, { state: 'skin', reference: null, condition: 'default', value: '1rem', property: 'padding' });
+  assert.equal(sideProvenance(stacksOf({ skin }), 'padding', 'narrow', CONDITIONS).top.value, '1rem');
   // A later block's shorthand resets an earlier longhand, as the
   // printed document does: a Medium `padding` after a Base `padding-top`.
-  const reset = sideProvenance(null, null, 'padding', {
-    skinEntry: { default: { 'padding-top': '9rem' }, medium: { padding: '1rem' } },
-    condition: 'medium',
-    conditions: CONDITIONS,
-  });
-  assert.deepEqual(reset.top, { state: 'skin', reference: null, condition: 'medium', value: '1rem', property: 'padding' });
+  const reset = sideProvenance(stacksOf({ skin: { default: { 'padding-top': '9rem' }, medium: { padding: '1rem' } } }), 'padding', 'medium', CONDITIONS);
+  assert.deepEqual(reset.top, { state: 'skin', layer: 0, id: 'skin:block_type:text', reference: null, condition: 'medium', atPose: true, value: '1rem', property: 'padding' });
   // Own and variant values both beat the skin.
-  const beaten = sideProvenance({ 'padding-top': '5px' }, { padding: '1px', 'padding-top': '5px' }, 'padding', {
-    suppliers: { default: { padding: 'stuff' } },
-    skinEntry,
-    condition: 'default',
-    conditions: CONDITIONS,
-  });
+  const beaten = sideProvenance(stacksOf({ skin, variants: [{ id: 'stuff', styles: { padding: '1px' } }], own: { 'padding-top': '5px' } }), 'padding', 'default', CONDITIONS);
   assert.equal(beaten.top.state, 'authored');
-  assert.deepEqual(beaten.left, { state: 'variant', reference: 'stuff', condition: 'default', value: '1px', property: 'padding' });
-  // An unsplittable skin shorthand is set-but-opaque, like the other layers.
-  const opaque = sideProvenance(null, null, 'padding', { skinEntry: { default: { padding: 'var(--s)' } } });
-  assert.deepEqual(opaque.top, { state: 'skin', reference: null, condition: 'default', value: null, property: 'padding' });
+  assert.deepEqual(beaten.left, { state: 'variant', layer: 1, id: 'variant:stuff', reference: 'stuff', condition: 'default', atPose: true, value: '1px', property: 'padding' });
+  // An unsplittable skin shorthand is set-but-opaque, like the other
+  // layers; a skin's lone reference is the reference on every side.
+  const opaque = sideProvenance(stacksOf({ skin: { padding: 'calc(1rem + 2px)' } }));
+  assert.deepEqual(opaque.top, { state: 'skin', layer: 0, id: 'skin:block_type:text', reference: null, condition: 'default', atPose: true, value: null, property: 'padding' });
+  assert.equal(sideProvenance(stacksOf({ skin: { padding: 'var(--s)' } })).top.value, 'var(--s)');
 });
 
 test('sideProvenance classifies the declaration\'s own default beneath the skin\'s', () => {
-  const declaredEntry = { default: { padding: '4px 8px' } };
+  const declared = { padding: '4px 8px' };
   // Declared alone: every side the declaration's, from Base at any pose.
-  const alone = sideProvenance(null, null, 'padding', { declaredEntry, condition: 'medium', conditions: CONDITIONS });
-  assert.deepEqual(alone.top, { state: 'declared', reference: null, condition: 'default', value: '4px', property: 'padding' });
-  assert.deepEqual(alone.left, { state: 'declared', reference: null, condition: 'default', value: '8px', property: 'padding' });
+  const alone = sideProvenance(stacksOf({ declared }), 'padding', 'medium', CONDITIONS);
+  assert.deepEqual(alone.top, { state: 'declared', layer: 0, id: 'declared:block_type:text', reference: null, condition: 'default', atPose: false, value: '4px', property: 'padding' });
+  assert.deepEqual(alone.left, { state: 'declared', layer: 0, id: 'declared:block_type:text', reference: null, condition: 'default', atPose: false, value: '8px', property: 'padding' });
   // The skin's delivering block beats the declaration's for the sides it
-  // resolves, whatever the conditions (the declared tier prints first);
-  // the declaration supplies the rest.
-  const both = sideProvenance(null, null, 'padding', {
-    skinEntry: { medium: { 'padding-top': '3rem' } },
-    declaredEntry,
-    condition: 'medium',
-    conditions: CONDITIONS,
-  });
-  assert.deepEqual(both.top, { state: 'skin', reference: null, condition: 'medium', value: '3rem', property: 'padding-top' });
-  assert.deepEqual(both.left, { state: 'declared', reference: null, condition: 'default', value: '8px', property: 'padding' });
+  // resolves, whatever the conditions (the skin layer sits above the
+  // declared one); the declaration supplies the rest.
+  const both = sideProvenance(stacksOf({ declared, skin: { medium: { 'padding-top': '3rem' } } }), 'padding', 'medium', CONDITIONS);
+  assert.deepEqual(both.top, { state: 'skin', layer: 1, id: 'skin:block_type:text', reference: null, condition: 'medium', atPose: true, value: '3rem', property: 'padding-top' });
+  assert.deepEqual(both.left, { state: 'declared', layer: 0, id: 'declared:block_type:text', reference: null, condition: 'default', atPose: false, value: '8px', property: 'padding' });
   // A declared block at an unrelated condition reaches nothing.
-  const away = sideProvenance(null, null, 'padding', { declaredEntry: { narrow: { padding: '0' } }, condition: 'medium', conditions: CONDITIONS });
+  const away = sideProvenance(stacksOf({ declared: { narrow: { padding: '0' } } }), 'padding', 'medium', CONDITIONS);
   assert.equal(away.top.state, 'computed');
 });
 
-test('uniformState never counts a skin default as set', () => {
-  // The field's face is what the element and its variants SET; the skin
-  // is a ghost. uniformState takes no tables, so a skin-only ring reads
-  // unset however the diagram classifies it.
-  assert.deepEqual(uniformState(null, null), { set: false, uniform: null, text: null });
+test('uniformState counts every delivering layer as set: a skin default lights the field', () => {
+  // The display rule: the field's face is the winner's, whichever tier
+  // delivers it, so a skin-only ring reads set and uniform, never a
+  // ghost.
+  assert.deepEqual(uniformState(stacksOf({ skin: { padding: '1rem' } })), { set: true, uniform: '1rem', text: '1rem' });
+  assert.deepEqual(uniformState(stacksOf({ declared: { padding: '4px 8px' } })), { set: true, uniform: null, text: '4px 8px' });
 });
 
 // --- sideCommit -----------------------------------------------------------
@@ -423,9 +562,10 @@ test('sideCommit expansion honors own longhand overrides and clears', () => {
 });
 
 test('sideCommit splits a whole-reference own shorthand, the reference on every side', () => {
-  // One var(--name) addresses all four sides identically (uniformState's
-  // reading), so a guide-scale pick or a skin color never blocks the
-  // ring: the shorthand unsets and the unedited sides keep the reference.
+  // One var(--name) addresses all four sides identically (expandShorthand,
+  // the splitter the read shares), so a guide-scale pick or a skin color
+  // never blocks the ring: the shorthand unsets and the unedited sides
+  // keep the reference.
   assert.deepEqual(sideCommit({ padding: 'var(--s)' }, ['top'], null), {
     padding: null,
     'padding-top': null,
@@ -544,69 +684,89 @@ test('spreadSides implements the Figma modifier split', () => {
 // --- uniformState (the chips' longhand-aware view) ------------------------
 
 test('uniformState reads nothing set as honestly nothing', () => {
-  assert.deepEqual(uniformState(null, null), { set: false, uniform: null, text: null });
-  assert.deepEqual(uniformState({}, {}), { set: false, uniform: null, text: null });
-  assert.deepEqual(uniformState({ color: 'red' }, { color: 'red' }), { set: false, uniform: null, text: null });
+  assert.deepEqual(uniformState(null), { set: false, uniform: null, text: null });
+  assert.deepEqual(uniformState(stacksOf()), { set: false, uniform: null, text: null });
+  assert.deepEqual(uniformState(stacksOf({ own: { color: 'red' } })), { set: false, uniform: null, text: null });
 });
 
 test('uniformState finds the uniform value whatever the spelling', () => {
-  const shorthand = { padding: '1rem' };
-  assert.deepEqual(uniformState(shorthand, shorthand), { set: true, uniform: '1rem', text: '1rem' });
+  assert.deepEqual(uniformState(stacksOf({ own: { padding: '1rem' } })), { set: true, uniform: '1rem', text: '1rem' });
   const longhands = {
     'padding-top': '1rem', 'padding-right': '1rem', 'padding-bottom': '1rem', 'padding-left': '1rem',
   };
-  assert.deepEqual(uniformState(longhands, longhands), { set: true, uniform: '1rem', text: '1rem' },
+  assert.deepEqual(uniformState(stacksOf({ own: longhands })), { set: true, uniform: '1rem', text: '1rem' },
     'four equal longhands light the chip a shorthand would');
-  const variantOnly = uniformState(null, { padding: '.5rem' });
+  const variantOnly = uniformState(stacksOf({ variants: [{ id: 'v', styles: { padding: '.5rem' } }] }));
   assert.deepEqual(variantOnly, { set: true, uniform: '.5rem', text: '.5rem' },
     'a variant-supplied shorthand reads uniform in its own spelling');
 });
 
 test('uniformState reads per-side values as explicit custom', () => {
-  const mixed = { padding: '1rem', 'padding-top': '2rem' };
-  assert.deepEqual(uniformState(mixed, mixed), { set: true, uniform: null, text: '2rem 1rem 1rem' },
+  assert.deepEqual(uniformState(stacksOf({ own: { padding: '1rem', 'padding-top': '2rem' } })), { set: true, uniform: null, text: '2rem 1rem 1rem' },
     'differing sides serialize as the minimal shorthand');
-  const partial = { 'padding-top': '2rem' };
-  assert.deepEqual(uniformState(partial, partial), { set: true, uniform: null, text: 'top 2rem' },
+  assert.deepEqual(uniformState(stacksOf({ own: { 'padding-top': '2rem' } })), { set: true, uniform: null, text: 'top 2rem' },
     'partly-set sides list themselves — no shorthand can honestly claim unset sides');
   const axis = {
     'padding-top': '1rem', 'padding-right': '2rem', 'padding-bottom': '1rem', 'padding-left': '2rem',
   };
-  assert.deepEqual(uniformState(axis, axis), { set: true, uniform: null, text: '1rem 2rem' },
+  assert.deepEqual(uniformState(stacksOf({ own: axis })), { set: true, uniform: null, text: '1rem 2rem' },
     'the minimal-shorthand serialization runs the 1/2/3/4 rule backwards');
 });
 
 test('uniformState reads an unsplittable shorthand as opaque custom', () => {
-  const opaque = { padding: 'calc(1rem + 2px)' };
-  assert.deepEqual(uniformState(opaque, opaque), { set: true, uniform: null, text: null });
+  assert.deepEqual(uniformState(stacksOf({ own: { padding: 'calc(1rem + 2px)' } })), { set: true, uniform: null, text: null });
 });
 
-test('uniformState surfaces a whole-shorthand token reference as the uniform value', () => {
-  // One var(--name) reference addresses all four sides identically, so its
-  // spelling IS the box's single value: the chips light a scale token pick
+test('uniformState reads a whole-shorthand token reference as the uniform value through the per-side read', () => {
+  // One var(--name) reference is the reference on every side
+  // (expandShorthand), so its spelling IS the box's single value with no
+  // exception in the field's read: the select lights a scale token pick
   // by reference-spelling matching instead of degrading to custom.
-  const reference = { padding: 'var(--space-4)' };
-  assert.deepEqual(uniformState(reference, reference),
+  assert.deepEqual(uniformState(stacksOf({ own: { padding: 'var(--space-4)' } })),
     { set: true, uniform: 'var(--space-4)', text: 'var(--space-4)' });
-  assert.deepEqual(uniformState(null, { padding: 'var(--space-4)' }),
+  assert.deepEqual(uniformState(stacksOf({ variants: [{ id: 'v', styles: { padding: 'var(--space-4)' } }] })),
     { set: true, uniform: 'var(--space-4)', text: 'var(--space-4)' },
     'a variant-supplied reference shorthand reads uniform too');
   // Multi-component var() shorthands stay opaque: no one spelling honestly
   // represents sides that differ per component.
-  const multi = { padding: 'var(--space-2) var(--space-4)' };
-  assert.deepEqual(uniformState(multi, multi), { set: true, uniform: null, text: null });
-  // A later own longhand shadows its side out of the reference shorthand,
-  // so no single spelling covers the box any more.
-  const mixed = { padding: 'var(--space-4)', 'padding-top': '1rem' };
-  assert.deepEqual(uniformState(mixed, mixed), { set: true, uniform: null, text: null });
+  assert.deepEqual(uniformState(stacksOf({ own: { padding: 'var(--space-2) var(--space-4)' } })), { set: true, uniform: null, text: null });
+  // A later own longhand shadows its side out of the reference shorthand:
+  // the sides differ, and the honest custom text is the minimal
+  // shorthand over the per-side spellings, not an opaque blank.
+  assert.deepEqual(uniformState(stacksOf({ own: { padding: 'var(--space-4)', 'padding-top': '1rem' } })), { set: true, uniform: null, text: '1rem var(--space-4) var(--space-4)' });
+});
+
+test('uniformState reads a logical pair per side', () => {
+  // The Site width variant's padding-inline is outside the grammar: the
+  // field measures it as the ring's cells do (sideMeasured), so the
+  // band reads unset (the detented field over the canvas's placeholder,
+  // never a listing of the max() expression), while a worn logical pair
+  // the field can spell lists the two sides it moves.
+  const inset = 'max(var(--space-gutter), calc((100% - var(--layout-max-width)) / 2))';
+  assert.deepEqual(uniformState(stacksOf({ variants: [{ id: 'container_site', styles: { 'padding-inline': inset } }] })),
+    { set: false, uniform: null, text: null });
+  assert.deepEqual(uniformState(stacksOf({ variants: [{ id: 'v', styles: { 'padding-inline': 'var(--space-md)' } }] })),
+    { set: true, uniform: null, text: 'right var(--space-md), left var(--space-md)' },
+    'a lone reference is a value the field spells, not a measurement');
+  assert.deepEqual(uniformState(stacksOf({ own: { 'padding-inline': inset } })),
+    { set: true, uniform: null, text: `right ${inset}, left ${inset}` },
+    'an own side outside the grammar is authored, never measured');
+  // A logical pair plus its complement covering all four with one value
+  // is uniform, however spelled.
+  assert.deepEqual(uniformState(stacksOf({ own: { 'padding-inline': '1rem', 'padding-block': '1rem' } })),
+    { set: true, uniform: '1rem', text: '1rem' });
+  assert.deepEqual(uniformState(stacksOf({ own: { 'padding-inline': '2rem', 'padding-block': '1rem' } })),
+    { set: true, uniform: null, text: '1rem 2rem' }, 'differing pairs collapse to the minimal shorthand');
+  // A vertical-only grant judges the block pair alone.
+  assert.deepEqual(uniformState(stacksOf({ own: { 'padding-inline': '2rem', 'padding-block': '1rem' } }), 'padding', ['top', 'bottom']),
+    { set: true, uniform: '1rem', text: '1rem' });
 });
 
 test('uniformState lets the own layer win whole-side cross-spelling', () => {
-  // Own shorthand over a variant longhand: the own declaration lands after
-  // the variant's in the cascade and resets all four sides.
-  const own = { padding: '1rem' };
-  const effective = { 'padding-top': '2rem', padding: '1rem' };
-  assert.deepEqual(uniformState(own, effective), { set: true, uniform: '1rem', text: '1rem' });
+  // Own shorthand over a variant longhand: the own layer is the topmost
+  // and resets all four sides.
+  const stack = stacksOf({ variants: [{ id: 'v', styles: { 'padding-top': '2rem' } }], own: { padding: '1rem' } });
+  assert.deepEqual(uniformState(stack), { set: true, uniform: '1rem', text: '1rem' });
 });
 
 // --- uniformCommit (the chips' collapse-to-shorthand pick) ----------------
@@ -637,9 +797,10 @@ test('uniformCommit collapses own longhands back into the shorthand', () => {
 // --- grain ----------------------------------------------------------------
 
 test('diagram grain is Shift-coarse only, Alt spends Shift on spread', () => {
-  assert.deepEqual(diagramModifiers({}), { shiftKey: false });
-  assert.deepEqual(diagramModifiers({ shiftKey: true }), { shiftKey: true });
-  assert.deepEqual(diagramModifiers({ shiftKey: true, altKey: true }), { shiftKey: false });
+  assert.deepEqual(diagramModifiers({}), { shiftKey: false, altKey: false });
+  assert.deepEqual(diagramModifiers({ shiftKey: true }), { shiftKey: true, altKey: false });
+  assert.deepEqual(diagramModifiers({ shiftKey: true, altKey: true }), { shiftKey: false, altKey: false });
+  assert.deepEqual(diagramModifiers({ altKey: true }), { shiftKey: false, altKey: false }, 'Alt is spread on the ring, never the fine ladder');
   assert.equal(diagramStep({}), 1);
   assert.equal(diagramStep({ shiftKey: true }), 10);
   assert.equal(diagramStep({ altKey: true }), 1, 'no 0.1 fine grain in the diagram');
@@ -680,6 +841,64 @@ test('the fixture spaces have the kinds the cells dispatch on', () => {
   assert.equal(closedSpace.kind, 'closed');
   assert.equal(detentedSpace.kind, 'detented');
   assert.equal(freeSpace.kind, 'free');
+  assert.equal(detentedSpace.unit, 'rem', 'the rem stops name the vocabulary\'s unit');
+  assert.equal(freeSpace.unit, null, 'a free space names none');
+});
+
+const UNITS_OFFERED = ['px', 'em', 'rem', '%'];
+// The canvas's measured bases (readCanvas): what a placeholder converts
+// through.
+const ROOT_16 = { rootPx: 16, fontPx: 16 };
+const ROOT_20 = { rootPx: 20, fontPx: 12 };
+
+test('sideMeasured: computed sides and supplied sides outside the grammar measure; own ones never', () => {
+  assert.equal(sideMeasured('computed', null), true, 'nothing styles it: the canvas is all there is');
+  const inset = 'max(var(--space-gutter), calc((100% - var(--layout-max-width)) / 2))';
+  assert.equal(sideMeasured('variant', inset), true, 'the Site width variant\'s inset: shown as what it measures, in the variant\'s hue');
+  assert.equal(sideMeasured('skin', null), true, 'a skin\'s calc() shorthand the splitter cannot open: its measurement, not an opaque blank');
+  assert.equal(sideMeasured('declared', 'calc(1rem + 2px)'), true);
+  assert.equal(sideMeasured('variant', '0.5rem'), false, 'a supplied dimension is the value itself (a lone reference faces as one)');
+  assert.equal(sideMeasured('variant', '0'), false, 'a bare zero is a dimension');
+  assert.equal(sideMeasured('authored', 'calc(1rem + 2px)'), false, 'an own value outside the grammar is the caller\'s opaque state');
+  assert.equal(sideMeasured('authored', null), false, 'an own unsplittable shorthand likewise: the ring blocks, it never measures over it');
+  assert.equal(sideMeasured('authored', '2rem'), false);
+});
+
+test('sideAnchor: a measured side beneath a rem scale works in rem, seeded from the px placeholder through the measured root', () => {
+  // The trigger: the theme's 16px beneath olivero's rem ladder. The
+  // vocabulary's unit is the gesture's (contextUnit), and the seed is
+  // the placeholder converted through the canvas's root (seedAnchor),
+  // so the ring-label scrub, the focused cell's arrows and the side
+  // editor beneath all start at 1rem and write rem.
+  const anchor = sideAnchor(detentedSpace, '16px', true, UNITS_OFFERED, ROOT_16);
+  assert.deepEqual(anchor, { mode: 'dimension', number: 1, unit: 'rem' });
+  assert.deepEqual(sideScrubSeed(detentedSpace, '16px', anchor.number, anchor.unit), { raw: 1, unit: 'rem' });
+  const stepped = sideStepValue(detentedSpace, { number: anchor.number, unit: anchor.unit }, 1, {});
+  assert.equal(stepped.text, '1.1rem', 'ArrowUp nudges the theme\'s padding, never collapses it to 0.1rem');
+  assert.equal(stepped.stop, null);
+  assert.equal(sideAnchor(detentedSpace, '17px', true, UNITS_OFFERED, ROOT_16).number, 1.1, 'the seed carries the ring\'s rem precision: tenths, never the editor\'s hundredths');
+  assert.equal(sideAnchor(detentedSpace, '32px', true, UNITS_OFFERED, ROOT_20).number, 1.6, 'a 20px root: the same placeholder seeds 1.6rem, never 2');
+  assert.equal(sideAnchor(closedSpace, '16px', true, UNITS_OFFERED, ROOT_16).unit, 'rem', 'a closed ring speaks its stops\' unit too');
+  assert.deepEqual(sideAnchor(detentedSpace, '16px', true, UNITS_OFFERED), { mode: 'dimension', number: 0, unit: 'rem' }, 'no bases (the satellite): rem still, seeded 0 rather than through an assumed root');
+});
+
+test('sideAnchor: a measured side with no vocabulary unit works in the first offered unit, the placeholder converted into it', () => {
+  assert.deepEqual(sideAnchor(freeSpace, '16px', true, UNITS_OFFERED, ROOT_16), { mode: 'dimension', number: 16, unit: 'px' }, 'px first by default: the placeholder passes through');
+  assert.deepEqual(sideAnchor(freeSpace, '16px', true, ['em', 'px'], ROOT_20), { mode: 'dimension', number: 1.3, unit: 'em' }, 'the offered list decides, never the placeholder\'s px; the seed converts through the element\'s font size, to the ring\'s tenths (1.333 is no em a cell gesture carries)');
+  assert.deepEqual(sideAnchor(freeSpace, '50%', true, ['em', 'px'], ROOT_16), { mode: 'dimension', number: 0, unit: 'em' }, 'an incomparable placeholder seeds 0 (its face shows whole)');
+});
+
+test('sideAnchor: no placeholder (the satellite) seeds 0 in the vocabulary\'s unit', () => {
+  assert.deepEqual(sideAnchor(detentedSpace, null, true, UNITS_OFFERED), { mode: 'empty', number: 0, unit: 'rem' });
+  assert.deepEqual(sideAnchor(freeSpace, null, true, ['em', 'px']), { mode: 'empty', number: 0, unit: 'em' }, 'nothing at all: the first offered unit');
+  assert.deepEqual(sideAnchor(freeSpace, null, true, []), { mode: 'empty', number: 0, unit: 'px' }, 'the built-in floor');
+});
+
+test('sideAnchor: a set side works in its own unit from its own number', () => {
+  assert.deepEqual(sideAnchor(detentedSpace, '2rem', false, UNITS_OFFERED), { mode: 'dimension', number: 2, unit: 'rem' });
+  assert.deepEqual(sideAnchor(detentedSpace, '40px', false, UNITS_OFFERED), { mode: 'dimension', number: 40, unit: 'px' }, 'an own px value beneath a rem scale stays px: no seed, no conversion');
+  assert.deepEqual(sideAnchor(detentedSpace, '0', false, UNITS_OFFERED), { mode: 'dimension', number: 0, unit: 'rem' }, 'a bare zero names no unit and takes the vocabulary\'s');
+  assert.deepEqual(sideAnchor(detentedSpace, 'calc(1rem + 2px)', false, UNITS_OFFERED), { mode: 'text', number: 0, unit: 'rem' }, 'degraded text: click-to-edit, the unit still the vocabulary\'s');
 });
 
 test('sideScrubSeed anchors a closed cell on its stop, low end when unset', () => {
@@ -723,6 +942,42 @@ test('sideScrubMove rides sticky magnets on a detented space', () => {
   assert.equal(captured.number, 1);
   assert.equal(captured.text, '1rem');
   assert.equal(captured.stop.ref, 'var(--space-m)');
+});
+
+test('Shift scrubs a detented cell ten times faster, magnets still capture', () => {
+  const seed = sideScrubSeed(detentedSpace, '1rem', 1, 'rem');
+  const base = sideScrubMove(detentedSpace, seed, 10, {});
+  assert.equal(base.raw, 1 + 10 * SCRUB_PER_PIXEL * 1, 'unmodified: 0.06rem of travel');
+  assert.equal(base.text, '1rem', 'still inside the 1rem stop\'s magnet');
+  const coarse = sideScrubMove(detentedSpace, seed, 10, { shiftKey: true });
+  assert.equal(coarse.raw, 1 + 10 * SCRUB_PER_PIXEL * 10, 'Shift: the same ten pixels travel 0.6rem');
+  assert.equal(coarse.text, '2rem', 'the widened magnet captures the 2rem stop, no bypass');
+  assert.equal(coarse.stop.ref, 'var(--space-l)');
+  const px = sideScrubMove(detentedSpace, sideScrubSeed(detentedSpace, '40px', 40, 'px'), 10, { shiftKey: true });
+  assert.equal(px.text, '50px', 'the rate multiplies the unit-scaled feel (x16 for px), 49.6 shown whole');
+});
+
+test('Alt spends Shift on a detented cell; Cmd/Ctrl and Alt never change its rate', () => {
+  const seed = sideScrubSeed(detentedSpace, '1rem', 1, 'rem');
+  const base = 1 + 10 * SCRUB_PER_PIXEL * 1;
+  const spread = sideScrubMove(detentedSpace, seed, 10, { shiftKey: true, altKey: true });
+  assert.equal(spread.raw, base, 'Alt+Shift is spread at the base rate, not coarse');
+  assert.equal(spread.text, '1rem');
+  assert.equal(sideScrubMove(detentedSpace, seed, 10, { altKey: true }).raw, base, 'no 0.1 fine rate in the diagram');
+  assert.equal(sideScrubMove(detentedSpace, seed, 10, { metaKey: true }).raw, base, 'no 100 rate in the diagram');
+  assert.equal(sideScrubMove(detentedSpace, seed, 10, { ctrlKey: true }).raw, base);
+});
+
+test('a detented cell shows tenths of a rem between magnets, Alt spreads rather than refines', () => {
+  const seed = sideScrubSeed(detentedSpace, '1.5rem', 1.5, 'rem');
+  const moved = sideScrubMove(detentedSpace, seed, 10, {});
+  assert.equal(moved.raw, 1.5 + 10 * SCRUB_PER_PIXEL, 'the accumulator keeps the true travel (1.56)');
+  assert.equal(moved.number, 1.6, 'shown to the tenth: 1.41rem is nothing a padding wants');
+  assert.equal(moved.text, '1.6rem');
+  assert.equal(moved.stop, null, 'between the 1rem and 2rem magnets');
+  const alt = sideScrubMove(detentedSpace, seed, 10, { altKey: true });
+  assert.equal(alt.number, 1.6, 'Alt is spread on the ring: the precision stays tenths, the hundredths ladder is the editor\'s');
+  assert.equal(alt.text, '1.6rem');
 });
 
 test('detented feel scales for px-magnitude units, magnets same-unit only', () => {
@@ -816,7 +1071,7 @@ test('expandShorthand keeps a function\'s own spaces inside one component', () =
   assert.deepEqual(expandShorthand('solid dashed'), {
     top: 'solid', right: 'dashed', bottom: 'solid', left: 'dashed',
   });
-  assert.deepEqual(uniformState({ 'border-color': 'rgb(0 0 0 / 50%)' }, null, 'border-color'), {
+  assert.deepEqual(uniformState(stacksOf({ own: { 'border-color': 'rgb(0 0 0 / 50%)' } }), 'border-color'), {
     set: true, uniform: 'rgb(0 0 0 / 50%)', text: 'rgb(0 0 0 / 50%)',
   });
 });
@@ -825,19 +1080,20 @@ test('sideProvenance classifies the three border families independently over one
   // The blockquote posture skins ship: the skin strokes the left edge
   // alone (width, style, color), the element authors one width for
   // every side, a worn variant colors the top.
-  const own = { 'border-width': '1px 2px' };
-  const effective = { 'border-top-color': 'red', 'border-width': '1px 2px' };
-  const skinEntry = { default: { 'border-left-width': '4px', 'border-left-style': 'solid', 'border-left-color': 'var(--accent)' } };
-  const tables = { suppliers: { default: { 'border-top-color': 'accent' } }, skinEntry, condition: 'default' };
-  const width = sideProvenance(own, effective, 'border-width', tables);
-  assert.deepEqual(width.top, { state: 'authored', reference: null, condition: 'default', value: '1px', property: 'border-width' });
-  assert.deepEqual(width.left, { state: 'authored', reference: null, condition: 'default', value: '2px', property: 'border-width' }, 'the own shorthand beats the skin\'s left width');
-  const style = sideProvenance(own, effective, 'border-style', tables);
-  assert.deepEqual(style.left, { state: 'skin', reference: null, condition: 'default', value: 'solid', property: 'border-left-style' });
+  const stack = stacksOf({
+    skin: { 'border-left-width': '4px', 'border-left-style': 'solid', 'border-left-color': 'var(--accent)' },
+    variants: [{ id: 'accent', styles: { 'border-top-color': 'red' } }],
+    own: { 'border-width': '1px 2px' },
+  });
+  const width = sideProvenance(stack, 'border-width');
+  assert.deepEqual(width.top, { state: 'authored', layer: 2, id: 'element', reference: null, condition: 'default', atPose: true, value: '1px', property: 'border-width' });
+  assert.deepEqual(width.left, { state: 'authored', layer: 2, id: 'element', reference: null, condition: 'default', atPose: true, value: '2px', property: 'border-width' }, 'the own shorthand beats the skin\'s left width');
+  const style = sideProvenance(stack, 'border-style');
+  assert.deepEqual(style.left, { state: 'skin', layer: 0, id: 'skin:block_type:text', reference: null, condition: 'default', atPose: true, value: 'solid', property: 'border-left-style' });
   assert.equal(style.top.state, 'computed', 'a width says nothing about a style');
-  const color = sideProvenance(own, effective, 'border-color', tables);
-  assert.deepEqual(color.top, { state: 'variant', reference: 'accent', condition: 'default', value: 'red', property: 'border-top-color' });
-  assert.deepEqual(color.left, { state: 'skin', reference: null, condition: 'default', value: 'var(--accent)', property: 'border-left-color' });
+  const color = sideProvenance(stack, 'border-color');
+  assert.deepEqual(color.top, { state: 'variant', layer: 1, id: 'variant:accent', reference: 'accent', condition: 'default', atPose: true, value: 'red', property: 'border-top-color' });
+  assert.deepEqual(color.left, { state: 'skin', layer: 0, id: 'skin:block_type:text', reference: null, condition: 'default', atPose: true, value: 'var(--accent)', property: 'border-left-color' });
   assert.equal(color.right.state, 'computed');
 });
 
@@ -861,6 +1117,87 @@ test('sideCommit writes border-top-width and expands an own border-width shortha
   assert.deepEqual(uniformCommit({ 'border-top-width': '3px', 'border-top-color': 'red' }, '2px', 'border-width'), {
     'border-width': '2px', 'border-top-width': null,
   });
+});
+
+// --- sidesOrigin (the family row's one mark over its sides) -----------------
+
+const ELEMENT_HUE = layerColor('element');
+
+test('sidesOrigin: an own shorthand at the pose is one group, set here, in the element hue', () => {
+  const origin = sidesOrigin(stacksOf({ own: { padding: '1rem' } }), 'padding', SIDES, 'default', CONDITIONS);
+  assert.deepEqual([origin.delivers, origin.atPose, origin.layer, origin.color, origin.condition], [true, true, 'element', ELEMENT_HUE, 'default']);
+  assert.equal(origin.groups.length, 1);
+  assert.deepEqual(origin.groups[0].sides, SIDES);
+  assert.equal(origin.groups[0].state, 'authored');
+  assert.equal(origin.supplier.id, 'element', 'the stack layer object rides along for the sentence');
+});
+
+test('sidesOrigin: an own Base shorthand viewed at Medium is one group, hollow (from Base) in the element hue', () => {
+  const origin = sidesOrigin(stacksOf({ own: { padding: '1rem' } }), 'padding', SIDES, 'medium', CONDITIONS);
+  assert.deepEqual([origin.delivers, origin.atPose, origin.color, origin.condition], [true, false, ELEMENT_HUE, 'default']);
+  assert.equal(origin.groups.length, 1);
+  assert.equal(origin.groups[0].atPose, false);
+});
+
+test('sidesOrigin: a Medium longhand over a Base shorthand splits the set, hollow in the topmost hue, groups topmost first', () => {
+  const stacks = stacksOf({ own: { default: { padding: '1rem' }, medium: { 'padding-top': '2rem' } } });
+  const origin = sidesOrigin(stacks, 'padding', SIDES, 'medium', CONDITIONS);
+  assert.deepEqual([origin.delivers, origin.atPose, origin.color], [true, false, ELEMENT_HUE]);
+  assert.equal(origin.groups.length, 2, 'same layer, two pose relations: two groups');
+  assert.deepEqual(origin.groups.map((group) => [group.sides, group.atPose, group.condition]), [
+    [['top'], true, 'medium'],
+    [['right', 'bottom', 'left'], false, 'default'],
+  ]);
+});
+
+test('sidesOrigin: an own side over a variant\'s shorthand is a split led by the element, the variant beneath', () => {
+  const stacks = stacksOf({ variants: [{ id: 'stuff', label: 'Stuff', styles: { padding: '1rem' } }], own: { 'padding-top': '2rem' } });
+  const origin = sidesOrigin(stacks, 'padding', SIDES, 'default', CONDITIONS);
+  assert.deepEqual([origin.atPose, origin.layer, origin.color], [false, 'element', ELEMENT_HUE]);
+  assert.deepEqual(origin.groups.map((group) => [group.id, group.sides, group.state]), [
+    ['element', ['top'], 'authored'],
+    ['variant:stuff', ['right', 'bottom', 'left'], 'variant'],
+  ]);
+  assert.equal(origin.groups[1].supplier.label, 'Stuff');
+  assert.equal(origin.groups[1].reference, 'stuff');
+});
+
+test('sidesOrigin: a wholly variant-supplied ring at its own condition is one group, set at the pose, in the variant hue', () => {
+  const stacks = stacksOf({ variants: [{ id: 'stuff', styles: { padding: '1rem 2rem' } }] });
+  const origin = sidesOrigin(stacks, 'padding', SIDES, 'default', CONDITIONS);
+  assert.deepEqual([origin.delivers, origin.atPose, origin.layer, origin.tier, origin.reference, origin.color], [true, true, 'variant:stuff', 'variant', 'stuff', layerColor('variant:stuff')]);
+  assert.equal(origin.groups.length, 1, 'two values, one supplier at one pose relation: one group');
+});
+
+test('sidesOrigin judges only the offered sides', () => {
+  const stacks = stacksOf({ own: { default: { padding: '1rem' }, medium: { 'padding-left': '2rem' } } });
+  const vertical = sidesOrigin(stacks, 'padding', ['top', 'bottom'], 'medium', CONDITIONS);
+  assert.equal(vertical.groups.length, 1, 'the split on the left is outside the offer');
+  assert.deepEqual(vertical.groups[0].sides, ['top', 'bottom']);
+});
+
+test('sidesOrigin: no set side but the family authored at another condition lends the author\'s hue, hollow, naming its conditions', () => {
+  const stacks = stacksOf({ own: { medium: { 'padding-top': '2rem' }, dark: { padding: '1rem' } } });
+  const origin = sidesOrigin(stacks, 'padding', SIDES, 'default', CONDITIONS);
+  assert.deepEqual([origin.delivers, origin.atPose, origin.layer, origin.color, origin.condition, origin.groups], [false, false, 'element', ELEMENT_HUE, null, []]);
+  assert.deepEqual(origin.named, ['medium', 'dark'], 'the guide\'s condition order');
+  assert.equal(origin.supplier.tier, 'element');
+  const worn = sidesOrigin(stacksOf({ variants: [{ id: 'shy', label: 'Shy', styles: { narrow: { padding: '0' } } }] }), 'padding', SIDES, 'default', CONDITIONS);
+  assert.deepEqual([worn.delivers, worn.layer, worn.color, worn.named, worn.supplier.label], [false, 'variant:shy', layerColor('variant:shy'), ['narrow'], 'Shy']);
+});
+
+test('sidesOrigin: the topmost author wins over a lower one, and a Medium-only own longhand beats a variant\'s Base outside the offer', () => {
+  const stacks = stacksOf({ variants: [{ id: 'stuff', styles: { narrow: { padding: '1rem' } } }], own: { medium: { 'padding-top': '2rem' } } });
+  const origin = sidesOrigin(stacks, 'padding', SIDES, 'default', CONDITIONS);
+  assert.deepEqual([origin.layer, origin.named], ['element', ['medium']]);
+  const offered = sidesOrigin(stacks, 'padding', ['left'], 'default', CONDITIONS);
+  assert.deepEqual([offered.layer, offered.named], ['variant:stuff', ['narrow']], 'the own longhand does not touch the left');
+});
+
+test('sidesOrigin: nothing authored anywhere is hueless, no supplier', () => {
+  const origin = sidesOrigin(stacksOf(), 'padding', SIDES, 'default', CONDITIONS);
+  assert.deepEqual(origin, { delivers: false, atPose: false, layer: null, tier: null, reference: null, color: null, condition: null, supplier: null, groups: [], named: [] });
+  assert.equal(sidesOrigin(null).color, null, 'no stacks at all');
 });
 
 let failures = 0;

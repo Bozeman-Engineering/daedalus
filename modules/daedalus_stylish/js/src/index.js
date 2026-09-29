@@ -3,13 +3,16 @@ import { InspectorHost } from './host.js';
 import { createLeaderSource } from './sources/leader-source.js';
 import { createPopoutLeader } from './broadcast/popout-leader.js';
 import { createPartBehavior } from './tree-parts.js';
-import { createCanvasPartPaint } from './canvas-part-paint.js';
+import { createCanvasSelectorPaint } from './canvas-selector-paint.js';
 import { createCanvasHighlight } from './canvas-highlight.js';
 import { createCanvasPaint } from './canvas-paint.js';
 import { createForceState } from './force-state.js';
 import { uiMode } from './ui-mode.js';
 import { stopsFromConditions } from './canvas-stops.js';
 import { openPicker as openVariantPicker } from './apply-variant-hotkey.js';
+import { registerCollapseHotkeys } from '../../../daedalus_ui/js/outline/collapse-hotkeys.js';
+import { OUTLINE_ID, readOutline, applyOutline } from './code/collapse-seam.js';
+import { copyStyles, pasteStyles } from './copy-styles.js';
 // Registers the media library selection AJAX command handler (the client
 // half of DaedalusStylishMediaLibraryOpener); pickers import openMediaLibrary.
 import './media-library.js';
@@ -48,11 +51,17 @@ import './media-library.js';
     drupalSettings.daedalusStylish?.mediaUrls ?? {},
   );
 
-  // No channel scope (no derivable main entity on this route) means no
-  // pop-out: the panel renders in-page only.
+  // No pop-out URL (no derivable main entity on this route) means no
+  // pop-out: the panel renders in-page only. The channel scope is the edit
+  // session's identity, daedalus_ui's one delivery (editSession.scope);
+  // the URL already forwards it as ?scope per the pop-out route contract.
   const popoutSettings = drupalSettings.daedalusStylish?.popout;
   const popout = popoutSettings
-    ? createPopoutLeader({ ...popoutSettings, source })
+    ? createPopoutLeader({
+        scope: drupalSettings.daedalusUi.editSession.scope,
+        url: popoutSettings.url,
+        source,
+      })
     : null;
 
   // The satellite and the in-page panel are alternatives, not layers:
@@ -86,17 +95,20 @@ import './media-library.js';
   // The markup view in the page-elements tree is daedalus_ui's own;
   // daedalus_stylish registers the part BEHAVIOR its shell rows delegate to: the
   // "style" badge and the part resolution seam (part clicks, hover, and
-  // active state live on the selection spine itself). The canvas part
-  // paint rides the same behavior: a spine subscriber rendering the
-  // hover/selection part facets as dashed @scope boxes through
+  // active state live on the selection spine itself). The canvas
+  // selector paint rides the same behavior: a spine subscriber rendering
+  // the hover facet and the styling target as dashed @scope boxes through
   // selectorFor. Guarded: an older daedalus_ui without the behavior
   // seam just renders inert shell rows, and one without the hover facet
-  // paints no part boxes.
+  // paints no selector boxes. The paint also renders the write
+  // address's matches (the source's selection-scoped address, the
+  // switcher's pick), so the chosen rule's reach shows before its first
+  // write.
   if (app.tree?.registerPartBehavior) {
     const partBehavior = createPartBehavior({ source, guide });
     app.tree.registerPartBehavior(partBehavior);
-    if (app.onHoverPartChange && app.onPartChange) {
-      createCanvasPartPaint({ app, behavior: partBehavior });
+    if (app.onHoverSelectorChange && app.onTargetChange) {
+      createCanvasSelectorPaint({ app, behavior: partBehavior });
     }
   }
 
@@ -130,13 +142,9 @@ import './media-library.js';
   // CHANGE only (never on load), so within a mode the Show menu stays
   // user-controllable. The subscription also hears satellite-window
   // switches (the storage event relays them into this window's store).
-  // Guarded: an older daedalus_ui without the seam just keeps manual
-  // toggling.
-  if (app.tree?.setPartVisibility) {
-    uiMode.subscribe((mode) =>
-      app.tree.setPartVisibility('markup', mode !== 'basic'),
-    );
-  }
+  uiMode.subscribe((mode) =>
+    app.tree.setViewVisibility('markup', mode !== 'basic'),
+  );
 
   // The apply-variant hotkey: shift+v with a selection opens the variant
   // picker for it, through the opener seam the mounted wear bar fills
@@ -150,8 +158,14 @@ import './media-library.js';
   // visible: the press is handled either way, so it never propagates.
   // With the panel open, the action returns false when no wear bar is
   // mounted or it declines (no offer, an apply in flight), so the press
-  // propagates. Leader only: the satellite window has no dispatcher and
-  // keeps the add row as its one apply gesture.
+  // propagates. Registered here only because the leader alone resolves
+  // keys: a shift+v pressed in the satellite window reaches this action
+  // through daedalus_ui's pop-out keyboard wire, and the picker opens
+  // where the panel is. While the panel is popped out the sidebar stays
+  // closed (the satellite displaced it) and the open is routed to the
+  // satellite over stylish's own protocol (open-variant-picker); that
+  // wire is asynchronous, so the routed press counts as handled and
+  // the satellite's own wear bar decides the rest in its window.
   Drupal.Daedalus.Hotkeys.register({
     id: 'daedalus_stylish.apply_variant',
     key: 'shift+v',
@@ -160,6 +174,10 @@ import './media-library.js';
     section: Drupal.t('Styling'),
     remappable: true,
     action: () => {
+      if (popout?.isPoppedOut()) {
+        popout.openVariantPicker();
+        return true;
+      }
       const panel = document.getElementById('daedalus_stylish_inspector');
       if (!panel?.classList.contains('daedalus-ui-hidden')) {
         return openVariantPicker();
@@ -175,6 +193,63 @@ import './media-library.js';
         });
       return true;
     },
+  });
+
+  // Code mode's collapse-all and expand-all: daedalus_ui's collapse
+  // registrar (the page elements tree's, under this outline's own id),
+  // listed in the tray's Panels section and unbound by default (the
+  // tree holds 3 and 4, both outlines can be open at once and both
+  // bindings live in the global context; the user binds this pair in
+  // the tray). Registered at leader boot like the apply-variant hotkey
+  // and for the same reason: the leader alone resolves keys, and its
+  // own page view is unmounted exactly while the panel is popped out.
+  // The actions read and land the posture through the seam the mounted
+  // page view fills (code/collapse-seam.js); popped out, the GESTURE is
+  // routed to the satellite over stylish's protocol (collapse-outline)
+  // and lands on the satellite's own posture, since a collapse is a
+  // reading posture of one window. The routed press counts as handled
+  // like any bound key; with no view mounted the model returns the same
+  // posture and the landing is a no-op.
+  registerCollapseHotkeys({
+    id: OUTLINE_ID,
+    label: Drupal.t('Code mode'),
+    read: readOutline,
+    apply: (next, gesture) => {
+      if (popout?.isPoppedOut()) {
+        popout.collapseOutline(gesture);
+      } else {
+        applyOutline(next);
+      }
+    },
+  });
+
+  // The styles clipboard: mod+alt+c copies the styling target's own
+  // document (its entries and worn variants, copy-styles.js), mod+alt+v
+  // lands it at the target under the selection as one batch, one undo.
+  // The bindings the design tools use for copy/paste properties, leaving
+  // mod+c / mod+v to the browser and to element copy. Registered on the
+  // leader for the same reason as apply_variant: keys resolve here, a
+  // press in the satellite is forwarded, and the slot lives in this
+  // window; the toasts land on this page's messenger. No panel needs
+  // opening: the gesture reads the map and writes the op queue, so it
+  // works with the inspector closed.
+  Drupal.Daedalus.Hotkeys.register({
+    id: 'daedalus_stylish.copy_styles',
+    key: 'mod+alt+c',
+    when: 'selection',
+    label: Drupal.t('Copy styles'),
+    section: Drupal.t('Styling'),
+    remappable: true,
+    action: () => copyStyles(source),
+  });
+  Drupal.Daedalus.Hotkeys.register({
+    id: 'daedalus_stylish.paste_styles',
+    key: 'mod+alt+v',
+    when: 'selection',
+    label: Drupal.t('Paste styles'),
+    section: Drupal.t('Styling'),
+    remappable: true,
+    action: () => pasteStyles(source, guide),
   });
 
   Drupal.behaviors.daedalusStylishInspector = {
@@ -193,7 +268,15 @@ import './media-library.js';
           swatches={drupalSettings.daedalusStylish?.swatches ?? {}}
           animations={drupalSettings.daedalusStylish?.animations ?? {}}
           previewWindow={
-            drupalSettings.daedalusUi?.responsivePreview ?? null
+            // The opener's {url, scope}, composed from the two settings
+            // the Edit mode attaches together (the preview route's URL and
+            // the session identity); the satellite host composes none.
+            drupalSettings.daedalusUi?.responsivePreview
+              ? {
+                  url: drupalSettings.daedalusUi.responsivePreview.url,
+                  scope: drupalSettings.daedalusUi.editSession.scope,
+                }
+              : null
           }
         />,
         mount,

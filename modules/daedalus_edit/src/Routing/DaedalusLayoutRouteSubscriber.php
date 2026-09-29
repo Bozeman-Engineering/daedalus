@@ -14,8 +14,9 @@ use Drupal\daedalus_edit\Controller\BlockFormController;
  *
  * This subscriber is only registered when daedalus_layout module is available
  * (via DaedalusEditServiceProvider). It adds the block-form endpoint of the
- * form path: the route the Edit tool fetches a placement's Layout Builder
- * block form from (the entity form endpoint is daedalus_edit.entity_form).
+ * form path: the route the editing engine fetches a placement's Layout
+ * Builder block form from (the entity form endpoint is
+ * daedalus_edit.entity_form).
  *
  * The path carries placement identity only (storage + component uuid);
  * BlockFormController derives the section delta and region from the

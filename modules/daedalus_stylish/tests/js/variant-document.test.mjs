@@ -19,14 +19,14 @@ import {
   documentLineWinner,
   documentSlotEntry,
   documentTree,
-  documentValueWinner,
   overlaySessionLines,
   updateFromElementLines,
   wearerWinners,
   wearingOf,
 } from '../../js/src/code/variant-document.js';
 import { pendingLineId, stageLine, updateSession } from '../../js/src/pending.js';
-import { islandLines } from '../../js/src/code/island.js';
+import { stackLines } from '../../js/src/code/island.js';
+import { buildStack } from '../../js/src/style-stack.js';
 import { ELEMENT_LAYER, variantLayerId } from '../../js/src/code/layers.js';
 
 let current = null;
@@ -92,8 +92,8 @@ test('the tree walks the whole key space: root, parts, then child slots', () => 
       kind: 'root',
       detail: null,
       keys: [
-        { key: '', part: null, children: false },
-        { key: '::.quote', part: '.quote', children: false },
+        { key: '', selector: null },
+        { key: '::.quote', selector: '.quote' },
       ],
     },
     {
@@ -101,14 +101,14 @@ test('the tree walks the whole key space: root, parts, then child slots', () => 
       depth: 1,
       kind: 'block',
       detail: 'text',
-      keys: [{ key: 'block(text,1)', part: null, children: false }],
+      keys: [{ key: 'block(text,1)', selector: null }],
     },
   ]);
 });
 
 test('the root always renders, even in an empty document', () => {
   assert.deepEqual(documentTree({}, null, 'block'), [
-    { slot: '', depth: 0, kind: 'root', detail: null, keys: [{ key: '', part: null, children: false }] },
+    { slot: '', depth: 0, kind: 'root', detail: null, keys: [{ key: '', selector: null }] },
   ]);
   assert.deepEqual(documentTree(null, null, null)[0].slot, '');
   // Empty entries carry nothing and drop; reference-only entries list.
@@ -117,24 +117,26 @@ test('the root always renders, even in an empty document', () => {
     'block(text,1)': { variants: [{ variant: 'loud', fragment: '' }] },
   }, null, 'container');
   assert.deepEqual(sparse.map((node) => node.slot), ['', 'block(text,1)']);
-  assert.deepEqual(sparse[0].keys, [{ key: '', part: null, children: false }]);
+  assert.deepEqual(sparse[0].keys, [{ key: '', selector: null }]);
 });
 
-test("keys order: own entry, its '::>', then each part with its own '::>'", () => {
+test("keys order: own entry, the part-less selectors, then each part with its own selectors", () => {
   const styles = {
     '::.b': { default: { color: 'red' } },
-    '::.a::>': { default: { gap: '1rem' } },
-    '::>': { default: { margin: '0' } },
+    '::.a > *': { default: { gap: '1rem' } },
+    '::> *': { default: { margin: '0' } },
+    '::> pb-text': { default: { color: 'blue' } },
     '::.a': { default: { padding: '0' } },
     '': { default: { display: 'grid' } },
   };
   const [root] = documentTree(styles, null, 'container');
   assert.deepEqual(root.keys, [
-    { key: '', part: null, children: false },
-    { key: '::>', part: null, children: true },
-    { key: '::.b', part: '.b', children: false },
-    { key: '::.a', part: '.a', children: false },
-    { key: '::.a::>', part: '.a', children: true },
+    { key: '', selector: null },
+    { key: '::> *', selector: '> *' },
+    { key: '::> pb-text', selector: '> pb-text' },
+    { key: '::.b', selector: '.b' },
+    { key: '::.a', selector: '.a' },
+    { key: '::.a > *', selector: '.a > *' },
   ]);
 });
 
@@ -180,20 +182,22 @@ test('unparseable slots keep stored order after parsed ones, kind null', () => {
 
 // --- carriedBy: the per-fragment current-page carriers ---------------------
 
-test('carriedBy names each fragment\'s carriers by record id, in map order', () => {
+test('carriedBy names each fragment\'s carriers by record id, in map order, rules included', () => {
   const map = {
     [`container:${SEC}`]: { variants: [{ variant: 'cta', fragment: '' }] },
     'container:other': { variants: [{ variant: 'cta', fragment: '' }] },
     [`block:${TXT}`]: { variants: [{ variant: 'cta', fragment: 'block(text,1)' }] },
-    // Other variants, the retired uuid spelling and part entries never
-    // carry.
+    // Other variants, the retired uuid spelling and an entry wearing
+    // nothing never carry.
     'block:b2': { variants: [{ variant: 'loud', fragment: '' }] },
     'block:b3': { variants: [{ variant: '00000000-0000-0000-0000-000000000001', fragment: '' }] },
     [`container:${SEC}::.quote`]: { default: { color: 'red' } },
+    // A rule wearing the document carries its root fragment at every match.
+    [`container:${SEC}::> pb-text`]: { variants: [{ variant: 'cta', fragment: '' }] },
   };
   const carriers = carriedBy(map, 'cta');
   assert.deepEqual([...carriers.entries()], [
-    ['', [`container:${SEC}`, 'container:other']],
+    ['', [`container:${SEC}`, 'container:other', `container:${SEC}::> pb-text`]],
     ['block(text,1)', [`block:${TXT}`]],
   ]);
   assert.deepEqual([...carriedBy(map, null).entries()], []);
@@ -257,7 +261,7 @@ test('a document line a higher layer beats names its winner', () => {
       default: { padding: '4rem' },
     },
   };
-  const wearer = islandLines(map, `container:${SEC}`, 'default', library, ['style', 'container_layout']);
+  const wearer = stackLines(buildStack({ map, key: `container:${SEC}`, variants: library, axes: ['style', 'container_layout'], floor: false }), 'default');
   const winners = wearerWinners(wearer);
   // The wearer's own override beats the sheet's padding.
   assert.deepEqual(documentLineWinner(winners, 'cta', 'padding'), { layer: ELEMENT_LAYER, variant: null });
@@ -331,6 +335,24 @@ test('no wearing, no resolution, or no diff pre-stages nothing', () => {
   assert.deepEqual(updateFromElementLines(identical, `container:${SEC}`, 'cta', library, layout), []);
 });
 
+test('a rule anchor pre-stages its own entry and its continuations by descent', () => {
+  const rule = `container:${SEC}::> pb-text`;
+  const map = {
+    [rule]: {
+      variants: [{ variant: 'cta', fragment: '' }],
+      default: { padding: '4rem', gap: '1rem' },
+    },
+    // The continuation by descent ('::.quote' under the rule).
+    [`${rule} .quote`]: { default: { color: 'navy' } },
+    // A sibling rule under the same owner is no continuation.
+    [`container:${SEC}::p`]: { default: { margin: '0' } },
+  };
+  assert.deepEqual(updateFromElementLines(map, rule, 'cta', library, layout), [
+    { relative: '', condition: 'default', property: 'padding', value: '4rem' },
+    { relative: '::.quote', condition: 'default', property: 'color', value: 'navy' },
+  ]);
+});
+
 // --- captureRelativeTable: save marks address capture rows -----------------
 
 test('the table maps island keys to the capture\'s relative keys', () => {
@@ -387,23 +409,6 @@ test('documentSlotEntry without a session is the variant sheet at rest', () => {
   // An empty slot projects an empty entry (a fresh part the session can
   // still stage into).
   assert.deepEqual(documentSlotEntry(library[0].value, '::.missing', null), { entry: {}, pending: {} });
-});
-
-test('documentValueWinner: own beats, later suppliers beat, the document wins otherwise', () => {
-  const own = { default: { gap: '89px' }, variants: [{ variant: 'cta', fragment: '' }] };
-  const suppliers = { default: { gap: 'cta', padding: 'loud' } };
-  // The element's own layer always wins delivery.
-  assert.deepEqual(documentValueWinner(own, suppliers, 'cta', 'default', 'gap'), { variant: null });
-  // Another worn reference winning delivery names itself.
-  assert.deepEqual(documentValueWinner({}, suppliers, 'cta', 'default', 'padding'), { variant: 'loud' });
-  // The document supplying the delivery winner — or nothing else defining
-  // the property at all — means the document wins (null: previews are
-  // honest).
-  assert.equal(documentValueWinner({}, suppliers, 'cta', 'default', 'gap'), null);
-  assert.equal(documentValueWinner({}, suppliers, 'cta', 'default', 'color'), null);
-  assert.equal(documentValueWinner(null, null, 'cta', 'default', 'gap'), null);
-  // An own value at another condition does not win this one.
-  assert.equal(documentValueWinner({ dark: { gap: '1px' } }, {}, 'cta', 'default', 'gap'), null);
 });
 
 process.stdout.write('variant-document suite passed\n');

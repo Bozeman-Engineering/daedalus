@@ -10,7 +10,6 @@ use Drupal\daedalus_ui\Attribute\Sidebar;
 use Drupal\daedalus_ui\ButtonBuilderTrait;
 use Drupal\daedalus_ui\EditorSettings;
 use Drupal\daedalus_ui\Event\SettingsSidebarEvent;
-use Drupal\daedalus_ui\DaedalusUi;
 use Drupal\daedalus_ui\SidebarPluginBase;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Contracts\EventDispatcher\EventDispatcherInterface;
@@ -18,8 +17,8 @@ use Symfony\Contracts\EventDispatcher\EventDispatcherInterface;
 /**
  * The Edit Mode settings panel.
  *
- * Aggregates each tool's buildSettings() plus the settings contributed via
- * SettingsSidebarEvent into a single right-rail panel, bound to Edit Mode.
+ * Aggregates the settings contributed via SettingsSidebarEvent into a
+ * single right-rail panel, bound to Edit Mode.
  *
  * Slot bottom: the transient panels (settings, notifications, history) share
  * the right rail's bottom slot with the AI chat, leaving the top slot to the
@@ -43,7 +42,6 @@ final class SettingsSidebar extends SidebarPluginBase implements ContainerFactor
     array $configuration,
     $plugin_id,
     $plugin_definition,
-    protected DaedalusUi $ui,
     protected EventDispatcherInterface $eventDispatcher,
     protected EditorSettings $editorSettings,
   ) {
@@ -58,7 +56,6 @@ final class SettingsSidebar extends SidebarPluginBase implements ContainerFactor
       $configuration,
       $plugin_id,
       $plugin_definition,
-      $container->get('daedalus_ui.ui'),
       $container->get('event_dispatcher'),
       $container->get('daedalus_ui.editor_settings'),
     );
@@ -99,19 +96,11 @@ final class SettingsSidebar extends SidebarPluginBase implements ContainerFactor
       ],
     ];
 
-    // Aggregate per-tool settings.
-    foreach ($this->ui->getToolPlugins() as $id => $tool) {
-      $settings = $tool->buildSettings();
-      if (!empty($settings)) {
-        $contents['body'][$id] = $settings;
-      }
-    }
-
-    // Aggregate settings contributed by non-tool modules via the event.
+    // Aggregate the settings modules contribute via the event.
     $event = $this->eventDispatcher->dispatch(new SettingsSidebarEvent(), SettingsSidebarEvent::class);
-    $non_tool_settings = $event->getSettings();
-    if (!empty($non_tool_settings)) {
-      $contents['body'] = array_merge($contents['body'], $non_tool_settings);
+    $contributed_settings = $event->getSettings();
+    if (!empty($contributed_settings)) {
+      $contents['body'] = array_merge($contents['body'], $contributed_settings);
     }
 
     return $contents;

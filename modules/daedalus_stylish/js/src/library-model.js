@@ -19,6 +19,7 @@
  */
 
 import { entryRefs, isOrphaned, isShipped, locked } from './variant-scope.js';
+import { styleTarget } from './widgets/lib/use-highlight.js';
 
 /**
  * The filter vocabularies: every axis and scope the variants speak.
@@ -250,20 +251,22 @@ export const cardGestures = (
  * The card's "Apply to selection" doorway state.
  *
  * The browse-first workflow's one write gesture: find a variant in the
- * catalog, put it on the element you are holding. Applying is the same
- * instant apply_variant op the styling place's variant picker speaks (element
- * edit, tempstore net), so unlike the lifecycle gestures it takes no
- * variant grant — shipped variants apply fine, only pushing into them is
- * locked. What gates it is the SELECTION: 'ready' needs an element
- * selected, not already wearing the variant (fragment wearings included —
- * the wearing row is then the gesture surface; Re-apply lives on its
- * menu), and the variant in the selection's offer (the same
- * scope/ownership/tag-filtered set the axis dropdowns list). The view
+ * catalog, put it on the styling target you are holding. Applying is
+ * the same instant apply_variant op the styling place's variant picker
+ * speaks (element edit, tempstore net), so unlike the lifecycle gestures
+ * it takes no variant grant — shipped variants apply fine, only pushing
+ * into them is locked. What gates it is the TARGET (the key the panel
+ * writes at: the selected element, or the rule the target chip names,
+ * whose every match then wears it): 'ready' needs a target, not already
+ * wearing the variant (fragment wearings included — the wearing row is
+ * then the gesture surface; Re-apply lives on its menu), and the variant
+ * in the target's offer (the same scope/ownership/tag-filtered set the
+ * wear bar's picker lists, paired at the target's landing). The view
  * renders every state — the doorway's presence tells the browsing user it
  * exists; the disabled titles say honestly why it is shut. Off the offer,
  * ownership names its own reasons: 'unfit-owned' when the variant belongs
- * to a stencil and the selection is not inside that stencil's placements
- * (the caller resolves the selection's provenance, variant-scope.js
+ * to a stencil and the target is not inside that stencil's placements
+ * (the caller resolves the target's provenance, variant-scope.js
  * stencilProvenance), 'unfit-orphaned' when the owner is gone (offers
  * nowhere until released), so the title can say "belongs to stencil X"
  * instead of a vague scope shrug. An owned variant refused by scope INSIDE
@@ -273,14 +276,15 @@ export const cardGestures = (
  *   The variant record.
  * @param {?object} styleMap
  *   The page's style map (mirror view).
- * @param {?string} selected
- *   The selected element's key.
+ * @param {?string} target
+ *   The styling target's key (an element's, or a rule's), null with no
+ *   selection.
  * @param {?Array<object>} offer
- *   The selection's applicable variants (variant-scope.js
- *   applicableVariants); empty when nothing is selected or the selection
+ *   The target's applicable variants (variant-scope.js
+ *   applicableVariants); empty when nothing is selected or the target
  *   is unstylable.
  * @param {?string} provenance
- *   The selection's stencil provenance (stencilProvenance), or null.
+ *   The target's stencil provenance (stencilProvenance), or null.
  * @param {object} materials
  *   The materials roster (the orphan rule).
  *
@@ -290,16 +294,16 @@ export const cardGestures = (
 export const applyDoorway = (
   variant,
   styleMap,
-  selected,
+  target,
   offer,
   provenance = null,
   materials = null,
 ) => {
-  if (!selected) {
+  if (!target) {
     return 'no-selection';
   }
   if (
-    entryRefs(styleMap?.[selected]).some((ref) => ref.variant === variant?.id)
+    entryRefs(styleMap?.[target]).some((ref) => ref.variant === variant?.id)
   ) {
     return 'worn';
   }
@@ -324,10 +328,13 @@ export const applyDoorway = (
  * renders in wearer context, so it needs a wearing element as its
  * anchor. The lookup matches the record id (the one reference identity)
  * and answers the worn reference, the one the session's `editing` must
- * hold. The current selection wins when it wears the variant (no
- * selection jump); otherwise a root wearing beats a fragment wearing (the
- * full-sheet context), map order breaking ties. Null when nothing on this
- * page wears it — the view degrades the doorway honestly (a wearer on
+ * hold. The styling target wins when it wears the variant (no jump: the
+ * session anchors where the bar already wears); otherwise an element's
+ * root wearing (the full-sheet context with a read subject), then a
+ * rule's (`container:X::> pb-text`: the document rendered at the
+ * rule's own stack, previewing on every match), then a fragment
+ * wearing, map order breaking ties. Null when nothing on this page
+ * wears it — the view degrades the doorway honestly (a wearer on
  * another page, or the unworn degenerate case, cannot anchor here).
  *
  * @param {?object} styleMap
@@ -335,7 +342,8 @@ export const applyDoorway = (
  * @param {?object} variant
  *   The variant record.
  * @param {?string} preferred
- *   The selected element's key, preferred as the anchor.
+ *   The styling target's wear key (an element or a rule), preferred as
+ *   the anchor.
  *
  * @return {?{key: string, reference: string, fragment: string}}
  */
@@ -355,9 +363,12 @@ export const pageWearer = (styleMap, variant, preferred = null) => {
       return own;
     }
   }
-  const wearers = Object.keys(styleMap ?? {})
-    .filter((key) => !key.includes('::'))
-    .map(wornRef)
-    .filter(Boolean);
-  return wearers.find((wearer) => wearer.fragment === '') ?? wearers[0] ?? null;
+  const wearers = Object.keys(styleMap ?? {}).map(wornRef).filter(Boolean);
+  const roots = wearers.filter((wearer) => wearer.fragment === '');
+  return (
+    roots.find((wearer) => styleTarget(wearer.key).selector === null) ??
+    roots[0] ??
+    wearers[0] ??
+    null
+  );
 };

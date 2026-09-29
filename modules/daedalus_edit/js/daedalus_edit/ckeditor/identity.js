@@ -38,7 +38,7 @@
  * htmlLiAttributes road), one identity per listItemId.
  *
  * The IdentityMinter contract (vocabulary, class shape, id length and
- * alphabet) is DELIVERED, not copied: the Edit tool attaches
+ * alphabet) is DELIVERED, not copied: the form panel's build attaches
  * IdentityMinter::clientContract() as drupalSettings.daedalusEdit.identity and
  * this plugin reads it at init, one server truth, nothing to drift. The
  * behavioral rules mirrored live (see daedalus_edit/src/IdentityMinter.php):
@@ -62,8 +62,8 @@ const { Plugin } = window.CKEditor5.core;
  * The delivered IdentityMinter contract
  * (drupalSettings.daedalusEdit.identity, IdentityMinter::clientContract()).
  *
- * Read per call, not at import: the settings ride the Edit tool's
- * attachments and can land after this module loads. A missing contract
+ * Read per call, not at import: the settings ride the form panel's
+ * attachments (EntityFormSidebar) and can land after this module loads. A missing contract
  * throws, minting against a guessed vocabulary would write identity the
  * server disowns, and the retired copies are not coming back.
  *
@@ -74,7 +74,7 @@ const contract = () => {
   const identity = drupalSettings.daedalusEdit?.identity;
   if (!identity) {
     throw new Error(
-      'The eager-identity contract (drupalSettings.daedalusEdit.identity) was not delivered; the Edit tool attaches it.',
+      'The eager-identity contract (drupalSettings.daedalusEdit.identity) was not delivered; the form panel (EntityFormSidebar) attaches it.',
     );
   }
   return {

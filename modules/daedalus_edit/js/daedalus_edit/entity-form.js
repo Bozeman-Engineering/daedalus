@@ -1,66 +1,24 @@
-import * as editableElement from './editable-element.js';
+import { placementFor } from './panel-items.js';
 
 /**
- * Get the Layout Builder block form.
+ * @file
+ * Fetching entity forms into the panel's form cache: the hosting half.
  *
- * Fetches the placement's block form (UpdateBlockFormForEditTool) into the
- * panel's form cache. The path carries placement identity only (storage +
- * component uuid); the server derives the section coordinates from the
- * storage and responds with the same open contract as the entity form
- * endpoint (an AppendCommand into the form-cache mount), so no command
- * rewriting happens here.
- *
- * @param {EditableElement} EditableElement
- *   The element info object.
- *
- * @return {Promise<unknown>}
- *   A promise to retrieve the form.
+ * The entity form is a widget host and value extractor, never a write
+ * path: every write leaves it through the form transport (transports.js)
+ * and the op spine. What lives here is how a subject's form gets onto the
+ * page: the entity-form endpoint (the root, any entity by type and id)
+ * and the block-form endpoint (a Layout Builder placement's
+ * PanelUpdateBlockForm), both answering the same open contract (an
+ * AppendCommand into the form-cache mount), and the refetch that replaces
+ * a cached form with a fresh one when a response left it stale.
  */
-const getBlockForm = (EditableElement) => {
-  return new Promise((resolve, reject) => {
-    const pageElement = EditableElement.getPageElement();
-    const storageInfo =
-      Drupal.Daedalus.ModeManager.getPlugin('edit').getSectionStorageInfo(
-        pageElement,
-      );
-    const path = `/daedalus-edit/block-form/${storageInfo.storageType}/${storageInfo.storageId}/${storageInfo.blockUuid}`;
-
-    EditableElement.info.ajaxReturnForm = true;
-    const ajax = Drupal.Daedalus.ModePluginBase.ajax({
-      url: path,
-      type: 'GET',
-      dataType: 'text',
-      submit: EditableElement.info,
-      progress: {
-        type: 'fullscreen',
-        message: Drupal.t('Loading form...'),
-      },
-      error: (error) => {
-        console.error('Block form load: ', error.responseText || error);
-        Drupal.Daedalus.ModeManager.getPlugin('edit').handleError(
-          error,
-          'Unable to load the block form.',
-        );
-        reject(error);
-      },
-      success: (response, status) => {
-        Promise.resolve(
-          Drupal.Ajax.prototype.success.call(ajax, response, status),
-        ).then(() => {
-          resolve({ status: 'new_form' });
-        });
-      },
-    });
-    ajax.execute();
-    EditableElement.info.ajaxReturnForm = false;
-  });
-};
 
 /**
  * Fetch an entity form into the panel's form cache.
  *
  * The one fetch both doors share: the form engine's leaf-driven load
- * (getEntityForm) and the panel's own top-level load (fetchMainEntityForm).
+ * (getForm) and the panel's own top-level load (fetchMainEntityForm).
  * The response's AppendCommand lands the wrapped form in the form-cache
  * mount; the caller decides what to do with it (typically make it the
  * panel's subject).
@@ -69,23 +27,28 @@ const getBlockForm = (EditableElement) => {
  *   The entity type id.
  * @param {string} entityId
  *   The entity id.
- * @param {Object} submit
- *   The POST payload (must carry viewMode; ajaxReturnForm makes the server
- *   respond with the append command).
+ * @param {string} viewMode
+ *   The view mode the canvas shows the entity in.
  * @param {boolean} quiet
  *   Skip the fullscreen progress indicator (background loads the user did
- *   not ask for, e.g. the subject revert).
+ *   not ask for, e.g. a refetch).
  *
  * @return {Promise<unknown>}
  *   A promise to retrieve the form.
  */
-const fetchEntityForm = (entityTypeId, entityId, submit, quiet = false) => {
+const fetchEntityForm = (entityTypeId, entityId, viewMode, quiet = false) => {
   return new Promise((resolve, reject) => {
+    // The view mode rides the URL's query, not the POST body: core copies
+    // the fetch request's query onto every #ajax URL the form builds, so a
+    // widget's own rounds (remove, add more, a media library insert) and
+    // the form transport's commits all carry it, and the server never has
+    // to remember it across the form cache (which does not exist until a
+    // form's first rebuild).
     const ajax = Drupal.Daedalus.ModePluginBase.ajax({
-      url: `/daedalus-edit/entity-form/${entityTypeId}/${entityId}`,
+      url: `/daedalus-edit/entity-form/${entityTypeId}/${entityId}?viewMode=${encodeURIComponent(viewMode)}`,
       type: 'POST',
       dataType: 'text',
-      submit,
+      submit: { ajaxReturnForm: true },
       progress: quiet
         ? { type: 'none' }
         : {
@@ -113,23 +76,70 @@ const fetchEntityForm = (entityTypeId, entityId, submit, quiet = false) => {
 };
 
 /**
- * Get Entity Form.
+ * Fetch a Layout Builder placement's block form into the form cache.
  *
- * @param {EditableElement} EditableElement
- *   The element info object.
+ * The path carries placement identity only (storage + component uuid,
+ * from the placement's Layout Builder attribution); the server derives
+ * the section coordinates from the storage and responds with the same
+ * open contract as the entity form endpoint.
+ *
+ * @param {Element} element
+ *   The placement, or any element inside it.
+ * @param {string} viewMode
+ *   The view mode the block's content renders in.
+ * @param {boolean} quiet
+ *   Skip the fullscreen progress indicator.
  *
  * @return {Promise<unknown>}
  *   A promise to retrieve the form.
  */
-const getEntityForm = (EditableElement) => {
-  EditableElement.info.ajaxReturnForm = true;
-  const fetch = fetchEntityForm(
-    EditableElement.info.entityTypeId,
-    EditableElement.info.entityId,
-    EditableElement.info,
-  );
-  EditableElement.info.ajaxReturnForm = false;
-  return fetch;
+export const fetchBlockForm = (element, viewMode, quiet = false) => {
+  return new Promise((resolve, reject) => {
+    const storageInfo =
+      Drupal.Daedalus.ModeManager.getPlugin('edit').getSectionStorageInfo(
+        element,
+      );
+    if (!storageInfo?.blockUuid) {
+      reject(
+        new Error(
+          'Daedalus Edit: the element is not inside a Layout Builder placement to fetch a block form for.',
+        ),
+      );
+      return;
+    }
+    const path = `/daedalus-edit/block-form/${storageInfo.storageType}/${storageInfo.storageId}/${storageInfo.blockUuid}`;
+
+    // The view mode on the query, as for the entity form (see
+    // fetchEntityForm).
+    const ajax = Drupal.Daedalus.ModePluginBase.ajax({
+      url: `${path}?viewMode=${encodeURIComponent(viewMode)}`,
+      type: 'GET',
+      dataType: 'text',
+      submit: { ajaxReturnForm: true },
+      progress: quiet
+        ? { type: 'none' }
+        : {
+            type: 'fullscreen',
+            message: Drupal.t('Loading form...'),
+          },
+      error: (error) => {
+        console.error('Block form load: ', error.responseText || error);
+        Drupal.Daedalus.ModeManager.getPlugin('edit').handleError(
+          error,
+          'Unable to load the block form.',
+        );
+        reject(error);
+      },
+      success: (response, status) => {
+        Promise.resolve(
+          Drupal.Ajax.prototype.success.call(ajax, response, status),
+        ).then(() => {
+          resolve({ status: 'new_form' });
+        });
+      },
+    });
+    ajax.execute();
+  });
 };
 
 /**
@@ -168,9 +178,13 @@ export const getForm = async (EditableElement) => {
       .daedalusEditFormEndpoint ?? 'entity-form';
   let status;
   if (endpoint === 'block-form') {
-    status = await getBlockForm(EditableElement);
+    status = await fetchBlockForm(pageElement, EditableElement.info.viewMode);
   } else if (endpoint === 'entity-form') {
-    status = await getEntityForm(EditableElement);
+    status = await fetchEntityForm(
+      EditableElement.info.entityTypeId,
+      EditableElement.info.entityId,
+      EditableElement.info.viewMode,
+    );
   } else {
     throw new Error(`Daedalus Edit: unknown form endpoint kind "${endpoint}".`);
   }
@@ -186,9 +200,17 @@ export const getForm = async (EditableElement) => {
 };
 
 /**
+ * The main entity wrapper, or null.
+ *
+ * @return {?Element}
+ */
+const mainEntityWrapper = () =>
+  document.querySelector('[data-main-entity][data-daedalus-ui-entity-wrapper]');
+
+/**
  * Fetch the TOP-LEVEL entity's form — the panel's default subject.
  *
- * The icon door and the subject revert have no EditableElement: the fetch
+ * The icon door and the boot restore have no EditableElement: the fetch
  * identity comes from the main entity wrapper's canonical id and recorded
  * view mode instead. Exposed on Drupal.Daedalus.Edit (daedalus-edit.js) for the
  * sidebar plugin, which lives outside this ES-module graph.
@@ -200,9 +222,7 @@ export const getForm = async (EditableElement) => {
  *   A promise to retrieve the form.
  */
 export const fetchMainEntityForm = ({ quiet = false } = {}) => {
-  const wrapper = document.querySelector(
-    '[data-main-entity][data-daedalus-ui-entity-wrapper]',
-  );
+  const wrapper = mainEntityWrapper();
   if (!wrapper) {
     return Promise.reject(
       new Error(
@@ -215,297 +235,72 @@ export const fetchMainEntityForm = ({ quiet = false } = {}) => {
   return fetchEntityForm(
     entityTypeId,
     entityId,
-    {
-      viewMode: wrapper.dataset.daedalusUiViewMode,
-      ajaxReturnForm: true,
-    },
+    wrapper.dataset.daedalusUiViewMode,
     quiet,
   );
 };
 
 /**
- * Flag that the page is currently being updated.
+ * Fetch the form for a cached-form identity ("{type}::{id}").
  *
- * @see Drupal.Daedalus.Edit.notUpdating
+ * The refetch's fetch: the top-level entity through the entity-form
+ * endpoint, a placed block's content through the block-form endpoint
+ * (found by the placement rendering that entity). Exposed on
+ * Drupal.Daedalus.Edit for the sidebar plugin.
  *
- * @type {boolean}
+ * @param {string} formId
+ *   The form identity.
+ * @param {Object} options
+ *   - quiet: skip the fullscreen progress indicator.
+ *
+ * @return {Promise<unknown>}
+ *   A promise to retrieve the form.
  */
-export let daedalusEditIsUpdating = false;
-
-/**
- * Get background color.
- *
- *   The element to get the background color for.
- *
- * @return {string}
- *   The inherited background color of this element.
- */
-const getBackgroundColor = (element) => {
-  let currentElement = element;
-  while (currentElement) {
-    const bgColor = window.getComputedStyle(currentElement).backgroundColor;
-    if (bgColor !== 'rgba(0, 0, 0, 0)' && bgColor !== 'transparent') {
-      return bgColor;
-    }
-    currentElement = currentElement.parentElement;
-  }
-
-  return 'white';
-};
-
-/**
- * Get text color for background.
- *
- * We don't want to have black text on a black background or other similarly
- * un-contrasty situations.
- *
- *   The background color the text will appear on.
- *
- * @return {string}
- *   white or black, which would be a better choice given the background color.
- */
-const getTextColorForBackground = (backgroundColor) => {
-  // Extract the RGB values from the string.
-  const rgb = backgroundColor.match(/\d+/g);
-  const [r, g, b] = rgb
-    ? [parseInt(rgb[0], 10), parseInt(rgb[1], 10), parseInt(rgb[2], 10)]
-    : [255, 255, 255];
-  // Calculate the luminance of the color.
-  const a = [r, g, b].map((v) => {
-    v /= 255;
-    return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
-  });
-  const luminance = a[0] * 0.2126 + a[1] * 0.7152 + a[2] * 0.0722;
-
-  return luminance < 0.5 ? 'white' : 'black';
-};
-
-/**
- * Update tempstore.
- *
- * @param {EditableElement} EditableElement
- *   The form item whose form needs updating.
- * @param isEmpty
- *   Whether the field has been emptied or not. Emptied fields are moved to the
- *   sidebar.
- * @param form
- *   Pass the form element directly when an EditableElement isn't available,
- *   but you still need to submit the form like when a sidebar form item changes.
- * @param onlyUpdateElement
- *   Pass the element to update when an EditableElement isn't available,
- *   but you still need to submit the form like when a sidebar form item changes.
- */
-export const updateTempstore = async (
-  EditableElement,
-  isEmpty,
-  form = null,
-  onlyUpdateElement = null,
-) => {
-  if (updateTempstore.alreadyUpdating) {
-    return;
-  }
-  if (!EditableElement && Drupal.Daedalus.Edit.CurrentlyEditingElement) {
-    // We are saving something other than an EditableElement while an
-    // EditableElement is focused. Probably something in the sidebar. Let's
-    // blur the CurrentlyEditingElement to get any changes from it.
-    // Flag that we are already updating as blur can call updateTempstore again.
-    updateTempstore.alreadyUpdating = true;
-    try {
-      await Drupal.Daedalus.Edit.CurrentlyEditingElement.plugin.blur();
-    } finally {
-      updateTempstore.alreadyUpdating = false;
-    }
-  }
-
-  if (!form) {
-    form = EditableElement.getFormItemWrapper().closest('form');
-  }
-
-  // Move emptied fields to the sidebar.
-  if (EditableElement && isEmpty) {
-    form.querySelector('#empty-field').value = EditableElement.info.fieldName;
-  }
-
-  // Update the hidden view mode input in order to persist the view mode across
-  // multiple form submissions as it could be changing in this update.
-  let viewMode;
-  if (EditableElement) {
-    // I think we can standardize on getting the view mode from the form > entity
-    // wrapper relationship detailed in the else, but we might as well get it
-    // from EditableElement when it's available as it's a tiny bit faster.
-    viewMode = EditableElement.info.viewMode;
-
-    // Disable editing the item while it's being updated.
-    const pageElementWrapper = EditableElement.getPageElementWrapper();
-    pageElementWrapper.classList.add('disabled-updating');
-    // Add an AJAX throbber to indicate the item is being updated. The
-    // throbber is a SIBLING of the wrapper, never a child: the wrapper can
-    // be an <svg> root (the image block's vector lane), and HTML inserted
-    // inside an svg parses in the SVG namespace and renders nothing.
-    // 'afterend' parses in the HTML parent's context, and the overlay
-    // takes its geometry from the wrapper's rect (svg-safe) instead of
-    // absolute positioning within it.
-    const throbber = Drupal.theme.ajaxProgressThrobber(Drupal.t('Updating...'));
-    pageElementWrapper.insertAdjacentHTML('afterend', throbber);
-    const progress = pageElementWrapper.nextElementSibling;
-    progress.classList.add('daedalus-edit-element-throbber');
-    const rect = pageElementWrapper.getBoundingClientRect();
-    progress.style.top = `${rect.top}px`;
-    progress.style.left = `${rect.left}px`;
-    progress.style.width = `${rect.width}px`;
-    progress.style.height = `${rect.height}px`;
-    setTimeout(() => {
-      const backgroundColor = getBackgroundColor(pageElementWrapper);
-      progress.style.backgroundColor = backgroundColor;
-      progress.style.color = getTextColorForBackground(backgroundColor);
-      progress.style.opacity = '1';
-    }, 50);
-    // Flag to hide the submit handler ajax throbber in the sidebar.
-    document.querySelector('body').classList.add('element-ajax-throbbing');
-    // Flag to only update the rendered output of this field, not the entire
-    // entity. This allows users to continue editing other items on the page.
-    form.querySelector('.daedalus-edit-only-update-element').value =
-      EditableElement.getPageElement().dataset.daedalusEditId;
-  } else {
-    // EditableElement won't be available when submitting the form via DaedalusEditEntityFormAutoSave.
-    // @todo review if this entityWrapper getting works. It seems like it shouldn't.
-    const entityWrapper = document.querySelector(
-      `[data-daedalus-ui-entity-wrapper^="${
-        form.closest('.daedalus-edit-form').dataset.daedalusEditFormId
-      }"]`,
+export const fetchFormFor = (formId, { quiet = false } = {}) => {
+  const [entityTypeId, entityId] = formId.split('::');
+  const main = mainEntityWrapper();
+  if (
+    main &&
+    main.dataset.daedalusUiEntityWrapper.startsWith(
+      `${entityTypeId}::${entityId}::`,
+    )
+  ) {
+    return fetchEntityForm(
+      entityTypeId,
+      entityId,
+      main.dataset.daedalusUiViewMode,
+      quiet,
     );
-    viewMode = entityWrapper.dataset.daedalusUiViewMode;
-    // Flag to update the render output of the entire entity.
-    form.querySelector('.daedalus-edit-only-update-element').value =
-      onlyUpdateElement;
   }
-  // Update the hidden view mode input in order to persist the view mode across
-  // multiple form submissions as it could be changing in this update.
-  form.querySelector('.daedalus-edit-view-mode').value = viewMode;
-
-  // Click the update button (formerly the save submit).
-  const updateButton = form.querySelector('.daedalus-edit-update-button');
-  jQuery(updateButton).mousedown();
-  daedalusEditIsUpdating = true;
-};
-
-/**
- * Daedalus Edit is done updating.
- *
- * AJAX callback that flags that the update is complete.
- */
-jQuery.fn.daedalusEditIsDoneUpdating = () => {
-  daedalusEditIsUpdating = false;
-  document.querySelector('body').classList.remove('element-ajax-throbbing');
-  // The throbber is a sibling of the updated element's wrapper (see
-  // updateTempstore), so the response's markup swap does not take it out
-  // with the wrapper; remove any stragglers explicitly.
-  document
-    .querySelectorAll('.daedalus-edit-element-throbber')
-    .forEach((element) => element.remove());
-};
-
-/**
- * Clear form.
- *
- * Evicts a cached entity form so the next edit fetches fresh values.
- * Removal routes through the sidebar plugin's subject-death entry point: an
- * evicted form that was the OPEN panel's subject reverts the panel to the
- * top-level entity. Manually re-attaching behaviors prevents the automatic
- * detachBehaviors that RemoveCommand would trigger without a subsequent
- * attachBehaviors.
- */
-jQuery.fn.daedalusEditClearForm = (selector) => {
-  const element = document.querySelector(selector);
-  if (element) {
-    Drupal.Daedalus.SidebarManager.getPlugin('daedalus_edit_form').removeForm(
-      element,
+  const placement = placementFor(entityTypeId, entityId);
+  if (!placement) {
+    return Promise.reject(
+      new Error(
+        `Daedalus Edit: no placement on the page renders ${formId}; its form cannot be fetched.`,
+      ),
     );
-    Drupal.attachBehaviors();
-    Drupal.displace();
   }
+  const wrapper = placement.matches('[data-daedalus-ui-entity-wrapper]')
+    ? placement
+    : placement.querySelector('[data-daedalus-ui-entity-wrapper]');
+  return fetchBlockForm(placement, wrapper.dataset.daedalusUiViewMode, quiet);
 };
 
 /**
- * Handle validation error.
+ * Replaces a cached form with a freshly fetched one.
  *
- * AJAX callback for when the form is submitted, but there are errors. Re-edit
- * the field that had errors.
+ * The client-side successor of server-side form eviction: a mutation
+ * response whose targets name a field the panel shows (a foreign write,
+ * an AI turn, an undo) leaves the cached form's widget stale, and a
+ * canceled panel-widget edit leaves its staged state unknowable, so the
+ * form is fetched again. The sidebar plugin owns the cache and the
+ * subject, so the swap is its.
  *
- * @param elementId
- *   The element ID of the form item or form item wrapper that has an error
- *   and needs to be edited.
+ * @param {Element} form
+ *   The cached form wrapper (.daedalus-edit-form).
+ *
+ * @return {Promise<Element>}
+ *   Resolves with the fresh form element.
  */
-jQuery.fn.epHandleValidationError = (elementId) => {
-  try {
-    const EditableElement = new editableElement.EditableElement(elementId);
-    EditableElement.setWidget();
-    const pageElementWrapper = EditableElement.getPageElementWrapper();
-
-    // Remove spinner and disabled state. The throbber is a sibling of the
-    // wrapper, not a child (see updateTempstore).
-    document
-      .querySelectorAll('.daedalus-edit-element-throbber')
-      .forEach((element) => element.remove());
-    pageElementWrapper.classList.remove('disabled-updating');
-
-    const body = document.querySelector('body');
-    if (body) {
-      body.classList.remove('element-ajax-throbbing');
-    }
-    EditableElement.plugin.edit(EditableElement);
-
-    // Set up server-side validation clearing after field is re-opened.
-    const inputs = EditableElement.getFormItemInputs();
-    if (inputs && inputs.length > 0) {
-      inputs.forEach((input) => {
-        EditableElement.plugin.clearValidationMessageOnUserInput(
-          input,
-          EditableElement.plugin.removeServersideValidationMessage.bind(
-            EditableElement.plugin,
-          ),
-        );
-      });
-    }
-  } catch (error) {
-    console.error('Error handling validation error:', error);
-  }
-};
-
-(($, Drupal, once) => {
-  /**
-   * Daedalus Edit entity form auto save.
-   *
-   * Auto saves form items in the sidebar when the user changes its value.
-   */
-  Drupal.behaviors.DaedalusEditEntityFormAutoSave = {
-    attach: (context, settings) => {
-      once(
-        'DaedalusEditEntityFormAutoSave',
-        '[data-daedalus-edit-auto-submit]',
-        context,
-      ).forEach((formItem) => {
-        formItem.addEventListener('change', (e) => {
-          const input = e.target;
-          // The nearest auto-submit element owns the change, judged at
-          // event time rather than from the once record: auto-submit
-          // elements nest (a revealed field wrapper around an advanced
-          // pane's own auto-submit child), and the visibility behavior
-          // withdraws a wrapper's attribute when its field gains a canvas
-          // leaf (the leaf's editor owns the widget then), which once
-          // cannot unbind.
-          if (input.closest('[data-daedalus-edit-auto-submit]') !== formItem) {
-            return;
-          }
-          const onlyUpdateElement = input.dataset.daedalusEditUpdateElement ?? null;
-          updateTempstore(
-            null,
-            false,
-            input.closest('form'),
-            onlyUpdateElement,
-          );
-        });
-      });
-    },
-  };
-})(jQuery, Drupal, once);
+export const refetchForm = (form) =>
+  Drupal.Daedalus.SidebarManager.getPlugin('daedalus_edit_form').refetch(form);

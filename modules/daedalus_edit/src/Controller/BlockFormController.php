@@ -7,7 +7,7 @@ namespace Drupal\daedalus_edit\Controller;
 use Drupal\Core\Ajax\AjaxResponse;
 use Drupal\Core\Ajax\AppendCommand;
 use Drupal\Core\Controller\ControllerBase;
-use Drupal\daedalus_edit\Form\UpdateBlockFormForEditTool;
+use Drupal\daedalus_edit\Form\PanelUpdateBlockForm;
 use Drupal\daedalus_edit\Plugin\Sidebar\EntityFormSidebar;
 use Drupal\layout_builder\SectionStorageInterface;
 use Symfony\Component\HttpFoundation\Request;
@@ -50,7 +50,7 @@ final class BlockFormController extends ControllerBase {
       throw new NotFoundHttpException(sprintf('Daedalus Edit: no component "%s" in section storage "%s".', $uuid, $section_storage->getStorageId()));
     }
 
-    $form = $this->formBuilder()->getForm(UpdateBlockFormForEditTool::class, $section_storage, $delta, $region, $uuid);
+    $form = $this->formBuilder()->getForm(PanelUpdateBlockForm::class, $section_storage, $delta, $region, $uuid);
 
     if (empty($request->request->get('ajaxReturnForm'))) {
       // The form is being submitted (AJAX submits re-enter this route and
@@ -60,7 +60,7 @@ final class BlockFormController extends ControllerBase {
 
     // The entity-form panel's open contract, shared with the entity form
     // endpoint: the wrapped form (see DaedalusEditFormTrait::wrapForm, applied
-    // by UpdateBlockFormForEditTool::wrapFormAfterBuild) is appended into
+    // by PanelUpdateBlockForm::wrapFormAfterBuild) is appended into
     // the EntityFormSidebar plugin's form-cache mount, where it is cached
     // for reuse. The client-side subject model then makes this form the
     // panel's subject and opens the panel.

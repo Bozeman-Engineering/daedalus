@@ -1,4 +1,5 @@
 import {
+  parseKey,
   styleMapOf,
   componentBlockTypes,
   sectionLayouts,
@@ -6,9 +7,11 @@ import {
   tokenDisplayValue,
 } from '../style-guide.js';
 import { notify } from '../notify.js';
+import { failureText, getText, post } from '../gesture-transport.js';
 import { customProperty } from '../materials.js';
 import { animationPreviewCss } from '../animations-model.js';
 import { PLACES } from '../surface-state.js';
+import { addressKey } from '../write-address.js';
 import { createPreview } from '../preview.js';
 import { readLayoutContext } from '../layout-context.js';
 import { partsForKey } from '../parts.js';
@@ -16,10 +19,17 @@ import {
   resolveRoot,
   resolveTargets,
   readComputed,
+  pseudoOf,
+  lengthBases,
   paddingPx,
   borderPx,
 } from '../computed-read.js';
-import { openMediaLibrary, mediaLibraryAvailable } from '../media-library.js';
+import {
+  MEDIA_PICK_PLACEHOLDER,
+  openMediaLibrary,
+  mediaLibraryAvailable,
+} from '../media-library.js';
+import { compoundOperations } from '../controls.js';
 import {
   log,
   logEnabled,
@@ -204,6 +214,14 @@ export const createLeaderSource = (app, guide = {}, mediaUrls = {}) => {
     }
   });
 
+  // The ledger's account of where writes land: the styling target is
+  // spine state (daedalus_ui's selection facade; the switcher and
+  // provenance's "Edit at" seat an ancestor rule there through
+  // target()), so its every move is logged here, never held here.
+  app.onTargetChange(({ selected, target }) => {
+    log('address', target === null ? (selected ?? 'none') : addressKey(target));
+  });
+
   // The inspector's place state (four controls, one loud mode):
   // WHERE the panel is and whether the editing session is mounted:
   // {place, editing} with place one of surface-state.js's PLACES
@@ -229,17 +247,21 @@ export const createLeaderSource = (app, guide = {}, mediaUrls = {}) => {
 
   // The canvas-highlight state (transient band chrome for properties whose
   // effect is invisible geometry): null, or a normalized property-keyed
-  // {key, sub, properties} spec — consumers say WHAT they are editing, the
+  // {key, selector, properties} spec — consumers say WHAT they are editing, the
   // painter registry (canvas-painters.js) owns how it tints. Panel state
   // the source owns so widgets in BOTH hosts
   // drive one renderer (canvas-highlight.js subscribes here; satellite
-  // hover intents land here through the popout leader). Any selection move
-  // clears it: the bands are edit-chrome for the current target only.
+  // hover intents land here through the popout leader). Any move of the
+  // styling address clears it, a selection move or a target move under
+  // the same selection alike (the facade's target-aware subscription
+  // fires for either): the bands are edit-chrome for the current write
+  // address only, and a spec keyed at the old address would paint the
+  // wrong matches until the next hover.
   let canvasHighlight = null;
   const highlightListeners = new Set();
   const announceCanvasHighlight = () =>
     highlightListeners.forEach((callback) => callback(canvasHighlight));
-  app.onSelectionChange(() => {
+  app.onTargetChange(() => {
     if (canvasHighlight !== null) {
       canvasHighlight = null;
       announceCanvasHighlight();
@@ -304,8 +326,8 @@ export const createLeaderSource = (app, guide = {}, mediaUrls = {}) => {
       (error) => {
         log('op', `update_style ${key} REJECTED`, error);
         preview.release(key, condition, settling);
-        // Flash the scope root: a sub-element part has no element of its
-        // own — its parent carries the selectable key.
+        // Flash the scope root: a selector entry has no element of its
+        // own — its owner carries the selectable key.
         app.Blueprint.reportFailure(error, key.split('::')[0]);
       },
     );
@@ -334,6 +356,61 @@ export const createLeaderSource = (app, guide = {}, mediaUrls = {}) => {
       `${op} ${variant} settled: +${Object.keys(delta.gained).length} -${Object.keys(delta.lost).length} keys, ${delta.carriers} carrying`,
       delta,
     );
+  };
+
+  // The batch settle path, hoisted beside commit for the same reason: a
+  // media pick whose routed changes touch several keys commits through
+  // it, and the widget's compound gesture and the library selection must
+  // be the same batch shape, release semantics and failure report.
+  const commitBatch = ({ operations, label = null }) => {
+    const context = app.Blueprint.rootContext();
+    if (!context) {
+      return Promise.reject(
+        new Error('No root entity mutation context on this page.'),
+      );
+    }
+    const keys = [
+      ...new Set(
+        operations
+          .map((operation) => operation.key)
+          .filter((key) => typeof key === 'string'),
+      ),
+    ];
+    // Per update_style op, the release bound at dispatch to what is
+    // staged for its properties (preview.settling, as commit() binds).
+    const settling = operations
+      .filter(
+        (operation) => operation.op === 'update_style' && operation.properties,
+      )
+      .map((operation) => {
+        const condition = operation.condition ?? 'default';
+        return [
+          operation.key,
+          condition,
+          preview.settling(operation.key, condition, operation.properties),
+        ];
+      });
+    const release = () => {
+      preview.releaseEntries(keys);
+      settling.forEach(([key, condition, properties]) =>
+        preview.release(key, condition, properties),
+      );
+    };
+    log(
+      'op',
+      `batch of ${operations.length} (${label ?? 'no label'})`,
+      operations,
+    );
+    const request = app.Blueprint.mutate({ ...context, operations, label });
+    request.then(release, (error) => {
+      log('op', `batch of ${operations.length} REJECTED`, error);
+      release();
+      app.Blueprint.reportFailure(
+        error,
+        keys.length ? keys[0].split('::')[0] : null,
+      );
+    });
+    return request;
   };
 
   return {
@@ -393,7 +470,8 @@ export const createLeaderSource = (app, guide = {}, mediaUrls = {}) => {
      *
      * @param {object} batch
      *   {operations, label} — operations as built by code/island.js,
-     *   code/ops.js (paste), controls.js compoundOperations() or
+     *   code/paste-door.js entriesToOps() (the paste door, the header's
+     *   Paste CSS included), controls.js compoundOperations() or
      *   material-gestures.js (save_material / update_material, which
      *   address no style key: nothing to release, no element to flash).
      *
@@ -401,56 +479,89 @@ export const createLeaderSource = (app, guide = {}, mediaUrls = {}) => {
      *   The op-queue promise, resolving with the applied response payload
      *   (rejects on failure; catch it).
      */
-    commitBatch: ({ operations, label = null }) => {
+    commitBatch,
+
+    /**
+     * Reads a CSS fragment under one style key through the spine's parse
+     * door (the code view's paste; paste-door.js is the client half).
+     *
+     * A write-nothing POST to daedalus_blueprint_api's parse-css route
+     * on this page's root entity (the staged working copy the ops edit),
+     * with the CSRF token the gesture transport holds. The answer is the
+     * door's: {key, entries: [{key, condition, properties}], wear:
+     * [{key, variant}], errors: [BlueprintError::toArray()]} with
+     * `context.line` relative to the sent css; the route answers 200
+     * under correctives (the entries are the parser's best effort), so a
+     * rejection here is the transport's (a refused key, the gates, the
+     * network) and is reported on this page's messenger before it
+     * rejects, the satellite relaying it to its own.
+     *
+     * @param {string} key
+     *   The style key the text was pasted into (an element or a rule).
+     * @param {string} css
+     *   The fragment.
+     *
+     * @return {Promise<object>}
+     */
+    parseCss: (key, css) => {
       const context = app.Blueprint.rootContext();
       if (!context) {
         return Promise.reject(
           new Error('No root entity mutation context on this page.'),
         );
       }
-      const keys = [
-        ...new Set(
-          operations
-            .map((operation) => operation.key)
-            .filter((key) => typeof key === 'string'),
-        ),
-      ];
-      // Per update_style op, the release bound at dispatch to what is
-      // staged for its properties (preview.settling, as commit() binds).
-      const settling = operations
-        .filter(
-          (operation) =>
-            operation.op === 'update_style' && operation.properties,
-        )
-        .map((operation) => {
-          const condition = operation.condition ?? 'default';
-          return [
-            operation.key,
-            condition,
-            preview.settling(operation.key, condition, operation.properties),
-          ];
-        });
-      const release = () => {
-        preview.releaseEntries(keys);
-        settling.forEach(([key, condition, properties]) =>
-          preview.release(key, condition, properties),
-        );
-      };
-      log(
-        'op',
-        `batch of ${operations.length} (${label ?? 'no label'})`,
-        operations,
-      );
-      const request = app.Blueprint.mutate({ ...context, operations, label });
-      request.then(release, (error) => {
-        log('op', `batch of ${operations.length} REJECTED`, error);
-        release();
-        app.Blueprint.reportFailure(
-          error,
-          keys.length ? keys[0].split('::')[0] : null,
-        );
+      return post(
+        `daedalus-blueprint/${encodeURIComponent(context.entityType)}/${encodeURIComponent(context.entityId)}/parse-css`,
+        { key, css },
+      ).catch((error) => {
+        notify('error', failureText(error));
+        throw error;
       });
-      return request;
+    },
+
+    /**
+     * Prints one style key's own entries as CSS (the header's Copy CSS).
+     *
+     * A read of daedalus_blueprint_api's route in css mode on this
+     * page's root entity (the staged working copy): the element the key
+     * names, pruned to itself, printed as flat dialect rules by
+     * DialectPrinter::printStyles() (`#<uuid>` as the id, the element's
+     * words as a comment, its own wear as a comment line), or with a
+     * rule key (`::selector`) that rule's entry and its continuations by
+     * descent. The text is the dialect the AI reads and the parse door
+     * takes back. A failure (a refused key, the gates, the network) is
+     * reported on this page's messenger before it rejects, the satellite
+     * relaying it to its own.
+     *
+     * @param {string} key
+     *   The style key (an element, or a rule).
+     *
+     * @return {Promise<string>}
+     *   The CSS text.
+     */
+    readCss: (key) => {
+      const context = app.Blueprint.rootContext();
+      if (!context) {
+        return Promise.reject(
+          new Error('No root entity mutation context on this page.'),
+        );
+      }
+      const pos = key.indexOf('::');
+      const root = pos === -1 ? key : key.slice(0, pos);
+      const parsed = parseKey(root);
+      if (!parsed) {
+        return Promise.reject(new Error(`The key '${key}' does not parse.`));
+      }
+      const query = new URLSearchParams({ mode: 'css', uuid: parsed.uuid });
+      if (pos !== -1) {
+        query.set('selector', key.slice(pos + 2));
+      }
+      return getText(
+        `daedalus-blueprint/${encodeURIComponent(context.entityType)}/${encodeURIComponent(context.entityId)}?${query}`,
+      ).catch((error) => {
+        notify('error', failureText(error));
+        throw error;
+      });
     },
 
     /**
@@ -489,10 +600,10 @@ export const createLeaderSource = (app, guide = {}, mediaUrls = {}) => {
     canPickMedia: () => mediaLibraryAvailable(),
 
     /**
-     * Opens the media library for one property row and lands the pick.
+     * Opens the media library for one property and lands the pick.
      *
      * The whole delivery runs here, not in the widget, because a satellite
-     * row's pick arrives as an intent with only the target coordinates (the
+     * row's pick arrives as an intent with only the routed payload (the
      * modal and the op queue both live on this page). On selection: the live
      * URL table gains the server-resolved preview URL, the token stages so
      * the page previews instantly (before the op settles), and the token
@@ -501,50 +612,68 @@ export const createLeaderSource = (app, guide = {}, mediaUrls = {}) => {
      * file) still stages and commits: the table cannot answer it, so the
      * preview shows "none", exactly the server's emit-gate degradation.
      *
-     * A `companions` map (the basic Background widget's seed, computed at
-     * the click; the advanced row passes none) merges into the SAME
-     * update_style op beside the token (one batch, one undo) and stages
-     * with it, so the instant preview already paints cover/no-repeat/
-     * center instead of flashing the tiled browser defaults. The settle
-     * releases every staged property because they all ride the one
-     * properties map. A satellite's payload arrives verbatim through the
-     * pick-media intent relay, so its companions land identically.
+     * `changes` is the routed list the widget pipeline's route() produces
+     * (basic-controls.js: the picked property and its set companions on
+     * the one box the address rule answers for them as a group, each null
+     * companion on the box its value lives on), or the advanced row's one
+     * change. Exactly one change carries the picked property, holding
+     * MEDIA_PICK_PLACEHOLDER (media-library.js) until the selection fills
+     * it with the token; anything else is a contract violation and throws
+     * before the modal opens. Every property of every change stages with
+     * the token, so the instant preview already paints cover/no-repeat/
+     * center and the replaced colour gone instead of flashing the tiled
+     * browser defaults, and the settle releases them all. One change is
+     * one update_style op; several are one atomic batch under the one
+     * label (compoundOperations, as the pipeline's onCommit spells it), so
+     * every part lands or none does. The source never routes: a widget
+     * names no key, and the pipeline's rule is the only one. A
+     * satellite's payload arrives verbatim through the pick-media intent
+     * relay, so its pick lands identically.
      *
-     * @param {object} target
-     *   {key, condition, property, label, companions}; condition defaults
-     *   to 'default', companions to none.
+     * @param {object} pick
+     *   {condition, property, label, changes}; condition defaults to
+     *   'default', changes is [{key, properties}].
      *
      * @return {boolean}
      *   Whether the library could open (false without a server URL).
      */
-    pickMedia: ({
-      key,
-      condition = 'default',
-      property,
-      label = null,
-      companions = null,
-    }) =>
-      openMediaLibrary(({ uuid, token, url }) => {
+    pickMedia: ({ condition = 'default', property, label = null, changes }) => {
+      const carriers = Array.isArray(changes)
+        ? changes.filter(
+            (change) =>
+              change?.properties?.[property] === MEDIA_PICK_PLACEHOLDER,
+          )
+        : [];
+      if (carriers.length !== 1) {
+        throw new Error(
+          `A media pick carries ${property} in exactly one change; ` +
+            `got ${carriers.length}.`,
+        );
+      }
+      return openMediaLibrary(({ uuid, token, url }) => {
         if (typeof url === 'string' && url !== '') {
           mediaUrls[uuid] = url;
         }
-        const seeded =
-          companions !== null &&
-          typeof companions === 'object' &&
-          !Array.isArray(companions)
-            ? companions
-            : {};
-        preview.stage(key, condition, property, token);
-        Object.entries(seeded).forEach(([companion, value]) =>
-          preview.stage(key, condition, companion, value),
-        );
-        commit({
+        const filled = changes.map(({ key, properties }) => ({
           key,
           condition,
-          properties: { [property]: token, ...seeded },
-          label,
-        }).catch(() => {});
-      }),
+          properties:
+            properties[property] === MEDIA_PICK_PLACEHOLDER
+              ? { ...properties, [property]: token }
+              : properties,
+        }));
+        filled.forEach(({ key, properties }) =>
+          Object.entries(properties).forEach(([name, value]) =>
+            preview.stage(key, condition, name, value),
+          ),
+        );
+        const request =
+          filled.length > 1
+            ? commitBatch({ operations: compoundOperations(filled), label })
+            : commit({ ...filled[0], label });
+        request.catch(() => {});
+      });
+    },
 
     /**
      * The materials roster: the store's current index (tokens, swatches,
@@ -734,39 +863,62 @@ export const createLeaderSource = (app, guide = {}, mediaUrls = {}) => {
     getSelected: () => app.Selection.getSelected(),
 
     /**
-     * The committed selection's part facet — the part id sub-selected on
-     * the selected element ('.quote'), or null (the whole element). Spine
-     * state: its owner is always getSelected(), and any element-only
-     * selection gesture clears it.
+     * The styling target ({key, selector}: a part, tag tier or chain
+     * under the selected element, or an ancestor rule reaching it), or
+     * null for the whole element. Spine state: its key is always
+     * getSelected() or an ancestor of it, and any selection gesture
+     * clears it.
      */
-    getSelectedPart: () => app.Selection.getSelectedPart(),
+    getTarget: () => app.Selection.getTarget(),
 
     /**
-     * Selects a selectable key on the canvas (the page tree's row click),
-     * optionally with a part facet (the breadcrumb's clear passes the bare
-     * key, which clears the facet, the spine's own invariant).
+     * Selects a selectable key on the canvas (the page tree's row click,
+     * the subject chip's way back): a bare element, which drops any styling
+     * target, the spine's own invariant.
      *
      * Routed through the source so the satellite's tree drives the same
      * spine by intent; the change comes back through onSelectionChange /
-     * onPartChange. The selection spine stays the one authority, this is
-     * just its programmatic face.
+     * onTargetChange. The selection spine stays the one authority, this
+     * is just its programmatic face.
+     *
+     * A panel gesture, so the canvas reveals the element by the one
+     * reveal rule (Drupal.Daedalus.scrollReveal, daedalus_ui/scroll_reveal)
+     * the way the page elements row and the breadcrumb do; the satellite's
+     * select intent settles through this seam, so a pop-out click scrolls
+     * the leader's canvas too.
      */
-    select: (key, part = null) => app.Selection.select(key, part),
+    select: (key) => {
+      app.Selection.select(key);
+      Drupal.Daedalus.scrollReveal(app.Selection.getElement(key), {
+        behavior: 'smooth',
+      });
+    },
+
+    /**
+     * Sets the styling target on the current selection (a code-mode row
+     * header seating a chain, a tree part row, the inspector's address
+     * switcher and provenance's "Edit at" seating an ancestor rule): the
+     * spine canonicalizes the selector and refuses a key that is neither
+     * the selection nor an ancestor of it. The change comes back through
+     * onTargetChange.
+     */
+    target: (key, selector) => app.Selection.target(key, selector),
 
     /**
      * Subscribes to selection KEY changes; returns unsubscribe. Fires when
-     * the selected element changes, never on a part-facet change under the
+     * the selected element changes, never on a target change under the
      * same key, so element-scoped clear-on-change consumers keep meaning
      * "different element".
      */
     onSelectionChange: (callback) => app.onSelectionChange(callback),
 
     /**
-     * Subscribes to the committed (key, part) pair — the part-aware
-     * counterpart of onSelectionChange: fires on any facet change too,
-     * with ({key, part}, previous). Returns unsubscribe.
+     * Subscribes to the selection and its styling target — the
+     * target-aware counterpart of onSelectionChange: fires on a selection
+     * OR target change, with ({selected, target}, previous). Returns
+     * unsubscribe.
      */
-    onPartChange: (callback) => app.onPartChange(callback),
+    onTargetChange: (callback) => app.onTargetChange(callback),
 
     /**
      * The hovered (would-select) selectable key, or null.
@@ -789,28 +941,29 @@ export const createLeaderSource = (app, guide = {}, mediaUrls = {}) => {
     onHoverChange: (callback) => app.onHoverChange(callback),
 
     /**
-     * The hovered part facet ({key, part} | null) — the part counterpart
-     * of getHovered(), spine state carrying its OWN owner key.
+     * The hovered selector facet ({key, selector} | null) — the selector
+     * counterpart of getHovered(), spine state carrying its OWN owner key.
      */
-    getHoveredPart: () => app.Selection.getHoveredPart(),
+    getHoveredSelector: () => app.Selection.getHoveredSelector(),
 
     /**
-     * Drives the part-hover facet (a code part header's mouseenter): the
-     * canvas dashed paint and the tree part-row glow light up exactly as
-     * if the pointer Cmd-crossed the part itself — one facet, every
+     * Drives the selector-hover facet (a code part header's mouseenter):
+     * the canvas dashed paint and the tree part-row glow light up exactly
+     * as if the pointer Cmd-crossed the part itself — one facet, every
      * surface. Deliberately never the element hover (a part header must
-     * not light its owner's solid outline). hoverPart(null) clears;
+     * not light its owner's solid outline). hoverSelector(null) clears;
      * callers follow the rows' contract: clear on leave only while the
      * facet is still theirs.
      */
-    hoverPart: (key, part = null) => app.Selection.hoverPart(key, part),
+    hoverSelector: (key, selector = null) =>
+      app.Selection.hoverSelector(key, selector),
 
     /**
-     * Subscribes to part-hover facet changes ({key, part} | null,
+     * Subscribes to selector-hover facet changes ({key, selector} | null,
      * value-compared); returns unsubscribe. Pointer-speed like
      * onHoverChange: consumers paint, not recompute.
      */
-    onHoverPartChange: (callback) => app.onHoverPartChange(callback),
+    onHoverSelectorChange: (callback) => app.onHoverSelectorChange(callback),
 
     /**
      * The root entity's style map (selectable key → style entry), or {}.
@@ -850,6 +1003,15 @@ export const createLeaderSource = (app, guide = {}, mediaUrls = {}) => {
      * session state.
      */
     getLayout: () => layout(),
+
+    /**
+     * The blueprint's lean node tree (`_tree`, kind-discriminated
+     * container, region and block nodes carrying the `_element`
+     * annotations): what the selector matcher reads (ancestor layers in
+     * the stack, structural facts, a rule's actual targets). Broadcast
+     * to the satellite with the rest of the session state.
+     */
+    getTree: () => app.Blueprint.getBlueprint()?._tree ?? [],
 
     /**
      * The selection facts: {self, parent} with self = the element's own
@@ -909,35 +1071,55 @@ export const createLeaderSource = (app, guide = {}, mediaUrls = {}) => {
      * through the source so widget code never reaches around it to app
      * globals.
      *
-     * First match only: a multi-match part selector's placeholder comes
-     * from the first match (the bands loop every match themselves). The
+     * First match only: a multi-match selector's placeholder comes from
+     * the first match (the bands loop every match themselves). The
      * content size is the border-box rect minus borders and padding —
-     * the diagram's center readout.
+     * the diagram's center readout. A generated box (`&::before`,
+     * `.quote::after`) reads through its first host with
+     * getComputedStyle's pseudo argument (computed-read.js: the box has
+     * no node, the hosts are what resolve), and carries no content
+     * size: no rect exists for a box, so the readout withholds rather
+     * than report the host's. The read carries the canvas's measured
+     * bases beside the values (computed-read.js lengthBases: the root's
+     * font size for rem, the target's own for em), so a px placeholder
+     * converts into the panel's unit at this page's real root.
      *
      * @param {string} key
      *   The style target's selectable key.
-     * @param {?string} sub
-     *   A declared part selector ('.quote'), or null for the element.
+     * @param {?string} selector
+     *   A canonical relative selector ('.quote', '> pb-text',
+     *   '&::before'), or null for the element.
      * @param {string[]} properties
      *   The computed properties to read.
      *
      * @return {?{values: Object<string, string>,
-     *   content: {width: number, height: number}}}
+     *   bases: {rootPx: ?number, fontPx: ?number},
+     *   content: ?{width: number, height: number}}}
      *   null when the target has no canvas element (widgets degrade to
-     *   placeholder-less rendering rather than guess).
+     *   placeholder-less rendering rather than guess); `content` null
+     *   for a generated box.
      */
-    readCanvas: (key, sub, properties) => {
-      const matches = resolveTargets(key, sub);
+    readCanvas: (key, selector, properties) => {
+      const matches = resolveTargets(key, selector);
       if (!matches.length) {
         return null;
       }
       const element = matches[0];
+      const pseudo = pseudoOf(selector);
+      if (pseudo !== null) {
+        return {
+          values: readComputed(element, properties, pseudo),
+          bases: lengthBases(element, pseudo),
+          content: null,
+        };
+      }
       const computed = getComputedStyle(element);
       const rect = element.getBoundingClientRect();
       const border = borderPx(computed);
       const padding = paddingPx(computed);
       return {
         values: readComputed(element, properties),
+        bases: lengthBases(element),
         content: {
           width: Math.max(
             0,
@@ -960,32 +1142,6 @@ export const createLeaderSource = (app, guide = {}, mediaUrls = {}) => {
     },
 
     /**
-     * The drill target's rendered tag name ('h2'), or null when the
-     * target has no canvas element. The base:{tag} provenance read
-     * (skinDefaultEntry): whether a skin's bare-markup defaults hit
-     * this element is a fact only the live DOM holds (a collapsed block
-     * IS its tag; a wrapped block's root is a div), so the leader answers
-     * from the canvas and relays the selection's tags to the satellite
-     * with every state broadcast (popout-leader.js selectionTags).
-     * localName, not tagName.toLowerCase(): an svg-rooted block
-     * (the vector image) answers 'svg' either way, but SVG local names
-     * are case-sensitive (clipPath), so lowercasing would lie for any
-     * non-HTML target while localName is the canonical name in both
-     * namespaces.
-     *
-     * @param {string} key
-     *   The style target's selectable key.
-     * @param {?string} sub
-     *   A declared part selector ('.quote'), or null for the element.
-     *
-     * @return {?string}
-     */
-    readCanvasTag: (key, sub) => {
-      const matches = resolveTargets(key, sub);
-      return matches.length ? matches[0].localName : null;
-    },
-
-    /**
      * Re-arms the target's motion trigger on the canvas (the Motion
      * trigger control's Replay and the advanced Motion section's): the
      * motion-triggers runtime (daedalus_stylish/motion_triggers, a dependency of
@@ -996,15 +1152,15 @@ export const createLeaderSource = (app, guide = {}, mediaUrls = {}) => {
      *
      * @param {string} key
      *   The style target's selectable key.
-     * @param {?string} sub
-     *   A declared part selector ('.quote'), or null for the element.
+     * @param {?string} selector
+     *   A canonical relative selector ('.quote'), or null for the element.
      *
      * @return {boolean}
      *   Whether the target had a canvas element to replay (false is the
      *   honest no-op, the same rule as a missing element on readCanvas).
      */
-    replayMotion: (key, sub = null) => {
-      const matches = resolveTargets(key, sub);
+    replayMotion: (key, selector = null) => {
+      const matches = resolveTargets(key, selector);
       if (!matches.length) {
         return false;
       }
@@ -1105,14 +1261,14 @@ export const createLeaderSource = (app, guide = {}, mediaUrls = {}) => {
     },
 
     /**
-     * The current canvas highlight: null, or {key, sub, properties}.
+     * The current canvas highlight: null, or {key, selector, properties}.
      */
     getCanvasHighlight: () => canvasHighlight,
 
     /**
      * Sets (or clears, with null) the canvas highlight.
      *
-     * The spec names a style target (selectable key + optional part
+     * The spec names a style target (selectable key + optional relative
      * selector) plus the PROPERTIES being edited (['padding-top'], or
      * several under spread modifiers) — never how to paint them; the
      * painter registry maps each property to its tint, and painterless
@@ -1120,13 +1276,13 @@ export const createLeaderSource = (app, guide = {}, mediaUrls = {}) => {
      * editor-open and clear it on leave/close; deselection clears it
      * automatically.
      *
-     * @param {?{key: string, sub: ?string, properties: string[]}} spec
+     * @param {?{key: string, selector: ?string, properties: string[]}} spec
      */
     setCanvasHighlight: (spec) => {
       const next = spec
         ? {
             key: spec.key,
-            sub: spec.sub ?? null,
+            selector: spec.selector ?? null,
             properties: spec.properties ?? [],
           }
         : null;
@@ -1135,7 +1291,7 @@ export const createLeaderSource = (app, guide = {}, mediaUrls = {}) => {
         (next !== null &&
           canvasHighlight !== null &&
           next.key === canvasHighlight.key &&
-          next.sub === canvasHighlight.sub &&
+          next.selector === canvasHighlight.selector &&
           next.properties.join(' ') === canvasHighlight.properties.join(' '))
       ) {
         return;

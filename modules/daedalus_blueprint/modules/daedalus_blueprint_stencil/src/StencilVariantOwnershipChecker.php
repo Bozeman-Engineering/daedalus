@@ -8,6 +8,7 @@ use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\Entity\FieldableEntityInterface;
 use Drupal\daedalus_blueprint\LayoutBuilder\LayoutSerializer;
 use Drupal\daedalus_blueprint\LayoutBuilder\DaedalusLayoutAdapter;
+use Drupal\daedalus_blueprint\Materials\RelativeSelector;
 use Drupal\daedalus_blueprint\Result\BlueprintError;
 use Drupal\layout_builder\Section;
 use Drupal\daedalus_stylish\DaedalusStylishVariantInterface;
@@ -169,11 +170,18 @@ class StencilVariantOwnershipChecker implements VariantApplicabilityCheckerInter
    *
    * Only block and container keys live in the layout tree (a block field
    * key rides its block); entity and entity-field keys are the host's own
-   * surface, never a placement.
+   * surface, never a placement. A rule key ("{key}::{selector}") targets
+   * its root: ownership is the placed subtree's, and a rule's matches
+   * live inside the root's placement, so the rule is judged where its
+   * owner is. A suffix outside the grammar is no key (NULL, and owned
+   * variants are refused: degraded never over-permits).
    */
   protected function targetUuid(string $key): ?string {
-    $base = strstr($key, '::', TRUE) ?: $key;
-    $parts = explode(':', $base);
+    $split = RelativeSelector::splitKey($key);
+    if ($split === NULL) {
+      return NULL;
+    }
+    $parts = explode(':', $split[0]);
     if (count($parts) >= 2 && in_array($parts[0], ['block', 'container'], TRUE) && $parts[1] !== '') {
       return $parts[1];
     }

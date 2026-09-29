@@ -51,6 +51,7 @@ class StyleGuideTest extends KernelTestBase {
     'twig_events',
     'daedalus_tempstore',
     'daedalus_blueprint_api',
+    'file',
     'daedalus_ui',
     'daedalus_stylish',
     'daedalus_stylish_guide_test',
@@ -405,6 +406,125 @@ class StyleGuideTest extends KernelTestBase {
       $this->assertStringContainsString('names "padding", a shorthand; grants are stated over longhands, so list padding-top, padding-right, padding-bottom, padding-left instead', $exception->getMessage());
       $this->assertStringContainsString('names "gap", a shorthand; grants are stated over longhands, so list row-gap, column-gap instead', $exception->getMessage());
     }
+  }
+
+  /**
+   * A pseudo section declares a generated box's vocabulary; bad ones fail.
+   *
+   * The section layers like any map and reads back as authored; its
+   * property_groups ride the allowlist and scale checks like any node's;
+   * a section outside the grammar (a list, a pseudo-element the selector
+   * does not admit, a box that is not a map, a stray key, a nested
+   * pseudo) fails the build, and so does the pseudo-only
+   * generated_content group named on a real box (an element, a part, the
+   * children), since the roster grants it at every generated box by
+   * itself and it means nothing elsewhere.
+   */
+  public function testPseudoSections(): void {
+    $state = $this->container->get('state');
+    $state->set('daedalus_stylish_guide_test_extra.kinds', [
+      'container' => [
+        'pseudo' => [
+          'before' => ['property_groups' => ['background' => [], 'sizing' => ['properties' => ['width']]]],
+          'after' => ['property_groups' => ['background' => []]],
+        ],
+        'elements' => [
+          '.ornament' => [
+            'label' => 'Ornament',
+            'property_groups' => ['spacing' => []],
+            'pseudo' => ['after' => ['property_groups' => ['spacing' => ['properties' => ['margin-top']]]]],
+          ],
+        ],
+      ],
+    ]);
+    $this->styleGuide->resetCache();
+    $container = $this->styleGuide->getKind('container', self::THEME);
+    $this->assertSame(['background' => [], 'sizing' => ['properties' => ['width']]], $container['pseudo']['before']['property_groups']);
+    $this->assertSame(['background' => []], $container['pseudo']['after']['property_groups']);
+    $this->assertSame(['margin-top'], $container['elements']['.ornament']['pseudo']['after']['property_groups']['spacing']['properties']);
+    // The layout over the kind carries it.
+    $this->assertArrayHasKey('pseudo', $this->styleGuide->getLayout('layout_onecol', self::THEME));
+
+    $failures = [
+      [
+        ['container' => ['pseudo' => ['before']]],
+        'The pseudo declaration of kind "container" must be a map keyed by pseudo-element (before, after)',
+      ],
+      [
+        ['container' => ['pseudo' => ['marker' => ['property_groups' => []]]]],
+        'The pseudo declaration of kind "container" keys by "marker", which is not a pseudo-element the relative selector admits; the generated boxes are before and after.',
+      ],
+      [
+        ['container' => ['pseudo' => ['before' => 'background']]],
+        'The declaration of the ::before pseudo-element of kind "container" must be a map declaring the property_groups',
+      ],
+      [
+        ['container' => ['pseudo' => ['before' => ['property_groups' => [], 'label' => 'Box']]]],
+        'The declaration of the ::before pseudo-element of kind "container" has unknown key(s) \'label\'',
+      ],
+      [
+        ['container' => ['pseudo' => ['before' => ['property_groups' => ['background']]]]],
+        'The declaration of the ::before pseudo-element of kind "container" must declare property_groups as a map',
+      ],
+      [
+        ['container' => ['pseudo' => ['before' => ['property_groups' => [], 'pseudo' => ['after' => []]]]]],
+        'The pseudo declaration of the ::before pseudo-element of kind "container" is not valid there',
+      ],
+      [
+        ['container' => ['pseudo' => ['before' => ['property_groups' => ['spacing' => ['properties' => ['padding-tpo']]]]]]],
+        'The properties allowlist on the "spacing" group of the ::before pseudo-element of kind "container" names "padding-tpo"',
+      ],
+      [
+        ['container' => ['pseudo' => ['before' => ['property_groups' => ['spacing' => ['constraints' => ['padding-top' => ['scale' => 'nope']]]]]]]],
+        'The constraint on property "padding-top" of the ::before pseudo-element of kind "container" references the token scale \'nope\'',
+      ],
+      [
+        ['container' => ['property_groups' => ['generated_content' => []]]],
+        'The property_groups of kind "container" name the "generated_content" group, which is granted only at a generated box',
+      ],
+      [
+        ['container' => ['elements' => ['.ornament' => ['property_groups' => ['generated_content' => []]]]]],
+        'The property_groups of part ".ornament" of kind "container" name the "generated_content" group',
+      ],
+      [
+        ['container' => ['children' => ['property_groups' => ['generated_content' => []]]]],
+        'The property_groups of the children of kind "container" name the "generated_content" group',
+      ],
+    ];
+    foreach ($failures as [$kinds, $message]) {
+      $state->set('daedalus_stylish_guide_test_extra.kinds', $kinds);
+      $this->styleGuide->resetCache();
+      try {
+        $this->styleGuide->getKind('container', self::THEME);
+        $this->fail("A build must fail: $message");
+      }
+      catch (StyleGuideException $exception) {
+        $this->assertStringContainsString($message, $exception->getMessage());
+      }
+    }
+
+    // A base tag's section and a block plugin's are checked too.
+    $state->set('daedalus_stylish_guide_test_extra.kinds', []);
+    $state->set('daedalus_stylish_guide_test_extra.site', ['base' => ['p' => ['pseudo' => ['first-line' => []]]]]);
+    $this->styleGuide->resetCache();
+    try {
+      $this->styleGuide->getBase('p', self::THEME);
+      $this->fail('A base tag\'s pseudo section is checked.');
+    }
+    catch (StyleGuideException $exception) {
+      $this->assertStringContainsString('The pseudo declaration of base element "p" keys by "first-line"', $exception->getMessage());
+    }
+    $state->delete('daedalus_stylish_guide_test_extra.site');
+    $this->styleGuide->resetCache();
+    $this->assertArrayNotHasKey('pseudo', $this->styleGuide->getBase('p', self::THEME));
+
+    // Naming generated_content inside a pseudo section is redundant but
+    // legal: the position and constraints then stand as authored.
+    $state->set('daedalus_stylish_guide_test_extra.kinds', [
+      'container' => ['pseudo' => ['before' => ['property_groups' => ['generated_content' => [], 'background' => []]]]],
+    ]);
+    $this->styleGuide->resetCache();
+    $this->assertSame(['generated_content', 'background'], array_keys($this->styleGuide->getKind('container', self::THEME)['pseudo']['before']['property_groups']));
   }
 
   /**

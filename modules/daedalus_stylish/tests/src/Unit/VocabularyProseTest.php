@@ -53,7 +53,7 @@ class VocabularyProseTest extends UnitTestCase {
       'block' => self::roster('kind:block', $block),
       'field' => self::roster('kind:field', $block),
       'part' => self::roster('kind:block::.x', ['color']),
-      'bare' => self::roster('kind:block::>', []),
+      'bare' => self::roster('kind:block::> *', []),
     ]);
     $this->assertSame([
       'block' => implode(', ', $block),
@@ -135,6 +135,21 @@ class VocabularyProseTest extends UnitTestCase {
     }
     $this->expectException(\InvalidArgumentException::class);
     new VocabularyProse('loose');
+  }
+
+  /**
+   * The stack sentence names the five tiers in delivery order.
+   *
+   * The ancestor tier (the rules an ancestor's selector entry reaches the
+   * element with) sits between the skin defaults and the worn variants,
+   * the order StyleStack prints and the printer's specificity discipline
+   * delivers.
+   */
+  public function testStackSentence(): void {
+    $sentence = (new VocabularyProse(StyleGuide::ENFORCEMENT_OPEN))->stackSentence();
+    $this->assertStringContainsString("declared defaults, then skin defaults, then the rules its ancestors' selectors reach it with, then worn variants, then its own styles; the topmost setter wins", $sentence);
+    $this->assertStringContainsString('explain_element_styles', $sentence);
+    $this->assertSame($sentence, (new VocabularyProse(StyleGuide::ENFORCEMENT_STRICT))->stackSentence(), 'The stack is the same in every posture.');
   }
 
   /**

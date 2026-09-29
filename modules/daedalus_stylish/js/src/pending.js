@@ -93,10 +93,10 @@ export const payloadRows = (styles, rootKind = null) => {
     if (bySegments !== 0) {
       return bySegments;
     }
-    // Same base: the element's own entry before its parts, parts in
-    // payload order.
-    if ((parsedA.part === null) !== (parsedB.part === null)) {
-      return parsedA.part === null ? -1 : 1;
+    // Same base: the element's own entry before its selectors, selectors
+    // in payload order.
+    if ((parsedA.selector === null) !== (parsedB.selector === null)) {
+      return parsedA.selector === null ? -1 : 1;
     }
     return keys.indexOf(a) - keys.indexOf(b);
   });
@@ -135,7 +135,7 @@ export const payloadRows = (styles, rootKind = null) => {
         relative: key,
         kind: last ? last.type : slot ? 'root' : null,
         detail: last?.name ?? null,
-        part: slot ? slot.part : partPos === -1 ? null : key.slice(partPos + 2),
+        part: slot ? slot.selector : partPos === -1 ? null : key.slice(partPos + 2),
         refs,
         lines,
       };
@@ -268,8 +268,10 @@ export const saveSession = (anchor, axis = 'style') => ({
  *   The worn reference, VERBATIM as the map stores it (the
  *   verbatim-reference rule).
  * @param {string} anchor
- *   The wearer the document was entered from (the preview context); the pushed
- *   payload itself is variant-relative and anchor-free.
+ *   The wearer the document was entered from (the preview context): the
+ *   styling target's wear key, an element or a rule wearing the
+ *   document; the pushed payload itself is variant-relative and
+ *   anchor-free.
  */
 export const updateSession = (reference, anchor) => ({
   kind: 'update',

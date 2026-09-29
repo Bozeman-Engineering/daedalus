@@ -258,6 +258,60 @@ class BlueprintOperationsUpdateTest extends BlueprintKernelTestBase {
   }
 
   /**
+   * The placement's display settings write on every inline block.
+   *
+   * The label_display and view_mode keys are core's own block plugin
+   * settings, read out of every inline block component; update_element
+   * takes them without a managed-keys declaration and targets them like
+   * any property.
+   */
+  public function testUpdateElementPlacementConfiguration(): void {
+    $this->enableLayoutBuilder();
+    $this->refreshOperations();
+    $this->createBlockContentType('text_section', 'Text Section');
+    $this->createBlockField('field_heading', 'string', 'text_section');
+
+    $block = $this->entityTypeManager->getStorage('block_content')->create([
+      'type' => 'text_section',
+      'reusable' => FALSE,
+      'field_heading' => 'Hello',
+    ]);
+
+    $section = $this->createSection('layout_onecol', [
+      [
+        'uuid' => 'faf95c53-35e7-74e1-184e-041152031df4',
+        'region' => 'content',
+        'weight' => 0,
+        'configuration' => $this->createInlineBlockConfiguration('text_section', $block, 'Label'),
+      ],
+    ]);
+
+    $entity = $this->entityTypeManager->getStorage('entity_test')->create([
+      'name' => 'Test',
+      'layout_builder__layout' => [$section],
+    ]);
+    $entity->save();
+
+    $result = $this->operations->updateElement($entity, 'faf95c53-35e7-74e1-184e-041152031df4', [
+      'label_display' => '0',
+      'view_mode' => 'default',
+    ]);
+
+    $this->assertTrue($result->isSuccess(), print_r($result->toArray(), TRUE));
+    $this->assertSame([
+      ['uuid' => 'faf95c53-35e7-74e1-184e-041152031df4', 'field_name' => 'label_display'],
+      ['uuid' => 'faf95c53-35e7-74e1-184e-041152031df4', 'field_name' => 'view_mode'],
+    ], $result->getTargets());
+
+    $updated_section = $entity->get('layout_builder__layout')->first()->section;
+    $components = $updated_section->getComponents();
+    $config = reset($components)->get('configuration');
+    $this->assertSame('0', $config['label_display']);
+    $this->assertSame('default', $config['view_mode']);
+    $this->assertSame('Label', $config['label'], 'The label is untouched.');
+  }
+
+  /**
    * Tests updateElement on a paragraph entity.
    */
   public function testUpdateElementParagraph(): void {

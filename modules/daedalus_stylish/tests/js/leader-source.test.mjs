@@ -1,9 +1,12 @@
 /**
  * Self-asserting tests for the leader source's settle semantics, the
- * compound-commit path in particular: a widget gesture that batches its own
- * update_style op with a parent-keyed companion (one mutate() batch, one
- * undo label) must have every key's staged preview released when the batch
- * settles, success or failure alike.
+ * multi-key batch path in particular: a gesture that batches update_style
+ * ops on several keys (the Layout section's column resize, a typography
+ * gesture spanning the root and its anchor; one mutate() batch, one undo
+ * label) must have every key's staged preview released when the batch
+ * settles, success or failure alike. Beside it, the address-scoped
+ * chrome: the canvas highlight clears on a target move as on a
+ * selection move (one target-aware subscription).
  *
  * Run directly (`node tests/js/leader-source.test.mjs`) or via
  * PrinterEquivalenceTest, which executes this file inside the PHPUnit suite.
@@ -115,23 +118,28 @@ const createApp = () => {
     },
     Selection: {
       getSelected: () => CHILD,
-      getSelectedPart: () => app.selectedPart,
-      select: (key, part = null) => app.selections.push({ key, part }),
-      getHoveredPart: () => app.hoveredPart,
-      hoverPart: (key, part = null) => app.partHovers.push(key && part ? { key, part } : null),
+      getElement: (key) => ({ key }),
+      getTarget: () => app.target,
+      select: (key) => app.selections.push(key),
+      target: (key, selector) => app.targets.push({ key, selector }),
+      getHoveredSelector: () => app.hoveredSelector,
+      hoverSelector: (key, selector = null) => app.selectorHovers.push(key && selector ? { key, selector } : null),
     },
-    selectedPart: null,
+    target: null,
     selections: [],
-    hoveredPart: null,
-    partHovers: [],
-    onHoverPartChange: (callback) => app.hoverPartListeners.push(callback),
-    hoverPartListeners: [],
+    targets: [],
+    hoveredSelector: null,
+    selectorHovers: [],
+    onHoverSelectorChange: (callback) => app.hoverSelectorListeners.push(callback),
+    hoverSelectorListeners: [],
     onBlueprintChange: () => {},
     onSelectionChange: (callback) => app.selectionListeners.push(callback),
     selectionListeners: [],
     fireSelectionChange: (key) => app.selectionListeners.forEach((callback) => callback(key)),
-    onPartChange: (callback) => app.partListeners.push(callback),
-    partListeners: [],
+    onTargetChange: (callback) => app.targetListeners.push(callback),
+    targetListeners: [],
+    fireTargetChange: (selected, target) =>
+      app.targetListeners.forEach((callback) => callback({ selected, target }, { selected: null, target: null })),
   };
   return app;
 };
@@ -220,33 +228,33 @@ test('the animation delivery extension prints the roster and substitutes session
   animationTag = null;
 });
 
-test('a settled compound batch releases every key\'s staged preview', async () => {
+test('a settled multi-key batch releases every key\'s staged preview', async () => {
   const app = createApp();
   const source = createLeaderSource(app);
-  // The gesture's optimistic paint: the child's alignment AND the parent's
-  // mid-gesture display: grid stage under their own keys.
-  source.preview(CHILD, 'default', 'align-self', 'center');
-  source.preview(PARENT, 'default', 'display', 'grid');
+  // The gesture's optimistic paint: the column's grow AND the container's
+  // gap stage under their own keys (the Layout section's resize).
+  source.preview(CHILD, 'default', 'flex-grow', '2');
+  source.preview(PARENT, 'default', 'gap', '1rem');
   // Shape in the sheet, values inline: each staged property prints as its
   // live slot's var() and the literal rides the scope root.
-  assert.ok(previewCss().includes('align-self: var(--daedalus-stylish-live-1)'));
-  assert.ok(previewCss().includes('display: var(--daedalus-stylish-live-2)'));
-  assert.deepEqual(liveValues(), { '--daedalus-stylish-live-1': 'center', '--daedalus-stylish-live-2': 'grid' });
+  assert.ok(previewCss().includes('flex-grow: var(--daedalus-stylish-live-1)'));
+  assert.ok(previewCss().includes('gap: var(--daedalus-stylish-live-2)'));
+  assert.deepEqual(liveValues(), { '--daedalus-stylish-live-1': '2', '--daedalus-stylish-live-2': '1rem' });
 
   const request = source.commitBatch({
     operations: compoundOperations([
-      { key: CHILD, properties: { 'align-self': 'center' } },
-      { key: PARENT, properties: { display: 'grid' } },
+      { key: CHILD, properties: { 'flex-grow': '2' } },
+      { key: PARENT, properties: { gap: '1rem' } },
     ]),
-    label: 'Styled Position',
+    label: 'Resized columns',
   });
   // One mutate() call carries the whole gesture: both ops, one undo label.
   assert.equal(app.mutations.length, 1);
-  assert.equal(app.mutations[0].label, 'Styled Position');
+  assert.equal(app.mutations[0].label, 'Resized columns');
   assert.deepEqual(app.mutations[0].operations.map((op) => op.key), [CHILD, PARENT]);
   // In flight, the previews keep painting.
-  assert.ok(previewCss().includes('display: var(--daedalus-stylish-live-2)'));
-  assert.equal(liveValues()['--daedalus-stylish-live-2'], 'grid');
+  assert.ok(previewCss().includes('gap: var(--daedalus-stylish-live-2)'));
+  assert.equal(liveValues()['--daedalus-stylish-live-2'], '1rem');
 
   app.pending[0].resolve({});
   await request;
@@ -257,24 +265,24 @@ test('a settled compound batch releases every key\'s staged preview', async () =
   assert.deepEqual(app.failures, []);
 });
 
-test('a failed compound batch honestly reverts both keys and reports once', async () => {
+test('a failed multi-key batch honestly reverts both keys and reports once', async () => {
   const app = createApp();
   const source = createLeaderSource(app);
-  source.preview(CHILD, 'default', 'align-self', 'center');
-  source.preview(PARENT, 'default', 'display', 'grid');
+  source.preview(CHILD, 'default', 'flex-grow', '2');
+  source.preview(PARENT, 'default', 'gap', '1rem');
 
   const request = source.commitBatch({
     operations: compoundOperations([
-      { key: CHILD, properties: { 'align-self': 'center' } },
-      { key: PARENT, properties: { display: 'grid' } },
+      { key: CHILD, properties: { 'flex-grow': '2' } },
+      { key: PARENT, properties: { gap: '1rem' } },
     ]),
-    label: 'Styled Position',
+    label: 'Resized columns',
   });
   const failure = new Error('validator said no');
   app.pending[0].reject(failure);
   await assert.rejects(request, failure);
-  // All or nothing: the batch failed, so NEITHER preview may linger — the
-  // parent grid reverts with the child alignment, and the op failure
+  // All or nothing: the batch failed, so NEITHER preview may linger (the
+  // container's gap reverts with the column's grow), and the op failure
   // report lands once, flashed at the first op's scope root.
   assert.equal(previewCss(), '');
   assert.deepEqual(liveValues(), {});
@@ -368,42 +376,66 @@ test('force state is selection-scoped and the vector degrades without its facade
   assert.deepEqual(heard, ['hover', null, 'focus', null]);
 });
 
-test('the selection channel carries the part facet through to the spine', () => {
+test('the source holds no write address: an ancestor rule is the spine\'s target, seated through target() and read back through getTarget()', () => {
   const app = createApp();
   const source = createLeaderSource(app);
-  // select() passes the facet (or its absence) verbatim to the spine
-  // facade: a bare key is the facet-clearing gesture, never rewritten.
-  source.select(CHILD, '.quote');
-  source.select(CHILD);
-  assert.deepEqual(app.selections, [
-    { key: CHILD, part: '.quote' },
-    { key: CHILD, part: null },
-  ]);
-  // Reads and the part-aware subscription delegate to the spine: no
-  // source-local part state exists anymore.
-  app.selectedPart = '.quote';
-  assert.equal(source.getSelectedPart(), '.quote');
+  // The switcher's and "Edit at"'s road: one call, the spine's own.
+  source.target(PARENT, 'a');
+  assert.deepEqual(app.targets, [{ key: PARENT, selector: 'a' }]);
+  app.target = { key: PARENT, selector: 'a' };
+  assert.deepEqual(source.getTarget(), { key: PARENT, selector: 'a' });
+  // Nothing of the old state survives on the source.
+  assert.equal(source.getWriteAddress, undefined);
+  assert.equal(source.setWriteAddress, undefined);
+  assert.equal(source.onWriteAddressChange, undefined);
+  // A target move arrives on the one target-aware subscription, the
+  // shape the facade fires.
   const heard = [];
-  source.onPartChange((current, previous) => heard.push([current, previous]));
-  app.partListeners.forEach((callback) => callback({ key: CHILD, part: '.quote' }, { key: CHILD, part: null }));
-  assert.deepEqual(heard, [[{ key: CHILD, part: '.quote' }, { key: CHILD, part: null }]]);
+  source.onTargetChange(({ selected, target }) => heard.push([selected, target]));
+  app.fireTargetChange(CHILD, { key: PARENT, selector: 'a' });
+  app.fireTargetChange(CHILD, null);
+  assert.deepEqual(heard, [[CHILD, { key: PARENT, selector: 'a' }], [CHILD, null]]);
 });
 
-test('the hover-part channel delegates to the spine facade', () => {
+test('the selection channel carries the selection and the target through to the spine', () => {
   const app = createApp();
   const source = createLeaderSource(app);
-  // Writes pass through verbatim: a (key, part) pair sets the facet, a
-  // bare/null call clears it — the facade owns the shape.
-  source.hoverPart(CHILD, '.quote');
-  source.hoverPart(null);
-  assert.deepEqual(app.partHovers, [{ key: CHILD, part: '.quote' }, null]);
-  // Reads and the subscription delegate too: no source-local hover state.
-  app.hoveredPart = { key: CHILD, part: '.quote' };
-  assert.deepEqual(source.getHoveredPart(), { key: CHILD, part: '.quote' });
+  // select() is bare (the target-dropping gesture, never rewritten) and,
+  // a panel gesture, reveals the canvas element by the one reveal rule;
+  // target() seats the target through the spine facade verbatim.
+  const reveals = [];
+  globalThis.Drupal = { Daedalus: { scrollReveal: (element, options) => reveals.push([element, options]) } };
+  source.select(CHILD);
+  delete globalThis.Drupal;
+  source.target(CHILD, '.quote');
+  assert.deepEqual(app.selections, [CHILD]);
+  assert.deepEqual(reveals, [[{ key: CHILD }, { behavior: 'smooth' }]]);
+  assert.deepEqual(app.targets, [{ key: CHILD, selector: '.quote' }]);
+  // Reads and the target-aware subscription delegate to the spine: no
+  // source-local target state exists.
+  app.target = { key: CHILD, selector: '.quote' };
+  assert.deepEqual(source.getTarget(), { key: CHILD, selector: '.quote' });
   const heard = [];
-  source.onHoverPartChange((pair) => heard.push(pair));
-  app.hoverPartListeners.forEach((callback) => callback({ key: CHILD, part: '.quote' }));
-  assert.deepEqual(heard, [{ key: CHILD, part: '.quote' }]);
+  source.onTargetChange((current, previous) => heard.push([current, previous]));
+  app.fireTargetChange(CHILD, { key: CHILD, selector: '.quote' });
+  assert.deepEqual(heard, [[{ selected: CHILD, target: { key: CHILD, selector: '.quote' } }, { selected: null, target: null }]]);
+});
+
+test('the hover-selector channel delegates to the spine facade', () => {
+  const app = createApp();
+  const source = createLeaderSource(app);
+  // Writes pass through verbatim: a (key, selector) pair sets the facet,
+  // a bare/null call clears it — the facade owns the shape.
+  source.hoverSelector(CHILD, '.quote');
+  source.hoverSelector(null);
+  assert.deepEqual(app.selectorHovers, [{ key: CHILD, selector: '.quote' }, null]);
+  // Reads and the subscription delegate too: no source-local hover state.
+  app.hoveredSelector = { key: CHILD, selector: '.quote' };
+  assert.deepEqual(source.getHoveredSelector(), { key: CHILD, selector: '.quote' });
+  const heard = [];
+  source.onHoverSelectorChange((pair) => heard.push(pair));
+  app.hoverSelectorListeners.forEach((callback) => callback({ key: CHILD, selector: '.quote' }));
+  assert.deepEqual(heard, [{ key: CHILD, selector: '.quote' }]);
 });
 
 test('the place state defaults to styles, normalizes, and holds across selection moves', () => {
@@ -546,18 +578,47 @@ test('a vector-present part serves presence TRUE and keeps its controls offered'
     // The join's consequence: an element-bound control (Image width) is
     // NOT hidden by the presence gate on vector media — only a positive
     // absence (false) hides, and the vector-present part answers true.
+    // The projection stamps each candidate's presence from the layout's
+    // parts fact; the gate reads the stamps.
     const registry = createControlWidgetRegistry();
     registry.register('width', {});
-    const bound = { element: '.image-block-image', values: {}, hasMore: false };
-    assert.equal(registry.offered('width', bound, layout), true);
-    assert.equal(
-      registry.offered('width', bound, { self: { parts: { '.image-block-image': false } } }),
-      false,
-    );
+    const bound = (parts) => ({
+      candidates: [{ element: '.image-block-image', present: parts['.image-block-image'] ?? null }],
+      reads: {},
+      styledElsewhere: false,
+    });
+    assert.equal(registry.offered('width', bound(layout.self.parts), layout), true);
+    assert.equal(registry.offered('width', bound({ '.image-block-image': false }), layout), false);
   } finally {
     document.querySelector = baseQuerySelector;
     delete globalThis.window;
   }
+});
+
+test('the canvas highlight clears on a target move as on a selection move, one announcement per clear', () => {
+  const app = createApp();
+  const source = createLeaderSource(app);
+  const heard = [];
+  source.onCanvasHighlightChange((spec) => heard.push(spec));
+  const atElement = { key: CHILD, selector: null, properties: ['padding-top'] };
+  source.setCanvasHighlight(atElement);
+  assert.deepEqual(source.getCanvasHighlight(), atElement);
+  // The switcher seats an ancestor rule under the SAME selection: the
+  // spec is keyed at the old address now (a row's write key moved with
+  // the target), so it clears, once, through the facade's target-aware
+  // subscription (which fires for a selection move too).
+  app.fireTargetChange(CHILD, { key: PARENT, selector: 'a' });
+  assert.equal(source.getCanvasHighlight(), null);
+  assert.deepEqual(heard, [atElement, null]);
+  // Nothing held: another move announces nothing.
+  app.fireTargetChange(CHILD, null);
+  assert.deepEqual(heard, [atElement, null]);
+  // A selection move arrives on the same subscription and clears too.
+  const atRule = { key: PARENT, selector: 'a', properties: ['padding-top'] };
+  source.setCanvasHighlight(atRule);
+  app.fireTargetChange(PARENT, null);
+  assert.equal(source.getCanvasHighlight(), null);
+  assert.deepEqual(heard, [atElement, null, atRule, null]);
 });
 
 test('getMarkup serves the mirror annotation through the app facade', () => {

@@ -153,7 +153,7 @@
 
 /* Part rows: pseudo-selection entries a provider contributed — no verb
    menu, visually apart from model rows. No margin of their own: part rows
-   fold now, so the generic :first-child rule aligns leaf rows and the
+   collapse now, so the generic :first-child rule aligns leaf rows and the
    disclosure button occupies the column otherwise. */
 .daedalus-ui-tree__row--part > .daedalus-ui-tree__label {
   color: var(--daedalus-text-muted);
@@ -194,4 +194,68 @@
    anchored to the button; while it is open the kebab keeps the hover wash. */
 .daedalus-ui-icon-button.daedalus-ui-show-menu__button[aria-expanded="true"] {
   background-color: var(--daedalus-selection-background);
+}
+
+/* The outline's head: the root row stays pinned to the top of the
+   panel's scrollport, so the tools at its end are in reach however far
+   the tree has scrolled. Rows pass beneath it, so it paints an opaque
+   ground and its washes ride above that ground as an image layer
+   instead of replacing it. The row gives up its end padding: the last
+   tool's hit box ends where the header's close control does. */
+.daedalus-ui-tree {
+  --daedalus-ui-tree-head-size: 1.5rem;
+}
+
+.daedalus-ui-tree__row--root {
+  position: sticky;
+  inset-block-start: 0;
+  min-block-size: var(--daedalus-ui-tree-head-size);
+  padding-inline-end: 0;
+  background-color: var(--daedalus-background);
+}
+
+.daedalus-ui-tree__row--root:is(.daedalus-ui-tree__row--hovered, .daedalus-ui-tree__row--selected) {
+  background-color: var(--daedalus-background);
+  background-image: linear-gradient(var(--daedalus-selection-background), var(--daedalus-selection-background));
+}
+
+.daedalus-ui-tree__row--root.daedalus-ui-tree__row--marked {
+  background-color: var(--daedalus-background);
+  background-image: linear-gradient(var(--daedalus-focus-background), var(--daedalus-focus-background));
+}
+
+/* A revealed row (Drupal.Daedalus.scrollReveal) clears the pinned head:
+   the margin is the head's height plus the primary row's ring, and the
+   reveal rule reads it for "fully in view" as scrollIntoView does for
+   the alignment. The head itself never scrolls, so it carries none. */
+.daedalus-ui-tree__row:not(.daedalus-ui-tree__row--root) {
+  scroll-margin-top: calc(var(--daedalus-ui-tree-head-size) + 2px);
+}
+
+/* The outline's tools (OutlineTools in page-elements-tree.js): the
+   element picker (picker-toggle.js), then the collapse controls
+   (outline/collapse-controls.js), at the end of the root row, the label
+   truncating before they give way. Each rides the kit icon button, so
+   the muted variant, the hover wash, the disabled state and the kit's
+   pressed rule (.daedalus-ui-icon-button[aria-pressed="true"],
+   panel-controls.css, the one source of the pressed look) color it;
+   only the hit box (the head's height) and the glyph size are local. */
+.daedalus-ui-tree__tools {
+  display: flex;
+  flex: none;
+  align-items: center;
+  margin-inline-start: auto;
+  gap: 0.125rem;
+}
+
+.daedalus-ui-tree__tools .daedalus-ui-icon-button {
+  padding: 0;
+  line-height: 1;
+  inline-size: var(--daedalus-ui-tree-head-size);
+  block-size: var(--daedalus-ui-tree-head-size);
+}
+
+.daedalus-ui-tree__tools svg {
+  inline-size: var(--daedalus-icon-size);
+  block-size: var(--daedalus-icon-size);
 }

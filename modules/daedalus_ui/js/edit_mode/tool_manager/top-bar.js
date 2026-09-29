@@ -30,9 +30,10 @@ export const initTopBar = () => {
       once('DaedalusUiSave', '#daedalus-ui-save', context).forEach(
         (saveButton) => {
           saveButton.onclick = async (e) => {
-            if (Drupal.Daedalus.Edit) {
-              await Drupal.Daedalus.Edit.notUpdating();
-            }
+            // Every write (a spine op, a form commit) rides the op queue;
+            // a commit still on the wire must land in tempstore before the
+            // page navigates to the save route.
+            await Drupal.Daedalus.Blueprint.drained();
             // @todo Temporarily use the Daedalus Edit save controller.
             // @todo This creates a dependency on Daedalus Edit when in reality the
             // @todo tempstore for Daedalus Edit and Daedalus Layout should bubble up to some parent

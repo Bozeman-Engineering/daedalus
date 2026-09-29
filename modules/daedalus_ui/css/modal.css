@@ -33,12 +33,11 @@ html[data-daedalus-ui-mode] .ui-widget-overlay.ui-front {
   z-index: 1259;
 }
 
-/* The top bar and floating tool pill sit ABOVE the modal floor by
-   necessity — the layer constraints are circular (top bar above the
-   ck-toolbar-container, which must reach the dialog floor, which must
-   beat the overlay), so the overlay can never outstack them. Mirror the
-   scrim's darkening and blur on the elements themselves while a modal
-   overlay is up. Purely visual: they stay interactive. */
-html[data-daedalus-ui-mode]:has(.ui-widget-overlay.ui-front) :is(#edit-mode-top-bar, #edit-mode-toolbar) {
+/* The top bar sits ABOVE the modal floor by necessity: the layer
+   constraints are circular (top bar above the ck-toolbar-container, which
+   must reach the dialog floor, which must beat the overlay), so the overlay
+   can never outstack it. Mirror the scrim's darkening and blur on the bar
+   itself while a modal overlay is up. Purely visual: it stays interactive. */
+html[data-daedalus-ui-mode]:has(.ui-widget-overlay.ui-front) #edit-mode-top-bar {
   filter: blur(3px) brightness(0.65);
 }

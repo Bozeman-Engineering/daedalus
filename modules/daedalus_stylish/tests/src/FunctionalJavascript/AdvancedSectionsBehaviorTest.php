@@ -4,11 +4,15 @@ declare(strict_types=1);
 
 namespace Drupal\Tests\daedalus_stylish\FunctionalJavascript;
 
+use Drupal\file\Entity\File;
 use Drupal\FunctionalJavascriptTests\WebDriverTestBase;
+use Drupal\media\Entity\Media;
 use Drupal\node\Entity\Node;
 use Drupal\Tests\daedalus\Traits\EditModeTrait;
 use Drupal\Tests\daedalus\Traits\DaedalusFixtureTrait;
 use Drupal\Tests\daedalus\Traits\DesignSystemActivationTrait;
+use Drupal\Tests\daedalus_stylish\Traits\LayerColorTrait;
+use Drupal\Tests\TestFileCreationTrait;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 
@@ -17,33 +21,46 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  *
  * The capability under test is the inspector's Advanced surface: one
  * native <details> per declared property group, its `open` prop
- * CONTROLLED by the section-open model (section-open.js: the auto
- * arrival signals, the user's per-anchor marks folded into the prop, the
- * anchor reset). The model is node-tested exhaustively
- * (section-open.test.mjs owns the rule: auto only, mark over auto both
- * ways, stale-anchor marks ignored, reset yields auto). Everything here
+ * CONTROLLED by the collapse model (daedalus_ui/js/outline/collapse.js:
+ * `explicit ?? default`, the Sections' one posture over a flat outline
+ * whose defaults are the arrival signals, style-guide.js autoOpen; the
+ * reset a remount, the Sections keyed on the anchor). The model is
+ * node-tested exhaustively (daedalus_ui's collapse.test.mjs owns the
+ * rule: explicit over default both ways, the open, add, delete
+ * sequence, the all-gestures and their predicates;
+ * style-guide-refs.test.mjs owns the arrival signals). Everything here
  * is wiring that only exists where Preact's controlled push of
- * `details.open`, the summary's click handler, the op spine and the
- * selection facade meet in a browser:
+ * `details.open`, the summary's click handler, daedalus_ui's shared
+ * collapse controls, the op spine and the selection facade meet in a
+ * browser:
  * - Arrival state reaches the DOM (seam: the three auto signals crossing
  *   the prop into `details.open` on mount): on an element carrying one
  *   committed value in Typography, flipping to Advanced renders
  *   Typography's details `[open]` (the values signal), Spacing's `[open]`
  *   too with no value of its own (the defaults-tier signal: the skin
  *   zeroes `kind:block` margins, so the Margin top and Margin bottom
- *   rows wear the skin's value, faced as the ghost on their unset
- *   option), and Border's not (no value, no pending line, no skin
+ *   rows show the skin's 0 LIT, the selected option, in the skin
+ *   tier's hue), and Border's not (no value, no pending line, no skin
  *   value). Node tests pin that autoOpen answers true/false per signal;
  *   only a browser proves each answer lands as the native attribute,
  *   and the skin signal is only reachable where a real skin delivers
  *   a defaults-tier value to a mounted row.
+ * - A skin-delivered value is the row's lit value (seam: the style
+ *   stack's skin layer crossing stackAt into the closed select's
+ *   controlled value and the row's `--daedalus-stylish-origin`): the
+ *   Margin top select reads the skin's 0 as its VALUE, its mark titled
+ *   "0 from the active skin", the row hued in the skin tier's color.
+ *   style-stack.test.mjs pins the winner and provenance-model.test.mjs
+ *   the sentence; the display rule (the shown value is always the
+ *   winner's, lit, no ghost) reaching a mounted select is wiring.
  * - A hand-opened section survives its last value's deletion (seam: the
- *   summary click recording the mark, then the prop flipping true and
- *   back to false while the mark keeps the DOM open). This is the bug
- *   the model exists for: before it, the delete pushed open=false under
- *   the user. The click-not-toggle decision (the toggle event fires for
- *   programmatic opens too) and Preact's push-on-change are both
- *   invisible to a node test. The leg runs on Border, the group that
+ *   summary click writing the explicit posture, then the default
+ *   flipping open and back to closed while the explicit posture keeps
+ *   the DOM open). This is the bug the model exists for: before it, the
+ *   delete pushed open=false under the user. The click-not-toggle
+ *   decision (the toggle event fires for programmatic opens too) and
+ *   Preact's push-on-change are both invisible to a node test. The leg
+ *   runs on Border, the group that
  *   ARRIVES closed here (the flip true -> false is only observable on
  *   a section whose auto state is false without the value), and the
  *   value it sets rides the Border radius row's closed select: the
@@ -65,31 +82,127 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  *   pick commits the reference, whose unset pick commits the null; node
  *   tests pin the space, only a browser proves the advanced mount
  *   reaches it.
- * - The anchor reset pushes the DOM (seam: a selection change turning
- *   the marks stale, the prop recomputing to the new element's auto
- *   state, and Preact writing that change to the still-mounted
- *   details): selecting a second, value-less element closes the
- *   hand-opened Border again, while Spacing arrives open on it by the
- *   skin signal and Typography closed. Node tests pin marksFor's stale
- *   read; the push through the mounted DOM is browser-only.
+ * - The anchor reset remounts the sections (seam: a selection change
+ *   moving the anchor the Sections are keyed on, the remount dropping
+ *   the explicit postures, and the new element's arrival state landing
+ *   in fresh details): selecting a second, value-less element closes
+ *   the hand-opened Border again, while Spacing arrives open on it by
+ *   the skin signal and Typography closed. The reset is a key, not a
+ *   model function, so no node test sees it; the remount is
+ *   browser-only.
+ * - Collapse all and expand all over the sections (seam: the model's
+ *   collapseAll and expandAll crossing Preact's controlled push into
+ *   `details.open` for every section at once through daedalus_ui's
+ *   shared control at the list head, the pair's disabled states reading
+ *   the same posture, and the arrival state returning after a selection
+ *   move): on the mixed second element both buttons are enabled;
+ *   collapse all leaves no section `[open]` and disables itself; expand
+ *   all opens every section, the ones arriving closed included, and
+ *   disables itself; selecting the first element again shows its own
+ *   arrival state (Typography and Spacing open, Border closed) and
+ *   selecting the second restores its. collapse.test.mjs pins the
+ *   all-gestures and the predicates; only a browser proves the control,
+ *   the push and the remount agree.
  * - A row's provenance is read at the DELIVERING condition (seam: the
- *   whole supplier table crossing from the Inspector's variant-scope
- *   reads into rowOrigin, then the origin's hue landing as the row's
- *   `--daedalus-stylish-origin` and its story as the shared menu's header): a
- *   variant minted and worn through the op spine sets border-radius at
- *   Base (Border, closed on the second element, opens by the values
- *   signal alone: the resolved entry carries the worn value); with the
- *   canvas posed at Medium through the width chip's real menu, the
- *   Border radius row carries the variant layer's hue (layers.js
- *   layerColor over variantLayerId, spelled here as the oracle) while
- *   no retired layer dot exists anywhere, a right-click on the row
- *   opens the row menu whose header names the variant AND Base, and
- *   its "Go to Base" doorway drives the canvas back (the chip row's
- *   width face returns to Base, the document's width stamp clears).
- *   provenance-model.test.mjs pins the posture, color and sentence;
- *   only a browser proves the tables reach the row unsliced, the hue
- *   reaches the DOM, the menu mounts on the primitive, and the doorway
- *   reaches the canvas vector.
+ *   element's style stack, built once by the Inspector with every
+ *   layer's RAW conditions, read per row through stackAt's cascade at
+ *   the pose, then the winner's hue landing as the row's
+ *   `--daedalus-stylish-origin` and originOf's sentence as the shared
+ *   menu's header): a variant minted and worn through the op spine sets
+ *   border-radius at Base (Border, closed on the second element, opens
+ *   by the values signal alone: the delivered entry carries the worn
+ *   value); with the canvas posed at Medium through the width chip's
+ *   real menu, the Border radius row carries the variant layer's hue
+ *   (layers.js layerColor over variantLayerId, spelled here as the
+ *   oracle) while no retired layer dot exists anywhere, a right-click
+ *   on the row opens the row menu whose header names the variant AND
+ *   Base, and its "Go to Base" doorway drives the canvas back (the
+ *   chip row's width face returns to Base, the document's width stamp
+ *   clears). style-stack.test.mjs pins the cascaded read and
+ *   provenance-model.test.mjs the posture, color and sentence; only a
+ *   browser proves the stack reaches the row with its conditions
+ *   unsliced, the hue reaches the DOM, the menu mounts on the
+ *   primitive, and the doorway reaches the canvas vector.
+ * - A worn variant's PART value is lit on the drilled part's row (seam:
+ *   the drilled part's row reading the ROOT's reference layer through
+ *   the stack, the reference's styles resolved at the part's relative
+ *   suffix): a text block wearing the shipped `button` variant (its
+ *   styles keyed at `::.text-block-link`) is drilled to its link, and
+ *   the Padding row's input reads the variant's `0.75em 1.5em` as its
+ *   VALUE (no placeholder, no ghost), the row hued in the variant
+ *   layer's color, its mark titled "0.75em 1.5em from Button", and the
+ *   row menu offers the variant's doorway and no Unset (nothing of the
+ *   element's own delivers at the pose). style-stack.test.mjs pins the
+ *   part suffix resolution; that the selection's part facet reaches
+ *   the Inspector's one stack build and out to a mounted row is wiring.
+ *   Under strict law the shipped button is withheld (its literal hex
+ *   and em padding fail guide_example's bound scales), so this leg and
+ *   the next run on the recipe's open olivero system.
+ * - The wear bar is read-only on a drilled part (seam: the wear bar
+ *   reading the root's reference layers regardless of the drill, the
+ *   selection facet flowing into its posture instead of unmounting it):
+ *   drilled to the link, the bar wears its read-only class, its one row
+ *   names the axis and Button as a plain reading carrying no trigger
+ *   (no button, no picker chevron), no add row exists; the row's
+ *   right-click menu carries exactly Outline Variant and Select wearer,
+ *   and Select wearer re-selects the whole element (the part crumb
+ *   gone, the add row back). wear-bar-model.test.mjs pins the read-only
+ *   menu; the facet-to-posture wiring and the facade round trip only
+ *   exist in a browser.
+ * - The element doorway under a write address (seam: originOf under
+ *   `editable: address`, where style-stack.js gives the seated rule's
+ *   ancestor layer the editable mark so the element's own block sits
+ *   ABOVE it, emitting the `element` doorway; the advanced row's
+ *   useRowMenu dispatching it through the source's select(key), the
+ *   selection write that clears the target; and the row mounted with
+ *   NO sheet, the advanced Sections outside a session passing none, so
+ *   onWinner is never handed): with the block wearing an own padding
+ *   and its section's `> pb-text` rule seated as the styling target
+ *   (the chip lit at that address), the Padding row keeps the element's
+ *   value with its mark titled "1rem from this element", a right-click
+ *   offers "Edit on the element" and never the session's "Go to
+ *   element", and the pick drops the target through the source (the
+ *   selection stays, the chip is back on the own address, the row is
+ *   quiet again) with nothing logged: before this the row emitted the
+ *   session's winner doorway here and its click threw on the null
+ *   sheet. provenance-model.test.mjs pins the doorway and
+ *   use-row-menu.test.mjs the dispatch; that the mounted row outside a
+ *   session reaches the source and no sheet is wiring.
+ * - A generated box seated from the chip and styled through a row (seam:
+ *   the chip's "+ After" doorway seating the element's own `&::after` as
+ *   the styling target, a seat and never a write; the advanced Sections
+ *   mounting the box's derived roster, the host's groups plus Generated
+ *   content; the Background color row's settle committing ONE
+ *   update_style at the box key, the op spine birthing the entry with
+ *   `content: ""` at default in the same op; the printed `:scope::after`
+ *   inside the element's @scope landing on a generated box, and the
+ *   selection paint's own `:scope::after` outline computing on the
+ *   pseudo-element itself): the menu ends with "+ Before" / "+ After",
+ *   the pick faces the chip "After" at block::&::after unlit with no map
+ *   entry, the paint slot holds the dashed `:scope::after` rule and the
+ *   pseudo computes it while no box exists (content none), a typed
+ *   `#ff0000` settled by blur lands with the seed beneath it, the host's
+ *   own padding untouched, and the box computes `""`, red and dashed on
+ *   the canvas with the Generated content section open on its Content
+ *   row. subject-model.test.mjs pins the doorway and
+ *   write-address.test.mjs the box's set; the kernel tier pins the seed
+ *   and the print; no lower tier sees a generated box.
+ * - A generated box carries an image through its Content row (seam: the
+ *   Content row's media chip, offered because `content` carries the
+ *   media flag on a keyword-typed definition, opening the REAL media
+ *   library modal; the selection command landing the token at the
+ *   picker; the leader's pick committing ONE update_style at the box
+ *   key with the token as the whole `content` value; MediaValueResolver
+ *   substituting the file URL in the printed `:scope::after`; the
+ *   browser computing `url("…")` as the pseudo-element's content): with
+ *   the seeded box standing, the Generated content section offers the
+ *   media chip and no gradient opener (the offer follows the type), a
+ *   media minted mid-scenario is picked by id and inserted, the entry's
+ *   `content` becomes the token beside the untouched background line,
+ *   and the pseudo computes a `url("…")` ending in the file's name.
+ *   GradientBehaviorTest locks the same modal on `background-image`;
+ *   this leg locks it on the second consumer, and only a browser sees
+ *   the modal and the computed pseudo.
  *
  * The fixture is DaedalusFixtureTrait (the daedalus recipe's site as
  * daedalus_editor, the universal block kind declaring spacing,
@@ -98,9 +211,12 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  * ships open and the closed-row premises need law, so the scenario
  * activates daedalus_stylish_guide_example's guide_example system (strict as
  * shipped, its own skin and stop curation) rather than forcing a mode
- * onto a guide written to be open. One fixture, one scenario: the site install
- * dominates the run cost, so all behavior lives in the single test
- * method. Future advanced-mode seams append here.
+ * onto a guide written to be open. The two part legs at the tail switch
+ * the site back to olivero in-scenario (open as shipped), the posture
+ * under which the shipped button variant is offered. One fixture, one
+ * scenario: the site install dominates the run cost, so all behavior
+ * lives in the single test method. Future advanced-mode seams append
+ * here.
  *
  * @group daedalus_stylish
  */
@@ -110,6 +226,8 @@ class AdvancedSectionsBehaviorTest extends WebDriverTestBase {
 
   use DesignSystemActivationTrait;
   use EditModeTrait;
+  use LayerColorTrait;
+  use TestFileCreationTrait;
   use DaedalusFixtureTrait {
     setUp as daedalusSetUp;
   }
@@ -162,8 +280,9 @@ class AdvancedSectionsBehaviorTest extends WebDriverTestBase {
    * resolved value), and the suite's block allows the literal 0 beside
    * them (the zero no token mints, its own spelling as value and face).
    * The unset option (value '') leads the list and is not pinned here:
-   * its face is the ghost when a value is inherited, and the ghost is
-   * not this test's claim.
+   * a row whose winner is another layer selects that value's option,
+   * never the unset one (the Margin top leg), so the unset option's
+   * face is not this test's claim.
    */
   private const PADDING_STOPS = [
     ['var(--space-2)', '0.5rem'],
@@ -182,9 +301,9 @@ class AdvancedSectionsBehaviorTest extends WebDriverTestBase {
    * the allowed literal 0 (no package curation: guide_example's site
    * section carries no radius delta), so under the strict reference
    * system's law the row is the same ClosedField shape as Padding's.
-   * Border is the section-open legs' group: it arrives closed on a
+   * Border is the posture legs' group: it arrives closed on a
    * value-less block (the skin delivers nothing to any of its rows),
-   * which the hand-open, delete and reset claims need.
+   * which the hand-open, delete, reset and all-gesture claims need.
    */
   private const RADIUS_SELECT = "#daedalus_stylish_inspector details.daedalus-stylish-inspector__section select[aria-label='Border radius']";
 
@@ -216,30 +335,19 @@ class AdvancedSectionsBehaviorTest extends WebDriverTestBase {
   }
 
   /**
-   * A worn variant layer's stable hue: layers.js layerColor(variantLayerId()).
+   * The Padding row's detented input inside the advanced Spacing section.
    *
-   * The identity system's one hue rule (djb2 over the layer id to a
-   * hue, shifted off the element blue's band), spelled in PHP so the
-   * row's `--daedalus-stylish-origin` is asserted against the FUNCTION every
-   * identity surface shares, not against a color copied from one run.
-   *
-   * @param string $reference
-   *   The variant's record id.
-   *
-   * @return string
-   *   The CSS color layerColor() returns for that variant's layer.
+   * The open render of the same binding PADDING_SELECT reads closed: under
+   * olivero's open law a bound dimension is the free field, so the
+   * drilled link's Padding row is a text input carrying the row's label
+   * as its aria-label.
    */
-  private static function layerColor(string $reference): string {
-    $hash = 5381;
-    foreach (str_split("variant:$reference") as $char) {
-      $hash = (($hash << 5) + $hash + ord($char)) & 0xFFFFFFFF;
-    }
-    $hue = $hash % 360;
-    if (abs($hue - 213) < 24) {
-      $hue = ($hue + 48) % 360;
-    }
-    return "hsl($hue 70% 60%)";
-  }
+  private const PADDING_INPUT = "#daedalus_stylish_inspector details.daedalus-stylish-inspector__section input[aria-label='Padding']";
+
+  /**
+   * The wear bar and its parts (wear-bar.js).
+   */
+  private const WEAR_BAR = '#daedalus_stylish_inspector .daedalus-stylish-wear-bar';
 
   /**
    * Opens the Styles inspector when the cookie entry rendered it closed.
@@ -316,6 +424,63 @@ class AdvancedSectionsBehaviorTest extends WebDriverTestBase {
     $this->assertNotNull(
       $this->assertSession()->waitForElement('css', "[data-selectable='block:$block_uuid']"),
       'The formatted text block rendered on the canvas.',
+    );
+  }
+
+  /**
+   * Places a section holding one LINKED text block and waits for the render.
+   *
+   * daedalus_edit_text_block's composed block: the anchor (`.text-block-link`,
+   * the declared conditional part the shipped button variant styles)
+   * renders only while field_text_url holds a value, so the block is
+   * born linked and the part exists to drill.
+   *
+   * @param string $section_uuid
+   *   The new section's uuid.
+   * @param string $block_uuid
+   *   The new block's uuid.
+   * @param string $sentinel
+   *   A per-call window variable name for the placement error.
+   */
+  private function placeLinkedTextBlock(string $section_uuid, string $block_uuid, string $sentinel): void {
+    $session = $this->getSession();
+    $session->executeScript(<<<JS
+      (() => {
+        const Blueprint = Drupal.Daedalus.Blueprint;
+        Blueprint.mutate(Object.assign({}, Blueprint.rootContext(), {
+          operations: [
+            {
+              op: 'add_section',
+              uuid: '$section_uuid',
+              location: { anchor: Blueprint.getRoot().uuid, placement: 'inside' },
+            },
+            {
+              op: 'add_element',
+              uuid: '$block_uuid',
+              block_type: 'text',
+              properties: {
+                field_text_text: { value: 'Advanced sections link' },
+                field_text_url: { uri: 'https://example.com' },
+              },
+              location: { anchor: '$section_uuid', placement: 'inside' },
+            },
+          ],
+        })).catch((error) => {
+          window.$sentinel = error.message;
+        });
+      })();
+      JS);
+    $this->assertJsCondition(
+      "window.$sentinel !== undefined"
+      . " || JSON.stringify(Drupal.Daedalus.Blueprint.getBlueprint()).includes('$block_uuid')",
+      20000,
+      'The linked text block placement resolved.',
+    );
+    $placement_error = $session->evaluateScript("window.$sentinel ?? null");
+    $this->assertNull($placement_error, 'Linked text block placement failed: ' . ($placement_error ?? ''));
+    $this->assertNotNull(
+      $this->assertSession()->waitForElement('css', "[data-selectable='block:$block_uuid'] a.text-block-link"),
+      'The text block rendered on the canvas with its link part (the anchor the button variant styles).',
     );
   }
 
@@ -443,9 +608,13 @@ class AdvancedSectionsBehaviorTest extends WebDriverTestBase {
    * - Arrival state: A's Typography details is open (it carries the
    *   committed color), its Spacing details is open too (the skin's
    *   `kind:block` margin zeroes reach the Margin top and Margin bottom
-   *   rows as their ghost, the defaults-tier signal) and its Border
-   *   details is closed (no value, no pending line, no skin value): the
-   *   three auto signals landed as the native attribute.
+   *   rows, the defaults-tier signal) and its Border details is closed
+   *   (no value, no pending line, no skin value): the three auto
+   *   signals landed as the native attribute.
+   * - The lit skin value: the Margin top select's value IS the skin's 0
+   *   (the allowed literal's option selected, the unset option leading
+   *   unselected), the row hued in the skin tier's color, the mark
+   *   titled "0 from the active skin", the map holding no margin-top.
    * - The value space: in the open Spacing section the Padding row is
    *   the closed select over the skin's space scale (its options exactly
    *   the package's curated stops plus the suite's allowed 0, no free
@@ -468,13 +637,36 @@ class AdvancedSectionsBehaviorTest extends WebDriverTestBase {
    *   (border-radius var(--radius-md) at Base: a minted radius token,
    *   the only legal spelling on the bound property under strict law)
    *   is minted from B and worn by B through the op spine; Border opens
-   *   by the values signal alone (the resolved entry carries the worn
-   *   value); the width chip's real menu poses the canvas at Medium; the
+   *   by the values signal alone (the stack's delivered entry carries
+   *   the worn value); the width chip's real menu poses the canvas at Medium; the
    *   Border radius row's `--daedalus-stylish-origin` is the variant layer's hue
    *   and no layer dot exists; a right-click on the row opens the row
    *   menu with a header naming the variant and Base; its "Go to Base"
    *   doorway returns the chip row's width face to Base and clears the
    *   document's width stamp.
+   * - The open flip: the site switches back to the recipe's olivero
+   *   design system (open as shipped, the posture under which the
+   *   shipped `button` variant is offered: under strict law its literal
+   *   hex and em padding are withheld) server-side and the page reloads
+   *   still in Edit Mode; a section with one LINKED text block (C) is
+   *   placed through the op spine, selected, the inspector opened and
+   *   put in Advanced.
+   * - The lit part value: C wears `button` through apply_variant (the
+   *   variant's styles keyed at `::.text-block-link`); the wear bar
+   *   shows the wearing editable with its add row; the link is drilled
+   *   through the selection facade's part facet (the part crumb
+   *   mounts); the Padding row's input reads `0.75em 1.5em` as its value
+   *   with an empty placeholder, the row hued in the button layer's
+   *   color, the mark titled "0.75em 1.5em from Button", the map holding
+   *   nothing at the part key; the row menu's header names Button and
+   *   its items carry the variant's Edit doorway and no Unset; an
+   *   outside pointerdown dismisses it.
+   * - The read-only wear bar: still drilled, the bar wears its read-only
+   *   class, its Style row names Button as a span with the target
+   *   disabled, no picker trigger and no add row; the row's right-click
+   *   menu lists exactly Outline Variant and Select wearer; Select
+   *   wearer re-selects the whole element: the part crumb is gone, the
+   *   bar is editable again with its add row, the menu closed.
    */
   public function testAdvancedSectionsScenario(): void {
     $this->loginAsEditor();
@@ -511,7 +703,7 @@ class AdvancedSectionsBehaviorTest extends WebDriverTestBase {
     // under `narrow` instead of `default`.
     $session->resizeWindow(1920, 1200);
 
-    $this->enterEditModeViaCookies($node->toUrl(), 'selector');
+    $this->enterEditModeViaCookies($node->toUrl());
     $this->assertJsCondition(
       'window.Drupal && Drupal.Daedalus && Drupal.Daedalus.Blueprint && !!Drupal.Daedalus.Blueprint.getRoot()',
       20000,
@@ -558,15 +750,43 @@ class AdvancedSectionsBehaviorTest extends WebDriverTestBase {
     // carrying the committed color renders open (values), the group
     // whose rows wear the skin's defaults renders open (defaults tier:
     // guide_example's skin zeroes kind:block margins, so Margin top and
-    // Margin bottom face that 0 as the ghost on their unset option), and
-    // the group with neither renders collapsed.
+    // Margin bottom show that 0 lit), and the group with neither renders
+    // collapsed.
     $this->assertSectionOpen('Typography', TRUE, 'Typography arrives open: it carries the committed color (the values signal to details.open).');
     $this->assertSectionOpen('Spacing', TRUE, 'Spacing arrives open with no value of its own: the skin\'s kind:block margin zeroes reach the Margin rows (the defaults-tier signal to details.open).');
+
+    // ----- A skin-delivered value is the row's lit value. -----
+    // Seam: the stack's skin layer (guide_example's kind:block margin
+    // zero) is the Margin top row's WINNER at Base, so the closed
+    // select's controlled value is the skin's 0, the option the suite's
+    // allowed literal mints, never the unset option with a faded face;
+    // the row's --daedalus-stylish-origin is the skin tier's hue
+    // (layers.js SKIN_COLOR) and the mark's title is originOf's
+    // inherited-from-skin sentence. The map holds nothing for the block
+    // at margin-top: the value is the layer's, lit, not a write.
+    $margin_top_select = "#daedalus_stylish_inspector details.daedalus-stylish-inspector__section select[aria-label='Margin top']";
+    $margin_top_row = $this->rowJs($margin_top_select);
     $this->assertJsCondition(
-      "(() => { const select = document.querySelector(\"#daedalus_stylish_inspector details.daedalus-stylish-inspector__section select[aria-label='Margin top']\");"
-      . " return !!select && select.value === '' && select.options[0].textContent.trim() === '- 0 -'; })()",
+      '(() => { const select = document.querySelector(' . json_encode($margin_top_select) . ');'
+      . " return !!select && select.value === '0' && select.selectedOptions[0]?.textContent.trim() === '0'"
+      . " && select.options[0].value === '' && select.options[0].textContent.trim() === '- Unset -'; })()",
       20000,
-      'The Margin top row is unset and its unset option faces the skin\'s delivered 0 as the ghost: the defaults-tier value the section opened on.',
+      'Lit skin value: the Margin top select reads the skin\'s delivered 0 as its VALUE (the selected option is the allowed literal 0, the unset option leads unselected with no ghost face): the stack\'s skin layer is the row\'s winner.',
+    );
+    $this->assertJsCondition(
+      "($margin_top_row)?.style.getPropertyValue('--daedalus-stylish-origin').trim() === 'hsl(172 66% 50%)'",
+      20000,
+      'Lit skin value: the Margin top row\'s --daedalus-stylish-origin is the skin tier\'s hue (layers.js layerColor over the skin layer id, SKIN_COLOR).',
+    );
+    $this->assertJsCondition(
+      "($margin_top_row)?.querySelector('.daedalus-stylish-inspector__mark')?.title === '0 from the active skin'",
+      20000,
+      'Lit skin value: the Margin top row\'s mark is titled "0 from the active skin", originOf\'s inherited-from-skin sentence over the stack read.',
+    );
+    $this->assertJsCondition(
+      '!(' . $this->mapJs($block_a_key) . "?.default?.['margin-top'])",
+      20000,
+      'Lit skin value: the map holds no margin-top for the block; the lit 0 is the skin layer\'s, never a write.',
     );
     $this->assertSectionOpen('Border', FALSE, 'Border arrives closed: no value, no pending line, no skin value.');
 
@@ -623,7 +843,7 @@ class AdvancedSectionsBehaviorTest extends WebDriverTestBase {
     // Unset it: the select's unset option settling commits the null
     // (ClosedField's change with the empty value, the same settle an
     // emptied input makes). The unset option is the first, picked by
-    // whatever face it wears (the ghost, when a value is inherited).
+    // whatever face it wears (read off the option, never assumed).
     $unset_face = (string) $session->evaluateScript(
       'document.querySelector(' . json_encode($padding_select) . ').options[0].textContent.trim()'
     );
@@ -643,9 +863,10 @@ class AdvancedSectionsBehaviorTest extends WebDriverTestBase {
     // ----- A hand-opened section survives its last value's deletion. -----
     // On Border, the group whose auto state is false: the flip the mark
     // must beat only exists where no other signal keeps the prop true.
-    // A REAL click on the summary: the native toggle opens the details
-    // and Preact's click handler records the mark (details.open is the
-    // pre-toggle state at click time, so the mark is its negation).
+    // A REAL click on the summary: the native toggle is suppressed and
+    // Preact's click handler writes the explicit posture (the model's
+    // toggle over its answer for the row, the DOM's state at click
+    // time), pushed to details.open by the prop change alone.
     $this->clickPanelXpath('//details[contains(@class, "daedalus-stylish-inspector__section")]/summary[normalize-space() = "Border"]');
     $this->assertSectionOpen('Border', TRUE, 'The summary click opened Border by hand.');
 
@@ -705,18 +926,62 @@ class AdvancedSectionsBehaviorTest extends WebDriverTestBase {
     );
     $this->assertSectionOpen('Border', TRUE, 'Border is STILL open after its last value was deleted: the summary-click mark beat the prop flipping back to false.');
 
-    // ----- The anchor reset pushes the DOM. -----
-    // A second block with no values: selecting it moves the anchor, the
-    // marks read as stale, and the prop recomputes to B's arrival state.
-    // Preact writes that change to the still-mounted details.
+    // ----- The anchor reset remounts the sections. -----
+    // A second block with no values: selecting it moves the anchor the
+    // Sections are keyed on, the remount drops the explicit postures,
+    // and B's arrival state lands in fresh details.
     $block_b_uuid = $uuid_service->generate();
     $this->placeTextBlock($uuid_service->generate(), $block_b_uuid, '__placementErrorB');
     $block_b_key = "block:$block_b_uuid";
     $session->executeScript("Drupal.Daedalus.Selection.select('$block_b_key');");
 
-    $this->assertSectionOpen('Border', FALSE, 'Border recomputed closed on the second element: the hand-open mark was stale under the new anchor.');
-    $this->assertSectionOpen('Spacing', TRUE, 'Spacing arrives open on the value-less second element by the skin signal: its own arrival state, not a carried-over mark.');
+    $this->assertSectionOpen('Border', FALSE, 'Border arrives closed on the second element: the hand-open posture went with the remount on the new anchor.');
+    $this->assertSectionOpen('Spacing', TRUE, 'Spacing arrives open on the value-less second element by the skin signal: its own arrival state, not a carried-over posture.');
     $this->assertSectionOpen('Typography', FALSE, 'Typography is closed on the value-less second element: the arrival state is the new element\'s own, nothing carried over.');
+
+    // ----- Collapse all, expand all, then the arrival state again. -----
+    // Seam: the model's all-gestures crossing Preact's controlled push
+    // into details.open for every section at once through the shared
+    // pair at the list head, the pair's disabled states reading the
+    // same posture, and the arrival state returning after a selection
+    // move (the remount). Every read is one JS expression over the
+    // mounted sections, so a stale detail never satisfies it.
+    $sections_js = "document.querySelectorAll('#daedalus_stylish_inspector details.daedalus-stylish-inspector__section')";
+    $open_sections_js = "document.querySelectorAll('#daedalus_stylish_inspector details.daedalus-stylish-inspector__section[open]')";
+    $pair_js = "(() => { const head = document.querySelector('#daedalus_stylish_inspector .daedalus-stylish-inspector__sections-head');"
+      . " return { collapse: head?.querySelector('.daedalus-ui-collapse-all')?.disabled ?? null,"
+      . " expand: head?.querySelector('.daedalus-ui-expand-all')?.disabled ?? null }; })()";
+    $pair_reads = fn (string $collapse, string $expand): string =>
+      "(() => { const pair = $pair_js; return pair.collapse === $collapse && pair.expand === $expand; })()";
+    // B's arrival state is mixed (Spacing open, Border and Typography
+    // closed): neither gesture would do nothing, so both are enabled.
+    $this->assertJsCondition($pair_reads('false', 'false'), 20000, 'Both collapse all and expand all are enabled over the mixed arrival state (one section open, two closed).');
+
+    $this->clickPanelXpath('//div[contains(@class, "daedalus-stylish-inspector__sections-head")]/button[contains(@class, "daedalus-ui-collapse-all")]');
+    $this->assertJsCondition("$sections_js.length > 0 && $open_sections_js.length === 0", 20000, 'Collapse all closed every section at once: no details carries open, the one arriving open included.');
+    $this->assertJsCondition($pair_reads('true', 'false'), 20000, 'With every section collapsed, collapse all is disabled and expand all enabled: the pair reads the posture it wrote.');
+
+    $this->clickPanelXpath('//div[contains(@class, "daedalus-stylish-inspector__sections-head")]/button[contains(@class, "daedalus-ui-expand-all")]');
+    $this->assertJsCondition("$sections_js.length > 0 && $open_sections_js.length === $sections_js.length", 20000, 'Expand all opened every section at once, the ones arriving closed included.');
+    $this->assertJsCondition($pair_reads('false', 'true'), 20000, 'With every section expanded, expand all is disabled and collapse all enabled.');
+
+    // Select A again: the anchor moves, the Sections remount, and A's
+    // own arrival state shows (the color in Typography, the skin's
+    // margins in Spacing, Border unset). Border first: it is open on B
+    // after the expand and closed on A, so the read cannot pass on B's
+    // stale details.
+    $session->executeScript("Drupal.Daedalus.Selection.select('$block_a_key');");
+    $this->assertSectionOpen('Border', FALSE, 'Border arrives closed on the first element again after the expand all on the second: the arrival state, not the other element\'s posture.');
+    $this->assertSectionOpen('Typography', TRUE, 'Typography arrives open on the first element again: its committed color, the values signal.');
+    $this->assertSectionOpen('Spacing', TRUE, 'Spacing arrives open on the first element again: the skin signal.');
+
+    // And back to B for the legs below: its own arrival state again,
+    // no posture carried from either visit. Typography first: open on A,
+    // closed on B.
+    $session->executeScript("Drupal.Daedalus.Selection.select('$block_b_key');");
+    $this->assertSectionOpen('Typography', FALSE, 'Typography arrives closed on the second element again: nothing carried over from the first.');
+    $this->assertSectionOpen('Border', FALSE, 'Border arrives closed on the second element again: the expand all before the move did not survive the remount.');
+    $this->assertSectionOpen('Spacing', TRUE, 'Spacing arrives open on the second element again by the skin signal.');
 
     // ----- The origin is read at the delivering condition. -----
     // A variant that sets border-radius at Base, minted from B and worn
@@ -764,10 +1029,10 @@ class AdvancedSectionsBehaviorTest extends WebDriverTestBase {
     $variant_id = (string) $session->evaluateScript('window.__gripVariant');
     $this->assertSame('grip_origin', $variant_id, 'The variant minted under its derived machine name.');
 
-    // The worn value reaches the section model through the RESOLVED
-    // entry: Border (closed on B a moment ago, no mark under B's
-    // anchor) opens by the values signal alone.
-    $this->assertSectionOpen('Border', TRUE, 'Border opened by the values signal on the worn variant\'s border-radius: the resolved entry carries the supplied value.');
+    // The worn value reaches the section model through the stack's
+    // delivered entry: Border (closed on B a moment ago, no mark under
+    // B's anchor) opens by the values signal alone.
+    $this->assertSectionOpen('Border', TRUE, 'Border opened by the values signal on the worn variant\'s border-radius: the delivered entry carries the supplied value.');
     $radius_row = $this->rowJs($radius_select);
 
     // Pose the canvas at Medium through the width chip's real menu: the
@@ -793,13 +1058,14 @@ class AdvancedSectionsBehaviorTest extends WebDriverTestBase {
 
     // Seam: origin read at the delivering condition. Posed at Medium,
     // the Border radius row's value is delivered by the variant AT BASE;
-    // the supplier table crosses into rowOrigin whole (not pre-sliced at
-    // the pose, which is what lost this case before), and the origin's
-    // hue lands on the row as `--daedalus-stylish-origin`, the variant layer's
-    // color from the one identity function. The retired layer dots are
-    // gone from the DOM entirely: the slot is the only mark. The row is
-    // the same closed select's property element the surviving-mark leg
-    // read.
+    // the stack carries every layer's raw conditions (never pre-sliced
+    // at the pose, which is what lost this case before), stackAt's
+    // cascade finds the variant's Base block as the winner, and the
+    // winner's hue lands on the row as `--daedalus-stylish-origin`, the
+    // variant layer's color from the one identity function. The retired
+    // layer dots are gone from the DOM entirely: the slot is the only
+    // mark. The row is the same closed select's property element the
+    // surviving-mark leg read.
     $this->assertJsCondition(
       "($radius_row)?.style.getPropertyValue('--daedalus-stylish-origin').trim() === " . json_encode(self::layerColor($variant_id)),
       20000,
@@ -847,6 +1113,518 @@ class AdvancedSectionsBehaviorTest extends WebDriverTestBase {
       20000,
       'Drive doorway: the row menu closed on the pick.',
     );
+
+    // ----- The open flip. -----
+    // The two part legs need the shipped `button` variant offered, and
+    // under guide_example's strict law it is withheld (its literal hex
+    // fill and em padding fail the bound color and space scales), so the
+    // site switches back to the recipe's olivero design system, open as
+    // shipped, server-side; the reload serves the open guide with the
+    // button on the roster. The Edit Mode cookies persist, so the next
+    // render is still the editing chrome.
+    $this->activateSkin('olivero', 'olivero');
+    $this->assertSame(
+      'open',
+      \Drupal::service('daedalus_stylish.style_guide')->enforcement(),
+      'The re-activated olivero design system ships open enforcement: the part legs run on the open reference, where the shipped button variant is offered.',
+    );
+    $this->drupalGet($node->toUrl());
+    $this->assertJsCondition(
+      'window.Drupal && Drupal.Daedalus && Drupal.Daedalus.Blueprint && !!Drupal.Daedalus.Blueprint.getRoot()',
+      20000,
+      'The blueprint mirror booted after the switch to the open reference.',
+    );
+    $this->assertJsCondition(
+      "Drupal.Daedalus.Materials.has('variant', 'button')",
+      20000,
+      'The shipped button variant (daedalus_edit_text_block\'s, imported on install) is on the open roster.',
+    );
+
+    // A linked text block (C): the anchor exists from birth, so the
+    // button's part styles have a part to land on and the panel a part
+    // to drill.
+    $block_c_uuid = $uuid_service->generate();
+    // The section's uuid is kept: the element-doorway leg at the tail
+    // seats one of its rules as the styling target.
+    $section_c_uuid = $uuid_service->generate();
+    $this->placeLinkedTextBlock($section_c_uuid, $block_c_uuid, '__placementErrorC');
+    $block_c_key = "block:$block_c_uuid";
+    $this->openInspector();
+    $session->executeScript("Drupal.Daedalus.Selection.select('$block_c_key');");
+    // Advanced, whichever mode the reload restored: the flip is the mode
+    // segment's real button, as the first phase's.
+    $this->assertJsCondition(
+      "!!document.querySelector('.daedalus-stylish-inspector__ui-mode button[aria-pressed=\"true\"]')",
+      20000,
+      'The inspector mounted its mode segment after the reload.',
+    );
+    if ((string) $session->evaluateScript("document.querySelector('.daedalus-stylish-inspector__ui-mode button[aria-pressed=\"true\"]').textContent.trim()") !== 'Advanced') {
+      $this->clickPanelXpath('//div[contains(@class, "daedalus-stylish-inspector__ui-mode")]/button[normalize-space() = "Advanced"]');
+    }
+    $this->assertJsCondition(
+      "(() => { const active = document.querySelector('.daedalus-stylish-inspector__ui-mode button[aria-pressed=\"true\"]');"
+      . " return !!active && active.textContent.trim() === 'Advanced'; })()",
+      20000,
+      'The inspector is in Advanced mode for the part legs.',
+    );
+
+    // C wears the shipped button through the op spine: the reference on
+    // the ROOT's entry, the variant's styles keyed at ::.text-block-link.
+    $session->executeScript(<<<JS
+      (() => {
+        const Blueprint = Drupal.Daedalus.Blueprint;
+        Blueprint.mutate(Object.assign({}, Blueprint.rootContext(), {
+          operations: [{ op: 'apply_variant', key: '$block_c_key', variant: 'button' }],
+        })).catch((error) => {
+          window.__buttonWearError = error.message;
+        });
+      })();
+      JS);
+    $this->assertJsCondition(
+      "window.__buttonWearError !== undefined || JSON.stringify(" . $this->mapJs($block_c_key) . "?.variants ?? []).includes('button')",
+      20000,
+      'The button wear resolved.',
+    );
+    $wear_error = $session->evaluateScript('window.__buttonWearError ?? null');
+    $this->assertNull($wear_error, 'Wearing the button variant failed: ' . ($wear_error ?? ''));
+    // The whole element selected: the wear bar is editable, its add row
+    // offered, so the read-only posture below is the drill's doing.
+    $wear_bar = self::WEAR_BAR;
+    $this->assertJsCondition(
+      '(() => { const bar = document.querySelector(' . json_encode($wear_bar) . ');'
+      . " return !!bar && !bar.classList.contains('daedalus-stylish-wear-bar--read-only')"
+      . " && !!bar.querySelector('.daedalus-stylish-wear-bar__add')"
+      . " && !!bar.querySelector('.daedalus-stylish-wear-bar__row .daedalus-stylish-wear-bar__variant-label')"
+      . " && bar.querySelector('.daedalus-stylish-wear-bar__row .daedalus-stylish-wear-bar__variant-label').textContent.trim() === 'Button'; })()",
+      20000,
+      'Whole element selected: the wear bar shows the Button wearing editable, with its add row.',
+    );
+
+    // ----- The lit part value. -----
+    // Seam: the drilled part's row reads the ROOT's reference layer
+    // through the stack. The selection facade's styling target
+    // (select(key) then target(key, selector), the canvas click's and
+    // the tree row's one grammar) retargets the Inspector's one stack build to
+    // `root::.text-block-link`, where buildStack resolves the button's
+    // styles at the part's relative suffix; stackAt's winner for
+    // padding is the variant's block, so the Padding row's input reads
+    // the value LIT (never a placeholder), hued and titled by the
+    // variant layer, while the map holds nothing at the part key.
+    $session->executeScript("Drupal.Daedalus.Selection.select('$block_c_key'); Drupal.Daedalus.Selection.target('$block_c_key', '.text-block-link');");
+    $this->assertJsCondition(
+      "document.querySelector('#daedalus_stylish_inspector .daedalus-stylish-inspector__address')?.dataset.daedalusStylishAddress === " . json_encode("$block_c_key::.text-block-link"),
+      20000,
+      'Lit part value: the subject chip stands at the part (the panel targets root::.text-block-link).',
+    );
+    $padding_input = self::PADDING_INPUT;
+    $padding_part_row = 'document.querySelector(' . json_encode($padding_input) . ").closest('.daedalus-stylish-inspector__property')";
+    $this->assertJsCondition(
+      '(() => { const input = document.querySelector(' . json_encode($padding_input) . ');'
+      . " return !!input && input.value === '0.75em 1.5em' && !input.placeholder; })()",
+      20000,
+      'Lit part value: the drilled link\'s Padding row reads the button variant\'s 0.75em 1.5em as its VALUE (an empty placeholder: the value is the winner\'s, lit, not a ghost): the part row read the root\'s reference layer through the stack.',
+    );
+    $this->assertJsCondition(
+      "($padding_part_row)?.style.getPropertyValue('--daedalus-stylish-origin').trim() === " . json_encode(self::layerColor('button')),
+      20000,
+      'Lit part value: the Padding row\'s --daedalus-stylish-origin is the button layer\'s hue (layerColor(variantLayerId(button))).',
+    );
+    $this->assertJsCondition(
+      "($padding_part_row)?.querySelector('.daedalus-stylish-inspector__mark')?.title === '0.75em 1.5em from Button'",
+      20000,
+      'Lit part value: the Padding row\'s mark is titled "0.75em 1.5em from Button", originOf\'s inherited-from-variant sentence.',
+    );
+    $this->assertJsCondition(
+      '!' . $this->mapJs("$block_c_key::.text-block-link"),
+      20000,
+      'Lit part value: the map holds no entry at the part key; the lit padding is the variant layer\'s, never a write.',
+    );
+    // The row menu: the variant's doorway and no Unset (nothing of the
+    // element's own delivers at the pose, so there is nothing to unset;
+    // a typed value would write an own override instead).
+    $session->executeScript(
+      "(() => { const row = $padding_part_row; const rect = row.getBoundingClientRect();"
+      . " row.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true,"
+      . ' clientX: rect.left + rect.width / 2, clientY: rect.top + rect.height / 2 })); })();'
+    );
+    $this->assertJsCondition(
+      "!!document.querySelector('.daedalus-ui-menu .daedalus-ui-menu__header')",
+      20000,
+      'Lit part value: the right-click on the Padding row opened the row menu with its origin header.',
+    );
+    $padding_menu = json_decode((string) $session->evaluateScript(
+      "JSON.stringify({ header: document.querySelector('.daedalus-ui-menu .daedalus-ui-menu__header').textContent,"
+      . " labels: Array.from(document.querySelectorAll('.daedalus-ui-menu__item .daedalus-ui-menu__label')).map((label) => label.textContent.trim()) })"
+    ), TRUE);
+    $this->assertStringContainsString('Button', $padding_menu['header'], 'Lit part value: the row menu header names the supplying variant. Header: ' . $padding_menu['header']);
+    $this->assertNotContains('Unset', $padding_menu['labels'], 'Lit part value: the row menu offers no Unset doorway on a variant-delivered value (nothing of the element\'s own delivers at the pose). Items: ' . implode(', ', $padding_menu['labels']));
+    $this->assertNotEmpty(
+      array_filter($padding_menu['labels'], static fn (string $label): bool => str_starts_with($label, 'Edit Button')),
+      'Lit part value: the row menu offers the variant\'s document doorway (Edit Button at Base…). Items: ' . implode(', ', $padding_menu['labels']),
+    );
+    $session->executeScript("document.body.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));");
+    $this->assertJsCondition(
+      "!document.querySelector('.daedalus-ui-menu')",
+      20000,
+      'Lit part value: an outside pointerdown dismissed the row menu.',
+    );
+
+    // ----- The read-only wear bar. -----
+    // Seam: the wear bar reads the root's reference layers regardless of
+    // the drill. The part facet flows into VariantArea's readOnly
+    // posture (the area stays mounted, never remounts), so the bar
+    // still names the button that supplies every "from Button" mark
+    // beneath, without the whole-element gestures: the row carries no
+    // trigger (a plain reading, no picker), no add row, and the row menu
+    // reduced to Outline Variant and Select wearer.
+    $this->assertJsCondition(
+      '(() => { const bar = document.querySelector(' . json_encode($wear_bar) . ');'
+      . " if (!bar || !bar.classList.contains('daedalus-stylish-wear-bar--read-only')) { return false; }"
+      . " const row = bar.querySelector('.daedalus-stylish-wear-bar__row'); if (!row) { return false; }"
+      . " return row.querySelector('.daedalus-stylish-wear-bar__label')?.textContent.trim() === 'Style'"
+      . " && row.querySelector('span.daedalus-stylish-wear-bar__plain .daedalus-stylish-wear-bar__variant-label')?.textContent.trim() === 'Button'"
+      . " && !row.querySelector('.daedalus-stylish-wear-bar__trigger') && !row.querySelector('button')"
+      . " && !bar.querySelector('.daedalus-stylish-wear-bar__add'); })()",
+      20000,
+      'Read-only wear bar: drilled to the link, the bar wears its read-only class and its Style row names Button as a span with the target disabled, no picker trigger and no add row: the root\'s wearing anchors the part\'s marks without the whole-element gestures.',
+    );
+    $session->executeScript(
+      '(() => { const row = document.querySelector(' . json_encode($wear_bar . ' .daedalus-stylish-wear-bar__row') . '); const rect = row.getBoundingClientRect();'
+      . " row.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true,"
+      . ' clientX: rect.left + rect.width / 2, clientY: rect.top + rect.height / 2 })); })();'
+    );
+    $this->assertJsCondition(
+      "document.querySelectorAll('.daedalus-ui-menu .daedalus-ui-menu__item .daedalus-ui-menu__label').length === 2",
+      20000,
+      'Read-only wear bar: the right-click on the Style row opened the row menu with two items.',
+    );
+    $this->assertSame(
+      ['Outline Variant', 'Select wearer'],
+      json_decode((string) $session->evaluateScript(
+        "JSON.stringify(Array.from(document.querySelectorAll('.daedalus-ui-menu .daedalus-ui-menu__item .daedalus-ui-menu__label')).map((label) => label.textContent.trim()))"
+      ), TRUE),
+      'Read-only wear bar: the row menu carries exactly Outline Variant and Select wearer (no swap, detach, push or edit on a drilled part).',
+    );
+    $session->executeScript(
+      "Array.from(document.querySelectorAll('.daedalus-ui-menu__item'))"
+      . ".find((item) => item.querySelector('.daedalus-ui-menu__label')?.textContent.trim() === 'Select wearer').click();"
+    );
+    $this->assertJsCondition(
+      "document.querySelector('#daedalus_stylish_inspector .daedalus-stylish-inspector__address')?.dataset.daedalusStylishAddress === " . json_encode($block_c_key)
+      . ' && (() => { const bar = document.querySelector(' . json_encode($wear_bar) . ');'
+      . " return !!bar && !bar.classList.contains('daedalus-stylish-wear-bar--read-only')"
+      . " && !!bar.querySelector('.daedalus-stylish-wear-bar__add'); })()"
+      . " && !document.querySelector('.daedalus-ui-menu')",
+      20000,
+      'Read-only wear bar: Select wearer re-selected the whole element through the facade (the part crumb is gone, the bar is editable again with its add row, the menu closed).',
+    );
+
+    // ----- The element doorway under a write address. -----
+    // Seam: originOf under `editable: address`. Seating an ancestor rule
+    // as the styling target gives that rule's ancestor layer the
+    // editable mark (style-stack.js), so a value the element itself
+    // styles sits ABOVE the editable layer; the origin is then the
+    // element's, its doorway `element`, and the advanced row's
+    // useRowMenu dispatches it through source.select(key), the selection
+    // write that clears the target. The advanced Sections outside a
+    // session pass no sheet, so the row hands the hook no onWinner:
+    // before this the origin emitted the session's winner doorway here
+    // and the click threw on the null sheet. The node specs pin the
+    // doorway and the dispatch; only a mounted row proves it reaches the
+    // source and never a sheet.
+    $this->commitStyle($block_c_key, 'padding', '1rem', '__styleErrorC');
+    $section_c_rule_key = "container:$section_c_uuid::> pb-text";
+    $padding_row = 'document.querySelector(' . json_encode($padding_input) . ").closest('.daedalus-stylish-inspector__property')";
+    $address_chip = '#daedalus_stylish_inspector .daedalus-stylish-inspector__address';
+    $session->executeScript("Drupal.Daedalus.Selection.target('container:$section_c_uuid', '> pb-text');");
+    $this->assertJsCondition(
+      "(() => { const chip = document.querySelector('$address_chip'); const input = document.querySelector(" . json_encode($padding_input) . "); const row = $padding_row;"
+      . ' if (!chip || !input || !row || chip.dataset.daedalusStylishAddress !== ' . json_encode($section_c_rule_key) . ') { return false; }'
+      . " return chip.classList.contains('daedalus-stylish-chip--lit')"
+      . " && input.value === '1'"
+      . " && row.querySelector('.daedalus-stylish-inspector__mark')?.title === '1rem from this element'; })()",
+      20000,
+      'Element doorway: with the section\'s `> pb-text` rule seated as the styling target (the chip lit at its address) the Padding row keeps the element\'s own 1rem (olivero\'s open law renders the free field: the number in the input, rem on its select), its mark titled "1rem from this element": the own block sits above the address\'s editable layer and the origin is the element\'s.',
+    );
+    $session->executeScript(
+      "(() => { const row = $padding_row; const rect = row.getBoundingClientRect();"
+      . " row.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: rect.left + 8, clientY: rect.top + rect.height / 2 })); })()"
+    );
+    $menu_items_js = "Array.from(document.querySelectorAll('.daedalus-ui-menu .daedalus-ui-menu__item'))"
+      . ".map((item) => [item.querySelector('.daedalus-ui-menu__label')?.textContent.trim(), item.querySelector('.daedalus-ui-menu__hint')?.textContent.trim() ?? null])";
+    $this->assertJsCondition(
+      "(() => { const items = $menu_items_js; if (!document.querySelector('.daedalus-ui-menu') || items.length === 0) { return false; }"
+      . " return items.some(([label, hint]) => label === 'Edit on the element' && hint === 'drops the target; writes land on the element')"
+      . " && !items.some(([label]) => label === 'Go to element'); })()",
+      20000,
+      'Element doorway: a right-click on the Padding row offers "Edit on the element" (hinted that it drops the target) and never the session\'s "Go to element".',
+    );
+    $errors_js = "JSON.parse(sessionStorage.getItem('js_testing_log_test.errors') || '[]').length";
+    $errors_before = (int) $session->evaluateScript($errors_js);
+    $session->executeScript(
+      "Array.from(document.querySelectorAll('.daedalus-ui-menu .daedalus-ui-menu__item'))"
+      . ".find((item) => item.querySelector('.daedalus-ui-menu__label')?.textContent.trim() === 'Edit on the element').click();"
+    );
+    $this->assertJsCondition(
+      "(() => { const chip = document.querySelector('$address_chip'); const row = $padding_row;"
+      . " return !document.querySelector('.daedalus-ui-menu')"
+      . ' && Drupal.Daedalus.Selection.getSelected() === ' . json_encode($block_c_key)
+      . ' && Drupal.Daedalus.Selection.getTarget() === null'
+      . ' && !!chip && chip.dataset.daedalusStylishAddress === ' . json_encode($block_c_key)
+      . " && !chip.classList.contains('daedalus-stylish-chip--lit')"
+      . " && !!row && (() => { const mark = row.querySelector('.daedalus-stylish-inspector__mark');"
+      . " return !!mark && mark.title === '1rem set here' && mark.classList.contains('daedalus-stylish-inspector__mark--here'); })(); })()",
+      20000,
+      'Element doorway: the pick dropped the target through the source (the block still selected, no target, the chip unlit on the own address) and the Padding row\'s mark reads "1rem set here", filled: its 1rem is the editable layer\'s own at the pose.',
+    );
+    $this->assertSame(
+      $errors_before,
+      (int) $session->evaluateScript($errors_js),
+      'Element doorway: the pick logged no error (the advanced row outside a session hands the hook no sheet; the doorway rides the source, never sheet.onWinner).',
+    );
+
+    // ----- A generated box seated from the chip, styled through a row. -----
+    // Seam: the chip's "+ After" doorway (subject-model.js boxAddresses,
+    // a seat and never a write) -> the selection spine's target at the
+    // box (`&::after`, a rule facet the advanced Sections mount for: the
+    // box's derived roster, the host's groups plus Generated content) ->
+    // the Background color row's settle committing ONE update_style at
+    // the box key -> the op spine's birth seed landing `content: ""`
+    // beneath it in the same op -> the mirror replacement -> the printed
+    // `:scope::after` inside the element's @scope landing on a generated
+    // box, plus two facts only a browser has: the selection paint's
+    // `:scope::after` outline computes on the pseudo-element itself (no
+    // node, no rect; the browser's own geometry for it) and the seeded
+    // content is what makes the box exist at all. The node specs pin the
+    // doorway, the address set and the roster; the kernel tier pins the
+    // seed and the print; no lower tier sees a generated box.
+    $box_key = "$block_c_key::&::after";
+    $after_js = "getComputedStyle(document.querySelector(\"[data-selectable='$block_c_key']\"), '::after')";
+    $selected_paint_js = "document.querySelector('style[data-daedalus-stylish-selector-paint=\"selected\"]')";
+    $background_color_input = "#daedalus_stylish_inspector details.daedalus-stylish-inspector__section input[aria-label='Background color']";
+    // The editing compound is Base (the drive doorway returned the pose
+    // before the reload and nothing posed it since), so the row's write
+    // lands at default, where the seed lives.
+    $this->assertJsCondition(
+      "(() => { const chip = document.querySelector('#daedalus_stylish_inspector .daedalus-stylish-chip--width');"
+      . " return !!chip && !chip.classList.contains('daedalus-stylish-chip--lit') && chip.textContent.trim().startsWith('Base'); })()",
+      20000,
+      'Generated box: the width chip reads Base, unlit: the row below writes at default.',
+    );
+    $this->clickPanelXpath('//button[contains(@class, "daedalus-stylish-inspector__address")]');
+    $this->assertJsCondition(
+      "!!document.querySelector('.daedalus-ui-menu') && document.querySelector('.daedalus-ui-menu .daedalus-ui-menu__header')?.textContent.trim() === 'Style this at'",
+      20000,
+      'Generated box: the chip opened the shared menu headed "Style this at".',
+    );
+    // Read as [label, hint, aria-checked] triples (the element doorway's
+    // $menu_items_js above reads pairs; the checked state matters here).
+    $box_menu_js = "Array.from(document.querySelectorAll('.daedalus-ui-menu .daedalus-ui-menu__item'))"
+      . ".map((item) => [item.querySelector('.daedalus-ui-menu__label')?.textContent.trim(), item.querySelector('.daedalus-ui-menu__hint')?.textContent.trim() ?? null, item.getAttribute('aria-checked')])";
+    $box_menu = json_decode((string) $session->evaluateScript("JSON.stringify($box_menu_js)"), TRUE);
+    $this->assertSame(['This element', NULL, 'true'], $box_menu[0], 'Generated box: the menu leads with the own key, checked.');
+    $this->assertSame(
+      [['+ Before', NULL, 'false'], ['+ After', NULL, 'false']],
+      array_slice($box_menu, -2),
+      'Generated box: the menu ends with the element\'s two box doorways, unhinted and unchecked (seat only). Items: ' . json_encode($box_menu),
+    );
+    $session->executeScript(
+      "Array.from(document.querySelectorAll('.daedalus-ui-menu .daedalus-ui-menu__item'))"
+      . ".find((item) => item.querySelector('.daedalus-ui-menu__label')?.textContent.trim() === '+ After').click();"
+    );
+    $this->assertJsCondition(
+      "!document.querySelector('.daedalus-ui-menu')"
+      . ' && Drupal.Daedalus.Selection.getSelected() === ' . json_encode($block_c_key)
+      . ' && Drupal.Daedalus.Selection.getTarget()?.key === ' . json_encode($block_c_key)
+      . " && Drupal.Daedalus.Selection.getTarget()?.selector === '&::after'"
+      . " && (() => { const chip = document.querySelector('$address_chip'); return !!chip"
+      . '   && chip.dataset.daedalusStylishAddress === ' . json_encode($box_key)
+      . "   && chip.querySelector('.daedalus-stylish-inspector__address-label')?.textContent.trim() === 'After'"
+      . "   && !chip.classList.contains('daedalus-stylish-chip--lit'); })()",
+      20000,
+      'Generated box: the pick closed the menu and seated the element\'s own `&::after` as the styling target (the selection unmoved), the chip facing "After" at block::&::after, unlit (the own box is no ancestor\'s rule).',
+    );
+    $this->assertJsCondition(
+      '!' . $this->mapJs($box_key),
+      20000,
+      'Generated box: the seat wrote nothing: the map holds no entry at the box key (the doorway seats, the first write births).',
+    );
+    $this->assertJsCondition(
+      "(() => { const text = $selected_paint_js?.textContent ?? '';"
+      . ' return text.includes(' . json_encode('@scope ([data-selectable="' . $block_c_key . '"])') . ")"
+      . " && /\\n  :scope::after \\{\\n    outline: 2px dashed/.test(text); })()",
+      20000,
+      'Generated box: the selection paint slot holds the box\'s @scope rule with the printer\'s own `:scope::after` target in the dashed facet treatment.',
+    );
+    $this->assertJsCondition(
+      "($after_js).outlineStyle === 'dashed' && ($after_js).content === 'none'",
+      20000,
+      'Generated box: the paint computes on the pseudo-element itself (a dashed outline the browser resolves with no node behind it) while no box exists yet (content none).',
+    );
+    // The box's advanced roster: the host's groups plus Generated
+    // content. Background arrives closed (nothing delivers at a box, no
+    // skin value either) and opens by a real summary click; Generated
+    // content arrives closed too, its Content row waiting for the seed.
+    $this->assertSectionOpen('Background', FALSE, 'Generated box: the Background section rendered for the box, closed (nothing delivers there yet).');
+    $this->assertSectionOpen('Generated content', FALSE, 'Generated box: the Generated content section rendered for the box (the pseudo-only group rides the derived grant), closed.');
+    $this->clickPanelXpath('//details[contains(@class, "daedalus-stylish-inspector__section")]/summary[normalize-space() = "Background"]');
+    $this->assertSectionOpen('Background', TRUE, 'Generated box: the summary click opened the Background section.');
+    $this->assertNotNull(
+      $this->assertSession()->waitForElement('css', $background_color_input),
+      'Generated box: the Background color row renders its free text input (olivero\'s open law).',
+    );
+    // Typing previews; the blur settles: ONE update_style at the box key
+    // (the native setter plus a real input event is a keystroke's wiring,
+    // the blur a later tick, like a user's).
+    $session->executeScript(
+      '(() => { const input = document.querySelector(' . json_encode($background_color_input) . ');'
+      . " const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;"
+      . " setter.call(input, '#ff0000'); input.dispatchEvent(new Event('input', { bubbles: true })); })();"
+    );
+    $session->executeScript('document.querySelector(' . json_encode($background_color_input) . ").dispatchEvent(new FocusEvent('blur'));");
+    $this->assertJsCondition(
+      $this->mapJs($box_key) . "?.default?.['background-color'] === '#ff0000'",
+      20000,
+      'Generated box: the row\'s settle committed background-color: #ff0000 at block::&::after, minting the box\'s entry.',
+    );
+    $this->assertSame(
+      ['default' => ['content' => '""', 'background-color' => '#ff0000']],
+      json_decode((string) $session->evaluateScript('JSON.stringify(' . $this->mapJs($box_key) . ')'), TRUE),
+      'Generated box: the entry was born with the op spine\'s seed, `content: ""` at default beneath the typed background (one write, two lines: the seed rides the same op).',
+    );
+    $this->assertSame(
+      '1rem',
+      $session->evaluateScript($this->mapJs($block_c_key) . '?.default?.padding ?? null'),
+      'Generated box: the host\'s own entry is untouched by the write at its box.',
+    );
+    $this->assertJsCondition(
+      "($after_js).content === '\"\"' && ($after_js).backgroundColor === 'rgb(255, 0, 0)' && ($after_js).outlineStyle === 'dashed'",
+      20000,
+      'Generated box: the canvas materializes the box without reload: the seeded content makes it exist, the row\'s red paints it, and the selection paint outlines the generated box itself.',
+    );
+    $this->assertSectionOpen('Generated content', TRUE, 'Generated box: the Generated content section arrived open on the seeded value (the values signal).');
+    $this->assertJsCondition(
+      "document.querySelector(\"#daedalus_stylish_inspector details.daedalus-stylish-inspector__section [aria-label='Content']\")?.value === '\"\"'",
+      20000,
+      'Generated box: the Content row reads the seed, `""`, the spelling the validator accepts.',
+    );
+
+    // ----- A generated box carries an image through its Content row. -----
+    // Seam: the Content row's media chip (inspector.js controlFor: any
+    // `definition.media` row wears the library opener; `content` carries
+    // the flag on a keyword-typed definition, so the row offers its
+    // keywords and the opener and never the gradient half, which
+    // widget-values.js imageSlot withholds) -> the REAL media library
+    // modal (the opener URL the sidebar embedded, core's AJAX dialog)
+    // -> the selection returning as ONE daedalusStylishMediaLibrarySelection
+    // command carrying the semantic token -> the leader's pickMedia
+    // committing ONE update_style at the box key with the token as the
+    // whole `content` value (the advanced row seeds no companions) ->
+    // MediaValueResolver substituting the file URL in the printed
+    // `:scope::after` -> the browser computing `url("…")` as the
+    // pseudo-element's content. GradientBehaviorTest locks the modal on
+    // `background-image`; this is the second consumer of the one media
+    // seam, and only a browser sees the modal and the computed pseudo.
+    // The media is minted server-side mid-scenario: the library UI is an
+    // AJAX fetch, so the modal lists it without any reload.
+    $generated_content_js = $this->sectionJs('Generated content');
+    $this->assertJsCondition(
+      "(() => { const section = $generated_content_js; return !!section"
+      . " && !!section.querySelector('.daedalus-stylish-inspector__media-button')"
+      . " && !section.querySelector('.daedalus-stylish-inspector__gradient-opener')"
+      . " && !section.querySelector('.daedalus-stylish-inspector__palette-picker'); })()",
+      20000,
+      'Content media: the Content row offers the media library chip and no gradient opener or palette grid (the offer follows the type; the flag adds the picker).',
+    );
+    $image_files = $this->getTestFiles('image');
+    $image_file = File::create(['uri' => reset($image_files)->uri]);
+    $image_file->save();
+    $media = Media::create([
+      'bundle' => 'image',
+      'name' => 'Box icon',
+      'field_media_image' => [
+        ['target_id' => $image_file->id(), 'alt' => 'Box icon'],
+      ],
+    ]);
+    $media->save();
+    $media_token = "url('media:" . strtolower($media->uuid()) . "')";
+    $file_name = basename($image_file->getFileUri());
+
+    // The chip opens the modal inside the same click. Select the minted
+    // media by its id (demo content ships media too, so index 0 is not
+    // ours) and insert.
+    $this->clickPanelXpath('//details[contains(@class, "daedalus-stylish-inspector__section")][summary[normalize-space() = "Generated content"]]//button[contains(@class, "daedalus-stylish-inspector__media-button")]');
+    $media_checkbox = $assert_session->waitForElement(
+      'css',
+      ".js-media-library-view .js-click-to-select-checkbox input[value='" . $media->id() . "']",
+      20000,
+    );
+    $this->assertNotNull($media_checkbox, 'Content media: the media library modal opened from the Content row offering the minted image media.');
+    $media_checkbox->check();
+    $assert_session->elementExists('css', '.ui-dialog-buttonpane')->pressButton('Insert selected');
+
+    // The seam: the committed map after the op settles. The token is the
+    // whole `content` value, the seed it replaced gone, the row's own
+    // background line untouched, nothing else minted (no companions).
+    $this->assertJsCondition(
+      $this->mapJs($box_key) . '?.default?.content === ' . json_encode($media_token),
+      20000,
+      'Content media: the pick committed the media token as the box\'s whole `content` value at block::&::after.',
+    );
+    $box_entry = json_decode((string) $session->evaluateScript('JSON.stringify(' . $this->mapJs($box_key) . ')'), TRUE);
+    $this->assertSame(['default'], array_keys($box_entry), 'Content media: the pick wrote at default alone (the width chip read Base).');
+    $this->assertSame('#ff0000', $box_entry['default']['background-color'], 'Content media: the box\'s own background line survived the pick at its sibling property.');
+    $this->assertCount(2, $box_entry['default'], 'Content media: the pick landed the token alone beside the background (the advanced row seeds no companions).');
+    // The canvas: the pseudo computes the file URL as its content, the
+    // resolver having substituted the token (no image style is set on
+    // this site, so the original file's URL prints, ending in its name),
+    // the row's red still painting it and the paint still outlining it.
+    $this->assertJsCondition(
+      "(() => { const content = ($after_js).content; return content.startsWith('url(\"')"
+      . ' && content.endsWith(' . json_encode($file_name . '")') . ')'
+      . " && ($after_js).backgroundColor === 'rgb(255, 0, 0)' && ($after_js).outlineStyle === 'dashed'; })()",
+      20000,
+      'Content media: the generated box computes the picked file\'s URL as its content (MediaValueResolver in the printed :scope::after), still red and still outlined.',
+    );
+    // The row's face: the chip wears the picked media's thumbnail (the
+    // leader extended its uuid -> URL table from the selection response
+    // and the row reads the committed token's first uuid through it).
+    $this->assertJsCondition(
+      "!!($generated_content_js)?.querySelector('.daedalus-stylish-inspector__media-button .daedalus-stylish-inspector__media-thumbnail')",
+      20000,
+      'Content media: the Content row\'s media chip wears the picked media\'s thumbnail.',
+    );
+
+    // ----- The advanced row's mark and label share a center. -----
+    // Seam: a real layout fact. The property line lays its mark and its
+    // label in one label cell (inspector.css __property-line,
+    // align-items: center, the basic widget row's rule); before this the
+    // line aligned on a baseline synthesized from a textless first input
+    // (a color well, a palette button), so the mark's center and the
+    // label's text center met only by accident, row by row. Every
+    // visible line on the panel as it stands (the box's Generated
+    // content section open over a color well, a media chip and
+    // dimension fields), the dimension lines' scrub label and the other
+    // lines' property label alike, measured in ONE evaluateScript so
+    // every rect comes from the same layout pass; lines inside a closed
+    // section have no box and are skipped.
+    $centering = json_decode((string) $session->evaluateScript(<<<JS
+      (() => {
+        const lines = [...document.querySelectorAll('#daedalus_stylish_inspector .daedalus-stylish-inspector__property-line')];
+        const deltas = lines.map((line) => {
+          const mark = line.querySelector('.daedalus-stylish-inspector__mark');
+          const label = line.querySelector('.daedalus-stylish-inspector__property-label, .daedalus-stylish-dimension__label');
+          if (!mark || !label) { return null; }
+          const a = mark.getBoundingClientRect();
+          const b = label.getBoundingClientRect();
+          if (a.height === 0 || b.height === 0) { return null; }
+          return Math.abs((a.top + a.height / 2) - (b.top + b.height / 2));
+        }).filter((delta) => delta !== null);
+        return JSON.stringify({ lines: lines.length, measured: deltas.length, max: deltas.length ? Math.max(...deltas) : null });
+      })()
+      JS), TRUE);
+    $this->assertGreaterThan(0, $centering['measured'], 'Row centering: the panel renders visible property lines with a mark and a label to measure. Lines: ' . $centering['lines'] . ', measured: ' . $centering['measured'] . '.');
+    $this->assertLessThanOrEqual(1.0, $centering['max'], 'Row centering: on every visible advanced property line the mark\'s vertical center and the label\'s vertical center coincide within a pixel (the line centers its items; no synthesized baseline). Measured ' . $centering['measured'] . ' lines, largest delta ' . $centering['max'] . 'px.');
   }
 
 }

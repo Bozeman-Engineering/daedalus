@@ -6,6 +6,8 @@ namespace Drupal\Tests\daedalus_blueprint\Kernel;
 
 use Drupal\Component\Uuid\Php as PhpUuid;
 use Drupal\daedalus_blueprint\BlueprintOperations;
+use Drupal\layout_builder\Entity\LayoutBuilderEntityViewDisplay;
+use Drupal\layout_builder\Section;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
@@ -75,8 +77,10 @@ class BlueprintOperationsMintedUuidTest extends BlueprintKernelTestBase {
       'block',
       'block_content',
       'layout_builder',
+      'file',
       'daedalus_ui',
       'daedalus_tempstore',
+      'daedalus_blueprint_api',
       'daedalus_layout',
     ]);
     $this->installEntitySchema('block_content');
@@ -111,6 +115,37 @@ class BlueprintOperationsMintedUuidTest extends BlueprintKernelTestBase {
     $this->entity->save();
 
     $this->operations = $this->container->get('daedalus_blueprint.operations');
+  }
+
+  /**
+   * Tests a write anchored on a display default lands over a blank placeholder.
+   *
+   * A fresh override whose field holds only layout_builder_blank (core's
+   * copy of the display's marker) reads as empty, so the first anchored
+   * write materializes the display's real default section, uuid and all,
+   * exactly as it does over an empty field, and the placeholder is gone.
+   */
+  public function testAnchoredWriteMaterializesDefaultOverBlankPlaceholder(): void {
+    $default_uuid = (new PhpUuid())->generate();
+    $default = $this->createSection('layout_onecol');
+    $default->setThirdPartySetting('daedalus_layout', 'uuid', $default_uuid);
+    $display = LayoutBuilderEntityViewDisplay::load('entity_test.entity_test.default');
+    $display->removeAllSections()->appendSection($default)->save();
+
+    $fresh = $this->entityTypeManager->getStorage('entity_test')->create([
+      'name' => 'Fresh',
+      'layout_builder__layout' => [new Section('layout_builder_blank')],
+    ]);
+    $fresh->save();
+
+    $result = $this->operations->addElement($fresh, ['anchor' => $default_uuid, 'placement' => 'inside'], [
+      'block_type' => 'basic',
+    ]);
+    $this->assertTrue($result->isSuccess(), print_r($result->toArray()['errors'] ?? [], TRUE));
+    $sections = $fresh->get('layout_builder__layout')->getSections();
+    $this->assertCount(1, $sections);
+    $this->assertSame($default_uuid, $sections[0]->getThirdPartySetting('daedalus_layout', 'uuid'));
+    $this->assertCount(1, $sections[0]->getComponents());
   }
 
   /**

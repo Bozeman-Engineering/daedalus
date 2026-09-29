@@ -58,8 +58,12 @@ import { useMintRow } from '../../mint-row.js';
  *   The property's value space (valueSpaceFor), or null to mount nothing
  *   (a row of another shape; the hooks still run, unconditionally).
  * @param {string} options.value
- *   The authoritative value (the consumer's committed or draft-layered
- *   value); the field layers its own typing over it until it changes.
+ *   The authoritative value (the advanced row's lit winner whichever
+ *   layer delivers it, the swatch editor's own value, a draft-layered
+ *   value); the field layers its own typing over it until it changes
+ *   and faces it like any other (colorFace: a variant's or the skin's
+ *   colour paints the well exactly as an own one does; the row's mark
+ *   carries the origin). Nothing rests beneath an empty field.
  * @param {?object} options.guide
  *   The style guide payload.
  * @param {object} options.materials
@@ -68,8 +72,6 @@ import { useMintRow } from '../../mint-row.js';
  *   The editing compound.
  * @param {string} options.label
  *   The accessible name (the text input's aria-label, the grid's name).
- * @param {?string} [options.placeholder]
- *   The empty field's ghost (an inherited value, a skin default).
  * @param {boolean} [options.invalid]
  *   The row's rejected-commit state.
  * @param {boolean} [options.unsettable]
@@ -95,11 +97,12 @@ export const useColorField = ({
   materials,
   condition = 'default',
   label,
-  placeholder = null,
   invalid = false,
   unsettable = true,
   canMint = false,
   source = null,
+  disabled = false,
+  disabledTitle = null,
   onPreview,
   onSettle,
 }) => {
@@ -159,7 +162,7 @@ export const useColorField = ({
   // previews and its change settles exactly like typing.
   const picker = useColorLane({
     face,
-    disabled: !mounted || closed,
+    disabled: !mounted || closed || disabled,
     onInput: (event) => type(event.target.value),
     onChange: (event) => settleText(event.target.value),
   });
@@ -228,14 +231,15 @@ export const useColorField = ({
 
   const field = (
     <span
-      className={`daedalus-stylish-color-field${closed ? ' daedalus-stylish-color-field--closed' : ''}${face.token ? ' daedalus-stylish-color-field--blessed' : ''}${invalid ? ' daedalus-stylish-color-field--invalid' : ''}`}
+      className={`daedalus-stylish-color-field${closed ? ' daedalus-stylish-color-field--closed' : ''}${face.token ? ' daedalus-stylish-color-field--blessed' : ''}${invalid ? ' daedalus-stylish-color-field--invalid' : ''}${disabled ? ' daedalus-stylish-color-field--disabled' : ''}`}
+      title={disabled ? (disabledTitle ?? undefined) : undefined}
     >
       <button
         {...palette.triggerProps}
         type="button"
         className={`daedalus-stylish-color-field__well daedalus-stylish-color-field__well--${face.kind}${palette.open ? ' daedalus-stylish-color-field__well--open' : ''}`}
-        title={triggerTitle}
-        disabled={grid.entries.length === 0 && closed}
+        title={disabled ? (disabledTitle ?? undefined) : triggerTitle}
+        disabled={disabled || (grid.entries.length === 0 && closed)}
       >
         {face.kind !== 'unset' && (
           <Face
@@ -253,9 +257,7 @@ export const useColorField = ({
           className="daedalus-stylish-color-field__text daedalus-stylish-color-field__text--closed daedalus-ui-input"
           aria-label={label}
         >
-          {face.kind === 'unset'
-            ? (placeholder ?? Drupal.t('- Unset -'))
-            : face.text}
+          {face.kind === 'unset' ? Drupal.t('- Unset -') : face.text}
         </span>
       ) : (
         /* The hidden picker rides the field, not the popover: the lane
@@ -268,10 +270,14 @@ export const useColorField = ({
           type="text"
           className="daedalus-stylish-color-field__text daedalus-ui-input"
           value={face.text}
-          placeholder={placeholder ?? undefined}
           aria-label={label}
+          disabled={disabled}
           title={
-            face.token ? `${face.token.name} · ${shown.trim()}` : undefined
+            disabled
+              ? (disabledTitle ?? undefined)
+              : face.token
+                ? `${face.token.name} · ${shown.trim()}`
+                : undefined
           }
           onInput={(event) => type(event.target.value)}
           onBlur={(event) => settleText(event.target.value)}

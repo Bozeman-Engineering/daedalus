@@ -402,7 +402,12 @@ class LayoutSerializer {
         $fields[$field_name] = $field_value;
       }
       elseif ($include_stubs) {
-        $fields[$field_name] = FormOnlyStub::forDefinition($definition);
+        // The stub says whether the block field is empty (the panel's
+        // "Fill with sample" verb reads it), as the root serializer's does.
+        $fields[$field_name] = FormOnlyStub::forDefinition(
+          $definition,
+          empty: $entity->get($field_name)->isEmpty(),
+        );
       }
     }
 
@@ -623,6 +628,8 @@ class LayoutSerializer {
    * serializers here and the stencil ownership walk read the same tree, so
    * an entity without a saved override answers with the display defaults
    * (DaedalusLayoutAdapter::getDefaultSections()) without mutating the entity.
+   * A blank placeholder list, on the field or on the display, is no
+   * override and no default (DaedalusLayoutAdapter::isBlankSectionList()).
    * Readers of the saved field alone (locating a section by field delta,
    * snapshotting for rollback, diffing the previous state) deliberately do
    * not use it, since defaults are not on the entity.
@@ -638,12 +645,8 @@ class LayoutSerializer {
       return [];
     }
 
-    $field = $entity->get('layout_builder__layout');
-    if (!$field->isEmpty()) {
-      $sections = [];
-      foreach ($field as $item) {
-        $sections[] = $item->section;
-      }
+    $sections = $this->daedalusLayoutAdapter->getFieldSections($entity);
+    if ($sections !== []) {
       return $sections;
     }
 

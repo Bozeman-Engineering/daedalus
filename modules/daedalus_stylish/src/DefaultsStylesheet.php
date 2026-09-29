@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Drupal\daedalus_stylish;
 
 use Drupal\daedalus_blueprint\Materials\Address;
+use Drupal\daedalus_blueprint\Materials\RelativeSelector;
 use Drupal\Core\Asset\LibraryDiscoveryInterface;
 use Drupal\Core\Cache\Cache;
 use Drupal\Core\Config\ConfigFactoryInterface;
@@ -32,9 +33,8 @@ use Drupal\workspaces\WorkspaceManagerInterface;
  *   window before activation all serve it, because a block's box is the
  *   block's fact, not the site's look. Element scopes only, in delivery
  *   rank order (kind scopes, then refinements: block plugins, block
- *   types, layouts; stored order within), each an @scope block at its
- *   stamped scope class through the same printer path the skin's element
- *   defaults ride.
+ *   types, layouts; stored order within), through the same printer path
+ *   the skin's element defaults ride.
  * - THE SKIN'S TIERS (data, only with an active PUBLISHED skin): the
  *   skin's token values, as CSS custom property declarations on the TOKEN
  *   SCOPE ELEMENT (the MATERIALS ROSTER's token records: the active
@@ -43,50 +43,63 @@ use Drupal\workspaces\WorkspaceManagerInterface;
  *   prompt teaches), then its site defaults, one block per scope in
  *   DELIVERY RANK order (base:{tag} scopes, then kind scopes, then
  *   refinements, stored order within a rank), because a refined element
- *   wears BOTH its kind's and its refinement's scope class and at
+ *   matches BOTH its kind's and its refinement's selector and at
  *   identical specificity document order must let the refinement win.
  *
  * The declared tier prints entirely beneath the skin's tiers at the same
- * :scope specificity, so document order lets any skin scope for the same
- * target win, base tags included: the block ships the floor, the skin is
- * the site's look. Two delivery shapes for defaults:
- * - base:{tag} (skin only): bare rules at ':where(.daedalus-stylish-token-scope)
- *   :where(tag)', inside the token scope element so prose defaults never
- *   restyle admin chrome outside the page canvas, UNSCOPED (no @scope) and
- *   FULLY :where()-wrapped (scope class included) on purpose: at zero
- *   specificity the element tag tier's bare in-scope tag (0-0-1) beats a
- *   base default outright, and scoped declarations beat unscoped ones on
- *   scoping proximity at equal specificity, so every scoped path
- *   (per-entity maps, variants, element defaults) overrides a base default
- *   regardless of document order.
- * - element scopes (both tiers): @scope blocks rooted at the scope CLASS
- *   the render seams stamp on demand (scopeClass(); daedalus_stylish.module's
- *   entity-view, layout, block and field stamps), prefixed by the token
- *   scope element so the SAME boundary bounds every tier: a stamped class
- *   outside the scope element (admin theme, dialogs, non-builder layout
- *   renders) is inert. Core markup carries no bundle classes, so delivery
- *   stamps its own, demand-driven per scope against the UNION of the two
- *   tiers' scopes (scopes()), except that the two FAMILY kind classes
- *   (kind:container on every section, kind:block on every block) stamp
- *   whenever EITHER tier holds any element defaults: they double as the
- *   donut boundary (DEFAULTS_SCOPE_LIMIT), which must exist wherever any
- *   defaults block could leak into nested identical markup. Per-entity
- *   styles, wearing the same 0,1,0 specificity later in the document (the
- *   entity's inline style tag), override every default; unsetting an
- *   override reveals the default again: LIVE semantics, per decision.
+ * specificity, so document order lets any skin scope for the same target
+ * win, base tags included: the block ships the floor, the skin is the
+ * site's look.
+ *
+ * THE WHOLE TIER PRINTS BARE AT 0-0-0 (CssPrinter::printBareEntry): plain
+ * rules OUTSIDE any @scope, every selector fully :where()-wrapped, inside
+ * the token scope element so defaults never restyle admin chrome outside
+ * the page canvas. A default is the floor under every authored rule, and
+ * zero specificity is what makes that true structurally: every authored
+ * path (a per-entity @scope block, a compiled variant, an ancestor's rule
+ * for its descendants, the element tag tier's bare in-scope tag at 0-0-1)
+ * beats a default by specificity alone, and @scope proximity only ever
+ * orders authored rules among themselves. A default in its own @scope at
+ * the element would sit at 0-1-0 and, by the cascade's proximity step,
+ * beat an ancestor's equal-weight rule for that very element, putting a
+ * default above an authored rule. Beating the theme's own CSS is the
+ * cascade-layers sub-module's job, not specificity's. Unsetting an
+ * authored override reveals the default again: LIVE semantics, per
+ * decision. Two selector shapes:
+ * - base:{tag}: ':where(.daedalus-stylish-token-scope) :where(tag)', the
+ *   tag being the selector.
+ * - element scopes (both tiers): ':where(.daedalus-stylish-token-scope
+ *   [data-element="{scope}"])' (elementSelector()), selecting by the
+ *   element address daedalus_ui stamps UNCONDITIONALLY on every addressable
+ *   root in every mode (ElementAddress: the declaration the element
+ *   resolved through, spelled exactly as the scope). A kind scope selects
+ *   every address of that kind (kind:block is the block_type: and
+ *   block_plugin: families, kind:container the layout: family). Nothing
+ *   here demands a stamp and nothing bounds a scope from below: a default
+ *   is the same value on every instance of its scope, so reaching nested
+ *   identical anatomy changes nothing. Part entries print as :where()
+ *   descendants, children entries as ' > *'.
  *
  * THE DELIVERY THEME: declarations layer per theme (a theme may restate
  * a module's declared defaults: it owns the markup model), and the file
  * is one per site, so the declared tier compiles for the site's DEFAULT
  * theme (system.theme), never the request's active theme: compiles run
  * from admin routes too, where the active theme is the admin theme, and
- * admin-theme pages are outside the file's reach anyway. The stamps read
- * the active theme's layering at render, which is the default theme on
- * every page the file reaches.
+ * admin-theme pages are outside the file's reach anyway.
  *
  * THE TOKEN SCOPE ELEMENT (.daedalus-stylish-token-scope): tokens deliver on a
  * dedicated wrapper element daedalus_stylish stamps just inside the off-canvas page
  * canvas (daedalus_stylish_preprocess_off_canvas_page_wrapper()), never on :root.
+ * The file's ONE :root rule is not a token: the scheme declaration
+ * (CssPrinter::COLOR_SCHEME_RULE, `color-scheme: light dark`), appended
+ * on demand when any condition on the skin's tokens or the skin's
+ * defaults is a scheme condition, so the UA's own chrome (the viewport
+ * scrollbar, native form controls) follows the scheme the skin's values
+ * follow; the viewport reads color-scheme from the root element alone,
+ * which the scope element cannot reach. The declared tier does not feed
+ * that detection (a module's dark-conditioned box fact says nothing about
+ * the SITE's scheme), and neither do swatches or variants (a dark palette
+ * face does not flip the page floor).
  * Width-conditioned token values compile as @container queries, NEVER
  *
  * @media, because the edit-mode responsive canvas is a constrained div
@@ -123,8 +136,9 @@ use Drupal\workspaces\WorkspaceManagerInterface;
  * The workspace-preview edge: this file always holds the LIVE
  * (default-revision, published) skin. Inside a workspace the active skin may
  * carry a staged revision, so its workspace CSS inlines per page at the same
- * scope-class selectors (workspaceInlineCss(), embedded by
- * daedalus_stylish_page_top()); later in the document than the compiled <link>, it
+ * selectors (workspaceInlineCss(), printed inside the token scope element
+ * by daedalus_stylish_preprocess_off_canvas_page_wrapper()); later in the
+ * document than the compiled <link>, it
  * wins the cascade for identical selectors. Publishing the workspace
  * recompiles the file (SkinWorkspaceSubscriber). The declared tier is code
  * and stages nothing; it rides the one print path in the preview too, so
@@ -153,10 +167,8 @@ class DefaultsStylesheet extends CompiledStylesheetBase {
    * Invalidated on every recompile.
    *
    * Rendered pages attach the "daedalus_stylish/defaults" library and carry this
-   * tag (daedalus_stylish_page_top()); stamped fragments carry it too
-   * (_daedalus_stylish_stamp_defaults_scope_classes()), so skin saves,
-   * design-system switches and declaration changes reach already-cached
-   * pages.
+   * tag (daedalus_stylish_page_attachments()), so skin saves, design-system
+   * switches and declaration changes reach already-cached pages.
    */
   public const CACHE_TAG = 'daedalus_stylish_defaults';
 
@@ -177,26 +189,6 @@ class DefaultsStylesheet extends CompiledStylesheetBase {
    * renders around the page, and the selector every token block scopes to.
    */
   public const SCOPE_CLASS = 'daedalus-stylish-token-scope';
-
-  /**
-   * The class prefix of stamped defaults scope classes (scopeClass()).
-   */
-  public const SCOPE_CLASS_PREFIX = 'daedalus-stylish-defaults--';
-
-  /**
-   * The @scope limit for container-family defaults blocks.
-   *
-   * CssPrinter::CONTAINER_SCOPE_LIMIT extended with the stamped family
-   * kind classes: the selectable-key stamps the variant donut relies on
-   * are demand-driven per entity and absent from most live markup, while
-   * the family classes stamp on EVERY container and block whenever either
-   * tier carries any element defaults, so they are the boundary the
-   * compiled defaults can actually rely on. The key stamps stay in the
-   * list for edit mode, where they are always present.
-   */
-  public const DEFAULTS_SCOPE_LIMIT = CssPrinter::CONTAINER_SCOPE_LIMIT
-    . ', :scope .' . self::SCOPE_CLASS_PREFIX . 'kind-container'
-    . ', :scope .' . self::SCOPE_CLASS_PREFIX . 'kind-block';
 
   /**
    * State key holding the media uuids the compiled skin defaults reference.
@@ -227,71 +219,32 @@ class DefaultsStylesheet extends CompiledStylesheetBase {
   }
 
   /**
-   * The class stamped on elements of a defaults scope, and its selector root.
+   * The zero-specificity selector an element-scope default delivers on.
    *
-   * The ONE derivation between the stamping seams (daedalus_stylish.module) and the
-   * compiled selectors here: 'daedalus-stylish-defaults--' + the root address with
-   * ':' folded to '-', injective because address families contain no
-   * hyphens and ids no colons. base:{tag} scopes stamp nothing (the tag
-   * IS the selector) and derive no class. The address grammar is the
-   * emit-side hygiene: the scope lands inside class attributes and
-   * selectors, and only a root address (Address::parse(), no part, no
-   * children) prints there.
+   * The ONE derivation between the element address daedalus_ui stamps
+   * (ElementAddress, `data-element="{family}:{id}"`) and the compiled
+   * selectors here. A refinement scope (block_type:, block_plugin:,
+   * layout:) selects its own address exactly; a kind scope selects every
+   * address of that kind: kind:block the two block placement families,
+   * kind:container the layout family, kind:entity and kind:field their
+   * own bare kinds, which are the addresses entity and field roots wear.
+   * Every member is prefixed by the token scope element and the whole
+   * list rides inside :where(), so the selector carries no weight at all.
+   * base:{tag} scopes derive no selector (the tag IS the selector), and
+   * neither does a kind no root resolves through.
    *
    * @return string|null
-   *   The class, or NULL for base scopes and anything that is not a root
-   *   address.
+   *   The selector, or NULL when the scope selects nothing.
    */
-  public static function scopeClass(string $scope): ?string {
-    $address = Address::parse($scope);
-    if ($address === NULL || $address->isBase() || !$address->isRoot()) {
+  public static function elementSelector(Address $address): ?string {
+    $members = CssPrinter::addressMembers($address);
+    if ($members === []) {
       return NULL;
     }
-    return self::SCOPE_CLASS_PREFIX . $address->family . '-' . $address->id;
-  }
-
-  /**
-   * The scopes the compiled defaults carry rules for: the stamping demand.
-   *
-   * The stamping seams' ONE read (daedalus_stylish.module's entity-view and
-   * preprocess stamps): scope classes are demand-driven, so every stamp
-   * decision asks "does either tier default this scope?" here. The union
-   * of the declared tier's scopes (the active theme's layering, matching
-   * the markup being rendered) and the active skin's
-   * (SkinManager::activeDefaultScopes(), which inside a workspace answers
-   * for the staged revision, so the stamped markup always matches the CSS
-   * the page previews).
-   *
-   * @return string[]
-   *   The scope strings, declared first, then the skin's in stored order,
-   *   deduplicated; [] when neither tier holds defaults.
-   */
-  public function scopes(): array {
-    return array_values(array_unique(array_merge(
-      array_keys($this->styleGuide->declaredDefaults()),
-      $this->skinManager->activeDefaultScopes(),
-    )));
-  }
-
-  /**
-   * Whether the defaults scopes include any ELEMENT scope.
-   *
-   * Base:{tag} defaults deliver on tag selectors and need no stamped
-   * classes; every other scope does. The family kind classes (and with
-   * them the donut boundary) stamp exactly when this is TRUE: the one
-   * demand rule every stamping seam (entity view, plugin block, templated
-   * layout, composed section) asks.
-   *
-   * @param string[] $scopes
-   *   The scopes, as scopes() returns them.
-   */
-  public static function hasElementDefaults(array $scopes): bool {
-    foreach ($scopes as $scope) {
-      if (!str_starts_with((string) $scope, 'base:')) {
-        return TRUE;
-      }
-    }
-    return FALSE;
+    return ':where(' . implode(', ', array_map(
+      static fn (string $member): string => '.' . self::SCOPE_CLASS . ' ' . $member,
+      $members,
+    )) . ')';
   }
 
   /**
@@ -342,6 +295,9 @@ class DefaultsStylesheet extends CompiledStylesheetBase {
   public function print(?DaedalusStylishSkinInterface $skin, array &$cache_tags = []): string {
     $blocks = [];
     $uses_container = FALSE;
+    // Read from the skin's tiers only (the class docblock owns why the
+    // declared tier says nothing about the site's scheme).
+    $uses_scheme = FALSE;
     foreach ($this->orderedDefaults($this->styleGuide->declaredDefaults($this->deliveryTheme())) as $scope => $styles) {
       $css = $this->printDefaultsScope($scope, $styles, $cache_tags);
       if ($css !== '') {
@@ -356,6 +312,7 @@ class DefaultsStylesheet extends CompiledStylesheetBase {
         if ($css !== '') {
           $blocks[] = $css;
           $uses_container = $uses_container || $this->usesContainerConditions($entry);
+          $uses_scheme = $uses_scheme || $this->usesSchemeConditions($entry);
         }
       }
       foreach ($this->orderedDefaults($skin->getDefaults()) as $scope => $styles) {
@@ -363,6 +320,7 @@ class DefaultsStylesheet extends CompiledStylesheetBase {
         if ($css !== '') {
           $blocks[] = $css;
           $uses_container = $uses_container || $this->stylesUseContainerConditions($styles);
+          $uses_scheme = $uses_scheme || $this->stylesUseSchemeConditions($styles);
         }
       }
     }
@@ -376,6 +334,13 @@ class DefaultsStylesheet extends CompiledStylesheetBase {
     // shared constant's docblock owns the canvas-not-body reasoning.
     if ($uses_container && $this->conditionTypes->containerRootsEnabled()) {
       $css .= "\n" . CssPrinter::PAGE_CONTAINER_RULE;
+    }
+    // The scheme declaration, demand-driven the same way: a skin whose
+    // values follow the visitor's scheme tells the UA to follow it too, and
+    // a light-only skin prints nothing (the used scheme is already light).
+    // The constant's docblock owns the root-not-scope reasoning.
+    if ($uses_scheme) {
+      $css .= "\n" . CssPrinter::COLOR_SCHEME_RULE;
     }
     return $css;
   }
@@ -432,15 +397,19 @@ class DefaultsStylesheet extends CompiledStylesheetBase {
   }
 
   /**
-   * Prints one defaults scope's styles.
+   * Prints one defaults scope's styles: bare zero-specificity rules.
    *
    * Media tokens resolve pre-print exactly like variant styles (the
    * resolver reads the image-style constraint from the scope's own
-   * declaration); the printer never sees a token. Two shapes per the class
-   * docblock: base scopes print bare :where(tag) rules inside the token
-   * scope element, element scopes print @scope blocks at their stamped
-   * scope class (token-scope-prefixed) with the class-extended donut. Both
-   * tiers ride this one path; the declared tier only ever carries element
+   * declaration); the printer never sees a token. One shape per the class
+   * docblock: base scopes print at ':where(.token-scope) :where(tag)',
+   * element scopes at their address selector (elementSelector()), every
+   * entry through the printer's bare lane. Relative keys are the defaults
+   * grammar's ('' the element, '::' plus a relative selector under it:
+   * a part, its children, a tag, a type among its children); the
+   * grammar's canonical spelling is the emit gate, since the selector
+   * lands inside a selector, and anything else is inert data. Both tiers
+   * ride this one path; the declared tier only ever carries element
    * scopes (the guide admits nothing else).
    *
    * @return string
@@ -451,54 +420,39 @@ class DefaultsStylesheet extends CompiledStylesheetBase {
     if ($address === NULL) {
       return '';
     }
-    $styles = $this->mediaValueResolver->resolveVariantStyles($styles, $scope, $cache_tags);
     if ($address->isBase()) {
-      $tag = $address->id;
       // The closed vocabulary is the emit gate too: the tag prints into a
       // live selector, so anything outside it emits nothing (inert data,
       // like an uninstalled condition's blocks).
-      if (!in_array($tag, StyleGuide::BASE_TAGS, TRUE)) {
+      if (!in_array($address->id, StyleGuide::BASE_TAGS, TRUE)) {
         return '';
       }
-      // The whole selector rides inside :where() so the base tier really
-      // is zero-specificity: a raw scope-class prefix would put base
-      // defaults at 0-1-0, beating the element tag tier's bare in-scope
-      // tag (0-0-1) and silently inverting the three-tier text cascade.
-      // The class still bounds delivery (prose defaults never restyle
-      // admin chrome outside the page canvas); it just carries no weight.
-      $selector = ':where(.' . self::SCOPE_CLASS . ') :where(' . $tag . ')';
-      $blocks = [];
-      foreach ($styles as $relative => $entry) {
-        $relative = (string) $relative;
-        if (!is_array($entry)) {
-          continue;
-        }
-        $sub = NULL;
-        if ($relative !== '') {
-          if (!preg_match('/^::(\.[A-Za-z0-9_-]+)$/', $relative, $matches)) {
-            continue;
-          }
-          $sub = $matches[1];
-        }
-        $block = $this->printer->printBareEntry($selector, $sub, $entry);
-        if ($block !== '') {
-          $blocks[] = $block;
-        }
+      $selector = ':where(.' . self::SCOPE_CLASS . ') :where(' . $address->id . ')';
+      // base:{tag} defaults ARE the interposer the co-target companion
+      // exists to beat, so they never co-target.
+      $co_target = FALSE;
+    }
+    else {
+      $selector = static::elementSelector($address);
+      if ($selector === NULL) {
+        return '';
       }
-      return implode("\n", $blocks);
+      $co_target = TRUE;
     }
-    $class = static::scopeClass($scope);
-    if ($class === NULL) {
-      return '';
+    $styles = $this->mediaValueResolver->resolveVariantStyles($styles, $scope, $cache_tags);
+    $blocks = [];
+    foreach ($styles as $relative => $entry) {
+      $relative = (string) $relative;
+      $split = RelativeSelector::splitKey($relative);
+      if (!is_array($entry) || $split === NULL || $split[0] !== '') {
+        continue;
+      }
+      $block = $this->printer->printBareEntry($selector, $split[1], $entry, $co_target && $split[1] === NULL);
+      if ($block !== '') {
+        $blocks[] = $block;
+      }
     }
-    // The token scope element prefixes the @scope root so the boundary the
-    // base tier already honors bounds element defaults too: defaults CSS
-    // can only apply inside the scope element, wherever the stamped
-    // classes end up (admin-theme pages, dialogs attached to <body>,
-    // non-builder layout renders). The prefix narrows which elements
-    // qualify as roots without touching the inner rules' specificity or
-    // proximity.
-    return $this->printer->printFragmentStyles('.' . self::SCOPE_CLASS . ' .' . $class, $scope, $styles, '', self::DEFAULTS_SCOPE_LIMIT);
+    return implode("\n", $blocks);
   }
 
   /**
@@ -514,12 +468,25 @@ class DefaultsStylesheet extends CompiledStylesheetBase {
   }
 
   /**
+   * Whether any of one scope's default entries use a scheme condition.
+   */
+  protected function stylesUseSchemeConditions(array $styles): bool {
+    foreach ($styles as $entry) {
+      if (is_array($entry) && $this->usesSchemeConditions($entry)) {
+        return TRUE;
+      }
+    }
+    return FALSE;
+  }
+
+  /**
    * Inline CSS for the active skin's staged revision inside a workspace.
    *
    * The workspace-preview edge at page level: the compiled file is
    * per-site and library assets cannot vary by workspace, so inside a
    * workspace the active skin's (possibly staged) revision prints into a
-   * page-level <style> tag (daedalus_stylish_page_top()) at the same scope-class
+   * page-level <style> tag (inside the token scope element,
+   * daedalus_stylish_preprocess_off_canvas_page_wrapper()) at the same
    * selectors, where document order beats the compiled file. The one print
    * path: the declared tier rides along (identical to the file's, inert by
    * repetition), the skin's tiers are the staged ones. Without a published
@@ -680,6 +647,18 @@ class DefaultsStylesheet extends CompiledStylesheetBase {
   protected function usesContainerConditions(array $entry): bool {
     foreach (array_keys($entry) as $condition) {
       if ($this->conditionTypes->isContainerCondition((string) $condition)) {
+        return TRUE;
+      }
+    }
+    return FALSE;
+  }
+
+  /**
+   * Whether any emitted condition block tests the color scheme preference.
+   */
+  protected function usesSchemeConditions(array $entry): bool {
+    foreach (array_keys($entry) as $condition) {
+      if ($this->conditionTypes->isSchemeCondition((string) $condition)) {
         return TRUE;
       }
     }

@@ -24,20 +24,19 @@ const test = (name, run) => tests.push([name, run]);
 
 test('degenerate keys parse for every root kind, unknown included', () => {
   for (const rootKind of [...ROOT_KINDS, null]) {
-    assert.deepEqual(parseSlotKey('', rootKind), { segments: [], part: null, children: false });
-    assert.deepEqual(parseSlotKey('::.cta__button', rootKind), { segments: [], part: '.cta__button', children: false });
+    assert.deepEqual(parseSlotKey('', rootKind), { segments: [], selector: null });
+    assert.deepEqual(parseSlotKey('::.cta__button', rootKind), { segments: [], selector: '.cta__button' });
   }
 });
 
 test('container roots: child-first paths, recursion, part suffixes', () => {
   assert.deepEqual(parseSlotKey('block(text,2)', 'container'), {
     segments: [{ type: 'block', name: 'text', index: 2 }],
-    part: null,
-    children: false,
+    selector: null,
   });
   const deep = parseSlotKey('block(text,12)::.quote', 'container');
   assert.equal(deep.segments[0].index, 12);
-  assert.equal(deep.part, '.quote');
+  assert.equal(deep.selector, '.quote');
   assert.deepEqual(
     parseSlotKey('block(image,1)/field(field_media)', 'container').segments[1],
     { type: 'field', name: 'field_media' },
@@ -56,8 +55,7 @@ test('container roots: child-first paths, recursion, part suffixes', () => {
 test('block roots: field-first paths, no index, no container entry', () => {
   assert.deepEqual(parseSlotKey('field(field_image)', 'block'), {
     segments: [{ type: 'field', name: 'field_image' }],
-    part: null,
-    children: false,
+    selector: null,
   });
   assert.notEqual(parseSlotKey('field(field_image)::.caption', 'block'), null);
   assert.equal(parseSlotKey('container(1)', 'block'), null);
@@ -108,7 +106,6 @@ test('malformed keys never parse', () => {
     'container(1) ',
     'region(first)',
     'section(1)',
-    'container(1)::card',
     'container(1)::.a::.b',
     'container(1)::.a/block(text,1)',
     '::.',
@@ -127,31 +124,37 @@ test('malformed keys never parse', () => {
   assert.notEqual(parseSlotKey('::.Card-9_x', 'container'), null);
 });
 
-test('the ::> children pseudo-part terminates any key (PHP mirror)', () => {
-  // Bare root children.
-  assert.deepEqual(parseSlotKey('::>', 'container'), { segments: [], part: null, children: true });
-  // A part's children: the part suffix keeps parsing, children rides last.
-  assert.deepEqual(parseSlotKey('::.daedalus-stylish-layout-container::>', 'container'), {
+test('the relative selector suffix terminates any key (PHP mirror)', () => {
+  // Bare root children ('> *'), for every root kind (unknown included:
+  // the path-less key space grows the same suffix).
+  assert.deepEqual(parseSlotKey('::> *', 'container'), { segments: [], selector: '> *' });
+  // A part's children: the selector chains the part and the children.
+  assert.deepEqual(parseSlotKey('::.daedalus-stylish-layout-container > *', 'container'), {
     segments: [],
-    part: '.daedalus-stylish-layout-container',
-    children: true,
+    selector: '.daedalus-stylish-layout-container > *',
   });
-  // Slot paths compose too, with and without a part.
-  assert.deepEqual(parseSlotKey('container(1)::>', 'container'), {
+  // Slot paths compose too.
+  assert.deepEqual(parseSlotKey('container(1)::> *', 'container'), {
     segments: [{ type: 'container', index: 1 }],
-    part: null,
-    children: true,
+    selector: '> *',
   });
-  assert.equal(parseSlotKey('container(1)/block(text,1)::.card::>', 'container').children, true);
-  // The children suffix parses for every root kind, unknown included.
+  assert.equal(parseSlotKey('container(1)/block(text,1)::.card > *', 'container').selector, '.card > *');
+  // Tags and types are selectors like any other (legal in variants now).
+  assert.equal(parseSlotKey('::p', 'container').selector, 'p');
+  assert.equal(parseSlotKey('::> pb-text .link', 'container').selector, '> pb-text .link');
   for (const rootKind of [...ROOT_KINDS, null]) {
-    assert.equal(parseSlotKey('::>', rootKind).children, true);
+    assert.equal(parseSlotKey('::> *', rootKind).selector, '> *');
   }
-  // It is the LAST suffix and never doubles.
+  // The retired pseudo-part spelling and non-canonical spellings never
+  // parse: the grammar admits one spelling.
+  assert.equal(parseSlotKey('::>', 'container'), null);
+  assert.equal(parseSlotKey('::.card::>', 'container'), null);
   assert.equal(parseSlotKey('::>::.card', 'container'), null);
   assert.equal(parseSlotKey('::>::>', 'container'), null);
   assert.equal(parseSlotKey('::>x', 'container'), null);
   assert.equal(parseSlotKey('::.card::>::>', 'container'), null);
+  assert.equal(parseSlotKey('::>*', 'container'), null);
+  assert.equal(parseSlotKey('::*', 'container'), null);
 });
 
 test('format round-trips every canonical key losslessly', () => {
@@ -162,18 +165,21 @@ test('format round-trips every canonical key losslessly', () => {
     'container(1)::.card',
     'block(text,2)',
     'container(1)/container(2)/block(image,3)/field(field_media)::.caption',
-    '::>',
-    '::.daedalus-stylish-layout-container::>',
-    'container(1)::>',
-    'container(1)/block(text,1)::.card::>',
+    '::> *',
+    '::.daedalus-stylish-layout-container > *',
+    'container(1)::> *',
+    'container(1)/block(text,1)::.card > *',
+    '::> pb-text .link',
   ];
   for (const key of keys) {
     const parsed = parseSlotKey(key, 'container');
     assert.notEqual(parsed, null, `"${key}" must parse.`);
-    assert.equal(formatSlotKey(parsed.segments, parsed.part, parsed.children), key);
+    assert.equal(formatSlotKey(parsed.segments, parsed.selector), key);
   }
   const block = parseSlotKey('field(field_image)::.caption', 'block');
-  assert.equal(formatSlotKey(block.segments, block.part), 'field(field_image)::.caption');
+  assert.equal(formatSlotKey(block.segments, block.selector), 'field(field_image)::.caption');
+  // A tag suffix is a selector like any other: legal on every slot now.
+  assert.equal(parseSlotKey('container(1)::card', 'container').selector, 'card');
 });
 
 test('rootKindForScope maps the scope vocabulary structurally', () => {
@@ -201,8 +207,8 @@ test('fragmentStyles keys one fragment by part suffix (PHP mirror)', () => {
   const styles = {
     '': { default: { padding: '4rem' } },
     '::.inner': { default: { margin: '0' } },
-    '::.inner::>': { default: { flex: '1 1 0' } },
-    '::>': { default: { 'min-width': '0' } },
+    '::.inner > *': { default: { flex: '1 1 0' } },
+    '::> *': { default: { 'min-width': '0' } },
     'container(1)': { default: { display: 'flex' } },
     'block(text,2)': { default: { color: 'red' } },
     'block(text,2)::.quote': { default: { 'font-style': 'italic' } },
@@ -214,8 +220,8 @@ test('fragmentStyles keys one fragment by part suffix (PHP mirror)', () => {
   assert.deepEqual(fragmentStyles(styles, ''), {
     '': { default: { padding: '4rem' } },
     '::.inner': { default: { margin: '0' } },
-    '::.inner::>': { default: { flex: '1 1 0' } },
-    '::>': { default: { 'min-width': '0' } },
+    '::.inner > *': { default: { flex: '1 1 0' } },
+    '::> *': { default: { 'min-width': '0' } },
   });
   // A distributed fragment reads its own entry and part entries; deeper
   // paths under it (the field fragment) belong to their own carriers.

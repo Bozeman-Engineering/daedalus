@@ -130,7 +130,7 @@ class ContainerPartHoistTest extends NestedStorageKernelTestBase {
       'default' => ['background-color' => 'aliceblue', 'padding-top' => '5rem', 'align-items' => 'center'],
       'narrow' => ['padding-top' => '2rem'],
     ], $map["container:$uuid"]);
-    $this->assertSame(['default' => ['min-width' => '0']], $map["container:$uuid::>"]);
+    $this->assertSame(['default' => ['min-width' => '0']], $map["container:$uuid::> *"]);
     $this->assertStringNotContainsString('.daedalus-stylish-layout-container', implode(' ', array_keys($map)));
 
     // Idempotence: a second walk rewrites nothing.
@@ -192,7 +192,7 @@ class ContainerPartHoistTest extends NestedStorageKernelTestBase {
     $first = $storage->loadRevision($first_revision_id);
     $this->assertSame([
       '' => ['default' => ['background-color' => 'aliceblue', 'padding-top' => '4rem']],
-      '::>' => ['default' => ['min-width' => '0']],
+      '::> *' => ['default' => ['min-width' => '0']],
       'container(1)' => ['default' => ['gap' => '1rem']],
     ], $first->getStyles());
 
@@ -234,7 +234,7 @@ class ContainerPartHoistTest extends NestedStorageKernelTestBase {
     $this->assertSame([
       'kind:container' => [
         '' => ['default' => ['background-color' => 'white', 'max-width' => '80rem']],
-        '::>' => ['default' => ['min-width' => '0']],
+        '::> *' => ['default' => ['min-width' => '0']],
       ],
       'base:h2' => ['' => ['default' => ['font-size' => '2rem']]],
     ], $defaults);
@@ -283,7 +283,7 @@ class ContainerPartHoistTest extends NestedStorageKernelTestBase {
 
     $this->assertSame([
       '' => ['variants' => ['container_lg'], 'default' => ['padding-top' => '4rem']],
-      '::>' => ['default' => ['min-width' => '0']],
+      '::> *' => ['default' => ['min-width' => '0']],
     ], $element['styles']);
     $this->assertSame(['' => ['default' => ['gap' => '2rem']]], $element['regions']['content'][0]['styles']);
 

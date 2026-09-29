@@ -62,12 +62,13 @@ class FormOnlyStubTest extends BlueprintKernelTestBase {
     // Populated fields keep their values.
     $this->assertSame('A subtitle', $fields['field_subtitle']);
 
-    // Empty fields carry identity-only stubs: the marker and the
-    // definition's label, nothing else.
+    // Empty fields carry stubs: the marker, the definition's label and the
+    // emptiness flag (the panel's field-state judge reads it for the
+    // "Fill with sample" verb), nothing else.
     $this->assertArrayHasKey('field_count', $fields);
     $this->assertTrue(FormOnlyStub::isStub($fields['field_count']));
     $this->assertSame(
-      [FormOnlyStub::KEY => TRUE, '_label' => 'Count'],
+      [FormOnlyStub::KEY => TRUE, '_label' => 'Count', FormOnlyStub::EMPTY_KEY => TRUE],
       $fields['field_count'],
     );
 
@@ -146,6 +147,8 @@ class FormOnlyStubTest extends BlueprintKernelTestBase {
     $this->assertSame('Welcome', $component['block_fields']['field_heading']);
     $this->assertTrue(FormOnlyStub::isStub($component['block_fields']['field_body']));
     $this->assertSame('Body', $component['block_fields']['field_body']['_label']);
+    // The block field's stub carries the emptiness flag like a root field's.
+    $this->assertTrue($component['block_fields']['field_body'][FormOnlyStub::EMPTY_KEY]);
 
     // Component mode (AI transport): sparse, no stubs.
     $component_read = $this->serializer->serializeElement($entity, '19522840-e96e-9546-3ee1-f97220a240ac');

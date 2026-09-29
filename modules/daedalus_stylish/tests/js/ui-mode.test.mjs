@@ -1,6 +1,6 @@
 /**
- * Self-asserting tests for the basic/advanced/code UI-mode store
- * and its preference-store siblings (the variant line tints toggle).
+ * Self-asserting tests for the basic/advanced/code UI-mode store over
+ * the preference store.
  *
  * Run directly (`node tests/js/ui-mode.test.mjs`) or via
  * PrinterEquivalenceTest, which executes this file inside the PHPUnit suite
@@ -12,11 +12,6 @@ import {
   normalizeUiMode,
   UI_MODE_STORAGE_KEY,
 } from '../../js/src/ui-mode.js';
-import {
-  createLineTintsStore,
-  normalizeLineTints,
-  LINE_TINTS_STORAGE_KEY,
-} from '../../js/src/line-tints.js';
 
 /**
  * A Storage stand-in recording writes.
@@ -140,30 +135,6 @@ test('unsubscribe stops notifications', () => {
   unsubscribe();
   store.set('advanced');
   assert.deepEqual(heard, []);
-});
-
-test('line tints: on is the default, off is the one other value', () => {
-  assert.equal(normalizeLineTints('off'), 'off');
-  assert.equal(normalizeLineTints('on'), 'on');
-  assert.equal(normalizeLineTints(null), 'on');
-  assert.equal(normalizeLineTints('bogus'), 'on');
-  assert.equal(createLineTintsStore(null).get(), 'on');
-  assert.equal(createLineTintsStore(fakeStorage({ [LINE_TINTS_STORAGE_KEY]: 'off' })).get(), 'off');
-});
-
-test('line tints: the toggle round-trips with write-through and external sync', () => {
-  const storage = fakeStorage();
-  const store = createLineTintsStore(storage);
-  const heard = [];
-  store.subscribe((state) => heard.push(state));
-  store.set('off');
-  assert.equal(store.get(), 'off');
-  assert.deepEqual(storage.writes, [[LINE_TINTS_STORAGE_KEY, 'off']]);
-  // The other window's storage event: applied, never written back.
-  store.receiveExternal(null);
-  assert.equal(store.get(), 'on');
-  assert.deepEqual(heard, ['off', 'on']);
-  assert.deepEqual(storage.writes, [[LINE_TINTS_STORAGE_KEY, 'off']]);
 });
 
 test('a throwing storage degrades to session state', () => {

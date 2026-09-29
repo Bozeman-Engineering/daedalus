@@ -79,8 +79,8 @@ class DialectCatalogPromptTest extends KernelTestBase {
       /**
        * The STYLES line.
        */
-      public function styles(bool $rich_text): string {
-        return $this->stylesLine($rich_text);
+      public function styles(DialectCatalog $catalog): string {
+        return $this->stylesLine($catalog);
       }
 
       /**
@@ -136,8 +136,10 @@ class DialectCatalogPromptTest extends KernelTestBase {
    * @param string $enforcement
    *   The style guide's enforcement posture (a StyleGuide::ENFORCEMENT_*
    *   value).
+   * @param string[] $facts
+   *   The condition names among $conditions that are structural facts.
    */
-  protected function catalog(array $stylable, array $conditions = [], string $enforcement = StyleGuide::ENFORCEMENT_STRICT): DialectCatalog {
+  protected function catalog(array $stylable, array $conditions = [], string $enforcement = StyleGuide::ENFORCEMENT_STRICT, array $facts = []): DialectCatalog {
     $rosters = [];
     foreach ($stylable as $kind => $properties) {
       $rosters[$kind] = new VocabularyRoster(Address::kind($kind), 'prompt', ['stylable' => $properties], enforcement: $enforcement);
@@ -149,20 +151,74 @@ class DialectCatalogPromptTest extends KernelTestBase {
       conditions: $conditions,
       stylable: $rosters,
       prose: new VocabularyProse($enforcement),
+      facts: $facts,
     );
   }
 
   /**
-   * The STYLES line names both doors the conditioned rules ride.
+   * The file grammar rides the rendered section beside generate.
    *
-   * "Through the style op" read as edit-only and left a new page with no
-   * responsive answer; the page_create document's trailing <style> block
-   * is named beside the style op.
+   * Three sentences, one per surface the handle appears on: the ELEMENTS
+   * header gives file="" (and generate="") its word, the values line
+   * teaches url('file:<name>') beside url('generate:<prompt>'), and the
+   * op set teaches the file op with the document form of the same
+   * declaration (<pb-file>). Unconditional like generate's teaching: the
+   * op is in the page language on every site.
    */
-  public function testStylesLineNamesBothDoors(): void {
-    $line = $this->prompt()->styles(FALSE);
-    $this->assertStringStartsWith('STYLES: style="" is the element\'s own base look, plain CSS declarations. Conditions and parts are real CSS rules: a page_create document carries them in one trailing <style> block, a page_edit batch in the style op. Selectors are limited to #id, #id .part-class, #id:state, #id > * (direct children), inside the published wrappers:', $line);
-    $this->assertStringContainsString('(direct children), and the rich-text instance selectors below, inside the published wrappers:', $this->prompt()->styles(TRUE));
+  public function testFileGrammarRidesTheSection(): void {
+    $rendered = $this->container->get('daedalus_blueprint_ai.dialect_catalog_prompt')->render();
+    $this->assertStringContainsString('; file takes the name of a file this conversation holds, generate a prompt for a new image):', $rendered);
+    $this->assertStringContainsString("never wait for it); url('file:<name>') as a layer or the whole value places a file this conversation holds (it becomes media at once). Always single-quote url() arguments", $rendered);
+    $this->assertStringContainsString('- file {name, type, content}: declares bytes you author (an SVG, a stylesheet, CSV, text; never binary) as a file this conversation holds under name, type its MIME (image/svg+xml, text/css, text/csv, text/plain); put it ahead of the ops that place it with file="name" or url(\'file:name\'). In a page_create document the same declaration is a top-level <pb-file name="..." type="...">the bytes</pb-file> beside <style>.', $rendered);
+    $ops = $this->container->get('daedalus_blueprint.operation_handler_registry')->getPageLanguageOperations();
+    $this->assertContains('file', $ops, 'The file declaration is a page-language op.');
+    $this->assertStringContainsString(sprintf('These %d ops are the entire edit grammar', count($ops)), $rendered);
+  }
+
+  /**
+   * The STYLES line teaches the selector grammar from the catalog.
+   *
+   * Both doors the rules ride are named ("through the style op" read as
+   * edit-only and left a new page with no responsive answer). The
+   * relative-selector shapes print with the site's own spellings: the
+   * block types as types (the spine's list, the two kinds after them,
+   * the text type leading the examples when the site has one), the
+   * base tags, the declared parts grouped by owner, each family
+   * absent from the catalog printing nothing; the sibling combinators
+   * and the two qualifiers with examples in the site's spellings (the
+   * example tag, the image type, another type without them); the one
+   * rule the grammar exists for (style the children from the container,
+   * never the look
+   * copied onto each) and the one precedence sentence ride every site;
+   * the rich-text identity classes ride only where the spine declares a
+   * namespace, with the tag tier folded into the tag shape; the
+   * generated boxes (::before / ::after, born with content: "", which
+   * takes "", none or one media reference; states before the box) ride
+   * every site, spelled on the example type.
+   */
+  public function testStylesLineTeachesTheGrammar(): void {
+    $tags = ['p', 'h2', 'a'];
+    $full = new DialectCatalog(
+      containerLayoutId: 'layout_onecol',
+      axes: [],
+      blockTypes: ['image' => ['attributes' => [], 'void' => TRUE], 'text' => ['attributes' => []]],
+      conditions: ['hover' => ':hover'],
+      selectors: [
+        'pb-container' => ['parts' => ['.band-content' => 'Content'], 'tags' => $tags],
+        'pb-text' => ['parts' => ['.text-block-link' => 'Link'], 'tags' => $tags],
+        'pb-image' => ['parts' => [], 'tags' => $tags],
+        'pb-block' => ['parts' => [], 'tags' => $tags],
+      ],
+      instances: ['.s-*' => ['label' => 'Text element', 'tags' => ['p' => 'Paragraph']]],
+    );
+    $this->assertSame(
+      'STYLES: style="" is the element\'s own base look, plain CSS declarations. Every other rule is real CSS: a page_create document carries them in one trailing <style> block, a page_edit batch in the style op. A selector is #id plus an optional relative selector into #id\'s own subtree: > * (its direct children), > pb-text (the pb-text children; types: pb-image, pb-text, pb-container, pb-block), p (every p inside it, present and future; tags: p, h2, a), .part (declared parts: pb-container .band-content; pb-text .text-block-link), joined by a space (descendant), > (direct child), + (the next sibling) or ~ (any later sibling), as in #band > pb-text .text-block-link and #band > p + p (a p right after a p among its children). A compound narrows by :has() (a relative selector from it: #band > pb-text:has(a) the pb-text children that contain an a, #band > pb-text:has(+ pb-image) the one right before a pb-image) and :not() (one compound it is not: #band > *:not(pb-image) every child but the pb-image ones). Style a container\'s children with ONE rule on the container, never the same look copied onto each child; the nearest element\'s own rule wins (#child beats #band > pb-text on that child). A rule also wears a variant on every element it matches, as a declaration in its plain block, the attribute\'s twin: class: {class} (style classes, space-separated) or {axis}: {value} (an axis attribute of the matched element), as in #band > pb-text { class: {class}; color: red; }; never under a state or wrapper, never a composition or a top-level-only axis; take it off with remove naming class or the axis. Rich text styles by element: the s-* classes in a body are element identities; #id .s-x styles that ONE element, #id .s-x > * one list\'s items; author your own s-* classes on the elements you mean to style and KEEP the s-* classes on elements you keep when rewriting a body (a dropped class orphans its styles); other tags are the text format\'s, not styling targets. A selector may end in ::before or ::after, the generated box of what it addresses (#id::after the element\'s own box, #band > pb-text::before each pb-text child\'s), a rule of its own like the others: a box is born with content: "" (its existence switch; content takes "", none or one media reference url(\'media:<uuid>\') (the image at its own size; background-image on the box sizes and layers) and nothing else, since text belongs in the element\'s content), and states go before it (#id:hover::after). States and position facts are pseudo-classes on the last compound, after its qualifiers (#band > pb-text:hover), inside the published wrappers:',
+      $this->prompt()->styles($full),
+    );
+    $this->assertSame(
+      'STYLES: style="" is the element\'s own base look, plain CSS declarations. Every other rule is real CSS: a page_create document carries them in one trailing <style> block, a page_edit batch in the style op. A selector is #id plus an optional relative selector into #id\'s own subtree: > * (its direct children), > pb-container (the pb-container children; types: pb-container, pb-block), joined by a space (descendant), > (direct child), + (the next sibling) or ~ (any later sibling), as in #band > pb-container > * and #band > pb-container + pb-container (a pb-container right after a pb-container among its children). A compound narrows by :has() (a relative selector from it: #band > pb-container:has(pb-block) the pb-container children that contain a pb-block, #band > pb-container:has(+ pb-block) the one right before a pb-block) and :not() (one compound it is not: #band > *:not(pb-block) every child but the pb-block ones). Style a container\'s children with ONE rule on the container, never the same look copied onto each child; the nearest element\'s own rule wins (#child beats #band > pb-container on that child). A rule also wears a variant on every element it matches, as a declaration in its plain block, the attribute\'s twin: class: {class} (style classes, space-separated) or {axis}: {value} (an axis attribute of the matched element), as in #band > pb-container { class: {class}; color: red; }; never under a state or wrapper, never a composition or a top-level-only axis; take it off with remove naming class or the axis. A selector may end in ::before or ::after, the generated box of what it addresses (#id::after the element\'s own box, #band > pb-container::before each pb-container child\'s), a rule of its own like the others: a box is born with content: "" (its existence switch; content takes "", none or one media reference url(\'media:<uuid>\') (the image at its own size; background-image on the box sizes and layers) and nothing else, since text belongs in the element\'s content), and states go before it (#id:hover::after). States and position facts are pseudo-classes on the last compound, after its qualifiers (#band > pb-container:hover), inside the published wrappers:',
+      $this->prompt()->styles($this->catalog([])),
+    );
   }
 
   /**
@@ -172,7 +228,9 @@ class DialectCatalogPromptTest extends KernelTestBase {
    * person says, the wrapper what the page must spell), the width bands
    * are taught base-out with one narrow example, and the line grows by
    * data: a family the catalog lacks prints nothing, and a catalog with
-   * states alone carries no wrapper closure.
+   * states alone carries no wrapper closure. The position facts print
+   * between the states and the bands by their wrappers, the shipped ten
+   * (the four negations spelled as :not() wrappers) in catalog order.
    */
   public function testConditionsLine(): void {
     $conditions = [
@@ -186,6 +244,22 @@ class DialectCatalogPromptTest extends KernelTestBase {
     $this->assertSame(
       'states :hover, :focus-visible; width bands narrow @container (max-width: 767px), medium @container (min-width: 768px) and (max-width: 1023px) (base-out: the default, no wrapper, IS the wide look and each band adapts it downward; @container (max-width: 767px) { #hero-title { font-size: 2.5rem } } steps a headline down on phones; there is no wide wrapper); preferences dark @media (prefers-color-scheme: dark), reduced-motion @media (prefers-reduced-motion: reduce). Wrappers verbatim: no other @media/@container preludes exist.',
       $this->prompt()->conditions($this->catalog([], $conditions)),
+    );
+    $facts = [
+      'first-child' => ':first-child',
+      'last-child' => ':last-child',
+      'only-child' => ':only-child',
+      'empty' => ':empty',
+      'odd' => ':nth-child(odd)',
+      'even' => ':nth-child(even)',
+      'not-first-child' => ':not(:first-child)',
+      'not-last-child' => ':not(:last-child)',
+      'not-only-child' => ':not(:only-child)',
+      'not-empty' => ':not(:empty)',
+    ];
+    $this->assertSame(
+      'states :hover; position facts :first-child, :last-child, :only-child, :empty, :nth-child(odd), :nth-child(even), :not(:first-child), :not(:last-child), :not(:only-child), :not(:empty) (the addressed element\'s place among its siblings, spelled like a state: #band > pb-text:first-child); width bands narrow @container (max-width: 767px) (base-out: the default, no wrapper, IS the wide look and each band adapts it downward; @container (max-width: 767px) { #hero-title { font-size: 2.5rem } } steps a headline down on phones; there is no wide wrapper). Wrappers verbatim: no other @media/@container preludes exist.',
+      $this->prompt()->conditions($this->catalog([], ['hover' => ':hover'] + $facts + ['narrow' => '@container (max-width: 767px)'], facts: array_keys($facts))),
     );
     $this->assertSame(
       'states :hover.',
@@ -339,7 +413,7 @@ class DialectCatalogPromptTest extends KernelTestBase {
       new MaterialRecord(kind: MaterialKind::Variant, id: 'container_full', label: 'Full', group: 'width', spellings: [$slot('width') => 'full'], scope: Address::fromString('kind:container'), applies: $root),
       new MaterialRecord(kind: MaterialKind::Variant, id: 'surface_plain', label: 'Plain', group: 'surface', spellings: [$slot('surface') => 'plain'], scope: Address::fromString('kind:container'), applies: $root),
       new MaterialRecord(kind: MaterialKind::Variant, id: 'surface_tint', label: 'Tint', group: 'surface', spellings: [$slot('surface') => 'tint'], scope: Address::fromString('kind:container'), applies: $root),
-      new MaterialRecord(kind: MaterialKind::Variant, id: 'row', label: 'Columns', group: 'layout', spellings: [$slot('layout') => 'columns'], scope: Address::fromString('kind:container')),
+      new MaterialRecord(kind: MaterialKind::Variant, id: 'columns', label: 'Columns', group: 'layout', spellings: [$slot('layout') => 'columns'], scope: Address::fromString('kind:container')),
     ]);
     $this->assertSame(
       '- <pb-container width(site|full; top-level only) surface(plain|tint; top-level only) layout(columns)> — the one grouping element, nestable; children stack unless layout says otherwise, and every direct child of a columns container is a column. An omitted axis is not worn (a document or fragment is a total statement: nothing is stamped at birth), so a page band states width="site" (the site\'s content column; omit it only for a deliberately full-bleed band) and its other top-level-only axes (surface).',

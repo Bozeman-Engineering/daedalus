@@ -157,7 +157,8 @@ final class DiscoverCommand extends Command {
    * The generated wide-tier groups are deliberately absent: the scaffold is
    * a starting point a developer trims, and the wide tier is accept-when-
    * typed vocabulary, not a widget surface — a guide opts one in by
-   * declaring it explicitly.
+   * declaring it explicitly. The pseudo-only groups are absent too: every
+   * line lands on a real element, where the guide build refuses them.
    *
    * @return string[]
    *   One "GROUP: { }" line per group at the given indent.
@@ -165,7 +166,7 @@ final class DiscoverCommand extends Command {
   protected function groupLines(string $indent): array {
     return array_map(
       static fn (string $id): string => "$indent$id: { }",
-      array_keys($this->propertyGroups->getCuratedGroups()),
+      array_keys(array_intersect_key($this->propertyGroups->getCuratedGroups(), $this->propertyGroups->getElementGroups())),
     );
   }
 

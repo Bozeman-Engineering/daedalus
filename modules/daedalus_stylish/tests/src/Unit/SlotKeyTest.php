@@ -12,7 +12,7 @@ use PHPUnit\Framework\Attributes\Group;
  * Tests the slot-key grammar spine (composition variants).
  *
  * The one canonical parser for element-relative style keys: the degenerate
- * pre-composition key space ('' and '::.class'), slash-separated slot
+ * pre-composition key space ('' and '::selector'), slash-separated slot
  * paths, root-kind-parameterized structural rules, and the scope-to-root
  * mapping. The JS mirror (js/src/slot-key.js) locks the same cases in
  * tests/js/slot-key.test.mjs; PHP is authoritative.
@@ -21,7 +21,7 @@ use PHPUnit\Framework\Attributes\Group;
 class SlotKeyTest extends UnitTestCase {
 
   /**
-   * The '' and '::.class' keys parse for every root kind, NULL included.
+   * The '' and '::selector' keys parse for every root kind, NULL included.
    */
   public function testDegenerateKeys(): void {
     foreach ([...SlotKey::ROOT_KINDS, NULL] as $root_kind) {
@@ -29,29 +29,29 @@ class SlotKeyTest extends UnitTestCase {
       $this->assertNotNull($root);
       $this->assertTrue($root->isRoot());
       $this->assertSame([], $root->segments);
-      $this->assertNull($root->part);
+      $this->assertNull($root->selector);
       $this->assertSame('', $root->format());
 
       $part = SlotKey::parse('::.cta__button', $root_kind);
       $this->assertNotNull($part);
       $this->assertFalse($part->isRoot());
       $this->assertSame([], $part->segments);
-      $this->assertSame('.cta__button', $part->part);
+      $this->assertSame('.cta__button', (string) $part->selector);
       $this->assertSame('::.cta__button', $part->format());
     }
   }
 
   /**
-   * Container roots: child-first paths, recursion, part suffixes.
+   * Container roots: child-first paths, recursion, selector suffixes.
    */
   public function testContainerRootPaths(): void {
     $slot = SlotKey::parse('block(text,2)', 'container');
     $this->assertSame([['type' => 'block', 'name' => 'text', 'index' => 2]], $slot->segments);
-    $this->assertNull($slot->part);
+    $this->assertNull($slot->selector);
 
     $slot = SlotKey::parse('block(text,12)::.quote', 'container');
     $this->assertSame(12, $slot->segments[0]['index']);
-    $this->assertSame('.quote', $slot->part);
+    $this->assertSame('.quote', (string) $slot->selector);
 
     $slot = SlotKey::parse('block(image,1)/field(field_media)', 'container');
     $this->assertSame('field', $slot->segments[1]['type']);
@@ -136,7 +136,6 @@ class SlotKeyTest extends UnitTestCase {
       'container(1) ',
       'region(first)',
       'section(1)',
-      'container(1)::card',
       'container(1)::.a::.b',
       'container(1)::.a/block(text,1)',
       '::.',
@@ -150,47 +149,43 @@ class SlotKeyTest extends UnitTestCase {
     }
     // The part charset is the class charset: hyphens and case are legal.
     $this->assertNotNull(SlotKey::parse('::.Card-9_x', 'container'));
+    // A tag suffix is a selector like any other, legal on every slot.
+    $this->assertSame('card', (string) SlotKey::parse('container(1)::card', 'container')->selector);
   }
 
   /**
-   * The '::>' children pseudo-part suffix terminates any key.
+   * The relative selector suffix terminates any key, canonical only.
    */
-  public function testChildrenPseudoPart(): void {
+  public function testSelectorSuffix(): void {
     // Bare root children, for every root kind (unknown included: the
     // path-less key space grows the same suffix).
     foreach ([...SlotKey::ROOT_KINDS, NULL] as $root_kind) {
-      $slot = SlotKey::parse('::>', $root_kind);
+      $slot = SlotKey::parse('::> *', $root_kind);
       $this->assertNotNull($slot);
-      $this->assertTrue($slot->children);
+      $this->assertTrue($slot->selector->isChildren());
       $this->assertFalse($slot->isRoot());
       $this->assertSame([], $slot->segments);
-      $this->assertNull($slot->part);
-      $this->assertSame('::>', $slot->format());
+      $this->assertSame('::> *', $slot->format());
     }
 
-    // A part's children: the part suffix keeps parsing, children rides
-    // last.
-    $slot = SlotKey::parse('::.daedalus-stylish-layout-container::>', 'container');
+    // A part's children: the selector chains the part and the children.
+    $slot = SlotKey::parse('::.daedalus-stylish-layout-container > *', 'container');
     $this->assertNotNull($slot);
-    $this->assertSame('.daedalus-stylish-layout-container', $slot->part);
-    $this->assertTrue($slot->children);
+    $this->assertSame('.daedalus-stylish-layout-container > *', (string) $slot->selector);
 
-    // Slot paths compose too.
-    $slot = SlotKey::parse('container(1)::>', 'container');
+    // Slot paths compose too; tags and types are legal in variants.
+    $slot = SlotKey::parse('container(1)::> *', 'container');
     $this->assertNotNull($slot);
     $this->assertSame([['type' => 'container', 'index' => 1]], $slot->segments);
-    $this->assertTrue($slot->children);
-    $this->assertTrue(SlotKey::parse('container(1)/block(text,1)::.card::>', 'container')->children);
+    $this->assertSame('.card > *', (string) SlotKey::parse('container(1)/block(text,1)::.card > *', 'container')->selector);
+    $this->assertSame('p', (string) SlotKey::parse('::p', 'container')->selector);
+    $this->assertSame('> pb-text .link', (string) SlotKey::parse('::> pb-text .link', 'container')->selector);
 
-    // Keys without the suffix stay children-free.
-    $this->assertFalse(SlotKey::parse('', 'container')->children);
-    $this->assertFalse(SlotKey::parse('::.card', 'container')->children);
-
-    // The children suffix is the LAST suffix and never doubles.
-    $this->assertNull(SlotKey::parse('::>::.card', 'container'));
-    $this->assertNull(SlotKey::parse('::>::>', 'container'));
-    $this->assertNull(SlotKey::parse('::>x', 'container'));
-    $this->assertNull(SlotKey::parse('::.card::>::>', 'container'));
+    // The retired pseudo-part spelling and non-canonical spellings never
+    // parse: the grammar admits one spelling.
+    foreach (['::>', '::.card::>', '::>::.card', '::>::>', '::>x', '::.card::>::>', '::>*', '::*'] as $bad) {
+      $this->assertNull(SlotKey::parse($bad, 'container'), "\"$bad\" must not parse.");
+    }
   }
 
   /**
@@ -204,10 +199,11 @@ class SlotKeyTest extends UnitTestCase {
       'container(1)::.card',
       'block(text,2)',
       'container(1)/container(2)/block(image,3)/field(field_media)::.caption',
-      '::>',
-      '::.daedalus-stylish-layout-container::>',
-      'container(1)::>',
-      'container(1)/block(text,1)::.card::>',
+      '::> *',
+      '::.daedalus-stylish-layout-container > *',
+      'container(1)::> *',
+      'container(1)/block(text,1)::.card > *',
+      '::> pb-text .link',
     ];
     foreach ($keys as $key) {
       $slot = SlotKey::parse($key, 'container');

@@ -51,8 +51,9 @@ use Drupal\workspaces\WorkspaceManagerInterface;
  * The workspace-preview edge mirrors the skin file: this file always
  * holds the LIVE (default-revision, published) swatches. Inside a workspace
  * staged swatch revisions (and workspace-minted swatches) inline per page
- * at the same scope selector (workspaceInlineCss(), embedded by
- * daedalus_stylish_page_top()); later in the document than the compiled <link>, the
+ * at the same scope selector (workspaceInlineCss(), printed inside the token
+ * scope element by daedalus_stylish_preprocess_off_canvas_page_wrapper());
+ * later in the document than the compiled <link>, the
  * inline redefinition of the same custom property wins. The roster is
  * built per workspace, so the inline preview reads the staged palette and
  * the compile (outside the workspace) the live one. Publishing the
@@ -80,7 +81,8 @@ class SwatchStylesheet extends CompiledStylesheetBase {
    * Invalidated on every recompile.
    *
    * Rendered pages attach the "daedalus_stylish/swatches" library and carry this tag
-   * (daedalus_stylish_page_top()), so swatch saves reach already-cached pages.
+   * (daedalus_stylish_page_attachments()), so swatch saves reach already-cached
+   * pages.
    */
   public const CACHE_TAG = 'daedalus_stylish_swatches';
 
@@ -199,7 +201,8 @@ class SwatchStylesheet extends CompiledStylesheetBase {
    * The workspace-preview edge at page level, the skin file's exact
    * shape: the compiled file is per-site and library assets cannot vary by
    * workspace, so inside a workspace the (possibly staged) published
-   * swatches print into a page-level <style> tag (daedalus_stylish_page_top()) at
+   * swatches print into a page-level <style> tag (inside the token scope
+   * element, daedalus_stylish_preprocess_off_canvas_page_wrapper()) at
    * the same scope selector — the inline redefinition of the same custom
    * property is later in the document and wins. Workspace-minted swatches
    * are covered too: the roster built inside the workspace reads the

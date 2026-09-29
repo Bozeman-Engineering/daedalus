@@ -180,7 +180,7 @@ final class RenamerTest extends KernelTestBase {
     $container->get('module_handler')->loadInclude('daedalus_ui', 'install');
     $hook_registry = $container->get('update.update_hook_registry');
     $this->assertSame(10400, $hook_registry->getInstalledVersion('daedalus_ui'));
-    $this->assertSame([10401, 10402, 10403], array_values(array_filter($hook_registry->getAvailableUpdates('daedalus_ui'), static fn(int $number): bool => $number > 10400)));
+    $this->assertSame([10401, 10402, 10404], array_values(array_filter($hook_registry->getAvailableUpdates('daedalus_ui'), static fn(int $number): bool => $number > 10400)));
 
     // Config: names and data.
     $storage = $container->get('config.storage');

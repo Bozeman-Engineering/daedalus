@@ -125,7 +125,7 @@ const displayable = (link) => link?._displayable ?? link?.uri ?? '';
  *   The endpoint descriptors, possibly empty.
  */
 const endpointsFor = (EditableElement, fieldName) => {
-  const Blueprint = Drupal.Daedalus.Blueprint;
+  const { Blueprint } = Drupal.Daedalus;
   const component = Blueprint.componentForUuid(
     Blueprint.getBlueprint(),
     EditableElement.componentUuid,
@@ -162,7 +162,8 @@ const currentLinkEdit = () => {
  *   - {Function} applyLink: (EditableElement, uri) => void — previews the
  *     uri on the leaf's markup (wrap/unwrap the root, set href).
  *   - {Function} returnFocus: (EditableElement) => ?Element — the element
- *     focus returns to when the popover closes from the keyboard.
+ *     focus returns to when the popover closes with focus in its input
+ *     (Enter, a scroll, a press that dismissed it).
  *
  * @return {Object}
  *   The control: buildWidget, open, preview, value, write, refresh,
@@ -181,11 +182,12 @@ export function create({ fieldName, applyLink, returnFocus }) {
      * request per configured endpoint; responses render as a grouped
      * listbox under the input. Arrows walk the options; Enter picks the
      * active option (writing entity:TYPE/ID), else confirms and closes;
-     * a pick's mousedown keeps focus in the input. Escape closes the
-     * open dropdown first, then the popover — both handlers
-     * stopPropagation so the session's cancel never fires on the same
-     * press. Tab is left alone: it bubbles to the session, which commits
-     * and advances — "type the link, Tab, move on".
+     * a pick's mousedown keeps focus in the input. Escape is the
+     * surface's: one press closes the popover, dropdown and all (the
+     * list lives inside it), at document capture, so the session's
+     * cancel never sees it. Tab is left alone: it bubbles to the
+     * session, which commits and advances — "type the link, Tab, move
+     * on".
      *
      * @param {EditableElement} EditableElement
      *   The element being edited.
@@ -205,7 +207,7 @@ export function create({ fieldName, applyLink, returnFocus }) {
         icon: LINK_ICON,
         showLabel,
       });
-      const popover = buildPopover(EditableElement, container, 'link');
+      const popover = buildPopover(EditableElement, 'link', { returnFocus });
       popover.classList.add('daedalus-edit-link-popover');
       const endpoints = endpointsFor(EditableElement, fieldName);
 
@@ -374,18 +376,13 @@ export function create({ fieldName, applyLink, returnFocus }) {
           pick(options[activeIndex].suggestion);
           return;
         }
-        if (event.key === 'Escape' && !list.hidden) {
-          event.preventDefault();
-          event.stopPropagation();
-          closeSuggestions();
-          return;
-        }
-        if (event.key === 'Enter' || event.key === 'Escape') {
+        if (event.key === 'Enter') {
+          // Confirm: the typed value is already previewed; close, and the
+          // surface's close hands focus back to the editing surface.
           event.preventDefault();
           event.stopPropagation();
           closeSuggestions();
           togglePopover(EditableElement, 'link', false);
-          returnFocus(EditableElement)?.focus();
         }
       });
 
@@ -483,7 +480,7 @@ export function create({ fieldName, applyLink, returnFocus }) {
     /**
      * Re-syncs the widget's input to the current value.
      *
-     * A draft resuming over swapped markup (BlueprintEditorBase.resume)
+     * A draft resuming over swapped markup (EditorPluginBase.resume)
      * keeps the mounted widget while the snapshot is re-taken; the input
      * must follow the fresh snapshot. A fresh edit builds the widget after
      * this runs, so a missing input is a no-op.

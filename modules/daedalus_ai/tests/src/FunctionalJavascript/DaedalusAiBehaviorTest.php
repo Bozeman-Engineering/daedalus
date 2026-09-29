@@ -47,7 +47,7 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  *
  * CHARACTERIZATION LEGS: beyond the selection/chips UX, the method pins the
  * three daedalus_ai behaviors the selection-spine design keeps (there is no
- * badge UX and no DaedalusAi tool, and no parallel UpdateElement refresh path:
+ * badge UX and no DaedalusAi tool, and no parallel selector refresh path:
  * AI mutations answer the same mutation-response contract as every other
  * mutation path and apply through the app's one applyResponse):
  * - the selection context reaches the actual DeepChat request body (the real
@@ -74,6 +74,16 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  *   the style key and repaints the background live behind the unchanged
  *   token, with a reload as the durability check; the AI provider is again
  *   the only thing stubbed out.
+ * - THE ATTACHMENT TURN (ai-files), two seams: (a) request encoding: a
+ *   real file dropped on the widget's zone is uploaded to the attach route
+ *   (the one file lane, the X-CSRF-Token header) by the REAL installed
+ *   requestInterceptor, which re-encodes deep-chat's multipart body as the
+ *   JSON turn every text turn sends with contexts.attachments naming the
+ *   file beside the selection and view mode contexts (the chatbot API is
+ *   the one thing stubbed, at fetch); (b) handle to content: the name
+ *   places an image block ({_file: "…"} on its media field, the JSON
+ *   door's add_element op) through the REAL HTTP op endpoint, minting
+ *   the vector media from the held file, and the canvas renders it.
  *
  * @group daedalus_ai
  */
@@ -191,6 +201,11 @@ class DaedalusAiBehaviorTest extends WebDriverTestBase {
    * - chat chips: the chat LIVE-FOLLOWS the ONE selection spine: a
    *   selection renders a chip in the chat panel, and dismissing the chip
    *   deselects the element on the page. No AI-owned selection state exists.
+   *   A styling target on the selection (Selection.target) re-words the
+   *   chip "element › target" through the breadcrumb's label seam and
+   *   marks it data-target-selector; the provider then sends the
+   *   target's address (key and selector), and a bare select restores
+   *   the bare chip and key.
    * - daedalus_ai context: the selection is exposed through Drupal.Daedalus.AiContext as
    *   a 'selected_elements' provider emitting SPINE KEYS (+ labels projected
    *   from the blueprint mirror), which is what the context manager injects
@@ -384,6 +399,40 @@ class DaedalusAiBehaviorTest extends WebDriverTestBase {
       20000,
     );
 
+    // The chip carries the STYLING TARGET when the selection has one: a
+    // tag tier seated through the facade (the road the styling module's
+    // switcher and Cmd-click take) re-words the chip "element › target"
+    // through the label seam the breadcrumb reads too
+    // (Blueprint.targetLabel), marks it data-target-selector, and the
+    // provider sends the target's ADDRESS (its key and selector) so the AI
+    // sees where styling acts, never a bare element. A bare select drops
+    // the target (the facade clears it on every selection write) and
+    // restores the element's chip and the bare key.
+    $chip_selector = '#daedalus_ai .daedalus-ai-context-panel .daedalus-ai-context-item[data-selection-key="' . $key . '"]';
+    $session->executeScript("Drupal.Daedalus.Selection.target('$key', 'a');");
+    $this->assertJsCondition(
+      '(function () { var chip = document.querySelector(' . json_encode($chip_selector) . ');'
+      . ' var c = Drupal.Daedalus.AiContext.collect().selected_elements;'
+      . " var words = Drupal.Daedalus.Blueprint.labelForKey('$key') + ' › ' + Drupal.Daedalus.Blueprint.targetLabel('$key', 'a');"
+      . " return !!chip && chip.getAttribute('data-target-selector') === 'a'"
+      . " && chip.querySelector('.daedalus-ai-context-label').textContent === words"
+      . " && Array.isArray(c) && c.length === 1 && c[0].key === '$key' && c[0].selector === 'a' && c[0].label === words && c[0].number === 1;"
+      . '})()',
+      20000,
+      'A styling target on the selection re-words its chip "element › target" through the label seam, marks it with the target selector, and the context provider sends the target\'s address.',
+    );
+    $session->executeScript("Drupal.Daedalus.Selection.select('$key');");
+    $this->assertJsCondition(
+      '(function () { var chip = document.querySelector(' . json_encode($chip_selector) . ');'
+      . ' var c = Drupal.Daedalus.AiContext.collect().selected_elements;'
+      . " return !!chip && !chip.hasAttribute('data-target-selector')"
+      . " && chip.querySelector('.daedalus-ai-context-label').textContent === Drupal.Daedalus.Blueprint.labelForKey('$key')"
+      . " && Array.isArray(c) && c.length === 1 && c[0].key === '$key' && c[0].selector === undefined;"
+      . '})()',
+      20000,
+      'Dropping the target restores the bare element chip and the bare key in the context.',
+    );
+
     // ----- KEPT BEHAVIOR 1 (survived the spine refactor): the selection
     // context reaches the CHAT REQUEST BODY. collect() above proves the
     // provider's output; this drives the REAL installed DeepChat
@@ -418,6 +467,207 @@ class DaedalusAiBehaviorTest extends WebDriverTestBase {
     $this->assertIsArray($selected, 'The request body carries selected_elements context. ' . $intercept_debug);
     $this->assertCount(1, $selected, $intercept_debug);
     $this->assertSame($key, $selected[0]['key'], $intercept_debug);
+
+    // ----- THE ATTACHMENT TURN, seam (a): request encoding. A file the
+    // user attaches in the widget rides the turn as a NAME, never as
+    // bytes. The widget wears the attach button (deep-chat's mixedFiles,
+    // inside the input well at its start) and the drop zone
+    // (dragAndDrop), both from ChatSidebar; a real file dropped on the
+    // zone (a synthetic drop carrying a DataTransfer, the exact event
+    // deep-chat's zone listens for) attaches; and submitting the turn
+    // drives the REAL installed requestInterceptor on deep-chat's
+    // multipart body: the file is uploaded to daedalus_ai's attach route
+    // (multipart, the token in the X-CSRF-Token header, never ?token=),
+    // saved through the one file lane (the sanitizer runs: the fixture's
+    // <script> is gone from the stored bytes) and held by the thread's
+    // usage, and the turn reaches the chatbot API as a JSON string with
+    // the JSON header, carrying the text-only messages, the connect's
+    // typed body props (stream stays the boolean false, which the
+    // multipart body had stringified), the collected contexts intact
+    // (the selection, the view mode) and contexts.attachments naming the
+    // file. The chatbot API is stubbed at fetch (no provider in CI); the
+    // attach route is real. The user bubble is built client-side before
+    // the interceptor runs, so the re-encoding never hides the attachment.
+    $this->assertJsCondition(
+      "(() => { const chat = document.querySelector('deep-chat'); const shadow = chat.shadowRoot;"
+      . " return !!window.Drupal.Daedalus.AiAttachments && !!shadow && !!shadow.querySelector('#drag-and-drop')"
+      . " && !!shadow.querySelector('.input-button.inside-left #upload-mixed-files-icon')"
+      . " && JSON.parse(chat.getAttribute('mixedfiles')).files.acceptedFormats.split(',').includes('.svg')"
+      . " && drupalSettings.daedalus_ai.attachments.size_limit > 0; })()",
+      20000,
+      'The chat wears the attach button inside the input well and the drop zone, accepting what the lane accepts.',
+    );
+    $session->executeScript(<<<JS
+      (function () {
+        window.__daedalusAiAttachProbe = {turns: [], uploads: []};
+        var original = window.fetch;
+        window.fetch = function (resource, options) {
+          var url = typeof resource === 'string' ? resource : resource.url;
+          var headers = new Headers((options && options.headers) || {});
+          if (url.indexOf('/api/deepchat') !== -1) {
+            window.__daedalusAiAttachProbe.turns.push({
+              contentType: headers.get('content-type'),
+              bodyType: typeof options.body,
+              body: options.body,
+            });
+            return Promise.resolve(new Response(JSON.stringify({html: '<p>Attached.</p>'}), {
+              status: 200,
+              headers: {'Content-Type': 'application/json'},
+            }));
+          }
+          if (url.indexOf('daedalus-ai/attach') !== -1) {
+            window.__daedalusAiAttachProbe.uploads.push({url: url, csrfHeader: !!headers.get('x-csrf-token')});
+          }
+          return original.call(this, resource, options);
+        };
+        var svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><script>alert(1)</script><rect width="10" height="10" fill="#f00"/></svg>';
+        var transfer = new DataTransfer();
+        transfer.items.add(new File([svg], 'hero.svg', {type: 'image/svg+xml'}));
+        document.querySelector('deep-chat').shadowRoot.querySelector('#drag-and-drop')
+          .dispatchEvent(new DragEvent('drop', {dataTransfer: transfer, bubbles: true, cancelable: true}));
+      })();
+      JS);
+    $this->assertJsCondition(
+      "document.querySelector('deep-chat').shadowRoot.querySelectorAll('.file-attachment').length === 1",
+      20000,
+      'The dropped file attached in the widget.',
+    );
+    $session->executeScript(<<<JS
+      (function () {
+        var shadow = document.querySelector('deep-chat').shadowRoot;
+        shadow.querySelector('#text-input').focus();
+        document.execCommand('insertText', false, 'Place hero.svg');
+        shadow.querySelector('.input-button.inside-right').dispatchEvent(new MouseEvent('click', {bubbles: true}));
+      })();
+      JS);
+    $this->assertJsCondition('window.__daedalusAiAttachProbe.turns.length === 1', 20000, 'The attachment turn reached the chatbot API.');
+    $attach_probe = $session->evaluateScript('window.__daedalusAiAttachProbe');
+    $attach_debug = var_export($attach_probe, TRUE);
+    $this->assertCount(1, $attach_probe['uploads'], 'One file, one upload. ' . $attach_debug);
+    $this->assertTrue($attach_probe['uploads'][0]['csrfHeader'], 'The upload carries the X-CSRF-Token header. ' . $attach_debug);
+    $this->assertStringNotContainsString('token=', $attach_probe['uploads'][0]['url'], 'The upload never carries ?token=. ' . $attach_debug);
+    $turn = $attach_probe['turns'][0];
+    $this->assertSame('string', $turn['bodyType'], 'The turn is a string body, not multipart. ' . $attach_debug);
+    $this->assertSame('application/json', $turn['contentType'], $attach_debug);
+    $body = json_decode($turn['body'], TRUE);
+    $this->assertIsArray($body, 'The turn is JSON. ' . $attach_debug);
+    $last_message = end($body['messages']);
+    $this->assertSame(['role' => 'user', 'text' => 'Place hero.svg'], $last_message, 'The user message rides text-only. ' . $attach_debug);
+    $this->assertFalse($body['stream'], 'The body props keep their types. ' . $attach_debug);
+    $this->assertSame($session->evaluateScript('drupalSettings.ai_deepchat.thread_id'), $body['thread_id'], $attach_debug);
+    $this->assertSame(['hero.svg'], $body['contexts']['attachments'], 'The attachment rides by name. ' . $attach_debug);
+    $this->assertSame($key, $body['contexts']['selected_elements'][0]['key'], 'The selection context survived the re-encoding. ' . $attach_debug);
+    $this->assertSame('full', $body['contexts']['view_mode'], 'The view mode context survived the re-encoding. ' . $attach_debug);
+    $this->assertSame('/node/' . $node->id(), $body['contexts']['current_route'], "The connect's own context survived the re-encoding. " . $attach_debug);
+    // The user's bubble shows the attachment: the message holds the file
+    // beside the text, and the widget's attachment strip is cleared.
+    // deep-chat stores an image-kind file (an SVG counts) on the message
+    // as {src: data URL, type: 'image', ref: the File}; it names only the
+    // "any file" kind, so the bubble is pinned by its kind, its bytes and
+    // the dropped File it holds, never by a name it does not carry.
+    $this->assertJsCondition(
+      "(() => { const chat = document.querySelector('deep-chat'); const user = chat.getMessages().filter((m) => m.role === 'user').pop();"
+      . " const file = user && Array.isArray(user.files) && user.files.length === 1 ? user.files[0] : null;"
+      . " return user.text === 'Place hero.svg' && !!file && file.type === 'image'"
+      . " && String(file.src).startsWith('data:image/svg+xml') && (file.name || (file.ref && file.ref.name)) === 'hero.svg'"
+      . " && chat.shadowRoot.querySelectorAll('.file-attachment').length === 0; })()",
+      20000,
+      'The user bubble carries the attachment and the strip is cleared.',
+    );
+    // Server side: the lane saved the file (sanitized) where the attach
+    // route puts attachments, and the store holds it on the thread.
+    $file_storage = $this->container->get('entity_type.manager')->getStorage('file');
+    $file_storage->resetCache();
+    $held = $file_storage->loadByProperties(['filename' => 'hero.svg']);
+    $this->assertCount(1, $held, 'The attach route saved exactly one hero.svg.');
+    $held = reset($held);
+    $this->assertStringStartsWith('public://daedalus-ai/attachments/', (string) $held->getFileUri());
+    $this->assertStringNotContainsString('<script', (string) file_get_contents($held->getFileUri()), 'The lane sanitized the SVG on the way in.');
+    $this->assertSame(['daedalus_ai' => ['thread' => [$body['thread_id'] => '1']]], $this->container->get('file.usage')->listUsage($held), 'The thread holds the file.');
+
+    // ----- THE ATTACHMENT TURN, seam (b): handle to content. The name the
+    // attach route answered is the handle the model writes: an op batch
+    // through the REAL HTTP op endpoint places an image block whose media
+    // field carries {_file: "hero.svg"} and the canvas renders the minted
+    // vector media (the media's source file IS the held file). The endpoint
+    // speaks the JSON door only (it carries no dialect catalog, so the page
+    // language's <pb-image file="hero.svg"> cannot ride it); the JSON
+    // door's add_element op anchors after the block the fixture placed.
+    // The write happens in the browser's session (the staged copy is the
+    // browser user's tempstore), applied through the app's one
+    // applyResponse like the other legs; the thread id names the
+    // conversation whose file aliases resolve the handle.
+    $thread_id = $body['thread_id'];
+    $nid = $node->id();
+    $session->executeScript(<<<JS
+      (function () {
+        window.__daedalusAiFileProbe = {done: false};
+        fetch(Drupal.url('session/token'), {credentials: 'same-origin'})
+          .then(function (r) { return r.text(); })
+          .then(function (token) {
+            return fetch(Drupal.url('daedalus-blueprint/node/$nid'), {
+              method: 'POST',
+              credentials: 'same-origin',
+              headers: {'Content-Type': 'application/json', 'X-CSRF-Token': token},
+              body: JSON.stringify({
+                operations: [{
+                  op: 'add_element',
+                  block_type: 'image',
+                  location: {anchor: '$uuid', placement: 'after'},
+                  properties: {field_image: {_file: 'hero.svg', alt_text: 'Hero'}},
+                }],
+                thread_id: '$thread_id',
+                view_mode: 'full',
+                ajax_page_state: drupalSettings.ajaxPageState,
+              }),
+            });
+          })
+          .then(function (r) { return r.json().then(function (data) { return {status: r.status, data: data}; }); })
+          .then(function (out) {
+            var applied = Promise.resolve();
+            if (out.data.markup && Object.keys(out.data.markup).length) {
+              applied = Promise.resolve(Drupal.Daedalus.Blueprint.applyResponse(out.data));
+            }
+            return applied.then(function () {
+              window.__daedalusAiFileProbe = {
+                done: true,
+                status: out.status,
+                success: out.data.success,
+                errors: out.data.errors || [],
+              };
+            });
+          })
+          .catch(function (error) { window.__daedalusAiFileProbe = {done: true, error: String(error)}; });
+      })();
+      JS);
+    $this->assertJsCondition('window.__daedalusAiFileProbe.done === true', 20000);
+    $file_probe = $session->evaluateScript('window.__daedalusAiFileProbe');
+    $file_debug = var_export($file_probe, TRUE);
+    $this->assertArrayNotHasKey('error', $file_probe, $file_debug);
+    $this->assertSame(200, $file_probe['status'], $file_debug);
+    $this->assertTrue($file_probe['success'], 'The file handle placed an image through the real op endpoint. ' . $file_debug);
+    $this->assertSame([], $file_probe['errors'], $file_debug);
+    // The handle became media: a vector_image whose source file is the
+    // held file, now kept permanent by the media's own usage too.
+    $media_storage = $this->container->get('entity_type.manager')->getStorage('media');
+    $vector = $media_storage->loadByProperties(['bundle' => 'vector_image']);
+    $this->assertCount(1, $vector, 'The file handle minted exactly one vector media.');
+    $vector = reset($vector);
+    $this->assertEquals($held->id(), $vector->getSource()->getSourceFieldValue($vector), 'The media\'s source file is the attached file itself.');
+    // The canvas renders it: the response re-rendered the section (an
+    // added item's key is its parent container) and the swap landed the
+    // image block after the fixture's block. The image block composes ONE
+    // root: for vector media that root IS the inlined <svg> (the block
+    // uuid rides the svg element itself), role img with the alt as its
+    // accessible name.
+    $this->assertJsCondition(
+      "(() => { const blocks = document.querySelectorAll('#layout-builder [data-layout-builder-block-uuid]');"
+      . " const placed = blocks[blocks.length - 1];"
+      . " return blocks.length === 2 && !!placed && placed.getAttribute('data-layout-builder-block-uuid') !== '$uuid'"
+      . " && placed.matches('svg[role=\"img\"][aria-label=\"Hero\"]'); })()",
+      20000,
+      'The placed image block renders the attached vector inline on the canvas.',
+    );
 
     // Chip dismiss IS deselection: clicking the chip's × empties the ONE
     // selection set, the chips disappear, and the provider stops

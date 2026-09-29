@@ -1,26 +1,33 @@
 import { h } from 'preact';
 import { useEffect, useRef, useState } from 'preact/hooks';
-import { clamp, fieldState, formatDimension } from './dimension-value.js';
+import {
+  clamp,
+  formatDimension,
+  lengthIn,
+  unitOptions,
+} from './dimension-value.js';
 import { DimensionField } from './dimension-field.js';
 import { useFieldGesture } from './use-gesture.js';
 import { valueSpaceFor, wearing } from '../../value-space.js';
 import {
   conditionText,
   declarationLabel,
-  rowMenu,
   tokenItems,
 } from '../../provenance-model.js';
-import { useMenu } from '../../menu.js';
-import { SKIN_COLOR, layerColor, variantLayerId } from '../../code/layers.js';
+import { useRowMenu } from './use-row-menu.js';
+import { layerColor } from '../../code/layers.js';
+import { layerAt } from '../../style-stack.js';
+import { stacksIdentity } from './diagram-host.js';
 import {
   SIDES,
   familyLonghand,
   settleSpelling,
+  sideAnchor,
+  sideMeasured,
   sideProvenance,
   sideScrubMove,
   sideScrubSeed,
   sideStepValue,
-  sidesPatch,
   spreadSides,
 } from './box-model.js';
 
@@ -32,16 +39,31 @@ import {
  *
  * The pro-survey division of labor: the DIAGRAM selects and scrubs, the
  * EDITOR edits (Bricks and Builder.io proved cells are too cramped for
- * full inputs). Cells display each side's value with five-state
- * provenance (box-model.js sideProvenance) — authored on this element /
- * supplied by a worn variant / defaulted by the active skin / defaulted
- * by the element's declaration / computed from the theme (a muted live
- * placeholder the consumer reads from the canvas) — and speak the
- * diagram gesture vocabulary. A cell's hue is
- * its origin's, the one identity system the property rows' marks read
- * (layers.js: the variant's layerColor, the skin's SKIN_COLOR), set as
- * `--daedalus-stylish-origin` on the cell for the stylesheet's wash; an authored
- * cell keeps the selection blue. The gesture vocabulary:
+ * full inputs). Cells display each side's WINNER with five-state
+ * provenance (box-model.js sideProvenance, the per-side read of the
+ * style stack) — authored on this element / supplied by a worn variant
+ * / defaulted by the active skin / defaulted by the element's
+ * declaration, each lit in its layer's hue (the display rule: the shown
+ * value is the winner's, never an unlit resting value) / computed from
+ * the theme (a muted live placeholder the consumer reads from the
+ * canvas, the one value outside the stack, converted into the cell's
+ * gesture unit through the canvas's measured bases so `32px` beneath a
+ * rem scale reads `2rem`). A supplied side whose value is outside the
+ * dimension grammar (the Site width variant's `padding-inline:
+ * max(...)`, a skin's calc() shorthand) MEASURES too (box-model.js
+ * sideMeasured): the cell shows the converted measurement in the
+ * supplier's hue, its editor opens empty over that placeholder, and a
+ * gesture writes the physical longhand over the supplier (the wear bar
+ * names the override). The cells speak the diagram gesture vocabulary.
+ * A cell is its own mark, the property rows' two channels on a text
+ * box: its HUE is its delivering layer's, the one identity system the
+ * marks read (layers.js layerColor over the layer id, the element's own
+ * blue included), and its FILL says "at the pose" (`--here` when the
+ * delivering block is the posed compound, sideProvenance's atPose;
+ * washed in the hue when the value cascades in from another condition,
+ * so an own value from Base viewed at Hover reads "from Base", never
+ * "set here"). The hue is set as `--daedalus-stylish-origin` on the
+ * cell for the stylesheet's wash and fill. The gesture vocabulary:
  * - Drag a cell sideways to scrub its value THROUGH ITS VALUE SPACE
  *   (value-space.js, per side longhand): a closed vocabulary jumps
  *   detent to detent across the stops, a detented one scrubs
@@ -60,11 +82,12 @@ import {
  * - Click a cell to open that side's editor row beneath the diagram —
  *   the full DimensionField over the same value space (its closed
  *   render IS the stop select, so no separate strict picker exists);
- *   right-click on the editor row opens the row menu over the side's
- *   token items (provenance-model.js rowMenu), the advanced rows' token
- *   half.
- * - Alt-click an authored value to clear it (back to the computed
- *   placeholder). Escape closes the editor.
+ *   right-click on the editor row opens the shared row menu
+ *   (use-row-menu.js) over the side's token items, the advanced rows'
+ *   token half.
+ * - Alt-click a value authored at the pose to clear it (the layer
+ *   beneath returns, or the computed placeholder). Escape closes the
+ *   editor.
  *
  * Faces show VALUES, never var() syntax: a committed reference renders
  * as its display value at the editing condition (wearing) with the
@@ -86,12 +109,15 @@ import {
  * spread, highlight, provenance over the scrubbed family — and the
  * consumer supplies what differs:
  * - `patchFor(valuesBySide)`: the commit shape for a gesture's per-side
- *   values (null for an unset side), the default sidesPatch over the
- *   family; the border ring folds each side through the stroke
- *   completion rule and the three-family expansion
- *   (stroke-model.js strokeSidesPatch). The empty gesture is the
- *   BLOCKED probe: null means an own shorthand the expansion cannot
- *   split, and the ring degrades to display-only.
+ *   values (null for an unset side), the ONE seam through which a
+ *   write reaches an own layer: the diagram reads none itself, since
+ *   the layer a patch expands and collapses follows the write (the box
+ *   its set lands on, lib/write-layer.js), never a render-time key.
+ *   The padding ring folds each gesture through the family's sidesPatch
+ *   over that layer; the border ring through the stroke completion rule
+ *   and the three-family expansion (stroke-model.js strokeSidesPatch).
+ *   The empty gesture is the BLOCKED probe: null means an own shorthand
+ *   the expansion cannot split, and the ring degrades to display-only.
  * - `renderCellFace(cell)`: what a cell shows; the default is the
  *   side's value text, the border ring draws the side's line glyph
  *   beside its width.
@@ -117,25 +143,20 @@ import {
  * @param {string} props.condition
  *   The editing compound (model.condition); reference displays resolve
  *   here.
- * @param {?Object<string, *>} props.own
- *   The element's OWN values at the editing compound, ORDER-PRESERVING
- *   (stripVariants(styleMap[key])?.[condition] — never model.values,
- *   which is rebuilt in owned-property order).
- * @param {?Object<string, *>} props.effective
- *   The resolved values at the editing compound (effectiveEntry(...)
- *   .entry?.[condition]): variant layers with the own entry merged on
- *   top.
- * @param {?{suppliers: object, skinEntry: ?object, declaredEntry: ?object, declaredScope: ?string, labelOf: Function}} props.provenance
- *   The bound target's origin inputs (provenance-model.js provenanceFor,
- *   the widget model's `provenance`): the suppliers table names the
- *   variant behind a variant cell (its hue and its label), the skin
- *   entry supplies the skin cells and the declared entry the declared
- *   cells beneath them (the defaults tier, read at the pose through the
- *   cascade). Null classifies only authored / variant / computed,
- *   hue-less.
+ * @param {Object<string, object>} props.stacks
+ *   The per-property layer stacks (the widget model's `stacks`): the
+ *   cells read them per side (box-model.js sideProvenance, each side
+ *   from its longhand's box), a variant cell's label and a declared
+ *   cell's scope come from its delivering layer, and its hue from the
+ *   layer's id.
  * @param {?Object<string, string>} props.computed
  *   side → live computed longhand value ('16px') read from the canvas
  *   (computed-read.js, first match), or null when no canvas element.
+ * @param {?{rootPx: ?number, fontPx: ?number}} props.bases
+ *   The canvas's measured conversion bases (readCanvas), what a
+ *   computed placeholder converts into the cell's unit through; null
+ *   off canvas (the placeholder then shows whole when it cannot
+ *   convert, and seeds 0).
  * @param {?string} props.center
  *   The content-size readout for the diagram center ('272 × 96').
  * @param {string} props.family
@@ -148,9 +169,9 @@ import {
  * @param {?string} props.label
  *   The human label for the ring (Drupal.t('Padding')); falls back to
  *   the name.
- * @param {?Function} props.patchFor
+ * @param {Function} props.patchFor
  *   (valuesBySide) => patch | null — the gesture commit shape (see
- *   above); defaults to sidesPatch over `own` and the family.
+ *   above), the consumer's own layer read per write inside it.
  * @param {?Function} props.renderCellFace
  *   (cell) => node — the cell's face; defaults to the value text.
  * @param {?Function} props.renderEditor
@@ -161,7 +182,8 @@ import {
  * @param {Object<string, object>} props.constraints
  *   model.constraints (per longhand).
  * @param {Function} props.onPreview
- *   (property, value) — the widget contract's preview handler.
+ *   (properties) — the widget contract's preview handler, the whole
+ *   staged patch per tick.
  * @param {Function} props.onRelease
  *   (properties) — release staged previews without committing.
  * @param {Function} props.onCommit
@@ -179,15 +201,14 @@ export const BoxModelDiagram = ({
   guide = null,
   materials = null,
   condition = 'default',
-  own = null,
-  effective = null,
-  provenance = null,
+  stacks,
   computed = null,
+  bases = null,
   center = null,
   family = 'padding',
   name = null,
   label = null,
-  patchFor = null,
+  patchFor,
   renderCellFace = null,
   renderEditor = null,
   definitions = {},
@@ -201,8 +222,9 @@ export const BoxModelDiagram = ({
   // The optimistic draft: side → previewed text (null = cleared),
   // layered over the authoritative layers for rendering, superseded by
   // any new authoritative value (a settled commit, an AI edit, a
-  // selection move) — the useGesture discipline.
-  const identity = JSON.stringify([own, effective]);
+  // selection move) — the useGesture discipline. The stacks are rebuilt
+  // every render, so their identity is what their layers say.
+  const identity = JSON.stringify([condition, stacksIdentity(stacks)]);
   const [draft, setDraft] = useState(null);
   const [invalid, setInvalid] = useState(false);
   const [selected, setSelected] = useState(null);
@@ -217,32 +239,24 @@ export const BoxModelDiagram = ({
 
   const ringName = name ?? family;
   const ringLabel = label ?? ringName;
-  // The gesture commit shape: the consumer's seam, or the family's own
-  // per-side patch.
-  const patch =
-    patchFor ?? ((valuesBySide) => sidesPatch(own, valuesBySide, family));
+  // The gesture commit shape: the consumer's seam, every write's own
+  // layer read inside it.
+  const patch = patchFor;
   // The granted sides in SIDES order; gestures clamp their targets to
   // this, so a spread can never write a withheld longhand.
   const offered = SIDES.filter((side) => sides.includes(side));
-  const states = sideProvenance(own, effective, family, {
-    suppliers: provenance?.suppliers ?? null,
-    skinEntry: provenance?.skinEntry ?? null,
-    declaredEntry: provenance?.declaredEntry ?? null,
+  const states = sideProvenance(
+    stacks,
+    family,
     condition,
-    conditions: guide?.conditions ?? {},
-  });
-  // A defaults-tier cell (the skin's or the declaration's): a ghost in
-  // the editor, the defaults hue, named on hover.
-  const isDefaults = (state) => state === 'skin' || state === 'declared';
-  // The origin's hue: a variant cell wears its supplying variant's layer
-  // color, a defaults cell the skin tier's; authored and computed cells
-  // carry none (the stylesheet's selection blue and muted ink).
-  const originColor = (prov) => {
-    if (prov.state === 'variant') {
-      return prov.reference ? layerColor(variantLayerId(prov.reference)) : null;
-    }
-    return isDefaults(prov.state) ? SKIN_COLOR : null;
-  };
+    guide?.conditions ?? {},
+  );
+  // The origin's hue: a set cell wears its delivering layer's color
+  // (the element's own blue, a variant's hash, the floor tiers' teal:
+  // the one identity system the property rows' marks read); a computed
+  // cell carries none (the stylesheet's muted ink).
+  const originColor = (prov) =>
+    prov.id === null ? null : layerColor(prov.id);
   // An own shorthand the expansion cannot split (calc(), a
   // multi-component var(); a lone token reference splits) blocks EVERY
   // per-side write (sideCommit's whole-patch contract), so the diagram
@@ -276,19 +290,41 @@ export const BoxModelDiagram = ({
       : prov.state === 'computed'
         ? null
         : prov.value;
-    // Set-but-unsplittable: the side IS styled (a calc()/var()
-    // shorthand) but no per-side value can honestly be shown.
-    const opaque = state !== 'computed' && value === null;
     // Values, never var(): a committed reference renders its display
     // value at the editing condition, blessed.
     const worn =
       value === null
         ? null
         : wearing(guide, materials, space, String(value), condition);
-    const shown =
-      state === 'computed' ? (computed?.[side] ?? null) : (worn?.face ?? value);
-    const blessed = (worn?.token ?? null) !== null;
-    const anchor = fieldState(shown ?? '');
+    const face = value === null ? null : (worn?.face ?? value);
+    // A measured side (box-model.js sideMeasured): computed, or
+    // supplied by a value outside the grammar. It shows the canvas's
+    // measurement converted into the gesture's unit, and its editor
+    // opens empty over that placeholder.
+    const measured = sideMeasured(state, face);
+    // Set-but-unsplittable: the side IS styled by an own calc()/var()
+    // shorthand but no per-side value can honestly be shown.
+    const opaque = !measured && value === null;
+    const raw = measured ? (computed?.[side] ?? null) : null;
+    // The gesture's unit and start (box-model.js sideAnchor): a set
+    // side's own, a measured side's through contextUnit (the
+    // vocabulary's unit) seeded from the placeholder converted into it
+    // through the canvas's bases, so the cell, the ring label and the
+    // side editor beneath write one unit.
+    const anchor = sideAnchor(
+      space,
+      measured ? raw : face,
+      measured,
+      unitOptions(constraints[longhand] ?? {}),
+      bases,
+    );
+    // The measured face: the placeholder in the gesture's unit (`32px`
+    // beneath rem at a 16px root is `2rem`), whole when it cannot
+    // convert (`50%` beneath rem), null off canvas.
+    const placeholder =
+      raw === null ? null : (lengthIn(raw, anchor.unit, bases) ?? raw);
+    const shown = measured ? placeholder : face;
+    const blessed = !measured && (worn?.token ?? null) !== null;
     // A closed space with an empty vocabulary offers nothing legal; any
     // other kind is editable through the field.
     const editable =
@@ -303,17 +339,22 @@ export const BoxModelDiagram = ({
       (space.kind === 'closed'
         ? space.stops.length > 0
         : anchor.mode !== 'text');
-    // A cell with no unit of its own (unset, computed as a bare zero)
-    // works in its space's unit, the stops' own (contextUnit's rule for
-    // the open field), and only a space naming none falls to px.
-    const unit =
-      anchor.mode === 'dimension' && anchor.unit !== ''
-        ? anchor.unit
-        : (space.unit ?? 'px');
-    const clearable =
-      granted && !blocked && !drafted && prov.state === 'authored';
+    const { unit } = anchor;
+    // At the pose: the delivering block is the posed compound
+    // (sideProvenance's atPose, the fill every mark reads); a set draft
+    // is being written at the pose. A value reaching the pose from
+    // another condition is lit like any winner (hollow: the wash), and
+    // an edit over it writes an override at the pose.
+    const here = drafted ? draft[side] !== null : prov.atPose;
+    // The own layer delivering the side AT the pose: the Unset verb's
+    // test (an Alt-click clear, the editor's emptied field).
+    const ownAtPose = !drafted && prov.state === 'authored' && here;
+    const clearable = granted && !blocked && ownAtPose;
     // A draft is this element's (or cleared): no origin hue mid-gesture.
     const reference = drafted ? null : prov.reference;
+    const layer = drafted
+      ? null
+      : layerAt(stacks[longhand] ?? null, prov.layer);
     const color = drafted ? null : originColor(prov);
     const from = drafted ? null : prov.condition;
     return {
@@ -322,6 +363,7 @@ export const BoxModelDiagram = ({
       space,
       granted,
       state,
+      measured,
       opaque,
       value,
       shown,
@@ -330,8 +372,11 @@ export const BoxModelDiagram = ({
       scrubbable,
       unit,
       anchor,
+      here,
+      ownAtPose,
       clearable,
       reference,
+      layer,
       color,
       from,
     };
@@ -347,47 +392,52 @@ export const BoxModelDiagram = ({
     bottom: Drupal.t('bottom'),
     left: Drupal.t('left'),
   };
-  // The origin in words (the aria state, the title's leading phrase): a
-  // variant cell names its variant when the library can label it; a
-  // defaults cell names its supplier and, when the delivering condition
-  // is not the pose, where ("from the active skin at Base").
+  // The origin in words (the aria state, the title's leading phrase),
+  // in the row marks' vocabulary (provenance-model.js originOf): an
+  // authored cell at the pose is "set here" ("set here at Hover + Dark"
+  // when posed), an own value cascading in from another condition is
+  // "from Base"; a variant cell names its variant when the library can
+  // label it, a defaults cell its supplier (the declaring layer's scope
+  // for a declaration, so a kind block says "kind"), each with "at
+  // @condition" when the delivering block is not the pose ("from the
+  // active skin at Base").
   const stateLabel = (cell) => {
+    if (cell.state === 'computed') {
+      return Drupal.t('computed from the theme');
+    }
+    const conditions = guide?.conditions ?? {};
     if (cell.state === 'authored') {
-      return Drupal.t('set here');
-    }
-    if (cell.state === 'variant') {
-      const label =
-        cell.reference && provenance?.labelOf
-          ? provenance.labelOf(cell.reference)
-          : null;
-      return label
-        ? Drupal.t('from @variant', { '@variant': label })
-        : Drupal.t('from a worn variant');
-    }
-    if (isDefaults(cell.state)) {
-      const supplier =
-        cell.state === 'skin'
-          ? Drupal.t('the active skin')
-          : Drupal.t('the @declaration declaration', {
-              '@declaration':
-                declarationLabel(provenance?.declaredScope ?? null) ??
-                Drupal.t('element'),
+      if (cell.here) {
+        return condition === 'default'
+          ? Drupal.t('set here')
+          : Drupal.t('set here at @condition', {
+              '@condition': conditionText(condition, conditions),
             });
-      return cell.from && cell.from !== condition
-        ? Drupal.t('from @supplier at @condition', {
-            '@supplier': supplier,
-            '@condition': conditionText(cell.from, guide?.conditions ?? {}),
-          })
-        : Drupal.t('from @supplier', { '@supplier': supplier });
+      }
+      return Drupal.t('from @condition', {
+        '@condition': conditionText(cell.from, conditions),
+      });
     }
-    return Drupal.t('computed from the theme');
+    let supplier;
+    if (cell.state === 'variant') {
+      supplier = cell.layer?.label ?? Drupal.t('a worn variant');
+    } else if (cell.state === 'skin') {
+      supplier = Drupal.t('the active skin');
+    } else {
+      supplier = Drupal.t('the @declaration declaration', {
+        '@declaration':
+          declarationLabel(cell.layer?.scope ?? null) ?? Drupal.t('element'),
+      });
+    }
+    return cell.here
+      ? Drupal.t('from @supplier', { '@supplier': supplier })
+      : Drupal.t('from @supplier at @condition', {
+          '@supplier': supplier,
+          '@condition': conditionText(cell.from, conditions),
+        });
   };
 
   // --- gesture plumbing: preview per tick, ONE commit at settle.
-  const previewPatch = (patch) => {
-    Object.entries(patch).forEach(([name, value]) => onPreview(name, value));
-  };
-
   const applyGesture = (updates, targets) => {
     const gesture = gestureRef.current;
     gesture.bySide = { ...gesture.bySide, ...updates };
@@ -397,7 +447,7 @@ export const BoxModelDiagram = ({
     }
     setDraft((current) => ({ ...(current ?? {}), ...updates }));
     setScrubSides(targets);
-    previewPatch(staged);
+    onPreview(staged);
   };
 
   const settleGesture = () => {
@@ -443,12 +493,14 @@ export const BoxModelDiagram = ({
     );
   };
 
-  const snapshotBases = () => {
-    const bases = {};
+  // The faces a gesture starts from, per side: what "ended where it
+  // began" compares against at settle.
+  const snapshotFaces = () => {
+    const faces = {};
     SIDES.forEach((side) => {
-      bases[side] = cells[side].shown ?? null;
+      faces[side] = cells[side].shown ?? null;
     });
-    return bases;
+    return faces;
   };
 
   const sideBounds = (side) => [
@@ -488,7 +540,7 @@ export const BoxModelDiagram = ({
     }
     setDraft((current) => ({ ...(current ?? {}), [side]: null }));
     setInvalid(false);
-    previewPatch(cleared);
+    onPreview(cleared);
     onCommit(cleared).then(
       () => setInvalid(false),
       (error) => {
@@ -509,7 +561,7 @@ export const BoxModelDiagram = ({
     spread,
     space: cell.space,
     scrub: sideScrubSeed(cell.space, cell.shown, cell.anchor.number, cell.unit),
-    base: snapshotBases(),
+    base: snapshotFaces(),
     bySide: {},
     last: null,
     moved: false,
@@ -637,7 +689,7 @@ export const BoxModelDiagram = ({
                 unit: cell.unit,
               }
             : { number: cell.anchor.number, unit: cell.unit },
-        base: snapshotBases(),
+        base: snapshotFaces(),
         bySide: {},
       };
     }
@@ -736,17 +788,13 @@ export const BoxModelDiagram = ({
   // --- rendering.
   const face = renderCellFace ?? cellText;
 
-  // The hover title: the origin's name first on a supplied cell (the
-  // "names on hover" rule the property rows' marks follow), then the
-  // gesture hints.
+  // The hover title: the origin's words first on every set cell (the
+  // "every mark has a sentence" rule the property rows' marks follow:
+  // "1rem set here at Hover + Dark", "1rem from Base", "2rem from the
+  // active skin at Base"), then the gesture hints.
   const cellTitle = (cell) => {
     const gesture = gestureTitle(cell);
-    if (
-      cell.granted &&
-      !blocked &&
-      !cell.opaque &&
-      (cell.state === 'variant' || isDefaults(cell.state))
-    ) {
+    if (cell.granted && !blocked && !cell.opaque && cell.state !== 'computed') {
       const origin = Drupal.t('@value @origin', {
         '@value': cell.shown ?? '',
         '@origin': stateLabel(cell),
@@ -805,6 +853,7 @@ export const BoxModelDiagram = ({
             'daedalus-stylish-boxmodel__cell',
             vertical ? 'daedalus-stylish-boxmodel__cell--v' : '',
             `daedalus-stylish-boxmodel__cell--${cell.state}`,
+            cell.here ? 'daedalus-stylish-boxmodel__cell--here' : '',
             'daedalus-stylish-boxmodel__cell--withheld',
           ]
             .filter(Boolean)
@@ -826,6 +875,7 @@ export const BoxModelDiagram = ({
       'daedalus-stylish-boxmodel__cell',
       vertical ? 'daedalus-stylish-boxmodel__cell--v' : '',
       `daedalus-stylish-boxmodel__cell--${cell.state}`,
+      cell.here ? 'daedalus-stylish-boxmodel__cell--here' : '',
       cell.opaque ? 'daedalus-stylish-boxmodel__cell--opaque' : '',
       cell.blessed ? 'daedalus-stylish-boxmodel__cell--blessed' : '',
       selected === cell.side ? 'daedalus-stylish-boxmodel__cell--selected' : '',
@@ -947,14 +997,12 @@ export const BoxModelDiagram = ({
               condition={condition}
               definition={definitions[editorCell.longhand] ?? {}}
               constraints={constraints[editorCell.longhand] ?? {}}
+              bases={bases}
               placeholder={
-                editorCell.state === 'computed'
+                editorCell.measured
                   ? (computed?.[editorSide] ?? undefined)
-                  : isDefaults(editorCell.state)
-                    ? (editorCell.shown ?? undefined)
-                    : undefined
+                  : undefined
               }
-              ghost={isDefaults(editorCell.state)}
               patchFor={(value) => patch({ [editorSide]: value })}
               onPreview={onPreview}
               onRelease={onRelease}
@@ -968,10 +1016,11 @@ export const BoxModelDiagram = ({
 };
 
 /**
- * A cell's default face: the side's value text. Computed placeholders
- * arrive px-resolved; the bare number keeps the cramped cells readable
- * (any other unit stays spelled out). Exported for a consumer's own
- * face to compose with (the border ring draws its glyph beside it).
+ * A cell's default face: the side's value text (a measured side's
+ * placeholder already converted into its unit). A px value shows its
+ * bare number to keep the cramped cells readable; any other unit stays
+ * spelled out. Exported for a consumer's own face to compose with (the
+ * border ring draws its glyph beside it).
  */
 export const cellText = (cell) => {
   if (cell.shown === null || cell.shown === undefined) {
@@ -985,11 +1034,18 @@ export const cellText = (cell) => {
  * The default side editor: the full DimensionField over the side's
  * longhand and value space (its closed render IS the stop select, so no
  * separate strict picker exists), through the ring's commit shape
- * (patchFor over the one side). A defaults-tier value is a ghost in the
- * editor (the rows' ghost-in-the-input read), never the field's value:
- * settling it would commit a value the element never set. Right-click
- * opens the row menu over the side's token items (provenance-model.js
- * rowMenu), the advanced rows' token half.
+ * (patchFor over the one side). The field shows the side's winner, lit,
+ * whichever layer delivers it (the display rule); typing over it writes
+ * an own value at the pose, and the emptied field commits the unset
+ * only while the own layer delivers the side at the exact pose (the
+ * cell's ownAtPose, useFieldGesture's `own`), releasing otherwise: a
+ * skin's or a variant's side has nothing here to remove. A measured
+ * side opens the field EMPTY over its measurement as the placeholder
+ * (the field converts it into its unit through the same bases the
+ * cell did): a `max(...)` a variant supplies is no text to edit per
+ * side, and what is typed here writes the physical longhand over it.
+ * Right-click opens the shared row menu (use-row-menu.js) over the
+ * side's token items, the advanced rows' token half.
  */
 const SideDimensionEditor = ({
   cell,
@@ -999,24 +1055,20 @@ const SideDimensionEditor = ({
   condition,
   definition,
   constraints,
+  bases,
   placeholder,
-  ghost,
   patchFor,
   onPreview,
   onRelease,
   onCommit,
 }) => {
-  const menu = useMenu();
-  const previewPatch = (patch) => {
-    Object.entries(patch).forEach(([name, value]) => onPreview(name, value));
-  };
   const field = useFieldGesture(
-    ghost ? '' : (cell.value ?? ''),
+    cell.measured ? '' : (cell.value ?? ''),
     cell.longhand,
-    (name, value) => {
-      const patch = patchFor(value);
+    (properties) => {
+      const patch = patchFor(properties[cell.longhand] ?? null);
       if (patch !== null) {
-        previewPatch(patch);
+        onPreview(patch);
       }
     },
     (properties) => {
@@ -1029,22 +1081,19 @@ const SideDimensionEditor = ({
       const patch = patchFor(properties[cell.longhand] ?? null);
       return patch === null ? Promise.resolve() : onCommit(patch);
     },
+    cell.ownAtPose ? (cell.value ?? '') : null,
   );
-  const onContextMenu = (event) => {
-    const spec = rowMenu({
-      origin: null,
-      tokens: tokenItems(guide, materials, condition, cell.space, field.shown, {
+  const onContextMenu = useRowMenu({
+    origin: null,
+    tokens: () =>
+      tokenItems(guide, materials, condition, cell.space, field.shown, {
         onPreview: field.preview,
         onSettle: field.settle,
       }),
-      face:
-        wearing(guide, materials, cell.space, field.shown, condition).face ||
-        field.shown,
-    });
-    if (spec && menu.open({ x: event.clientX, y: event.clientY, ...spec })) {
-      event.preventDefault();
-    }
-  };
+    face: () =>
+      wearing(guide, materials, cell.space, field.shown, condition).face ||
+      field.shown,
+  });
   return (
     <div
       className="daedalus-stylish-boxmodel__editor-field"
@@ -1059,8 +1108,12 @@ const SideDimensionEditor = ({
         guide={guide}
         materials={materials}
         condition={condition}
+        bases={bases}
         placeholder={placeholder}
         invalid={field.invalid}
+        // The cell is the mark (its state class and origin wash); the
+        // field inside it leads with none.
+        mark={null}
         onPreview={field.preview}
         onSettle={field.settle}
       />

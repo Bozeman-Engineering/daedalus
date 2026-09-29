@@ -6,37 +6,37 @@ import { useEffect, useState } from 'preact/hooks';
  * Gesture semantics:
  * - A click previews immediately (optimistic paint) and commits in the
  *   same breath — one update_style op per gesture, multi-property writes
- *   (a spacing step's padding + gap) atomic in that one op. The source
+ *   (a stroke part's completion to a whole stroke, the motion trigger's
+ *   pair, an own shorthand's collapse) atomic in that one op. The source
  *   releases the staged preview when the op settles, so onRelease has no
  *   caller here: buttons have no cancel path.
- * - pick(properties, companions?) is the compound gesture: companions
- *   ([{key, properties, condition?}]) are changes on OTHER keys (the
- *   position widget's parent display: grid upgrade) that ride onCommit's
- *   batch — one op, one undo label, all or nothing. They preview in the
- *   same breath under their own key, because the optimistic paint must
- *   cover the WHOLE gesture: the child's align-self is visually inert
- *   until the parent is a grid, so the parent upgrade paints mid-gesture,
- *   not after the round trip. The source releases every key's staged
- *   preview when the one batch settles.
+ * - A pick writes only where its rows read: every property in it rides
+ *   the widget's own keys (the pipeline routes the pick's set values as
+ *   a group to one box and each removal to the box it lives on, several
+ *   boxes as one batch; basic-controls.js route), never another
+ *   element's. The pipeline labels the op ("Styled <control>").
  * - A rejected commit drops the optimistic draft (the preview already
- *   reverted, companions included, and the page reported the failure)
- *   and marks the widget invalid until the next authoritative value or
- *   gesture.
- * - pick's third argument names the gesture in the undo history when the
- *   widget's story is richer than the pipeline's "Styled <control>" (the
- *   position widget's compound upgrade names the parent it re-arranged);
- *   omitted, the pipeline labels the op.
+ *   reverted and the page reported the failure) and marks the widget
+ *   invalid until the next authoritative value or gesture.
  *
- * `values` is the committed model values with the in-flight draft layered
- * over them, so the clicked stop lights before the op round-trip settles.
- * A new authoritative model (the settled commit, an AI edit, a selection
- * move) supersedes the draft. stage(properties) is the paint half alone,
- * for a gesture whose commit comes later (the basic wells' color lane:
- * the picker's input events stage so the well repaints live, its change
+ * `values` is the widget's shown values (`base`: each owned property's
+ * winner at the pose, controls.js litValues over the model's reads, or
+ * a row's own value) with the in-flight draft layered over them, so the
+ * clicked stop lights before the op round-trip settles. A new
+ * authoritative base (the settled commit, an AI edit, a selection move)
+ * supersedes the draft. stage(properties) is the paint half alone, for
+ * a gesture whose commit comes later (the basic wells' color lane: the
+ * picker's input events stage so the well repaints live, its change
  * event picks).
+ *
+ * @param {string} key
+ *   The gesture's target (the bound key; a row's property when the row
+ *   is its own gesture), the draft's identity beside the base.
+ * @param {Object<string, ?string>} base
+ *   The shown values the draft layers over.
  */
-export const useGesture = (model, onPreview, onCommit) => {
-  const committed = JSON.stringify([model.key, model.values]);
+export const useGesture = (key, base, onPreview, onCommit) => {
+  const committed = JSON.stringify([key, base]);
   const [draft, setDraft] = useState(null);
   const [invalid, setInvalid] = useState(false);
   useEffect(() => {
@@ -44,7 +44,7 @@ export const useGesture = (model, onPreview, onCommit) => {
     setInvalid(false);
   }, [committed]);
 
-  const values = draft ? { ...model.values, ...draft } : model.values;
+  const values = draft ? { ...base, ...draft } : base;
 
   // The optimistic paint alone: the draft layers over the values (so the
   // widget's own faces repaint from it) and the canvas previews, with no
@@ -53,22 +53,13 @@ export const useGesture = (model, onPreview, onCommit) => {
   // change event picks).
   const stage = (properties) => {
     setDraft((current) => ({ ...(current ?? {}), ...properties }));
-    Object.entries(properties).forEach(([property, value]) =>
-      onPreview(property, value),
-    );
+    onPreview(properties);
   };
 
-  const pick = (properties, companions = null, label = null) => {
+  const pick = (properties) => {
     stage(properties);
     setInvalid(false);
-    // Companion changes paint under their own key; the draft stays the
-    // widget's own — model.values never carries another key's properties.
-    (companions ?? []).forEach(({ key, properties: companionProperties }) => {
-      Object.entries(companionProperties).forEach(([property, value]) =>
-        onPreview(property, value, key),
-      );
-    });
-    onCommit(properties, companions ?? undefined, label ?? undefined).then(
+    onCommit(properties).then(
       () => setInvalid(false),
       (error) => {
         setDraft(null);
@@ -84,21 +75,28 @@ export const useGesture = (model, onPreview, onCommit) => {
 
 /**
  * The text-field gesture for a field embedded in a basic widget (the
- * pencil reveal's DimensionField): preview per input, one commit on
- * settle, the same policy the advanced rows' PropertyWidget applies,
- * spoken through the widget contract's onPreview/onRelease/onCommit
- * handlers instead of the row pipeline's.
+ * padding row's shorthand DimensionField, the stroke row's width field,
+ * the box-model diagram's side editor): preview per input, one commit
+ * on settle, the same policy the advanced rows' PropertyWidget applies,
+ * spoken through the widget contract's OBJECT handlers
+ * (onPreview(properties), onRelease(properties), onCommit(properties))
+ * instead of the row pipeline's pair.
  *
- * `base` is the authoritative text underneath the field: the committed
- * value with any sibling gesture's optimistic draft layered over it
- * (useGesture's `values`), so a chip click repaints an open reveal in the
- * same breath as the chips. The field's own draft echoes previews back
- * into the controlled field; a new base supersedes it (a settled commit,
- * an AI edit, a selection move — or a failed CHIP commit reverting). An
- * unchanged settle releases the staged preview instead of committing; an
- * emptied field commits null (unset). A failed commit keeps the typed
- * value for correction and marks the field invalid until the next
- * authoritative value or gesture.
+ * `base` is the authoritative text underneath the field: the shown
+ * value (the winner's at the pose) with any sibling gesture's optimistic
+ * draft layered over it (useGesture's `values`), so a sibling's pick (a
+ * stroke's style or colour) repaints the field in the same breath. The field's
+ * own draft echoes previews back into the controlled field; a new base
+ * supersedes it (a settled commit, an AI edit, a selection move — or a
+ * failed CHIP commit reverting). `own` is what the editable layer says
+ * at the EXACT pose (null when it says nothing there): a settle that
+ * lands on it has nothing to persist and releases the staged preview
+ * instead of committing, and an emptied field commits null (unset)
+ * only while it says something, because a null write over a value a
+ * lower layer delivers would remove nothing. Callers whose base IS the
+ * own value (a row over the own entry alone) leave `own` at its default.
+ * A failed commit keeps the typed value for correction and marks the
+ * field invalid until the next authoritative value or gesture.
  */
 export const useFieldGesture = (
   base,
@@ -106,6 +104,7 @@ export const useFieldGesture = (
   onPreview,
   onRelease,
   onCommit,
+  own = base,
 ) => {
   const committed = base ?? '';
   const [draft, setDraft] = useState(null);
@@ -120,7 +119,7 @@ export const useFieldGesture = (
 
   const preview = (text) => {
     setDraft(text);
-    onPreview(property, asStyleValue(text));
+    onPreview({ [property]: asStyleValue(text) });
   };
 
   const settle = (text) => {
@@ -128,9 +127,10 @@ export const useFieldGesture = (
       return;
     }
     const next = asStyleValue(text);
-    if (next === asStyleValue(committed)) {
-      // Nothing to persist — release the staged preview and fall back to
-      // the committed value.
+    if (next === asStyleValue(own ?? '')) {
+      // Nothing to persist (the editable layer already says this at the
+      // pose, or says nothing and the field was emptied) — release the
+      // staged preview and fall back to the shown value.
       onRelease({ [property]: next });
       setDraft(null);
       setInvalid(false);

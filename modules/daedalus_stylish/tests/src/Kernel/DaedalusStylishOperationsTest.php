@@ -6,13 +6,17 @@ namespace Drupal\Tests\daedalus_stylish\Kernel;
 
 use Drupal\daedalus_blueprint\Result\BlueprintResultInterface;
 use Drupal\entity_test\Entity\EntityTest;
+use Drupal\file\Entity\File;
 use Drupal\KernelTests\KernelTestBase;
 use Drupal\layout_builder\Entity\LayoutBuilderEntityViewDisplay;
 use Drupal\layout_builder\Section;
 use Drupal\layout_builder\SectionComponent;
+use Drupal\media\Entity\Media;
 use Drupal\daedalus_stylish\Entity\DaedalusStylishVariant;
 use Drupal\daedalus_stylish\DaedalusStylishFieldManager;
+use Drupal\daedalus_stylish\MediaToken;
 use Drupal\Tests\daedalus\Traits\DesignSystemActivationTrait;
+use Drupal\Tests\media\Traits\MediaTypeCreationTrait;
 use Drupal\Tests\user\Traits\UserCreationTrait;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
@@ -32,6 +36,7 @@ class DaedalusStylishOperationsTest extends KernelTestBase {
 
   use UserCreationTrait;
   use DesignSystemActivationTrait;
+  use MediaTypeCreationTrait;
 
   /**
    * {@inheritdoc}
@@ -48,6 +53,7 @@ class DaedalusStylishOperationsTest extends KernelTestBase {
     'twig_events',
     'daedalus_tempstore',
     'daedalus_blueprint_api',
+    'file',
     'daedalus_ui',
     'daedalus_stylish',
     'daedalus_stylish_guide_test',
@@ -753,6 +759,247 @@ class DaedalusStylishOperationsTest extends KernelTestBase {
       ['STYLE_VALUE_ABOVE_MAX'],
       $codes['fields.' . DaedalusStylishFieldManager::FIELD_NAME . ".block:$component_uuid.default.font-size"],
     );
+  }
+
+
+  /**
+   * The three variant ops at a rule key.
+   *
+   * Apply places ONE reference on the rule's entry (a rule distributes
+   * nothing); a variant of the wrong scope for the rule's landing is
+   * refused; detach materializes the root styles at the rule and every
+   * part entry continued under the rule by descent (never "::" twice),
+   * leaving a map the validator accepts; remove drops the reference; and
+   * a part the rule's grammar refuses (a class under a tag rule) is not
+   * materialized, because it never delivered.
+   */
+  public function testVariantOpsAtARule(): void {
+    $variant = DaedalusStylishVariant::create(['label' => 'Quote card', 'machine_name' => 'quote_card', 'scope' => 'block_type:testimonial']);
+    $variant->setStyles([
+      '' => ['default' => ['padding' => '2rem'], 'hover' => ['color' => 'purple']],
+      '::.testimonial__quote' => ['default' => ['font-weight' => '700']],
+    ]);
+    $variant->save();
+    DaedalusStylishVariant::create(['label' => 'Band', 'machine_name' => 'band', 'scope' => 'kind:container'])->save();
+    $link = DaedalusStylishVariant::create(['label' => 'Link', 'machine_name' => 'link_style', 'scope' => 'base:a']);
+    $link->setStyles([
+      '' => ['default' => ['color' => 'red']],
+      '::.icon' => ['default' => ['margin' => '0']],
+    ]);
+    $link->save();
+    $rule = "container:{$this->uuid}::> pb-testimonial";
+    $entity = $this->createStyledEntity([
+      "container:{$this->uuid}" => ['default' => ['gap' => '1rem']],
+    ]);
+
+    // Apply: one reference at the rule, nothing else in the map moves.
+    $result = $this->operations->batchOperations($entity, [
+      ['op' => 'apply_variant', 'key' => $rule, 'variant' => 'quote_card'],
+    ]);
+    $this->assertTrue($result->isSuccess(), print_r($result->toArray()['errors'] ?? [], TRUE));
+    $this->assertSame([
+      "container:{$this->uuid}" => ['default' => ['gap' => '1rem']],
+      $rule => ['variants' => [self::ref('quote_card')]],
+    ], $this->styleMap($entity));
+
+    // The landing decides the scope: a container variant is refused at
+    // the testimonial rule.
+    $result = $this->operations->batchOperations($entity, [
+      ['op' => 'apply_variant', 'key' => $rule, 'variant' => 'band'],
+    ]);
+    $this->assertFalse($result->isSuccess());
+    $this->assertSame(['STYLE_VARIANT_SCOPE_MISMATCH'], $this->errorCodes($result)['variant']);
+
+    // Detach: the root styles at the rule, the part under the rule by
+    // descent, and the map stays canonical.
+    $result = $this->operations->batchOperations($entity, [
+      ['op' => 'detach_variant', 'key' => $rule, 'variant' => 'quote_card'],
+    ]);
+    $this->assertTrue($result->isSuccess());
+    $map = $this->styleMap($entity);
+    $this->assertSame([
+      "container:{$this->uuid}" => ['default' => ['gap' => '1rem']],
+      $rule => ['default' => ['padding' => '2rem'], 'hover' => ['color' => 'purple']],
+      "$rule .testimonial__quote" => ['default' => ['font-weight' => '700']],
+    ], $map);
+    $this->assertSame([], $this->container->get('daedalus_stylish.style_map_validator')->validate($map, ['entity' => $entity]));
+    foreach (array_keys($map) as $key) {
+      $this->assertLessThanOrEqual(1, substr_count($key, '::'), "$key carries :: at most once.");
+    }
+
+    // Remove at the rule drops the reference and leaves the entry's own
+    // styles; naming a variant the rule does not carry is refused.
+    $this->assertTrue($this->operations->batchOperations($entity, [
+      ['op' => 'apply_variant', 'key' => $rule, 'variant' => 'quote_card'],
+    ])->isSuccess());
+    $this->assertSame([self::ref('quote_card')], $this->styleMap($entity)[$rule]['variants']);
+    $result = $this->operations->batchOperations($entity, [
+      ['op' => 'remove_variant', 'key' => $rule, 'variant' => 'quote_card'],
+    ]);
+    $this->assertTrue($result->isSuccess());
+    $this->assertSame(['default' => ['padding' => '2rem'], 'hover' => ['color' => 'purple']], $this->styleMap($entity)[$rule]);
+    $result = $this->operations->batchOperations($entity, [
+      ['op' => 'remove_variant', 'key' => $rule, 'variant' => 'quote_card'],
+    ]);
+    $this->assertSame('STYLE_VARIANT_NOT_REFERENCED', $result->getErrors()[0]->getCode());
+
+    // A part the rule's grammar refuses (a class under a tag rule) never
+    // delivered, so detach materializes only what reached the page.
+    $tag_rule = "container:{$this->uuid}::a";
+    $entity2 = $this->createStyledEntity([$tag_rule => ['variants' => [self::ref('link_style')]]]);
+    $result = $this->operations->batchOperations($entity2, [
+      ['op' => 'detach_variant', 'key' => $tag_rule, 'variant' => 'link_style'],
+    ]);
+    $this->assertTrue($result->isSuccess());
+    $this->assertSame([$tag_rule => ['default' => ['color' => 'red']]], $this->styleMap($entity2));
+  }
+
+  /**
+   * A generated box is born with its existence switch at the op spine.
+   *
+   * A pseudo-element exists only while the cascade sets its content, so
+   * the first update_style that CREATES a pseudo entry ("::&::before" on
+   * the element, "::> pb-testimonial::before" under a rule) seeds
+   * content: "" at default in the same op, whatever condition the write
+   * lands on; a write that sets content at default itself is the
+   * author's word and is not overridden. Only birth seeds: an existing
+   * entry is never re-seeded (deleting the content line is a deliberate
+   * act, the box honestly disappears), and an unset-only patch at a key
+   * that never existed mints nothing. Variants are authored, not born:
+   * wearing a variant whose "::&::before" fragment carries no content
+   * mints no box entry on the wearer, no reference is accepted at a box
+   * key (it lands on no element scope), and detach materializes the
+   * fragment verbatim, without a seed, so the look the wear delivered is
+   * exactly the look detach keeps.
+   */
+  public function testPseudoElementBirthSeed(): void {
+    $key = "container:{$this->uuid}";
+    $box = "$key::&::before";
+    $rule_box = "$key::> pb-testimonial::before";
+    $entity = $this->createStyledEntity();
+
+    // Born with content: the seed lands at default beneath the write, and
+    // beneath a write on another condition alike.
+    $result = $this->operations->batchOperations($entity, [
+      ['op' => 'update_style', 'key' => $box, 'properties' => ['padding' => '1rem']],
+      ['op' => 'update_style', 'key' => $rule_box, 'condition' => 'hover', 'properties' => ['padding' => '2rem']],
+    ]);
+    $this->assertTrue($result->isSuccess(), print_r($result->toArray()['errors'] ?? [], TRUE));
+    $this->assertSame([
+      $box => ['default' => ['content' => '""', 'padding' => '1rem']],
+      $rule_box => ['default' => ['content' => '""'], 'hover' => ['padding' => '2rem']],
+    ], $this->styleMap($entity));
+
+    // The author's own content at default is the word: no seed over it.
+    $after = "$key::&::after";
+    $result = $this->operations->batchOperations($entity, [
+      ['op' => 'update_style', 'key' => $after, 'properties' => ['content' => 'none', 'padding' => '1rem']],
+    ]);
+    $this->assertTrue($result->isSuccess());
+    $this->assertSame(['default' => ['content' => 'none', 'padding' => '1rem']], $this->styleMap($entity)[$after]);
+
+    // Never re-seeded: unsetting the content line is deliberate, and a
+    // later write on the existing entry does not bring it back.
+    $result = $this->operations->batchOperations($entity, [
+      ['op' => 'update_style', 'key' => $box, 'properties' => ['content' => NULL]],
+      ['op' => 'update_style', 'key' => $box, 'properties' => ['margin' => '1rem']],
+      ['op' => 'update_style', 'key' => $rule_box, 'condition' => 'hover', 'properties' => ['margin' => '1rem']],
+    ]);
+    $this->assertTrue($result->isSuccess());
+    $map = $this->styleMap($entity);
+    $this->assertSame(['default' => ['padding' => '1rem', 'margin' => '1rem']], $map[$box]);
+    $this->assertSame(['default' => ['content' => '""'], 'hover' => ['padding' => '2rem', 'margin' => '1rem']], $map[$rule_box]);
+
+    // An unset-only patch at a box that never existed mints nothing.
+    $result = $this->operations->batchOperations($entity, [
+      ['op' => 'update_style', 'key' => "$key::.band-content::before", 'properties' => ['padding' => NULL]],
+    ]);
+    $this->assertTrue($result->isSuccess());
+    $this->assertSame($map, $this->styleMap($entity));
+
+    // A variant fragment is not touched: the wear mints no box entry, a
+    // reference at a box key is refused, and detach materializes the
+    // fragment as authored (no content, so no box, exactly as delivered).
+    $variant = DaedalusStylishVariant::create(['label' => 'Band', 'machine_name' => 'band', 'scope' => 'kind:container']);
+    $variant->setStyles([
+      '' => ['default' => ['padding' => '3rem']],
+      '::&::before' => ['default' => ['padding' => '4rem']],
+    ]);
+    $variant->save();
+    $wearer = $this->createStyledEntity();
+    $result = $this->operations->batchOperations($wearer, [
+      ['op' => 'apply_variant', 'key' => $key, 'variant' => 'band'],
+    ]);
+    $this->assertTrue($result->isSuccess(), print_r($result->toArray()['errors'] ?? [], TRUE));
+    $this->assertSame([$key => ['variants' => [self::ref('band')]]], $this->styleMap($wearer));
+    $result = $this->operations->batchOperations($wearer, [
+      ['op' => 'apply_variant', 'key' => $box, 'variant' => 'band'],
+    ]);
+    $this->assertFalse($result->isSuccess());
+    $this->assertSame(['STYLE_VARIANT_SCOPE_MISMATCH'], $this->errorCodes($result)['variant']);
+    $result = $this->operations->batchOperations($wearer, [
+      ['op' => 'detach_variant', 'key' => $key, 'variant' => 'band'],
+    ]);
+    $this->assertTrue($result->isSuccess());
+    $this->assertSame([
+      $key => ['default' => ['padding' => '3rem']],
+      $box => ['default' => ['padding' => '4rem']],
+    ], $this->styleMap($wearer));
+  }
+
+  /**
+   * A first write of a content image at a new box stands unseeded.
+   *
+   * The birth seed merges BENEATH the validated write, so `content:
+   * url('media:…')` as the box's first line is the box's content: no `""`
+   * beneath it, nothing over it. The token rides the same gates as
+   * background-image (a token naming no media is the media corrective at
+   * the op's properties path, and the write mints nothing). The media
+   * modules are enabled here, not on the class, so the other operations
+   * run on the site they always did.
+   */
+  public function testPseudoElementContentMedia(): void {
+    $this->enableModules(['file', 'image', 'media']);
+    $this->installEntitySchema('file');
+    $this->installSchema('file', ['file_usage']);
+    $this->installEntitySchema('media');
+    $this->installConfig(['field', 'image', 'file', 'media']);
+    $this->operations = $this->container->get('daedalus_blueprint.operations');
+    $image_type = $this->createMediaType('image');
+    $source_field = $image_type->getSource()->getSourceFieldDefinition($image_type)->getName();
+    $this->container->get('file_system')->copy($this->root . '/core/misc/druplicon.png', 'public://rosette.png');
+    $file = File::create(['uri' => 'public://rosette.png', 'filename' => 'rosette.png']);
+    $file->save();
+    $media = Media::create(['bundle' => $image_type->id(), 'name' => 'Rosette', $source_field => ['target_id' => $file->id()]]);
+    $media->save();
+    $token = MediaToken::build($media->uuid());
+
+    $key = "container:{$this->uuid}";
+    $box = "$key::&::before";
+    $rule_box = "$key::> pb-testimonial::after";
+    $entity = $this->createStyledEntity();
+
+    // The first write is the content: the seed never lands beneath a
+    // write that carries content, at the anchor and at a rule's box alike.
+    $result = $this->operations->batchOperations($entity, [
+      ['op' => 'update_style', 'key' => $box, 'properties' => ['content' => $token]],
+      ['op' => 'update_style', 'key' => $rule_box, 'properties' => ['content' => $token, 'padding' => '1rem']],
+    ]);
+    $this->assertTrue($result->isSuccess(), print_r($result->toArray()['errors'] ?? [], TRUE));
+    $this->assertSame([
+      $box => ['default' => ['content' => $token]],
+      $rule_box => ['default' => ['content' => $token, 'padding' => '1rem']],
+    ], $this->styleMap($entity));
+
+    // A token naming no media is refused by the media gates at the op's
+    // path, and a refused first write mints no box.
+    $missing = "$key::&::after";
+    $result = $this->operations->batchOperations($entity, [
+      ['op' => 'update_style', 'key' => $missing, 'properties' => ['content' => MediaToken::build('123e4567-e89b-12d3-a456-426614174000')]],
+    ]);
+    $this->assertFalse($result->isSuccess());
+    $this->assertSame(['MEDIA_NOT_FOUND'], $this->errorCodes($result)['properties.content']);
+    $this->assertArrayNotHasKey($missing, $this->styleMap($entity));
   }
 
 }

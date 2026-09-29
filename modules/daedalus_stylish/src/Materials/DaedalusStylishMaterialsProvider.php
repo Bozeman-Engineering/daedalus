@@ -358,7 +358,7 @@ final class DaedalusStylishMaterialsProvider implements MaterialsProviderInterfa
     $styles = $operation['styles'] ?? NULL;
     if ($styles !== NULL && !is_array($styles)) {
       throw new MaterialGestureException([
-        new BlueprintError('styles', 'INVALID_PARAMETER', 'styles must be an element-relative style map.', [], 'Omit "styles" to capture the element\'s look, or pass {"": {...}, "::.class": {...}}.'),
+        new BlueprintError('styles', 'INVALID_PARAMETER', 'styles must be an element-relative style map.', [], 'Omit "styles" to capture the element\'s look, or pass {"": {...}, "::.class": {...}, "::> *": {...}}.'),
       ]);
     }
     $styles ??= $this->capturer()->capture($entity, $key, $axis ?? StyleGuide::STYLE_AXIS);
@@ -414,7 +414,7 @@ final class DaedalusStylishMaterialsProvider implements MaterialsProviderInterfa
       $styles = $changes['styles'] ?? NULL;
       if ($styles !== NULL && !is_array($styles)) {
         throw new MaterialGestureException([
-          new BlueprintError('styles', 'INVALID_PARAMETER', 'styles must be an element-relative style map.', [], 'Omit "styles" to capture the element\'s look, or pass {"": {...}, "::.class": {...}}.'),
+          new BlueprintError('styles', 'INVALID_PARAMETER', 'styles must be an element-relative style map.', [], 'Omit "styles" to capture the element\'s look, or pass {"": {...}, "::.class": {...}, "::> *": {...}}.'),
         ]);
       }
       if ($styles === NULL) {

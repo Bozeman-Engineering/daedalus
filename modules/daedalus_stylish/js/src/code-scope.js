@@ -7,9 +7,11 @@
  * `element` (the default, DevTools' posture: the selected element's
  * row alone), `subtree` (the selection with everything under it, the
  * stencil case: a composition's fragments distributed over a subtree
- * read together), or `page` (the whole filtered tree, selection or
- * not). It exists only in code mode, so its segments render only there
- * (inspector.js' code branch), and it is a display preference exactly
+ * read together), or `page` (the whole page tree, every element a row,
+ * selection or not). It exists only in code mode, so its one control renders only
+ * there (page-view.js: the showing row's sentence, "Showing this
+ * element ▾", a menu of the three scopes at the top of the code body
+ * after the wear bar), and it is a display preference exactly
  * like the UI mode (preference-store.js): per browser, synced across
  * the leader and satellite windows through the storage event. The
  * projection it drives is page-model.js scopeNodes().

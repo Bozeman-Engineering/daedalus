@@ -38,6 +38,7 @@ final class EditSessionScopeTest extends KernelTestBase {
     'daedalus_tempstore',
     'daedalus_blueprint',
     'daedalus_blueprint_api',
+    'file',
     'daedalus_ui',
   ];
 

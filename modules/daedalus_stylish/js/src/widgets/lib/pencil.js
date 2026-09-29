@@ -19,7 +19,7 @@ export const PencilToggle = ({
 }) => (
   <button
     type="button"
-    className={`daedalus-stylish-inspector__pencil daedalus-ui-icon-button daedalus-ui-icon-button--muted${open ? ' daedalus-stylish-inspector__pencil--open' : ''}`}
+    className="daedalus-stylish-inspector__pencil daedalus-ui-icon-button daedalus-ui-icon-button--muted"
     aria-pressed={open}
     aria-label={label}
     title={

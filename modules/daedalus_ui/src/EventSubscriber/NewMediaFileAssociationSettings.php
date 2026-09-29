@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Drupal\daedalus_ui\EventSubscriber;
 
 use Drupal\Core\Entity\EntityTypeManagerInterface;
-use Drupal\daedalus_ui\ToolPluginManager;
 use Drupal\Core\Session\AccountProxyInterface;
 use Drupal\Core\StringTranslation\StringTranslationTrait;
 use Drupal\daedalus_ui\Event\SettingsSidebarEvent;
@@ -19,7 +18,6 @@ final class NewMediaFileAssociationSettings implements EventSubscriberInterface 
   use StringTranslationTrait;
 
   public function __construct(
-    private ToolPluginManager $toolManager,
     private AccountProxyInterface $account,
     private EntityTypeManagerInterface $entityTypeManager,
   ) {}

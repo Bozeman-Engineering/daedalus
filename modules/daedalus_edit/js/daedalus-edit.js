@@ -1,15 +1,14 @@
-import './daedalus_edit/effects.js'; // Registers the effects behaviors.
 import './daedalus_edit/media-library-selection.js'; // Registers an AJAX command.
+import './daedalus_edit/panel-widget-visibility.js'; // Registers the field-state behavior.
+import './daedalus_edit/configure-dialog.js'; // Registers the Configure dialog behavior.
 import * as entityForm from './daedalus_edit/entity-form.js';
 import initEditorRegistry from './daedalus_edit/editor-registry.js';
 import { setCurrentlyEditing } from './daedalus_edit/currently-editing.js';
 // The stock editors. Importing them pushes their registration callbacks
 // onto window.DaedalusEditQueue, which initEditorRegistry() drains.
-import './daedalus_edit/plugins/default.js';
+import './daedalus_edit/plugins/panel-widget-editor.js';
 import './daedalus_edit/plugins/textfield.js';
 import './daedalus_edit/plugins/inline-editor.js';
-import './daedalus_edit/plugins/entity-reference-autocomplete.js';
-import './daedalus_edit/plugins/media.js';
 
 (($, Drupal) => {
   Drupal.Daedalus.Edit = {};
@@ -42,41 +41,12 @@ import './daedalus_edit/plugins/media.js';
   Drupal.Daedalus.Edit.FetchMainEntityForm = entityForm.fetchMainEntityForm;
 
   /**
-   * Disable edit mode
-   */
-  Drupal.Daedalus.Edit.DisableEditMode = async () => {
-    await Drupal.Daedalus.Edit.notUpdating();
-    if (Drupal.Daedalus.Edit.hasInvalidFormItem()) {
-      Drupal.Daedalus.Edit.warnAboutInvalidFormItem();
-      return Promise.reject();
-    }
-    // Commit any pending edit — deactivating the tool must not leave an
-    // open editor behind. The entity-form panel itself stays open: it is
-    // mode-bound chrome with first-class identity (its icon toggles it
-    // under any tool), so leaving the Edit tool no longer closes it; mode
-    // exit closes it with the other ephemeral panels.
-    if (Drupal.Daedalus.Edit.CurrentlyEditingElement) {
-      await Drupal.Daedalus.Edit.CurrentlyEditingElement.plugin.blur();
-    }
-  };
-
-  /**
-   * Not updating.
+   * Fetches the form for a cached-form identity ("{type}::{id}").
    *
-   * Wait till Daedalus Edit is done updating.
-   *
-   * @return {Promise<unknown>}
+   * The sidebar plugin's refetch (a stale or discarded cached form is
+   * replaced with a fresh one) fetches through here.
    */
-  Drupal.Daedalus.Edit.notUpdating = () => {
-    return new Promise((resolve) => {
-      const intervalId = setInterval(() => {
-        if (!entityForm.daedalusEditIsUpdating) {
-          clearInterval(intervalId);
-          resolve();
-        }
-      }, 100);
-    });
-  };
+  Drupal.Daedalus.Edit.FetchForm = entityForm.fetchFormFor;
 
   /**
    * Has invalid form item.
@@ -104,10 +74,9 @@ import './daedalus_edit/plugins/media.js';
    * the warning will include the original error message to remind the user
    * what needs to be fixed.
    *
-   * The warning appears in three scenarios:
+   * The warning appears in two scenarios:
    * - Attempting to edit a different field
    * - Attempting to close the daedalus edit sidebar
-   * - Attempting to disable edit mode
    *
    * @see Drupal.Daedalus.Edit.hasInvalidFormItem()
    */
@@ -136,14 +105,17 @@ import './daedalus_edit/plugins/media.js';
       ${originalError}`;
     }
 
-    const target =
-      Drupal.Daedalus.Edit.CurrentlyEditingElement.getPageElementHandle();
     const editMode = Drupal.Daedalus.ModeManager.getPlugin('edit');
     editMode.message(Drupal.t(message), 'warning', {
       duration: 3000,
       scroll: false,
     });
-    editMode.scrollToElement(target);
+    // A panel widget has no page element handle: its widget is the one
+    // in the panel holding the invalid input, already in view.
+    const target = element.getPageElementHandle();
+    if (target) {
+      editMode.scrollToElement(target);
+    }
   };
 
   // Boot the editor registry and register the editors.
@@ -165,7 +137,7 @@ import './daedalus_edit/plugins/media.js';
    * the new markup as context, which is the natural re-measure hook. The
    * measurement itself is grow-only per edit and released on blur.
    *
-   * @see FormEditorBase.widenPanelIfNeeded()
+   * @see EditorPluginBase.widenPanelIfNeeded()
    */
   Drupal.behaviors.DaedalusEditPanelAutoWiden = {
     attach(context) {
@@ -173,7 +145,7 @@ import './daedalus_edit/plugins/media.js';
       // Page-load attaches (context = document) can't have an active edit;
       // only element contexts from AJAX rebuilds matter here. Blueprint
       // edits have no form panel to measure (mutation swaps attach behaviors
-      // too), so only form-path edits, which carry getForm(), proceed.
+      // too), so only form-backed edits, which carry getForm(), proceed.
       if (
         !editing ||
         !(context instanceof Element) ||

@@ -125,9 +125,14 @@ field:
     text_color:
       label: 'Text color'
       widget: text_color
-    # Child-positions-itself: both screen axes as child-local writes
-    # (align-self + justify-self); under a plain block parent a pick rides
-    # in with the parent's display: grid as one compound commit.
+    # Child-positions-itself: both screen axes as child-local writes. A
+    # container parent is always a flex box by the declared tier (a flex
+    # column stacked, a flex row under Columns), so the cross axis is
+    # align-self and the main axis is the auto-margin pair (margin-top /
+    # margin-bottom in a stack: free space goes to auto margins before
+    # justify-content); a hand-made grid parent keeps align-self +
+    # justify-self. No parent upgrade rides in: there is no display to
+    # give a container, and a plain block parent offers no placement.
     position:
       label: 'Position'
       widget: position
@@ -178,9 +183,14 @@ block:
     elevation:
       label: 'Shadow'
       widget: elevation
-    # Child-positions-itself: both screen axes as child-local writes
-    # (align-self + justify-self); under a plain block parent a pick rides
-    # in with the parent's display: grid as one compound commit.
+    # Child-positions-itself: both screen axes as child-local writes. A
+    # container parent is always a flex box by the declared tier (a flex
+    # column stacked, a flex row under Columns), so the cross axis is
+    # align-self and the main axis is the auto-margin pair (margin-top /
+    # margin-bottom in a stack: free space goes to auto margins before
+    # justify-content); a hand-made grid parent keeps align-self +
+    # justify-self. No parent upgrade rides in: there is no display to
+    # give a container, and a plain block parent offers no placement.
     position:
       label: 'Position'
       widget: position
@@ -233,7 +243,7 @@ instances:
       background: {}
       border: {}
     # A minted element's direct children as ONE addressable
-    # ("{key}::.s-x::>"): the style-every-item-of-one-list gesture, and
+    # ("{key}::.s-x > *"): the style-every-item-of-one-list gesture, and
     # the same shape for any other minted root. Items also mint their own
     # identity (li is a declared tag), so this is the live rule beside
     # per-item parts. Declaring it here is what lets STRICT sites speak

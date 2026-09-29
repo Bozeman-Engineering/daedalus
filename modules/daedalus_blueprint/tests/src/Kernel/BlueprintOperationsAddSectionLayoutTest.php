@@ -6,6 +6,7 @@ namespace Drupal\Tests\daedalus_blueprint\Kernel;
 
 use Drupal\daedalus_blueprint\BlueprintOperations;
 use Drupal\daedalus_blueprint\LayoutBuilder\LayoutSerializer;
+use Drupal\layout_builder\Section;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
@@ -98,6 +99,25 @@ class BlueprintOperationsAddSectionLayoutTest extends BlueprintKernelTestBase {
     $this->assertSame('layout_twocol_section', $section->getLayoutId());
     // The provided settings patched over the plugin defaults.
     $this->assertSame('33-67', $section->getLayoutSettings()['column_widths']);
+  }
+
+  /**
+   * Tests a root add_section onto a blank placeholder leaves one real section.
+   *
+   * Core seeds layout_builder_blank onto a fresh override and clears it on
+   * the first insert; the spine's root append rides that path, so the page
+   * never holds the placeholder beside its first section.
+   */
+  public function testFirstSectionReplacesBlankPlaceholder(): void {
+    $entity = $this->createLbEntity();
+    $entity->set('layout_builder__layout', [new Section('layout_builder_blank')]);
+    $entity->save();
+
+    $result = $this->operations->addSection($entity, ['anchor' => $entity->uuid(), 'placement' => 'inside']);
+    $this->assertTrue($result->isSuccess(), print_r($result->toArray()['errors'] ?? [], TRUE));
+    $sections = $entity->get('layout_builder__layout')->getSections();
+    $this->assertCount(1, $sections);
+    $this->assertNotSame('layout_builder_blank', $sections[0]->getLayoutId());
   }
 
   /**

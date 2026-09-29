@@ -63,6 +63,7 @@ class VariantStylesheetTest extends KernelTestBase {
     'twig_events',
     'daedalus_tempstore',
     'daedalus_blueprint_api',
+    'file',
     'daedalus_ui',
     'daedalus_layout',
     'daedalus_stylish',
@@ -234,7 +235,7 @@ class VariantStylesheetTest extends KernelTestBase {
   /**
    * Children pseudo-part entries compile into the shared stylesheet.
    *
-   * A container-family variant carrying '::>' (and '::.class::>') styles
+   * A container-family variant carrying '::> *' (and '::.class > *') styles
    * delivers them through its fragment classes like any part entry: the
    * compiled file gets the ' > *' children rules at the variant-class
    * scope roots, bounded by the child-shifted donut. This is the equal-fill
@@ -243,11 +244,11 @@ class VariantStylesheetTest extends KernelTestBase {
   public function testChildrenPseudoPartCompilation(): void {
     $this->createVariant('row', [
       '' => ['default' => ['display' => 'flex']],
-      '::>' => [
+      '::> *' => [
         'default' => ['flex-grow' => '1', 'min-width' => '0'],
         'narrow' => ['flex-grow' => '0'],
       ],
-      '::.daedalus-stylish-layout-container::>' => ['default' => ['min-width' => '0']],
+      '::.daedalus-stylish-layout-container > *' => ['default' => ['min-width' => '0']],
     ], TRUE, 'kind:container');
 
     $css = file_get_contents($this->stylesheetUri());
@@ -266,14 +267,14 @@ class VariantStylesheetTest extends KernelTestBase {
   /**
    * A child's own grow override beats a worn row's equal-fill rule.
    *
-   * Mode + share's cascade seam, both delivery modes. The '::>' children
+   * Mode + share's cascade seam, both delivery modes. The '::> *' children
    * rules are DEFAULTS under any per-child fact: every children target is
    * capped at ':scope' weight (0-1-0, the part class in :where()), and
    * the child's own entry prints at the child's OWN scope root, so at
    * equal weight it wins on scope proximity in every mode and at every
    * depth. That structural fact is what this locks: the capped selector
    * in both delivery forms, plus edit mode's document-order backup (the
-   * '::>' fragment rules inline at the referencing container key BEFORE
+   * '::> *' fragment rules inline at the referencing container key BEFORE
    * the map's own blocks).
    */
   public function testChildGrowOverrideBeatsChildrenRules(): void {
@@ -282,7 +283,7 @@ class VariantStylesheetTest extends KernelTestBase {
         'default' => ['display' => 'flex', 'gap' => '16px'],
         'narrow' => ['flex-direction' => 'column'],
       ],
-      '::.daedalus-stylish-layout-container::>' => [
+      '::.daedalus-stylish-layout-container > *' => [
         'default' => ['flex-grow' => '1', 'flex-shrink' => '1', 'flex-basis' => '0', 'min-width' => '0'],
         'narrow' => ['flex-grow' => '0', 'flex-shrink' => '0', 'flex-basis' => 'auto'],
       ],
@@ -324,7 +325,7 @@ class VariantStylesheetTest extends KernelTestBase {
     $this->assertStringContainsString("@scope ([data-selectable=\"block:$component_uuid\"])", $html);
     $this->assertStringContainsString('flex-grow: 2;', $html);
 
-    // EDIT: the '::>' fragment rules inline at the referencing container
+    // EDIT: the '::> *' fragment rules inline at the referencing container
     // key, capped dual and child-shifted donut intact, and the child's
     // override block prints AFTER them (variant CSS first inside the tag).
     $this->container->get('request_stack')->getCurrentRequest()->cookies->set('navigationMode', 'edit');
@@ -556,7 +557,6 @@ class VariantStylesheetTest extends KernelTestBase {
       ],
       '::.cta__button' => ['default' => ['font-weight' => '700']],
     ]);
-    $this->createVariant('quote_style', ['' => ['default' => ['font-style' => 'italic']]]);
     $draft_variant = $this->createVariant('secret_draft', ['' => ['default' => ['color' => 'rebeccapurple']]], FALSE, 'kind:container');
 
     $section_uuid = '77777777-7777-7777-7777-777777777777';
@@ -575,8 +575,6 @@ class VariantStylesheetTest extends KernelTestBase {
         ],
       ],
       "block:$component_uuid" => ['variants' => [['variant' => 'cta_bold', 'fragment' => '']]],
-      // Sub-element keys have no selectable attribute to root at; skipped.
-      "block:$component_uuid::.quote" => ['variants' => [['variant' => 'quote_style', 'fragment' => '']]],
     ];
     $entity->set(DaedalusStylishFieldManager::FIELD_NAME, json_encode($map));
     $entity->save();
@@ -596,7 +594,6 @@ class VariantStylesheetTest extends KernelTestBase {
     $this->assertStringContainsString(':scope:is(:hover, [data-force-state~="hover"])', $css);
     $this->assertStringContainsString('.cta__button', $css);
     $this->assertStringNotContainsString('.daedalus-stylish-variant--', $css);
-    $this->assertStringNotContainsString('font-style: italic;', $css);
     $this->assertStringNotContainsString('rebeccapurple', $css);
 
     // The printed variants' tags bubble; the draft rides the roster's list
@@ -956,6 +953,128 @@ class VariantStylesheetTest extends KernelTestBase {
     $this->container->get('request_stack')->getCurrentRequest()->cookies->set('navigationMode', 'edit');
     $css = (string) $this->container->get('daedalus_stylish.style_backend')->build($entity, $map)['#value'];
     $this->assertLessThan(strpos($css, 'padding: 2rem;'), strpos($css, 'padding: 5rem;'));
+  }
+
+
+  /**
+   * Wear at a rule delivers inside the rule owner's @scope in every mode.
+   *
+   * The third lane: a reference on a rule entry prints the variant's
+   * fragment inside the OWNER's @scope with each suffix continued under
+   * the rule by descent (the root entry at the rule's targets, a part at
+   * `{rule} .part`, the children at `{rule} > *`), the same text in edit
+   * mode and live, never a class; a suffix the rule's grammar refuses (a
+   * class under a tag rule) prints nothing; the rule's own properties
+   * print after what it wears (own beats worn by order); the workspace
+   * fallback skips rule keys (its class-rooted CSS would reach nothing);
+   * and the worn variant's tag bubbles.
+   */
+  public function testRuleWearDelivery(): void {
+    $text_variant = $this->createVariant('text_soft', [
+      '' => ['default' => ['padding' => '1rem'], 'hover' => ['color' => 'purple']],
+      '::.link' => ['default' => ['font-weight' => '700']],
+      '::> *' => ['default' => ['margin' => '0']],
+    ]);
+    $this->createVariant('link_style', [
+      '' => ['default' => ['color' => 'red']],
+      '::.icon' => ['default' => ['margin' => '0']],
+    ], TRUE, 'base:a');
+    $section_uuid = '77777777-7777-7777-7777-777777777777';
+    $entity = EntityTest::create(['name' => 'rule-wear']);
+    $entity->save();
+    $map = [
+      "container:$section_uuid::> pb-text" => [
+        'variants' => [['variant' => 'text_soft', 'fragment' => '']],
+        'default' => ['padding' => '2rem'],
+      ],
+      "container:$section_uuid::a" => ['variants' => [['variant' => 'link_style', 'fragment' => '']]],
+    ];
+    $entity->set(DaedalusStylishFieldManager::FIELD_NAME, json_encode($map));
+    $entity->save();
+
+    $rule = "@scope ([data-selectable=\"container:$section_uuid\"]) {\n  :where(:scope) > [data-element=\"block_type:text\"] {\n    padding: 1rem;\n  }\n  :where(:scope) > [data-element=\"block_type:text\"]:is(:hover, [data-force-state~=\"hover\"]) {\n    color: purple;\n  }\n}";
+    $expected_rule_css = $rule
+      . "\n@scope ([data-selectable=\"container:$section_uuid\"]) {\n  :where(:scope) > :where([data-element=\"block_type:text\"]) .link {\n    font-weight: 700;\n  }\n}"
+      . "\n@scope ([data-selectable=\"container:$section_uuid\"]) {\n  :where(:scope) > [data-element=\"block_type:text\"] > * {\n    margin: 0;\n  }\n}"
+      . "\n@scope ([data-selectable=\"container:$section_uuid\"]) {\n  a {\n    color: red;\n  }\n}";
+    $tags = [];
+    $this->assertSame($expected_rule_css, $this->container->get('daedalus_stylish.variant_stylesheet')->ruleWearCss($map, $tags));
+    $this->assertContains("daedalus_variant:{$text_variant->id()}", $tags);
+    $this->assertContains('daedalus_variant_list', $tags);
+
+    foreach (['edit', NULL] as $mode) {
+      $request = $this->container->get('request_stack')->getCurrentRequest();
+      $mode === NULL ? $request->cookies->remove('navigationMode') : $request->cookies->set('navigationMode', $mode);
+      $element = $this->container->get('daedalus_stylish.style_backend')->build($entity, $map);
+      $css = (string) $element['#value'];
+      $this->assertStringContainsString($expected_rule_css, $css, $mode ?? 'live');
+      // Own beats worn by order: the rule's own padding prints after the
+      // worn one. Never a class root, never the refused part.
+      $this->assertLessThan(strpos($css, 'padding: 2rem;'), strpos($css, 'padding: 1rem;'), $mode ?? 'live');
+      $this->assertStringNotContainsString('.daedalus-stylish-variant--', $css, $mode ?? 'live');
+      $this->assertStringNotContainsString('.icon', $css, $mode ?? 'live');
+      $this->assertContains("daedalus_variant:{$text_variant->id()}", $element['#cache']['tags'], $mode ?? 'live');
+    }
+
+    // The live render carries the rule's wear in the authoritative tag.
+    $build = $this->container->get('entity_type.manager')->getViewBuilder('entity_test')->view($entity);
+    $html = (string) $this->container->get('renderer')->renderInIsolation($build);
+    $this->assertStringContainsString($rule, $html);
+
+    // The workspace fallback is the element lane's: rule keys are skipped.
+    $this->initializeWorkspacesModule();
+    $this->switchToWorkspace('stage');
+    $tags = [];
+    $this->assertSame('', $this->container->get('daedalus_stylish.variant_stylesheet')->workspaceInlineCss($map, $tags));
+  }
+
+  /**
+   * A map without references neither depends on nor builds the roster.
+   *
+   * Cacheability rides the read (VariantStylesheet::resolveWorn()): the
+   * roster's metadata attaches at each reference delivery resolves, so a
+   * styled entity wearing nothing carries none of the roster's tags (the
+   * list tag a publish invalidates included) in any mode, and the lanes
+   * build no roster along the way: after the compile's build is dropped,
+   * the builder's memo stays empty through both renders.
+   */
+  public function testReferencelessMapSkipsTheRoster(): void {
+    // A published variant exists, so the roster is not trivially empty and
+    // the compiled file is current; the map just never wears it.
+    $this->createVariant('unworn', ['' => ['default' => ['padding' => '1rem']]]);
+    $block_uuid = '66666666-6666-6666-6666-666666666666';
+    $section_uuid = '77777777-7777-7777-7777-777777777777';
+    $entity = EntityTest::create(['name' => 'no-refs']);
+    $entity->save();
+    $map = [
+      "block:$block_uuid" => ['default' => ['padding' => '2rem']],
+      "container:$section_uuid::> pb-text" => ['default' => ['margin' => '0']],
+    ];
+    $entity->set(DaedalusStylishFieldManager::FIELD_NAME, json_encode($map));
+    $entity->save();
+
+    $builder = $this->container->get('daedalus_blueprint.materials_roster_builder');
+    // The roster's tags that are the roster's alone: the three entity
+    // lists its records read (the config tags beside them are owed by the
+    // render in its own right, for the condition thresholds and the
+    // container-roots switch).
+    $list_tags = ['daedalus_variant_list', 'daedalus_swatch_list', 'daedalus_animation_list'];
+    $this->assertSame([], array_diff($list_tags, $builder->cacheMetadata()->getCacheTags()));
+    $memo = new \ReflectionProperty($builder, 'memo');
+    // The variant's save compiled the file over a built roster; drop it so
+    // a build by either render below would show.
+    $builder->reset();
+    $this->assertSame([], $memo->getValue($builder));
+
+    foreach (['edit', NULL] as $mode) {
+      $request = $this->container->get('request_stack')->getCurrentRequest();
+      $mode === NULL ? $request->cookies->remove('navigationMode') : $request->cookies->set('navigationMode', $mode);
+      $element = $this->container->get('daedalus_stylish.style_backend')->build($entity, $map);
+      $this->assertStringContainsString('padding: 2rem;', (string) $element['#value'], $mode ?? 'live');
+      $tags = $element['#cache']['tags'];
+      $this->assertSame([], array_values(array_intersect($list_tags, $tags)), $mode ?? 'live');
+      $this->assertSame([], $memo->getValue($builder), $mode ?? 'live');
+    }
   }
 
 }

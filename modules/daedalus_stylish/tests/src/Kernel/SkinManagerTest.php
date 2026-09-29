@@ -43,6 +43,7 @@ class SkinManagerTest extends KernelTestBase {
     'twig_events',
     'daedalus_tempstore',
     'daedalus_blueprint_api',
+    'file',
     'daedalus_ui',
     'daedalus_stylish',
   ];
@@ -89,7 +90,6 @@ class SkinManagerTest extends KernelTestBase {
     $manager = $this->skinManager();
     $this->assertNull($manager->activeSkinName());
     $this->assertNull($manager->loadActiveSkin());
-    $this->assertSame([], $manager->activeDefaultScopes());
 
     DesignSystem::create(['id' => 'aurora', 'label' => 'Aurora', 'default_skin' => 'aurora'])->save();
     DesignSystem::create(['id' => 'borealis', 'label' => 'Borealis'])->save();
@@ -99,12 +99,10 @@ class SkinManagerTest extends KernelTestBase {
     $this->active()->activate('aurora');
     $this->assertSame('aurora', $manager->activeSkinName());
     $this->assertNull($manager->loadActiveSkin());
-    $this->assertSame([], $manager->activeDefaultScopes());
 
     $skin = DaedalusStylishSkin::create(['label' => 'Aurora', 'machine_name' => 'aurora']);
     $skin->setDefaults(['kind:container' => ['' => ['default' => ['padding' => '2rem']]]])->save();
     $this->assertSame($skin->id(), $manager->loadActiveSkin()?->id());
-    $this->assertSame(['kind:container'], $manager->activeDefaultScopes());
 
     // A system carrying no skin (stencils and doctrine only) wears none.
     $this->active()->activate('borealis');
@@ -118,7 +116,6 @@ class SkinManagerTest extends KernelTestBase {
     $skin->delete();
     $this->assertSame('aurora', $manager->activeSkinName());
     $this->assertNull($manager->loadActiveSkin());
-    $this->assertSame([], $manager->activeDefaultScopes());
   }
 
 }

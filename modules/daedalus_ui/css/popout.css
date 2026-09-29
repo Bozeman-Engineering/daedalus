@@ -1,0 +1,69 @@
+/* The pop-out document: the chrome a window the editing page opens beside
+   itself wears (the stylish inspector satellite, the responsive preview).
+
+   Pop-outs keep the site theme (no theme negotiator), so the document is
+   the theme's page tree with a tool mounted in its main content, and this
+   sheet neutralizes the theme around the tool: the body wears the chrome
+   (the same paint the rail's .daedalus-ui-sidebar wears on the editing
+   page), every wrapper the theme puts between the body and the mount goes
+   transparent and inherits, headings wear the chrome text, and the theme's
+   header and footer stay out. Anchored on html.daedalus-ui-popout, which
+   DaedalusUiHooks::preprocessHtml stamps on every route carrying the
+   _daedalus_ui.popout option (see Chromeless), and attached by that same
+   hook, so no pop-out carries a chrome story of its own.
+
+   The mount is the pop-out display variant's own wrapper around the main
+   content (.daedalus-ui-popout__mount, PopoutDocumentVariant), so "every
+   ancestor of the mount" needs no theme's wrapper names. The :has() is paid
+   only here: this sheet never reaches the editing page, whose document is
+   large enough for body-anchored :has() to cost on every mutation.
+
+   Unlayered (daedalus_stylish_layers_exempt): editor chrome never loses to
+   page CSS (the posture inspector.css takes), and unlayered this sheet
+   beats the theme's layered sheets whatever their specificity. The skin is
+   not in the contest: a pop-out is outside the skin's reach (the gate,
+   _daedalus_stylish_skinless_document()), so it carries neither the
+   stylish token scope element nor the skin's compiled files. */
+
+html.daedalus-ui-popout {
+  scrollbar-color: var(--daedalus-scrollbar-thumb) var(--daedalus-background);
+}
+
+html.daedalus-ui-popout body {
+  margin: 0;
+  color: var(--daedalus-text);
+  /* The shorthand, deliberately: Olivero paints its droplet pattern as a
+     body background-image, which a background-color alone leaves showing. */
+  background: var(--daedalus-background);
+  font-family: var(--daedalus-font);
+}
+
+/* The theme paints its own surfaces, text and type on the wrappers between
+   the body and the mount (Olivero's .page-wrapper is white; daedalus_theme's
+   floor rule sets color, background and font-family on the token scope,
+   which a pop-out no longer carries),
+   and boxes them (a container's max-width and padding). A tool window owns
+   the whole window: every wrapper contributes no box and shows the body
+   through. */
+html.daedalus-ui-popout body :has(.daedalus-ui-popout__mount) {
+  max-width: none;
+  margin: 0;
+  padding: 0;
+  color: inherit;
+  background: transparent;
+  font-family: inherit;
+}
+
+/* Headings would otherwise wear the site theme's heading color; the rail's
+   heading rule, restated for the pop-out. */
+html.daedalus-ui-popout :is(h1, h2, h3, h4, h5, h6) {
+  color: var(--daedalus-text);
+}
+
+/* A tool window, not a site page: the theme's header and footer (printed by
+   its page template whether or not the regions hold blocks) stay out. The
+   role and the class name cover the themes that print either; a tool's own
+   header inside the mount is not the theme's. */
+html.daedalus-ui-popout body :is(header[role="banner"], footer[role="contentinfo"], .site-header, .site-footer):not(.daedalus-ui-popout__mount *) {
+  display: none;
+}

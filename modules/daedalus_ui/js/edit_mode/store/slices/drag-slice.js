@@ -15,9 +15,9 @@ import { createSlice } from '@reduxjs/toolkit';
  * same division: they are IDENTITY, not geometry — the projection keys of
  * the panel row the current drop location addresses and of the container
  * it inserts into — and they change per gap transition, not per mousemove.
- * The page-elements tree consumes the row key to unfold the path to the
- * caret (the drop's twin of the selection's auto-unfold), which is what
- * lets the caret's panel face draw inside folded containers; the selection
+ * The page-elements tree consumes the row key to reveal the path to the
+ * caret (the drop's twin of the selection's reveal rule), which is what
+ * lets the caret's panel face draw inside collapsed containers; the selection
  * indicator consumes the container key to show the drop trail — where the
  * caret sits in the tree, the lift's depth indicator.
  */

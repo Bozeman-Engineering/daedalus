@@ -1,10 +1,7 @@
 library:
   js:
     js/daedalus-edit.js: { attributes: { type: 'module' }}
-    # Plain script: it needs nothing from the module graph, only the
-    # DaedalusEditEntityFormAutoSave behavior entity-form.js registers.
-    js/daedalus_edit/panel-widget-visibility.js: {}
-    js/daedalus-edit-tool-plugin.js: { attributes: { type: 'module' }}
+    js/daedalus-edit-plugin.js: { attributes: { type: 'module' }}
     js/daedalus_edit/sidebars/daedalus-edit-sidebar.js: {}
   css:
     component:
@@ -31,7 +28,13 @@ library:
     - daedalus_ui/modes
     - daedalus_ui/sidebar
     - daedalus_ui/edit_mode
-    - daedalus_ui/update_element
+    # The widget popovers ride the chrome's one floating surface
+    # (js/daedalus_edit/composed/verb-widgets.js opens Drupal.Daedalus.popover).
+    - daedalus_ui/popover
+    # Their content (css/verb-widgets.css) is a token surface that hosts
+    # the kit's segmented control (the editors' pickers).
+    - daedalus_ui/variables
+    - daedalus_ui/panel_controls
     - ckeditor5/internal.drupal.ckeditor5
     - ckeditor5/internal.drupal.ckeditor5.emphasis
     - ckeditor5/internal.drupal.ckeditor5.htmlEngine

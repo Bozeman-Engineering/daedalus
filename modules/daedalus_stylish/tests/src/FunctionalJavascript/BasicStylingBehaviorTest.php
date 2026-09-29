@@ -4,11 +4,14 @@ declare(strict_types=1);
 
 namespace Drupal\Tests\daedalus_stylish\FunctionalJavascript;
 
+use Drupal\daedalus_stylish\Entity\DaedalusStylishSwatch;
+use Drupal\daedalus_stylish\Entity\DaedalusStylishVariant;
 use Drupal\FunctionalJavascriptTests\WebDriverTestBase;
 use Drupal\node\Entity\Node;
 use Drupal\Tests\daedalus\Traits\EditModeTrait;
 use Drupal\Tests\daedalus\Traits\DaedalusFixtureTrait;
 use Drupal\Tests\daedalus\Traits\DesignSystemActivationTrait;
+use Drupal\Tests\daedalus_stylish\Traits\LayerColorTrait;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 
@@ -38,19 +41,47 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  *   pin that valueSpaceFor yields token stops and surfaceFor answers the
  *   well; only a browser proves the rendered well's pick puts the REF in
  *   the map while every face keeps the value.
- * - The resting value at a pose reaches the well (seam: the row's
- *   resting value at a pose is the delivering layer's, reaching the row
- *   through the one derivation, choice-row-model.js restingValue beneath
- *   originFor's ghost, the same read that hues the mark): basic mode
- *   reads a row's VALUE at the exact compound, so posed at Medium the
- *   Size row holds nothing of its own while its Base commit still
- *   delivers there; the well rests unset with the Base value as its
- *   ghost, faced as the display value, and the row's mark wears the
- *   element layer's hue. The derivation (skin, declared, own-at-Base,
- *   variant, set, nothing) is node-pinned; the placeholder wire from the
- *   origin read into the rendered well's ghost text only exists in a
- *   browser, and no shipped fixture skin sets a basic-owned property on
- *   a block scope, so the pose is the wire's proof.
+ * - A Base value posed at Medium is the row's lit value (seam: the
+ *   control model's stack read, controls.js reads over stackAt's
+ *   cascade at the pose, reaching the well's face, the row's mark and
+ *   the Unset verb through one read): posed at Medium the Size row's
+ *   own entry says nothing at the compound while its Base commit still
+ *   delivers there, so the well wears the Base value LIT on the stop
+ *   face (never a ghost or a faded stand-in), the row's mark wears the
+ *   element layer's hue with "from Base" as its story, and the Unset
+ *   gesture is absent: picking the lit stop again is refused (no op,
+ *   the value stays) because nothing of the element's own delivers at
+ *   the pose. Back at Base the same pick IS the unset (the map loses
+ *   the value). style-stack.test.mjs pins the cascade and controls
+ *   ownAtPose; the read reaching a rendered well, its listbox and the
+ *   gesture gate only exists in a browser, and no shipped fixture skin
+ *   sets a basic-owned property on a block scope, so the pose is the
+ *   wire's proof.
+ * - One Background row over the link-first candidate list (seam: the
+ *   text block's restated `background` binding listing `.text-block-link`
+ *   before the root, crossing the served list, controls.js's
+ *   resolveCandidates and the pipeline's key routing to the rendered
+ *   panel and the op spine): a linked text block wearing `button`
+ *   renders exactly ONE Background row on the block's own basic panel,
+ *   lit with the anchor's variant fill on the swatch well's face, the
+ *   row hued in the button layer's color and its mark titled "#1a1a2e
+ *   from Button", no part caption anywhere; a root background written
+ *   through the op path leaves the row on the anchor and puts the inert
+ *   "Also set on element" line in the row's menu; a Center alignment
+ *   picked while posed at Medium fills the row's mark in the element
+ *   hue ("center set here at Medium") and driving the canvas back to
+ *   Base hollows it ("Set at Medium, not here"); after undo a pick
+ *   from the row's well commits at the PART key (write where you read);
+ *   the unlinked text block's Background row commits at the plain
+ *   block key (the absent first candidate falls to the root); and a
+ *   gradient pick on a fresh linked block whose root wears an authored
+ *   band is ONE atomic batch of two update_style ops, the image placed
+ *   on the anchor (the set's box as a group, controls.js resolveGroup)
+ *   and the root's band cleared (a removal lands where the value
+ *   lives), the anchor painting the gradient and the band gone.
+ *   controls.test.mjs pins the address rule and its group form; the
+ *   served list, the rendered row, the routed op and the multi-key
+ *   batch through the op path only meet in a browser.
  * - Typed capture goes blessed (seam: native input events driving the
  *   typedRef settle guard and magnetic capture through the same commit
  *   path): under open enforcement the same binding shapes a detented
@@ -166,8 +197,140 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  *   the entity root's own style tag prints the part rule, and the layout
  *   root's computed `row-gap` changes on the canvas without reload, the
  *   bands moving that far apart. The gate and the count are node-tested
- *   and the binding Kernel-pinned; the declared grid laying the gap out
+ *   and the binding Kernel-pinned; the declared flex column laying the gap out
  *   on the edit canvas exists only here.
+ * - The write address: one link, every link in its section (seam: the
+ *   address switcher over addressSet -> the spine's styling target
+ *   seated on the section's rule -> the canvas paint slot,
+ *   controlModels' rebase and withheld verdicts as live and disabled
+ *   rows, and a Basic widget's typed settle landing at the ADDRESS key
+ *   while the selection stays put). First the reach gate (seam: the
+ *   part resolver's injected reachable-row predicate over reach.js):
+ *   a synthetic Cmd-click on the first link's anchor in Basic (Markup
+ *   view off, no link row drawn) selects the block with no target; the
+ *   Markup view on through the Show menu, the same click seats
+ *   block::.text-block-link; off again, the row goes and the target
+ *   stands as a doorway seat. Then with one link part targeted the
+ *   target chip's switcher lists the link's address set ("This link",
+ *   then the mintable "Every a in the section" and the two chained
+ *   text-block-link shapes, hinted "new rule"); picking the tag rule
+ *   moves the target to container::a, lights the chip there and paints
+ *   every anchor in the section through the printers' own targets (the
+ *   part's dashed box gone with the target); the link's
+ *   rows are judged at `a` (Background and Corners disabled with the
+ *   grant reason as their title, Size live); a typed Size commits ONE
+ *   update_style at container::a, every anchor computes it (an
+ *   h3-rooted block's included) and no root does; back on the own key
+ *   the Size row reads the rule as the inherited origin, and a typed
+ *   own value wins on that anchor alone. addressSet, the rebase rule
+ *   and the editable-layer rule are node-tested (write-address,
+ *   controls, style-stack); the chip, the menu, the injected paint
+ *   computing on the canvas and the disabled posture over one real
+ *   write exist only in a browser.
+ * - Wear at the rule (seam: the wear bar and the Materials card over the
+ *   styling target -> ONE apply_variant at the rule key -> the server's
+ *   rule-wear lane, VariantStylesheet::ruleWearCss, printing the
+ *   variant inside the section's @scope with no class on any element ->
+ *   every anchor computing it): with container::a re-seated, the wear
+ *   bar is live and its picker offers the two base:a variants the
+ *   scenario minted and nothing else; picking one lands the reference
+ *   on the RULE's entry (never on the link or its block) beside the
+ *   rule's own font-size, the row names it, and all three anchors
+ *   compute the variant's color and letter-spacing; on the Materials
+ *   place the target chip still reads the rule, and the other variant's
+ *   card applies at the same rule, replacing the first on its axis. The
+ *   landing pairing, the reference placement and the printed lane are
+ *   Kernel-pinned (StyleMapValidatorTest, VariantApplySubtreeTest,
+ *   VariantStylesheetTest); the gestures aimed at the target and the
+ *   delivered wear computing on the canvas exist only in a browser.
+ * - The member reads the rule's wear (seam: the link part targeted again
+ *   below the selection -> its stack's ancestor tier as a group per
+ *   rule position, style-stack.js ancestorLayers, the worn layer
+ *   `ancestor:{sec}::a|quiet_link` carrying the variant's identity and
+ *   its carrier beneath the rule's own layer -> originOf's worn-ancestor
+ *   branch on the Basic Text color row: the variant's hue through
+ *   layerColor and the sentence naming the variant AND the carrier in
+ *   the switcher's words -> the row's shared menu hook, use-row-menu.js,
+ *   offering the variant's document and "Edit at" the CARRIER -> the
+ *   target seated on the rule): the row's mark wears Quiet link's hue,
+ *   its title starts "#993366 from Quiet link at Every link in the
+ *   section", a right-click opens the provenance menu with "Edit Quiet
+ *   link at …" (opens the variant) and "Edit at Every link in the
+ *   section", and that pick seats container::a with the selection
+ *   unchanged, the chip lit and the wear bar live naming Quiet link.
+ *   The group, the words and the menu spec are node-pinned
+ *   (style-stack, provenance-model, use-row-menu); the rendered mark,
+ *   the real menu on a self-rendered row and the doorway's seat exist
+ *   only here.
+ * - Every choice row carries the source (seam: the widget contract's
+ *   `source` -> ChoiceRow's own `source` prop -> use-row-menu.js
+ *   dispatching the ancestor doorway through `source.target`): with
+ *   the rule still seated, a typed Weight lands ONE update_style at
+ *   container::a and every anchor computes it; back on the link's own
+ *   address the Weight row reads the rule's own layer ("550 inherited
+ *   from the section (a)"), its right-click offers "Edit at the
+ *   section (a)", and the pick seats container::a with the selection
+ *   unchanged. The doorway's words and dispatch are node-pinned
+ *   (provenance-model, use-row-menu); the prop's road from the
+ *   contract through the row into the hook exists only here, and
+ *   before it every choice row's "Edit at" ran inert (the source rode
+ *   inside the highlight bag only the two gap rows filled).
+ * - Typing into the Padding field previews mid-gesture (seam: a native
+ *   input event -> DimensionField's typedPreview -> useFieldGesture's
+ *   preview handing its caller ONE object, {padding: value} -> the
+ *   padding row's patchFor over that object -> basic-controls.js route
+ *   -> source.preview -> the preview sheet's live slot on the canvas):
+ *   with the band selected whole, a typed bare number in the open
+ *   phase's detented Padding field paints every side of the band in
+ *   the space's unit (the static rem label) before any settle, nothing
+ *   dispatched, and the
+ *   blur then commits ONE update_style with the same value and releases
+ *   the slot. The hook's object shape and the row's patch are
+ *   node-tested apart (use-gesture, padding-row), but the callback
+ *   shape crosses from the hook to the component and only the browser
+ *   runs both: a handler still destructuring the old (name, value)
+ *   pair reads an undefined value and paints nothing until blur, which
+ *   is the drift the step accretes against (the stroke widths' field
+ *   and the ring's side editors ride the same hook and were ported in
+ *   the same change).
+ * - ArrowUp on an unset ring cell under rem commits rem seeded from the
+ *   converted placeholder (seam: the canvas probe's px-resolved
+ *   computed side and the document's measured bases (computed-read.js,
+ *   readCanvas) -> the padding ring's cellFor (box-model.js
+ *   sideMeasured: a supplied side outside the dimension grammar reads
+ *   as its measurement; sideAnchor: the cell's unit through
+ *   contextUnit, the space's rem, its number the placeholder converted
+ *   through the MEASURED root, seedAnchor) -> stepKeyGesture's anchor
+ *   -> sideStepValue over the detented space -> applyGesture's preview
+ *   through the ring's patch -> settleGesture's settleSpelling and ONE
+ *   commit): a band wearing no own padding shows its gutter as the left
+ *   cell's placeholder converted into the space's rem (olivero's 2rem
+ *   gutter reads 2rem, never 32px) beneath a Padding row whose static
+ *   label says rem; ArrowUp previews the cell one diagram grain (a
+ *   tenth) above that seed, 2.1rem (never 0.1rem from zero, never px
+ *   from the placeholder), and its release commits that rem literal as
+ *   ONE update_style of padding-left. The seed and the step are
+ *   node-pinned (box-model, dimension-value); the placeholder's road
+ *   from the canvas into the cell, and the unit the committed op
+ *   actually carries, exist only here: before the seed rule the same
+ *   cell read its px placeholder as its own anchor and wrote px beneath
+ *   a row that said rem, and until the conversion rule it printed the
+ *   placeholder's px whole beside a rem select.
+ * - The ring's inline cells read the Site width variant (seam: the
+ *   stack's `padding-inline` line, the worn Site width variant's
+ *   `max(var(--space-gutter), calc(...))`, through resolveSides'
+ *   logical-longhand read (LOGICAL_SIDES) into the right cell's variant
+ *   hue, its hover words ("2rem from Site width") and its converted
+ *   placeholder, then the side editor's `padding-right` write beating
+ *   it on the canvas while the variant stays worn): the right cell of a
+ *   band born by add_section reads the variant, not "computed from the
+ *   theme", a real click opens its editor EMPTY over the measurement
+ *   as a placeholder (2 beside the rem label), and a typed 3 previews
+ *   and commits padding-right: 3rem as ONE update_style, the band
+ *   computing 3rem on the right beside its own left while the map holds
+ *   no padding-inline. The logical read and the measured-cell rule are
+ *   node-pinned (box-model); the hue, the measurement and the write
+ *   meet only in the browser.
  *
  * Scrub pointer math is deliberately NOT exercised here: it is a pure
  * model (value-space.test.mjs) and FJS pointer capture is brittle and
@@ -197,6 +360,7 @@ class BasicStylingBehaviorTest extends WebDriverTestBase {
 
   use DesignSystemActivationTrait;
   use EditModeTrait;
+  use LayerColorTrait;
   use DaedalusFixtureTrait {
     setUp as daedalusSetUp;
   }
@@ -371,6 +535,80 @@ class BasicStylingBehaviorTest extends WebDriverTestBase {
   }
 
   /**
+   * Places a section holding one `text` block and waits for the render.
+   *
+   * The composed block of daedalus_edit_text_block: the anchor
+   * (`.text-block-link`, the declared conditional part the shipped button
+   * variant styles and the first candidate of the block's restated basic
+   * bindings) renders only while field_text_url holds a value, so a block
+   * born with a url has the part and a block born without one has only
+   * its root.
+   *
+   * @param string $section_uuid
+   *   The new section's uuid.
+   * @param string $block_uuid
+   *   The new block's uuid.
+   * @param string $sentinel
+   *   A per-call window variable name for the placement error.
+   * @param string|null $url
+   *   The link's uri, or NULL for an unlinked block.
+   */
+  private function placeTextTypeBlock(string $section_uuid, string $block_uuid, string $sentinel, ?string $url): void {
+    $session = $this->getSession();
+    $url_property = $url === NULL ? '' : "field_text_url: { uri: '$url' },";
+    $session->executeScript(<<<JS
+      (() => {
+        const Blueprint = Drupal.Daedalus.Blueprint;
+        Blueprint.mutate(Object.assign({}, Blueprint.rootContext(), {
+          operations: [
+            {
+              op: 'add_section',
+              uuid: '$section_uuid',
+              location: { anchor: Blueprint.getRoot().uuid, placement: 'inside' },
+            },
+            {
+              op: 'add_element',
+              uuid: '$block_uuid',
+              block_type: 'text',
+              properties: {
+                field_text_text: { value: 'Basic styling link' },
+                $url_property
+              },
+              location: { anchor: '$section_uuid', placement: 'inside' },
+            },
+          ],
+        })).catch((error) => {
+          window.$sentinel = error.message;
+        });
+      })();
+      JS);
+    $this->assertJsCondition(
+      "window.$sentinel !== undefined"
+      . " || JSON.stringify(Drupal.Daedalus.Blueprint.getBlueprint()).includes('$block_uuid')",
+      20000,
+      'The text block placement resolved.',
+    );
+    $placement_error = $session->evaluateScript("window.$sentinel ?? null");
+    $this->assertNull($placement_error, 'Text block placement failed: ' . ($placement_error ?? ''));
+    if ($url === NULL) {
+      $this->assertNotNull(
+        $this->assertSession()->waitForElement('css', "[data-selectable='block:$block_uuid']"),
+        'The unlinked text block rendered on the canvas.',
+      );
+      $this->assertJsCondition(
+        "!document.querySelector(\"[data-selectable='block:$block_uuid'] a.text-block-link\")",
+        20000,
+        'The unlinked text block renders no anchor: its link part is absent.',
+      );
+      return;
+    }
+    $this->assertNotNull(
+      $this->assertSession()->waitForElement('css', "[data-selectable='block:$block_uuid'] a.text-block-link"),
+      'The text block rendered on the canvas with its link part (the anchor the button variant styles).',
+    );
+  }
+
+  /**
    * Types into a Preact-controlled panel input, without settling it.
    *
    * The native value setter plus a real 'input' event is the same wiring
@@ -537,6 +775,25 @@ class BasicStylingBehaviorTest extends WebDriverTestBase {
   }
 
   /**
+   * Asserts the op log holds exactly one batch of the given update_style ops.
+   *
+   * One dispatch carrying exactly count($changes) ops, each change a
+   * [key, properties] pair matched by one op with exactly those
+   * properties (null = unset), in any order.
+   */
+  private function assertOneBatch(array $changes, string $message): void {
+    $this->assertJsCondition(
+      '(() => { const log = ' . self::OP_LOG . '; const changes = ' . json_encode($changes) . ';'
+      . ' if (log.length !== 1 || log[0].length !== changes.length) { return false; }'
+      . ' const sorted = (map) => JSON.stringify(Object.keys(map).sort().map((name) => [name, map[name]]));'
+      . ' return changes.every(([key, properties]) => log[0].some((operation) =>'
+      . " operation.op === 'update_style' && operation.key === key && sorted(operation.properties ?? {}) === sorted(properties))); })()",
+      20000,
+      $message,
+    );
+  }
+
+  /**
    * The basic styling scenario: closed well, empty vocabulary, capture.
    *
    * The scripted scenario, in order:
@@ -555,13 +812,18 @@ class BasicStylingBehaviorTest extends WebDriverTestBase {
    *   the canvas block to the token's resolved size without reload, and
    *   wears the value on the well's face, the lit stop checked in the
    *   list.
-   * - Resting value at a pose (strict): the width chip's real menu poses
-   *   the canvas at Medium; the Size well wears the unset face with the
-   *   Base commit as its ghost text (1.5rem, never var()), titled "Unset;
-   *   1.5rem applies", the row's --daedalus-stylish-origin in the element layer's
-   *   hue; the row menu's header names the value and Base, and its "Go to
-   *   Base" doorway drives the canvas back, the well lit with 1.5rem
-   *   again before the next step.
+   * - Lit value at a pose (strict): the width chip's real menu poses
+   *   the canvas at Medium; the Size well wears the Base commit LIT on
+   *   its stop face (1.5rem, never var(), no ghost text), the row's
+   *   --daedalus-stylish-origin in the element layer's hue and its mark
+   *   titled "1.5rem from Base"; picking the lit stop again in the
+   *   reopened list is refused (no op, the map and the face unchanged:
+   *   no Unset where nothing of the element's own delivers at the pose);
+   *   the row menu's header names the value and Base with no Unset
+   *   item, and its "Go to Base" doorway drives the canvas back, the
+   *   well lit with 1.5rem; at Base the same pick IS the unset (the map
+   *   loses font-size, the well rests unset) and a fresh pick of 1.5rem
+   *   restores the value for the steps that follow.
    * - Font row (strict): the Text section's Font row is the choice WELL
    *   (guide_example mints three distinct stacks, body, heading and
    *   mono, and the heading face outgrows the chip budget), unset with
@@ -575,7 +837,7 @@ class BasicStylingBehaviorTest extends WebDriverTestBase {
    *   well's unset gesture, picking the checked row again in the
    *   reopened list, clears it.
    * - Sections (strict): the selected block's Basic tab reads exactly
-   *   the section headers Text, Surface, Layout, Motion, in roster
+   *   the section headers Layout, Text, Surface, Motion, in roster
    *   order, one per non-empty section.
    * - Empty vocabulary (strict): the Width control renders but holds NO
    *   field row, because width's bound measure scale mints nothing.
@@ -673,7 +935,7 @@ class BasicStylingBehaviorTest extends WebDriverTestBase {
    *   canvas's layout root (daedalus_layout's #layout-builder wearing
    *   .daedalus-layout-layout, inside the entity root) holds exactly the two
    *   bands (A from the strict phase, staged in tempstore across the
-   *   reload, and B) as its child boxes and computes the declared grid;
+   *   reload, and B) as its child boxes and computes the declared flex column;
    *   the Basic tab's Layout section renders the Gap row as the detented
    *   field with the stop picker's chevron (the suite binds gap to the
    *   space scale site-wide, the part included, olivero curates the
@@ -686,7 +948,85 @@ class BasicStylingBehaviorTest extends WebDriverTestBase {
    *   capture, the entity root's style tag holds the part rule, the
    *   layout root's computed row-gap reads the token's resolved length,
    *   the bands sit that much further apart than before, and the field
-   *   wears 1 with rem on its unit select and the blessed chrome.
+   *   wears 1 with rem as its static unit label and the blessed chrome.
+   * - Background (open): a section with one LINKED text block (C) is
+   *   placed and selected, and C wears the shipped `button` variant
+   *   through apply_variant (offered under open law; strict
+   *   guide_example withholds its literal hex and em padding); the
+   *   block's Basic panel renders exactly ONE row whose axis reads
+   *   "Background" (daedalus_edit_text_block restates the kind's
+   *   `background` binding over `['.text-block-link', '']`), its swatch
+   *   well in the literal face painted the button's #1a1a2e, the row
+   *   hued in the button layer's color, its mark titled "#1a1a2e from
+   *   Button", no part caption in the panel, and the map holding nothing
+   *   at the part key; an update_style of background-color on C's ROOT
+   *   through the op path leaves the row reading the anchor and puts
+   *   the inert "Also set on element" line (hinted with the band's
+   *   value) in the row's menu while both boxes paint on the canvas;
+   *   undo clears the root entry and the line; a REAL Center pick on the
+   *   Alignment row while the width chip poses the canvas at Medium
+   *   fills the row's mark (`--here`, the element hue, a circle, "center
+   *   set here at Medium") and the chip's Base entry hollows it (the hue
+   *   kept, "Set at Medium, not here", the row menu's header the same
+   *   with Medium as its drive); and a REAL accent pick from the row's
+   *   well commits ONE
+   *   update_style at `block:{uuid}::.text-block-link` carrying
+   *   background-color alone, the anchor wearing the accent on the
+   *   canvas and the root untouched; then a section with one UNLINKED
+   *   text block (D) is placed and selected, its Basic panel renders one
+   *   Background row over the root alone, and the same accent pick
+   *   commits ONE update_style at the plain block key.
+   * - Write address (open): a band with three LINKED text blocks (two
+   *   `p` roots, one `h3`) is placed; the first block's link PART is
+   *   selected; the target chip's switcher reads "This link" at the
+   *   own address, unlit, no write paint; a real click opens the menu
+   *   "Style this at" listing This link (checked), Every a in the
+   *   section, Text block links directly in Section, Text block
+   *   links in the section (each "new rule"); picking the tag rule lits
+   *   the chip at container::a with the selection unchanged, the write
+   *   paint slot holds the rule's @scope block with the bare `a`
+   *   target, the two sibling anchors wear the dotted box and the
+   *   selected one its dashed selection box; the Background well and
+   *   Corners field are disabled with "… is not allowed at "a" on the
+   *   section …" as their title while Size is live; typing 30px into
+   *   Size and blurring commits ONE update_style at container::a,
+   *   every anchor computes 30px and the roots keep their sizes; the
+   *   reopened menu checks the tag rule with no "new rule" hint;
+   *   picking This link clears the chip and the paint, the Size row
+   *   reads 30 with its mark "30px inherited from Section (a)",
+   *   the Background well is live again; typing 24px commits at the
+   *   link's own key and the anchors compute 24px, 30px, 30px.
+   * - Wear at the rule (open): container::a is re-seated through the
+   *   facade (the switcher's road, already driven above); the wear bar
+   *   is live (not read-only) with its add row enabled; the picker lists
+   *   exactly the two base:a variants minted before the open flip
+   *   ("Accent link", "Quiet link"); picking Accent link dispatches ONE
+   *   apply_variant at container::a, the map carries the reference on
+   *   the rule's entry beside its font-size and none on the link or the
+   *   block, the bar renders one row naming Accent link, every anchor
+   *   computes rgb(51, 102, 153) with letter-spacing 2px, and no
+   *   anchor or root carries a variant class; the Materials place shows
+   *   the chip lit at "Every link in Section", the Quiet link row
+   *   unfolds its card with Apply enabled at the styling target, and
+   *   the click lands ONE apply_variant at container::a replacing the
+   *   axis's reference, every anchor now computing rgb(153, 51, 102)
+   *   with letter-spacing 3px while the rule's font-size stays.
+   * - Member wear (open): Basic mode again, the first link's part
+   *   re-targeted below the selection (the chip back on "This link");
+   *   the Text color row's origin is Quiet link's hue with its mark
+   *   titled "#993366 from Quiet link at Every link in Section…";
+   *   a synthetic right-click on the row opens the provenance menu
+   *   offering "Edit Quiet link at …" (opens the variant) and "Edit at
+   *   Every link in Section"; picking the latter seats container::a
+   *   as the target with the selection still the first link, the chip
+   *   lit and the wear bar live with its one row naming Quiet link.
+   * - Row source (open): with the rule still seated, a typed 550 in the
+   *   Weight field commits ONE update_style at container::a and every
+   *   anchor computes font-weight 550; the link part re-targeted, the
+   *   Weight field reads 550 with its mark titled "550 inherited from
+   *   the section (a)", a synthetic right-click on its row offers "Edit
+   *   at the section (a)", and the pick seats container::a with the
+   *   selection still the first link and the chip lit.
    */
   public function testBasicStylingScenario(): void {
     $this->loginAsEditor();
@@ -725,7 +1065,7 @@ class BasicStylingBehaviorTest extends WebDriverTestBase {
     // under `narrow` instead of `default`.
     $session->resizeWindow(1920, 1200);
 
-    $this->enterEditModeViaCookies($node->toUrl(), 'selector');
+    $this->enterEditModeViaCookies($node->toUrl());
     $this->assertJsCondition(
       'window.Drupal && Drupal.Daedalus && Drupal.Daedalus.Blueprint && !!Drupal.Daedalus.Blueprint.getRoot()',
       20000,
@@ -750,17 +1090,17 @@ class BasicStylingBehaviorTest extends WebDriverTestBase {
     // The block's controls group under the roster's four headers in
     // roster order (controls.js groupControls over the payload's
     // controlSections), one header per non-empty section and no
-    // per-control header: the baseline binds typography and text
-    // color (Text), background, corners and shadow (Surface),
-    // position, spacing and width (Layout) and the motion trigger
-    // (Motion). The grouping is node-tested; only the browser proves
-    // the payload's roster reaches the rendered panel.
+    // per-control header: the baseline binds position, spacing and
+    // width (Layout), typography and text color (Text), background,
+    // corners and shadow (Surface) and the motion trigger (Motion).
+    // The grouping is node-tested; only the browser proves the
+    // payload's roster reaches the rendered panel.
     $this->assertJsCondition(
       "(() => { const titles = [...document.querySelectorAll('#daedalus_stylish_inspector .daedalus-stylish-inspector__control-section-title')]"
       . " .map((title) => title.textContent.trim());"
-      . " return JSON.stringify(titles) === JSON.stringify(['Text', 'Surface', 'Layout', 'Motion']); })()",
+      . " return JSON.stringify(titles) === JSON.stringify(['Layout', 'Text', 'Surface', 'Motion']); })()",
       20000,
-      'The Basic tab reads exactly the section headers Text, Surface, Layout, Motion for the block.',
+      'The Basic tab reads exactly the section headers Layout, Text, Surface, Motion for the block.',
     );
 
     // ----- Closed well commit lands var(). -----
@@ -891,29 +1231,32 @@ class BasicStylingBehaviorTest extends WebDriverTestBase {
       'The well\'s second click closed its popover.',
     );
 
-    // ----- The resting value at a pose reaches the well. -----
-    // Seam: the row's resting value at a pose is the delivering layer's,
-    // reaching the row through the one derivation (choice-row-model.js
-    // restingValue beneath originFor's `ghost`, the same read that hues
-    // the mark and writes the origin sentence). Basic mode reads a row's
-    // VALUE at the exact compound (controls.js: entry[condition]), so
-    // posed at Medium the Size row holds nothing of its own while the
-    // Base commit of var(--text-title-2) still delivers there: the well
-    // rests unset with the Base value as its ghost, faced (1.5rem, never
-    // the var() spelling), titled with the resting story, and the row's
-    // mark wears the element layer's hue. The skin branch of the same
-    // derivation is node-pinned (no shipped fixture skin sets a
-    // basic-owned property on a block scope), so the pose is the wire's
-    // browser proof. Posed through the width chip's real menu, the idiom
-    // AdvancedSectionsBehaviorTest proves; driven back through the row
-    // menu's "Go to Base" doorway before the next step.
+    // ----- A Base value posed at Medium is the row's lit value. -----
+    // Seam: the control model's stack read. controls.js builds the
+    // block's stack once per control and reads each owned property
+    // through stackAt's cascade at the pose; the shown value is the
+    // WINNER's, whichever layer delivers it. Posed at Medium the Size
+    // row's own entry says nothing at the compound while the Base commit
+    // of var(--text-title-2) still delivers there, so the well wears
+    // the Base value LIT on its stop face (1.5rem, never the var()
+    // spelling, never a ghost), the row's mark wears the element layer's
+    // hue with "from Base" as its story, and the Unset gesture is gone:
+    // picking the lit stop again is refused (controls.js ownAtPose, the
+    // one Unset gate) since nothing of the element's own delivers at
+    // the pose. The skin branch of the same read is node-pinned (no
+    // shipped fixture skin sets a basic-owned property on a block
+    // scope), so the pose is the wire's browser proof. Posed through
+    // the width chip's real menu, the idiom AdvancedSectionsBehaviorTest
+    // proves; driven back through the row menu's "Go to Base" doorway,
+    // where the same pick IS the unset.
     $size_row_js = "[...document.querySelectorAll('#daedalus_stylish_inspector .daedalus-stylish-inspector__widget--typography .daedalus-stylish-inspector__widget-row')]"
       . ".find((row) => row.querySelector('.daedalus-stylish-inspector__widget-axis')?.textContent.trim() === 'Size')";
+    $size_map_js = $map . '[' . json_encode($block_a_key) . "]?.default?.['font-size']";
     $this->clickPanelXpath('//div[contains(@class, "daedalus-stylish-chip-row")]/button[contains(@class, "daedalus-stylish-chip--width")]');
     $this->assertJsCondition(
       "!!document.querySelector('.daedalus-ui-menu .daedalus-ui-menu__label')",
       20000,
-      'Resting value at a pose: the width chip opened its menu on the shared primitive.',
+      'Lit value at a pose: the width chip opened its menu on the shared primitive.',
     );
     $session->executeScript(
       "Array.from(document.querySelectorAll('.daedalus-ui-menu__item'))"
@@ -924,29 +1267,67 @@ class BasicStylingBehaviorTest extends WebDriverTestBase {
       . " && (() => { const chip = document.querySelector('#daedalus_stylish_inspector .daedalus-stylish-chip--width');"
       . " return !!chip && chip.classList.contains('daedalus-stylish-chip--lit') && chip.textContent.includes('Medium'); })()",
       20000,
-      'Resting value at a pose: the width chip posed the canvas at Medium (the document wears the width stamp, the chip reads Medium, lit).',
+      'Lit value at a pose: the width chip posed the canvas at Medium (the document wears the width stamp, the chip reads Medium, lit).',
     );
-    // The well: unset at the Medium compound, the Base value resting
-    // beneath it as the ghost text, faced through ghostFace at the pose.
+    // The well: the Base commit lit on the stop face at the Medium
+    // compound, the winner of the stack read, no ghost text anywhere.
     $this->assertJsCondition(
       "(() => { const well = document.querySelector(" . json_encode($size_well) . ');'
-      . " return !!well && well.classList.contains('daedalus-stylish-choice-well--unset')"
-      . " && !well.classList.contains('daedalus-stylish-choice-well--stop')"
-      . " && well.querySelector('.daedalus-stylish-choice-well__text--ghost')?.textContent.trim() === '1.5rem'"
-      . " && well.getAttribute('title') === 'Unset; 1.5rem applies'; })()",
+      . " return !!well && well.classList.contains('daedalus-stylish-choice-well--stop')"
+      . " && !well.classList.contains('daedalus-stylish-choice-well--unset')"
+      . " && well.querySelector('.daedalus-stylish-choice-well__text')?.textContent.trim() === '1.5rem'"
+      . " && !well.querySelector('[class*=\"--ghost\"]')"
+      . " && well.getAttribute('title') !== 'Unset; 1.5rem applies'; })()",
       20000,
-      'Resting value at a pose: posed at Medium, the Size well wears the unset face (nothing set at the Medium compound) with the Base commit as its ghost text 1.5rem (the display face, never var(--text-title-2)), titled "Unset; 1.5rem applies".',
+      'Lit value at a pose: posed at Medium, the Size well wears the Base commit LIT on its stop face, 1.5rem (the display face, never var(--text-title-2)), no ghost text and no "Unset; 1.5rem applies" title: the shown value is the stack winner\'s whichever condition delivers it.',
     );
-    // The mark: the same read as the ghost, so the row's hue is the
-    // element layer's (the own layer delivering from Base).
+    // The mark: the same read as the face, so the row's hue is the
+    // element layer's (the own layer delivering from Base) and its story
+    // names the delivering condition.
     $this->assertJsCondition(
       "($size_row_js)?.style.getPropertyValue('--daedalus-stylish-origin').trim() === 'hsl(213 90% 66%)'",
       20000,
-      'Resting value at a pose: the Size row\'s --daedalus-stylish-origin is the element layer\'s hue (layers.js layerColor(ELEMENT_LAYER)): the ghost and the mark come from the one read of the Base commit.',
+      'Lit value at a pose: the Size row\'s --daedalus-stylish-origin is the element layer\'s hue (layers.js layerColor(ELEMENT_LAYER)): the face and the mark come from the one stack read of the Base commit.',
+    );
+    $this->assertJsCondition(
+      "!!($size_row_js)?.querySelector('[title=\"1.5rem from Base\"]')",
+      20000,
+      'Lit value at a pose: the Size row\'s mark is titled "1.5rem from Base", originOf\'s inherited-from-own-at-another-condition sentence.',
+    );
+    // No Unset at the pose: the reopened list checks the lit stop, and
+    // picking it again (the well's one unset gesture) is refused since
+    // the element's own entry says nothing at Medium: no op leaves the
+    // panel, the map keeps the Base commit, the well stays lit.
+    $this->recordOps();
+    $this->clickPanel($size_well);
+    $this->assertJsCondition(
+      "(() => { const options = Array.from(document.querySelectorAll(" . json_encode($size_options) . '));'
+      . " const checked = options.filter((option) => option.getAttribute('aria-selected') === 'true');"
+      . " return options.length > 1 && checked.length === 1 && checked[0].textContent.includes('1.5rem'); })()",
+      20000,
+      'Lit value at a pose: reopened at Medium, the well\'s list checks the lit Base stop and no other.',
+    );
+    $session->executeScript(
+      'Array.from(document.querySelectorAll(' . json_encode($size_options) . '))'
+      . ".find((option) => option.getAttribute('aria-selected') === 'true').click();"
+    );
+    $this->assertJsCondition(
+      '!document.querySelector(' . json_encode($size_options) . ')'
+      . " && $size_map_js === 'var(--text-title-2)'"
+      . ' && (() => { const well = document.querySelector(' . json_encode($size_well) . ');'
+      . " return !!well && well.classList.contains('daedalus-stylish-choice-well--stop')"
+      . " && well.querySelector('.daedalus-stylish-choice-well__text')?.textContent.trim() === '1.5rem'; })()",
+      20000,
+      'Lit value at a pose: picking the lit stop again at Medium closed the list and was REFUSED as an unset (the map keeps var(--text-title-2) at Base, the well stays lit 1.5rem): nothing of the element\'s own delivers at the pose, so there is nothing to unset.',
+    );
+    $this->assertSame(
+      0,
+      (int) $session->evaluateScript(self::OP_LOG . '.length'),
+      'Lit value at a pose: the refused unset dispatched no op.',
     );
     // The origin in words and its drive doorway: the row menu's header
-    // tells the story the ghost wears, and "Go to Base" drives the
-    // canvas back to the delivering condition, the well lit again.
+    // tells the story the mark wears with no Unset item beside it, and
+    // "Go to Base" drives the canvas back to the delivering condition.
     $session->executeScript(
       "(() => { const row = $size_row_js; const rect = row.getBoundingClientRect();"
       . " row.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true,"
@@ -955,11 +1336,15 @@ class BasicStylingBehaviorTest extends WebDriverTestBase {
     $this->assertJsCondition(
       "!!document.querySelector('.daedalus-ui-menu .daedalus-ui-menu__header')",
       20000,
-      'Resting value at a pose: the right-click on the Size row opened the row menu with its origin header on the shared primitive.',
+      'Lit value at a pose: the right-click on the Size row opened the row menu with its origin header on the shared primitive.',
     );
-    $size_header = (string) $session->evaluateScript("document.querySelector('.daedalus-ui-menu .daedalus-ui-menu__header').textContent");
-    $this->assertStringContainsString('1.5rem', $size_header, 'Resting value at a pose: the row menu header names the resting value by its display face. Header: ' . $size_header);
-    $this->assertStringContainsString('Base', $size_header, 'Resting value at a pose: the row menu header names the delivering condition (Base), not the posed one. Header: ' . $size_header);
+    $size_menu = json_decode((string) $session->evaluateScript(
+      "JSON.stringify({ header: document.querySelector('.daedalus-ui-menu .daedalus-ui-menu__header').textContent,"
+      . " labels: Array.from(document.querySelectorAll('.daedalus-ui-menu__item .daedalus-ui-menu__label')).map((label) => label.textContent.trim()) })"
+    ), TRUE);
+    $this->assertStringContainsString('1.5rem', $size_menu['header'], 'Lit value at a pose: the row menu header names the lit value by its display face. Header: ' . $size_menu['header']);
+    $this->assertStringContainsString('Base', $size_menu['header'], 'Lit value at a pose: the row menu header names the delivering condition (Base), not the posed one. Header: ' . $size_menu['header']);
+    $this->assertNotContains('Unset', $size_menu['labels'], 'Lit value at a pose: the row menu offers no Unset doorway at Medium (the own entry delivers at Base, not at the pose). Items: ' . implode(', ', $size_menu['labels']));
     $session->executeScript(
       "Array.from(document.querySelectorAll('.daedalus-ui-menu__item'))"
       . ".find((item) => item.querySelector('.daedalus-ui-menu__label')?.textContent.trim() === 'Go to Base').click();"
@@ -970,15 +1355,51 @@ class BasicStylingBehaviorTest extends WebDriverTestBase {
       . " && (() => { const chip = document.querySelector('#daedalus_stylish_inspector .daedalus-stylish-chip--width');"
       . " return !!chip && !chip.classList.contains('daedalus-stylish-chip--lit') && chip.textContent.trim().startsWith('Base'); })()",
       20000,
-      'Resting value at a pose: "Go to Base" drove the canvas back (the width stamp is gone, the chip reads Base, unlit, the row menu closed).',
+      'Lit value at a pose: "Go to Base" drove the canvas back (the width stamp is gone, the chip reads Base, unlit, the row menu closed).',
     );
     $this->assertJsCondition(
       "(() => { const well = document.querySelector(" . json_encode($size_well) . ');'
       . " return !!well && well.classList.contains('daedalus-stylish-choice-well--stop')"
-      . " && !well.querySelector('.daedalus-stylish-choice-well__text--ghost')"
       . " && well.querySelector('.daedalus-stylish-choice-well__text')?.textContent.trim() === '1.5rem'; })()",
       20000,
-      'Resting value at a pose: back at Base the Size well wears the committed stop\'s face, 1.5rem lit with no ghost: the value is the row\'s own again for the steps that follow.',
+      'Lit value at a pose: back at Base the Size well wears the committed stop\'s face, 1.5rem lit, the same face the pose showed: the value is the row\'s own at the pose now.',
+    );
+    // Unset present at Base: the same pick of the checked row now IS the
+    // unset (the own entry delivers at the exact pose), the map loses
+    // font-size and the well rests unset; a fresh pick of 1.5rem
+    // restores the value for the steps that follow.
+    $this->recordOps();
+    $this->clickPanel($size_well);
+    $this->assertJsCondition(
+      'Array.from(document.querySelectorAll(' . json_encode($size_options) . "))"
+      . ".some((option) => option.getAttribute('aria-selected') === 'true' && option.getAttribute('title') === 'Unset')",
+      20000,
+      'Unset at Base: the reopened list\'s checked row carries the Unset title.',
+    );
+    $session->executeScript(
+      'Array.from(document.querySelectorAll(' . json_encode($size_options) . '))'
+      . ".find((option) => option.getAttribute('aria-selected') === 'true').click();"
+    );
+    $this->assertJsCondition(
+      "$size_map_js === undefined"
+      . ' && (() => { const well = document.querySelector(' . json_encode($size_well) . ');'
+      . " return !!well && well.classList.contains('daedalus-stylish-choice-well--unset'); })()",
+      20000,
+      'Unset at Base: picking the lit stop again at Base unset it (the map holds no font-size for the block, the well rests unset): the own entry delivered at the exact pose, so the gesture had something to remove.',
+    );
+    $this->assertOneOp($block_a_key, ['font-size' => NULL], 'Unset at Base: the unset was ONE update_style op on the block carrying font-size: null.');
+    $this->clickPanel($size_well);
+    $session->executeScript(
+      'Array.from(document.querySelectorAll(' . json_encode($size_options) . '))'
+      . ".find((option) => option.textContent.includes('1.5rem')).click();"
+    );
+    $this->assertJsCondition(
+      "$size_map_js === 'var(--text-title-2)'"
+      . ' && (() => { const well = document.querySelector(' . json_encode($size_well) . ');'
+      . " return !!well && well.classList.contains('daedalus-stylish-choice-well--stop')"
+      . " && well.querySelector('.daedalus-stylish-choice-well__text')?.textContent.trim() === '1.5rem'; })()",
+      20000,
+      'Unset at Base: a fresh pick of 1.5rem restored var(--text-title-2) to the map and the lit face to the well for the steps that follow.',
     );
 
     // ----- The Font row wears the skin's stacks and commits a reference. -----
@@ -1287,6 +1708,30 @@ class BasicStylingBehaviorTest extends WebDriverTestBase {
     // inert, never refused, and no open-phase claim reads block A or
     // section A's own values. The Edit Mode cookies persist, so the next
     // render is still the editing chrome.
+    // Two base:a variants for the wear-at-the-rule leg at the end: the
+    // site ships none, and a rule's offer is its landing's (the tag `a`
+    // for container::a), so these two are exactly what the picker
+    // lists there. Minted before the activation so the materials
+    // payload the reload boots the store with (the roster's cache rides
+    // the active-system config tag) carries them.
+    foreach ([
+      ['label' => 'Accent link', 'color' => '#336699', 'letter-spacing' => '2px'],
+      ['label' => 'Quiet link', 'color' => '#993366', 'letter-spacing' => '3px'],
+    ] as $link_variant) {
+      $variant = DaedalusStylishVariant::create([
+        'label' => $link_variant['label'],
+        'scope' => 'base:a',
+      ]);
+      $variant->setStyles(['' => ['default' => ['color' => $link_variant['color'], 'letter-spacing' => $link_variant['letter-spacing']]]]);
+      $variant->save();
+    }
+    // One published gradient swatch for the Background replacement step:
+    // the client guide payload carries it as the widget's gradient stop
+    // and the compiled swatch stylesheet delivers its custom property, so
+    // it too is minted before the activation and the reload.
+    $swatch = DaedalusStylishSwatch::create(['label' => 'Hero fade', 'kind' => 'gradient']);
+    $swatch->setSwatchValue('linear-gradient(135deg, #e94560, #16213e)')->save();
+    $this->assertSame('hero_fade', $swatch->getMachineName(), 'The gradient swatch minted as --swatch-hero_fade.');
     $this->activateSkin('olivero', 'olivero');
     $this->assertSame(
       'open',
@@ -1375,10 +1820,11 @@ class BasicStylingBehaviorTest extends WebDriverTestBase {
     $this->assertJsCondition(
       "(() => { const input = document.querySelector(" . json_encode($size_input) . ');'
       . " return !document.querySelector('.daedalus-ui-menu') && input.value === '1.25'"
-      . " && input.closest('.daedalus-stylish-dimension').querySelector('.daedalus-stylish-dimension__unit').value === 'rem'"
+      . " && input.closest('.daedalus-stylish-dimension').querySelector('.daedalus-stylish-dimension__unit-label').textContent === 'rem'"
+      . " && !input.closest('.daedalus-stylish-dimension').querySelector('.daedalus-stylish-dimension__unit-well')"
       . " && input.closest('.daedalus-stylish-dimension').classList.contains('daedalus-stylish-dimension--blessed'); })()",
       20000,
-      'The menu closed on the pick and the face wears the stop\'s display value (the number in the input, the unit on the select) with the blessed chrome.',
+      'The menu closed on the pick and the face wears the stop\'s display value (the number in the input, the unit on the static label; the type scale names rem, so no select) with the blessed chrome.',
     );
 
     // ----- Alt+ArrowDown from the input opens the picker. -----
@@ -1412,7 +1858,7 @@ class BasicStylingBehaviorTest extends WebDriverTestBase {
     $this->assertJsCondition(
       'document.querySelector(' . json_encode($size_input) . ").value === '.85'",
       20000,
-      'The typed text echoed into the controlled input as its number face (the unit rides the select).',
+      'The typed text echoed into the controlled input as its number face (the unit rides the label).',
     );
     $this->blurPanel($size_input);
     $this->assertJsCondition(
@@ -1514,7 +1960,7 @@ class BasicStylingBehaviorTest extends WebDriverTestBase {
     // marker), never the "?" custom face.
     $this->switchMode('Basic');
     $widget = self::TEXT_COLOR_WIDGET;
-    $well = "$widget .daedalus-stylish-inspector__widget-row > .daedalus-stylish-swatch-well";
+    $well = "$widget .daedalus-stylish-inspector__widget-row .daedalus-stylish-inspector__widget-value > .daedalus-stylish-swatch-well";
     $this->assertNotNull(
       $assert_session->waitForElement('css', "$well.daedalus-stylish-swatch-well--literal"),
       'The text_color well wears the literal face for the committed custom color.',
@@ -1653,6 +2099,54 @@ class BasicStylingBehaviorTest extends WebDriverTestBase {
       'Escape closed the picker opened through the closed panel and returned focus to the add row.',
     );
 
+    // ----- Copy styles, paste styles. -----
+    // Seam: daedalus_ui's hotkey dispatcher (mod+alt+c and mod+alt+v under
+    // the selection context) -> the styles clipboard (copy-styles.js:
+    // the target's own document out of the mirror's map) -> one
+    // commitBatch of update_style ops under one label -> the mirror and
+    // the canvas -> one undo entry. Block B wears the picker's literal;
+    // block A, styled earlier, gains it additively. 'mod' resolves by
+    // platform (binding.js): the meta key on a Mac, ctrl elsewhere, so
+    // the press carries whichever this browser reads, and an alt combo
+    // matches on event.code (macOS composes alt+c into a character), so
+    // the press carries the physical key too.
+    $mod = $session->evaluateScript('/mac/i.test(navigator.platform)') ? 'metaKey' : 'ctrlKey';
+    $this->pressHotkey('c', [$mod => TRUE, 'altKey' => TRUE, 'code' => 'KeyC']);
+    $this->assertJsCondition(
+      "Drupal.Daedalus.messenger.history().some((entry) => entry.type === 'status' && /^Copied \\d+ styles?\\.$/.test(entry.message))",
+      20000,
+      'mod+alt+c copied block B\'s styles and said so through the messenger.',
+    );
+    $session->executeScript("Drupal.Daedalus.Selection.select('$block_a_key');");
+    $this->assertJsCondition(
+      "Drupal.Daedalus.Selection.getSelected() === " . json_encode($block_a_key),
+      20000,
+      'Block A is the selection for the paste.',
+    );
+    $this->pressHotkey('v', [$mod => TRUE, 'altKey' => TRUE, 'code' => 'KeyV']);
+    $this->assertJsCondition(
+      $map . '[' . json_encode($block_a_key) . "]?.default?.color === '#0a55f0'",
+      20000,
+      'mod+alt+v pasted the copied color onto block A: the batch landed in the mirror.',
+    );
+    $this->assertJsCondition(
+      "getComputedStyle(document.querySelector(\"$canvas_a\")).color === 'rgb(10, 85, 240)'",
+      20000,
+      'The canvas block A wears the pasted color without reload.',
+    );
+    $this->assertJsCondition(
+      "Drupal.Daedalus.messenger.history().some((entry) => entry.type === 'status' && /^Pasted \\d+ styles?\\.$/.test(entry.message))",
+      20000,
+      'The paste toasted its count once the batch settled.',
+    );
+    // One paste is one history entry: undo takes the whole batch back.
+    $this->pressHotkey('z', [$mod => TRUE]);
+    $this->assertJsCondition(
+      $map . '[' . json_encode($block_a_key) . "]?.default?.color !== '#0a55f0'",
+      20000,
+      'Undo reverted the paste as one entry: block A no longer carries the pasted color.',
+    );
+
     // ----- A claimed axis yields its row to the section surfacing it. -----
     // Seam: the inspector's mode -> the claim aggregation from the mounted
     // sections (basic mounts the Layout section, whose Stack | Columns
@@ -1677,9 +2171,9 @@ class BasicStylingBehaviorTest extends WebDriverTestBase {
     );
     $this->clickPanelXpath($columns_segment);
     $this->assertJsCondition(
-      'JSON.stringify(' . $map . '[' . json_encode($container_key) . "]?.variants ?? []).includes('row')",
+      'JSON.stringify(' . $map . '[' . json_encode($container_key) . "]?.variants ?? []).includes('columns')",
       20000,
-      'The Columns flip committed apply_variant: the container wears the shipped row variant on container_layout.',
+      'The Columns flip committed apply_variant: the container wears the shipped columns variant on container_layout.',
     );
     $layout_row = '//div[contains(@class, "daedalus-stylish-wear-bar__row")][.//span[contains(@class, "daedalus-stylish-wear-bar__label")][normalize-space() = "Layout"]]';
     $layout_row_js = 'document.evaluate(' . json_encode($layout_row) . ', document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue';
@@ -1955,10 +2449,10 @@ class BasicStylingBehaviorTest extends WebDriverTestBase {
       . " const input = row.querySelector('input[aria-label=\"Border\"]');"
       . " return row.querySelector('.daedalus-stylish-stroke-row__part--color .daedalus-stylish-swatch-well').classList.contains('daedalus-stylish-swatch-well--stop')"
       . " && row.querySelector('.daedalus-stylish-stroke-row__part--style .daedalus-stylish-swatch-well').classList.contains('daedalus-stylish-swatch-well--stop')"
-      . " && input.value === '1' && input.closest('.daedalus-stylish-dimension').querySelector('.daedalus-stylish-dimension__unit').value === 'px'"
+      . " && input.value === '1' && input.closest('.daedalus-stylish-dimension').querySelector('.daedalus-stylish-dimension__unit-label').textContent === 'px'"
       . " && !document.querySelector('.daedalus-ui-popover .daedalus-stylish-swatch-popover'); })()",
       20000,
-      'The popover closed and the row wears the completed stroke: the color and style wells light their stops and the width field reads 1px.',
+      'The popover closed and the row wears the completed stroke: the color and style wells light their stops and the width field reads 1 beside its static px label (the stroke widths name px).',
     );
 
     // ----- The ring's right cell commits twelve longhands in one op. -----
@@ -2149,9 +2643,10 @@ class BasicStylingBehaviorTest extends WebDriverTestBase {
       . ' return boxes.length === 2'
       . ' && boxes.some((box) => box.matches(' . json_encode($section_a) . '))'
       . ' && boxes.some((box) => box.matches(' . json_encode($section_b) . '))'
-      . " && getComputedStyle(root).display === 'grid'; })()",
+      . " && getComputedStyle(root).display === 'flex'"
+      . " && getComputedStyle(root).flexDirection === 'column'; })()",
       20000,
-      'The edit canvas renders the layout root (daedalus_layout\'s #layout-builder wearing .daedalus-layout-layout) inside the entity root, holding exactly the two bands as its child boxes and laid out as the declared grid.',
+      'The edit canvas renders the layout root (daedalus_layout\'s #layout-builder wearing .daedalus-layout-layout) inside the entity root, holding exactly the two bands as its child boxes and laid out as the declared flex column.',
     );
     $gap_widget = '#daedalus_stylish_inspector .daedalus-stylish-inspector__widget--gap';
     $gap_input = "$gap_widget input[aria-label='Gap']";
@@ -2248,15 +2743,1466 @@ class BasicStylingBehaviorTest extends WebDriverTestBase {
       . ' return !!root && getComputedStyle(root).rowGap === ' . json_encode($gap_facts['tokenGap'])
       . " && Math.abs($bands_apart_js - (" . json_encode((float) $gap_facts['apart']) . ' + ' . json_encode($token_gap) . ')) < 1; })()',
       20000,
-      'The layout root computes the md token\'s row-gap and the two bands sit that much further apart on the canvas without reload: the declared grid laid the page gap out.',
+      'The layout root computes the md token\'s row-gap and the two bands sit that much further apart on the canvas without reload: the declared flex column laid the page gap out.',
     );
     $this->assertJsCondition(
       '(() => { const input = document.querySelector(' . json_encode($gap_input) . ');'
       . " return !document.querySelector('.daedalus-ui-menu') && !!input && input.value === '1'"
-      . " && input.closest('.daedalus-stylish-dimension').querySelector('.daedalus-stylish-dimension__unit').value === 'rem'"
+      . " && input.closest('.daedalus-stylish-dimension').querySelector('.daedalus-stylish-dimension__unit-label').textContent === 'rem'"
+      . " && !input.closest('.daedalus-stylish-dimension').querySelector('.daedalus-stylish-dimension__unit-well')"
       . " && input.closest('.daedalus-stylish-dimension').classList.contains('daedalus-stylish-dimension--blessed'); })()",
       20000,
-      'The menu closed on the pick and the Gap field wears the stop\'s display value (1 on the input, rem on the unit select) with the blessed chrome.',
+      'The menu closed on the pick and the Gap field wears the stop\'s display value (1 on the input, rem on the static unit label; the space scale names rem, so no select) with the blessed chrome.',
+    );
+
+    // ----- Background: one row over the link-first candidate list. -----
+    // Seam: daedalus_edit_text_block restates the kind's `background`
+    // binding over `['.text-block-link', '']` beside the shipped `button`
+    // variant; controls.js builds one candidate per served address and
+    // resolveCandidates answers, per owned property, the first candidate
+    // whose stack delivers an AUTHORED value (here the anchor: the root's
+    // reference layer resolved at the part's suffix), so the block's OWN
+    // basic panel renders exactly one Background row lit with the
+    // anchor's fill and no part caption (the retired second row). The
+    // pipeline routes the row's writes to the resolved key (write where
+    // you read), the Surface header's chip surfaces a second authored
+    // candidate (`more`), and an absent first candidate (the unlinked
+    // block's anchor) falls to the root. The served list, the rendered
+    // row and the routed op only meet in a browser. Under open law only:
+    // guide_example's strict law withholds the button (its literal hex
+    // fails the bound color scale), which is why the leg rides the open
+    // phase.
+    $block_c_uuid = $uuid_service->generate();
+    $section_c_uuid = $uuid_service->generate();
+    $this->placeTextTypeBlock($section_c_uuid, $block_c_uuid, '__linkPlacementError', 'https://example.com');
+    $block_c_key = "block:$block_c_uuid";
+    $link_key = "$block_c_key::.text-block-link";
+    $canvas_c = "[data-selectable='$block_c_key']";
+    $session->executeScript("Drupal.Daedalus.Selection.select('$block_c_key');");
+    $this->assertJsCondition(
+      "(() => { const active = document.querySelector('.daedalus-stylish-inspector__ui-mode button[aria-pressed=\"true\"]');"
+      . " return !!active && active.textContent.trim() === 'Basic'; })()",
+      20000,
+      'Background: the inspector is in Basic mode on the linked text block.',
+    );
+    $this->assertJsCondition(
+      "Drupal.Daedalus.Materials.has('variant', 'button')",
+      20000,
+      'Background: the shipped button variant (daedalus_edit_text_block\'s, imported on install) is on the open roster.',
+    );
+    $session->executeScript(<<<JS
+      (() => {
+        const Blueprint = Drupal.Daedalus.Blueprint;
+        Blueprint.mutate(Object.assign({}, Blueprint.rootContext(), {
+          operations: [{ op: 'apply_variant', key: '$block_c_key', variant: 'button' }],
+        })).catch((error) => {
+          window.__buttonWearError = error.message;
+        });
+      })();
+      JS);
+    $this->assertJsCondition(
+      'window.__buttonWearError !== undefined || JSON.stringify(' . $map . '[' . json_encode($block_c_key) . "]?.variants ?? []).includes('button')",
+      20000,
+      'Background: the button wear resolved.',
+    );
+    $wear_error = $session->evaluateScript('window.__buttonWearError ?? null');
+    $this->assertNull($wear_error, 'Background: wearing the button variant failed: ' . ($wear_error ?? ''));
+    // Seam one: the resolution rule picked the anchor and the caption is
+    // gone. The row is the background widget's, its axis the binding's
+    // label (the kind's "Background", restated, never "Link fill"), and
+    // it is the only row of that name on the panel.
+    $background_rows_js = "[...document.querySelectorAll('#daedalus_stylish_inspector .daedalus-stylish-inspector__widget--background .daedalus-stylish-inspector__widget-row')]"
+      . ".filter((row) => row.querySelector('.daedalus-stylish-inspector__widget-axis')?.textContent.trim() === 'Background')";
+    $background_row_js = "($background_rows_js)[0]";
+    $background_well_xpath = '//div[@id = "daedalus_stylish_inspector"]//*[contains(@class, "daedalus-stylish-inspector__widget--background")]'
+      . '//*[contains(@class, "daedalus-stylish-inspector__widget-row")][.//*[contains(@class, "daedalus-stylish-inspector__widget-axis") and normalize-space() = "Background"]]'
+      . '//button[contains(@class, "daedalus-stylish-swatch-well")]';
+    $this->assertJsCondition(
+      "($background_rows_js).length === 1",
+      20000,
+      'Background: the linked block\'s Basic panel renders exactly ONE row whose axis reads "Background" (the kind\'s id restated over the link-first list; no "Link fill" row beside it).',
+    );
+    $this->assertJsCondition(
+      "!document.querySelector('#daedalus_stylish_inspector .daedalus-stylish-inspector__control-caption')",
+      20000,
+      'Background: no part caption renders anywhere on the panel (one row per binding, always; the caption is retired).',
+    );
+    $this->assertJsCondition(
+      "(() => { const row = $background_row_js; if (!row) { return false; }"
+      . " const well = row.querySelector('button.daedalus-stylish-swatch-well');"
+      . " const face = well?.querySelector('.daedalus-stylish-swatch-well__face');"
+      . " return !!well && well.classList.contains('daedalus-stylish-swatch-well--literal')"
+      . " && !!face && getComputedStyle(face).backgroundColor === 'rgb(26, 26, 46)'; })()",
+      20000,
+      'Background: the row\'s swatch well wears the literal face painted the button\'s #1a1a2e (rgb(26, 26, 46)): the rule resolved background-color to the anchor, whose stack lit the root\'s reference layer at .text-block-link.',
+    );
+    $this->assertJsCondition(
+      "($background_row_js)?.style.getPropertyValue('--daedalus-stylish-origin').trim() === " . json_encode(self::layerColor('button')),
+      20000,
+      'Background: the row\'s --daedalus-stylish-origin is the button layer\'s hue (layerColor(variantLayerId(button))).',
+    );
+    $this->assertJsCondition(
+      "($background_row_js)?.querySelector('.daedalus-stylish-inspector__mark')?.title === '#1a1a2e from Button'",
+      20000,
+      'Background: the row\'s mark is titled "#1a1a2e from Button", originOf\'s inherited-from-variant sentence over the anchor\'s read.',
+    );
+    $this->assertJsCondition(
+      '!' . $map . '[' . json_encode($link_key) . ']',
+      20000,
+      'Background: the map holds no entry at the part key; the lit fill is the variant layer\'s, never a write.',
+    );
+
+    // Seam two: the second authored candidate rides the row's menu. A
+    // root background written through the op path (never the row: the
+    // row addresses the anchor) is a second AUTHORED candidate for the
+    // same property; the rule keeps the row on the first (the anchor)
+    // and the read carries the other box as `alsoOn` (controls.js
+    // resolveCandidates) into the origin and the row menu's inert
+    // "Also set on element" line, hinted with the band's value, so the
+    // hidden value surfaces honestly on the row that flattened it (no
+    // section-header chip). The menu opens through the shared row menu
+    // hook on a synthetic right-click; an outside pointerdown dismisses
+    // the surface (the popover's own leave rule).
+    $background_menu_items_js = "Array.from(document.querySelectorAll('.daedalus-ui-menu .daedalus-ui-menu__item'))"
+      . ".map((item) => [item.querySelector('.daedalus-ui-menu__label')?.textContent.trim(), item.querySelector('.daedalus-ui-menu__hint')?.textContent.trim() ?? null, item.getAttribute('aria-disabled')])";
+    $open_background_menu_js = "(() => { const row = $background_row_js; const rect = row.getBoundingClientRect();"
+      . " row.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: rect.left + 8, clientY: rect.top + rect.height / 2 })); })()";
+    $dismiss_menu_js = "document.body.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));";
+    $session->executeScript($open_background_menu_js);
+    $this->assertJsCondition(
+      "(() => { const items = $background_menu_items_js; if (!document.querySelector('.daedalus-ui-menu') || items.length === 0) { return false; }"
+      . " return document.querySelector('.daedalus-ui-menu .daedalus-ui-menu__header')?.textContent.trim() === '#1a1a2e from Button'"
+      . " && !items.some(([label]) => (label ?? '').startsWith('Also set on')); })()",
+      20000,
+      'Background: before the root write the row menu opens under the origin\'s header ("#1a1a2e from Button") with no "Also set on" line (one authored candidate, nothing hidden).',
+    );
+    $session->executeScript($dismiss_menu_js);
+    $this->assertJsCondition(
+      "!document.querySelector('.daedalus-ui-menu')",
+      20000,
+      'Background: the outside pointerdown dismissed the row menu.',
+    );
+    $session->executeScript(<<<JS
+      (() => {
+        const Blueprint = Drupal.Daedalus.Blueprint;
+        Blueprint.mutate(Object.assign({}, Blueprint.rootContext(), {
+          operations: [{ op: 'update_style', key: '$block_c_key', properties: { 'background-color': '#ff0000' } }],
+        })).catch((error) => {
+          window.__rootBandError = error.message;
+        });
+      })();
+      JS);
+    $this->assertJsCondition(
+      'window.__rootBandError !== undefined || ' . $map . '[' . json_encode($block_c_key) . "]?.default?.['background-color'] === '#ff0000'",
+      20000,
+      'Background: the root band write resolved.',
+    );
+    $root_band_error = $session->evaluateScript('window.__rootBandError ?? null');
+    $this->assertNull($root_band_error, 'Background: writing background-color on the block root failed: ' . ($root_band_error ?? ''));
+    $this->assertJsCondition(
+      "(() => { const rows = $background_rows_js; if (rows.length !== 1) { return false; }"
+      . " const face = rows[0].querySelector('button.daedalus-stylish-swatch-well .daedalus-stylish-swatch-well__face');"
+      . " const mark = rows[0].querySelector('.daedalus-stylish-inspector__mark');"
+      . " return !!face && getComputedStyle(face).backgroundColor === 'rgb(26, 26, 46)'"
+      . " && !!mark && mark.title === '#1a1a2e from Button'"
+      . " && mark.classList.contains('daedalus-stylish-inspector__mark--here')"
+      . " && mark.style.getPropertyValue('--daedalus-stylish-origin').trim() === " . json_encode(self::layerColor('button')) . '; })()',
+      20000,
+      'Background: the one row still reads the anchor (the button\'s #1a1a2e, its mark titled from Button, filled in the button hue since the variant\'s block is the posed Base), never the root\'s band: authored-first keeps list order between two authored candidates.',
+    );
+    $session->executeScript($open_background_menu_js);
+    $this->assertJsCondition(
+      "(() => { const items = $background_menu_items_js; if (!document.querySelector('.daedalus-ui-menu') || items.length === 0) { return false; }"
+      . " return document.querySelector('.daedalus-ui-menu .daedalus-ui-menu__header')?.textContent.trim() === '#1a1a2e from Button'"
+      . " && items.some(([label, hint, disabled]) => label === 'Also set on element' && hint === '#ff0000' && disabled === 'true'); })()",
+      20000,
+      'Background: the row menu carries the inert "Also set on element" line hinted with the band\'s #ff0000 under the anchor\'s header: the root\'s authored band is the second authored candidate the row does not show (resolveCandidates\' alsoOn, through the origin into rowMenu).',
+    );
+    $session->executeScript($dismiss_menu_js);
+    $this->assertJsCondition(
+      "!document.querySelector('.daedalus-ui-menu')",
+      20000,
+      'Background: the row menu closed again.',
+    );
+    $this->assertJsCondition(
+      "(() => { const block = document.querySelector(\"$canvas_c\"); const link = block?.querySelector('a.text-block-link');"
+      . " return !!link && getComputedStyle(block).backgroundColor === 'rgb(255, 0, 0)' && getComputedStyle(link).backgroundColor === 'rgb(26, 26, 46)'; })()",
+      20000,
+      'Background: both boxes paint on the canvas (the root\'s red band, the anchor\'s dark pill): the menu line names a value that really paints, the honesty rule\'s reason.',
+    );
+
+    // Undo the root band (the timeline's last step), so the pick below
+    // lands on a block whose only authored background is the anchor's.
+    $session->executeScript('Drupal.Daedalus.History.undo();');
+    $this->assertJsCondition(
+      $map . '[' . json_encode($block_c_key) . "]?.default?.['background-color'] === undefined",
+      20000,
+      'Background: undo cleared the root band from the map.',
+    );
+    $session->executeScript("Drupal.Daedalus.Selection.select('$block_c_key');");
+    $this->assertJsCondition(
+      "($background_rows_js).length === 1",
+      20000,
+      'Background: after undo the one row stands.',
+    );
+    $session->executeScript($open_background_menu_js);
+    $this->assertJsCondition(
+      "(() => { const items = $background_menu_items_js; if (!document.querySelector('.daedalus-ui-menu') || items.length === 0) { return false; }"
+      . " return !items.some(([label]) => (label ?? '').startsWith('Also set on')); })()",
+      20000,
+      'Background: after undo the row menu carries no "Also set on" line (one authored candidate again).',
+    );
+    $session->executeScript($dismiss_menu_js);
+    $this->assertJsCondition(
+      "!document.querySelector('.daedalus-ui-menu')",
+      20000,
+      'Background: the row menu closed after the undo read.',
+    );
+
+    // ----- The mark at the pose: set here, then not here. -----
+    // Seam: the canvas vector (the width chip's real menu posing the
+    // canvas at Medium) -> the editing compound the row writes at -> the
+    // stack read at the pose (stackAt, originOf's two axes) -> the mark
+    // (widgets/lib/mark.js: FILL = the winner's block is the posed
+    // compound, HUE = the supplying layer, SHAPE = the gesture). Four
+    // layers that only agree in a browser. The Alignment row is the row
+    // for it: text-align binds the block root alone and no layer beneath
+    // delivers it (the skin sets a text block's size, not its
+    // alignment), so a REAL pick of Center while posed at Medium lands
+    // at the root's medium compound and the row's mark is a FILLED
+    // circle (a pick row) in the element hue titled "center set here at
+    // Medium"; driving the canvas back to Base through the chip's Base
+    // entry leaves nothing delivering text-align there, so the same mark
+    // is HOLLOW in the same hue titled "Set at Medium, not here" over
+    // unpressed segments (the row as a whole reads "authored elsewhere,
+    // not here"), and the row menu's header says so with the Medium
+    // entry as its drive. The states and sentences are node-pinned
+    // (mark.test.mjs, provenance-model.test.mjs); the wire from the chip
+    // to the rendered mark exists only here.
+    $alignment_row_js = "[...document.querySelectorAll('#daedalus_stylish_inspector .daedalus-stylish-inspector__widget-row')]"
+      . ".find((row) => row.querySelector('.daedalus-stylish-inspector__widget-axis')?.textContent.trim() === 'Alignment')";
+    $alignment_mark_js = "($alignment_row_js)?.querySelector('.daedalus-stylish-inspector__mark')";
+    $alignment_pressed_js = "[...(($alignment_row_js)?.querySelectorAll('.daedalus-ui-segment') ?? [])].map((segment) => segment.getAttribute('aria-pressed')).join(',')";
+    $center_segment_xpath = '//div[@id = "daedalus_stylish_inspector"]//*[contains(@class, "daedalus-stylish-inspector__widget-row")][.//*[contains(@class, "daedalus-stylish-inspector__widget-axis") and normalize-space() = "Alignment"]]'
+      . '//button[contains(@class, "daedalus-ui-segment")][@aria-label = "Center"]';
+    $this->assertJsCondition(
+      "(() => { const mark = $alignment_mark_js; if (!mark) { return false; }"
+      . " return mark.title === 'Not set' && !mark.classList.contains('daedalus-stylish-inspector__mark--here')"
+      . " && $alignment_pressed_js === 'false,false,false,false'; })()",
+      20000,
+      'Mark at the pose: before the pick the Alignment row\'s mark is the resting ring titled "Not set" (no layer authors text-align on the block) over four unpressed segments.',
+    );
+    $this->clickPanelXpath('//div[contains(@class, "daedalus-stylish-chip-row")]/button[contains(@class, "daedalus-stylish-chip--width")]');
+    $this->assertJsCondition(
+      "!!document.querySelector('.daedalus-ui-menu .daedalus-ui-menu__label')",
+      20000,
+      'Mark at the pose: the width chip opened its menu on the shared primitive.',
+    );
+    $session->executeScript(
+      "Array.from(document.querySelectorAll('.daedalus-ui-menu__item'))"
+      . ".find((item) => item.querySelector('.daedalus-ui-menu__label')?.textContent.trim() === 'Medium').click();"
+    );
+    $this->assertJsCondition(
+      "document.documentElement.hasAttribute('data-canvas-width')"
+      . " && (() => { const chip = document.querySelector('#daedalus_stylish_inspector .daedalus-stylish-chip--width');"
+      . " return !!chip && chip.classList.contains('daedalus-stylish-chip--lit') && chip.textContent.includes('Medium'); })()",
+      20000,
+      'Mark at the pose: the width chip posed the canvas at Medium (the document wears the width stamp, the chip reads Medium, lit).',
+    );
+    $this->clickPanelXpath($center_segment_xpath);
+    $this->assertJsCondition(
+      $map . '[' . json_encode($block_c_key) . "]?.medium?.['text-align'] === 'center'"
+      . ' && ' . $map . '[' . json_encode($block_c_key) . "]?.default?.['text-align'] === undefined",
+      20000,
+      'Mark at the pose: the Center pick committed text-align: center at the block root\'s medium compound and nothing at Base (the editing compound follows the pose; Alignment binds the root).',
+    );
+    $this->assertJsCondition(
+      "(() => { const mark = $alignment_mark_js; if (!mark) { return false; }"
+      . " return mark.classList.contains('daedalus-stylish-inspector__mark--here')"
+      . " && !mark.classList.contains('daedalus-stylish-inspector__mark--slide')"
+      . " && mark.style.getPropertyValue('--daedalus-stylish-origin').trim() === 'hsl(213 90% 66%)'"
+      . " && mark.title === 'center set here at Medium'"
+      . " && $alignment_pressed_js === 'false,true,false,false'; })()",
+      20000,
+      'Mark at the pose: the Alignment row\'s mark is FILLED (--here) in the element hue (layers.js layerColor(ELEMENT_LAYER)), a circle (a pick row, no --slide) titled "center set here at Medium", the Center segment pressed: the winner\'s block is the posed compound.',
+    );
+    $this->clickPanelXpath('//div[contains(@class, "daedalus-stylish-chip-row")]/button[contains(@class, "daedalus-stylish-chip--width")]');
+    $this->assertJsCondition(
+      "!!document.querySelector('.daedalus-ui-menu .daedalus-ui-menu__label')",
+      20000,
+      'Mark at the pose: the width chip reopened its menu.',
+    );
+    $session->executeScript(
+      "Array.from(document.querySelectorAll('.daedalus-ui-menu__item'))"
+      . ".find((item) => item.querySelector('.daedalus-ui-menu__label')?.textContent.trim() === 'Base').click();"
+    );
+    $this->assertJsCondition(
+      "!document.documentElement.hasAttribute('data-canvas-width')"
+      . " && !document.querySelector('.daedalus-ui-menu')"
+      . " && (() => { const chip = document.querySelector('#daedalus_stylish_inspector .daedalus-stylish-chip--width');"
+      . " return !!chip && !chip.classList.contains('daedalus-stylish-chip--lit') && chip.textContent.trim().startsWith('Base'); })()",
+      20000,
+      'Mark at the pose: the chip\'s Base entry drove the canvas back (the width stamp is gone, the chip reads Base, unlit, the menu closed).',
+    );
+    $this->assertJsCondition(
+      "(() => { const mark = $alignment_mark_js; if (!mark) { return false; }"
+      . " return !mark.classList.contains('daedalus-stylish-inspector__mark--here')"
+      . " && mark.style.getPropertyValue('--daedalus-stylish-origin').trim() === 'hsl(213 90% 66%)'"
+      . " && mark.title === 'Set at Medium, not here'"
+      . " && $alignment_pressed_js === 'false,false,false,false'; })()",
+      20000,
+      'Mark at the pose: back at Base the Alignment row\'s mark is HOLLOW (no --here) in the element hue titled "Set at Medium, not here" over four unpressed segments: nothing delivers text-align at Base, and the mark still names the layer that authored it elsewhere.',
+    );
+    $session->executeScript(
+      "(() => { const row = $alignment_row_js; const rect = row.getBoundingClientRect();"
+      . " row.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: rect.left + 8, clientY: rect.top + rect.height / 2 })); })()"
+    );
+    $this->assertJsCondition(
+      "(() => { const items = $background_menu_items_js; if (!document.querySelector('.daedalus-ui-menu') || items.length === 0) { return false; }"
+      . " return document.querySelector('.daedalus-ui-menu .daedalus-ui-menu__header')?.textContent.trim() === 'Set at Medium, not here'"
+      . " && items.some(([label, hint]) => label === 'Medium' && hint === 'center'); })()",
+      20000,
+      'Mark at the pose: the Alignment row\'s menu at Base opens under the same "Set at Medium, not here" header (every menu a header) with Medium in its "Also set at" group hinted center, the drive to where the value lives.',
+    );
+    $session->executeScript($dismiss_menu_js);
+    $this->assertJsCondition(
+      "!document.querySelector('.daedalus-ui-menu') && " . $map . '[' . json_encode($block_c_key) . "]?.medium?.['text-align'] === 'center'",
+      20000,
+      'Mark at the pose: the menu closed and the drive wrote nothing; the medium block keeps its center.',
+    );
+
+    // Seam three: write where you read. Pre-commit facts: the accent
+    // token resolved inside the block (the color the anchor will wear).
+    // A REAL click on the row's well opens the palette popover, and a
+    // REAL pick of the accent swatch commits ONE update_style at the
+    // PART key, the candidate the row read from, carrying
+    // background-color alone (backgroundPick over an unset image), and
+    // the root gets nothing.
+    $accent_js = "(() => { const block = document.querySelector(\"$canvas_c\"); const probe = document.createElement('span');"
+      . " probe.style.color = 'var(--color-accent)'; block.append(probe); const accent = getComputedStyle(probe).color; probe.remove(); return accent; })()";
+    $accent = (string) $session->evaluateScript($accent_js);
+    $this->assertMatchesRegularExpression('/^rgb\(/', $accent, 'The accent token resolves to a color inside the linked block.');
+    $this->recordOps();
+    $this->clickPanelXpath($background_well_xpath);
+    $this->assertNotNull(
+      $assert_session->waitForElement('xpath', $accent_stop_xpath),
+      'Background: the row\'s well opened the palette popover offering the accent swatch.',
+    );
+    $this->clickPanelXpath($accent_stop_xpath);
+    $this->assertJsCondition(
+      $map . '[' . json_encode($link_key) . "]?.default?.['background-color'] === 'var(--color-accent)'"
+      . ' && ' . $map . '[' . json_encode($block_c_key) . "]?.default?.['background-color'] === undefined",
+      20000,
+      'Background: the pick committed background-color: var(--color-accent) at block:{uuid}::.text-block-link, the candidate the row read from, and nothing on the root (write where you read).',
+    );
+    $this->assertOneOp(
+      $link_key,
+      ['background-color' => 'var(--color-accent)'],
+      'Background: the pick was ONE update_style op on the PART key carrying background-color alone: the pipeline routed the gesture to the resolved key.',
+    );
+    $this->assertJsCondition(
+      "(() => { const link = document.querySelector(\"$canvas_c a.text-block-link\");"
+      . ' return !!link && getComputedStyle(link).backgroundColor === ' . json_encode($accent) . '; })()',
+      20000,
+      'Background: the anchor wears the accent on the canvas without reload: the part-keyed write paints where the row read.',
+    );
+    $this->assertJsCondition(
+      "(() => { const row = $background_row_js; if (!row) { return false; }"
+      . " const well = row.querySelector('button.daedalus-stylish-swatch-well');"
+      . " return !!well && well.classList.contains('daedalus-stylish-swatch-well--stop')"
+      . " && !document.querySelector('.daedalus-ui-popover .daedalus-stylish-swatch-popover'); })()",
+      20000,
+      'Background: the popover closed on the pick and the row\'s well lights the accent stop: the row reads back its own write.',
+    );
+
+    // Seam four: the absent first candidate falls to the root. An
+    // UNLINKED text block renders no anchor, so its `.text-block-link`
+    // candidate is absent (layout.self.parts) and the rule drops it: the
+    // same binding renders one Background row over the root alone, and
+    // the same pick commits at the plain block key.
+    $block_d_uuid = $uuid_service->generate();
+    $section_d_uuid = $uuid_service->generate();
+    $this->placeTextTypeBlock($section_d_uuid, $block_d_uuid, '__plainTextPlacementError', NULL);
+    $block_d_key = "block:$block_d_uuid";
+    $session->executeScript("Drupal.Daedalus.Selection.select('$block_d_key');");
+    $this->assertJsCondition(
+      "(() => { const active = document.querySelector('.daedalus-stylish-inspector__ui-mode button[aria-pressed=\"true\"]');"
+      . " return !!active && active.textContent.trim() === 'Basic'; })()",
+      20000,
+      'Background: the inspector is in Basic mode on the unlinked text block.',
+    );
+    $this->assertJsCondition(
+      "($background_rows_js).length === 1 && !document.querySelector('#daedalus_stylish_inspector .daedalus-stylish-inspector__control-caption')",
+      20000,
+      'Background: the unlinked block\'s Basic panel renders exactly ONE captionless Background row: the absent anchor dropped out of the list and the root is the only candidate left.',
+    );
+    $this->recordOps();
+    $this->clickPanelXpath($background_well_xpath);
+    $this->assertNotNull(
+      $assert_session->waitForElement('xpath', $accent_stop_xpath),
+      'Background: the unlinked block\'s well opened the palette popover offering the accent swatch.',
+    );
+    $this->clickPanelXpath($accent_stop_xpath);
+    $this->assertJsCondition(
+      $map . '[' . json_encode($block_d_key) . "]?.default?.['background-color'] === 'var(--color-accent)'"
+      . ' && !' . $map . '[' . json_encode("$block_d_key::.text-block-link") . ']',
+      20000,
+      'Background: the pick committed background-color: var(--color-accent) at the plain block key and nothing at the absent part key (the absent first candidate fell to the root).',
+    );
+    $this->assertOneOp(
+      $block_d_key,
+      ['background-color' => 'var(--color-accent)'],
+      'Background: the unlinked block\'s pick was ONE update_style op on the plain block key carrying background-color alone.',
+    );
+    $this->assertJsCondition(
+      "(() => { const block = document.querySelector(\"[data-selectable='$block_d_key']\");"
+      . ' return !!block && getComputedStyle(block).backgroundColor === ' . json_encode($accent) . '; })()',
+      20000,
+      'Background: the unlinked block\'s root wears the accent on the canvas without reload.',
+    );
+
+    // Seam five: the one legitimate multi-key batch. A gesture's SET
+    // values land on ONE box as a group (controls.js resolveGroup, the
+    // address rule asked for the set) and a null member (a removal)
+    // lands where the value lives (write where you read, per property),
+    // so a background REPLACEMENT on a linked block whose root wears an
+    // authored band spans two boxes: the gradient pick's image means the
+    // anchor (nothing authored for it anywhere: first present) while the
+    // band it replaces is cleared on the root. The pipeline joins the
+    // two keys in ONE atomic mutate() batch (compoundOperations) under
+    // one undo label; the batch through the real op path and the canvas
+    // repaint (the anchor painting the gradient, the band gone) exist
+    // only here. A fresh linked block, so the root's band is the only
+    // authored background on either box (block C's anchor wears the
+    // button and its accent pick).
+    $block_f_uuid = $uuid_service->generate();
+    $section_f_uuid = $uuid_service->generate();
+    $this->placeTextTypeBlock($section_f_uuid, $block_f_uuid, '__replacementPlacementError', 'https://example.com/replacement');
+    $block_f_key = "block:$block_f_uuid";
+    $link_f_key = "$block_f_key::.text-block-link";
+    $canvas_f = "[data-selectable='$block_f_key']";
+    $session->executeScript(<<<JS
+      (() => {
+        const Blueprint = Drupal.Daedalus.Blueprint;
+        Blueprint.mutate(Object.assign({}, Blueprint.rootContext(), {
+          operations: [{ op: 'update_style', key: '$block_f_key', properties: { 'background-color': '#ff0000' } }],
+        })).catch((error) => {
+          window.__replacementBandError = error.message;
+        });
+      })();
+      JS);
+    $this->assertJsCondition(
+      'window.__replacementBandError !== undefined || ' . $map . '[' . json_encode($block_f_key) . "]?.default?.['background-color'] === '#ff0000'",
+      20000,
+      'Replacement: the root band write resolved.',
+    );
+    $replacement_band_error = $session->evaluateScript('window.__replacementBandError ?? null');
+    $this->assertNull($replacement_band_error, 'Replacement: writing background-color on the fresh linked block\'s root failed: ' . ($replacement_band_error ?? ''));
+    $session->executeScript("Drupal.Daedalus.Selection.select('$block_f_key');");
+    $this->assertJsCondition(
+      "(() => { const rows = $background_rows_js; if (rows.length !== 1) { return false; }"
+      . " const face = rows[0].querySelector('button.daedalus-stylish-swatch-well .daedalus-stylish-swatch-well__face');"
+      . " return !!face && getComputedStyle(face).backgroundColor === 'rgb(255, 0, 0)'; })()",
+      20000,
+      'Replacement: the fresh linked block\'s one Background row reads the root\'s authored band (rgb(255, 0, 0)) on its well face: the band is the only authored value on either box.',
+    );
+    $hero_fade_stop_xpath = '//div[contains(@class, "daedalus-ui-popover")]//div[contains(@class, "daedalus-stylish-swatch-popover")]'
+      . '//button[contains(@class, "daedalus-stylish-palette-grid__stop")][@aria-label = "Hero fade"]';
+    $this->recordOps();
+    $this->clickPanelXpath($background_well_xpath);
+    $this->assertNotNull(
+      $assert_session->waitForElement('xpath', $hero_fade_stop_xpath),
+      'Replacement: the row\'s well opened the palette popover offering the gradient swatch as a stop.',
+    );
+    $this->clickPanelXpath($hero_fade_stop_xpath);
+    $this->assertJsCondition(
+      $map . '[' . json_encode($link_f_key) . "]?.default?.['background-image'] === 'var(--swatch-hero_fade)'"
+      . ' && ' . $map . '[' . json_encode($block_f_key) . "]?.default?.['background-color'] === undefined"
+      . ' && ' . $map . '[' . json_encode($link_f_key) . "]?.default?.['background-color'] === undefined",
+      20000,
+      'Replacement: the gradient pick placed background-image: var(--swatch-hero_fade) on the anchor (the set\'s box as a group) and cleared the root\'s background-color (the removal, where the band lived); the anchor got no color.',
+    );
+    $this->assertOneBatch(
+      [
+        [$link_f_key, ['background-image' => 'var(--swatch-hero_fade)']],
+        [$block_f_key, ['background-color' => NULL]],
+      ],
+      'Replacement: the pick was ONE mutate() batch of exactly two update_style ops, the image on the PART key and the null on the ROOT key, each carrying its property alone.',
+    );
+    $this->assertJsCondition(
+      "(() => { const block = document.querySelector(\"$canvas_f\"); const link = document.querySelector(\"$canvas_f a.text-block-link\");"
+      . " return !!block && !!link && getComputedStyle(link).backgroundImage.includes('linear-gradient')"
+      . " && getComputedStyle(block).backgroundColor === 'rgba(0, 0, 0, 0)'; })()",
+      20000,
+      'Replacement: the canvas repainted without reload: the anchor paints the swatch gradient and the root\'s band is gone.',
+    );
+    $this->assertJsCondition(
+      "(() => { const row = $background_row_js; if (!row) { return false; }"
+      . " const well = row.querySelector('button.daedalus-stylish-swatch-well');"
+      . " return !!well && well.classList.contains('daedalus-stylish-swatch-well--stop')"
+      . " && !document.querySelector('.daedalus-ui-popover .daedalus-stylish-swatch-popover'); })()",
+      20000,
+      'Replacement: the popover closed on the pick and the row\'s well lights the gradient stop: the row reads back the anchor\'s image, the box the group resolved to.',
+    );
+
+    // ----- The write address: one link, every link in its section. -----
+    // Seam: the address switcher (inspector.js over write-address.js
+    // addressSet) -> the spine's styling target seated on the section's
+    // rule (Selection.target, the inspector reading it back as its
+    // address by reach, write-address.js facetOf) -> three
+    // consumers that only agree in a browser: the canvas paint slot
+    // (canvas-selector-paint.js, the printers' targets injected as CSS
+    // and computed by the cascade), controlModels' rebase and withheld
+    // verdicts rendered as live and disabled rows, and the Basic
+    // widget's typed settle landing ONE update_style at the ADDRESS key
+    // while the selection stays on the link, the delivered rule then
+    // computing on every anchor the section holds. addressSet, the
+    // rebase rule and the editable-layer rule are node-tested
+    // (write-address, controls, style-stack); the chip, the menu, the
+    // paint and the disabled posture over one real write exist only
+    // here. The fixture: a new band holding three LINKED text blocks
+    // (two `p` roots and one `h3` root, so the tag rule's reach into a
+    // heading-rooted block is on the canvas too), placed through the op
+    // spine; the site's demo container carries no linked siblings, so
+    // the scenario mints its own.
+    $section_e_uuid = $uuid_service->generate();
+    $link_uuids = [$uuid_service->generate(), $uuid_service->generate(), $uuid_service->generate()];
+    [$link_1, $link_2, $link_3] = $link_uuids;
+    $session->executeScript(<<<JS
+      (() => {
+        const Blueprint = Drupal.Daedalus.Blueprint;
+        Blueprint.mutate(Object.assign({}, Blueprint.rootContext(), {
+          operations: [
+            {
+              op: 'add_section',
+              uuid: '$section_e_uuid',
+              location: { anchor: Blueprint.getRoot().uuid, placement: 'inside' },
+            },
+            {
+              op: 'add_element',
+              uuid: '$link_1',
+              block_type: 'text',
+              properties: { field_text_text: { value: 'First link' }, field_text_tag: 'p', field_text_url: { uri: 'https://example.com/1' } },
+              location: { anchor: '$section_e_uuid', placement: 'inside' },
+            },
+            {
+              op: 'add_element',
+              uuid: '$link_2',
+              block_type: 'text',
+              properties: { field_text_text: { value: 'Second link' }, field_text_tag: 'p', field_text_url: { uri: 'https://example.com/2' } },
+              location: { anchor: '$link_1', placement: 'after' },
+            },
+            {
+              op: 'add_element',
+              uuid: '$link_3',
+              block_type: 'text',
+              properties: { field_text_text: { value: 'Third link' }, field_text_tag: 'h3', field_text_url: { uri: 'https://example.com/3' } },
+              location: { anchor: '$link_2', placement: 'after' },
+            },
+          ],
+        })).catch((error) => {
+          window.__addressPlacementError = error.message;
+        });
+      })();
+      JS);
+    $anchors_js = '[' . implode(', ', array_map(static fn (string $uuid) => "document.querySelector(\"[data-selectable='block:$uuid'] a.text-block-link\")", $link_uuids)) . ']';
+    $this->assertJsCondition(
+      "window.__addressPlacementError !== undefined"
+      . " || (($anchors_js).every((anchor) => !!anchor) && JSON.stringify(Drupal.Daedalus.Blueprint.getBlueprint()).includes('$link_3'))",
+      20000,
+      'Write address: the band of three linked text blocks placed and rendered, each with its anchor.',
+    );
+    $address_placement_error = $session->evaluateScript('window.__addressPlacementError ?? null');
+    $this->assertNull($address_placement_error, 'Write address: placing the linked band failed: ' . ($address_placement_error ?? ''));
+    $container_e_key = "container:$section_e_uuid";
+    $tag_rule_key = "$container_e_key::a";
+    $block_e1_key = "block:$link_1";
+    $link_e1_key = "$block_e1_key::.text-block-link";
+    $address_chip = '#daedalus_stylish_inspector .daedalus-stylish-inspector__address';
+    $write_paint_js = "document.querySelector('style[data-daedalus-stylish-selector-paint=\"write\"]')";
+    $menu_items_js = "Array.from(document.querySelectorAll('.daedalus-ui-menu .daedalus-ui-menu__item'))"
+      . ".map((item) => [item.querySelector('.daedalus-ui-menu__label')?.textContent.trim(), item.querySelector('.daedalus-ui-menu__hint')?.textContent.trim() ?? null, item.getAttribute('aria-checked')])";
+    $background_well = '#daedalus_stylish_inspector .daedalus-stylish-inspector__widget--background button.daedalus-stylish-swatch-well';
+    $corners_input = "#daedalus_stylish_inspector .daedalus-stylish-inspector__widget--corners-border input[aria-label='Corners']";
+    // The bare element first: the subject line's chip is always rendered
+    // (the line keeps one shape), reading "This element" at the block's
+    // own key (the chip's map key is the bare key, no selector), unlit.
+    $session->executeScript("Drupal.Daedalus.Selection.select('$block_e1_key');");
+    $this->assertJsCondition(
+      "(() => { const chip = document.querySelector('$address_chip'); if (!chip) { return false; }"
+      . ' return chip.dataset.daedalusStylishAddress === ' . json_encode($block_e1_key)
+      . " && chip.querySelector('.daedalus-stylish-inspector__address-label')?.textContent.trim() === 'This element'"
+      . " && !chip.classList.contains('daedalus-stylish-chip--lit')"
+      . " && Drupal.Daedalus.Selection.getTarget() === null; })()",
+      20000,
+      'Write address: at the bare element the chip renders at the block\'s own key reading "This element", unlit, with no target seated.',
+    );
+    // The reach gate on the canvas. Seam: the part resolver's injected
+    // reachable-row predicate (view-registry.js over reach.js) under the
+    // Selector's deep policy. In Basic the mode mirror flipped the Markup
+    // view off, so the panel draws no shell rows: a Cmd-click on the
+    // first link's anchor (synthetic, the OS modifier cannot ride a Mink
+    // click; the same capture-phase document listener) resolves the
+    // deepest DEPICTED thing, the block, and seats no target even though
+    // block::.text-block-link exists in the index. The Markup view back
+    // on through the Show menu's real toggle, the same click seats the
+    // link part; off again, the standing target degrades to a doorway
+    // seat and stands (a view flip never drops a target).
+    $first_anchor_js = "document.querySelector(\"[data-selectable='$block_e1_key'] a.text-block-link\")";
+    $cmd_click_js = "($first_anchor_js).dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, metaKey: true }));";
+    $markup_item_js = "Array.from(document.querySelectorAll('.daedalus-ui-popover > .daedalus-ui-menu .daedalus-ui-menu__item'))"
+      . ".find((item) => item.querySelector('.daedalus-ui-menu__label')?.textContent === 'Markup') ?? null";
+    $link_row_js = "document.querySelector('.daedalus-ui-tree [data-tree-address=\"$link_e1_key\"]')";
+    $this->assertJsCondition(
+      "$link_row_js === null",
+      20000,
+      'Reach: in Basic (Markup view off) the panel draws no row for the first link part.',
+    );
+    // Cleared first, so the click's element commit is a real write (a
+    // same-address commit dispatches nothing).
+    $session->executeScript("Drupal.Daedalus.Selection.clear(); $cmd_click_js");
+    $this->assertJsCondition(
+      "Drupal.Daedalus.Selection.getSelected() === " . json_encode($block_e1_key)
+      . ' && Drupal.Daedalus.Selection.getTarget() === null',
+      20000,
+      'Reach: a Cmd-click on the first link\'s anchor with the Markup view off selects the block and seats no target: the depth stop is the deepest depicted row.',
+    );
+    $session->executeScript("document.querySelector('.daedalus-ui-show-menu__button').click();");
+    $this->assertJsCondition(
+      "(() => { const item = $markup_item_js; return !!item && item.getAttribute('role') === 'menuitemcheckbox' && item.getAttribute('aria-checked') === 'false'; })()",
+      20000,
+      'Reach: the Show menu lists the Markup view unchecked in Basic.',
+    );
+    $session->executeScript("($markup_item_js).click();");
+    $this->assertJsCondition(
+      "!document.querySelector('.daedalus-ui-popover') && $link_row_js !== null",
+      20000,
+      'Reach: activating the Markup item closed the Show menu and the panel drew the first link\'s part row.',
+    );
+    $session->executeScript($cmd_click_js);
+    $this->assertJsCondition(
+      "Drupal.Daedalus.Selection.getSelected() === " . json_encode($block_e1_key)
+      . ' && Drupal.Daedalus.Selection.getTarget()?.key === ' . json_encode($block_e1_key)
+      . " && Drupal.Daedalus.Selection.getTarget()?.selector === '.text-block-link'",
+      20000,
+      'Reach: the same Cmd-click with the Markup view on seats the link part: the row is drawn, so the stop lands on it.',
+    );
+    $session->executeScript("document.querySelector('.daedalus-ui-show-menu__button').click();");
+    $this->assertJsCondition(
+      "(() => { const item = $markup_item_js; return !!item && item.getAttribute('aria-checked') === 'true'; })()",
+      20000,
+      'Reach: the reopened Show menu shows the Markup view checked.',
+    );
+    $session->executeScript("($markup_item_js).click();");
+    $this->assertJsCondition(
+      "!document.querySelector('.daedalus-ui-popover') && $link_row_js === null"
+      . ' && Drupal.Daedalus.Selection.getSelected() === ' . json_encode($block_e1_key)
+      . " && Drupal.Daedalus.Selection.getTarget()?.selector === '.text-block-link'",
+      20000,
+      'Reach: the Markup view off again dropped the link\'s row and the seated target still stands on the block (a doorway seat, not a drop).',
+    );
+    // Target the first link PART: the selection is the block, its link
+    // part the styling target, and both stay for the whole leg. The
+    // switcher renders on the target chip at the own address ("This
+    // link"), unlit, and no write paint stands while the address is the
+    // own key.
+    $session->executeScript("Drupal.Daedalus.Selection.select('$block_e1_key'); Drupal.Daedalus.Selection.target('$block_e1_key', '.text-block-link');");
+    $this->assertJsCondition(
+      "(() => { const active = document.querySelector('.daedalus-stylish-inspector__ui-mode button[aria-pressed=\"true\"]');"
+      . " return !!active && active.textContent.trim() === 'Basic'; })()",
+      20000,
+      'Write address: the inspector is in Basic mode on the first link.',
+    );
+    $this->assertJsCondition(
+      "(() => { const chip = document.querySelector('$address_chip'); if (!chip) { return false; }"
+      . ' return chip.dataset.daedalusStylishAddress === ' . json_encode($link_e1_key)
+      . " && chip.querySelector('.daedalus-stylish-inspector__address-label')?.textContent.trim() === 'This link'"
+      . " && !chip.classList.contains('daedalus-stylish-chip--lit') && !$write_paint_js; })()",
+      20000,
+      'Write address: the switcher chip renders on the link at its own address (block::.text-block-link), reading "This link", unlit, with no write paint on the canvas.',
+    );
+    // A REAL click on the chip opens the shared menu headed "Style this
+    // at": the own key first, then the mintable addresses nearest
+    // ancestor first, every one marked "new rule" (nothing exists yet).
+    // The tag rule reads "Every link in Section": the fresh section
+    // carries no label, and the base `a` tag reads its shipped word
+    // (StyleGuide::BASE_TAG_LABELS served as the guide's tagLabels; no
+    // instance namespace words it); the chained shapes carry the text
+    // block's part word.
+    $this->clickPanel($address_chip);
+    $this->assertJsCondition(
+      "!!document.querySelector('.daedalus-ui-menu') && document.querySelector('.daedalus-ui-menu .daedalus-ui-menu__header')?.textContent.trim() === 'Style this at'",
+      20000,
+      'Write address: the chip opened the shared menu headed "Style this at".',
+    );
+    $this->assertSame(
+      [
+        ['This link', NULL, 'true'],
+        ['This element', NULL, 'false'],
+        ['Every link in Section', 'new rule', 'false'],
+        ['Text block links directly in Section', 'new rule', 'false'],
+        ['Text block links in Section', 'new rule', 'false'],
+      ],
+      json_decode((string) $session->evaluateScript("JSON.stringify($menu_items_js)"), TRUE),
+      'Write address: the menu lists the link\'s address set in order (the own key checked, "This element" as the way back to the bare element while the part facet stands, then the three mintable addresses on the section, each hinted "new rule"), the tag rule labelled "Every link in Section", and no generated-box doorway: basic mode mounts no rows at a box, so it offers none (advanced and code do).',
+    );
+    // A REAL pick of the tag rule: the chip lights at container::a, the
+    // styling target moves to the section's rule (one target: the part's
+    // dashed box goes with it), the canvas paints the rule's every match
+    // through the printers' own targets (all three anchors wear the
+    // dotted write box), and the selection is still the first link.
+    $session->executeScript(
+      "Array.from(document.querySelectorAll('.daedalus-ui-menu .daedalus-ui-menu__item'))"
+      . ".find((item) => item.querySelector('.daedalus-ui-menu__label')?.textContent.trim() === 'Every link in Section').click();"
+    );
+    $this->assertJsCondition(
+      "(() => { const chip = document.querySelector('$address_chip'); if (!chip) { return false; }"
+      . ' return chip.dataset.daedalusStylishAddress === ' . json_encode($tag_rule_key)
+      . " && chip.querySelector('.daedalus-stylish-inspector__address-label')?.textContent.trim() === 'Every link in Section'"
+      . " && chip.classList.contains('daedalus-stylish-chip--lit') && !document.querySelector('.daedalus-ui-menu')"
+      . " && Drupal.Daedalus.Selection.getSelected() === " . json_encode($block_e1_key)
+      . " && Drupal.Daedalus.Selection.getTarget()?.key === " . json_encode($container_e_key)
+      . " && Drupal.Daedalus.Selection.getTarget()?.selector === 'a'; })()",
+      20000,
+      'Write address: the pick closed the menu, seated the section\'s `a` rule as the styling target and lit the chip at container::a ("Every link in Section") while the selection stayed on the first link.',
+    );
+    $this->assertJsCondition(
+      "(() => { const text = $write_paint_js?.textContent ?? '';"
+      . ' return text.includes(' . json_encode('@scope ([data-selectable="' . $container_e_key . '"])') . ")"
+      . " && /\\n  a \\{\\n    outline: 2px dotted/.test(text); })()",
+      20000,
+      'Write address: the write paint slot holds the tag rule\'s @scope block on the section with the bare `a` target (the printer\'s own target for a tag) in the dotted treatment.',
+    );
+    $this->assertJsCondition(
+      "(() => { return ($anchors_js).map((anchor) => getComputedStyle(anchor))"
+      . ".every((style) => style.outlineStyle === 'dotted' && style.outlineWidth === '2px' && style.outlineOffset === '5px'); })()",
+      20000,
+      'Write address: every anchor in the section wears the dotted write box on the canvas (the blast radius before any write), the first one included: the target is the rule now, so the part\'s dashed box is gone.',
+    );
+    // The rows stay the LINK's rows, judged at the address: base `a`
+    // grants typography and motion only, so the Background well and the
+    // Corners field render disabled with the roster's reason as their
+    // title, while the Size field stays live (typography lands at `a`).
+    $withheld_title = static fn (string $property) => sprintf('%s is not allowed at "a" on Section: the style guide does not grant it there. Choose this element alone to set it here.', $property);
+    $this->assertJsCondition(
+      "(() => { const well = document.querySelector('$background_well'); const corners = document.querySelector(\"$corners_input\"); const size = document.querySelector(\"" . self::SIZE_INPUT . "\");"
+      . ' return !!well && well.disabled && well.title === ' . json_encode($withheld_title('background-color'))
+      . ' && !!corners && corners.disabled && corners.title === ' . json_encode($withheld_title('border-radius'))
+      . ' && !!size && !size.disabled; })()',
+      20000,
+      'Write address: under the section\'s `a` rule the link\'s Background well and Corners field are disabled with the grant reason as their title (base `a` grants neither), while the Size field stays live (typography is granted at `a`).',
+    );
+    // Pre-write facts: the block roots' font sizes, which the tag rule
+    // must leave alone (it targets the anchors, never the roots).
+    $roots_js = '[' . implode(', ', array_map(static fn (string $uuid) => "document.querySelector(\"[data-selectable='block:$uuid']\")", $link_uuids)) . ']';
+    $root_sizes_js = "($roots_js).map((root) => getComputedStyle(root).fontSize)";
+    $root_sizes = json_decode((string) $session->evaluateScript("JSON.stringify($root_sizes_js)"), TRUE);
+    $this->assertCount(3, $root_sizes, 'Write address: the three block roots\' font sizes were measured before the write.');
+    $this->assertJsCondition(
+      "!($anchors_js).some((anchor) => getComputedStyle(anchor).fontSize === '30px')",
+      20000,
+      'Write address: no anchor computes 30px before the write, so the write below is observable.',
+    );
+    // The write: a typed Size settles through the widget's own path and
+    // lands ONE update_style at the ADDRESS key (container::a), nothing
+    // on the link or its block; the delivered rule computes on all
+    // three anchors, the third inside an h3-rooted block (a tag rule
+    // reaches every anchor under the section, doctrine B), and the
+    // roots are untouched.
+    $this->recordOps();
+    $this->typeIntoPanel(self::SIZE_INPUT, '30px');
+    $this->blurPanel(self::SIZE_INPUT);
+    $this->assertJsCondition(
+      $map . '[' . json_encode($tag_rule_key) . "]?.default?.['font-size'] === '30px'"
+      . ' && !' . $map . '[' . json_encode($link_e1_key) . ']'
+      . ' && ' . $map . '[' . json_encode($block_e1_key) . "]?.default?.['font-size'] === undefined",
+      20000,
+      'Write address: the typed Size committed font-size: 30px at container::a, the write address, and nothing at the link or its block.',
+    );
+    $this->assertOneOp(
+      $tag_rule_key,
+      ['font-size' => '30px'],
+      'Write address: the settle was ONE update_style op on the address key carrying font-size alone: the Basic widget wrote at the rebased candidate.',
+    );
+    $this->assertJsCondition(
+      "($anchors_js).every((anchor) => getComputedStyle(anchor).fontSize === '30px')",
+      20000,
+      'Write address: all three anchors compute 30px on the canvas without reload, the third inside an h3-rooted block: one rule on the section, every link in it.',
+    );
+    $this->assertJsCondition(
+      "JSON.stringify($root_sizes_js) === " . json_encode(json_encode($root_sizes)),
+      20000,
+      'Write address: the block roots keep their font sizes: the tag rule reaches the anchors alone.',
+    );
+    // Back to the own key: the reopened menu checks the tag rule, now
+    // existing (no "new rule" hint); picking "This link" clears the
+    // address, the write paint, and the Size row reads the section's
+    // rule as the inherited origin on its mark.
+    $this->clickPanel($address_chip);
+    $this->assertJsCondition(
+      "(() => { const items = $menu_items_js; return items.length === 5"
+      . " && items[0][0] === 'This link' && items[0][2] === 'false'"
+      . " && items[1][0] === 'This element' && items[1][2] === 'false'"
+      . " && items[2][0] === 'Every link in Section' && items[2][1] === null && items[2][2] === 'true'; })()",
+      20000,
+      'Write address: the reopened menu checks "Every link in Section", no longer hinted "new rule" (the address exists in the map now), and the own key and the "This element" way back are unchecked.',
+    );
+    $session->executeScript("document.querySelectorAll('.daedalus-ui-menu .daedalus-ui-menu__item')[0].click();");
+    $this->assertJsCondition(
+      "(() => { const chip = document.querySelector('$address_chip'); if (!chip) { return false; }"
+      . ' return chip.dataset.daedalusStylishAddress === ' . json_encode($link_e1_key)
+      . " && !chip.classList.contains('daedalus-stylish-chip--lit') && !$write_paint_js && !document.querySelector('.daedalus-ui-menu'); })()",
+      20000,
+      'Write address: picking "This link" put the chip back on the own address, unlit, and removed the write paint.',
+    );
+    $this->assertJsCondition(
+      "(() => { const input = document.querySelector(\"" . self::SIZE_INPUT . "\"); const row = input?.closest('.daedalus-stylish-inspector__widget-row');"
+      . " return !!row && input.value === '30'"
+      . " && row.querySelector('.daedalus-stylish-inspector__mark')?.title === '30px inherited from Section (a)'"
+      . " && row.style.getPropertyValue('--daedalus-stylish-origin').trim() !== '';"
+      . ' })()',
+      20000,
+      'Write address: back on the own key the Size row reads 30 with its mark titled "30px inherited from Section (a)" and the row hued for the ancestor layer: the link reads the section\'s rule through its stack.',
+    );
+    $this->assertJsCondition(
+      "(() => { const well = document.querySelector('$background_well'); return !!well && !well.disabled; })()",
+      20000,
+      'Write address: the Background well is live again at the own key.',
+    );
+    // The own entry wins on this anchor alone: a typed 24px lands ONE
+    // update_style at the link's own key, the first anchor computes it
+    // and its siblings keep the section's 30px (the child's own entry
+    // wins by @scope proximity, never by weight).
+    $this->recordOps();
+    $this->typeIntoPanel(self::SIZE_INPUT, '24px');
+    $this->blurPanel(self::SIZE_INPUT);
+    $this->assertJsCondition(
+      $map . '[' . json_encode($link_e1_key) . "]?.default?.['font-size'] === '24px'"
+      . ' && ' . $map . '[' . json_encode($tag_rule_key) . "]?.default?.['font-size'] === '30px'",
+      20000,
+      'Write address: the typed Size committed font-size: 24px at the link\'s own key, the section\'s rule still holding 30px.',
+    );
+    $this->assertOneOp(
+      $link_e1_key,
+      ['font-size' => '24px'],
+      'Write address: the settle was ONE update_style op on the own part key carrying font-size alone.',
+    );
+    $this->assertJsCondition(
+      "($anchors_js).map((anchor) => getComputedStyle(anchor).fontSize).join(',') === '24px,30px,30px'",
+      20000,
+      'Write address: the first anchor computes its own 24px and its two siblings keep the section\'s 30px: the child\'s own entry wins on that anchor only.',
+    );
+
+    // ----- Wear at the rule: the wear bar and a card apply at the target. -----
+    // Seam: the styling target seated on the section's `a` rule -> the
+    // wear bar (wear-bar.js, its `target` the rule) and the Materials
+    // card (library.js, applyDoorway over the same target) -> ONE
+    // apply_variant at the RULE key -> the server's rule-wear lane
+    // (VariantStylesheet::ruleWearCss, the printer twin on the client)
+    // printing the variant inside the section's @scope, so every anchor
+    // computes it and no element carries a variant class. The landing
+    // pairing, the reference placement and the printed lane are
+    // Kernel-pinned; the gestures aimed at the target and the delivered
+    // wear on the canvas exist only here. The rule is re-seated through
+    // the facade, the road the switcher's pick took above.
+    $wear_bar = '#daedalus_stylish_inspector .daedalus-stylish-wear-bar';
+    $wear_rows = "document.querySelectorAll('$wear_bar .daedalus-stylish-wear-bar__row')";
+    $picker_labels_js = "Array.from(document.querySelectorAll('.daedalus-ui-popover .daedalus-stylish-variant-picker__option .daedalus-stylish-variant-picker__label')).map((label) => label.textContent.trim())";
+    $rule_refs_js = "JSON.stringify(($map" . '[' . json_encode($tag_rule_key) . "]?.variants ?? []).map((ref) => [ref.variant, ref.fragment]))";
+    $anchor_wear_js = "($anchors_js).map((anchor) => getComputedStyle(anchor)).map((style) => style.color + ' ' + style.letterSpacing).join(',')";
+    $one_apply_op = static fn (string $variant) => '(() => { const log = ' . self::OP_LOG . ';'
+      . ' if (log.length !== 1 || log[0].length !== 1) { return false; }'
+      . ' const [operation] = log[0];'
+      . " return operation.op === 'apply_variant' && operation.key === " . json_encode($tag_rule_key)
+      . ' && operation.variant === ' . json_encode($variant) . '; })()';
+    $session->executeScript("Drupal.Daedalus.Selection.target('$container_e_key', 'a');");
+    $this->assertJsCondition(
+      "(() => { const chip = document.querySelector('$address_chip'); const bar = document.querySelector('$wear_bar');"
+      . " const add = document.querySelector('$wear_bar .daedalus-stylish-wear-bar__add');"
+      . ' return !!chip && chip.dataset.daedalusStylishAddress === ' . json_encode($tag_rule_key)
+      . " && chip.classList.contains('daedalus-stylish-chip--lit')"
+      . " && !!bar && !bar.classList.contains('daedalus-stylish-wear-bar--read-only')"
+      . " && $wear_rows.length === 0 && !!add && !add.disabled; })()",
+      20000,
+      'Rule wear: with container::a re-seated the chip lights there again and the wear bar is LIVE at the rule (a tag landing wears), no row yet, its add row enabled.',
+    );
+    $this->clickPanel("$wear_bar .daedalus-stylish-wear-bar__add");
+    $this->assertJsCondition(
+      "(() => { const labels = $picker_labels_js; labels.sort(); return JSON.stringify(labels) === " . json_encode(json_encode(['Accent link', 'Quiet link'])) . '; })()',
+      20000,
+      'Rule wear: the picker offers exactly the two base:a variants (the rule\'s landing is the tag `a`; nothing element-scoped offers at it).',
+    );
+    $this->recordOps();
+    $session->executeScript(
+      "Array.from(document.querySelectorAll('.daedalus-ui-popover .daedalus-stylish-variant-picker__option'))"
+      . ".find((option) => option.querySelector('.daedalus-stylish-variant-picker__label')?.textContent.trim() === 'Accent link').click();"
+    );
+    $this->assertJsCondition(
+      $one_apply_op('accent_link'),
+      20000,
+      'Rule wear: the pick dispatched ONE apply_variant op at container::a, the rule key, never at the link or its block.',
+    );
+    $this->assertJsCondition(
+      "$rule_refs_js === " . json_encode(json_encode([['accent_link', '']]))
+      . ' && ' . $map . '[' . json_encode($tag_rule_key) . "]?.default?.['font-size'] === '30px'"
+      . ' && ' . $map . '[' . json_encode($link_e1_key) . '].variants === undefined'
+      . ' && ' . $map . '[' . json_encode($block_e1_key) . ']?.variants === undefined',
+      20000,
+      'Rule wear: the map carries the reference on the RULE\'s entry beside its own font-size, and neither the link nor its block wears anything.',
+    );
+    $this->assertJsCondition(
+      "(() => { const rows = $wear_rows; return !document.querySelector('.daedalus-ui-popover .daedalus-stylish-variant-picker')"
+      . " && rows.length === 1 && rows[0].querySelector('.daedalus-stylish-wear-bar__variant-label')?.textContent.trim() === 'Accent link'; })()",
+      20000,
+      'Rule wear: the picker closed and the bar renders one row at the rule naming Accent link.',
+    );
+    $this->assertJsCondition(
+      "$anchor_wear_js === 'rgb(51, 102, 153) 2px,rgb(51, 102, 153) 2px,rgb(51, 102, 153) 2px'",
+      20000,
+      'Rule wear: every anchor in the section computes the variant\'s color and letter-spacing without reload, the h3-rooted block\'s included: the rule delivers the wear to every match.',
+    );
+    $this->assertJsCondition(
+      "(() => { const band = document.querySelector(\"[data-selectable='$container_e_key']\");"
+      . " return !!band && !band.className.includes('daedalus-stylish-variant--') && !band.querySelector('[class*=\"daedalus-stylish-variant--\"]'); })()",
+      20000,
+      'Rule wear: no element in the band carries a variant class: a rule\'s wear is delivered inside its @scope, never stamped.',
+    );
+    // The Materials place: the target chip renders there too, still the
+    // rule, and the catalog's cards read the same target: Accent link's
+    // Apply is withheld as already worn AT THE RULE (the block wears
+    // nothing), Quiet link's is ready, and its click applies at the rule,
+    // replacing Accent link on the axis.
+    $this->clickPanel('#daedalus_stylish_inspector .daedalus-stylish-inspector__place');
+    $library_row_js = static fn (string $label) => "Array.from(document.querySelectorAll('#daedalus_stylish_inspector .daedalus-stylish-library__row'))"
+      . ".find((row) => row.querySelector('.daedalus-stylish-library__name')?.textContent.trim() === " . json_encode($label) . ')';
+    $this->assertJsCondition(
+      "(() => { const chip = document.querySelector('$address_chip');"
+      . " return document.querySelector('#daedalus_stylish_inspector .daedalus-stylish-inspector__place')?.getAttribute('aria-pressed') === 'true'"
+      . ' && !!chip && chip.dataset.daedalusStylishAddress === ' . json_encode($tag_rule_key)
+      . " && chip.classList.contains('daedalus-stylish-chip--lit')"
+      . " && chip.querySelector('.daedalus-stylish-inspector__address-label')?.textContent.trim() === 'Every link in Section'"
+      . ' && !!' . $library_row_js('Accent link') . ' && !!' . $library_row_js('Quiet link') . '; })()',
+      20000,
+      'Rule wear: the Materials place shows the target chip lit at "Every link in Section" and lists both link variants.',
+    );
+    $apply_button = '#daedalus_stylish_inspector .daedalus-stylish-library-card__action--apply';
+    $session->executeScript($library_row_js('Accent link') . '.click();');
+    $this->assertJsCondition(
+      "(() => { const apply = document.querySelector('$apply_button');"
+      . " return !!apply && apply.disabled && apply.title.startsWith('The styling target already wears it'); })()",
+      20000,
+      'Rule wear: Accent link\'s card withholds Apply as already worn at the styling target: the card reads the rule\'s entry, not the selected block\'s.',
+    );
+    $session->executeScript($library_row_js('Quiet link') . '.click();');
+    $this->assertJsCondition(
+      "(() => { const apply = document.querySelector('$apply_button');"
+      . " return document.querySelectorAll('#daedalus_stylish_inspector .daedalus-stylish-library-card__action--apply').length === 1"
+      . " && !!apply && !apply.disabled && apply.title.startsWith('Apply this variant at the styling target'); })()",
+      20000,
+      'Rule wear: Quiet link\'s card offers Apply at the styling target (base:a offers at the rule\'s landing).',
+    );
+    $this->recordOps();
+    $this->clickPanel($apply_button);
+    $this->assertJsCondition(
+      $one_apply_op('quiet_link'),
+      20000,
+      'Rule wear: the card dispatched ONE apply_variant op at container::a, the same rule the wear bar wrote at.',
+    );
+    $this->assertJsCondition(
+      "$rule_refs_js === " . json_encode(json_encode([['quiet_link', '']]))
+      . ' && ' . $map . '[' . json_encode($tag_rule_key) . "]?.default?.['font-size'] === '30px'"
+      . ' && ' . $map . '[' . json_encode($link_e1_key) . '].variants === undefined',
+      20000,
+      'Rule wear: the card\'s apply replaced Accent link with Quiet link on the rule\'s style axis, the rule\'s own font-size and the link\'s entry untouched.',
+    );
+    $this->assertJsCondition(
+      "$anchor_wear_js === 'rgb(153, 51, 102) 3px,rgb(153, 51, 102) 3px,rgb(153, 51, 102) 3px'"
+      . " && ($anchors_js).map((anchor) => getComputedStyle(anchor).fontSize).join(',') === '24px,30px,30px'",
+      20000,
+      'Rule wear: every anchor now computes Quiet link\'s color and letter-spacing while the font sizes stay (the rule\'s 30px, the first link\'s own 24px): wear at a rule layers beneath the entries exactly as it does at an element.',
+    );
+
+    // ----- The member reads the rule's wear: hue, sentence, doorways. -----
+    // Seam: the first link's part targeted again below the selection ->
+    // its stack's ancestor tier as a group per rule position
+    // (style-stack.js ancestorLayers: the worn layer
+    // `ancestor:{sec}::a|quiet_link` carrying the variant's identity and
+    // its carrier, the rule's own layer beneath it) -> the Basic Text
+    // color row's origin (originOf's worn-ancestor branch: the variant's
+    // hue through layerColor, the sentence naming the variant AND the
+    // carrier in the switcher's words) -> the row's shared menu hook
+    // (use-row-menu.js) offering the variant's document and "Edit at"
+    // the CARRIER -> the target seated on the rule with the wear bar
+    // live naming the variant. The group, the words and the menu spec
+    // are node-pinned; the rendered mark on a self-rendered row, the
+    // real menu there and the doorway's seat exist only here. The Text
+    // color row is the row Quiet link styles (a base:a variant grants
+    // no background), so it is the row that reads the wear.
+    $this->switchMode('Basic');
+    $session->executeScript("Drupal.Daedalus.Selection.select('$block_e1_key'); Drupal.Daedalus.Selection.target('$block_e1_key', '.text-block-link');");
+    $text_color_row = self::TEXT_COLOR_WIDGET . ' .daedalus-stylish-inspector__widget-row';
+    $text_color_mark = "$text_color_row .daedalus-stylish-inspector__mark";
+    $this->assertJsCondition(
+      "(() => { const chip = document.querySelector('$address_chip'); const row = document.querySelector('$text_color_row'); const mark = document.querySelector('$text_color_mark');"
+      . ' if (!chip || !row || !mark || chip.dataset.daedalusStylishAddress !== ' . json_encode($link_e1_key) . ') { return false; }'
+      . " return row.style.getPropertyValue('--daedalus-stylish-origin').trim() === 'hsl(33 70% 60%)'"
+      . " && (mark.title ?? '').startsWith('#993366 from Quiet link at Every link in Section'); })()",
+      20000,
+      'Member wear: back on the link\'s own address, the Basic Text color row wears Quiet link\'s hue (the variant\'s own djb2 hue, never the ancestor teal) and its mark\'s title names the variant and the rule it arrives through in the switcher\'s words: the link reads the rule\'s worn variant as a worn ancestor layer carrying the variant\'s identity.',
+    );
+    $session->executeScript(
+      "(() => { const row = document.querySelector('$text_color_row'); const rect = row.getBoundingClientRect();"
+      . " row.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: rect.left + 8, clientY: rect.top + rect.height / 2 })); })()"
+    );
+    $this->assertJsCondition(
+      "(() => { const items = $menu_items_js; if (!document.querySelector('.daedalus-ui-menu') || items.length === 0) { return false; }"
+      . " return items.some(([label, hint]) => (label ?? '').startsWith('Edit Quiet link at ') && hint === 'opens the variant')"
+      . " && items.some(([label, hint]) => label === 'Edit at Every link in Section' && hint === 'writes land on that rule; the selection stays'); })()",
+      20000,
+      'Member wear: a right-click on the Text color row opens the provenance menu (the shared row menu hook on a self-rendered row; the browser\'s own menu no longer falls through here) offering the variant\'s document ("Edit Quiet link at …", opens the variant) and "Edit at Every link in Section", the CARRIER rule.',
+    );
+    $session->executeScript(
+      "Array.from(document.querySelectorAll('.daedalus-ui-menu .daedalus-ui-menu__item'))"
+      . ".find((item) => item.querySelector('.daedalus-ui-menu__label')?.textContent.trim() === 'Edit at Every link in Section').click();"
+    );
+    $this->assertJsCondition(
+      "(() => { const chip = document.querySelector('$address_chip'); const bar = document.querySelector('$wear_bar'); const rows = $wear_rows;"
+      . " return !document.querySelector('.daedalus-ui-menu')"
+      . ' && Drupal.Daedalus.Selection.getSelected() === ' . json_encode($block_e1_key)
+      . ' && Drupal.Daedalus.Selection.getTarget()?.key === ' . json_encode($container_e_key)
+      . " && Drupal.Daedalus.Selection.getTarget()?.selector === 'a'"
+      . ' && !!chip && chip.dataset.daedalusStylishAddress === ' . json_encode($tag_rule_key)
+      . " && chip.classList.contains('daedalus-stylish-chip--lit')"
+      . " && !!bar && !bar.classList.contains('daedalus-stylish-wear-bar--read-only')"
+      . " && rows.length === 1 && rows[0].querySelector('.daedalus-stylish-wear-bar__variant-label')?.textContent.trim() === 'Quiet link'; })()",
+      20000,
+      'Member wear: the "Edit at" pick seated the CARRIER as the styling target (container::a, the selection still the first link), the chip lit there and the wear bar live at the rule with its one row naming Quiet link: a worn value\'s provenance is a door back to where it was set.',
+    );
+
+    // ----- Every choice row carries the source: the Weight doorway. -----
+    // Seam: a typed Weight settling at the seated rule (the Basic
+    // typography rows under the write address write at the rebased
+    // candidate, controls.js keys) -> the link part re-targeted below
+    // the selection -> the Weight row's stack reading the rule's own
+    // layer (style-stack.js ancestorLayers, the rule's own position)
+    // -> originOf's own-ancestor doorway -> ChoiceRow's shared menu
+    // hook (use-row-menu.js) dispatching `ancestor` through the row's
+    // OWN `source` prop -> source.target seating the rule. The Text
+    // color row above carries its own hook call; the choice row is the
+    // one every other basic row renders through, and its source once
+    // rode inside the highlight bag only the two gap rows filled, so
+    // this menu opened with an inert "Edit at" on Font, Size, Weight,
+    // Width, Alignment, Position, Shadow, Corners and the motion rows:
+    // the item ran and nothing seated. The words and the dispatch are
+    // node-pinned (provenance-model, use-row-menu); the prop's road
+    // from the widget contract through the row into the hook exists
+    // only here. The Weight row is the open field under olivero (a
+    // number property, the weight scale unclosed), so a typed 550, no
+    // stop's value, settles as the literal.
+    $weight_input = "#daedalus_stylish_inspector .daedalus-stylish-inspector__widget--typography input[aria-label='Weight']";
+    $weight_row_js = 'document.querySelector(' . json_encode($weight_input) . ")?.closest('.daedalus-stylish-inspector__widget-row')";
+    $this->assertJsCondition(
+      '(() => { const input = document.querySelector(' . json_encode($weight_input) . ');'
+      . ' return Drupal.Daedalus.Selection.getTarget()?.key === ' . json_encode($container_e_key)
+      . ' && !!input && !input.disabled'
+      . ' && ' . $map . '[' . json_encode($tag_rule_key) . "]?.default?.['font-weight'] === undefined"
+      . " && !($anchors_js).some((anchor) => getComputedStyle(anchor).fontWeight === '550'); })()",
+      20000,
+      'Row source: with the rule still seated, the Weight row is the live field at `a` (typography lands there), the rule holds no font-weight, and no anchor computes 550 before the write.',
+    );
+    $this->recordOps();
+    $this->typeIntoPanel($weight_input, '550');
+    $this->blurPanel($weight_input);
+    $this->assertOneOp(
+      $tag_rule_key,
+      ['font-weight' => '550'],
+      'Row source: the typed Weight settled ONE update_style at container::a carrying font-weight: 550 (a unitless number matching no stop, so the literal): the Weight row writes at the rebased candidate as the Size row did.',
+    );
+    $this->assertJsCondition(
+      $map . '[' . json_encode($tag_rule_key) . "]?.default?.['font-weight'] === '550'"
+      . " && ($anchors_js).every((anchor) => getComputedStyle(anchor).fontWeight === '550')",
+      20000,
+      'Row source: the rule holds font-weight: 550 and every anchor in the section computes it without reload.',
+    );
+    // Back below the selection: the link's own address reads the rule's
+    // weight as an inherited own-ancestor value, the origin whose one
+    // doorway is "Edit at" the rule in its own words.
+    $session->executeScript("Drupal.Daedalus.Selection.target('$block_e1_key', '.text-block-link');");
+    $this->assertJsCondition(
+      "(() => { const chip = document.querySelector('$address_chip'); const input = document.querySelector(" . json_encode($weight_input) . "); const row = $weight_row_js;"
+      . ' if (!chip || !input || !row || chip.dataset.daedalusStylishAddress !== ' . json_encode($link_e1_key) . ') { return false; }'
+      . " return input.value === '550'"
+      . " && row.querySelector('.daedalus-stylish-inspector__mark')?.title === '550 inherited from Section (a)'; })()",
+      20000,
+      'Row source: back on the link\'s own address the Weight field reads the rule\'s 550 with its mark titled "550 inherited from Section (a)": the row reads the rule\'s own layer through its stack.',
+    );
+    $session->executeScript(
+      "(() => { const row = $weight_row_js; const rect = row.getBoundingClientRect();"
+      . " row.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: rect.left + 8, clientY: rect.top + rect.height / 2 })); })()"
+    );
+    $this->assertJsCondition(
+      "(() => { const items = $menu_items_js; if (!document.querySelector('.daedalus-ui-menu') || items.length === 0) { return false; }"
+      . " return items.some(([label, hint]) => label === 'Edit at Section (a)' && hint === 'writes land on that rule; the selection stays'); })()",
+      20000,
+      'Row source: a right-click on the Weight row opens the provenance menu on the shared primitive offering "Edit at Section (a)" (originOf\'s own-ancestor doorway in the rule\'s own words) hinted that the selection stays.',
+    );
+    $session->executeScript(
+      "Array.from(document.querySelectorAll('.daedalus-ui-menu .daedalus-ui-menu__item'))"
+      . ".find((item) => item.querySelector('.daedalus-ui-menu__label')?.textContent.trim() === 'Edit at Section (a)').click();"
+    );
+    $this->assertJsCondition(
+      "(() => { const chip = document.querySelector('$address_chip');"
+      . " return !document.querySelector('.daedalus-ui-menu')"
+      . ' && Drupal.Daedalus.Selection.getSelected() === ' . json_encode($block_e1_key)
+      . ' && Drupal.Daedalus.Selection.getTarget()?.key === ' . json_encode($container_e_key)
+      . " && Drupal.Daedalus.Selection.getTarget()?.selector === 'a'"
+      . ' && !!chip && chip.dataset.daedalusStylishAddress === ' . json_encode($tag_rule_key)
+      . " && chip.classList.contains('daedalus-stylish-chip--lit'); })()",
+      20000,
+      'Row source: the "Edit at" pick on the Weight row seated the rule as the styling target (container::a, the selection still the first link, the chip lit there): the choice row hands its own source to the menu hook, so the doorway every basic row offers is live, never inert.',
+    );
+
+    // ----- Typing into the Padding field previews mid-gesture. -----
+    // Seam: a native input event on the Basic Padding field ->
+    // DimensionField's typedPreview (a bare number in the space's unit,
+    // the static label's rem)
+    // -> useFieldGesture.preview handing its caller ONE object,
+    // {padding: value} -> the padding row's patchFor over that object
+    // (uniformCommit: the shorthand alone while no own longhand stands)
+    // -> basic-controls.js route -> source.preview -> the preview
+    // sheet's live slot inline on the band. The hook and the row are
+    // node-tested apart (use-gesture's shape, padding-row's patch), but
+    // the callback shape crosses from the hook to the component and only
+    // the browser runs both: a handler still destructuring the old
+    // (name, value) pair reads an undefined value and paints nothing
+    // until blur. The band is selected whole (select() drops the rule
+    // target with it), and under the open phase its Padding row over
+    // olivero's rem space ladder is the detented field.
+    $session->executeScript("Drupal.Daedalus.Selection.select('$container_e_key');");
+    $padding_field = "#daedalus_stylish_inspector .daedalus-stylish-inspector__widget--spacing input[aria-label='Padding']";
+    $band_js = "document.querySelector(\"[data-selectable='$container_e_key']\")";
+    $preview_sheet_js = "(document.querySelector('style[data-daedalus-stylish-preview]')?.textContent ?? '')";
+    $this->assertJsCondition(
+      '(() => { const input = document.querySelector(' . json_encode($padding_field) . ');'
+      . ' return Drupal.Daedalus.Selection.getTarget() === null && !!input'
+      . " && input.closest('.daedalus-stylish-dimension')?.querySelector('.daedalus-stylish-dimension__unit-label')?.textContent === 'rem'"
+      . " && !input.closest('.daedalus-stylish-dimension')?.querySelector('.daedalus-stylish-dimension__unit-well')"
+      . ' && ' . $map . '[' . json_encode($container_e_key) . ']?.default?.padding === undefined'
+      . " && $preview_sheet_js === ''; })()",
+      20000,
+      'Padding preview: selecting the band whole dropped the rule target, its Basic Padding row renders as the detented field with rem as its static unit label (no select: the space names its unit), the band wears no own padding, and the preview sheet is empty before the gesture.',
+    );
+    $this->recordOps();
+    $this->typeIntoPanel($padding_field, '2.75');
+    $expected_padding_js = "(parseFloat(getComputedStyle(document.documentElement).fontSize) * 2.75) + 'px'";
+    $this->assertJsCondition(
+      "(() => { const style = getComputedStyle($band_js); const sheet = $preview_sheet_js;"
+      . " return style.paddingTop === $expected_padding_js"
+      . ' && style.paddingRight === style.paddingTop && style.paddingBottom === style.paddingTop && style.paddingLeft === style.paddingTop'
+      . " && sheet.includes('--daedalus-stylish-live-') && sheet.includes('padding')"
+      . ' && document.querySelector(' . json_encode($padding_field) . ").value === '2.75'; })()",
+      20000,
+      'Padding preview: the input event alone painted the band, every side computing 2.75rem through the preview sheet\'s live slot while the field echoes the draft: the field\'s preview reached the row\'s patch as one object, mid-gesture, before any settle.',
+    );
+    $this->assertSame(
+      0,
+      (int) $session->evaluateScript(self::OP_LOG . '.length'),
+      'Padding preview: nothing was dispatched on the input event; the paint is the staged preview and the commit waits for the settle.',
+    );
+    $this->blurPanel($padding_field);
+    $this->assertOneOp(
+      $container_e_key,
+      ['padding' => '2.75rem'],
+      'Padding preview: the blur settled ONE update_style at the band carrying the typed value in the space\'s unit (2.75rem matches no space stop, so it stays a literal).',
+    );
+    $this->assertJsCondition(
+      "(() => { const style = getComputedStyle($band_js);"
+      . ' return ' . $map . '[' . json_encode($container_e_key) . "]?.default?.padding === '2.75rem'"
+      . " && style.paddingTop === $expected_padding_js"
+      . " && $preview_sheet_js === ''; })()",
+      20000,
+      'Padding preview: the settled op landed padding: 2.75rem in the map, the band computes it from the entity tag alone, and the preview sheet released its slot.',
+    );
+
+    // ----- An unset ring cell under rem steps in rem, seeded. -----
+    // Seam: the canvas probe's px-resolved computed side and the
+    // document's measured bases (computed-read.js, readCanvas) -> the
+    // padding ring's cellFor (box-model.js sideMeasured: a supplied
+    // side whose value is outside the dimension grammar reads as its
+    // measurement; sideAnchor: the cell's unit through contextUnit, the
+    // space's rem, its number the placeholder converted through the
+    // MEASURED root, seedAnchor) -> stepKeyGesture's anchor ->
+    // sideStepValue over the detented space -> applyGesture's preview
+    // through the ring's patch -> settleGesture's settleSpelling and ONE
+    // commit. The seed and the step are node-pinned; the placeholder's
+    // road from the canvas into the cell and the unit the committed op
+    // carries exist only here: before the seed rule this cell read its
+    // px placeholder as its own anchor and wrote px beneath a row whose
+    // select said rem, and until the conversion rule it printed that px
+    // whole beside the rem select. Band D wears no own padding; born by
+    // add_section it wears the Site width variant, whose
+    // `padding-inline: max(var(--space-gutter), ...)` gives the left
+    // cell its gutter, so the cell shows that measurement converted
+    // into the space's rem (olivero's gutter token is 2rem: 2rem at the
+    // theme's root, never 32) beneath a Padding row whose static label
+    // says rem. Olivero's ladder (0.5, 1, 2, 4rem) holds no stop inside
+    // the first tenth above 2rem, so the step stays a literal (a stop
+    // there would magnetize to its reference). The step rides the
+    // keyboard like the border ring's: arrows run the pointer scrub's
+    // gesture and settle path.
+    $band_d_key = "container:$section_d_uuid";
+    $band_d_js = "document.querySelector(\"[data-selectable='$band_d_key']\")";
+    $root_px_js = 'parseFloat(getComputedStyle(document.documentElement).fontSize)';
+    $session->executeScript("Drupal.Daedalus.Selection.select('$band_d_key');");
+    $this->clickPanel("#daedalus_stylish_inspector .daedalus-stylish-inspector__widget--spacing button[aria-label='Edit padding per side']");
+    $left_cell_xpath = '//div[contains(@class, "daedalus-stylish-boxmodel__ring--padding")]'
+      . '//button[contains(@class, "daedalus-stylish-boxmodel__cell")][starts-with(@aria-label, "Padding left:")]';
+    $left_cell_js = 'document.evaluate(' . json_encode($left_cell_xpath) . ', document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue';
+    $this->assertNotNull(
+      $assert_session->waitForElement('xpath', $left_cell_xpath),
+      'Ring seed: the pencil opened the padding ring beneath band D\'s Padding row, with a left cell.',
+    );
+    $this->assertJsCondition(
+      "(() => { const cell = $left_cell_js; const px = getComputedStyle($band_d_js).paddingLeft;"
+      . ' const input = document.querySelector(' . json_encode($padding_field) . ');'
+      . " const field = input?.closest('.daedalus-stylish-dimension');"
+      . " return !!cell && !!field && Math.abs(parseFloat(px) - 2 * $root_px_js) < 0.05"
+      . " && cell.getAttribute('aria-label') === 'Padding left: 2rem (from Site width)'"
+      . " && cell.textContent.trim() === '2rem'"
+      . " && cell.classList.contains('daedalus-stylish-boxmodel__cell--variant') && cell.classList.contains('daedalus-stylish-boxmodel__cell--scrubbable')"
+      . " && !cell.classList.contains('daedalus-stylish-boxmodel__cell--opaque') && !cell.classList.contains('daedalus-stylish-boxmodel__cell--computed')"
+      . " && cell.title.startsWith('2rem from Site width') && cell.title.includes('Drag sideways to change')"
+      . " && field.querySelector('.daedalus-stylish-dimension__unit-label')?.textContent === 'rem'"
+      . " && !field.querySelector('.daedalus-stylish-dimension__unit-well')"
+      . ' && ' . $map . '[' . json_encode($band_d_key) . "]?.default?.['padding-left'] === undefined"
+      . ' && ' . $map . '[' . json_encode($band_d_key) . "]?.default?.padding === undefined"
+      . " && $preview_sheet_js === ''; })()",
+      20000,
+      'Ring seed: band D\'s left cell reads the Site width variant\'s gutter (computing 2rem at the root) as 2rem in the variant\'s hue, titled "2rem from Site width", scrubbable and not opaque, beneath a Padding row whose static label says rem (no select), the band wearing no own padding and the preview sheet empty.',
+    );
+    // The seed the cell takes: 2rem (the 32px measurement through the
+    // measured 16px root, at the ring's tenths), then one diagram grain
+    // (0.1rem) up. Pinned as literals: the gutter is the skin's fixture
+    // fact the precondition above asserts, so a changed gutter reads as
+    // a fixture change, never a seed failure.
+    $stepped = 2.1;
+    $stepped_text = '2.1rem';
+    $stepped_label = json_encode('Padding left: ' . $stepped_text . ' (set here)');
+    $this->recordOps();
+    $session->executeScript(
+      "(() => { const cell = $left_cell_js; cell.focus();"
+      . " cell.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true, cancelable: true })); })();"
+    );
+    $this->assertJsCondition(
+      "(() => { const cell = $left_cell_js; const sheet = $preview_sheet_js;"
+      . " return !!cell && cell.getAttribute('aria-label') === $stepped_label"
+      . " && sheet.includes('--daedalus-stylish-live-')"
+      . " && Math.abs(parseFloat(getComputedStyle($band_d_js).paddingLeft) - $stepped * $root_px_js) < 0.05; })()",
+      20000,
+      'Ring seed: ArrowUp previewed the left cell in REM, one tenth above the placeholder converted through the measured root (2.1rem: never 0.1rem from zero, never px from the placeholder), the band computing it through the live slot.',
+    );
+    $this->assertSame(
+      0,
+      (int) $session->evaluateScript(self::OP_LOG . '.length'),
+      'Ring seed: nothing was dispatched while the key is held; the diagram commits on release.',
+    );
+    $session->executeScript(
+      "($left_cell_js).dispatchEvent(new KeyboardEvent('keyup', { key: 'ArrowUp', bubbles: true, cancelable: true }));"
+    );
+    $this->assertOneOp(
+      $band_d_key,
+      ['padding-left' => $stepped_text],
+      'Ring seed: the release was ONE update_style at band D carrying padding-left as the rem literal the seed and one grain produce (no own shorthand to expand, no stop to capture).',
+    );
+    $this->assertJsCondition(
+      "(() => { const cell = $left_cell_js;"
+      . ' return ' . $map . '[' . json_encode($band_d_key) . "]?.default?.['padding-left'] === " . json_encode($stepped_text)
+      . " && !!cell && cell.getAttribute('aria-label') === $stepped_label"
+      . " && cell.classList.contains('daedalus-stylish-boxmodel__cell--authored')"
+      . " && $preview_sheet_js === ''; })()",
+      20000,
+      'Ring seed: the map holds the rem longhand, the cell wears it authored, and the preview sheet released its slot.',
+    );
+
+    // ----- The ring's inline cells read the Site width variant. -----
+    // Seam: the stack's `padding-inline` line (the worn Site width
+    // variant's `max(var(--space-gutter), calc((100% -
+    // var(--layout-max-width)) / 2))`) through resolveSides'
+    // logical-longhand read (box-model.js, LOGICAL_SIDES) into the
+    // right cell's variant hue, its hover words and its converted
+    // placeholder, then the side editor's `padding-right` write beating
+    // it on the canvas while the variant stays worn. The logical read
+    // and the measured-cell rule are node-pinned (box-model); the hue,
+    // the measurement and the write meet only in the browser: before
+    // the logical read the same cell read "computed from the theme"
+    // (false: the variant) with the canvas's px as its number, and a
+    // per-side write silently defeated the site width. Band D's left
+    // side is now its own (the step above), so the right cell is the
+    // variant's beside an authored left: an own per-side padding beats
+    // the worn width variant and the ring says nothing special about it
+    // (the wear bar names the override). The top cell, which no layer
+    // styles, still reads computed: the logical read lands on the
+    // inline pair alone.
+    $right_cell_xpath = '//div[contains(@class, "daedalus-stylish-boxmodel__ring--padding")]'
+      . '//button[contains(@class, "daedalus-stylish-boxmodel__cell")][starts-with(@aria-label, "Padding right:")]';
+    $right_cell_js = 'document.evaluate(' . json_encode($right_cell_xpath) . ', document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue';
+    $top_cell_xpath = '//div[contains(@class, "daedalus-stylish-boxmodel__ring--padding")]'
+      . '//button[contains(@class, "daedalus-stylish-boxmodel__cell")][starts-with(@aria-label, "Padding top:")]';
+    $top_cell_js = 'document.evaluate(' . json_encode($top_cell_xpath) . ', document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue';
+    $this->assertNotNull(
+      $assert_session->waitForElement('xpath', $right_cell_xpath),
+      'Site width: the padding ring is still open beneath band D\'s Padding row, with a right cell.',
+    );
+    $this->assertJsCondition(
+      "(() => { const right = $right_cell_js; const left = $left_cell_js; const top = $top_cell_js;"
+      . " const px = getComputedStyle($band_d_js).paddingRight;"
+      . " return !!right && !!left && !!top && Math.abs(parseFloat(px) - 2 * $root_px_js) < 0.05"
+      . " && right.getAttribute('aria-label') === 'Padding right: 2rem (from Site width)'"
+      . " && right.textContent.trim() === '2rem'"
+      . " && right.classList.contains('daedalus-stylish-boxmodel__cell--variant') && right.classList.contains('daedalus-stylish-boxmodel__cell--scrubbable')"
+      . " && !right.classList.contains('daedalus-stylish-boxmodel__cell--opaque')"
+      . " && right.style.getPropertyValue('--daedalus-stylish-origin') !== ''"
+      . " && right.title.startsWith('2rem from Site width') && right.title.includes('Drag sideways to change')"
+      . " && left.getAttribute('aria-label') === $stepped_label && left.classList.contains('daedalus-stylish-boxmodel__cell--authored')"
+      . " && top.classList.contains('daedalus-stylish-boxmodel__cell--computed') && top.getAttribute('aria-label').endsWith('(computed from the theme)')"
+      . " && !document.querySelector('#daedalus_stylish_inspector .daedalus-stylish-boxmodel--blocked'); })()",
+      20000,
+      'Site width: the right cell reads the variant\'s padding-inline as 2rem "from Site width" in the variant\'s hue (the origin custom property set), scrubbable and not opaque, beside the authored left, while the top cell no layer styles still reads computed from the theme, and the ring is not blocked.',
+    );
+    // A REAL click selects the side: the side editor mounts as the
+    // DimensionField over padding-right, EMPTY (a max() is no text to
+    // edit per side) with the measurement as its placeholder converted
+    // into the space's rem, beside the static rem label.
+    $this->clickPanelXpath($right_cell_xpath);
+    $editor_input = '#daedalus_stylish_inspector .daedalus-stylish-boxmodel__editor input[aria-label="Padding right"]';
+    $this->assertJsCondition(
+      "(() => { const cell = $right_cell_js; const input = document.querySelector(" . json_encode($editor_input) . ');'
+      . " if (!cell || !input) { return false; } const field = input.closest('.daedalus-stylish-dimension');"
+      . " return cell.getAttribute('aria-pressed') === 'true'"
+      . " && input.value === '' && input.placeholder === '2'"
+      . " && field.querySelector('.daedalus-stylish-dimension__unit-label')?.textContent === 'rem'"
+      . " && !field.querySelector('.daedalus-stylish-dimension__unit-well'); })()",
+      20000,
+      'Site width: the click selected the right cell and mounted the side editor EMPTY over the variant\'s measurement as its placeholder (2, the 32px through the measured root into the space\'s rem) beside the static rem label, no select.',
+    );
+    $this->recordOps();
+    $this->typeIntoPanel($editor_input, '3');
+    $this->assertJsCondition(
+      "(() => { const style = getComputedStyle($band_d_js); const sheet = $preview_sheet_js;"
+      . " return Math.abs(parseFloat(style.paddingRight) - 3 * $root_px_js) < 0.05"
+      . " && Math.abs(parseFloat(style.paddingLeft) - $stepped * $root_px_js) < 0.05"
+      . " && sheet.includes('--daedalus-stylish-live-') && sheet.includes('padding-right')"
+      . ' && document.querySelector(' . json_encode($editor_input) . ").value === '3'; })()",
+      20000,
+      'Site width: typing 3 into the side editor previewed padding-right as 3rem on the band through the live slot (the physical longhand over the variant\'s padding-inline), the left side keeping its own 2.1rem, before any settle.',
+    );
+    $this->assertSame(
+      0,
+      (int) $session->evaluateScript(self::OP_LOG . '.length'),
+      'Site width: nothing was dispatched on the input event; the commit waits for the settle.',
+    );
+    $this->blurPanel($editor_input);
+    $this->assertOneOp(
+      $band_d_key,
+      ['padding-right' => '3rem'],
+      'Site width: the blur settled ONE update_style at band D carrying padding-right: 3rem, the physical longhand in the space\'s unit (3rem matches no olivero stop, so it stays a literal), never a padding-inline of the band\'s own.',
+    );
+    $this->assertJsCondition(
+      "(() => { const style = getComputedStyle($band_d_js); const right = $right_cell_js;"
+      . ' return ' . $map . '[' . json_encode($band_d_key) . "]?.default?.['padding-right'] === '3rem'"
+      . ' && ' . $map . '[' . json_encode($band_d_key) . "]?.default?.['padding-inline'] === undefined"
+      . " && Math.abs(parseFloat(style.paddingRight) - 3 * $root_px_js) < 0.05"
+      . " && Math.abs(parseFloat(style.paddingLeft) - $stepped * $root_px_js) < 0.05"
+      . " && !!right && right.getAttribute('aria-label') === 'Padding right: 3rem (set here)'"
+      . " && right.classList.contains('daedalus-stylish-boxmodel__cell--authored')"
+      . " && $preview_sheet_js === ''; })()",
+      20000,
+      'Site width: the map holds padding-right: 3rem and no padding-inline (the variant stays worn beneath, beaten on that side by the own longhand), the band computes 3rem on the right and its own 2.1rem on the left from the entity tag alone, the cell wears it authored, and the preview sheet released its slot.',
+    );
+
+    // ----- The value column: one edge, three surfaces. -----
+    // Seam: one CSS column contract (inspector.css: every property row
+    // lays a label cell beside a value cell, __widget-value, the
+    // inspector root's --daedalus-stylish-value-column wide at the row's
+    // end; a pick surface fills the cell, a slide surface's cluster
+    // fills it) met by three unrelated surfaces on a text block's Basic
+    // panel: the Font choice well (choice-row.js), the Size dimension
+    // field's cluster (dimension-field.js) and the Alignment segments
+    // (segments.js). That the well's left edge equals the cluster's left
+    // edge and the segments' right edge equals the cluster's right edge
+    // is a fact only a layout engine can confirm, read in ONE
+    // evaluateScript so every rect comes from the same layout pass. Back
+    // on the open phase's plain text block: a Font well, a free Size
+    // field and the Alignment segments on one panel.
+    $session->executeScript("Drupal.Daedalus.Selection.select('$block_b_key');");
+    $this->assertNotNull(
+      $assert_session->waitForElement('css', self::FONT_WELL),
+      'Value column: the text block\'s Basic panel renders the Font well.',
+    );
+    $this->assertNotNull(
+      $assert_session->waitForElement('css', self::SIZE_INPUT),
+      'Value column: the text block\'s Basic panel renders the free Size field.',
+    );
+    $column = json_decode((string) $session->evaluateScript(<<<JS
+      (() => {
+        const rows = [...document.querySelectorAll('#daedalus_stylish_inspector .daedalus-stylish-inspector__widget-row')];
+        const rowOf = (axis) => rows.find((row) => (row.querySelector('.daedalus-stylish-inspector__widget-axis, .daedalus-stylish-dimension__label')?.textContent.trim() ?? '') === axis) ?? null;
+        const edges = (element) => {
+          if (!element) { return null; }
+          const rect = element.getBoundingClientRect();
+          return { left: rect.left, right: rect.right, width: rect.width };
+        };
+        const font = rowOf('Font');
+        const size = rowOf('Size');
+        const alignment = rowOf('Alignment');
+        return JSON.stringify({
+          fontWell: edges(font?.querySelector('.daedalus-stylish-choice-well')),
+          fontCell: edges(font?.querySelector('.daedalus-stylish-inspector__widget-value')),
+          sizeControls: edges(size?.querySelector('.daedalus-stylish-dimension__controls')),
+          sizeCell: edges(size?.querySelector('.daedalus-stylish-inspector__widget-value')),
+          segments: edges(alignment?.querySelector('.daedalus-stylish-inspector__segments')),
+          alignmentCell: edges(alignment?.querySelector('.daedalus-stylish-inspector__widget-value')),
+          row: edges(size),
+        });
+      })()
+      JS), TRUE);
+    foreach (['fontWell', 'fontCell', 'sizeControls', 'sizeCell', 'segments', 'alignmentCell', 'row'] as $part) {
+      $this->assertNotNull($column[$part], "Value column: the panel renders the $part to measure (the Font row's well, the Size row's cluster and the Alignment row's segments, each in its row's value cell).");
+    }
+    $this->assertEqualsWithDelta(
+      $column['sizeControls']['left'],
+      $column['fontWell']['left'],
+      1.0,
+      'Value column: the Font well\'s left edge is the Size cluster\'s left edge within a pixel (a pick surface fills the value cell a slide surface\'s cluster also fills). Font well left ' . $column['fontWell']['left'] . ', Size cluster left ' . $column['sizeControls']['left'] . '.',
+    );
+    $this->assertEqualsWithDelta(
+      $column['sizeControls']['right'],
+      $column['segments']['right'],
+      1.0,
+      'Value column: the Alignment segments\' right edge is the Size cluster\'s right edge within a pixel (both end at the row\'s end). Segments right ' . $column['segments']['right'] . ', Size cluster right ' . $column['sizeControls']['right'] . '.',
+    );
+    $this->assertEqualsWithDelta(
+      $column['sizeCell']['left'],
+      $column['fontCell']['left'],
+      1.0,
+      'Value column: the Font and Size rows\' value cells start on one edge. Font cell left ' . $column['fontCell']['left'] . ', Size cell left ' . $column['sizeCell']['left'] . '.',
+    );
+    $this->assertEqualsWithDelta(
+      $column['sizeCell']['left'],
+      $column['alignmentCell']['left'],
+      1.0,
+      'Value column: the Alignment row\'s value cell starts on the same edge. Alignment cell left ' . $column['alignmentCell']['left'] . ', Size cell left ' . $column['sizeCell']['left'] . '.',
+    );
+    $this->assertEqualsWithDelta(
+      $column['sizeCell']['left'],
+      $column['sizeControls']['left'],
+      1.0,
+      'Value column: the Size cluster starts on its cell\'s left edge (the cluster fills the value cell, so the cell\'s edge IS the column edge every surface meets). Cell left ' . $column['sizeCell']['left'] . ', cluster left ' . $column['sizeControls']['left'] . '.',
+    );
+    $this->assertLessThan(
+      $column['sizeCell']['left'],
+      $column['row']['left'] + $column['row']['width'] / 3,
+      'Value column: the column edge sits past the row\'s first third (the label cell is the row\'s free width; the value cell is the 8.5rem cluster width at the rail\'s default width). Row left ' . $column['row']['left'] . ', width ' . $column['row']['width'] . ', cell left ' . $column['sizeCell']['left'] . '.',
     );
   }
 

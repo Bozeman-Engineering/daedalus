@@ -15,8 +15,10 @@ use Drupal\Core\Plugin\Context\ContextHandlerInterface;
 use Drupal\Core\Plugin\Context\ContextRepositoryInterface;
 use Drupal\Core\Plugin\Context\EntityContext;
 use Drupal\Core\Plugin\ContextAwarePluginInterface;
+use Drupal\Core\TypedData\TranslatableInterface;
 use Drupal\daedalus_blueprint\Access\BlueprintAccessChecker;
 use Drupal\daedalus_blueprint\Event\ElementCreatedEvent;
+use Drupal\daedalus_blueprint\Event\FieldAppliedEvent;
 use Drupal\daedalus_blueprint\Event\SectionCreatedEvent;
 use Drupal\daedalus_blueprint\Event\ElementDuplicatedEvent;
 use Drupal\daedalus_blueprint\Event\ElementMovedEvent;
@@ -35,6 +37,7 @@ use Drupal\daedalus_blueprint\Result\BlueprintResult;
 use Drupal\daedalus_blueprint\Result\TargetType;
 use Drupal\daedalus_blueprint\Utility\FormOnlyStub;
 use Drupal\daedalus_blueprint\Utility\HtmlEntityDecoder;
+use Drupal\daedalus_blueprint\Utility\SampleRequest;
 use Drupal\daedalus_blueprint\Validator\SemanticValidator;
 use Drupal\layout_builder\Section;
 use Drupal\layout_builder\SectionComponent;
@@ -60,6 +63,24 @@ class BlueprintOperations implements BlueprintOperationsInterface {
   protected const REJECTED_FIELD_TYPES = [
     'layout_section',
     'entity_reference_revisions',
+  ];
+
+  /**
+   * The placement configuration every inline block carries.
+   *
+   * Core's block plugin settings (the label's display toggle, the render
+   * view mode) are read out of every inline block component unconditionally
+   * (LayoutSerializer::serializeInlineBlockComponent), so update_element
+   * writes them on every inline block too, without a managed-keys
+   * declaration; a site's own configuration keys stay managed keys. Stored
+   * in core's spelling: label_display 'visible' or '0', view_mode a view
+   * mode id.
+   *
+   * @var string[]
+   */
+  protected const PLACEMENT_CONFIGURATION = [
+    'label_display',
+    'view_mode',
   ];
 
   /**
@@ -141,11 +162,15 @@ class BlueprintOperations implements BlueprintOperationsInterface {
    *   recordings made by ops inside a batch persist to tempstore when the
    *   OUTERMOST batch succeeds and are discarded when it rolls back, so
    *   aliases never outlive identity that was never born.
+   * @param \Drupal\daedalus_blueprint\SampleFiller $sampleFiller
+   *   The one ladder that makes a field value up (default value, then the
+   *   configured field_sample_value generator, then core's type-level
+   *   sample), entered twice: add_element's populate: 'sample' fills only
+   *   what the site answers (placement stops after the generator rung), the
+   *   `_sample` request may continue to core when no generator is
+   *   configured. A configured generator's answer is final on both.
    * @param \Drupal\Core\Layout\LayoutPluginManagerInterface|null $layoutPluginManager
    *   The layout plugin manager (NULL when layout_discovery is not installed).
-   * @param object|null $sampleValueGenerator
-   *   The field_sample_value generator (NULL when that module is not
-   *   installed; core's generateSampleItems() is the fallback).
    */
   public function __construct(
     protected BlueprintSerializerInterface $serializer,
@@ -168,8 +193,8 @@ class BlueprintOperations implements BlueprintOperationsInterface {
     protected ContextHandlerInterface $contextHandler,
     protected OperationHandlerRegistry $operationHandlerRegistry,
     protected DialectAliasMap $dialectAliasMap,
+    protected SampleFiller $sampleFiller,
     protected ?LayoutPluginManagerInterface $layoutPluginManager = NULL,
-    protected ?object $sampleValueGenerator = NULL,
   ) {}
 
   /**
@@ -248,11 +273,17 @@ class BlueprintOperations implements BlueprintOperationsInterface {
   /**
    * Updates a section's properties (uniform at every depth).
    *
-   * A section's one editable property is its label, stored in
-   * layout_settings.label (core-native, the same slot at every depth).
-   * Structure changes through its own operations (move_element,
-   * add_section); a section is born with its layout and keeps it for
-   * life — arrangement is styling, not a property write.
+   * A section has two editable properties: its label, stored in
+   * layout_settings.label (core-native, the same slot at every depth), and
+   * its layout plugin's settings under layout_settings (column widths and
+   * the like), patched with the same contract add_section's layout_settings
+   * and a block's configuration keys use: a given key is set, an explicit
+   * empty value clears it (the plugin's default then rules), an omitted key
+   * keeps its value. The label's slot inside layout_settings is not writable
+   * there: the label property is its one spelling. Structure changes through
+   * its own operations (move_element, add_section); a section is born with
+   * its layout and keeps it for life — arrangement is styling, not a
+   * property write.
    *
    * @param \Drupal\Core\Entity\FieldableEntityInterface $entity
    *   The root entity.
@@ -270,43 +301,68 @@ class BlueprintOperations implements BlueprintOperationsInterface {
    *   The result with the modified entity on success.
    */
   protected function updateElementSection(FieldableEntityInterface $entity, ElementContext $context, string $uuid, array $properties, array $options = []): BlueprintResult {
+    $available = ['label', 'layout_settings'];
     $errors = [];
-    foreach (array_keys($properties) as $key) {
-      if ($key !== 'label') {
+    foreach ($properties as $key => $value) {
+      if (!in_array($key, $available, TRUE)) {
         $errors[] = new BlueprintError(
           path: "properties.{$key}",
           code: 'UNKNOWN_PROPERTY',
           message: "Property '$key' does not exist on a section.",
-          context: ['available' => ['label']],
-          hint: 'Sections take label here. A section is born with its layout (add_section) and keeps it; arrangement is styling, not a section property.',
+          context: ['available' => $available],
+          hint: 'Sections take label and layout_settings here. A section is born with its layout (add_section) and keeps it; arrangement is styling, not a section property.',
         );
+        continue;
+      }
+      if ($key === 'layout_settings') {
+        if (!is_array($value) || ($value !== [] && array_is_list($value))) {
+          $errors[] = new BlueprintError(
+            path: 'properties.layout_settings',
+            code: 'INVALID_LAYOUT_SETTINGS',
+            message: 'layout_settings is a map of layout plugin settings.',
+            hint: 'Provide settings the layout plugin understands (e.g. column_widths for two-column layouts); omitted keys keep their current values, an explicit null clears a key.',
+          );
+        }
+        elseif (array_key_exists('label', $value)) {
+          $errors[] = new BlueprintError(
+            path: 'properties.layout_settings.label',
+            code: 'INVALID_LAYOUT_SETTINGS',
+            message: "The section's name is not a layout setting.",
+            hint: 'Rename a section through its label property.',
+          );
+        }
       }
     }
     if ($errors) {
       return BlueprintResult::structuralFailure($errors);
     }
-    if (!array_key_exists('label', $properties)) {
+    if ($properties === []) {
       return BlueprintResult::success($entity);
     }
 
     /** @var \Drupal\layout_builder\Section $section */
     $section = $context->target;
-    $label = $properties['label'];
-    if (is_string($label) && !empty($options['decode_html_entities'])) {
-      $label = HtmlEntityDecoder::decode($label);
-    }
     $settings = $section->getLayoutSettings();
-    if (is_string($label) && $label !== '') {
-      $settings['label'] = $label;
+    if (array_key_exists('layout_settings', $properties)) {
+      $settings = $this->opaqueDataMerger->patch($settings, $properties['layout_settings']);
     }
-    else {
-      unset($settings['label']);
+    if (array_key_exists('label', $properties)) {
+      $label = $properties['label'];
+      if (is_string($label) && !empty($options['decode_html_entities'])) {
+        $label = HtmlEntityDecoder::decode($label);
+      }
+      if (is_string($label) && $label !== '') {
+        $settings['label'] = $label;
+      }
+      else {
+        unset($settings['label']);
+      }
     }
     $section->setLayoutSettings($settings);
     $this->bubbleNestedChanges($context);
 
     return BlueprintResult::success($entity)
-      ->withTargetsFrom($uuid, ['label']);
+      ->withTargetsFrom($uuid, array_keys($properties));
   }
 
   /**
@@ -335,7 +391,7 @@ class BlueprintOperations implements BlueprintOperationsInterface {
     }
 
     return BlueprintResult::success($entity, $result['warnings'])
-      ->withTargetsFrom($entity->uuid(), array_keys($properties));
+      ->withTargetsFrom($entity->uuid(), $this->appliedTargetNames(array_keys($properties), $result));
   }
 
   /**
@@ -421,7 +477,7 @@ class BlueprintOperations implements BlueprintOperationsInterface {
     $applied_field_names = array_merge($applied_field_names, array_keys($sorted['configuration'] ?? []));
 
     return BlueprintResult::success($entity, $result['warnings'])
-      ->withTargetsFrom($uuid, $applied_field_names);
+      ->withTargetsFrom($uuid, $this->appliedTargetNames($applied_field_names, $result));
   }
 
   /**
@@ -454,11 +510,15 @@ class BlueprintOperations implements BlueprintOperationsInterface {
     }
 
     return BlueprintResult::success($entity, $result['warnings'])
-      ->withTargetsFrom($uuid, array_keys($properties));
+      ->withTargetsFrom($uuid, $this->appliedTargetNames(array_keys($properties), $result));
   }
 
   /**
    * Sorts a flat property bag into fields, configuration, and label.
+   *
+   * Configuration is the placement's: core's own display settings
+   * (PLACEMENT_CONFIGURATION) on every inline block, and the block type's
+   * managed keys.
    *
    * @param \Drupal\Core\Entity\FieldableEntityInterface $entity
    *   The root entity (for managed keys lookup).
@@ -489,10 +549,13 @@ class BlueprintOperations implements BlueprintOperationsInterface {
       if ($key === 'label') {
         $label = $value;
       }
-      elseif (isset($processable_fields[$key])) {
+      elseif (isset($processable_fields[$key]) || (($value instanceof ExtractedValue || SampleRequest::isRequest($value)) && $block->hasField($key))) {
+        // An ExtractedValue, or the sample request that resolves into one,
+        // names any field the block has; the processable filter bounds
+        // grammar values only (see validateAndApplyFields()).
         $fields[$key] = $value;
       }
-      elseif (isset($inline_managed[$key])) {
+      elseif (isset($inline_managed[$key]) || in_array($key, static::PLACEMENT_CONFIGURATION, TRUE)) {
         $configuration[$key] = $value;
       }
       elseif ($key === 'layout_builder__layout') {
@@ -509,6 +572,7 @@ class BlueprintOperations implements BlueprintOperationsInterface {
       else {
         $available = array_merge(
           ['label'],
+          static::PLACEMENT_CONFIGURATION,
           array_keys($processable_fields),
           array_keys($inline_managed),
         );
@@ -582,17 +646,18 @@ class BlueprintOperations implements BlueprintOperationsInterface {
    * Seeds a fresh override field with the display's default sections.
    *
    * Until the first write lands, an overridable entity's layout field is
-   * empty while the page still renders the display's sections — and the
-   * serializer exposes those with their real daedalus_layout uuids. Materializing
-   * them makes the entity's identity tree match what the writer was shown,
-   * so anchors can name a default-seeded section and minted identity is
+   * empty (or holds core's blank placeholder, which reads as empty) while
+   * the page still renders the display's sections, and the serializer
+   * exposes those with their real daedalus_layout uuids. Materializing them
+   * makes the entity's identity tree match what the writer was shown, so
+   * anchors can name a default-seeded section and minted identity is
    * checked against it. Idempotent, and a no-op without Layout Builder.
    *
    * @param \Drupal\Core\Entity\FieldableEntityInterface $entity
    *   The entity to seed.
    */
   protected function materializeDefaultSections(FieldableEntityInterface $entity): void {
-    if (!$entity->hasField('layout_builder__layout') || !$entity->get('layout_builder__layout')->isEmpty()) {
+    if (!$entity->hasField('layout_builder__layout') || $this->daedalusLayoutAdapter->getFieldSections($entity) !== []) {
       return;
     }
     $sections = $this->daedalusLayoutAdapter->getDefaultSections($entity);
@@ -2188,7 +2253,7 @@ class BlueprintOperations implements BlueprintOperationsInterface {
     }
 
     return BlueprintResult::success($entity, $result['warnings'])
-      ->withTargetsFrom($entity->uuid(), array_keys($fields));
+      ->withTargetsFrom($entity->uuid(), $this->appliedTargetNames(array_keys($fields), $result));
   }
 
   /**
@@ -2327,6 +2392,18 @@ class BlueprintOperations implements BlueprintOperationsInterface {
       return BlueprintResult::success($entity);
     }
 
+    // The batch mutates the translation the caller names, resolved by the
+    // read side's rule (BlueprintSerializer: the translation must exist).
+    // The ops, the rollback snapshot and every lifecycle event run on the
+    // translation; the result carries the entity object the caller handed
+    // in, since translations share storage and every consumer (the
+    // response builder, the storage handler) addresses the translation by
+    // langcode rather than by which object it holds.
+    $langcode = $options['langcode'] ?? NULL;
+    $target = is_string($langcode) && $langcode !== '' && $entity instanceof TranslatableInterface
+      ? $entity->getTranslation($langcode)
+      : $entity;
+
     $dressed = !empty($options['dressed']);
     $judge = !empty($options['judge']);
     // The judge posture is THIS batch's: a nested batch an op runs (a
@@ -2339,7 +2416,7 @@ class BlueprintOperations implements BlueprintOperationsInterface {
       $this->dressedDepth++;
     }
     try {
-      $result = $this->doBatchOperations($entity, $operations, $options + ['judge' => $judge]);
+      $result = $this->doBatchOperations($target, $operations, $options + ['judge' => $judge]);
     }
     finally {
       $this->batchDepth--;
@@ -2352,6 +2429,11 @@ class BlueprintOperations implements BlueprintOperationsInterface {
     // lands nothing, aliases included.
     if ($this->batchDepth === 0) {
       $result->isSuccess() && !$judge ? $this->dialectAliasMap->persist() : $this->dialectAliasMap->discard();
+    }
+    if ($target !== $entity && $result->isSuccess()) {
+      $result = BlueprintResult::success($entity, $result->getWarnings())
+        ->withTargets($result->getTargets())
+        ->withAliases($result->getAliases());
     }
     return $result;
   }
@@ -2583,10 +2665,23 @@ class BlueprintOperations implements BlueprintOperationsInterface {
    * single method. Used by updateFields, updateElement, addLbComponent,
    * and addParagraphElement.
    *
+   * A field's value is one of two kinds (FieldValueKind). A grammar value
+   * must name a processable field (anything else is silently left alone,
+   * the read-side transport's PATCH-omit semantics) and is deserialized by
+   * the field's handler before the set. An ExtractedValue is an item list
+   * the caller already extracted and validated in-process (the entity
+   * form's widget pipeline), so it skips the handler and the processable
+   * filter: any field that exists on the entity can take one. Both kinds
+   * pass the same gates that judge whether the write may land: field
+   * existence, the rejected types, per-field edit access, and entity
+   * constraint validation scoped to the written fields. Every landed set
+   * dispatches a FieldAppliedEvent before constraints run.
+   *
    * @param \Drupal\Core\Entity\FieldableEntityInterface $entity
    *   The entity to apply fields to.
    * @param array $fields
-   *   The field data keyed by field name.
+   *   The field data keyed by field name: grammar values or ExtractedValue
+   *   objects.
    * @param string $path_prefix
    *   The error path prefix (e.g., 'fields' or 'block_fields').
    * @param array $options
@@ -2605,6 +2700,10 @@ class BlueprintOperations implements BlueprintOperationsInterface {
    *   - 'structuralErrors': Errors from field name/type validation.
    *   - 'errors': Errors from handlers and constraint validation.
    *   - 'warnings': Warnings from handlers.
+   *   - 'presenceChanged': The names of the landed fields that went from
+   *     empty to valued or back (absent on a structural failure); callers
+   *     turn it into the TargetType::PRESENCE target through
+   *     appliedTargetNames().
    */
   protected function validateAndApplyFields(
     FieldableEntityInterface $entity,
@@ -2653,7 +2752,24 @@ class BlueprintOperations implements BlueprintOperationsInterface {
         continue;
       }
 
-      if (!isset($processable_fields[$field_name])) {
+      // A sample request is the marker and nothing else: a value beside it
+      // would be two answers to one question.
+      if (SampleRequest::isRequest($value) && !SampleRequest::isBare($value)) {
+        $structural_errors[] = new BlueprintError(
+          path: "{$path_prefix}.{$field_name}",
+          code: 'INVALID_SAMPLE_REQUEST',
+          message: "A sample request for '$field_name' carries keys beside '" . SampleRequest::KEY . "'.",
+          context: ['unknown' => array_values(array_diff(array_keys($value), [SampleRequest::KEY]))],
+          hint: 'Pass {"' . SampleRequest::KEY . '": true} alone to fill the field with a sample, or pass the value.',
+        );
+        continue;
+      }
+
+      // The processable filter is the grammar's: it bounds what the
+      // blueprint reads and what a handler can spell. An ExtractedValue
+      // carries a field the form edits, processable or not, and a sample
+      // request resolves into one.
+      if (!$value instanceof ExtractedValue && !SampleRequest::isRequest($value) && !isset($processable_fields[$field_name])) {
         continue;
       }
 
@@ -2675,10 +2791,11 @@ class BlueprintOperations implements BlueprintOperationsInterface {
     $errors = [];
     $warnings = [];
     $error_field_names = [];
+    $presence_changed = [];
 
     foreach ($valid_field_names as $field_name) {
       $value = $fields[$field_name];
-      $definition = $processable_fields[$field_name];
+      $definition = $processable_fields[$field_name] ?? $entity->getFieldDefinition($field_name);
 
       // Per-field edit access on the surgical write path, mirroring the root
       // deserialize and nested (inline block / paragraph) paths. Without this,
@@ -2694,6 +2811,33 @@ class BlueprintOperations implements BlueprintOperationsInterface {
           hint: 'The current user lacks permission to modify this field.',
         );
         $error_field_names[] = $field_name;
+        continue;
+      }
+
+      // A sample request resolves here, after access, through the ladder's
+      // request entrance into the same ExtractedValue a form submit hands
+      // the spine.
+      if (SampleRequest::isRequest($value)) {
+        $value = $this->sampleFiller->extract($entity, $field_name);
+        if ($value === NULL) {
+          $errors[] = new BlueprintError(
+            path: "{$path_prefix}.{$field_name}",
+            code: 'NO_SAMPLE_VALUE',
+            message: "No sample value could be made for field '$field_name'.",
+            hint: 'The field has no default value, and either its configured field_sample_value generator yielded nothing (that answer is final; the site has no candidate, such as no published target to reference) or it has no generator and its type provides no sample. Give the site a candidate, configure a default value or generator, or pass a value.',
+          );
+          $error_field_names[] = $field_name;
+          continue;
+        }
+      }
+
+      if ($value instanceof ExtractedValue) {
+        $was_empty = $entity->get($field_name)->isEmpty();
+        $entity->set($field_name, $value->getValue());
+        if ($was_empty !== $entity->get($field_name)->isEmpty()) {
+          $presence_changed[] = $field_name;
+        }
+        $this->eventDispatcher->dispatch(new FieldAppliedEvent($entity, $field_name, $options['element_uuid'], FieldValueKind::Extracted));
         continue;
       }
 
@@ -2716,7 +2860,12 @@ class BlueprintOperations implements BlueprintOperationsInterface {
         $error_field_names[] = $field_name;
       }
       else {
+        $was_empty = $entity->get($field_name)->isEmpty();
         $entity->set($field_name, $handler_result->getValue());
+        if ($was_empty !== $entity->get($field_name)->isEmpty()) {
+          $presence_changed[] = $field_name;
+        }
+        $this->eventDispatcher->dispatch(new FieldAppliedEvent($entity, $field_name, $options['element_uuid'], FieldValueKind::Value));
       }
 
       array_push($warnings, ...$handler_result->getWarnings());
@@ -2743,7 +2892,34 @@ class BlueprintOperations implements BlueprintOperationsInterface {
       array_push($errors, ...$constraint_errors);
     }
 
-    return ['structuralErrors' => [], 'errors' => $errors, 'warnings' => $warnings];
+    return [
+      'structuralErrors' => [],
+      'errors' => $errors,
+      'warnings' => $warnings,
+      'presenceChanged' => $presence_changed,
+    ];
+  }
+
+  /**
+   * The target names of an applied property bag.
+   *
+   * The applied names, plus the presence sentinel when a written field
+   * went from empty to valued or back (see TargetType::PRESENCE): the
+   * field's own subtree cannot carry that change to the page.
+   *
+   * @param string[] $field_names
+   *   The property names that were applied.
+   * @param array $result
+   *   The array returned by validateAndApplyFields().
+   *
+   * @return string[]
+   *   The names to build targets from.
+   */
+  protected function appliedTargetNames(array $field_names, array $result): array {
+    if (!empty($result['presenceChanged'])) {
+      $field_names[] = TargetType::PRESENCE;
+    }
+    return $field_names;
   }
 
   /**
@@ -3147,15 +3323,18 @@ class BlueprintOperations implements BlueprintOperationsInterface {
   }
 
   /**
-   * Populates empty non-base fields of a fresh block with sample values.
+   * Populates non-base fields of a fresh block with the site's sample answer.
    *
-   * Parity with the daedalus_layout palette flow: field_sample_value generators
-   * when that module is installed, core's generateSampleItems() otherwise.
-   * Caller-provided fields are skipped — the field pipeline applies those.
-   * Structural field types (REJECTED_FIELD_TYPES) are skipped too: sample
-   * content never belongs in a layout field — core's layout_section sample
-   * is a hardcoded layout_onecol section that would clobber anything a
-   * bundle's own create/presave seed established.
+   * Parity with the daedalus_layout palette flow, through the one ladder's
+   * placement entrance (SampleFiller::fillOnPlacement(): default value, then
+   * the configured field_sample_value generator, then nothing). A field with
+   * no policy stays empty and a configured generator's empty answer is
+   * final: a dropped block is an editor's starting point, and core's
+   * type-level sample (a random link, tag or unsaved reference) would be
+   * noise the editor must undo. Caller-provided fields are skipped; the
+   * field pipeline applies those. Structural field types
+   * (REJECTED_FIELD_TYPES) are skipped too: sample content never belongs in
+   * a layout field, whose bundle create/presave seed owns its shape.
    *
    * @param \Drupal\Core\Entity\FieldableEntityInterface $block
    *   The freshly created block_content entity.
@@ -3169,12 +3348,7 @@ class BlueprintOperations implements BlueprintOperationsInterface {
         || in_array($field->getFieldDefinition()->getType(), self::REJECTED_FIELD_TYPES, TRUE)) {
         continue;
       }
-      if ($this->sampleValueGenerator !== NULL) {
-        $this->sampleValueGenerator->populateWithSampleValue($field);
-      }
-      else {
-        $field->generateSampleItems();
-      }
+      $this->sampleFiller->fillOnPlacement($field);
     }
   }
 

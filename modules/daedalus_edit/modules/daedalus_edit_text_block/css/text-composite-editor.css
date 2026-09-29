@@ -2,31 +2,17 @@
  * The text block editor's own widget control: the tag picker.
  *
  * The widget-popover grammar and the link input are daedalus_edit's shared
- * machinery and ship their CSS there (daedalus_edit/css/verb-widgets.css);
- * only the tag picker popover's pieces are this editor's own.
+ * machinery and ship their CSS there (daedalus_edit/css/verb-widgets.css).
+ * The picker itself is the kit's segmented control
+ * (daedalus_ui/panel_controls: .daedalus-ui-segments track,
+ * .daedalus-ui-segment buttons, --active for the pressed tag), so its look,
+ * hover and pressed state are the kit's; only the picker's own density is
+ * this editor's.
  */
-.daedalus-edit-tag-picker {
+
+/* The tag ladder is long (h1 to h6 and more); a tighter gap than the
+   kit's keeps the whole row on one popover. Compounded with the kit class
+   so it outranks the kit rule by specificity, not load order. */
+.daedalus-edit-tag-picker.daedalus-ui-segments {
   gap: 2px;
-}
-
-.daedalus-edit-tag-picker__tag {
-  margin: 0;
-  padding: 6px 8px;
-  cursor: pointer;
-  color: #222;
-  border: 0;
-  /* Concentric with the popover: its radius minus the 6px inset. */
-  border-radius: calc(var(--daedalus-border-radius) - 6px);
-  background: transparent;
-  font: inherit;
-  font-weight: 600;
-}
-
-.daedalus-edit-tag-picker__tag:hover {
-  background-color: #f0f0f0;
-}
-
-.daedalus-edit-tag-picker__tag[aria-pressed="true"] {
-  color: var(--daedalus-selection-text);
-  background-color: var(--daedalus-selection);
 }

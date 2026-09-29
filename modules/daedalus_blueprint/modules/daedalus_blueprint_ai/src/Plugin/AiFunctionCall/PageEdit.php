@@ -15,9 +15,10 @@ use Drupal\daedalus_blueprint_ai\PageToolBase;
  * The page mutation tool: DOM-vocabulary ops on the dialect.
  *
  * The op-set gate lives HERE, at the tool surface: this
- * tool accepts ONLY the DOM ops, so the model-facing edit grammar is the
- * six-op DOM vocabulary taught in the cached catalog, while the spine
- * dispatcher underneath keeps every registered op for other consumers.
+ * tool accepts ONLY the page language's ops, so the model-facing edit
+ * grammar is the DOM vocabulary taught in the cached catalog (the six DOM
+ * ops and the file declaration beside them), while the spine dispatcher
+ * underneath keeps every registered op for other consumers.
  */
 #[FunctionCall(
   id: 'daedalus_blueprint:page_edit',

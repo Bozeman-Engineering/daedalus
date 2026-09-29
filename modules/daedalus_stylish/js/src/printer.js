@@ -2,6 +2,21 @@ import { parseKey } from './style-guide.js';
 import { parseSlotKey, rootKindForScope, fragmentStyles } from './slot-key.js';
 import { cascadeOrder } from './condition-cascade.js';
 import { CLAIMS_CONTENT_ATTRIBUTE } from '../../../daedalus_ui/js/edit_mode/blueprint/element-resolver.js';
+import {
+  CHILD,
+  DESCENDANT,
+  HAS,
+  NEXT,
+  SUBSEQUENT,
+  SUFFIX,
+  TYPE,
+  UNIVERSAL,
+  isPartFirst,
+  parseSelector,
+  splitKey,
+  typeSelector,
+  under as rebase,
+} from '../../../daedalus_ui/js/edit_mode/materials/relative-selector.js';
 
 /**
  * Prints a style map as CSS text with @scope roots — the client printer.
@@ -15,10 +30,12 @@ import { CLAIMS_CONTENT_ATTRIBUTE } from '../../../daedalus_ui/js/edit_mode/blue
  * one printer and you change both.
  *
  * The condition wrapper table is not duplicated here: it arrives in the
- * style guide payload (guide.conditions, each {label, wrapper, axis})
- * straight from the server's ConditionTypePluginManager, live thresholds
- * included, so the two printers dispatch on the same data. Compound "a+b"
- * condition keys compose their parts' wrappers exactly like the server. Like the PHP printer this is
+ * style guide payload (guide.conditions, each {label, wrapper, axis,
+ * fact?}) straight from the server's ConditionTypePluginManager, live
+ * thresholds included, so the two printers dispatch on the same data.
+ * Compound "a+b" condition keys compose their parts' wrappers exactly like
+ * the server (a posable state as an :is() with the force-state dual, a
+ * structural fact bare). Like the PHP printer this is
  * an emit gate — the text lands inside a <style> element, so unsafe pieces
  * are dropped, never emitted.
  */
@@ -88,40 +105,231 @@ const orderedConditions = (entry, conditions) =>
   cascadeOrder(Object.keys(entry), conditions).map((key) => [key, entry[key]]);
 
 /**
- * The @scope limit for container-rooted blocks (CssPrinter mirror).
+ * The @scope limit for container-rooted blocks: the donut (CssPrinter
+ * mirror).
  *
- * Nested containers repeat the outer container's own markup, so container
- * blocks are donuts: they stop at nested container roots — and at nested BLOCK
- * roots, whose interiors belong to the block's own key family. The server
- * printer owns the rationale (CssPrinter::CONTAINER_SCOPE_LIMIT); the texts
- * must stay byte-identical.
+ * Nested containers repeat the outer container's own markup, so a
+ * container's ROOT entry and its part-first selectors are donuts: they
+ * stop at nested container roots — and at nested BLOCK roots, whose
+ * interiors belong to the block's own key family. Every other selector
+ * (a tag, a type, `> *`) reaches its whole subtree (donutLimit). The
+ * server printer owns the rationale (CssPrinter::CONTAINER_SCOPE_LIMIT);
+ * the texts must stay byte-identical.
  */
 export const CONTAINER_SCOPE_LIMIT =
   ':scope [data-selectable^="container:"], :scope [data-selectable^="block:"]';
 
 /**
- * The @scope limit for container-rooted CHILDREN pseudo-part entries.
+ * The donut a container-rooted entry takes, by its selector's shape
+ * (CssPrinter::donutLimit mirror): the root entry and a bare part take
+ * the standard limit; a part reaching by `>` shifts it one child level
+ * per compound (`.cls > *` stops at the nested roots' children, so the
+ * roots themselves stay stylable as the part's children); a part
+ * continuing by a descendant combinator, and every other shape, takes
+ * none. The server printer owns the rationale.
  *
- * A '::>' entry's targets are exactly the elements the standard donut
- * excludes (a container's direct children ARE nested container/block
- * roots), so the boundary shifts one level down: the nested roots'
- * CHILDREN. The server printer owns the rationale
- * (CssPrinter::CONTAINER_CHILDREN_SCOPE_LIMIT); the texts must stay
- * byte-identical.
+ * @param {?string} selector
+ *   The key's canonical relative selector, or null for the root.
+ *
+ * @return {?string}
  */
-export const CONTAINER_CHILDREN_SCOPE_LIMIT =
-  ':scope [data-selectable^="container:"] > *, :scope [data-selectable^="block:"] > *';
+export const donutLimit = (selector) => {
+  if (selector === null) {
+    return CONTAINER_SCOPE_LIMIT;
+  }
+  if (!isPartFirst(selector)) {
+    return null;
+  }
+  const rest = parseSelector(selector).compounds.slice(1);
+  if (rest.some((compound) => compound.combinator !== CHILD)) {
+    return null;
+  }
+  if (!rest.length) {
+    return CONTAINER_SCOPE_LIMIT;
+  }
+  return CONTAINER_SCOPE_LIMIT.split(',')
+    .map((member) => `${member.trim()}${' > *'.repeat(rest.length)}`)
+    .join(', ');
+};
 
 /**
- * Shifts an @scope donut one level down for children pseudo-part entries
- * (CssPrinter::childShiftedLimit mirror): every comma member gets the
- * direct-child combinator appended. Members must stay comma-safe.
+ * The index of the last weighted (non-universal) compound from `from`, or -1.
+ *
+ * The subject alone weighs: a qualifier takes its argument's weight, and
+ * every argument compound prints inside :where().
  */
-const childShiftedLimit = (limit) =>
-  limit
-    .split(',')
-    .map((member) => `${member.trim()} > *`)
-    .join(', ');
+const lastWeighted = (compounds, from) => {
+  for (let i = compounds.length - 1; i >= from; i -= 1) {
+    if (compounds[i].kind !== UNIVERSAL) {
+      return i;
+    }
+  }
+  return -1;
+};
+
+/**
+ * Whether a compound is reached by a sibling combinator (`+`, `~`).
+ */
+const isSibling = (compound) => [NEXT, SUBSEQUENT].includes(compound.combinator);
+
+/**
+ * The symbols of the spelled combinators (the descendant one is a space).
+ */
+const COMBINATOR_SYMBOLS = { [CHILD]: '>', [NEXT]: '+', [SUBSEQUENT]: '~' };
+
+/**
+ * Prints the combinator reaching a compound: ` > `, ` + ` or ` ~ `, the one
+ * space for a descendant.
+ */
+const renderCombinator = (compound) =>
+  compound.combinator === DESCENDANT
+    ? ' '
+    : ` ${COMBINATOR_SYMBOLS[compound.combinator]} `;
+
+/**
+ * Prints a compound's qualifiers, each at zero weight (CssPrinter mirror):
+ * every argument compound inside :where(), the argument's combinators
+ * bare, its lead glued to its space. The server printer owns the
+ * rationale.
+ */
+const renderQualifiers = (compound) =>
+  compound.qualifiers
+    .map((qualifier) =>
+      qualifier.name === HAS
+        ? `:has(${renderArgument(qualifier.argument)})`
+        : `:not(${renderCompound(qualifier.argument, false)})`,
+    )
+    .join('');
+
+/**
+ * Prints a `:has()` argument: its lead, then each compound in :where().
+ */
+const renderArgument = (compounds) => {
+  const lead =
+    compounds[0].combinator === DESCENDANT
+      ? ''
+      : `${COMBINATOR_SYMBOLS[compounds[0].combinator]} `;
+  return compounds
+    .map(
+      (compound, i) =>
+        `${i === 0 ? lead : renderCombinator(compound)}${renderCompound(compound, false)}`,
+    )
+    .join('');
+};
+
+/**
+ * Prints one compound: its subject, bare when it carries the weight, else
+ * in :where(), then its qualifiers. `*` prints bare (it weighs nothing);
+ * an implied subject (inside `:not()`) prints nothing.
+ */
+const renderCompound = (compound, bare) => {
+  if (compound.kind === null) {
+    return renderQualifiers(compound);
+  }
+  if (compound.kind === UNIVERSAL) {
+    return `*${renderQualifiers(compound)}`;
+  }
+  const printed =
+    compound.kind === TYPE ? typeSelector(compound.name) : compound.name;
+  return `${bare ? printed : `:where(${printed})`}${renderQualifiers(compound)}`;
+};
+
+/**
+ * Prints the chain from one compound on, each behind its combinator.
+ */
+const renderTail = (compounds, carrier, from) =>
+  compounds
+    .map((compound, i) =>
+      i < from
+        ? ''
+        : `${renderCombinator(compound)}${renderCompound(compound, i === carrier)}`,
+    )
+    .join('');
+
+/**
+ * The @scope targets a relative selector prints to: the discipline
+ * (CssPrinter::scopeTargets mirror, byte for byte).
+ *
+ * The chain is `:scope` followed by the selector's compounds; exactly ONE
+ * link carries specificity (the last non-universal one, `*` never
+ * weighs), every other prints inside :where(), so an ancestor's rule
+ * weighs what the addressed element's own rule weighs and loses to it on
+ * proximity. A descendant-first chain omits `:scope` from the print. A
+ * part-first selector prints the hoisted dual first (`:scope.cls`, the
+ * bare part keeping 0-2-0 on the owner's own root; a longer chain puts
+ * the root's weight on `:scope` when nothing after the class weighs, else
+ * on the last weighted compound; the dual is skipped when the part's next
+ * compound is a sibling, the scope root having no sibling inside itself).
+ * A sibling combinator prints like `>`; a compound's qualifiers print on
+ * it at zero weight (renderQualifiers). A terminal pseudo-element glues
+ * onto every target after the last compound's qualifiers (the part dual
+ * on both halves), the owner's anchor (`&::before`) being the scoping
+ * root's own box (`:scope::before`); :where() cannot wrap a
+ * pseudo-element, so every rule addressing a box weighs its host's
+ * weight plus 0-0-1, own and ancestor alike. A printed entry puts the
+ * condition suffixes BEFORE the pseudo (printEntry), so these are the
+ * whole selectors of an unconditional rule and the hosts are
+ * hostTargets'. The server printer owns the rationale.
+ *
+ * @param {?string} selector
+ *   The key's canonical relative selector, or null for the root.
+ *
+ * @return {string[]}
+ */
+export const scopeTargets = (selector) => {
+  const pseudo = pseudoTail(selector);
+  return hostTargets(selector).map((host) => `${host}${pseudo}`);
+};
+
+/**
+ * The terminal pseudo-element a selector prints, as selector text
+ * (CssPrinter::pseudoTail mirror): '::before' / '::after', or '' for an
+ * element (null included).
+ */
+const pseudoTail = (selector) => {
+  const pseudo = selector === null ? null : parseSelector(selector).pseudo;
+  return pseudo === null ? '' : `${SUFFIX}${pseudo}`;
+};
+
+/**
+ * The @scope targets of a selector's HOSTS (CssPrinter::hostTargets
+ * mirror): scopeTargets without the pseudo-element, the selectors a
+ * condition suffix appends to. The owner's anchor hosts on the scoping
+ * root itself. The canvas reads through these (computed-read.js
+ * resolveTargets): a generated box has no node, so the DOM twin of a
+ * box's rule is its hosts, and the box rides the computed read as
+ * getComputedStyle's pseudo argument.
+ *
+ * @param {?string} selector
+ *   The key's canonical relative selector, or null for the root.
+ *
+ * @return {string[]}
+ */
+export const hostTargets = (selector) => {
+  if (selector === null) {
+    return [':scope'];
+  }
+  const { compounds } = parseSelector(selector);
+  if (!compounds.length) {
+    return [':scope'];
+  }
+  const carrier = lastWeighted(compounds, 0);
+  const main = compounds[0].combinator === CHILD
+    ? `${carrier === -1 ? ':scope' : ':where(:scope)'}${renderTail(compounds, carrier, 0)}`
+    : `${renderCompound(compounds[0], carrier === 0)}${renderTail(compounds, carrier, 1)}`;
+  if (!isPartFirst(selector)) {
+    return [main];
+  }
+  if (compounds.length === 1) {
+    return [`:scope${compounds[0].name}${renderQualifiers(compounds[0])}`, main];
+  }
+  if (isSibling(compounds[1])) {
+    return [main];
+  }
+  const restCarrier = lastWeighted(compounds, 1);
+  const dual = `${restCarrier === -1 ? ':scope' : ':where(:scope)'}:where(${compounds[0].name})${renderQualifiers(compounds[0])}${renderTail(compounds, restCarrier, 1)}`;
+  return [dual, main];
+};
 
 /**
  * The properties a scope-root entry co-targets onto text-claiming parts
@@ -222,80 +430,43 @@ const holdsAnimation = (properties) => {
  *
  * @param {string} scopeRoot
  *   The @scope prelude selector, e.g. '[data-selectable="block:{uuid}"]'.
- * @param {?string} sub
- *   The sub-element class selector ('.quote') for sub-element keys, a bare
- *   tag name ('p') for tag-tier keys, or null when the entry styles the
- *   scope root itself.
+ * @param {?string} selector
+ *   The key's canonical relative selector ('.quote', 'p', '> *',
+ *   '> pb-text .link', '&::before', '> pb-text::after'), or null when
+ *   the entry styles the scope root itself. Its targets are
+ *   scopeTargets()'s, the condition suffixes composed on the hosts
+ *   before the pseudo-element.
  * @param {object} entry
  *   The entry: condition keys mapping properties to values.
  * @param {object} conditions
  *   The condition table (guide.conditions): name => {label, wrapper}.
  * @param {?string} scopeLimit
- *   An @scope "to" limit selector bounding the scope from below (the donut
- *   for container-rooted blocks: CONTAINER_SCOPE_LIMIT, and its
- *   child-shifted variant for children entries), or null for an
- *   unbounded scope.
- * @param {boolean} children
- *   True for a '::>' children pseudo-part entry: every target selector is
- *   extended with ' > *', so the entry styles the addressed element's
- *   direct children (PHP printer mirror).
+ *   An @scope "to" limit selector bounding the scope from below (the
+ *   donut, donutLimit()), or null for an unbounded scope.
  *
  * @return {string}
  *   The @scope block, or '' when nothing inside it printed.
  */
 export const printEntry = (
   scopeRoot,
-  sub,
+  selector,
   entry,
   conditions,
   scopeLimit = null,
-  children = false,
 ) => {
-  // A sub-element CLASS selector targets the part class inside the scope
-  // AND on the scope root itself (':scope.cls' first, then the descendant
-  // selector): a collapsed container hoists its part class onto the very
-  // element carrying the key, so part-targeted styles must land on the
-  // root exactly like on a descendant (PHP printer mirror).
-  // A dotless sub is a TAG-TIER entry ('{key}::p'): it emits ONE bare
-  // descendant tag target inside the scope. No ':scope' dual (the scope
-  // root is the element carrying the key, never one of its own text
-  // tags), and no :where() wrap on purpose: the bare tag stays at 0-0-1,
-  // which is the whole three-tier cascade — it beats the skin's
-  // zero-specificity base:{tag} default, and every minted part rule (a
-  // class at 0-1-0) beats it, regardless of document order (PHP printer
-  // mirror, CssPrinter::printEntry()).
-  const isTag = sub !== null && !sub.startsWith('.');
-  let targets;
-  if (sub === null) {
-    targets = [':scope'];
-  } else if (isTag) {
-    targets = [sub];
-  } else {
-    targets = [`:scope${sub}`, sub];
-  }
-  // The children pseudo-part rides the same targets one level down: the
-  // element's own selectors, each extended with the direct-child
-  // combinator. No children target may outweigh ':scope' (0-1-0): a
-  // child's own entry must win on scope proximity at equal weight, so the
-  // part half's class wraps in :where() or a collapsed nested container
-  // (hoisted part class on the scope-root element) would push the rule to
-  // 0-2-0 and a column's flex-grow override would silently lose (PHP
-  // printer mirror, CssPrinter::printEntry()). A tag-tier children entry
-  // keeps its single descendant target ('ul > *'): no root dual exists to
-  // cap.
-  if (children) {
-    if (sub !== null && !isTag) {
-      targets[0] = `:scope:where(${sub})`;
-    }
-    targets = targets.map((target) => `${target} > *`);
-  }
+  const targets = hostTargets(selector);
+  // The terminal pseudo-element prints LAST on every target: after the
+  // condition suffixes (the state holds on the host) and after the
+  // hold's :not() (the runtime stamps the host); nothing composes behind
+  // it (CssPrinter::entryPieces() mirror).
+  const pseudo = pseudoTail(selector);
   // Only the scope root's own entry co-targets its inherited text
-  // properties onto declared text-claiming elements: a part entry styles a
-  // concrete interior element (claiming parts included — a real part style
-  // must WIN over the co-target, not feed it), and a children entry
-  // already addresses descendants directly (PHP printer mirror,
-  // CssPrinter::printEntry()).
-  const coTarget = sub === null && !children;
+  // properties onto declared text-claiming elements: a selector entry
+  // styles concrete interior elements (claiming parts included — a real
+  // part style must WIN over the co-target, not feed it), and the owner's
+  // own generated box ('&::before') is a selector entry like any other
+  // (PHP printer mirror, CssPrinter::printEntry()).
+  const coTarget = selector === null;
   const pieces = [];
 
   orderedConditions(entry, conditions).forEach(([condition, value]) => {
@@ -324,11 +495,16 @@ export const printEntry = (
         if (wrapper === null) {
           unknown = true;
         } else if (wrapper.startsWith(':')) {
-          // Pseudo-class conditions also match the editor's forced state
+          // A structural fact (fact: true, ':first-child') prints bare:
+          // nothing the editor does can force it. Every other pseudo-class
+          // condition also matches the editor's forced state
           // (data-force-state, the inspector's DevTools-style :hov) — see
           // the PHP printer for the full rationale; the texts must stay
           // byte-identical.
-          suffixes += `:is(${wrapper}, [data-force-state~="${part}"])`;
+          suffixes +=
+            conditions?.[part]?.fact === true
+              ? wrapper
+              : `:is(${wrapper}, [data-force-state~="${part}"])`;
         } else {
           atRules.push(wrapper);
         }
@@ -342,8 +518,11 @@ export const printEntry = (
     if (declarations === '') {
       return;
     }
-    // Pseudo suffixes append to EVERY selector in the target list.
-    const selector = targets.map((target) => `${target}${suffixes}`).join(', ');
+    // Pseudo-class suffixes append to EVERY selector in the target list,
+    // the pseudo-element after them.
+    const selector = targets
+      .map((target) => `${target}${suffixes}${pseudo}`)
+      .join(', ');
     let piece = `${targetIndent}${selector} {\n${declarations}\n${targetIndent}}`;
     if (coTarget) {
       // The companion declarations are the block's INHERITED_TEXT_PROPERTIES
@@ -367,11 +546,15 @@ export const printEntry = (
     if (holdsAnimation(value)) {
       // The polyfill hold: a sibling of the rule after the companion,
       // inside the same condition wrappers, over exactly what the rule
-      // targets (the same selector list, the same pseudo suffixes), each
-      // member extended with :not([data-daedalus-stylish-triggered])
+      // targets (the same selector list, the same pseudo-class suffixes,
+      // the same pseudo-element last), each member extended with
+      // :not([data-daedalus-stylish-triggered]) on the host
       // (CssPrinter::entryPieces() mirror).
       const held = targets
-        .map((target) => `${target}${suffixes}:not([${TRIGGERED_ATTRIBUTE}])`)
+        .map(
+          (target) =>
+            `${target}${suffixes}:not([${TRIGGERED_ATTRIBUTE}])${pseudo}`,
+        )
         .join(', ');
       piece += `\n${targetIndent}${TRIGGER_HOLD_SUPPORTS} {\n${targetIndent}  ${held} {\n${targetIndent}    animation-play-state: paused;\n${targetIndent}  }\n${targetIndent}}`;
     }
@@ -423,6 +606,11 @@ export const printEntry = (
  *   path-less key space, where only the '' fragment can print.
  * @param {object} conditions
  *   The condition table (guide.conditions).
+ * @param {?string} under
+ *   The rule the fragment is worn at, or null at an element: each suffix
+ *   continues the rule by descent (relative-selector.js under(); the ''
+ *   suffix prints at the rule's own targets), and a suffix the grammar
+ *   refuses under the rule prints nothing.
  *
  * @return {string}
  *   CSS text, '' when nothing printed.
@@ -433,6 +621,7 @@ export const printFragmentStyles = (
   styles,
   fragment,
   conditions,
+  under = null,
 ) => {
   const rootKind = rootKindForScope(scope);
   const slot = parseSlotKey(fragment, rootKind);
@@ -442,38 +631,31 @@ export const printFragmentStyles = (
   const kind = slot.segments.length
     ? slot.segments[slot.segments.length - 1].type
     : rootKind;
-  const limit = kind === 'container' ? CONTAINER_SCOPE_LIMIT : null;
   const blocks = [];
   // The fragment lookup is slot-key.js's fragmentStyles — the same read
   // the edit-mode resolver uses, so delivery and the panel never disagree.
   Object.entries(fragmentStyles(styles, fragment)).forEach(
     ([suffix, entry]) => {
-      let sub = null;
-      // The '::>' children suffix strips first, mirroring the key grammar
-      // (parseSlotKey): '::.class::>' is the part's children.
-      const entryChildren = suffix.endsWith('::>');
-      if (entryChildren) {
-        suffix = suffix.slice(0, -3);
+      // The suffix is '' or '::selector'; the selector prints into
+      // selectors, so the grammar (canonical spelling) is the emit gate,
+      // the same gate authored keys pass.
+      const split = splitKey(suffix);
+      if (split === null) {
+        return;
       }
-      if (suffix !== '') {
-        sub = suffix.slice(2);
-        // The part selector prints verbatim, so its charset is the same
-        // emit-side gate authored '::.class' keys pass.
-        if (!/^\.[A-Za-z0-9_-]+$/.test(sub)) {
+      let selector = split.selector;
+      if (under !== null) {
+        selector = selector === null ? under : rebase(under, selector);
+        if (selector === null) {
           return;
         }
       }
-      // Children entries take the child-shifted donut: their targets are the
-      // nested roots the standard donut excludes.
-      const entryLimit =
-        entryChildren && limit !== null ? childShiftedLimit(limit) : limit;
       const block = printEntry(
         scopeRoot,
-        sub,
+        selector,
         entry,
         conditions,
-        entryLimit,
-        entryChildren,
+        kind === 'container' ? donutLimit(selector) : null,
       );
       if (block !== '') {
         blocks.push(block);
@@ -548,21 +730,12 @@ export const printMap = (map, conditions) => {
     }
     const pos = key.indexOf('::');
     const root = pos === -1 ? key : key.slice(0, pos);
-    // Children pseudo-part entries take the child-shifted donut: their
-    // targets are the nested roots the standard donut would exclude.
-    const limit =
-      parsed.kind === 'container'
-        ? parsed.children
-          ? CONTAINER_CHILDREN_SCOPE_LIMIT
-          : CONTAINER_SCOPE_LIMIT
-        : null;
     const block = printEntry(
       `[data-selectable="${root}"]`,
-      parsed.sub,
+      parsed.selector,
       entry,
       conditions,
-      limit,
-      parsed.children,
+      parsed.kind === 'container' ? donutLimit(parsed.selector) : null,
     );
     if (block !== '') {
       blocks.push(block);

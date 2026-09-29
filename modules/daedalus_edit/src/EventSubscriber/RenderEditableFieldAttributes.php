@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Drupal\daedalus_edit\EventSubscriber;
 
 use Drupal\Core\Session\AccountInterface;
+use Drupal\daedalus_edit\EditIdentity;
 use Drupal\daedalus_edit\Event\SuppressInlineEditing;
 use Drupal\daedalus_ui\Event\EditableFieldAttributes;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
@@ -70,17 +71,18 @@ class RenderEditableFieldAttributes implements EventSubscriberInterface {
     }
     // Get the actual view mode.
     $view_mode = _daedalus_ui_get_view_mode($entity, $view_mode);
-    $definition = $entity->getFieldDefinition($element['#field_name']);
-    $main_property = method_exists($definition, 'getMainPropertyName') ? $definition->getMainPropertyName() : 'value';
-    $id = daedalus_ui_entity_identifier($entity);
+    // The identities the form side must match (EditIdentity, the one
+    // minter): the field's main property on every shape.
+    $field_name = $element['#field_name'];
+    $main_property = EditIdentity::mainProperty($field_definition);
 
-    $variables['attributes']['data-daedalus-edit-field-value-wrapper'] = sprintf('%s::%s::%s::%s', $entity->getEntityTypeId(), $id, $element['#field_name'], $main_property);
+    $variables['attributes']['data-daedalus-edit-field-value-wrapper'] = EditIdentity::fieldWrapperId($entity, $field_name, $main_property);
 
     if (!empty($variables['items'])) {
       foreach ($variables['items'] as $delta => &$item) {
         $item['content']['edit_mode_wrapper']['#attributes']['class'] = ['daedalus-edit-field-value'];
-        $item['content']['edit_mode_wrapper']['#attributes']['data-daedalus-edit-id'] = sprintf('%s::%s::%s::%s::%s::%s::%s::%s::%s', $entity->getEntityTypeId(), $entity->bundle(), $id, $element['#field_name'], $delta, $element['#language'], $element['#field_type'], $element['#formatter'], $main_property);
-        $item['content']['edit_mode_wrapper']['#attributes']['data-daedalus-edit-page-element-id'] = sprintf('%s::%s::%s::%s::%s', $entity->getEntityTypeId(), $id, $element['#field_name'], $delta, $main_property);
+        $item['content']['edit_mode_wrapper']['#attributes']['data-daedalus-edit-id'] = EditIdentity::editId($entity, $field_name, $delta, $element['#language'], $element['#field_type'], $element['#formatter'], $main_property);
+        $item['content']['edit_mode_wrapper']['#attributes']['data-daedalus-edit-page-element-id'] = EditIdentity::itemId($entity, $field_name, $delta, $main_property);
         $item['content']['edit_mode_wrapper']['#cache']['tags'][] = daedalus_edit_cache_tag($entity);
       }
     }

@@ -74,6 +74,12 @@
     }
   }
 
+  /* The Fill with sample button an empty field's row carries
+     (panel-widget-visibility.js): a kit pill above the widget. */
+  .daedalus-edit-sample-fill {
+    margin-block: 0.375rem 0.125rem;
+  }
+
   /* Stacked panes: the shared body indent plus a little breathing room
      (the daedalus-ui-details recipe zeroes the wrapper so consumers choose). */
   .daedalus-ui-details > .details-wrapper {

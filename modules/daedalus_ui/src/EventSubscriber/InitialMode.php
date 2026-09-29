@@ -6,7 +6,6 @@ namespace Drupal\daedalus_ui\EventSubscriber;
 
 use Drupal\Core\Entity\EntityInterface;
 use Symfony\Component\HttpFoundation\Cookie;
-use Drupal\daedalus_ui\ModePluginManager;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Symfony\Component\HttpKernel\KernelEvents;
 use Symfony\Component\HttpFoundation\RequestStack;
@@ -14,7 +13,7 @@ use Symfony\Component\HttpKernel\Event\ResponseEvent;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 
 /**
- * Handles initial mode and tool setup for newly created entities.
+ * Handles the initial mode of newly created entities.
  *
  * When an entity is created with an initial_mode configured, this service
  * sets the appropriate cookies so the page is rendered in that mode.
@@ -26,7 +25,6 @@ final class InitialMode implements EventSubscriberInterface {
    */
   public function __construct(
     private readonly RequestStack $requestStack,
-    private readonly ModePluginManager $modeManager,
     private readonly EntityTypeManagerInterface $entityTypeManager,
   ) {}
 
@@ -60,22 +58,12 @@ final class InitialMode implements EventSubscriberInterface {
           'path' => $url,
           'mode' => $initial_mode,
         ]);
-        if ($initial_mode === 'edit') {
-          $configured_modes = $bundle_entity->getThirdPartySetting('daedalus_ui', 'modes', []);
-          $edit_mode = $this->modeManager->createInstance('edit');
-          $mode_settings = $configured_modes[$initial_mode] ?? $edit_mode->getConfiguration();
-          if (!empty($mode_settings['default_tool'])) {
-            $session->set('daedalus_ui_edit_mode_tool_cookie', [
-              'mode' => $mode_settings['default_tool'],
-            ]);
-          }
-        }
       }
     }
   }
 
   /**
-   * Sets mode and tool cookies on the response.
+   * Sets the mode cookie on the response.
    *
    * Reads queued cookie parameters from session and adds them to the
    * response headers.
@@ -101,22 +89,6 @@ final class InitialMode implements EventSubscriberInterface {
       );
       $response->headers->setCookie($cookie);
       $session->remove('daedalus_ui_set_mode_cookie');
-    }
-
-    // Set activeTool cookie if requested (for initial Edit Mode default tool).
-    $tool_cookie_params = $session->get('daedalus_ui_edit_mode_tool_cookie');
-    if ($tool_cookie_params) {
-      $cookie = new Cookie(
-        'activeTool',
-        $tool_cookie_params['mode'],
-        0,
-        '/',
-        NULL,
-        FALSE,
-        FALSE
-      );
-      $response->headers->setCookie($cookie);
-      $session->remove('daedalus_ui_edit_mode_tool_cookie');
     }
   }
 

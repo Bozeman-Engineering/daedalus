@@ -32,7 +32,7 @@ services:
   # The proportions retirement (mode + share) runs AFTER the grammar sweep
   # (lower priority): by then the map speaks the container grammar and
   # retiring references have landed on their split_* spellings, so one
-  # host pass converges old data all the way to the row variant.
+  # host pass converges old data all the way to the columns variant.
   daedalus_stylish_layouts.row_arrangement_sweep:
     class: Drupal\daedalus_stylish_layouts\RowArrangementSweep
     arguments:
@@ -40,6 +40,18 @@ services:
       - '@entity_field.manager'
     tags:
       - { name: daedalus_layout.host_transform, priority: -10 }
+
+  # A variant machine-name rename across every store (host maps, stored
+  # stencils, variant styles) plus the old shipped entity's retirement.
+  # Its host sweep (VariantRenameSweep) is built per walk inside the
+  # service with a private registry, never tagged: a rename is a one-shot.
+  daedalus_stylish_layouts.variant_rename:
+    class: Drupal\daedalus_stylish_layouts\VariantRename
+    arguments:
+      - '@entity_type.manager'
+      - '@entity_field.manager'
+      - '@logger.factory'
+  Drupal\daedalus_stylish_layouts\VariantRename: '@daedalus_stylish_layouts.variant_rename'
 
   daedalus_stylish_layouts.container_part_hoist:
     class: Drupal\daedalus_stylish_layouts\ContainerPartHoist

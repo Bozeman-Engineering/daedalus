@@ -110,13 +110,15 @@ final class VocabularyProse implements VocabularyProseInterface {
   /**
    * {@inheritdoc}
    *
-   * The stack the delivery composes (skin defaults, then worn variants,
-   * then the element's own styles, topmost setter wins), where styles
-   * persist, and the tool that shows any element's stack. The brief's
-   * one styling pointer, stated by the layer that owns the tool.
+   * The stack the delivery composes (declared defaults, then skin
+   * defaults, then the ancestor rules reaching the element, then worn
+   * variants, then the element's own styles, topmost setter wins: the
+   * five tiers StyleStack prints, in its order), where styles persist,
+   * and the tool that shows any element's stack. The brief's one styling
+   * pointer, stated by the layer that owns the tool.
    */
   public function stackSentence(): string {
-    return 'Every element wears a stack (skin defaults, then worn variants, then its own styles; the topmost setter wins) and explain_element_styles shows any element\'s stack; styles persist in the host entity\'s daedalus_stylish_styles field.';
+    return 'Every element wears a stack (declared defaults, then skin defaults, then the rules its ancestors\' selectors reach it with, then worn variants, then its own styles; the topmost setter wins) and explain_element_styles shows any element\'s stack; styles persist in the host entity\'s daedalus_stylish_styles field.';
   }
 
   /**

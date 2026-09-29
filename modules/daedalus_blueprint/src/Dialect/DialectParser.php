@@ -72,8 +72,8 @@ class DialectParser {
     'nav' => 'use <pb-container>',
     'table' => 'use <pb-formatted-text> if the format allows tables',
     'figure' => 'use <pb-container> with a <pb-image> and a <pb-text> caption',
-    'img' => 'use <pb-image>; reference existing media with media="id or label" or mint one with generate="prompt" + alt (src is not writable)',
-    'image' => 'use <pb-image>; reference existing media with media="id or label" or mint one with generate="prompt" + alt (src is not writable)',
+    'img' => 'use <pb-image>; reference existing media with media="id or label", mint one with generate="prompt" + alt, or place a file this conversation holds with file="name" + alt (src is not writable)',
+    'image' => 'use <pb-image>; reference existing media with media="id or label", mint one with generate="prompt" + alt, or place a file this conversation holds with file="name" + alt (src is not writable)',
   ];
 
   /**
@@ -90,12 +90,21 @@ class DialectParser {
   ];
 
   /**
+   * The file declaration's tag and its two attributes.
+   */
+  public const FILE_TAG = 'pb-file';
+  private const FILE_ATTRS = ['name', 'type'];
+
+  /**
    * Parses a full page document: top-level containers plus <style> blocks.
    *
    * The top level holds <pb-container> elements and <pb-stencil>
    * references (a placement lands as its root; the same set the insert
    * door admits at the page's root anchor); blocks belong inside a
-   * container.
+   * container. Beside them, write-only: <style> blocks and <pb-file
+   * name type> declarations (bytes the author wrote, carried on the
+   * result's files for the op layer to save before the tree lands; they
+   * never print, since after commit a declared file is media).
    */
   public function parseDocument(string $html, DialectCatalog $catalog): DialectParseResult {
     $walk = new DialectWalk($catalog);
@@ -103,6 +112,7 @@ class DialectParser {
 
     $tree = [];
     $style_elements = [];
+    $files = [];
     foreach ($root->children as $child) {
       if (!$child instanceof RawElement) {
         if (trim($child['#text']) !== '') {
@@ -112,6 +122,13 @@ class DialectParser {
       }
       if ($child->tag === 'style') {
         $style_elements[] = $child;
+        continue;
+      }
+      if ($child->tag === self::FILE_TAG) {
+        $declaration = self::fileDeclaration($child, $walk->errors);
+        if ($declaration !== NULL) {
+          $files[] = $declaration;
+        }
         continue;
       }
       if (!in_array($child->tag, ['pb-container', 'pb-stencil'], TRUE) && !isset(self::SUGAR[$child->tag]) && !isset(self::UNPREFIXED[$child->tag])) {
@@ -128,10 +145,15 @@ class DialectParser {
       }
     }
 
+    // The known ids the <style> block's selectors judge against: derived
+    // from the parsed tree by the ONE derivation the style op uses too
+    // (DialectCssParser::knownId()), so ownership answers the same at both
+    // doors.
     $css_parser = new DialectCssParser($catalog);
+    $known_ids = DialectCssParser::knownIds($tree, $catalog);
     $styles_by_id = [];
     foreach ($style_elements as $style_element) {
-      $assignments = $css_parser->parseStyleBlock($style_element->text(), $style_element->line, $walk->ids, $walk->errors);
+      $assignments = $css_parser->parseStyleBlock($style_element->text(), $style_element->line, $known_ids, $walk->errors);
       foreach ($assignments as [$id, $local, $condition, $properties]) {
         $styles_by_id[$id][$local][$condition] = array_merge($styles_by_id[$id][$local][$condition] ?? [], $properties);
       }
@@ -140,7 +162,59 @@ class DialectParser {
       self::injectStyles($tree, $styles_by_id);
     }
 
-    return new DialectParseResult($tree, $walk->errors);
+    return new DialectParseResult($tree, $walk->errors, $files);
+  }
+
+  /**
+   * Reads one <pb-file> declaration's grammar: name, type, a raw body.
+   *
+   * The body is the RAWTEXT the tree builder captured (an SVG's own
+   * markup, a stylesheet, CSV rows), trimmed at both ends; what the bytes
+   * ARE (the type against the name, the sanitizer's verdict, the site's
+   * accepted extensions) is the file lane's judgement at the op layer,
+   * never the parser's.
+   *
+   * @param \Drupal\daedalus_blueprint\Dialect\RawElement $el
+   *   The declaration element.
+   * @param \Drupal\daedalus_blueprint\Dialect\DialectError[] $errors
+   *   Collector for the declaration's grammar errors.
+   *
+   * @return array{name: string, type: string, content: string, line: int}|null
+   *   The declaration, or NULL when its grammar failed.
+   */
+  private static function fileDeclaration(RawElement $el, array &$errors): ?array {
+    $valid = TRUE;
+    foreach (array_keys($el->attributes) as $attr) {
+      if (!in_array($attr, self::FILE_ATTRS, TRUE)) {
+        $errors[] = new DialectError(
+          'ILLEGAL_ATTR',
+          sprintf('<%s> takes name and type only; "%s" is not an attribute of a file declaration', self::FILE_TAG, (string) $attr),
+          $el->line,
+          ['attribute' => (string) $attr, 'legal' => self::FILE_ATTRS],
+          'A file declaration is <pb-file name="logo.svg" type="image/svg+xml">the bytes</pb-file>; what places the file is the element (file="logo.svg") or the CSS (url(\'file:logo.svg\')).',
+        );
+        $valid = FALSE;
+      }
+    }
+    $name = trim((string) $el->attr('name'));
+    $type = trim((string) $el->attr('type'));
+    $content = trim($el->text());
+    if ($name === '' || str_contains($name, '/') || str_contains($name, '\\')) {
+      $errors[] = new DialectError('FILE_DECLARATION', sprintf('<%s> needs name="<filename>" (a bare filename with its extension, the handle later writes address it by)', self::FILE_TAG), $el->line, ['name' => $name], 'Write <pb-file name="logo.svg" type="image/svg+xml">...</pb-file>; the name is what file="" and url(\'file:...\') refer to.');
+      $valid = FALSE;
+    }
+    if ($type === '') {
+      $errors[] = new DialectError('FILE_DECLARATION', sprintf('<%s> needs type="<MIME type>" (image/svg+xml, text/css, text/csv, text/plain, text/markdown, application/json, text/html)', self::FILE_TAG), $el->line, ['name' => $name], 'The type must agree with the name\'s extension: name="logo.svg" is type="image/svg+xml".');
+      $valid = FALSE;
+    }
+    if ($content === '') {
+      $errors[] = new DialectError('FILE_DECLARATION', sprintf('<%s name="%s"> has an empty body; a declaration carries the file\'s bytes between its tags', self::FILE_TAG, $name), $el->line, ['name' => $name], 'Write the file\'s content (the SVG markup, the stylesheet, the rows) as the body of the declaration.');
+      $valid = FALSE;
+    }
+    if (!$valid) {
+      return NULL;
+    }
+    return ['name' => $name, 'type' => $type, 'content' => $content, 'line' => $el->line];
   }
 
   /**
@@ -169,6 +243,10 @@ class DialectParser {
       }
       if ($child->tag === 'style') {
         $walk->errors[] = new DialectError('STYLE_IN_FRAGMENT', '<style> is not legal in an op payload; use the style op or the elements\' own style="" attributes', $child->line);
+        continue;
+      }
+      if ($child->tag === self::FILE_TAG) {
+        $walk->errors[] = new DialectError('FILE_IN_FRAGMENT', sprintf('<%s> is not legal in an op payload; declare the file with the file op ({op: "file", name, type, content}) ahead of the op that places it', self::FILE_TAG), $child->line, [], 'A <pb-file> declaration belongs at the top level of a page_create document; in a page_edit batch the file op carries the same name, type and content.');
         continue;
       }
       $node = $walk->element($child, $top_level ? 0 : 1);

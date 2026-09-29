@@ -52,8 +52,10 @@ class ContainerSectionTest extends BlueprintKernelTestBase {
       'block',
       'block_content',
       'layout_builder',
+      'file',
       'daedalus_ui',
       'daedalus_tempstore',
+      'daedalus_blueprint_api',
       'daedalus_layout',
       'daedalus_blueprint_test',
     ]);

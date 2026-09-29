@@ -22,69 +22,6 @@ function daedalus_ui_preprocess_field(&$variables) {
 /**
  * Implements hook_preprocess_HOOK().
  *
- * Stamps the active mode on the html element. All mode-dependent chrome
- * visibility hangs off this one attribute: CSS hides the core navigation
- * sidebar and top bar and reveals the mode's own top bar when it is present.
- * The server stamps it from the (path-scoped) cookie so the initial render is
- * flicker-free; the client-side mode toggle flips the same attribute.
- *
- * The chrome density preference rides the html element too, as
- * data-daedalus-ui-chrome-density, and for the same reason: CSS and the reveal engine
- * read only this attribute, so stamping it SSR means clean mode never
- * flashes its hidden chrome before JS boots. It is stamped whenever the Edit
- * mode is AVAILABLE on the request, the same predicate under which the edit
- * chrome itself renders (present but hidden until the mode is active, see
- * DaedalusUi::buildPageTop), not only while the mode is active: the
- * client-side toggle flips the mode stamp alone, so a density stamp tied to
- * the active mode is missing after an AJAX entry and every consumer reads
- * the absence as full density until a reload. The preference is per-user
- * (EditorSettings), hence the user cache context; the response already
- * varies per user wherever the chrome renders (every sidebar panel carries
- * that context), so the stamp adds no new cache variation.
- */
-function daedalus_ui_preprocess_html(&$variables) {
-  $variables['#cache']['contexts'][] = 'daedalus_ui_mode';
-  $mode = \Drupal::service('daedalus_ui.mode_state')->getMode();
-  if ($mode !== 'none') {
-    $variables['html_attributes']->setAttribute('data-daedalus-ui-mode', $mode);
-    // In a mode the page is the user's own editing session (staged tempstore
-    // content), so it varies per user regardless of any preference.
-    $variables['#cache']['contexts'][] = 'user';
-    if ($mode === 'edit') {
-      // Seed the displace offsets the open rails will produce so first paint
-      // agrees with the SSR-rendered panels: consumers of
-      // --drupal-displace-offset-left/right otherwise pay the 0px fallback
-      // until displace.js first runs and flash full-width. displace.js writes
-      // measured values over these same inline properties, correcting drift.
-      $rails = \Drupal::service('daedalus_ui.ui')->getRailWidths();
-      array_push($variables['#cache']['contexts'], ...$rails['cache_contexts']);
-      $seed = '';
-      foreach ($rails['widths'] as $side => $width) {
-        if ($width !== NULL) {
-          $seed .= "--drupal-displace-offset-$side: $width;";
-        }
-      }
-      if ($seed !== '') {
-        $variables['html_attributes']->setAttribute('style', $seed);
-      }
-    }
-  }
-
-  // The mode plugins are memoized; hook_page_top already resolved them for
-  // this request when it built the chrome.
-  $modes = \Drupal::service('plugin.manager.modes')->getModePlugins();
-  if (isset($modes['edit'])) {
-    $variables['#cache']['contexts'][] = 'user';
-    $density = \Drupal::service('daedalus_ui.editor_settings')->getChromeDensity();
-    $variables['html_attributes']->setAttribute('data-daedalus-ui-chrome-density', $density);
-  }
-
-  $variables['#cache']['contexts'][] = 'user.permissions';
-}
-
-/**
- * Implements hook_preprocess_HOOK().
- *
  * The stage: one wrapper around the page (page_top chrome stays outside),
  * rendered whenever a mode could activate here so entering a mode client-side
  * needs no re-render. In-mode CSS makes it a query container, which is what

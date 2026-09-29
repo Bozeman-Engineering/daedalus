@@ -49,16 +49,26 @@ class CssStyleBackend implements StyleBackendInterface {
     // data-selectable attribute — class stamping never reaches the canvas
     // (sections build inside the canvas element's #pre_render, after
     // hook_entity_view), and the editing spine addresses elements by key.
-    // LIVE delivery stays class + compiled stylesheet, with the
-    // workspace-preview edge: the compiled file holds the LIVE variants, so
-    // inside a workspace the referenced variants' (possibly staged)
-    // revisions inline here at the same variant-class scope roots. Either
-    // way this tag is later in the document than the compiled <link> and
-    // wins the cascade for identical selectors. daedalus_stylish_entity_view() adds
-    // the daedalus_ui_mode cache context whenever the map holds refs.
-    $variant_css = $this->modeState?->getMode() === 'edit'
+    // LIVE delivery of wear at ELEMENT keys stays class + compiled
+    // stylesheet, with the workspace-preview edge: the compiled file holds
+    // the LIVE variants, so inside a workspace the referenced variants'
+    // (possibly staged) revisions inline here at the same variant-class
+    // scope roots. Either way this tag is later in the document than the
+    // compiled <link> and wins the cascade for identical selectors.
+    // daedalus_stylish_entity_view() adds the daedalus_ui_mode cache
+    // context whenever the map holds refs.
+    // Wear at a RULE key has no element to class and no selectable
+    // attribute of its own: in every mode it prints inside the rule
+    // owner's @scope with the variant's suffixes continued under the rule
+    // (VariantStylesheet::ruleWearCss()), the third lane beside the two
+    // element lanes above.
+    $variant_css = $this->variantStylesheet->ruleWearCss($map, $tags);
+    $element_css = $this->modeState?->getMode() === 'edit'
       ? $this->variantStylesheet->editModeInlineCss($map, $tags)
       : $this->variantStylesheet->workspaceInlineCss($map, $tags);
+    if ($element_css !== '') {
+      $variant_css = $variant_css === '' ? $element_css : "$variant_css\n$element_css";
+    }
     if ($variant_css !== '') {
       // Variant CSS prints FIRST inside the tag: a layered entry's own
       // condition blocks are OVERRIDES and beat its referenced variants

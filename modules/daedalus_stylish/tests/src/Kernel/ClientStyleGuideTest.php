@@ -4,13 +4,17 @@ declare(strict_types=1);
 
 namespace Drupal\Tests\daedalus_stylish\Kernel;
 
+use Drupal\block_content\Entity\BlockContentType;
 use Drupal\daedalus_blueprint\Materials\Address;
 use Drupal\daedalus_blueprint\Materials\MaterialKind;
+use Drupal\daedalus_blueprint\Materials\RelativeSelector;
 use Drupal\KernelTests\KernelTestBase;
 use Drupal\daedalus_stylish\ClientStyleGuide;
 use Drupal\daedalus_stylish\Entity\DaedalusStylishSkin;
 use Drupal\daedalus_stylish\Entity\DaedalusStylishSwatch;
 use Drupal\daedalus_stylish\Entity\DaedalusStylishVariant;
+use Drupal\daedalus_stylish\Exception\StyleGuideException;
+use Drupal\daedalus_stylish\StyleGuide;
 use Drupal\Tests\daedalus\Traits\DesignSystemActivationTrait;
 use Drupal\Tests\user\Traits\UserCreationTrait;
 use PHPUnit\Framework\Attributes\Group;
@@ -41,12 +45,14 @@ class ClientStyleGuideTest extends KernelTestBase {
     'daedalus_blueprint',
     'user',
     'field',
+    'block_content',
     'layout_discovery',
     'layout_builder',
     'navigation',
     'twig_events',
     'daedalus_tempstore',
     'daedalus_blueprint_api',
+    'file',
     'daedalus_ui',
     'daedalus_stylish',
     'daedalus_stylish_guide_test',
@@ -67,6 +73,7 @@ class ClientStyleGuideTest extends KernelTestBase {
     // The payload serves the published swatches; the user schema backs the
     // swatch entity's owner field for the fixtures testSwatches() mints.
     $this->installEntitySchema('user');
+    $this->installEntitySchema('block_content');
     $this->installEntitySchema('daedalus_swatch');
     $this->installEntitySchema('daedalus_animation');
     // The materials roster's daedalus_stylish provider reads all four storages on
@@ -102,9 +109,64 @@ class ClientStyleGuideTest extends KernelTestBase {
   }
 
   /**
+   * The payload serves one word per closed base tag, declared labels applied.
+   *
+   * tagLabels covers EVERY BASE_TAGS entry, declared or not (a label
+   * read never falls through to the tag itself for a closed tag), in
+   * vocabulary order: the shipped word (StyleGuide::BASE_TAG_LABELS)
+   * unless the site's base declaration carries a `label:` for the tag,
+   * which wins the way a theme's restatement wins any declared fact. A
+   * label that is not a non-empty string fails the guide build.
+   */
+  public function testTagLabels(): void {
+    $payload = $this->clientStyleGuide->build(self::THEME);
+    $this->assertSame(StyleGuide::BASE_TAGS, array_keys($payload['tagLabels']));
+    $this->assertSame(StyleGuide::BASE_TAG_LABELS, $payload['tagLabels'], 'Nothing declares a label: every word is the shipped one.');
+    $this->assertSame('Link', $payload['tagLabels']['a']);
+    $this->assertSame('Paragraph', $payload['tagLabels']['p']);
+    // Undeclared on this site (no tag tier), still worded.
+    $this->assertArrayNotHasKey('em', $payload['base']);
+    $this->assertSame('Emphasis', $payload['tagLabels']['em']);
+    foreach (StyleGuide::BASE_TAGS as $tag) {
+      $this->assertArrayHasKey($tag, StyleGuide::BASE_TAG_LABELS, "The closed tag \"$tag\" has a word.");
+    }
+
+    // A declared label overrides the shipped word for its tag alone,
+    // riding the served node as authored beside the roster's answers.
+    $state = $this->container->get('state');
+    $guide = $this->container->get('daedalus_stylish.style_guide');
+    $state->set('daedalus_stylish_guide_test_extra.site', ['base' => ['a' => ['label' => 'Hyperlink']]]);
+    $guide->resetCache();
+    $payload = $this->clientStyleGuide->build(self::THEME);
+    $this->assertSame('Hyperlink', $payload['tagLabels']['a']);
+    $this->assertSame('Hyperlink', $payload['base']['a']['label']);
+    $this->assertSame('Paragraph', $payload['tagLabels']['p']);
+    $this->assertSame(['typography', 'motion'], array_keys($payload['base']['a']['grants']), 'The label restates nothing else: the merged declaration keeps its groups.');
+    $this->assertSame($payload['tagLabels'], $guide->baseTagLabels(self::THEME), 'The payload serves the guide\'s one resolution.');
+
+    // An empty label is a build error, not a silent fall-through.
+    $state->set('daedalus_stylish_guide_test_extra.site', ['base' => ['a' => ['label' => '']]]);
+    $guide->resetCache();
+    try {
+      $this->clientStyleGuide->build(self::THEME);
+      $this->fail('An empty base element label must fail the guide build.');
+    }
+    catch (StyleGuideException $exception) {
+      $this->assertStringContainsString('The base element "a" sets its label to \'\'', $exception->getMessage());
+      $this->assertStringContainsString('omit it to use the shipped word "Link"', $exception->getMessage());
+    }
+    $state->delete('daedalus_stylish_guide_test_extra.site');
+    $guide->resetCache();
+  }
+
+  /**
    * The payload carries groups, conditions, kinds, and block types.
    */
   public function testPayload(): void {
+    // The declared testimonial type exists as a bundle on this site (the
+    // label a served block type carries); the guide test's other declared
+    // types stay dormant, which serves no label.
+    BlockContentType::create(['id' => 'testimonial', 'label' => 'Testimonial'])->save();
     $payload = $this->clientStyleGuide->build(self::THEME);
 
     $this->assertSame('guarded', $payload['enforcement']);
@@ -122,12 +184,30 @@ class ClientStyleGuideTest extends KernelTestBase {
       'layout',
       'effects',
       'motion',
+      'generated_content',
     ], array_keys($payload['groups']));
     $spacing = $payload['groups']['spacing'];
     $this->assertSame('Spacing', $spacing['label']);
     $this->assertSame('Padding', $spacing['properties']['padding']['label']);
     $this->assertSame('dimension', $spacing['properties']['padding']['type']);
     $this->assertSame(4, $spacing['properties']['padding']['repeat']);
+    // The one pseudo-only group says so (the client's derivation of an
+    // undeclared generated box reads the flag); every other group rides
+    // {label, properties} alone.
+    $this->assertSame(['label', 'properties', 'pseudo'], array_keys($payload['groups']['generated_content']));
+    $this->assertTrue($payload['groups']['generated_content']['pseudo']);
+    $this->assertSame(['content'], array_keys($payload['groups']['generated_content']['properties']));
+    // content is media-capable (one media reference is its third
+    // spelling): the definition is served whole, so the flag the picker
+    // and the client offers read reaches the client with the keywords.
+    $this->assertTrue($payload['groups']['generated_content']['properties']['content']['media']);
+    $this->assertSame('keyword', $payload['groups']['generated_content']['properties']['content']['type']);
+    $this->assertSame(['""', 'none'], $payload['groups']['generated_content']['properties']['content']['keywords']);
+    foreach ($payload['groups'] as $id => $group) {
+      if ($id !== 'generated_content') {
+        $this->assertSame(['label', 'properties'], array_keys($group), $id);
+      }
+    }
 
     // The condition vocabulary, in declaration order, labels as strings and
     // wrappers carrying live thresholds (the client printer's dispatch
@@ -148,6 +228,15 @@ class ClientStyleGuideTest extends KernelTestBase {
     $this->assertSame(['feature' => 'prefers-color-scheme', 'value' => 'dark'], $payload['conditions']['dark']['preference']);
     $this->assertSame(['feature' => 'prefers-reduced-motion', 'value' => 'reduce'], $payload['conditions']['reduced-motion']['preference']);
     $this->assertArrayNotHasKey('band', $payload['conditions']['dark']);
+    // A structural fact says so, and only a fact does: the printer twin
+    // prints it bare, the pose model skips it, the code view lights its
+    // row from the blueprint tree.
+    $this->assertSame(['label', 'wrapper', 'axis', 'fact'], array_keys($payload['conditions']['first-child']));
+    $this->assertTrue($payload['conditions']['first-child']['fact']);
+    $this->assertSame('structural', $payload['conditions']['first-child']['axis']);
+    $this->assertSame(':nth-child(odd)', $payload['conditions']['odd']['wrapper']);
+    $this->assertArrayNotHasKey('fact', $payload['conditions']['hover']);
+    $this->assertArrayNotHasKey('fact', $payload['conditions']['narrow']);
 
     // The container-roots switch rides along so the client preview emits
     // the page-container rule exactly when the backend would.
@@ -170,6 +259,7 @@ class ClientStyleGuideTest extends KernelTestBase {
     // underneath by the guide), so the client never re-implements the
     // merge; a part is served as the roster at its part address.
     $testimonial = $payload['blockTypes']['testimonial'];
+    $this->assertSame('Testimonial', $testimonial['label'], 'A served block type carries its bundle\'s human label.');
     $this->assertArrayHasKey('spacing', $testimonial['grants']);
     $this->assertSame('2rem', $testimonial['valueSpaces']['font-size']['max']);
     $this->assertSame('Quote', $testimonial['elements']['.testimonial__quote']['label']);
@@ -244,14 +334,14 @@ class ClientStyleGuideTest extends KernelTestBase {
 
     foreach ([
       'kind:container' => $container,
-      'kind:container::>' => $container['children'],
+      'kind:container::> *' => $container['children'],
       'kind:block' => $payload['kinds']['block'],
       'block_type:testimonial' => $payload['blockTypes']['testimonial'],
       'block_type:testimonial::.testimonial__quote' => $payload['blockTypes']['testimonial']['elements']['.testimonial__quote'],
       'block_plugin:fancy_menu' => $payload['blockPlugins']['fancy_menu'],
       'layout:layout_twocol_section' => $payload['layouts']['layout_twocol_section'],
       'layout:layout_twocol_section::.band-content' => $payload['layouts']['layout_twocol_section']['elements']['.band-content'],
-      'layout:layout_twocol_section::.band-content::>' => $payload['layouts']['layout_twocol_section']['elements']['.band-content']['children'],
+      'layout:layout_twocol_section::.band-content > *' => $payload['layouts']['layout_twocol_section']['elements']['.band-content']['children'],
       'base:p' => $payload['base']['p'],
     ] as $address => $node) {
       $roster = $builder->build(Address::fromString($address), self::THEME);
@@ -342,8 +432,9 @@ class ClientStyleGuideTest extends KernelTestBase {
     // The section roster: the four headers in weight order, and every
     // shipped widget files under one of them (the decided roster; the
     // control test module's own widgets ride along and are left out).
-    $this->assertSame(['text', 'surface', 'layout', 'motion'], array_keys($payload['controlSections']));
-    $this->assertSame(['label' => 'Text', 'weight' => 0], $payload['controlSections']['text']);
+    $this->assertSame(['layout', 'text', 'surface', 'motion'], array_keys($payload['controlSections']));
+    $this->assertSame(['label' => 'Layout', 'weight' => 0], $payload['controlSections']['layout']);
+    $this->assertSame(['label' => 'Text', 'weight' => 10], $payload['controlSections']['text']);
     $this->assertSame('Motion', $payload['controlSections']['motion']['label']);
     $sections = array_map(static fn (array $widget) => $widget['section'], $payload['controlWidgets']);
     unset($sections['test_alignment'], $sections['test_orphan']);
@@ -404,7 +495,7 @@ class ClientStyleGuideTest extends KernelTestBase {
       'padding-left',
       'gap',
     ], $payload['controlWidgets']['spacing_scale']['properties']);
-    $this->assertSame(['align-self', 'justify-self'], $payload['controlWidgets']['position']['properties']);
+    $this->assertSame(['align-self', 'justify-self', 'margin-top', 'margin-bottom'], $payload['controlWidgets']['position']['properties']);
     $this->assertSame(['text-align'], $payload['controlWidgets']['text_alignment']['properties']);
     $this->assertSame(['color', 'background-image', 'background-clip'], $payload['controlWidgets']['text_color']['properties']);
     $this->assertSame(['font-family', 'font-size', 'font-weight', 'line-height'], $payload['controlWidgets']['typography']['properties']);
@@ -418,12 +509,58 @@ class ClientStyleGuideTest extends KernelTestBase {
     $this->assertSame($sorted, $ids);
 
     // The controls: bindings themselves ride inside the effective block
-    // type declaration as authored — no separate projection to drift.
+    // type declaration — no separate projection to drift — with the one
+    // served shape: the authored string becomes its candidate list.
     $this->assertSame([
       'label' => 'Alignment',
       'widget' => 'test_alignment',
-      'element' => '.media__frame',
+      'element' => ['.media__frame'],
     ], $payload['blockTypes']['media']['controls']['alignment']);
+  }
+
+  /**
+   * Every served binding carries `element` as its normalized candidate list.
+   *
+   * The block plugin lane over the fancy_menu fixture: a list binding
+   * (a part first, the root second) is served as authored, a root binding
+   * with no element key is served as [''], and the kind's layered-in
+   * root bindings arrive as [''] too. The client's resolver has one input
+   * shape; the authoring shorthands never leave the server.
+   */
+  public function testControlCandidatesServed(): void {
+    $this->container->get('state')->set('daedalus_stylish_control_test.block_plugins', [
+      'fancy_menu' => [
+        'property_groups' => ['layout' => []],
+        'elements' => [
+          '.menu-item' => ['property_groups' => ['layout' => []]],
+        ],
+        'controls' => [
+          'item_alignment' => ['label' => 'Item alignment', 'widget' => 'test_alignment', 'element' => ['.menu-item', '']],
+          'alignment' => ['label' => 'Alignment', 'widget' => 'test_alignment'],
+        ],
+      ],
+    ]);
+    $this->container->get('daedalus_stylish.style_guide')->resetCache();
+    $payload = $this->clientStyleGuide->build(self::THEME);
+
+    $controls = $payload['blockPlugins']['fancy_menu']['controls'];
+    $this->assertSame(['.menu-item', ''], $controls['item_alignment']['element']);
+    $this->assertSame([
+      'label' => 'Alignment',
+      'widget' => 'test_alignment',
+      'element' => [''],
+    ], $controls['alignment']);
+    foreach (['kinds', 'blockTypes', 'blockPlugins', 'layouts', 'instances'] as $dimension) {
+      foreach ($payload[$dimension] as $name => $node) {
+        foreach ($node['controls'] ?? [] as $control_name => $control) {
+          if ($control === FALSE) {
+            continue;
+          }
+          $this->assertIsList($control['element'], "$dimension $name $control_name");
+          $this->assertNotEmpty($control['element'], "$dimension $name $control_name");
+        }
+      }
+    }
   }
 
   /**
@@ -502,6 +639,104 @@ class ClientStyleGuideTest extends KernelTestBase {
     foreach ($node['elements'] ?? [] as $part) {
       if (is_array($part)) {
         $this->assertServedNode($part, $groups);
+      }
+    }
+    foreach ($node['pseudo'] ?? [] as $pseudo => $box) {
+      $this->assertContains($pseudo, RelativeSelector::PSEUDOS);
+      $this->assertSame(['grants', 'valueSpaces'], array_keys($box), 'A served box is the roster\'s answers and nothing else.');
+      $this->assertServedNode($box, $groups);
+    }
+  }
+
+  /**
+   * A declared generated box is served as the roster at its address.
+   *
+   * A node's `pseudo: {before: …}` section rides under the served node
+   * as `pseudo.before`, the roster at "{address}::&::before" (a root's
+   * box) or "{address}::before" (a part's), a pattern part's through the
+   * builder's projection; the existence switch is appended like the
+   * roster appends it, the authored property_groups never ride, and a
+   * box the node does not declare is NOT served: existence is universal
+   * and the client derives the undeclared box from the host node
+   * (style-guide.js pseudoNode(), locked against the roster by
+   * VocabularyRosterTest::testClientTwinEquivalence), so the payload
+   * never doubles.
+   */
+  public function testPseudoNodesServed(): void {
+    $state = $this->container->get('state');
+    $state->set('daedalus_stylish_guide_test_extra.kinds', [
+      'container' => [
+        'pseudo' => [
+          'before' => [
+            'property_groups' => [
+              'background' => ['constraints' => ['background-color' => ['allowed' => ['gold']]]],
+              'sizing' => ['properties' => ['width', 'height']],
+            ],
+          ],
+        ],
+      ],
+    ]);
+    $state->set('daedalus_stylish_control_test.block_types', [
+      'testimonial' => [
+        'elements' => [
+          '.testimonial__quote' => ['pseudo' => ['after' => ['property_groups' => ['border' => []]]]],
+          '.t-*' => ['label' => 'Owner namespace', 'property_groups' => ['background' => []], 'pseudo' => ['before' => ['property_groups' => ['shadow' => []]]]],
+        ],
+      ],
+    ]);
+    $this->container->get('daedalus_stylish.style_guide')->resetCache();
+    $builder = $this->container->get('daedalus_stylish.vocabulary_roster');
+    $payload = $this->clientStyleGuide->build(self::THEME);
+
+    // The kind's declared box, and the layout that layers over the kind
+    // carrying it like any merged map; the undeclared ::after is absent.
+    $container = $payload['kinds']['container'];
+    $this->assertSame(['before'], array_keys($container['pseudo']));
+    $before = $container['pseudo']['before'];
+    $this->assertSame(['grants', 'valueSpaces'], array_keys($before));
+    $this->assertSame(['background', 'sizing', 'generated_content'], array_keys($before['grants']));
+    $this->assertSame(['width', 'height'], $before['grants']['sizing'], 'An allowlist narrows a box\'s grant like any node\'s, resolved to names.');
+    $this->assertSame(['content'], $before['grants']['generated_content']);
+    $this->assertSame(['allowed' => ['gold']], $before['valueSpaces']['background-color']);
+    $this->assertArrayNotHasKey('padding', $before['valueSpaces'], 'A declared box serves its section, not its host.');
+    $this->assertSame(['before'], array_keys($payload['layouts']['layout_twocol_section']['pseudo']));
+    $this->assertArrayNotHasKey('pseudo', $payload['kinds']['block'], 'Nothing declared: no box is served, the client derives it.');
+    $this->assertArrayNotHasKey('pseudo', $container['children']);
+
+    // A part's declared box at depth, the pattern part's through the
+    // builder's projection; a part declaring no box serves none.
+    $testimonial = $payload['blockTypes']['testimonial'];
+    $this->assertArrayNotHasKey('pseudo', $testimonial);
+    $quote = $testimonial['elements']['.testimonial__quote'];
+    $this->assertSame(['after'], array_keys($quote['pseudo']));
+    $this->assertSame(['border', 'generated_content'], array_keys($quote['pseudo']['after']['grants']));
+    $this->assertArrayNotHasKey('typography', $quote['pseudo']['after']['grants']);
+    $pattern = $testimonial['elements']['.t-*'];
+    $this->assertSame(['shadow', 'generated_content'], array_keys($pattern['pseudo']['before']['grants']));
+    $covered = $builder->build(Address::fromString('block_type:testimonial::.t-quote::before'), self::THEME);
+    $this->assertSame($covered->grants(), $pattern['pseudo']['before']['grants']);
+    $this->assertSame($covered->valueSpaces(), $pattern['pseudo']['before']['valueSpaces']);
+
+    // Every served box IS the roster at its address.
+    foreach ([
+      'kind:container::&::before' => $before,
+      'layout:layout_twocol_section::&::before' => $payload['layouts']['layout_twocol_section']['pseudo']['before'],
+      'block_type:testimonial::.testimonial__quote::after' => $quote['pseudo']['after'],
+    ] as $address => $node) {
+      $roster = $builder->build(Address::fromString($address), self::THEME);
+      $this->assertTrue($roster->declared(), $address);
+      $this->assertSame($roster->grants(), $node['grants'], $address);
+      $this->assertSame($roster->valueSpaces(), $node['valueSpaces'], $address);
+    }
+
+    // The served-shape invariants hold with boxes in the payload: the
+    // authored wire is gone everywhere, boxes included.
+    $encoded = json_encode($payload);
+    $this->assertStringNotContainsString('"property_groups"', $encoded);
+    $this->assertStringNotContainsString('"constraints"', $encoded);
+    foreach (['kinds', 'blockTypes', 'blockPlugins', 'layouts', 'instances', 'base'] as $dimension) {
+      foreach ($payload[$dimension] as $node) {
+        $this->assertServedNode($node, $payload['groups']);
       }
     }
   }
@@ -710,7 +945,7 @@ class ClientStyleGuideTest extends KernelTestBase {
   /**
    * The entity's layout root serves as a part node of the entity kind.
    *
-   * daedalus_layout declares the anatomy (label, tag) and its display: grid;
+   * daedalus_layout declares the anatomy (label, tag) and its flex column;
    * daedalus_stylish layers spacing and layout over the part. The payload serves
    * the merged part as a roster node, the twin of the roster at
    * kind:entity::.daedalus-layout-layout, so the inspector's Spacing and Layout
@@ -740,8 +975,9 @@ class ClientStyleGuideTest extends KernelTestBase {
     $this->assertSame($roster->valueSpaces(), $part['valueSpaces']);
 
     // The declared tier carries daedalus_layout's box fact for the part: code, no
-    // skin, the mechanic a gap needs.
-    $this->assertSame(['default' => ['display' => 'grid']], $payload['declaredDefaults']['kind:entity']['::.daedalus-layout-layout']);
+    // skin, the mechanic a gap needs (a flex column, the container kind's
+    // own stacking model, so the bands pack instead of stretching).
+    $this->assertSame(['default' => ['display' => 'flex', 'flex-direction' => 'column']], $payload['declaredDefaults']['kind:entity']['::.daedalus-layout-layout']);
   }
 
   /**

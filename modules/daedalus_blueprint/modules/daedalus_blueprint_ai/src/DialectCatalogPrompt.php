@@ -16,6 +16,7 @@ use Drupal\daedalus_blueprint\Materials\MaterialsProse;
 use Drupal\daedalus_blueprint\Materials\MaterialsRoster;
 use Drupal\daedalus_blueprint\Materials\MaterialsRosterBuilder;
 use Drupal\daedalus_blueprint\Materials\MaterialsSchema;
+use Drupal\daedalus_blueprint\Materials\RelativeSelector;
 use Drupal\daedalus_blueprint\OperationHandler\OperationHandlerRegistry;
 
 /**
@@ -82,23 +83,16 @@ class DialectCatalogPrompt {
     $lines[] = '';
     $lines[] = 'Pages are HTML in a small dialect: what you read (the "Current page print" tag) is exactly what you write (page_edit fragments, page_create documents). Element ids are minted uuids; on elements YOU add, choose any id (id="hero") and the result echoes id -> uuid (prints carry your name as data-alias, keep using it). Never author id, data-*, or src.';
     $lines[] = '';
-    $lines[] = 'ELEMENTS (attr(allowed values); (link) takes a path or URL, (ref) an id or exact label of existing content):';
+    $lines[] = 'ELEMENTS (attr(allowed values); (link) takes a path or URL, (ref) an id or exact label of existing content; file takes the name of a file this conversation holds, generate a prompt for a new image):';
     $lines[] = $this->containerLine($catalog);
     foreach ($catalog->blockTypes() as $type => $spec) {
       $lines[] = $this->blockTypeLine($catalog, $type, $spec);
     }
     $lines[] = $this->blockLine($catalog);
     $lines[] = '';
-    $rich_text = $catalog->instances() !== [];
-    $lines[] = $this->stylesLine($rich_text);
+    $lines[] = $this->stylesLine($catalog);
     $lines[] = $this->conditionsLine($catalog);
-    if ($catalog->parts() !== []) {
-      $lines[] = $this->partsLine($catalog);
-    }
-    if ($rich_text) {
-      $lines[] = $this->instancesLine($catalog);
-    }
-    $lines[] = 'Values are named values (var(--name), MATERIALS below) or single CSS values; clamp()/calc() and !important are not supported. Images in CSS: url(\'media:<uuid>\') references existing media on media-capable properties (background-image), and url(\'generate:<prompt>\') as a layer or the whole value mints a new image (linear-gradient(...), url(\'generate:<prompt>\') darkens a generated image in one write; it prints back as a media token once generated; never wait for it). Always single-quote url() arguments: a double quote ends a style="" attribute early.';
+    $lines[] = 'Values are named values (var(--name), MATERIALS below) or single CSS values; clamp()/calc() and !important are not supported. Images in CSS: url(\'media:<uuid>\') references existing media on media-capable properties (background-image), and url(\'generate:<prompt>\') as a layer or the whole value mints a new image (linear-gradient(...), url(\'generate:<prompt>\') darkens a generated image in one write; it prints back as a media token once generated; never wait for it); url(\'file:<name>\') as a layer or the whole value places a file this conversation holds (it becomes media at once). Always single-quote url() arguments: a double quote ends a style="" attribute early.';
     $lines[] = $this->classLine($catalog);
     array_push($lines, ...$this->stylableLines($catalog));
     $lines[] = '';
@@ -110,6 +104,7 @@ class DialectCatalogPrompt {
     $lines[] = '- style {css, remove: [{selector, properties: [names]}]} — css rules merge into what is there; deleting a property needs the remove list (unset is a value, not a delete).';
     $lines[] = '- replace {ref, html} — whole-element rewrite; styles the new html does not restate are gone, so prefer set for edits.';
     $lines[] = '- move {ref, at}; remove {ref}.';
+    $lines[] = '- file {name, type, content}: declares bytes you author (an SVG, a stylesheet, CSV, text; never binary) as a file this conversation holds under name, type its MIME (image/svg+xml, text/css, text/csv, text/plain); put it ahead of the ops that place it with file="name" or url(\'file:name\'). In a page_create document the same declaration is a top-level <pb-file name="..." type="...">the bytes</pb-file> beside <style>.';
     $page_ops = $this->operationHandlerRegistry->getPageLanguageOperations();
     $guidance = $this->operationHandlerRegistry->getGuidance();
     foreach (array_diff($page_ops, DomOperationHandler::OPS) as $op) {
@@ -293,16 +288,87 @@ class DialectCatalogPrompt {
   }
 
   /**
-   * The STYLES rule: where the base look and the conditioned rules ride.
+   * The STYLES rule: the base look, the selector grammar, the precedence.
    *
-   * Conditions and parts are real CSS rules on both doors: a page_create
-   * document carries them in its trailing <style> block, a page_edit
-   * batch in the style op. The document's <style> block is named here
-   * explicitly: a line that only says "through the style op" reads as
-   * edit-only and leaves a new page without its narrow rules.
+   * One line, read from the catalog: where the base look and every other
+   * rule ride (a page_create document's trailing <style> block and the
+   * page_edit style op, both named: a line that only says "through the
+   * style op" reads as edit-only and leaves a new page without its
+   * narrow rules), the relative-selector grammar under #id with the
+   * site's own spellings (the block types as types, the base tags, the
+   * declared parts with their owners, each family absent from the
+   * catalog printing nothing; the sibling combinators and the two
+   * qualifiers with examples in the site's spellings), the one rule the
+   * grammar exists for
+   * (style a container's children through one rule on the container,
+   * never the same look copied onto each child) with the one precedence
+   * sentence (the nearest element's own rule wins), the wear clause (a
+   * rule wears a variant on every match as a declaration in its plain
+   * block, class: or an axis, the attribute's twin; never under a
+   * condition, never a composition or a top-level-only axis; remove
+   * takes it off), the rich-text identity classes where the spine
+   * declares a namespace, the generated boxes (a selector may end in
+   * ::before or ::after, the element's own or a compound's; born with
+   * content: "", which takes "", none or one media reference and
+   * nothing else, text being content, the image rendering at its own
+   * size while background-image on the box sizes and layers; states
+   * before the box), and the pseudo-class position of states and
+   * facts, leading
+   * into the conditions line.
    */
-  protected function stylesLine(bool $rich_text): string {
-    return 'STYLES: style="" is the element\'s own base look, plain CSS declarations. Conditions and parts are real CSS rules: a page_create document carries them in one trailing <style> block, a page_edit batch in the style op. Selectors are limited to #id, #id .part-class, #id:state, #id > * (direct children)' . ($rich_text ? ', and the rich-text instance selectors below' : '') . ', inside the published wrappers:';
+  protected function stylesLine(DialectCatalog $catalog): string {
+    $types = $catalog->types();
+    $type = in_array(DialectCatalog::tagForBlockType('text'), $types, TRUE) ? DialectCatalog::tagForBlockType('text') : $types[0];
+    $shapes = ['> * (its direct children)'];
+    $shapes[] = sprintf('> %s (the %s children; types: %s)', $type, $type, implode(', ', $types));
+    $tags = $catalog->textTags();
+    $tag = $catalog->exampleTextTag();
+    if ($tags !== []) {
+      $shapes[] = sprintf('%s (every %s inside it, present and future; tags: %s)', $tag, $tag, implode(', ', $tags));
+    }
+    // The declared parts by owner, and the chain example from the example
+    // type's own part, else the first block type owning one (a part is
+    // reached after its owner's type).
+    $by_owner = [];
+    foreach ($catalog->selectors() as $owner => $roster) {
+      if (($roster['parts'] ?? []) !== []) {
+        $by_owner[] = $owner . ' ' . implode(', ', array_keys($roster['parts']));
+      }
+    }
+    $chain = sprintf('#band > %s > *', $type);
+    foreach ([$type, ...array_keys($catalog->selectors())] as $owner) {
+      $parts = $catalog->partsOf($owner);
+      if ($owner !== RelativeSelector::TYPE_CONTAINER && $parts !== []) {
+        $chain = sprintf('#band > %s %s', $owner, array_key_first($parts));
+        break;
+      }
+    }
+    if ($by_owner !== []) {
+      $shapes[] = sprintf('.part (declared parts: %s)', implode('; ', $by_owner));
+    }
+    // The relations, spelled with the site's own words: the sibling
+    // example on the example tag (a type without a tag tier), the
+    // qualifier examples narrowing the example type by a link (the
+    // example tag, or another type without one) and by the image type
+    // (else any other type).
+    $sibling = $tags === [] ? $type : $tag;
+    $other = in_array('pb-image', $types, TRUE) ? 'pb-image' : array_values(array_diff($types, [$type]))[0];
+    $inside = $tags === [] ? $other : (in_array('a', $tags, TRUE) ? 'a' : $tag);
+    $an = static fn (string $word): string => (preg_match('/^[aeiou]/', $word) ? 'an ' : 'a ') . $word;
+    $line = 'STYLES: style="" is the element\'s own base look, plain CSS declarations. Every other rule is real CSS: a page_create document carries them in one trailing <style> block, a page_edit batch in the style op. A selector is #id plus an optional relative selector into #id\'s own subtree: ' . implode(', ', $shapes) . sprintf(', joined by a space (descendant), > (direct child), + (the next sibling) or ~ (any later sibling), as in %s and #band > %s + %s (a %s right after a %s among its children).', $chain, $sibling, $sibling, $sibling, $sibling);
+    $line .= sprintf(' A compound narrows by :has() (a relative selector from it: #band > %s:has(%s) the %s children that contain %s, #band > %s:has(+ %s) the one right before %s) and :not() (one compound it is not: #band > *:not(%s) every child but the %s ones).', $type, $inside, $type, $an($inside), $type, $other, $an($other), $other, $other);
+    $line .= sprintf(' Style a container\'s children with ONE rule on the container, never the same look copied onto each child; the nearest element\'s own rule wins (#child beats #band > %s on that child).', $type);
+    $line .= sprintf(' A rule also wears a variant on every element it matches, as a declaration in its plain block, the attribute\'s twin: class: {class} (style classes, space-separated) or {axis}: {value} (an axis attribute of the matched element), as in #band > %s { class: {class}; color: red; }; never under a state or wrapper, never a composition or a top-level-only axis; take it off with remove naming class or the axis.', $type);
+    if ($catalog->instances() !== []) {
+      $prefix = 's-';
+      $pattern = (string) array_key_first($catalog->instances());
+      if (preg_match('/^\.([A-Za-z0-9_-]*)\*$/', $pattern, $m)) {
+        $prefix = $m[1];
+      }
+      $line .= sprintf(' Rich text styles by element: the %s* classes in a body are element identities; #id .%sx styles that ONE element, #id .%sx > * one list\'s items; author your own %s* classes on the elements you mean to style and KEEP the %s* classes on elements you keep when rewriting a body (a dropped class orphans its styles); other tags are the text format\'s, not styling targets.', $prefix, $prefix, $prefix, $prefix, $prefix);
+    }
+    $line .= sprintf(' A selector may end in ::before or ::after, the generated box of what it addresses (#id::after the element\'s own box, #band > %s::before each %s child\'s), a rule of its own like the others: a box is born with content: "" (its existence switch; content takes "", none or one media reference url(\'media:<uuid>\') (the image at its own size; background-image on the box sizes and layers) and nothing else, since text belongs in the element\'s content), and states go before it (#id:hover::after).', $type, $type);
+    return $line . sprintf(' States and position facts are pseudo-classes on the last compound, after its qualifiers (#band > %s:hover), inside the published wrappers:', $type);
   }
 
   /**
@@ -324,9 +390,14 @@ class DialectCatalogPrompt {
       $conditions,
     ));
     $parts = [];
-    $states = array_filter($catalog->conditions(), static fn (string $wrapper): bool => str_starts_with($wrapper, ':'));
+    $wrappers = $catalog->conditions();
+    $states = array_map(static fn (string $name): string => $wrappers[$name], $catalog->stateConditions());
     if ($states !== []) {
       $parts[] = 'states ' . implode(', ', $states);
+    }
+    $facts = array_map(static fn (string $name): string => $wrappers[$name], $catalog->factConditions());
+    if ($facts !== []) {
+      $parts[] = 'position facts ' . implode(', ', $facts) . ' (the addressed element\'s place among its siblings, spelled like a state: #band > pb-text:first-child)';
     }
     $bands = $catalog->widthBands();
     if ($bands !== []) {
@@ -346,50 +417,6 @@ class DialectCatalogPrompt {
       $line .= ' Wrappers verbatim: no other @media/@container preludes exist.';
     }
     return $line;
-  }
-
-  /**
-   * The rich-text instance vocabulary: identity classes and the tag tier.
-   *
-   * Present only when the spine declares an instance namespace
-   * (grows-by-data). The example class derives from the first declared
-   * namespace pattern so the teaching always matches the site's actual
-   * identity spelling.
-   */
-  protected function instancesLine(DialectCatalog $catalog): string {
-    $prefix = 's-';
-    $pattern = (string) array_key_first($catalog->instances());
-    if (preg_match('/^\.([A-Za-z0-9_-]*)\*$/', $pattern, $m)) {
-      $prefix = $m[1];
-    }
-    $example = $prefix . 'x';
-    // The tag tier rides only where the styling layer declares prose-tag
-    // styleability (the text-tag vocabulary), grows-by-data like the
-    // instance line itself.
-    $tags = $catalog->textTags();
-    $tag_tier = $tags === []
-      ? ''
-      : sprintf(' #id %s styles ALL of #id\'s elements of a declared tag (%s), present and future;', $catalog->exampleTextTag(), implode(', ', $tags));
-    return sprintf(
-      'Rich text styles by element: the %s classes in a body are element identities. #id .%s styles that ONE element;%s #id .%s > * styles one list\'s items. When you write rich text you mean to style per element, author your own %s* classes on those elements and style them in the same batch (the identity minter honors authored identity; one class names ONE element). When rewriting a body, KEEP the %s classes on elements you are keeping: dropping one orphans its styles. Any other tag is governed by the text format and is not a styling target.',
-      $prefix . '*',
-      $example,
-      $tag_tier,
-      $example,
-      $prefix,
-      $prefix . '*',
-    );
-  }
-
-  /**
-   * The declared part classes with their owners.
-   */
-  protected function partsLine(DialectCatalog $catalog): string {
-    $entries = [];
-    foreach ($catalog->parts() as $class => $tags) {
-      $entries[] = sprintf('.%s (%s)', $class, implode(', ', $tags));
-    }
-    return 'Declared parts: ' . implode('; ', $entries) . '.';
   }
 
   /**

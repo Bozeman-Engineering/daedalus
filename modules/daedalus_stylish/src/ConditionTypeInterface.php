@@ -51,6 +51,14 @@ interface ConditionTypeInterface {
    *     "dark"). The canvas emulation (daedalus_ui's vector) forces a
    *     preference value per axis; the client matches the forced value
    *     against this fact, never against the wrapper text.
+   *   - fact: (bool, optional) TRUE when the condition is a structural
+   *     FACT rather than a posable state: it holds or not by the
+   *     element's place in the markup (":first-child", ":empty"), so no
+   *     editor gesture can make it true. The printers emit a fact's
+   *     pseudo-class wrapper bare (no data-force-state dual), the pose
+   *     model never derives it from the canvas vector or offers it as a
+   *     chip pose, and the code view lights a fact's row when the
+   *     selection satisfies it. Only meaningful on a pseudo-class wrapper.
    */
   public function getConditions(): array;
 

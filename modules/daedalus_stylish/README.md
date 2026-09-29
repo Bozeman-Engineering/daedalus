@@ -13,9 +13,11 @@ convention.
 - Style inspector sidebar: a properties panel that follows the current
   selection, in three modes over the same style map (basic controls declared
   per block type, advanced property groups, a CSS code view).
-- Style anything: entities, sections, regions, fields, blocks, and declared
-  sub-elements ("parts"), with conditions (hover and other pseudo-classes,
-  container width bands, reduced motion).
+- Style anything: entities, sections, regions, fields, blocks, declared
+  sub-elements ("parts"), the anonymous children (`> *`), descendant type
+  and tag rules, and every element's two generated boxes (`::before` and
+  `::after`, see "Generated boxes" below), with conditions (hover and other
+  pseudo-classes, container width bands, reduced motion).
 - Materials: named, reusable styling vocabulary as one roster. Variants
   (an element's styles as a named look), swatches (the palette), animations
   (keyframes as a material), and the skin's design tokens.
@@ -90,6 +92,92 @@ batch waits for the installer to finish (silently, nothing refused),
 and the recipe's activation lands every enabled module's definitions;
 an install that activates no system lands its globals at the site's
 first cache rebuild. Switch back with `... activate olivero`.
+
+## Generated boxes
+
+Every element has two pseudo-elements, `::before` and `::after`, and the
+relative selector addresses them as one more styling address: a terminal
+pseudo-element on the selector, never inside `:has()` or `:not()` and
+never followed by anything. The owner's own box is spelled with the CSS
+nesting anchor, `&::before`, the one place `&` is admitted (`& > p` is not
+a selector); a part's box is `.quote::after`, a descendant rule's
+`> pb-text::before`. In a style map the keys read `{key}::&::before`,
+`{key}::.quote::after` and `{key}::> pb-text::before`; the AI's dialect
+spells the same boxes `#id::before`, `#id .quote::after` and
+`#id > pb-text::before`, and states go before the box (`#id:hover::after`).
+
+Three laws keep a generated box honest:
+
+- **Existence is universal, vocabulary is declared or derived.** No
+  declaration says an element "has" a `::before` (every element does in
+  CSS); a declaration's `pseudo:` section declares only what may be
+  styled there:
+
+  ```yaml
+  # my_module.page_builder.block_type.testimonial.yml
+  pseudo:
+    before:
+      property_groups:
+        background: {}
+        sizing: {}
+        border: {}
+  elements:
+    '.quote':
+      label: 'Quote'
+      tag: blockquote
+      pseudo:
+        after:
+          property_groups:
+            typography: {}
+  ```
+
+  Undeclared, a box derives its host's property groups: granted on an open
+  or guarded site, refused on a strict one (`STYLE_PSEUDO_NOT_DECLARED`), so
+  a design system that wants a closed world runs strict and declares its
+  boxes. The children's box (`> *::before`) is always derived.
+- **`content` is the existence switch, closed to `none | "" | one media
+  reference`.** The curated `generated_content` group carries `content`
+  alone and is granted at every generated box, declared or derived, and
+  nowhere else: a `content` write on a real element is refused in every
+  mode (`STYLE_PROPERTY_PSEUDO_ONLY`). Three spellings pass and nothing
+  else: `""` (the box exists, empty), `none` (no box), and exactly one
+  media reference as the whole value, `content: url('media:<uuid>')`, the
+  same token `background-image` takes, on the same machinery (the media
+  library chip on the Content row, the token gates, image styles,
+  `_generate`, preview and delivery). No strings, `attr()`, counters or
+  `quotes`: text belongs in a field (translated, searched, read aloud
+  there; generated text is invisible to every content surface). No plain
+  `url()`, gradient, `image-set()`, `/ "alt"` suffix or second reference.
+  Two facts to weigh before putting the image on `content`: it renders as
+  replaced content at its own size, so an image style is the way to size
+  it (a declared box constrains `content` with `image_style` under its
+  `generated_content` group, else the site default `media_image_style`
+  applies), while `background-image` on the same box sizes, positions and
+  layers; and a content image is exposed to assistive technology as an
+  unlabelled image, where a background image is not. A media that no
+  longer exists delivers `content: none`, so the box honestly disappears.
+- **A box is born with `content: ""`.** A box without content is invisible,
+  so an `update_style` patch that CREATES a pseudo-element entry seeds
+  `content: ""` at `default` in the same op unless the write sets content
+  there itself (a first write of `content: none` or of a media reference
+  stands as written, nothing seeded beneath it). The seed lives at the
+  operation handler, the one door every lane's writes pass (inspector,
+  code view, AI), and nowhere else; an existing entry is never re-seeded,
+  so deleting the content line is a deliberate act and the box honestly
+  disappears. Variants and skins are authored, not born: a variant
+  fragment or skin default at a box key carries its own `content`.
+
+Seating a box is a doorway, not a write: "+ Before" / "+ After" on the
+inspector's address chip in advanced mode, a "Before" / "After" row in
+the Page elements tree (listed once something delivers content there),
+or `&::before {` typed on the code view's root island target the box;
+the first property write births the entry. Basic mode styles no box (its
+rows are the declared controls, and no box declares any), so its chip
+offers no doorway and a box seated from elsewhere shows an empty panel
+that says where to go. Edit-mode chrome that itself lives on a `::before`
+(daedalus_explode's plane label chips, daedalus_stylish_layouts' empty
+container hint) asserts its own box with `all: initial` under the stage id
+rather than moving off pseudo-elements, so it wins exactly while it exists.
 
 ## The disk lane
 

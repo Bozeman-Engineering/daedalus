@@ -56,6 +56,7 @@ class RootOnlyVariantCheckerTest extends KernelTestBase {
     'twig_events',
     'daedalus_tempstore',
     'daedalus_blueprint_api',
+    'file',
     'daedalus_ui',
     'daedalus_layout',
     'daedalus_stylish',
@@ -197,9 +198,9 @@ class RootOnlyVariantCheckerTest extends KernelTestBase {
     // The gate is per record, not per depth: a variant on an axis the
     // container offers at every depth applies nested.
     $this->batch($entity, [
-      ['op' => 'apply_variant', 'key' => $nested_key, 'variant' => 'row'],
+      ['op' => 'apply_variant', 'key' => $nested_key, 'variant' => 'columns'],
     ]);
-    $this->assertSame(['variants' => [['variant' => 'row', 'fragment' => '']]], $this->styleMap($entity)[$nested_key] ?? NULL);
+    $this->assertSame(['variants' => [['variant' => 'columns', 'fragment' => '']]], $this->styleMap($entity)[$nested_key] ?? NULL);
 
     // At root the same root-only variants apply: a fresh width pick, and
     // the birth default worn again after it is taken off.
@@ -265,6 +266,41 @@ class RootOnlyVariantCheckerTest extends KernelTestBase {
     $this->assertTrue($locator->isNestedSection($entity, $nested));
     $this->assertArrayNotHasKey($nested_key, $this->styleMap($entity));
     $this->assertSame([], $this->container->get('daedalus_stylish.style_map_validator')->validate($this->styleMap($entity), ['entity' => $entity]));
+  }
+
+
+  /**
+   * A root-only variant is refused at any rule: matches are never top-level.
+   *
+   * The rule's owner may be the page band itself; what the rule reaches
+   * sits inside it, so the depth question has one answer before the
+   * locator is asked. An every-depth variant wears at the rule as one
+   * reference on the rule's entry, distributing nothing.
+   */
+  public function testRuleApplyRefused(): void {
+    [$entity, $root, $nested] = $this->createHost();
+    $rule = "container:$root::> pb-container";
+
+    foreach (['container_site', 'container_md'] as $variant) {
+      $result = $this->operations->batchOperations($entity, [
+        ['op' => 'apply_variant', 'key' => $rule, 'variant' => $variant],
+      ]);
+      $this->assertFalse($result->isSuccess());
+      $error = $result->getErrors()[0];
+      $this->assertSame('VARIANT_ROOT_ONLY', $error->getCode());
+      $this->assertStringContainsString("a rule's matches are never top-level", $error->getMessage());
+      $this->assertSame(['variant' => $variant, 'axis' => 'width'], $error->getContext());
+      $this->assertArrayNotHasKey($rule, $this->styleMap($entity));
+    }
+
+    // The every-depth axis wears at the rule: one reference on the rule's
+    // own entry, the nested container's entry untouched.
+    $this->batch($entity, [
+      ['op' => 'apply_variant', 'key' => $rule, 'variant' => 'columns'],
+    ]);
+    $map = $this->styleMap($entity);
+    $this->assertSame(['variants' => [['variant' => 'columns', 'fragment' => '']]], $map[$rule] ?? NULL);
+    $this->assertArrayNotHasKey("container:$nested", $map);
   }
 
 }

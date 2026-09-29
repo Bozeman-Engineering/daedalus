@@ -281,7 +281,7 @@ class ContainerModelMigrationTest extends NestedStorageKernelTestBase {
     // properties land on the ROOT key (the container is one box).
     $map = $this->styleMap($entity);
     $this->assertSame([
-      'variants' => [['variant' => 'row', 'fragment' => '']],
+      'variants' => [['variant' => 'columns', 'fragment' => '']],
       'default' => [
         'width' => '100%',
         'max-width' => '80rem',

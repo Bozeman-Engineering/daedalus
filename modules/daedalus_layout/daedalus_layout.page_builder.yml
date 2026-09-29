@@ -47,9 +47,17 @@ entity:
   # default only the anatomy it declares, and this part is exactly that.
   # A skin carries the look (a page gap value or none), never the
   # mechanic. Token-free, compiled into the defaults file at the
-  # kind:entity family class, stamped on every host by daedalus_stylish. A grid with
-  # no gap is visually the flush stacking of before.
+  # kind:entity family class, stamped on every host by daedalus_stylish.
+  #
+  # A flex column, not a grid, the container kind's own model
+  # (daedalus_stylish_layouts.page_builder.yml): a one-column grid splits
+  # a tall root's surplus height between its bands (`align-content`
+  # stretches auto rows), while a flex column packs the bands at the top,
+  # honors the page gap, and lets a band pin itself to the foot with an
+  # auto margin. Every level of the container tree arranges the same way.
+  # A flex column with no gap is visually the flush stacking of before.
   defaults:
     '::.daedalus-layout-layout':
       default:
-        display: grid
+        display: flex
+        flex-direction: column

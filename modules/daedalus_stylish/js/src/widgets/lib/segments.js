@@ -3,8 +3,8 @@ import { h } from 'preact';
 /**
  * The segmented-button primitive shared by the stop-table widgets.
  *
- * Renders ONLY the input surface — the label line and hasMore hint are
- * pipeline chrome (basic-controls.js). For a small CLOSED vocabulary
+ * Renders ONLY the input surface: the label line and the row's mark are
+ * the row's (choice-row.js). For a small CLOSED vocabulary
  * only (alignment, a spacing scale): an open vocabulary like the palette
  * belongs behind the swatch well (swatch-well.js), where the enumeration
  * lives in a popover instead of the row. Segment semantics:
@@ -13,11 +13,10 @@ import { h } from 'preact';
  *   normalized on next click".
  * - Values no stop represents render as a disabled "Custom" pill carrying
  *   the raw value; picking a stop over it is an explicit replacement.
- *   Editing the custom value itself belongs to the row's pencil reveal
- *   where one exists (spacing_scale's DimensionField beside this row) —
- *   custom values stay editable without leaving basic mode — and to
- *   advanced mode otherwise; `customTitle` lets a consumer with a reveal
- *   tell that story on the pill.
+ *   Editing the custom value itself belongs to advanced mode (the pill's
+ *   default advice), or nowhere under a closed vocabulary, where a pick
+ *   is the only way out (`closed`). The choice row (choice-row.js) is
+ *   the one mount: a closed vocabulary short enough for the row.
  */
 const SegmentIcon = ({ rects }) => (
   <svg
@@ -58,13 +57,14 @@ const SegmentIcon = ({ rects }) => (
  * @param {?Object<string, Array>} [props.icons]
  *   Stop id → SegmentIcon rects; stops with an icon render it instead of
  *   the text label (which stays as the accessible name).
- * @param {?{id: string, value: string}} [props.ghost]
- *   The ghost posture beneath an UNSET row: the stop representing the
- *   resting value the element actually has (a parent's align-items
- *   placing this child, the layer stack's delivery) wears it, unlit and
- *   titled with the value that applies, the chips' twin of the field's
- *   placeholder and the well's ghost face. Ignored while a stop is lit
- *   or a custom value is set.
+ * @param {?{id: string, value: string}} [props.placeholder]
+ *   The attributed posture beneath an UNSET row: the stop representing
+ *   a value that reaches the element from OUTSIDE its layer stack (a
+ *   parent's align-items placing this child, the position widget's
+ *   read) wears it, unlit and titled with the value that applies, the
+ *   chips' twin of the field's placeholder. Never a layer's value: a
+ *   delivering layer lights its stop instead. Ignored while a stop is
+ *   lit or a custom value is set.
  * @param {boolean} [props.disabled]
  *   Renders the whole row inert (an axis reality has taken off the table,
  *   e.g. cross-axis alignment under a plain block parent). The reason
@@ -75,10 +75,6 @@ const SegmentIcon = ({ rects }) => (
  *   spaceClosed): the custom pill's default advice then says the
  *   vocabulary is closed here (a pick replaces the value) instead of
  *   sending the user to Advanced to edit a value no mode may author.
- * @param {?string} [props.customTitle]
- *   Overrides the custom pill's tooltip. A row with its own edit path
- *   (the spacing pencil reveal) points at it instead of the default's
- *   "Switch to Advanced" advice.
  * @param {?string} [props.title]
  *   The group's hover title: a disabled row's reason rides here (no
  *   prose inside widgets), so the row explains itself on hover.
@@ -94,9 +90,8 @@ export const Segments = ({
   icons = null,
   disabled = false,
   closed = false,
-  customTitle = null,
   title = null,
-  ghost = null,
+  placeholder = null,
   faceStyle = null,
 }) => (
   <span
@@ -106,25 +101,25 @@ export const Segments = ({
   >
     {stops.map((stop) => {
       const active = state.selected === stop.id;
-      const resting =
+      const attributed =
         !active &&
         !state.custom &&
         state.selected === null &&
-        ghost?.id === stop.id;
+        placeholder?.id === stop.id;
       const iconRects = icons?.[stop.id] ?? null;
       const stopTitle = (() => {
         if (active && !disabled) {
           return Drupal.t('Unset');
         }
-        return resting
-          ? Drupal.t('Unset; !value applies', { '!value': ghost.value })
+        return attributed
+          ? Drupal.t('Unset; !value applies', { '!value': placeholder.value })
           : Drupal.t(stop.label);
       })();
       return (
         <button
           key={stop.id}
           type="button"
-          className={`daedalus-stylish-inspector__segment daedalus-ui-segment${active ? ' daedalus-ui-segment--active' : ''}${resting ? ' daedalus-stylish-inspector__segment--ghost' : ''}`}
+          className={`daedalus-stylish-inspector__segment daedalus-ui-segment${active ? ' daedalus-ui-segment--active' : ''}${attributed ? ' daedalus-stylish-inspector__segment--attributed' : ''}`}
           aria-pressed={active}
           aria-label={Drupal.t(stop.label)}
           title={stopTitle}
@@ -140,8 +135,7 @@ export const Segments = ({
       <span
         className="daedalus-stylish-inspector__segment daedalus-ui-segment daedalus-ui-segment--static daedalus-stylish-inspector__segment--custom"
         title={
-          customTitle ??
-          (closed
+          closed
             ? Drupal.t(
                 "A value these buttons cannot represent is set: !value. This property's vocabulary is closed here, so pick a button to replace it.",
                 { '!value': custom },
@@ -149,7 +143,7 @@ export const Segments = ({
             : Drupal.t(
                 'A value these buttons cannot represent is set: !value. Switch to Advanced to edit it, or pick a button to replace it.',
                 { '!value': custom },
-              ))
+              )
         }
       >
         {Drupal.t('Custom')}

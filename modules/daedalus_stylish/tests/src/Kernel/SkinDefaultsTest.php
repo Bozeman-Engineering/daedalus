@@ -9,6 +9,8 @@ use Drupal\daedalus_stylish\CssPrinter;
 use Drupal\daedalus_stylish\Entity\DaedalusStylishSkin;
 use Drupal\daedalus_stylish\Exception\StyleGuideException;
 use Drupal\daedalus_stylish\DefaultsStylesheet;
+use Drupal\daedalus_blueprint\Materials\Address;
+use Drupal\daedalus_ui\Render\ElementAddress;
 use Drupal\Tests\daedalus\Traits\DesignSystemActivationTrait;
 use Drupal\Tests\user\Traits\UserCreationTrait;
 use PHPUnit\Framework\Attributes\Group;
@@ -20,9 +22,11 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  * A skin's defaults field holds {scope: element-relative styles} with LIVE
  * semantics — validated through the defaults seam
  * (StyleMapValidator::validateDefaults(), riding the scope-only seam),
- * delivered through the compiled defaults stylesheet as scope-class @scope
- * blocks (element scopes) and bare :where(tag) rules (the closed base:{tag}
- * family), overridden by every per-entity style map value by cascade.
+ * delivered through the compiled defaults stylesheet as bare
+ * zero-specificity rules: element scopes at their element address
+ * selector (the data-element attribute daedalus_ui stamps), the closed
+ * base:{tag} family at :where(tag), every one overridden by every
+ * authored style by specificity.
  */
 #[Group('daedalus_stylish')]
 #[RunTestsInSeparateProcesses]
@@ -50,6 +54,7 @@ class SkinDefaultsTest extends KernelTestBase {
     'twig_events',
     'daedalus_tempstore',
     'daedalus_blueprint_api',
+    'file',
     'daedalus_ui',
     'daedalus_stylish',
     'daedalus_stylish_control_test',
@@ -285,42 +290,46 @@ class SkinDefaultsTest extends KernelTestBase {
     $this->assertIsString($uri);
     $css = file_get_contents($uri);
 
-    // Base defaults are BARE rules inside the token scope element: no.
-    // @scope (scoped declarations must beat them on scoping proximity)
-    // and FULLY :where()-wrapped, the scope class included, so the tier
-    // sits at zero specificity: the element tag tier's bare in-scope tag
-    // (0-0-1) must beat a base default outright, which a raw class
-    // prefix (0-1-0) would silently invert.
+    // The whole tier is BARE rules inside the token scope element: no
+    // @scope anywhere (a default in its own @scope at the element would
+    // beat an ancestor's equal-weight rule on proximity) and FULLY
+    // :where()-wrapped, the scope class included, so every default sits
+    // at zero specificity: the element tag tier's bare in-scope tag
+    // (0-0-1) beats a base default outright, and every authored rule
+    // beats every default by specificity alone.
     $this->assertStringContainsString(':where(.' . DefaultsStylesheet::SCOPE_CLASS . ') :where(h2) {', $css);
     $this->assertStringContainsString('font-size: 2rem;', $css);
-    $this->assertStringNotContainsString('@scope (:where(.' . DefaultsStylesheet::SCOPE_CLASS . ') :where', $css);
+    $this->assertStringNotContainsString('@scope', $css);
+    $this->assertStringNotContainsString(':scope', $css);
+    $this->assertStringNotContainsString('daedalus-stylish-defaults--', $css, 'No scope class exists any more.');
 
-    // Element defaults are @scope blocks at their stamped scope class,
-    // PREFIXED by the token scope element — the one boundary both tiers
-    // honor, so a stamped class outside it (admin theme, dialogs) is
-    // inert; the container family carries the class-extended donut.
-    $prefix = '.' . DefaultsStylesheet::SCOPE_CLASS . ' ';
-    $this->assertStringContainsString('@scope (' . $prefix . '.daedalus-stylish-defaults--kind-container) to (' . DefaultsStylesheet::DEFAULTS_SCOPE_LIMIT . ')', $css);
-    $this->assertStringContainsString('@scope (' . $prefix . '.daedalus-stylish-defaults--layout-layout_onecol) to (' . DefaultsStylesheet::DEFAULTS_SCOPE_LIMIT . ')', $css);
-    // Part entries ride the class root as descendant selectors with the
-    // root-hoist alternative, exactly like variant part styles.
-    $this->assertStringContainsString(':scope.band-inner, .band-inner', $css);
-    // Block-kind scopes are donut-free (@scope without a "to" limit), and
-    // the block family's plugin refinement compiles the same way at its
-    // own scope class.
-    $this->assertStringContainsString('@scope (' . $prefix . '.daedalus-stylish-defaults--kind-block) {', $css);
-    $this->assertStringContainsString('@scope (' . $prefix . '.daedalus-stylish-defaults--block_plugin-system_menu_block) {', $css);
+    // Element defaults select by the element address daedalus_ui stamps,
+    // PREFIXED by the token scope element inside the :where(): the one
+    // boundary both tiers honor, so an address outside it (admin theme,
+    // dialogs) is inert. A kind selects its whole family.
+    $selector = static fn (string $scope): string => DefaultsStylesheet::elementSelector(Address::fromString($scope));
+    $prefix = '.' . DefaultsStylesheet::SCOPE_CLASS . ' [' . ElementAddress::ATTRIBUTE;
+    $this->assertSame(':where(' . $prefix . '^="layout:"])', $selector('kind:container'));
+    $this->assertStringContainsString($selector('kind:container') . " {\n  padding: 2rem;\n}", $css);
+    $this->assertStringContainsString($selector('layout:layout_onecol') . " {\n  padding: 3rem;\n}", $css);
+    // Part entries print as :where() descendants of the address selector.
+    $this->assertStringContainsString($selector('kind:container') . " :where(.band-inner) {\n  max-width: 80rem;\n}", $css);
+    // The block kind is the two placement families; its plugin
+    // refinement compiles the same way at its own exact address.
+    $this->assertSame(':where(' . $prefix . '^="block_type:"], ' . $prefix . '^="block_plugin:"])', $selector('kind:block'));
+    $this->assertStringContainsString($selector('kind:block') . " {\n  padding: 1rem;\n}", $css);
+    $this->assertStringContainsString($selector('block_plugin:system_menu_block') . " {\n  margin: 1rem;\n}", $css);
 
     // Delivery rank order: base, then kinds, then refinements — the
     // refinement must beat its kind by document order at equal
     // specificity.
     $base_at = strpos($css, ':where(h2)');
-    $kind_at = strpos($css, '@scope (' . $prefix . '.daedalus-stylish-defaults--kind-container)');
-    $refinement_at = strpos($css, '@scope (' . $prefix . '.daedalus-stylish-defaults--layout-layout_onecol)');
+    $kind_at = strpos($css, $selector('kind:container'));
+    $refinement_at = strpos($css, $selector('layout:layout_onecol'));
     $this->assertLessThan($kind_at, $base_at);
     $this->assertLessThan($refinement_at, $kind_at);
-    $block_kind_at = strpos($css, '@scope (' . $prefix . '.daedalus-stylish-defaults--kind-block)');
-    $plugin_at = strpos($css, '@scope (' . $prefix . '.daedalus-stylish-defaults--block_plugin-system_menu_block)');
+    $block_kind_at = strpos($css, $selector('kind:block'));
+    $plugin_at = strpos($css, $selector('block_plugin:system_menu_block'));
     $this->assertLessThan($plugin_at, $block_kind_at);
 
     // A width-conditioned default demands the live width container exactly
@@ -328,46 +337,32 @@ class SkinDefaultsTest extends KernelTestBase {
     $this->assertStringContainsString('@container (max-width: 767px)', $css);
     $this->assertStringContainsString(CssPrinter::PAGE_CONTAINER_RULE, $css);
 
-    // The skin's half of the stamping demand: its defaults scopes.
-    $this->assertSame(
-      ['layout:layout_onecol', 'kind:container', 'kind:block', 'block_plugin:system_menu_block', 'base:h2'],
-      $this->container->get('daedalus_stylish.skin_manager')->activeDefaultScopes(),
-    );
-
-    // The plugin-block stamping seam: a plugin block render wears the
-    // family class (selector and donut boundary) plus its own refinement
-    // class; derivatives resolve to the base id; entity-backed blocks are
-    // the entity-view stamp's business, not this seam's.
-    $variables = ['plugin_id' => 'system_menu_block:main', 'attributes' => []];
-    daedalus_stylish_preprocess_block($variables);
-    $this->assertSame(
-      ['daedalus-stylish-defaults--kind-block', 'daedalus-stylish-defaults--block_plugin-system_menu_block'],
-      $variables['attributes']['class'],
-    );
-    $variables = ['plugin_id' => 'some_other_plugin', 'attributes' => []];
-    daedalus_stylish_preprocess_block($variables);
-    $this->assertSame(['daedalus-stylish-defaults--kind-block'], $variables['attributes']['class']);
-    $variables = ['plugin_id' => 'inline_block:media', 'attributes' => []];
-    daedalus_stylish_preprocess_block($variables);
-    $this->assertArrayNotHasKey('class', $variables['attributes']);
-
-    // Unpublishing retires defaults from delivery AND from the stamps.
+    // Unpublishing retires defaults from delivery.
     $skin->setUnpublished()->save();
     $this->assertNull($this->container->get('state')->get(DefaultsStylesheet::STATE_KEY));
-    $this->assertSame([], $this->container->get('daedalus_stylish.skin_manager')->activeDefaultScopes());
   }
 
   /**
-   * The scope class derivation: one rule, base scopes classless.
+   * A children entry prints as the address selector's direct children.
+   *
+   * The bare twin of the children pseudo-part: ' > *' on the element's
+   * selector (and on a part's), still at zero specificity, no donut.
    */
-  public function testScopeClass(): void {
-    $this->assertSame('daedalus-stylish-defaults--kind-container', DefaultsStylesheet::scopeClass('kind:container'));
-    $this->assertSame('daedalus-stylish-defaults--layout-layout_onecol', DefaultsStylesheet::scopeClass('layout:layout_onecol'));
-    $this->assertSame('daedalus-stylish-defaults--block_type-media', DefaultsStylesheet::scopeClass('block_type:media'));
-    $this->assertSame('daedalus-stylish-defaults--block_plugin-system_menu_block', DefaultsStylesheet::scopeClass('block_plugin:system_menu_block'));
-    $this->assertNull(DefaultsStylesheet::scopeClass('base:h2'));
-    $this->assertNull(DefaultsStylesheet::scopeClass('kind:container::x'));
-    $this->assertNull(DefaultsStylesheet::scopeClass('no-colon'));
+  public function testChildrenDefaultsDelivery(): void {
+    $skin = DaedalusStylishSkin::create(['label' => 'aurora', 'machine_name' => 'aurora', 'status' => TRUE]);
+    $skin->setDefaults([
+      'kind:container' => [
+        '::> *' => ['default' => ['min-width' => '0']],
+        '::.band-inner > *' => ['default' => ['flex' => '1']],
+      ],
+    ]);
+    $skin->save();
+    $this->activateSkin($skin);
+    $css = file_get_contents($this->container->get('state')->get(DefaultsStylesheet::STATE_KEY));
+    $selector = DefaultsStylesheet::elementSelector(Address::fromString('kind:container'));
+    $this->assertStringContainsString($selector . " > * {\n  min-width: 0;\n}", $css);
+    $this->assertStringContainsString($selector . " :where(.band-inner) > * {\n  flex: 1;\n}", $css);
+    $this->assertStringNotContainsString('@scope', $css);
   }
 
   /**

@@ -261,7 +261,7 @@ class StencilPlacementBehaviorTest extends WebDriverTestBase {
 
     $this->drupalGet($node->toUrl());
     $session->resizeWindow(1600, 1200);
-    $this->enterEditModeViaCookies($node->toUrl(), 'selector');
+    $this->enterEditModeViaCookies($node->toUrl());
     $this->assertJsCondition(
       'window.Drupal && Drupal.Daedalus && Drupal.Daedalus.Blueprint && !!Drupal.Daedalus.Blueprint.getRoot()',
       20000,

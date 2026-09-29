@@ -18,6 +18,31 @@ variables:
       css/variables.css: {}
       css/fonts.css: {}
 
+# The pop-out document: what a window the editing page opens beside
+# itself wears (see css/popout.css) and the keyboard it senses for the
+# leader (js/popout/keyboard.js: every Edit Mode shortcut pressed in a
+# pop-out acts on the editing page, resolved there). Attached by
+# DaedalusUiHooks::pageAttachments on every route carrying the
+# _daedalus_ui.popout option (see Chromeless), beside the pop-out's
+# session identity setting, never by a pop-out itself.
+popout:
+  js:
+    # A native ES module: it imports the keyboard sensor, the typing rule
+    # and the shared broadcast wire relative to its own URL, so it must be
+    # served standalone (aggregation would break the relative import
+    # resolution).
+    js/popout/keyboard.js: { attributes: { type: 'module' }, preprocess: false }
+  css:
+    component:
+      # The pop-out's mount sits inside the stylish token scope, where the
+      # skin's output competes unlayered: exempt from the
+      # daedalus_stylish_layers wrapper layer so this sheet competes there too.
+      css/popout.css: { daedalus_stylish_layers_exempt: true }
+  dependencies:
+    - core/drupal
+    - core/drupalSettings
+    - daedalus_ui/variables
+
 # The cosmetic tier over core Navigation: maps core's --drupal-admin-*
 # color hooks onto the chrome tokens so the rail, top bar, and flyouts
 # wear the palette. Attached to navigation/internal.navigation through
@@ -120,6 +145,24 @@ reveal:
   dependencies:
     - core/drupal
     - core/once
+
+# The selection reveal rule (Drupal.Daedalus.scrollReveal): the one way a
+# surface scrolls the selection into view (the whole element, centered in
+# its nearest scrollport when it fits with its scroll margins, its top
+# under the fixed chrome when it does not, never moved when already fully
+# in view). Not the proximity engine above. Standalone on purpose: any
+# chrome library (a separate window's included; daedalus_stylish's
+# satellite reveals the code view's row in its own document) declares this
+# as a dependency and calls scrollReveal(element, { behavior }) instead of
+# a scrollIntoView alignment of its own.
+scroll_reveal:
+  js:
+    # A native ES module: it imports its pure model relative to its own
+    # URL, so it must be served standalone (aggregation would break the
+    # relative import resolution).
+    js/scroll-reveal.js: { attributes: { type: 'module' }, preprocess: false }
+  dependencies:
+    - core/drupal
 
 # The shared modal dialog primitive (Drupal.Daedalus.dialog):
 # promise-based confirm/prompt/alert on the native <dialog> top layer,
@@ -227,11 +270,10 @@ modes:
       css/navigation.css: {}
       css/top-bar.css: {}
       css/split-button.css: {}
-      css/tool-bar-button.css: {}
   dependencies:
     - daedalus_ui/cookie
     - daedalus_ui/variables
-    # Top bar and tool pill buttons are icon-only below full density; their
+    # Top bar buttons are icon-only below full density; their
     # labels ride the tooltip spine.
     - daedalus_ui/tooltip
     # Our top bar markup is built from core navigation's component classes,
@@ -252,15 +294,6 @@ set_cookie:
     - daedalus_ui/cookie
     - core/drupal
     - core/drupal.ajax
-
-update_element:
-  js:
-    js/update-element.js: {}
-  dependencies:
-    - core/jquery
-    - core/drupal
-    - core/drupal.ajax
-    - daedalus_ui/highlight
 
 highlight:
   js:
@@ -322,6 +355,9 @@ edit_mode:
     # The tree rows' right-click, the frame chip's chevron, and the Show
     # kebab all open the shared menu primitive.
     - daedalus_ui/menu
+    # Every selection reveal (the canvas from a panel gesture, the tree's
+    # row, scrollToElement) applies the one reveal rule.
+    - daedalus_ui/scroll_reveal
     - daedalus_ui/sidebar
 #    - daedalus_ui/debug_cursor
 
@@ -361,13 +397,6 @@ responsive_preview:
     - core/drupal
     - core/drupalSettings
     - core/once
-
-debug_cursor:
-  js:
-    js/edit_mode/utilities/debug-mouse-cursor/debug-mouse-cursor.js: {}
-  css:
-    theme:
-      js/edit_mode/utilities/debug-mouse-cursor/debug-mouse-cursor.css: {}
 
 sidebar:
   js:

@@ -18,8 +18,11 @@ use Drupal\daedalus_blueprint\Result\BlueprintResult;
  *
  * Six ops, the vocabulary every model already knows (spec v0.2 section 8):
  * insert(html, at), replace(ref, html), remove(ref), move(ref, at),
- * set(ref, attrs), style(css, remove). JSON is the envelope, HTML/CSS the
- * payload. Each op TRANSLATES into the batch operations that already exist
+ * set(ref, attrs), style(css, remove), and a seventh beside them,
+ * file(name, type, content): bytes the author wrote (an SVG, a
+ * stylesheet, rows), declared in the batch that places them so a page
+ * with its own icons is still one gesture. JSON is the envelope, HTML/CSS
+ * the payload. Each op TRANSLATES into the batch operations that already exist
  * on the spine (add_section/add_element/update_element/move_element/
  * remove_element and the registered style ops) and executes them as a
  * nested batch (the stencil handler's precedent) so everything the spine
@@ -40,6 +43,15 @@ use Drupal\daedalus_blueprint\Result\BlueprintResult;
  * The site vocabulary rides in as $options['dialect_catalog'] (a
  * DialectCatalog), the per-call contract; the tool layer threads the
  * generated catalog.
+ *
+ * A file declaration (the `file` op, a document's <pb-file>) is saved
+ * through the FileDeclarationHandlerInterface seam (collected by service
+ * tag; daedalus_ai implements it over the file lane and the attachment
+ * store) and recorded under its name in the alias layer's files namespace
+ * for $options['conversation'], on the overlay the batch settles: later
+ * ops in the same batch place it with file="name" or url('file:name'), a
+ * rolled-back batch leaves no name behind. A refused body is a dialect
+ * error naming the declaration.
  */
 class DomOperationHandler implements PageLanguageOperationsInterface {
 
@@ -51,12 +63,17 @@ class DomOperationHandler implements PageLanguageOperationsInterface {
   /**
    * The DOM op names this handler provides.
    */
-  public const OPS = ['insert', 'replace', 'remove', 'move', 'set', 'style'];
+  public const OPS = ['insert', 'replace', 'remove', 'move', 'set', 'style', 'file'];
 
   /**
    * The at.ref spelling for the page itself.
    */
   public const ROOT_REF = 'root';
+
+  /**
+   * The seam that saves declared bytes, or NULL on a site without one.
+   */
+  protected ?FileDeclarationHandlerInterface $fileDeclarations = NULL;
 
   /**
    * Constructs the handler.
@@ -81,6 +98,13 @@ class DomOperationHandler implements PageLanguageOperationsInterface {
     protected UuidInterface $uuid,
     protected \Closure $operations,
   ) {}
+
+  /**
+   * Takes the seam that saves declared bytes (the service collector's call).
+   */
+  public function setFileDeclarationHandler(FileDeclarationHandlerInterface $handler): void {
+    $this->fileDeclarations = $handler;
+  }
 
   /**
    * {@inheritdoc}
@@ -111,6 +135,7 @@ class DomOperationHandler implements PageLanguageOperationsInterface {
       'move' => 'with "ref" and "at" {ref, position}; a page-language op',
       'set' => 'with "ref" and "attrs"; a page-language op',
       'style' => 'with "css" and/or "remove"; a page-language op',
+      'file' => 'with "name", "type" (MIME) and "content"; declares bytes the conversation then holds under name, ahead of the ops that place it; a page-language op',
     ];
   }
 
@@ -136,7 +161,90 @@ class DomOperationHandler implements PageLanguageOperationsInterface {
       'move' => $this->applyMove($entity, $operation, $options, $conversation, $index, $aliases),
       'set' => $this->applySet($entity, $operation, $options, $catalog, $conversation, $index, $aliases),
       'style' => $this->applyStyle($entity, $operation, $options, $catalog, $conversation, $index, $aliases),
+      'file' => $this->applyFile($entity, $operation, $conversation),
     };
+  }
+
+  /**
+   * Applies a file op: the declared bytes saved and named for the batch.
+   *
+   * Not a page mutation: the entity is untouched and the result carries
+   * no target. The op's whole effect is the file the conversation now
+   * holds under name, which the ops after it place.
+   */
+  protected function applyFile(FieldableEntityInterface $entity, array $operation, string $conversation): BlueprintResult {
+    $errors = [];
+    foreach (['name', 'type', 'content'] as $key) {
+      $value = $operation[$key] ?? NULL;
+      if (!is_string($value) || trim($value) === '') {
+        $errors[] = new BlueprintError($key, 'MISSING_PARAMETER', sprintf('file needs "%s": %s.', $key, match ($key) {
+          'name' => 'the filename (with its extension) the file is held under',
+          'type' => 'the MIME type (image/svg+xml, text/css, text/csv, text/plain, text/markdown, application/json, text/html)',
+          'content' => 'the file\'s bytes',
+        }), [], 'A file op is {op: "file", name: "logo.svg", type: "image/svg+xml", content: "<svg ...>...</svg>"}, placed ahead of the ops that use file="logo.svg" or url(\'file:logo.svg\').');
+      }
+    }
+    if ($errors) {
+      return BlueprintResult::structuralFailure($errors);
+    }
+    $name = trim($operation['name']);
+    if (str_contains($name, '/') || str_contains($name, '\\')) {
+      return BlueprintResult::structuralFailure([
+        new BlueprintError('name', 'MISSING_PARAMETER', sprintf('file "name" is a bare filename, not a path: "%s".', $name), ['name' => $name], 'Write name: "logo.svg"; the conversation holds the file by that name.'),
+      ]);
+    }
+    $error = $this->declareFile($conversation, $name, trim($operation['type']), trim($operation['content']), 'content');
+    return $error === NULL ? BlueprintResult::success($entity) : BlueprintResult::structuralFailure([$error]);
+  }
+
+  /**
+   * Declares one file through the seam, on the batch's overlay.
+   *
+   * The two authoring forms (the file op, a document's <pb-file>) share
+   * this one call and one error shape: a wiring gap (no seam on this
+   * site), a write without a conversation (nothing could hold the file),
+   * and the seam's refusal (the lane's reasons) each name the declaration
+   * by the name the author gave it.
+   *
+   * @param string $conversation
+   *   The conversation the file is held for ('' when the caller has none).
+   * @param string $name
+   *   The declared name.
+   * @param string $type
+   *   The declared MIME type.
+   * @param string $content
+   *   The bytes.
+   * @param string $path
+   *   The payload path the error answers on ('content' for the op,
+   *   'layout' for a document).
+   * @param int|null $line
+   *   The declaration's source line in a document (joins the message, the
+   *   one fact a payload path cannot carry), NULL for an op.
+   *
+   * @return \Drupal\daedalus_blueprint\Result\BlueprintError|null
+   *   The error that refused the declaration, or NULL when it was saved.
+   */
+  protected function declareFile(string $conversation, string $name, string $type, string $content, string $path, ?int $line = NULL): ?BlueprintError {
+    $where = $line === NULL ? '' : sprintf(' (line %d)', $line);
+    if ($this->fileDeclarations === NULL) {
+      return new BlueprintError($path, 'FILE_STORE_MISSING', sprintf('The file "%s" cannot be declared: this site holds no files for a conversation.%s', $name, $where), ['name' => $name], 'This is a site wiring gap, not a batch problem: no daedalus_blueprint.file_declaration_handler service is registered (daedalus_ai provides one).');
+    }
+    if ($conversation === '') {
+      return new BlueprintError($path, 'CONVERSATION_MISSING', sprintf('The file "%s" cannot be declared: no conversation rides this write to hold it.%s', $name, $where), ['name' => $name], 'The page tools carry the conversation; the HTTP op endpoint takes thread_id in the request body.');
+    }
+    try {
+      $this->fileDeclarations->declare($conversation, $name, $type, $content);
+    }
+    catch (FileDeclarationException $e) {
+      return new BlueprintError(
+        $path,
+        'FILE_REJECTED',
+        sprintf('The file "%s" was refused: %s%s', $name, $e->getMessage(), $where),
+        ['name' => $name, 'reasons' => $e->messages],
+        'Fix the declaration and resend the whole batch: the name\'s extension must be one the site accepts (svg, css, csv, txt, md, json, html), the type must agree with it, and the bytes must pass the site\'s file validation.',
+      );
+    }
+    return NULL;
   }
 
   /**
@@ -330,6 +438,13 @@ class DomOperationHandler implements PageLanguageOperationsInterface {
         $errors[] = new BlueprintError('attrs.src', 'ILLEGAL_SRC', 'src is not writable on <pb-image>.', [], 'Reference existing media with media="id or label" or mint one with generate="prompt" + alt.');
         continue;
       }
+      if ($is_container && $name === DialectWalk::NAME_ATTR) {
+        // The container's name is the section's label: the same
+        // update_element {label} the tree's rename takes (null clears it,
+        // so the section reads by its kind again).
+        $properties['label'] = $value === NULL ? NULL : (string) $value;
+        continue;
+      }
       if ($name === 'style') {
         $patch = [];
         if ($value !== NULL) {
@@ -398,6 +513,7 @@ class DomOperationHandler implements PageLanguageOperationsInterface {
       }
       $legal = array_merge(
         ['class', 'style'],
+        $is_container ? [DialectWalk::NAME_ATTR] : [],
         array_keys($axes),
         array_keys($spec['attributes'] ?? []),
         !$is_container && isset($spec['body']['field']) ? [DialectCatalog::BODY_ATTR] : [],
@@ -478,6 +594,14 @@ class DomOperationHandler implements PageLanguageOperationsInterface {
 
   /**
    * Applies a style op: <style>-block CSS plus an explicit remove list.
+   *
+   * Rules land as update_style writes at the selector's key; a rule's
+   * wear declarations (`class: x`, `{axis}: {value}`, the parser's
+   * 'variants' assignment) land as apply_variant at the rule key, and a
+   * remove entry naming "class" or an axis attribute of the rule's
+   * landing takes that wear off (remove_variant per matching reference,
+   * read from the rule's staged entry), the twin of the set op's class
+   * restatement and {axis: null} on an element.
    */
   protected function applyStyle(FieldableEntityInterface $entity, array $operation, array $options, DialectCatalog $catalog, string $conversation, array $index, array $aliases): BlueprintResult {
     $css_text = $operation['css'] ?? NULL;
@@ -491,20 +615,14 @@ class DomOperationHandler implements PageLanguageOperationsInterface {
     // Addressable ids: every element uuid, plus every live alias, carrying
     // the info the selector grammar checks (kind, block type for parts,
     // and the rich body content instance selectors existence-check
-    // against). The tree is the entity's STAGED state, so a body written
-    // by an earlier op in the same batch (its authored or minted
-    // identities included) is what `#id .s-x` validates against.
+    // against), by the ONE derivation the document parser uses too
+    // (DialectCssParser::knownId()). The tree is the entity's STAGED
+    // state, so a body written by an earlier op in the same batch (its
+    // authored or minted identities included) is what `#id .s-x`
+    // validates against.
     $known_ids = [];
     foreach ($index as $uuid => $info) {
-      $known_ids[$uuid] = ['container' => $info['kind'] === 'container', 'block_type' => $info['block_type']];
-      $body_spec = $info['block_type'] === NULL ? NULL : ($catalog->blockType($info['block_type'])['body'] ?? NULL);
-      if ($body_spec !== NULL && ($body_spec['kind'] ?? '') === 'rich') {
-        $value = $info['node']['block_fields'][$body_spec['field']] ?? NULL;
-        if (is_array($value) && !empty($value['_form_only'])) {
-          $value = NULL;
-        }
-        $known_ids[$uuid]['body'] = is_array($value) ? (string) ($value['value'] ?? '') : (string) ($value ?? '');
-      }
+      $known_ids[$uuid] = DialectCssParser::knownId($info['node'], $catalog);
     }
     foreach ($aliases as $alias => $uuid) {
       if (isset($known_ids[$uuid])) {
@@ -520,29 +638,44 @@ class DomOperationHandler implements PageLanguageOperationsInterface {
     }
     elseif ($css_text !== NULL && !is_string($css_text)) {
       return BlueprintResult::structuralFailure([
-        new BlueprintError('css', 'BAD_OP', 'css is CSS text under the <style>-block grammar.', [], 'Selectors: #id, #id .declared-part, #id:state, #id > *; conditions via the published wrappers.'),
+        new BlueprintError('css', 'BAD_OP', 'css is CSS text under the <style>-block grammar.', [], 'Selectors: #id, then a relative selector under it (#id .declared-part, #id p, #id > *, #id > pb-text, #id > pb-text .link) with states on the addressed element (#id:hover, #id > pb-text:hover) and its generated box last (#id::after, #id > pb-text:hover::before); conditions via the published wrappers, nesting accepted as sugar.'),
       ]);
     }
 
     $errors = [];
     if (!is_array($remove)) {
-      $errors[] = new BlueprintError('remove', 'BAD_OP', 'remove is a list of {selector, properties: [property names]} entries.', [], 'Each entry deletes the named properties from the styles the selector addresses.');
+      $errors[] = new BlueprintError('remove', 'BAD_OP', 'remove is a list of {selector, properties: [property names]} entries.', [], 'Each entry deletes the named properties from the styles the selector addresses; at a rule, "class" or an axis name takes the rule\'s wear off.');
       $remove = [];
     }
+    // A rule's wear removals: [path, id, local, states, names], resolved
+    // against the rule's current entry once the id is known below.
+    $wear_removals = [];
     foreach ($remove as $i => $entry) {
       if (!is_array($entry) || !isset($entry['selector']) || !isset($entry['properties']) || !is_array($entry['properties'])) {
-        $errors[] = new BlueprintError("remove.$i", 'BAD_OP', 'remove entries are {selector, properties: [property names]}.', [], 'Name the selector whose styles to trim and the properties to delete.');
+        $errors[] = new BlueprintError("remove.$i", 'BAD_OP', 'remove entries are {selector, properties: [property names]}.', [], 'Name the selector whose styles to trim and the properties to delete; at a rule, "class" or an axis name takes the rule\'s wear off.');
         continue;
       }
       $target = $css->parseSelector((string) $entry['selector'], NULL, $known_ids, $dialect_errors);
       if ($target === NULL) {
         continue;
       }
+      $landing = $css->ruleLanding($target['local'], $known_ids[$target['id']] ?? NULL);
       $properties = [];
+      $wear = [];
       foreach ($entry['properties'] as $property) {
-        $properties[(string) $property] = NULL;
+        $property = (string) $property;
+        if ($property === 'class' || isset($landing['axes'][$property])) {
+          $wear[] = $property;
+          continue;
+        }
+        $properties[$property] = NULL;
       }
-      $assignments[] = [$target['id'], $target['local'], $catalog->canonicalCompound($target['states']), $properties];
+      if ($properties !== []) {
+        $assignments[] = [$target['id'], $target['local'], $catalog->canonicalCompound($target['states']), $properties];
+      }
+      if ($wear !== []) {
+        $wear_removals[] = ["remove.$i", $target['id'], $target['local'], $target['states'], $wear];
+      }
     }
 
     array_push($errors, ...$this->toBlueprintErrors($dialect_errors, 'css'));
@@ -550,25 +683,79 @@ class DomOperationHandler implements PageLanguageOperationsInterface {
       return BlueprintResult::structuralFailure($errors);
     }
 
+    $resolve = function (string $id) use ($aliases, $index): ?string {
+      $uuid = DialectParser::isUuid($id) ? $id : ($aliases[$id] ?? NULL);
+      return $uuid !== NULL && isset($index[$uuid]) ? $uuid : NULL;
+    };
+    $not_found = static fn (string $id): BlueprintResult => BlueprintResult::structuralFailure([
+      new BlueprintError('css', 'ELEMENT_NOT_FOUND', sprintf('No element #%s on this page.', $id), [], 'Refs are the ids in the page print (uuids or data-alias values).'),
+    ]);
+
     $ops = [];
-    foreach ($assignments as [$id, $local, $condition, $properties]) {
-      if ($properties === []) {
+    foreach ($assignments as [$id, $local, $condition, $payload]) {
+      if ($payload === []) {
         continue;
       }
-      $uuid = DialectParser::isUuid($id) ? $id : ($aliases[$id] ?? NULL);
-      if ($uuid === NULL || !isset($index[$uuid])) {
+      $uuid = $resolve($id);
+      if ($uuid === NULL) {
         // parseStyleBlock already vouched for the id; this guards races.
-        return BlueprintResult::structuralFailure([
-          new BlueprintError('css', 'ELEMENT_NOT_FOUND', sprintf('No element #%s on this page.', $id), [], 'Refs are the ids in the page print (uuids or data-alias values).'),
-        ]);
+        return $not_found($id);
       }
       $prefix = $index[$uuid]['kind'] === 'container' ? 'container:' : 'block:';
+      if ($condition === 'variants') {
+        // The rule's wear declarations (DialectCssParser::peelWear()):
+        // each reference lands as the spine's apply_variant at the rule
+        // key, the wear itself the validator's judgement (landing, flat,
+        // not top-level only). An axis wear replaces the same-axis
+        // reference by apply_variant's contract; a class wear adds, as
+        // every css rule merges into what is there.
+        foreach ($payload as $reference) {
+          $ops[] = ['op' => 'apply_variant', 'key' => $prefix . $uuid . $local, 'variant' => $reference['variant']];
+        }
+        continue;
+      }
       $ops[] = [
         'op' => 'update_style',
         'key' => $prefix . $uuid . $local,
         'condition' => $condition,
-        'properties' => $properties,
+        'properties' => $payload,
       ];
+    }
+    foreach ($wear_removals as [$path, $id, $local, $states, $names]) {
+      $uuid = $resolve($id);
+      if ($uuid === NULL) {
+        return $not_found($id);
+      }
+      if ($local === '') {
+        $errors[] = new BlueprintError($path, 'BAD_OP', sprintf('#%s wears its variants on its own tag; the remove list trims a rule\'s wear ("class" or an axis name on #%s > pb-text), never the element\'s.', $id, $id), ['properties' => $names], 'Take a variant off the element with set {ref, attrs: {class: "..."}} (restating the classes it keeps) or {axis: null}; detach materializes it instead.');
+        continue;
+      }
+      if ($states !== []) {
+        $errors[] = new BlueprintError($path, 'BAD_OP', 'A rule wears a variant in its plain block, never under a state; name the rule without its pseudo-classes.', ['properties' => $names], sprintf('remove: [{selector: "#%s %s", properties: [...]}].', $id, substr($local, 2)));
+        continue;
+      }
+      $prefix = $index[$uuid]['kind'] === 'container' ? 'container:' : 'block:';
+      $worn = $index[$uuid]['node']['styles'][$local]['variants'] ?? [];
+      foreach ($names as $name) {
+        $matched = [];
+        foreach ($worn as $reference) {
+          $variant = (string) ($reference['variant'] ?? '');
+          $mapping = $catalog->axisForVariant($variant);
+          if ($name === 'class' ? ($mapping === NULL && $catalog->classForVariant($variant) !== NULL) : ($mapping !== NULL && $mapping[0] === $name)) {
+            $matched[] = $variant;
+          }
+        }
+        if ($matched === []) {
+          $errors[] = new BlueprintError($path, 'BAD_OP', sprintf('The rule #%s %s wears no %s variant to remove.', $id, substr($local, 2), $name === 'class' ? 'class' : $name), ['property' => $name, 'worn' => array_column($worn, 'variant')], 'Remove names "class" (every style class the rule wears) or an axis attribute name the rule wears a value on.');
+          continue;
+        }
+        foreach ($matched as $variant) {
+          $ops[] = ['op' => 'remove_variant', 'key' => $prefix . $uuid . $local, 'variant' => $variant];
+        }
+      }
+    }
+    if ($errors) {
+      return BlueprintResult::structuralFailure($errors);
     }
     if ($ops === []) {
       return BlueprintResult::structuralFailure([
@@ -626,8 +813,20 @@ class DomOperationHandler implements PageLanguageOperationsInterface {
     }
     if ($ops === [] && $style_ops === []) {
       return BlueprintResult::structuralFailure($parse_errors ?: [
-        new BlueprintError('layout', 'MISSING_PARAMETER', 'The document holds no elements.', [], 'A page document is one or more <pb-container> elements, with an optional <style> block.'),
+        new BlueprintError('layout', 'MISSING_PARAMETER', 'The document holds no elements.', [], 'A page document is one or more <pb-container> elements, with an optional <style> block and <pb-file> declarations.'),
       ]);
+    }
+
+    // The declarations land before the batch, on the overlay the batch
+    // settles, so file="name" and url('file:name') anywhere in the
+    // document resolve whatever the source order; a refusal joins the
+    // grammar errors and dooms the gesture to a judged batch (nothing
+    // lands, the overlay is discarded).
+    foreach ($parse->files as $file) {
+      $error = $this->declareFile($conversation, $file['name'], $file['type'], $file['content'], 'layout', $file['line']);
+      if ($error !== NULL) {
+        $parse_errors[] = $error;
+      }
     }
 
     return $this->runTranslated($entity, array_merge($ops, $style_ops), $options, $conversation, $minted, judge: $parse_errors);
@@ -687,6 +886,12 @@ class DomOperationHandler implements PageLanguageOperationsInterface {
         if (isset($node['stencil'])) {
           $op['stencil'] = $node['stencil'];
         }
+        // So is the name: a born container's name="" lands in the
+        // section's label slot (layout_settings.label, the slot the
+        // tree's rename and set {name} write), never as a second op.
+        if (isset($node['label'])) {
+          $op['layout_settings'] = ['label' => $node['label']];
+        }
         $ops[] = $op;
         foreach ($node['children'] ?? [] as $child) {
           // 'inside' appends: sequential appends into the fresh container
@@ -735,9 +940,9 @@ class DomOperationHandler implements PageLanguageOperationsInterface {
    * Fragment nodes only ever carry the '' entry (style="" defaults plus
    * variant wear; conditions and parts ride the style op, spec section
    * 7). Document nodes (applyDocument) additionally carry the entries the
-   * document's <style> block injected — part locals ('::.class', '::>')
-   * and condition-keyed maps — so the walk covers every local and every
-   * condition.
+   * document's <style> block injected — selector locals ('::.class',
+   * '::> *', '::p') and condition-keyed maps — so the walk covers every
+   * local and every condition.
    */
   protected function expandNodeStyles(array $node, string $key, array &$style_ops): void {
     foreach ($node['styles'] ?? [] as $local => $entry) {
@@ -1226,6 +1431,13 @@ class DomOperationHandler implements PageLanguageOperationsInterface {
         }
         if ($has_attrs && isset($attrs['style']) && is_string($attrs['style'])) {
           $css->parseDeclarations($attrs['style'], NULL, sprintf('op %d set style', $i), $op_errors);
+        }
+      }
+      if ($name === 'file') {
+        foreach (['name', 'type', 'content'] as $key) {
+          if (!is_string($op[$key] ?? NULL) || trim($op[$key]) === '') {
+            $op_errors[] = new DialectError('BAD_OP', sprintf('file needs "%s" (a non-empty string)', $key));
+          }
         }
       }
       if ($name === 'style') {

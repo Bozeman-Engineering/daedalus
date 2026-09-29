@@ -36,7 +36,7 @@ use Drupal\daedalus_stylish\StyleMapValidator;
  *   region:NAME relative styles move onto the minted child; conditions and
  *   variant name lists rewrite like maps.
  * - Proportions retirement (mode + share): worn split_* references and
- *   stepper-written explicit track overrides convert to the one `row`
+ *   stepper-written explicit track overrides convert to the one `columns`
  *   arrangement reference plus per-child flex-grow overrides; track styles
  *   outside the stepper's own pattern stay Custom, loudly. Applies to
  *   style maps (migrateArrangement()) and stored stencils alike.
@@ -121,7 +121,7 @@ class ContainerMigration {
    *
    * Mode + share retires the proportions axis: the ratio fact moves off the
    * parent's track string onto the children (flex-grow overrides under the
-   * one `row` arrangement variant). These ratios are FROZEN history - the
+   * one `columns` arrangement variant). These ratios are FROZEN history - the
    * exact fr weights the shipped variants carried - so worn references
    * convert identically after the variant entities are deleted.
    */
@@ -139,9 +139,14 @@ class ContainerMigration {
   ];
 
   /**
-   * The arrangement variant worn split references convert to.
+   * The columns arrangement variant worn split references convert to.
+   *
+   * Machine name `columns` (label "Columns"); it was `row` until
+   * daedalus_stylish_layouts_post_update_rename_row_to_columns() repointed
+   * every stored wearing, so every historical one-shot and the permanent
+   * RowArrangementSweep converge onto the current name.
    */
-  public const ROW_VARIANT = 'row';
+  public const COLUMNS_VARIANT = 'columns';
 
   /**
    * The container part suffix every proportions treatment styled.
@@ -601,7 +606,7 @@ class ContainerMigration {
   }
 
   /**
-   * Whether a reference by this split_* name converts to the row variant.
+   * Whether a reference by this split_* name converts to the columns variant.
    *
    * The repointTarget() decision gate, applied to the split families: only
    * unmodified shipped daedalus_stylish_layouts variants convert (a missing variant
@@ -675,10 +680,10 @@ class ContainerMigration {
   }
 
   /**
-   * Converts a map's proportions grammar to mode + share (the row variant).
+   * Converts a map's proportions grammar to mode + share (the columns variant).
    *
    * Per container: worn references to retiring split_* variants drop for
-   * one `row` arrangement reference plus per-child flex-grow overrides
+   * one `columns` arrangement reference plus per-child flex-grow overrides
    * carrying the frozen ratio (children in order); stepper-written explicit
    * track overrides on the container part (display grid + minmax tracks +
    * the narrow 'none' stacking) parse the same way - the override was the
@@ -834,12 +839,12 @@ class ContainerMigration {
       if ($map[$part_key] === []) {
         unset($map[$part_key]);
       }
-      $this->report($lines, sprintf('%s: removed the stepper-written column tracks from "%s"%s.', $context, $part_key, $stacked ? ' (a stacked flow needs no styles)' : ' (the row arrangement replaces them)'));
+      $this->report($lines, sprintf('%s: removed the stepper-written column tracks from "%s"%s.', $context, $part_key, $stacked ? ' (a stacked flow needs no styles)' : ' (the columns arrangement replaces them)'));
       $changed = TRUE;
     }
 
     foreach ($converting as $name) {
-      $this->report($lines, sprintf('%s: converted the worn "%s" reference on "%s" to the "%s" arrangement.', $context, $name, $base_key, self::ROW_VARIANT));
+      $this->report($lines, sprintf('%s: converted the worn "%s" reference on "%s" to the "%s" arrangement.', $context, $name, $base_key, self::COLUMNS_VARIANT));
     }
     if ($converting !== []) {
       $entry['variants'] = array_values(array_filter($entry['variants'], static fn ($ref) => !is_array($ref) || !in_array($ref['variant'] ?? NULL, $converting, TRUE)));
@@ -849,10 +854,10 @@ class ContainerMigration {
     if (!$stacked) {
       $wears_row = FALSE;
       foreach ($entry['variants'] ?? [] as $ref) {
-        $wears_row = $wears_row || (is_array($ref) && ($ref['variant'] ?? NULL) === self::ROW_VARIANT);
+        $wears_row = $wears_row || (is_array($ref) && ($ref['variant'] ?? NULL) === self::COLUMNS_VARIANT);
       }
       if (!$wears_row) {
-        $entry['variants'][] = ['variant' => self::ROW_VARIANT, 'fragment' => ''];
+        $entry['variants'][] = ['variant' => self::COLUMNS_VARIANT, 'fragment' => ''];
         $changed = TRUE;
       }
       $map[$base_key] = $entry;
@@ -875,7 +880,7 @@ class ContainerMigration {
    * Writes the unequal share halves onto the children, in order.
    *
    * Weight 1 is spelled by writing nothing (the layout widget's rule: the
-   * row variant's `::>` equal fill is the resting state), and a child's
+   * columns variant's `> *` equal fill is the resting state), and a child's
    * pre-existing flex-grow override wins - it was already beating the
    * variant's tracks per the cascade, so the migration must not replace it.
    *
@@ -929,7 +934,7 @@ class ContainerMigration {
    * Retires the shipped split_* proportions variants and their axis.
    *
    * The migrate_0006 delete-pass precedent: every reference converted to
-   * the row arrangement (migrateArrangement()), so an unmodified shipped
+   * the columns arrangement (migrateArrangement()), so an unmodified shipped
    * copy is dead weight and deletes; a MODIFIED copy is user work and
    * survives as an ordinary variant. The proportions axis itself is off
    * the container declaration, so every surviving kind:container variant
@@ -953,7 +958,7 @@ class ContainerMigration {
         continue;
       }
       $variant->delete();
-      $this->report($lines, sprintf('Deleted the retired shipped "%s" variant (references converted to the "%s" arrangement).', $variant->getMachineName(), self::ROW_VARIANT));
+      $this->report($lines, sprintf('Deleted the retired shipped "%s" variant (references converted to the "%s" arrangement).', $variant->getMachineName(), self::COLUMNS_VARIANT));
     }
     // Deleted variants must not satisfy this request's later conversion
     // lookups as if they still existed.
@@ -999,7 +1004,7 @@ class ContainerMigration {
     foreach ($storage->loadMultiple($ids) as $variant) {
       /** @var \Drupal\daedalus_stylish\DaedalusStylishVariantInterface $variant */
       $variant->setAxis(self::CONTAINER_LAYOUT_AXIS);
-      if ($variant->getMachineName() === self::ROW_VARIANT
+      if ($variant->getMachineName() === self::COLUMNS_VARIANT
         && $variant->getProvider() === 'daedalus_stylish_layouts'
         && $variant->label() === 'Row') {
         $variant->set('label', 'Columns');
@@ -1194,12 +1199,12 @@ class ContainerMigration {
       else {
         $node['styles'][self::CONTAINER_PART] = $part;
       }
-      $this->report($lines, sprintf('%s: removed the stepper-written column tracks%s.', $context, $stacked ? ' (a stacked flow needs no styles)' : ' (the row arrangement replaces them)'));
+      $this->report($lines, sprintf('%s: removed the stepper-written column tracks%s.', $context, $stacked ? ' (a stacked flow needs no styles)' : ' (the columns arrangement replaces them)'));
       $changed = TRUE;
     }
 
     foreach ($converting as $name) {
-      $this->report($lines, sprintf('%s: converted the "%s" variant name to the "%s" arrangement.', $context, $name, self::ROW_VARIANT));
+      $this->report($lines, sprintf('%s: converted the "%s" variant name to the "%s" arrangement.', $context, $name, self::COLUMNS_VARIANT));
     }
     if ($converting !== []) {
       $root['variants'] = array_values(array_diff($root['variants'], $converting));
@@ -1207,8 +1212,8 @@ class ContainerMigration {
     }
 
     if (!$stacked) {
-      if (!in_array(self::ROW_VARIANT, $root['variants'] ?? [], TRUE)) {
-        $root['variants'][] = self::ROW_VARIANT;
+      if (!in_array(self::COLUMNS_VARIANT, $root['variants'] ?? [], TRUE)) {
+        $root['variants'][] = self::COLUMNS_VARIANT;
         $changed = TRUE;
       }
       $node['styles'][''] = $root;

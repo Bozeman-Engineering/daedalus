@@ -55,6 +55,7 @@ class BlueprintMirrorPayloadTest extends BlueprintKernelTestBase {
       'navigation',
       'twig_events',
       'daedalus_blueprint_api',
+      'file',
       'daedalus_ui',
       'daedalus_tempstore',
       'daedalus_layout',

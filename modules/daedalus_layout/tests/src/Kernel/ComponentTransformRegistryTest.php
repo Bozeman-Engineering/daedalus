@@ -39,6 +39,7 @@ class ComponentTransformRegistryTest extends KernelTestBase {
     // resolve info.yml dependencies, so the chain is listed explicitly.
     'daedalus_blueprint',
     'daedalus_blueprint_api',
+    'file',
     'daedalus_ui',
     'daedalus_layout',
     'daedalus_layout_transform_test',

@@ -124,8 +124,8 @@ class PageReadTest extends BlueprintKernelTestBase {
     $output = $this->read(['stencil' => 'card']);
 
     $expected = <<<HTML
-<pb-container class="hero_glow" style="padding-top: 2rem">
-  <pb-container>
+<pb-container name="Card" class="hero_glow" style="padding-top: 2rem">
+  <pb-container name="Image wrapper">
   </pb-container>
   <pb-text tag="h2">Card title</pb-text>
   <pb-text>Read more &amp; learn</pb-text>

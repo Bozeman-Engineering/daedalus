@@ -40,13 +40,13 @@ daedalus_ui.mode.configure:
     _permission: 'configure daedalus ui modes'
 
 daedalus_ui.settings.save_user_hotkey:
-  path: '/daedalus-ui/save-user-hotkey/{tool_id}/{hotkey}'
+  path: '/daedalus-ui/save-user-hotkey/{binding_id}/{hotkey}'
   defaults:
     _title: 'Save User Hotkey'
     _controller: '\Drupal\daedalus_ui\Controller\Settings::saveHotkey'
   requirements:
     _permission: 'use daedalus ui edit mode'
-    tool_id: '[a-z0-9_.]+'
+    binding_id: '[a-z0-9_.]+'
     hotkey: '[a-z0-9+]+'
 
 daedalus_ui.settings.remove_media_file_association:

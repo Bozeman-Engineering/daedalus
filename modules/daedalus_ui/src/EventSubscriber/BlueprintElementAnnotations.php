@@ -6,11 +6,17 @@ namespace Drupal\daedalus_ui\EventSubscriber;
 
 use Drupal\Component\Serialization\Json;
 use Drupal\daedalus_blueprint_api\Event\BlueprintMutationResponseEvent;
+use Drupal\daedalus_blueprint_api\Event\BlueprintReadEvent;
 use Drupal\daedalus_ui\ElementModel\BlueprintElementAnnotator;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 
 /**
  * Annotates the mutation response's blueprint with `_element`.
+ *
+ * The read endpoint's derived modes ride the same annotator (onRead()):
+ * the css print heads each element with its words, which are this
+ * annotation's `type` and `name`, so the blueprint a read mode projects
+ * through the lean tree is annotated exactly as a delivered one.
  *
  * The mutation response is one of the mirror's delivery seams (the others
  * ride drupalSettings through BlueprintMirror: boot render and form
@@ -62,10 +68,25 @@ final class BlueprintElementAnnotations implements EventSubscriberInterface {
   }
 
   /**
+   * Annotates the blueprint a derived read mode projects.
+   *
+   * The view mode rides the query (the read endpoint has no body), 'full'
+   * when absent, as the mutation seam defaults it.
+   */
+  public function onRead(BlueprintReadEvent $event): void {
+    $view_mode = $event->request->query->get('view_mode');
+    $view_mode = is_string($view_mode) && $view_mode !== '' ? $view_mode : 'full';
+    $event->setBlueprint($this->annotator->annotate($event->getBlueprint(), $event->entity, $view_mode));
+  }
+
+  /**
    * {@inheritdoc}
    */
   public static function getSubscribedEvents(): array {
-    return [BlueprintMutationResponseEvent::class => 'onMutationResponse'];
+    return [
+      BlueprintMutationResponseEvent::class => 'onMutationResponse',
+      BlueprintReadEvent::class => 'onRead',
+    ];
   }
 
 }

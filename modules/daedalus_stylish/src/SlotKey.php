@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Drupal\daedalus_stylish;
 
 use Drupal\daedalus_blueprint\Materials\Address;
+use Drupal\daedalus_blueprint\Materials\RelativeSelector;
 
 /**
  * The slot-key grammar: one parser for element-relative style keys.
@@ -13,14 +14,16 @@ use Drupal\daedalus_blueprint\Materials\Address;
  * '' (the root element) and '::.class' (a declared part); composition
  * variants extend it with slash-separated slot paths that address the root's
  * structural children semantically and positionally, never by uuid or markup
- * class:
+ * class, and the relative selector grammar (RelativeSelector, the one
+ * suffix grammar every key speaks) refines any slot into its subtree:
  *
- *   key       = path? ("::." class)? ("::>")?
+ *   key       = path? ("::" selector)?
  *   path      = segment ("/" segment)*
  *   segment   = container(index) | block(type,index) | field(name)
  *   name/type = machine name [a-z0-9_]+
  *   index     = 1-based [1-9][0-9]*
- *   class     = [A-Za-z0-9_-]+
+ *   selector  = a canonical RelativeSelector (".class", "p", "> *",
+ *               "> pb-text .link", ...)
  *
  * Structural rules are parameterized by the ROOT KIND, because a root
  * carries exactly the paths its kind structurally contains:
@@ -33,12 +36,10 @@ use Drupal\daedalus_blueprint\Materials\Address;
  * - field, entity and region roots carry no paths, parts only;
  * - container(...) is followed by container(index) or block(type,index);
  *   field(...) follows any block segment and terminates the path;
- * - the '::.class' part suffix may terminate any key, the bare root
- *   included (the pre-composition key space is the degenerate case);
- * - the '::>' children pseudo-part suffix ("all direct children of this
- *   element" as one addressable) may terminate any key too, part-suffixed
- *   keys included ('::.class::>' styles the part's children). It is the
- *   LAST suffix: nothing follows it, and it never doubles.
+ * - the '::' selector suffix may terminate any key, the bare root
+ *   included (the pre-composition key space is the degenerate case); it
+ *   is admitted in its canonical spelling only, and since a selector never
+ *   contains '::' the first '::' always splits path from selector.
  *
  * This class is the grammar's single home: validation, delivery, capture
  * and the client mirror (js/src/slot-key.js, PHP authoritative) all consume
@@ -79,11 +80,6 @@ final class SlotKey {
   private const SEGMENT = '/^(?:(field)\(([a-z0-9_]+)\)|(block)\(([a-z0-9_]+),([1-9][0-9]*)\)|(container)\(([1-9][0-9]*)\))$/';
 
   /**
-   * The '::.class' part suffix's class selector.
-   */
-  private const PART = '/^\.[A-Za-z0-9_-]+$/';
-
-  /**
    * Constructs a slot key.
    *
    * @param array $segments
@@ -93,19 +89,13 @@ final class SlotKey {
    *   block segments (containers are anonymous: their identity is
    *   positional; blocks disambiguate same-type siblings). Empty for the
    *   root element and for bare part keys.
-   * @param string|null $part
-   *   The '.class' part selector when the key carries a '::.class' suffix,
-   *   NULL otherwise. Kept in selector form (leading dot) because that is
-   *   the form the style guide's elements trees and the printers speak.
-   * @param bool $children
-   *   TRUE when the key carries the trailing '::>' children pseudo-part
-   *   suffix: the entry styles the addressed element's direct children
-   *   (printed as a ' > *' extension of the element's own targets).
+   * @param \Drupal\daedalus_blueprint\Materials\RelativeSelector|null $selector
+   *   The relative selector when the key carries a '::' suffix, NULL for
+   *   the addressed element itself.
    */
   private function __construct(
     public readonly array $segments,
-    public readonly ?string $part,
-    public readonly bool $children = FALSE,
+    public readonly ?RelativeSelector $selector = NULL,
   ) {}
 
   /**
@@ -116,8 +106,9 @@ final class SlotKey {
    * @param string|null $root_kind
    *   The root element's kind, one of ROOT_KINDS. NULL when the root's kind
    *   is unknown (an unresolvable scope), which permits only the path-less
-   *   keys ('' and '::.class'): no structural rule can hold for an unknown
-   *   root, and the degenerate keys are the only root-independent ones.
+   *   keys ('' and '::selector'): no structural rule can hold for an
+   *   unknown root, and the degenerate keys are the only root-independent
+   *   ones.
    *
    * @return self|null
    *   The parsed key, or NULL when it does not parse: bad charset, a
@@ -133,26 +124,13 @@ final class SlotKey {
       throw new \InvalidArgumentException(sprintf('"%s" is not a slot-key root kind (expected one of: %s).', $root_kind, implode(', ', self::ROOT_KINDS)));
     }
 
-    // The '::>' children suffix is the outermost (and always last) suffix:
-    // stripping it first leaves an ordinary element key, so '::.class::>'
-    // parses as the part's children and a doubled '::>::>' fails the part
-    // charset below like any malformed remainder.
-    $children = str_ends_with($key, '::>');
-    if ($children) {
-      $key = substr($key, 0, -3);
+    // The first '::' splits the path from its selector (the one split
+    // every key grammar shares); the selector is admitted canonical only.
+    $split = RelativeSelector::splitKey($key);
+    if ($split === NULL) {
+      return NULL;
     }
-
-    $path = $key;
-    $part = NULL;
-    if (($pos = strpos($key, '::')) !== FALSE) {
-      $part = substr($key, $pos + 2);
-      $path = substr($key, 0, $pos);
-      // The part charset excludes ':', so matching the whole remainder also
-      // guarantees the key carries exactly one '::' suffix.
-      if (!preg_match(self::PART, $part)) {
-        return NULL;
-      }
-    }
+    [$path, $selector] = $split;
 
     $segments = [];
     if ($path !== '') {
@@ -182,14 +160,14 @@ final class SlotKey {
       }
     }
 
-    return new self($segments, $part, $children);
+    return new self($segments, $selector);
   }
 
   /**
    * Whether this key is the bare root element ('').
    */
   public function isRoot(): bool {
-    return $this->segments === [] && $this->part === NULL && !$this->children;
+    return $this->segments === [] && $this->selector === NULL;
   }
 
   /**
@@ -204,7 +182,7 @@ final class SlotKey {
       },
       $this->segments,
     ));
-    return $path . ($this->part !== NULL ? '::' . $this->part : '') . ($this->children ? '::>' : '');
+    return $path . ($this->selector !== NULL ? '::' . $this->selector : '');
   }
 
   /**
@@ -212,10 +190,9 @@ final class SlotKey {
    *
    * The shape a single {variant, fragment} reference delivers to its
    * carrying element, root ('' fragment) and distributed fragment alike:
-   * the fragment's own entry reads as '' and its suffixed entries
-   * ('::.class' parts, the '::>' children pseudo-part, and '::.class::>')
-   * as their suffix, so "{key}{suffix}" is the map key the styles belong
-   * to on the carrier. Deeper slot paths under the fragment
+   * the fragment's own entry reads as '' and its suffixed entries (every
+   * '::selector' relative of the fragment) as their suffix, so
+   * "{key}{suffix}" is the map key the styles belong to on the carrier. Deeper slot paths under the fragment
    * are OTHER fragments (their elements carry their own references) and
    * never read here. A fragment the variant does not hold reads empty —
    * valid but inert. The ONE fragment-lookup semantics: detach
@@ -229,7 +206,7 @@ final class SlotKey {
    *   The fragment slot key ('' for the root element).
    *
    * @return array
-   *   Style entries keyed by '' or '::.class' part suffix, in stored
+   *   Style entries keyed by '' or '::selector' suffix, in stored
    *   order. Non-array and empty entries are dropped, and each entry
    *   reads values-only: a nested "variants" reference list is stripped
    *   (it distributes at apply time, never through the carrier's lookup).
@@ -268,7 +245,7 @@ final class SlotKey {
    * is a container root; every bundle is a block root; kinds map to
    * themselves. block_plugin scopes deliberately resolve NULL: plugin
    * blocks carry no blueprint fields and no slot space, so their variants
-   * speak the path-less key space ('' and '::.class' parts) only, the
+   * speak the path-less key space ('' and '::selector' keys) only, the
    * same posture as base:{tag} scopes.
    *
    * @return string|null

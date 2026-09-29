@@ -107,6 +107,8 @@ test('reanchorSession moves only an update session\'s preview anchor', () => {
   assert.equal(moved.anchor, 'block:b2');
   // The staged lines are variant-relative and survive verbatim.
   assert.deepEqual(moved.lines, session.lines);
+  // A rule wearing the document anchors the same way (a target move).
+  assert.equal(reanchorSession(session, 'container:c1::a').anchor, 'container:c1::a');
   // A no-op move returns the same object so subscribers can skip.
   assert.equal(reanchorSession(session, 'block:b1'), session);
   assert.equal(reanchorSession(session, ''), session);

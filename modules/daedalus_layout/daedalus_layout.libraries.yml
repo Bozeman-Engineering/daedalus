@@ -9,7 +9,6 @@ editing_ui:
     - core/drupal.displace
     - daedalus_ui/modes
     - daedalus_ui/edit_mode
-    - daedalus_ui/update_element
 
 # Selection verbs (Duplicate / Remove / Configure). Attached as a dependency
 # of daedalus_ui/edit_mode via daedalus_layout_library_info_alter() so the verbs

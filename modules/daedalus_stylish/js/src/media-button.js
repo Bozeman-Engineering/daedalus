@@ -7,8 +7,9 @@ import { h } from 'preact';
  * Background widget became the second consumer: one opener face
  * everywhere the media library mounts. The chip is pure chrome over an
  * onClick the consumer owns (the advanced row calls media.onPick, the
- * basic widget source.pickMedia — either way the SOURCE lands the whole
- * delivery: modal, table extension, staged preview, commit). The honest
+ * basic widget its onPickMedia contract; either way the routed pick
+ * reaches the SOURCE, which lands the whole delivery: modal, table
+ * extension, staged preview, commit). The honest
  * offer gate (media.canPick / source.canPickMedia) stays with the
  * consumer too: it is a source read, not chip state, and a gated-off
  * chip renders nothing rather than a disabled button.

@@ -3,7 +3,7 @@
  *
  * Everything that can drive the canvas highlight — an advanced property
  * row, a basic chips row, the box-model diagram — is a CLAIMANT: it
- * claims a {key, sub, properties} spec while the user is touching it
+ * claims a {key, selector, properties} spec while the user is touching it
  * (hover, a focus-held editor, a scrub) and releases when they stop.
  * The most recent claim wins (the diagram's own hover-over-open-editor
  * precedence generalized across rows), and a release falls back to the
@@ -85,13 +85,20 @@ const registries = new WeakMap();
 
 /**
  * The claim stack for a state source (leader or satellite), created on
- * first use. Selection moves wipe the claims: the source already
- * auto-clears its highlight state on selection change (transient edit
- * chrome never outlives its target), and a surviving claim would let a
- * later release resurrect a stale target's spec.
+ * first use. Any move of the styling address wipes the claims: a
+ * selection move AND a target move under the same selection (the
+ * switcher or "Edit at" seating an ancestor rule, the target moves
+ * without the selection), both heard on the source's one target-aware
+ * subscription (onTargetChange fires for either, the selection facade's
+ * rule). Why: every claim is keyed at a write address (a row's
+ * `model.keys[property]`, the ring's family write key), so a claim a
+ * focused row holds is a claim at the OLD address once the target
+ * moves; the source clears its highlight state on the same move
+ * (transient edit chrome never outlives its address), and a surviving
+ * claim would let a later release resurrect the stale address's spec.
  *
  * @param {object} source
- *   A state source exposing setCanvasHighlight and onSelectionChange.
+ *   A state source exposing setCanvasHighlight and onTargetChange.
  *
  * @return {{claim: Function, release: Function, clear: Function}}
  */
@@ -99,7 +106,7 @@ export const highlightClaimsFor = (source) => {
   let claims = registries.get(source);
   if (!claims) {
     claims = createHighlightClaims((spec) => source.setCanvasHighlight(spec));
-    source.onSelectionChange(() => claims.clear());
+    source.onTargetChange(() => claims.clear());
     registries.set(source, claims);
   }
   return claims;

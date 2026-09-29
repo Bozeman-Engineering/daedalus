@@ -10,7 +10,10 @@ composed: true
 # The markup model. The root is ALWAYS the tag element, and entity data
 # decides which tag: the validated field_text_tag value (h1..h6, span, p),
 # with the residual form carrying the fallback the render has always had —
-# a text whose tag field holds no value renders as a paragraph. The root
+# a text whose tag field holds no value renders as a paragraph. The field
+# ships a p default value, so a fresh block (a palette drop, an AI add) is
+# an explicit unlinked paragraph and the residual form serves only a block
+# whose tag was cleared. The root
 # is the selection target and the primary styling target: the tag element
 # is where the theme's element rules (h2 { font-size... }) land, and
 # linked text nests the anchor INSIDE it (a linked heading's natural HTML
@@ -25,20 +28,77 @@ root:
 
 # Styling (Daedalus Stylish's sections in this same declaration): because the block
 # is collapsed markup, the style target is the root itself and there is no
-# template SHELL to declare. The control below binds by OMITTING its
+# template SHELL to declare. The alignment control binds by OMITTING its
 # element key, which binds the block root: writes land on the block's plain
 # selectable key (":scope" in the printed CSS), and the panel grows zero
 # new rows because the root's row is the block itself.
 #
 # Guide validation covers root bindings against the block's EFFECTIVE
 # property groups: the universal block kind in daedalus_edit.page_builder.yml
-# carries typography (owns text-align, the widget's only property — the
+# carries typography (owns text-align, the widget's only property; the
 # adaptive cross axis moved to the kind-inherited position control), so
-# this binding is sanctioned without declaring anything extra here.
+# that binding is sanctioned without declaring anything extra here.
+#
+# A linked text block is TWO boxes (the tag root and the anchor nested
+# inside it), and basic mode must never make the editor pick one: the
+# panel is a text editor's, not a DOM inspector's. So the bindings below
+# RESTATE the universal block kind's ids (background, text_color,
+# typography, corners_border, spacing; the maps key-merge, so each
+# restatement retargets the kind's row rather than adding a second one)
+# with an ORDERED CANDIDATE LIST as the address: the link first, the root
+# (`''`) second. Daedalus Stylish resolves every property a widget owns to
+# ONE candidate, the first whose stack delivers it from an authored layer
+# (an own entry or a worn variant), else the first whose stack delivers
+# it at any tier, else the first present candidate; the row reads that
+# candidate and writes to it. Link-first is the rule that makes the
+# shipped `button` variant (daedalus_edit_text_block.daedalus_stylish.variants.yml,
+# every style keyed at the link) light the SAME rows an unlinked block
+# shows, with no "Link fill" beside "Background", and it is the empty
+# state's meaning: a linked block with nothing authored on either box
+# addresses the anchor, so a background pick makes a pill (text width),
+# which is what a text block with a background almost always means; a
+# band on a linked heading is advanced mode's. The order never hides a
+# painting value: an authored root band outranks the anchor's tier
+# defaults, and a second authored value on the other box rides the row's
+# read as `alsoOn` and shows in the row's menu as an inert "Also set on
+# element" (or "Also set on link") line hinted with that box's value,
+# beside "Also set at". Unlinked, the anchor is absent and every row
+# falls to the root: one declaration, both link states.
+#
+# The ids are the kind's on purpose. A design system package curates
+# these rows by restating the SAME ids over its narrowed grants, and
+# guide validation covers a widget at the property GROUP on EVERY
+# candidate (the link declares background, spacing, border, typography
+# and layout below; the root inherits the kind's), so a package that
+# narrows a group's properties keeps the binding valid. The kind's
+# elevation, width and position stay root-only: the link declares no
+# shadow or sizing group, and a shadow or a width on the anchor is not a
+# text block's gesture. Alignment binds the root by OMITTING its element
+# key (the served list is `['']`): text-align is the tag's property.
 controls:
   text_alignment:
     label: 'Alignment'
     widget: text_alignment
+  background:
+    label: 'Background'
+    widget: background
+    element: ['.text-block-link', '']
+  text_color:
+    label: 'Text color'
+    widget: text_color
+    element: ['.text-block-link', '']
+  typography:
+    label: 'Typography'
+    widget: typography
+    element: ['.text-block-link', '']
+  corners_border:
+    label: 'Corners and border'
+    widget: corners_border
+    element: ['.text-block-link', '']
+  spacing:
+    label: 'Spacing'
+    widget: spacing_scale
+    element: ['.text-block-link', '']
 
 # The site's minted-identity instance namespace (the `instances:`
 # declaration in daedalus_edit.page_builder.yml) never covers this bundle in
@@ -64,13 +124,14 @@ controls:
 # the home for anything meant to override what the root hands down. The
 # link is therefore a declared CONDITIONAL part: unlinked text renders no
 # anchor, and part surfaces divide by what they project. Surfaces that
-# project the PAGE each ask their own question: element-bound panel
-# controls and the code-view `.` completion offer gate on DOM presence,
+# project the PAGE each ask their own question: the basic panel's
+# candidate lists above drop an absent candidate (the row falls to the
+# root) and the code-view `.` completion offer gates on DOM presence,
 # markup-view rows gate on placement-as-own-element (a part earns a row
 # only when it resolves as its own element). While the anchor is absent
-# both answers are no, so the part appears on none of them, styled or
-# not. Surfaces that project the STYLE MAP (code-view rows materialized
-# from existing declarations) persist unconditionally; they are the one home where a part style
+# the part appears on none of them, styled or not. Surfaces that project
+# the STYLE MAP (code-view rows materialized from existing declarations)
+# persist unconditionally; they are the one home where a part style
 # orphaned by unlinking stays findable and deletable, valid and inert
 # until a link exists again.
 # Collapse merges the WRAPPER chain's identity into the root; it is not a

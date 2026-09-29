@@ -11,10 +11,15 @@
  * (an apply in flight or an empty offer declines), and that verdict is
  * the action's.
  *
- * Only the leader registers the hotkey: the satellite window has no
- * daedalus_ui dispatcher, and this module's copy in the satellite
- * bundle is a slot nothing reads. The wear bar sets it there all the
- * same, harmlessly, rather than knowing which window it is in.
+ * Only the leader registers the hotkey, because the leader alone
+ * resolves keys: a press in the satellite window is forwarded through
+ * daedalus_ui's pop-out keyboard wire and judged there. The open then
+ * lands where the panel is. In-page, the action calls openPicker() in
+ * the leader document; popped out, it routes the open over stylish's
+ * own protocol (open-variant-picker) and satellite-source.js calls
+ * openPicker() in the satellite document, where the mounted wear bar
+ * filled this module's slot. Neither window needs to know which one it
+ * is: the bar installs its opener wherever it mounts.
  */
 
 /** @type {?function(): boolean} */

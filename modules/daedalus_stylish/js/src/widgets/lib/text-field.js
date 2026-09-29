@@ -17,10 +17,12 @@ import { useStopMenu } from '../../stop-menu.js';
  * - closed (a guide scale/allowed vocabulary while constraints are law):
  *   a select of the space's stops (option value the commit spelling,
  *   text the display value with the material's name when one stands
- *   behind it), an unset option naming the inherited value when one
- *   applies at the pose, and the honest extra option for a committed
- *   value the vocabulary does not offer: visible, replaceable, never
- *   editable as free text.
+ *   behind it), the unset option, and the honest extra option for a
+ *   shown value the vocabulary does not offer: visible, replaceable,
+ *   never editable as free text. The shown value is whatever the
+ *   consumer hands in (the advanced row's lit winner, whichever layer
+ *   delivers it); no option describes an inherited value, because the
+ *   row shows it.
  * - detented / free: the text input in its value box, and on a detented
  *   space the stop picker's chevron after it (stop-menu.js: the curated
  *   offer behind free entry, Alt+ArrowDown inside the input); a stop
@@ -47,17 +49,19 @@ import { useStopMenu } from '../../stop-menu.js';
  * editing as text stays exactly what it was, and a blur that still
  * reads the face (landing before the focus swap re-rendered) settles
  * nothing. `invalid` is the component-level rejected-commit mark
- * (basic-mode rows have no property wrapper to carry it).
+ * (basic-mode rows have no property wrapper to carry it). `disabled`
+ * renders the input inert with `title` as the reason (the panel's
+ * write address withholds the property); the shown value still
+ * renders honestly.
  */
 export const TextField = ({
   label,
   value,
   space,
-  placeholder,
-  inherited = null,
   face = null,
   title,
   invalid = false,
+  disabled = false,
   onPreview,
   onSettle,
 }) => {
@@ -81,16 +85,14 @@ export const TextField = ({
         className={`daedalus-stylish-inspector__input daedalus-ui-input daedalus-ui-input--select${invalid ? ' daedalus-stylish-text-field--invalid' : ''}`}
         value={shown}
         aria-label={label}
+        disabled={disabled}
+        title={title}
         onChange={(event) => {
           onPreview(event.target.value);
           settle(event.target.value);
         }}
       >
-        <option value="">
-          {inherited
-            ? Drupal.t('- Inherited: @value -', { '@value': inherited.value })
-            : Drupal.t('- Unset -')}
-        </option>
+        <option value="">{Drupal.t('- Unset -')}</option>
         {space.stops.map((stop) => (
           <option key={stop.ref} value={stop.ref}>
             {stopLabel(stop)}
@@ -129,9 +131,9 @@ export const TextField = ({
         type="text"
         className={`daedalus-stylish-inspector__input daedalus-ui-input${wearsFace ? ' daedalus-stylish-inspector__input--swatch-face' : ''}`}
         value={wearsFace ? face : shown}
-        placeholder={placeholder}
         aria-label={label}
         title={title}
+        disabled={disabled}
         onFocus={() => setFocused(true)}
         onInput={(event) => onPreview(event.target.value)}
         onBlur={(event) => {

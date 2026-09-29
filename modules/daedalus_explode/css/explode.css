@@ -1,0 +1,116 @@
+/**
+ * @file
+ * The Explode panel's own chrome.
+ *
+ * Only the panel lives here. The canvas rules (the stage's perspective and
+ * tilt, the neutralizer, every plane's lift, outline and label) are printed
+ * into one <style id="daedalus-explode"> at runtime from the projection
+ * index, never static; and the chrome that stands down while exploded
+ * hides under html[data-daedalus-ui-canvas-view] in its OWNER's stylesheet.
+ *
+ * The controls wear the panel kit (daedalus_ui/panel_controls: the chip,
+ * the segmented control, the pill button); this file adds only the
+ * layout the kit has no recipe for (the labeled slider row) and the
+ * range input's skin, keyed at the module's own classes.
+ */
+
+/* The mount is the panel's scroll body (sidebar.css owns the inset and the
+   height chain); the controls stack inside it from the top. */
+.daedalus-explode {
+  display: grid;
+  align-content: start;
+  gap: 0.75rem;
+}
+
+/* A control: its label row (label left, readout or segments right) over
+   the slider, when it has one. */
+.daedalus-explode__control {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.daedalus-explode__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.daedalus-explode__label {
+  margin: 0;
+  color: var(--daedalus-text);
+  font-size: var(--daedalus-font-size);
+  font-weight: 600;
+  line-height: 1.6;
+}
+
+/* The readout wears the meta chip; a fixed minimum keeps the row from
+   shifting as "8°" becomes "38°". */
+.daedalus-explode__readout.daedalus-ui-chip {
+  min-inline-size: 2.75rem;
+  justify-content: center;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The slider: the site theme's input box killed (height, margin, the
+   Olivero border), the thumb and track in the selection color. The
+   self-joined selector out-ranks a theme's input[type="range"] (0-1-1),
+   the same defense as the kit's recessed input. */
+.daedalus-explode__range.daedalus-explode__range {
+  inline-size: 100%;
+  height: auto;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  cursor: pointer;
+  border: 0;
+  background: transparent;
+  accent-color: var(--daedalus-selection);
+}
+
+.daedalus-explode__range.daedalus-explode__range:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+/* Keyboard focus, not the lingering click ring: the kit's treatment. */
+.daedalus-explode__range.daedalus-explode__range:focus {
+  outline: none;
+}
+
+.daedalus-explode__range.daedalus-explode__range:focus-visible {
+  outline: 2px solid var(--daedalus-selection);
+  outline-offset: 2px;
+  border-radius: var(--daedalus-border-radius);
+}
+
+/* Zoom's scrub row: the minus and plus pills flank the slider, which
+   takes the rest of the width (min-inline-size 0 lets a flex item shrink
+   below its intrinsic range width). */
+.daedalus-explode__scrub {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+}
+
+.daedalus-explode__scrub .daedalus-explode__range.daedalus-explode__range {
+  flex: 1 1 auto;
+  min-inline-size: 0;
+}
+
+/* The steppers wear the kit pill at a fixed square-ish footprint so
+   "−" and "+" read as a matched pair, the glyph centered. */
+.daedalus-explode__step.daedalus-ui-pill-button {
+  flex: 0 0 auto;
+  min-inline-size: 1.75rem;
+  padding-inline: 0.375rem;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Reset sits alone at the end of the stack, right-aligned with the
+   readouts and segments above it. */
+.daedalus-explode__control--actions {
+  justify-items: end;
+  margin-block-start: 0.25rem;
+}

@@ -89,7 +89,7 @@ class SkinDefaultsFieldHandler extends StyleMapFieldHandler {
    * {@inheritdoc}
    */
   public function getGuidance(): ?string {
-    return 'A skin\'s site element defaults: an object keyed by SCOPE, each scope mapping element-relative keys — "" for the scope\'s element, "::.class-name" for a declared part — to condition-keyed CSS properties, e.g. {"kind:container": {"": {"default": {"gap": "1.5rem"}}}, "base:a": {"": {"default": {"color": "var(--color-accent)"}}}}. Scopes are "base:{tag}" (bare prose markup; the field schema\'s style_guide.base_tags key lists the closed tag vocabulary), "block_type:{bundle}", "block_plugin:{plugin_id}" (plugin blocks such as menus and site branding, by BASE plugin id — "how menus look" site-wide is one entry here), "layout:{layout_id}", or "kind:{entity|container|field|block}" — kind:region cannot host defaults (regions are not addressable elements). Defaults are LIVE: changing them restyles every existing placement of the scope, and any per-entity style map value overrides them by cascade (unsetting the override reveals the default again). Slot paths and variant references are rejected: a default styles the scope\'s element itself and carries its styles directly. The field schema\'s style_guide key says what is valid (its scopes catalog, bindings and deviations lines, and guidance paragraph).';
+    return 'A skin\'s site element defaults: an object keyed by SCOPE, each scope mapping element-relative keys ("" for the scope\'s element, "::" plus a relative selector under it: "::.class-name" a declared part, "::p" its paragraphs, "::> *" its children, "::> pb-text" the text blocks among them) to condition-keyed CSS properties, e.g. {"kind:container": {"": {"default": {"gap": "1.5rem"}}}, "base:a": {"": {"default": {"color": "var(--color-accent)"}}}}. Scopes are "base:{tag}" (bare prose markup; the field schema\'s style_guide.base_tags key lists the closed tag vocabulary), "block_type:{bundle}", "block_plugin:{plugin_id}" (plugin blocks such as menus and site branding, by BASE plugin id — "how menus look" site-wide is one entry here), "layout:{layout_id}", or "kind:{entity|container|field|block}" — kind:region cannot host defaults (regions are not addressable elements). Defaults are LIVE: changing them restyles every existing placement of the scope, and any per-entity style map value overrides them by cascade (unsetting the override reveals the default again). Slot paths and variant references are rejected: a default styles the scope\'s element itself and carries its styles directly. The field schema\'s style_guide key says what is valid (its scopes catalog, bindings and deviations lines, and guidance paragraph).';
   }
 
   /**
@@ -133,8 +133,8 @@ class SkinDefaultsFieldHandler extends StyleMapFieldHandler {
   /**
    * {@inheritdoc}
    */
-  protected function stylableGrammar(): string {
-    return 'What each scope\'s element may style, by property name: an entry per scope value, its declared sub-elements ("{scope}::.class-name") and its direct children ("{scope}::>"). A block type, block plugin, or layout scope absent here at one of those places styles exactly what its kind scope does there (kind:block; kind:container for layouts); a sub-element or children key absent here is not declared there.';
+  protected function stylableGrammar(?string $theme): string {
+    return 'What each scope\'s element may style, by property name: an entry per scope value, its declared sub-elements ("{scope}::.class-name") and its direct children ("{scope}::> *"). A block type, block plugin, or layout scope absent here at one of those places styles exactly what its kind scope does there (kind:block; kind:container for layouts); a sub-element or children key absent here is not declared there. ' . $this->selectorGrammar('{scope}', $theme);
   }
 
 }

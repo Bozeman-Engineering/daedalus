@@ -5,7 +5,7 @@
 # variant axes) lives on the universal container kind declaration
 # (daedalus_stylish_layouts.page_builder.yml); this file adds only what is
 # container-specific. The container takes its variants from the kind-scoped
-# families (row, container_site..container_full in
+# families (columns, row, container_site..container_full in
 # daedalus_stylish_layouts.daedalus_stylish.variants.yml): with one layout there is nothing
 # layout-exact to scope to.
 #
@@ -24,8 +24,9 @@
 # declaration), so nested containers are never defaulted a width. The
 # container_layout axis has NO birth default: a new container at any
 # depth is born stacked (wearing no arrangement reference, which the
-# Layout widget reads as Stack), and Columns is the deliberate gesture,
-# via the layout widget or the AI's apply_variant.
+# Layout widget reads as Stack), and Row (natural-width children that
+# wrap) or Columns (equal shares) is the deliberate gesture, via the
+# layout widget or the AI's apply_variant.
 default_variants:
   width: container_site
 controls:

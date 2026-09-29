@@ -11,6 +11,7 @@ import { gradientSwatchOf } from '../../js/src/materials.js';
 import {
   backgroundPick,
   backgroundState,
+  gradientImageStop,
   gradientStops,
   MEDIA_COMPANIONS,
   mediaCompanions,
@@ -830,7 +831,7 @@ test('mediaCompanions: a clean stack seeds the whole best-guess set', () => {
   // Nothing answers size/repeat/position, the declaration sanctions the
   // background group unconstrained: every companion seeds, canonical
   // spellings, and the constant is the single source of what they are.
-  assert.deepEqual(mediaCompanions(seedGuide, seedDeclaration, null, null, 'default'), {
+  assert.deepEqual(mediaCompanions(seedGuide, seedDeclaration, null, 'default'), {
     'background-size': 'cover',
     'background-repeat': 'no-repeat',
     'background-position': 'center',
@@ -843,7 +844,7 @@ test('mediaCompanions: a clean stack seeds the whole best-guess set', () => {
   );
 });
 
-test('mediaCompanions: the effective entry answers at the write condition or default', () => {
+test('mediaCompanions: the delivered entry answers at the write condition or default', () => {
   // A default-compound value answers everywhere (it cascades under every
   // posed compound), so its companion never seeds.
   assert.deepEqual(
@@ -852,13 +853,13 @@ test('mediaCompanions: the effective entry answers at the write condition or def
   );
   // Posed at md: an md value answers there too.
   assert.deepEqual(
-    mediaCompanions(seedGuide, seedDeclaration, { md: { 'background-repeat': 'repeat-x' } }, null, 'md'),
+    mediaCompanions(seedGuide, seedDeclaration, { md: { 'background-repeat': 'repeat-x' } }, 'md'),
     { 'background-size': 'cover', 'background-position': 'center' },
   );
   // A value at an OTHER condition answers nothing at the write
   // condition: it neither delivers there nor is buried by the seed.
   assert.deepEqual(
-    mediaCompanions(seedGuide, seedDeclaration, { md: { 'background-size': 'contain' } }, null, 'default'),
+    mediaCompanions(seedGuide, seedDeclaration, { md: { 'background-size': 'contain' } }, 'default'),
     MEDIA_COMPANIONS,
   );
 });
@@ -870,39 +871,41 @@ test('mediaCompanions: a compound pose answered by a single-condition block seed
   // compound or default".
   const guide = { ...seedGuide, conditions: { md: { label: 'Medium', axis: 'width' }, dark: { label: 'Dark', axis: 'scheme' } } };
   assert.deepEqual(
-    mediaCompanions(guide, seedDeclaration, { md: { 'background-size': 'contain' } }, null, 'md+dark'),
+    mediaCompanions(guide, seedDeclaration, { md: { 'background-size': 'contain' } }, 'md+dark'),
     { 'background-repeat': 'no-repeat', 'background-position': 'center' },
   );
-  // The skin's subset block answers the same way.
+  // A skin's subset block rides the same delivered entry and answers
+  // the same way.
   assert.deepEqual(
-    mediaCompanions(guide, seedDeclaration, null, { dark: { 'background-position': 'top' } }, 'md+dark'),
+    mediaCompanions(guide, seedDeclaration, { dark: { 'background-position': 'top' } }, 'md+dark'),
     { 'background-size': 'cover', 'background-repeat': 'no-repeat' },
   );
   // A sibling single condition is not a subset: it answers nothing.
   assert.deepEqual(
-    mediaCompanions(guide, seedDeclaration, { dark: { 'background-size': 'contain' } }, null, 'md'),
+    mediaCompanions(guide, seedDeclaration, { dark: { 'background-size': 'contain' } }, 'md'),
     MEDIA_COMPANIONS,
   );
 });
 
-test('mediaCompanions: skin defaults answer the same way as the entry', () => {
+test('mediaCompanions: a skin default is a layer of the delivered entry and answers the same way', () => {
   // The skin is the weakest layer: a seed over its value would override
   // site styling the pick never asked to change, so the companion skips.
+  // It rides the stack's delivered entry like every other layer (the
+  // winner per stored condition), so one read answers for all of them.
   assert.deepEqual(
-    mediaCompanions(seedGuide, seedDeclaration, null, { default: { 'background-position': 'top' } }),
+    mediaCompanions(seedGuide, seedDeclaration, { default: { 'background-position': 'top' } }),
     { 'background-size': 'cover', 'background-repeat': 'no-repeat' },
   );
   assert.deepEqual(
-    mediaCompanions(seedGuide, seedDeclaration, null, { md: { 'background-size': 'contain' } }, 'md'),
+    mediaCompanions(seedGuide, seedDeclaration, { md: { 'background-size': 'contain' } }, 'md'),
     { 'background-repeat': 'no-repeat', 'background-position': 'center' },
   );
-  // Entry and skin skips compose; a fully answered stack seeds nothing.
+  // A fully answered stack seeds nothing.
   assert.deepEqual(
     mediaCompanions(
       seedGuide,
       seedDeclaration,
-      { default: { 'background-size': 'contain', 'background-repeat': 'round' } },
-      { default: { 'background-position': 'top left' } },
+      { default: { 'background-size': 'contain', 'background-repeat': 'round', 'background-position': 'top left' } },
     ),
     {},
   );
@@ -997,4 +1000,54 @@ test('backgroundState / textGradientState: a lone inline color rides as literal,
   assert.equal(textGradientState(guide, materials, { color: 'transparent' }, colorRow, gradientRow).literal, 'transparent');
   assert.equal(textGradientState(guide, materials, { color: 'var(--nope)' }, colorRow, gradientRow).literal, null);
   assert.equal(textGradientState(guide, materials, { color: '#abc', 'background-clip': 'text' }, colorRow, gradientRow).literal, null);
+});
+
+test('gradientImageStop: a lone gradient literal no offered stop claims derives the synthetic stop', () => {
+  const literal = 'linear-gradient(to right, #1b9ae4, #116392)';
+  const stop = gradientImageStop(guide, materials, literal, gradientRow);
+  assert.equal(stop.id, 'gradient:literal');
+  assert.equal(stop.value, literal);
+  assert.deepEqual(stop.matches, [literal.toLowerCase()]);
+  assert.equal(stop.gradient, true);
+  assert.equal(stop.group, 'Gradient');
+  assert.equal(stop.paint, literal);
+  assert.equal(stop.paintDark, null);
+  // Nested swatch references paint through the face rule.
+  const nested = gradientImageStop(guide, materials, 'linear-gradient(var(--swatch-brand_red), #fff)', gradientRow);
+  assert.equal(nested.paint, 'linear-gradient(#b91c1c, #fff)');
+  // A value an offered stop already claims derives nothing: that stop
+  // lights instead (a gradient swatch's var(), an allowed literal).
+  assert.equal(gradientImageStop(guide, materials, 'var(--swatch-hero_fade)', gradientRow), null);
+  assert.equal(gradientImageStop(guide, materials, literal, [{ matches: [literal.toLowerCase()] }]), null);
+  // Not-exactly-one-gradient values derive nothing: they stay the custom
+  // occupancy the state reads already answer.
+  assert.equal(gradientImageStop(guide, materials, `${literal}, url('media:1b671a64-40d5-491e-99b0-da01ff1f3341')`, gradientRow), null);
+  assert.equal(gradientImageStop(guide, materials, "url('media:1b671a64-40d5-491e-99b0-da01ff1f3341')", gradientRow), null);
+  assert.equal(gradientImageStop(guide, materials, '#fff', gradientRow), null);
+  assert.equal(gradientImageStop(guide, materials, undefined, gradientRow), null);
+});
+
+test('backgroundState: the synthetic gradient stop lights and its unpick clears the image', () => {
+  const literal = 'linear-gradient(to right, #1b9ae4, #116392)';
+  const offer = [...gradientRow, gradientImageStop(guide, materials, literal, gradientRow)];
+  assert.deepEqual(
+    backgroundState(guide, materials, { 'background-image': literal }, colorRow, offer),
+    { selected: 'gradient:literal', custom: false, value: null, gradient: literal, literal: null },
+  );
+  assert.deepEqual(backgroundPick({ 'background-image': literal }, null), { 'background-image': null });
+  // A color beside it stays the honest custom compound, lit stop or not.
+  const beside = backgroundState(guide, materials, { 'background-color': '#fff', 'background-image': literal }, colorRow, offer);
+  assert.equal(beside.selected, null);
+  assert.equal(beside.custom, true);
+});
+
+test('textGradientState: the recipe over a lone literal lights the synthetic stop', () => {
+  const literal = 'linear-gradient(to right, #1b9ae4, #116392)';
+  const offer = [...gradientRow, gradientImageStop(guide, materials, literal, gradientRow)];
+  const recipe = { color: 'transparent', 'background-image': literal, 'background-clip': 'text' };
+  assert.deepEqual(
+    textGradientState(guide, materials, recipe, colorRow, offer),
+    { selected: 'gradient:literal', custom: false, value: null, gradient: literal, literal: null },
+  );
+  assert.deepEqual(textPick(recipe, null), { color: null, 'background-image': null, 'background-clip': null });
 });

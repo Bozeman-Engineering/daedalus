@@ -232,6 +232,75 @@ class MediaValueDeliveryTest extends KernelTestBase {
   }
 
   /**
+   * Delivery of a content token on a generated box falls out of the flag.
+   *
+   * The map transform is property-blind, so `content: url('media:…')` at a
+   * box key resolves exactly as background-image does: through the site
+   * default image style, through a guide `image_style` constraint on
+   * `content` where the host declares the box (the media guide fixture's
+   * ::before on the universal block kind, beating the site default; the
+   * undeclared ::after is derived and keeps the default), vector media to
+   * the plain file URL (an image style cannot process an SVG), and a
+   * missing media to `none`, which on `content` means no box: the honest
+   * degradation, the same word the birth seed's opposite uses. The
+   * media's tags ride the host build like any token's.
+   */
+  public function testContentTokenDelivery(): void {
+    $this->config('daedalus_stylish.settings')->set('media_image_style', 'thumbnail')->save();
+    $entity = EntityTest::create(['name' => 'box']);
+    $entity->save();
+    $token = MediaToken::build($this->imageMedia->uuid());
+
+    // The site default sizes a content image where nothing constrains it.
+    [$css, $tags] = $this->buildCss($entity, [
+      "entity:{$entity->uuid()}::&::before" => ['default' => ['content' => $token]],
+    ]);
+    $this->assertStringContainsString(':scope::before', $css);
+    $this->assertMatchesRegularExpression('~content: url\("[^"]*/styles/thumbnail/[^"]*hero\.png[^"]*"\);~', $css);
+    $this->assertStringNotContainsString('media:', $css);
+    $this->assertContains('media:' . $this->imageMedia->id(), $tags);
+    $this->assertContains('config:image.style.thumbnail', $tags);
+
+    // A guide image_style constraint on content beats the site default,
+    // per box: the declared ::before is constrained, the derived ::after
+    // is not.
+    [$css, $tags] = $this->buildCss($entity, [
+      'block:66666666-6666-6666-6666-666666666666::&::before' => ['default' => ['content' => $token]],
+      'block:66666666-6666-6666-6666-666666666666::&::after' => ['default' => ['content' => $token]],
+    ]);
+    $this->assertMatchesRegularExpression('~:scope::before \{\s*content: url\("[^"]*/styles/large/[^"]*"\);~', $css);
+    $this->assertMatchesRegularExpression('~:scope::after \{\s*content: url\("[^"]*/styles/thumbnail/[^"]*"\);~', $css);
+    $this->assertContains('config:image.style.large', $tags);
+
+    // Vector media on content print the file URL, no derivative.
+    $vector_type = $this->createMediaType('svg');
+    $vector_source = $vector_type->getSource()->getSourceFieldDefinition($vector_type)->getName();
+    file_put_contents('public://rosette.svg', '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><circle r="5"/></svg>');
+    $file = File::create(['uri' => 'public://rosette.svg', 'filename' => 'rosette.svg']);
+    $file->save();
+    $vector = Media::create([
+      'bundle' => $vector_type->id(),
+      'name' => 'Rosette',
+      $vector_source => ['target_id' => $file->id()],
+    ]);
+    $vector->save();
+    [$css, $tags] = $this->buildCss($entity, [
+      "entity:{$entity->uuid()}::&::after" => ['default' => ['content' => MediaToken::build($vector->uuid())]],
+    ]);
+    $this->assertMatchesRegularExpression('~content: url\("[^"]*rosette\.svg"\);~', $css);
+    $this->assertStringNotContainsString('/styles/', $css);
+    $this->assertStringNotContainsString('<svg', $css);
+    $this->assertContains('media:' . $vector->id(), $tags);
+
+    // A missing media prints no box.
+    [$css] = $this->buildCss($entity, [
+      "entity:{$entity->uuid()}::&::before" => ['default' => ['content' => MediaToken::build('123e4567-e89b-12d3-a456-426614174000')]],
+    ]);
+    $this->assertStringContainsString('content: none;', $css);
+    $this->assertStringNotContainsString('media:', $css);
+  }
+
+  /**
    * A token whose media does not resolve degrades to "none" at the gate.
    */
   public function testMissingMediaDegradesToNone(): void {

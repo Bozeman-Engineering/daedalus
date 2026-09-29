@@ -104,6 +104,7 @@ class AnthropicContextSubscriberTest extends KernelTestBase {
     'navigation',
     'twig_events',
     'daedalus_tempstore',
+    'file',
     'daedalus_ui',
   ];
 
@@ -262,6 +263,9 @@ class AnthropicContextSubscriberTest extends KernelTestBase {
     $selections = [
       ['key' => 'block:' . $block_uuid, 'label' => 'Block', 'number' => 1],
       ['key' => 'field:' . $entity->uuid() . ':name', 'label' => 'Name', 'number' => 2],
+      // The block's link part targeted (the chips' wire: the owner key
+      // plus the target's selector): the AI sees the address.
+      ['key' => 'block:' . $block_uuid, 'selector' => '.text-block-link', 'label' => 'Block › every link', 'number' => 3],
     ];
     $subscriber->onPassContext($this->contextEvent(
       $this->agent($message),
@@ -272,6 +276,8 @@ class AnthropicContextSubscriberTest extends KernelTestBase {
     $this->assertStringContainsString('- Element 1: Block (UUID: ' . $block_uuid . ')', $text);
     $this->assertStringContainsString('Routed Page', $text, 'The viewable root entity contextualizes the block fallback.');
     $this->assertStringContainsString('- Element 2: Field "name" on this page', $text);
+    $this->assertStringContainsString("- Element 3: Block (UUID: $block_uuid)", $text);
+    $this->assertStringContainsString("\n  Styling target: the rule \".text-block-link\" under it (style-map key block:$block_uuid::.text-block-link): styling acts on every element the rule matches, not on this element alone.\n", $text, 'A targeted part shows the AI the address styling acts at.');
     $this->assertStringEndsWith('Make this about dogs.', $text);
 
     // Double-injection guard.
@@ -324,10 +330,13 @@ class AnthropicContextSubscriberTest extends KernelTestBase {
    * The resolver's per-element facts (`materials`, `placed_from`) render as
    * their own indented lines under the element in a fixed order (Wears,
    * Placed from), each only when present: the render contract the model
-   * reads. No Guidance line: what an element kind is for is the brief's and
-   * the schema's to teach once, never the selection block's per turn. A
-   * canned resolver keeps the line shapes the subject; the facts' derivation
-   * is ContextResolverTest's.
+   * reads. The Wears line carries the resolver's clauses verbatim, one per
+   * wearing with its origin (a wearing applied here with its spelling, one
+   * a composition distributed "via" it), never values. No Guidance line:
+   * what an element kind is for is the brief's and the schema's to teach
+   * once, never the selection block's per turn. A canned resolver keeps
+   * the line shapes the subject; the facts' derivation (the stack read
+   * behind the clauses) is ContextResolverTest's.
    */
   public function testSelectedElementRendersMaterialsAndProvenance(): void {
     $this->setUpCurrentUser([], [], TRUE);
@@ -340,10 +349,15 @@ class AnthropicContextSubscriberTest extends KernelTestBase {
         return [
           1 => [
             'description' => 'Section (UUID: s1)',
-            'materials' => 'container_lg "Large (1024px)" (width="lg")',
+            'materials' => 'container_lg "Large (1024px)" (width="lg"); row "Row" via card_left "Card Left"',
             'placed_from' => 'hero "Hero"',
           ],
           2 => ['description' => 'Block (UUID: b1)'],
+          3 => [
+            'description' => 'Section (UUID: s2)',
+            'target' => 'the rule "a" under it (style-map key container:s2::a): styling acts on every element the rule matches, not on this element alone',
+            'materials' => 'link "Link" (class="link")',
+          ],
         ];
       }
 
@@ -354,16 +368,21 @@ class AnthropicContextSubscriberTest extends KernelTestBase {
       'selected_elements' => [
         ['key' => 'container:s1', 'number' => 1],
         ['key' => 'block:b1', 'number' => 2],
+        ['key' => 'container:s2', 'selector' => 'a', 'number' => 3],
       ],
     ]));
     $this->assertStringContainsString(
       "- Element 1: Section (UUID: s1)\n"
-      . "  Wears: container_lg \"Large (1024px)\" (width=\"lg\")\n"
+      . "  Wears: container_lg \"Large (1024px)\" (width=\"lg\"); row \"Row\" via card_left \"Card Left\"\n"
       . "  Placed from: hero \"Hero\"\n"
-      . "- Element 2: Block (UUID: b1)\n",
+      . "- Element 2: Block (UUID: b1)\n"
+      . "- Element 3: Section (UUID: s2)\n"
+      . "  Styling target: the rule \"a\" under it (style-map key container:s2::a): styling acts on every element the rule matches, not on this element alone.\n"
+      . "  Wears: link \"Link\" (class=\"link\")\n",
       $message->getText(),
     );
-    $this->assertSame(1, substr_count($message->getText(), 'Wears:'), 'An element without materials renders no Wears line.');
+    $this->assertSame(2, substr_count($message->getText(), 'Wears:'), 'An element without materials renders no Wears line.');
+    $this->assertSame(1, substr_count($message->getText(), 'Styling target:'), 'An element without a target renders no Styling target line.');
     $this->assertSame(1, substr_count($message->getText(), 'Placed from:'), 'An element without provenance renders no Placed from line.');
     $this->assertStringNotContainsString('Guidance:', $message->getText(), 'The selection block carries no Guidance line: the brief and the schema teach elements.');
   }

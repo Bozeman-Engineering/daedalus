@@ -99,8 +99,9 @@ window.DaedalusUiQueue.forEach((callback) => callback(app));
 
 const spec = sources.get('media_file');
 
-const enable = () => stateCallback({ mode: 'edit' }, { enabled: true });
-const disable = () => stateCallback({ mode: 'edit' }, { enabled: false });
+// The mode slice holds the mode id itself ('edit' or null).
+const enable = () => stateCallback('edit', { enabled: true });
+const disable = () => stateCallback('edit', { enabled: false });
 
 const filesDrag = (types) => ({
   dataTransfer: {

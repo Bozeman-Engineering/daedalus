@@ -74,6 +74,7 @@ class TokenPropagationSubscriberTest extends KernelTestBase {
     'navigation',
     'twig_events',
     'daedalus_tempstore',
+    'file',
     'daedalus_ui',
   ];
 

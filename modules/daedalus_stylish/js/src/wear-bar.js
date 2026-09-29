@@ -11,11 +11,12 @@ import {
   rankVariants,
 } from './variant-scope.js';
 import { updateFromElementLines } from './code/variant-document.js';
+import { offerTag } from './style-stack.js';
+import { styleTarget } from './widgets/lib/use-highlight.js';
 import {
   overriddenWearing,
   refusalText,
   staleReason,
-  wearAtPose,
   wearOrigin,
   wearRowHeader,
   wearRowLabel,
@@ -27,27 +28,34 @@ import { usePopover } from './popover.js';
 import { VariantPicker } from './variant-picker.js';
 import { setOpener } from './apply-variant-hotkey.js';
 import { highlightClaimsFor } from './highlight-claims.js';
-import { lineTints as lineTintsStore } from './line-tints.js';
-import { compoundLabel } from './condition-cascade.js';
 
 /**
  * The wearing rows: the styling place's variant control (four controls,
  * one loud mode).
  *
- * One row per WORN reference of the selection (wornRows: axis-declaration
- * order, claimed axes yield, stale references after), each row dot · axis
- * label · variant label. Clicking a worn row's body is a DOORWAY into
- * the editing session on that document (`onOpenDocument`): a variant is
- * edited in the session, never by flipping this place's write target.
- * The variant label is the SWAP TRIGGER: it opens the variant picker
- * preset to the row's axis. Offering is one gesture, the ADD ROW ("Apply
- * variant"), which opens the same picker over every axis: the
+ * One row per WORN reference at the styling TARGET (`target`, the key
+ * the bar wears at: the selected element, or the rule the target chip
+ * names, `container:X::> pb-text .link`, whose every match wears what is
+ * applied here; wornRows: axis-declaration order, claimed axes yield,
+ * stale references after), each row dot · axis label · variant label ·
+ * chevron, ONE trigger: a worn row's click is the SWAP, opening the
+ * variant picker preset to the row's axis. Editing a variant is never a
+ * row click: it lives in the row's right-click menu (Edit variant
+ * styles, the session doorway `onOpenDocument`), in every property
+ * row's provenance menu and in Materials; a variant is edited in the
+ * session, never by flipping this place's write target. Offering is one
+ * gesture, the ADD ROW ("Apply variant"), which opens the same picker
+ * over every axis: the
  * applicable, fit-ranked offer grouped by axis, searchable, worn
  * variants marked (variant-picker.js). A pick is an ordinary
  * apply_variant op (instant cadence, tempstore net, which is why the
  * rows live here) that dresses ONE axis: the reference replaces its
  * same-axis predecessor in place and everything else survives. So the
- * row count tracks what the element wears, never the vocabulary size.
+ * row count tracks what the target wears, never the vocabulary size.
+ * The vocabulary is the target's (variant-scope.js axisVocabulary: the
+ * element's scope, or the rule's landing) and so is the offer
+ * (applicableVariants at the target, its tag from the tree through
+ * offerTag), so a rule's picker lists what its matches can wear.
  * References the store's records cannot resolve render as stale rows,
  * menu-detachable like everything else, and say WHY (staleReason): a
  * variant the style guide withholds under the site's current law names
@@ -55,16 +63,16 @@ import { compoundLabel } from './condition-cascade.js';
  * `withheld` verdict; any other stale reference is gone (deleted or
  * unpublished). Color = identity everywhere: a
  * worn row's dot wears its layer's stable hue (the same hue the code
- * view's line tints speak).
+ * view's run labels speak).
  *
  * The rows are a WEAR surface under the pose doctrine: a wear is
- * unconditioned by construction (the material owns its WHEN), so posing
- * the canvas never retargets a row. Posed away from default, each worn
- * row instead SAYS what its variant contributes there (wearAtPose: the
- * variant's own blocks the compound activates, "Lift at Hover:
- * transform…", or "Fade in sets nothing at Hover"), and the doorway
- * enters the editing session at that compound, where the document's
- * property rows read and write the posed block.
+ * unconditioned by construction (the material owns its trigger), so posing
+ * the canvas never retargets a row and the row reads the same at every
+ * pose. What a variant contributes at the pose is the property rows'
+ * story (their provenance marks wear the variant's hue and name it);
+ * the menu's edit doorway enters the editing session at the canvas's
+ * compound when it is posed, where the document's rows read and write
+ * the posed block.
  *
  * A worn row whose declarations the element's OWN values hide is
  * OVERRIDDEN (overriddenWearing: the layer rule's honesty half, on the
@@ -91,8 +99,7 @@ import { compoundLabel } from './condition-cascade.js';
  * identity facts: axis, weight, description): Outline Variant (the one
  * toggled coverage gesture — wearers outline on the canvas AND mark in
  * the page elements panel; outlineGesture, shared with the library
- * card), Variant tints (code view only — the global line-tints
- * preference), Re-apply, Detach, Remove (remove_variant), Update from
+ * card), Re-apply, Detach, Remove (remove_variant), Update from
  * this element (the wearer's diff pre-staged as dismissible pending
  * lines in the document's session, Push commits), Edit variant styles
  * (the session doorway, for every resolved wearing), and Variant
@@ -111,6 +118,25 @@ import { compoundLabel } from './condition-cascade.js';
  * Save-as-variant is the header's save icon, which opens a pending save
  * session on the same Push/Discard bar; the fork ("Copy as my variant")
  * lives on the library card that Variant settings… opens.
+ *
+ * READ-ONLY (`readOnly`, the bar under a target that can wear NOTHING:
+ * a part or the children, whose landing is no element scope, so the
+ * server refuses every reference there): `target` is then the selected
+ * element and the rows are ITS wearings, shown because every "from
+ * <variant>" mark on the part's rows beneath names a layer that must
+ * appear somewhere; no wear gesture lives here. The row carries no
+ * trigger, a plain reading of dot · axis · variant instead; the add row
+ * and the picker are gone, the hotkey declines, Reset overrides and the
+ * doorways into the editing session are absent, and the row menu keeps
+ * Outline beside one doorway, Select wearer (`source.select(target)`,
+ * "back to the whole element"), where every gesture waits. With nothing
+ * worn, the bar says so in one quiet line.
+ *
+ * The editing-session doorways (`onOpenDocument`, `onUpdateFromElement`)
+ * are the host's to wire: the session anchors at the target this bar
+ * wears at, an element or a rule (the document then previews on every
+ * match), so the inspector wires them at every wearable target and the
+ * read-only posture alone withdraws them.
  */
 
 /** How long an applied variant's highlight stays painted after the swap. */
@@ -120,7 +146,7 @@ export const WearBar = ({
   source,
   guide,
   materials,
-  selected,
+  target,
   styleMap,
   variants,
   blockTypes,
@@ -128,7 +154,7 @@ export const WearBar = ({
   config,
   claimedAxes = [],
   condition = 'default',
-  codeView = false,
+  readOnly = false,
   outline = null,
   onFlash = null,
   onOpenDocument = null,
@@ -136,62 +162,63 @@ export const WearBar = ({
   onVariantSettings = null,
 }) => {
   const [busy, setBusy] = useState(false);
-  // The row context menu (the shared primitive); a selection move closes
-  // it: its row may have scrolled away or changed meaning.
+  // The gesture doorways the posture allows: read-only (a drilled part)
+  // withdraws the session and update doorways the way an unwired host
+  // does, so every row renders through the one "no doorway" posture.
+  const doorway = readOnly ? null : onOpenDocument;
+  const updater = readOnly ? null : onUpdateFromElement;
+  // The row context menu (the shared primitive); a selection move or a
+  // posture change closes it: its row may have scrolled away or its
+  // roster changed meaning.
   const menu = useMenu();
   useEffect(() => {
     menu.close();
-  }, [selected]);
+  }, [target, readOnly]);
   // Hover flash is transient chrome; never leave it behind on unmount.
   useEffect(() => () => onFlash?.(null), []);
-  // The variant line tints preference (the row menu's global toggle):
-  // subscribed so the checkmark follows changes from any window.
-  const [tints, setTints] = useState(lineTintsStore.get());
-  useEffect(() => lineTintsStore.subscribe(setTints), []);
 
   const library = variants ?? [];
-  const entry = styleMap?.[selected];
+  const entry = styleMap?.[target];
   const refs = entryRefs(entry);
+  // Whether the bar wears at a rule (a tag tier, a type chain, an
+  // ancestor rule) rather than an element: the row menu's update
+  // gesture names which one's overrides it stages.
+  const rule = Boolean(target) && styleTarget(target).selector !== null;
   const layout = source.getLayout ? source.getLayout() : [];
   const vocabulary = axisVocabulary(
     guide,
-    selected,
+    target,
     blockTypes,
     sectionLayouts,
     layout,
   );
   const { rows, stale } = wornRows(entry, library, vocabulary, claimedAxes);
-  // The offer: scope-filtered (ownership and tag gates included), shipped
-  // variants included (applying a shipped variant is fine; only pushing
-  // into one is locked), fit-ranked for the picker's order and hints.
-  const selectedTag = selected
-    ? (source.readCanvasTag?.(selected, null) ?? null)
-    : null;
+  // The offer: scope-filtered at the target's landing (ownership and tag
+  // gates included, the tag from the tree: the subject's, or a tag
+  // rule's own), shipped variants included (applying a shipped variant
+  // is fine; only pushing into one is locked), fit-ranked for the
+  // picker's order and hints.
   const ranked = rankVariants(
     applicableVariants(
       materials,
-      selected,
+      target,
       blockTypes,
       sectionLayouts,
       layout,
-      selectedTag,
+      offerTag(source.getTree?.() ?? null, target),
     ),
-    selected,
+    target,
     layout,
   );
 
   const labelOf = (reference) =>
     findVariant(library, reference)?.label ?? reference;
-  // The pose: the canvas's editing compound, as site vocabulary. Default
-  // poses nothing (every block but default is off), so the rows carry no
-  // sub-line and the doorway names no condition.
-  const posed = condition !== 'default';
-  const poseLabel = compoundLabel(condition, guide?.conditions);
-  // The doorway: the editing session on the row's document, at the
-  // canvas's pose when it is posed (the session's rows then address the
-  // posed block; the wear itself stays where it is).
+  // The doorway (the row menu's Edit variant styles): the editing session
+  // on the row's document, at the canvas's pose when it is posed (the
+  // session's rows then address the posed block; the wear itself stays
+  // where it is). Default poses nothing, so it names no condition.
   const open = (reference) =>
-    onOpenDocument?.(reference, posed ? condition : null);
+    onOpenDocument?.(reference, condition !== 'default' ? condition : null);
   // Busy state only: every gesture here rides the op queue, whose source
   // reports its failure (reportFailure on the leader, the satellite's
   // settle).
@@ -208,7 +235,7 @@ export const WearBar = ({
     run(() =>
       source
         .applyVariant(
-          selected,
+          target,
           machineName,
           Drupal.t('Applied variant @label', {
             '@label': labelOf(machineName),
@@ -227,7 +254,7 @@ export const WearBar = ({
     run(() =>
       source
         .detachVariant(
-          selected,
+          target,
           reference,
           Drupal.t('Detached variant @label', { '@label': labelOf(reference) }),
         )
@@ -246,7 +273,7 @@ export const WearBar = ({
       source
         .commitBatch({
           operations: [
-            { op: 'remove_variant', key: selected, variant: reference },
+            { op: 'remove_variant', key: target, variant: reference },
           ],
           label: Drupal.t('Removed variant @label', {
             '@label': labelOf(reference),
@@ -295,22 +322,29 @@ export const WearBar = ({
         ),
         run: () => outline?.toggle(reference),
       }),
-      tints: (item) => ({
-        label: Drupal.t('Variant tints'),
-        checked: item.checked,
-        hint: Drupal.t('color lines by variant'),
-        title: Drupal.t(
-          "Wash every variant-supplied line in its variant's color across the code view. A display preference for all variants, not just this one.",
-        ),
-        run: () => lineTintsStore.set(item.checked ? 'off' : 'on'),
-      }),
+      // The target's own overrides, an element's or a rule's, diffed
+      // against the variant.
       update: () => ({
-        label: Drupal.t('Update from this element'),
+        label: rule
+          ? Drupal.t('Update from this rule')
+          : Drupal.t('Update from this element'),
         hint: Drupal.t('stage the differences'),
+        title: rule
+          ? Drupal.t(
+              "Stage this rule's own changes as pending updates to the variant: review and dismiss them in the editing session, then Push to restyle every wearer.",
+            )
+          : Drupal.t(
+              "Stage this element's own changes as pending updates to the variant: review and dismiss them in the editing session, then Push to restyle every wearer.",
+            ),
+        run: () => updater?.(reference),
+      }),
+      'select-wearer': () => ({
+        label: Drupal.t('Select wearer'),
+        hint: Drupal.t('the whole element'),
         title: Drupal.t(
-          "Stage this element's own changes as pending updates to the variant: review and dismiss them in the editing session, then Push to restyle every wearer.",
+          'Select the whole element this part belongs to. The variant is worn there: swap, detach, remove and edit it from its panel.',
         ),
-        run: () => onUpdateFromElement?.(reference),
+        run: () => source.select(target),
       }),
       reapply: () => ({
         label: Drupal.t('Re-apply'),
@@ -354,26 +388,25 @@ export const WearBar = ({
       stale: isStale,
       worn,
       ref: wornRef,
-      codeView,
+      readOnly,
       outlined: outline?.isOn(reference) ?? false,
-      tints: tints === 'on',
       canUpdate: Boolean(config?.canUpdate),
       // Updatable = a wired doorway, an editable variant (not locked: the
       // record's updatable flag, the distro lock as the provider stamps
       // it), and an actual diff to stage: presence means the gesture
       // will do something.
       updatable:
-        Boolean(onUpdateFromElement) &&
+        Boolean(updater) &&
         worn !== null &&
         !locked(worn) &&
         updateFromElementLines(
           styleMap ?? {},
-          selected,
+          target,
           reference,
           library,
           layout,
         ).length > 0,
-      canEditFull: Boolean(onOpenDocument),
+      canEditFull: Boolean(doorway),
       hasSettings: Boolean(onVariantSettings),
     }).map((item) => (item.separator ? item : views[item.type](item)));
   };
@@ -405,10 +438,11 @@ export const WearBar = ({
   // layer); the Inspector composes the full paint layer — forms, label,
   // dedupe against the toggled outline — in one place. Beside the flash,
   // a row claims the canvas highlight for the properties its wearing
-  // writes on the element (the same property-keyed claim stack every
-  // panel row shares), so hovering Width paints the inset bands exactly
-  // as scrubbing padding does; an apply holds that claim for a beat so
-  // the swap is seen landing before the pointer moves.
+  // writes at the target (the same property-keyed claim stack every
+  // panel row shares; a rule's claim paints its every match), so
+  // hovering Width paints the inset bands exactly as scrubbing padding
+  // does; an apply holds that claim for a beat so the swap is seen
+  // landing before the pointer moves.
   const claims = source?.setCanvasHighlight ? highlightClaimsFor(source) : null;
   const rowOwners = useRef(new Map());
   const holdTimer = useRef(null);
@@ -421,7 +455,7 @@ export const WearBar = ({
   const claimRow = (axis, ref) => {
     const properties = wornProperties(library, ref);
     if (claims && properties.length) {
-      claims.claim(ownerFor(axis), { key: selected, sub: null, properties });
+      claims.claim(ownerFor(axis), { ...styleTarget(target), properties });
     }
   };
   const releaseRow = (axis) => claims?.release(ownerFor(axis));
@@ -456,13 +490,14 @@ export const WearBar = ({
   // The picker's popover posture: one hook for every trigger. A trigger
   // points triggerRef at itself as it opens (so an outside press, Escape
   // and the pick's focus return all address the opener), and a second
-  // press on the open trigger closes. A selection move closes it: the
-  // offer it showed belonged to another element.
+  // press on the open trigger closes. A selection move closes it (the
+  // offer it showed belonged to another element), and so does a drill
+  // (read-only offers nothing).
   const picker = usePopover();
   const [pickerAxis, setPickerAxis] = useState(null);
   useEffect(() => {
     picker.setOpen(false);
-  }, [selected]);
+  }, [target, readOnly]);
   const showPicker = (trigger, axis) => {
     picker.triggerRef.current = trigger;
     setPickerAxis(axis);
@@ -489,13 +524,13 @@ export const WearBar = ({
   // mounted (the event propagates). The opener behaves as a press on the
   // add row: same trigger for dismissal and focus return, every axis,
   // and the same refusals (an apply in flight, an empty offer, when the
-  // add row is disabled). It reads the latest render through a ref, as
-  // the seam holds one function for the bar's lifetime.
+  // add row is disabled, read-only). It reads the latest render through
+  // a ref, as the seam holds one function for the bar's lifetime.
   const addRow = useRef(null);
   const hotkeyOpen = useRef(null);
   hotkeyOpen.current = () => {
     const trigger = addRow.current;
-    if (busy || !trigger || trigger.disabled) {
+    if (readOnly || busy || !trigger || trigger.disabled) {
       return false;
     }
     showPicker(trigger, null);
@@ -527,22 +562,17 @@ export const WearBar = ({
     });
 
   return (
-    <div className="daedalus-stylish-wear-bar">
+    <div
+      className={`daedalus-stylish-wear-bar${readOnly ? ' daedalus-stylish-wear-bar--read-only' : ''}`}
+    >
       {rows.map(({ axis, ref }) => {
         const applied = ref.variant;
-        // The posed sub-line: what the worn variant contributes at the
-        // canvas's compound (its own blocks the pose activates), or that
-        // it sets nothing there. The line is the same doorway as the row
-        // body.
-        const atPose = posed
-          ? wearAtPose(ref, library, condition, guide?.conditions)
-          : null;
         // The overridden state: the element's own values hiding what this
         // wearing sets (grain-aware), named in a sub-line with Reset
         // overrides as the row's action.
         const overridden = overriddenWearing(
           styleMap ?? {},
-          selected,
+          target,
           applied,
           library,
         );
@@ -550,65 +580,66 @@ export const WearBar = ({
         // wearing here (`via`), named in a sub-line; a switch of that
         // composition reaps the wearing, so the row says who owns it.
         const origin = wearOrigin(ref, library);
+        // The row's reading: dot · axis · variant, the same three in
+        // both postures.
+        const reading = (
+          <Fragment>
+            <span
+              className="daedalus-stylish-wear-bar__dot daedalus-ui-dot"
+              style={{ background: layerColor(variantLayerId(applied)) }}
+            />
+            <span className="daedalus-stylish-wear-bar__label">
+              {rowLabel(axis, ref)}
+            </span>
+            <span className="daedalus-stylish-wear-bar__variant-label">
+              {labelOf(applied)}
+            </span>
+          </Fragment>
+        );
         return (
           <div
             key={axis}
-            className={`daedalus-stylish-wear-bar__row${atPose ? ' daedalus-stylish-wear-bar__row--posed' : ''}${overridden ? ' daedalus-stylish-wear-bar__row--overridden' : ''}${origin ? ' daedalus-stylish-wear-bar__row--via' : ''}`}
+            className={`daedalus-stylish-wear-bar__row${overridden ? ' daedalus-stylish-wear-bar__row--overridden' : ''}${origin ? ' daedalus-stylish-wear-bar__row--via' : ''}`}
             {...rowHoverProps(axis, ref)}
             onContextMenu={(event) => openMenu(event, applied)}
           >
-            <button
-              type="button"
-              tabIndex={-1}
-              className="daedalus-stylish-wear-bar__target"
-              disabled={!onOpenDocument}
-              title={
-                onOpenDocument
-                  ? posed
+            {readOnly ? (
+              /* Read-only: the reading as a value, no trigger. */
+              <span
+                className="daedalus-stylish-wear-bar__plain"
+                title={Drupal.t(
+                  'Worn by the whole element; nothing can be worn at this target. Select the element (right-click: Select wearer) to swap, detach or edit the variant.',
+                )}
+              >
+                {reading}
+              </span>
+            ) : (
+              /* The one trigger: the whole row swaps, the picker preset
+                 to the row's axis. */
+              <button
+                type="button"
+                className="daedalus-stylish-wear-bar__trigger"
+                aria-haspopup="listbox"
+                aria-expanded={expanded(axis)}
+                title={
+                  ref.fragment !== ''
                     ? Drupal.t(
-                        'Edit the variant "@label" at @pose: its own document, pending until pushed. Right-click for actions.',
-                        { '@label': labelOf(applied), '@pose': poseLabel },
-                      )
-                    : Drupal.t(
-                        'Edit the variant "@label" — its own document, pending until pushed. Right-click for actions.',
+                        'Styled as part of the composition variant "@label". Applying a variant here replaces that on this element only. Right-click for actions.',
                         { '@label': labelOf(applied) },
                       )
-                  : undefined
-              }
-              onClick={onOpenDocument ? () => open(applied) : undefined}
-            >
-              <span
-                className="daedalus-stylish-wear-bar__dot daedalus-ui-dot"
-                style={{ background: layerColor(variantLayerId(applied)) }}
-              />
-              <span className="daedalus-stylish-wear-bar__label">
-                {rowLabel(axis, ref)}
-              </span>
-            </button>
-            <button
-              type="button"
-              className="daedalus-stylish-wear-bar__variant"
-              aria-haspopup="listbox"
-              aria-expanded={expanded(axis)}
-              title={
-                ref.fragment !== ''
-                  ? Drupal.t(
-                      'Styled as part of the composition variant "@label". Applying a variant here replaces that on this element only.',
-                      { '@label': labelOf(applied) },
-                    )
-                  : Drupal.t('Swap the @axis variant', {
-                      '@axis': rowLabel(axis, ref),
-                    })
-              }
-              onClick={(event) => openPicker(event.currentTarget, axis)}
-            >
-              <span className="daedalus-stylish-wear-bar__variant-label">
-                {labelOf(applied)}
-              </span>
-              <span className="daedalus-stylish-wear-bar__chevron" aria-hidden="true">
-                ▾
-              </span>
-            </button>
+                    : Drupal.t(
+                        'Swap the @axis variant. Right-click for actions.',
+                        { '@axis': rowLabel(axis, ref) },
+                      )
+                }
+                onClick={(event) => openPicker(event.currentTarget, axis)}
+              >
+                {reading}
+                <span className="daedalus-stylish-wear-bar__chevron" aria-hidden="true">
+                  ▾
+                </span>
+              </button>
+            )}
             {origin && (
               <span
                 className="daedalus-stylish-wear-bar__via"
@@ -619,46 +650,6 @@ export const WearBar = ({
               >
                 {Drupal.t('via @via', { '@via': origin.label })}
               </span>
-            )}
-            {atPose && (
-              <button
-                type="button"
-                tabIndex={-1}
-                className={`daedalus-stylish-wear-bar__pose${atPose.applies ? '' : ' daedalus-stylish-wear-bar__pose--nothing'}`}
-                disabled={!onOpenDocument}
-                title={
-                  onOpenDocument
-                    ? Drupal.t(
-                        'Edit what "@label" sets at @pose. Its wearing stays as it is; the variant owns its own conditions.',
-                        { '@label': labelOf(applied), '@pose': poseLabel },
-                      )
-                    : undefined
-                }
-                onClick={onOpenDocument ? () => open(applied) : undefined}
-              >
-                {atPose.applies ? (
-                  <Fragment>
-                    <span className="daedalus-stylish-wear-bar__pose-text">
-                      {Drupal.t('@label at @pose:', {
-                        '@label': labelOf(applied),
-                        '@pose': poseLabel,
-                      })}
-                    </span>
-                    <code className="daedalus-stylish-wear-bar__pose-declarations">
-                      {Object.entries(atPose.declarations)
-                        .map(([property, value]) => `${property}: ${value}`)
-                        .join('; ')}
-                    </code>
-                  </Fragment>
-                ) : (
-                  <span className="daedalus-stylish-wear-bar__pose-text">
-                    {Drupal.t('@label sets nothing at @pose', {
-                      '@label': labelOf(applied),
-                      '@pose': poseLabel,
-                    })}
-                  </span>
-                )}
-              </button>
             )}
             {overridden && (
               <div className="daedalus-stylish-wear-bar__overridden">
@@ -678,17 +669,19 @@ export const WearBar = ({
                     '@own': overridden.by.join(', '),
                   })}
                 </span>
-                <button
-                  type="button"
-                  className="daedalus-stylish-wear-bar__reset"
-                  disabled={busy}
-                  title={Drupal.t(
-                    "Drop this element's own values where they shadow the variant, so its styles show through again.",
-                  )}
-                  onClick={() => reset(applied, overridden.ops)}
-                >
-                  {Drupal.t('Reset overrides')}
-                </button>
+                {!readOnly && (
+                  <button
+                    type="button"
+                    className="daedalus-stylish-wear-bar__reset"
+                    disabled={busy}
+                    title={Drupal.t(
+                      "Drop this element's own values where they shadow the variant, so its styles show through again.",
+                    )}
+                    onClick={() => reset(applied, overridden.ops)}
+                  >
+                    {Drupal.t('Reset overrides')}
+                  </button>
+                )}
               </div>
             )}
           </div>
@@ -711,7 +704,7 @@ export const WearBar = ({
             {...rowHoverProps(ref.variant, ref)}
             onContextMenu={(event) => openMenu(event, ref.variant, true)}
           >
-            <span className="daedalus-stylish-wear-bar__target" aria-disabled="true">
+            <span className="daedalus-stylish-wear-bar__plain">
               <span
                 className="daedalus-stylish-wear-bar__dot daedalus-ui-dot"
                 style={{ background: layerColor(variantLayerId(ref.variant)) }}
@@ -754,29 +747,39 @@ export const WearBar = ({
           </div>
         );
       })}
+      {/* Read-only with nothing worn: say so, so the bar under a target
+          that wears nothing never reads as an empty frame. */}
+      {readOnly && rows.length === 0 && stale.length === 0 && (
+        <span className="daedalus-stylish-wear-bar__none">
+          {Drupal.t('The element wears no variant')}
+        </span>
+      )}
       {/* The add row: the one apply gesture, over every axis. Disabled,
           not hidden, when nothing applies, so the gesture stays where the
-          eye expects it. */}
-      <button
-        type="button"
-        ref={addRow}
-        className="daedalus-stylish-wear-bar__add"
-        aria-haspopup="listbox"
-        aria-expanded={expanded(null)}
-        disabled={ranked.length === 0}
-        title={
-          ranked.length === 0
-            ? Drupal.t('No variants apply to this element')
-            : undefined
-        }
-        onClick={(event) => openPicker(event.currentTarget, null)}
-      >
-        <span className="daedalus-stylish-wear-bar__add-plus" aria-hidden="true">
-          +
-        </span>
-        <span>{Drupal.t('Apply variant')}</span>
-      </button>
-      {picker.open &&
+          eye expects it; absent read-only, where no apply exists. */}
+      {!readOnly && (
+        <button
+          type="button"
+          ref={addRow}
+          className="daedalus-stylish-wear-bar__add"
+          aria-haspopup="listbox"
+          aria-expanded={expanded(null)}
+          disabled={ranked.length === 0}
+          title={
+            ranked.length === 0
+              ? Drupal.t('No variants apply at this target')
+              : undefined
+          }
+          onClick={(event) => openPicker(event.currentTarget, null)}
+        >
+          <span className="daedalus-stylish-wear-bar__add-plus" aria-hidden="true">
+            +
+          </span>
+          <span>{Drupal.t('Apply variant')}</span>
+        </button>
+      )}
+      {!readOnly &&
+        picker.open &&
         picker.portal(
           <VariantPicker
             ranked={ranked}

@@ -154,6 +154,30 @@ class SubtreeRenderer {
   }
 
   /**
+   * The outer HTML of the element a rendered fragment stamps with a key.
+   *
+   * The single-key twin of the extraction render() performs over the entity
+   * markup, for a subscriber that renders a fragment of its own (a render
+   * that lives outside the entity, such as the theme's page title) and
+   * needs it in the contract's shape: the keyed element alone, so the
+   * client's swap replaces exactly the element that carries the key.
+   *
+   * @param string $html
+   *   The rendered fragment.
+   * @param string $key
+   *   The selectable key to extract.
+   *
+   * @return string|null
+   *   The keyed element's outer HTML, or NULL when nothing in the fragment
+   *   carries the key.
+   */
+  public function subtree(string $html, string $key): ?string {
+    $dom = Html::load($html);
+    $node = $this->findSubtree(new \DOMXPath($dom), $key);
+    return $node === NULL ? NULL : (string) $dom->saveHTML($node);
+  }
+
+  /**
    * Finds the rendered subtree stamped with a selectable key.
    */
   protected function findSubtree(\DOMXPath $xpath, string $key): ?\DOMNode {

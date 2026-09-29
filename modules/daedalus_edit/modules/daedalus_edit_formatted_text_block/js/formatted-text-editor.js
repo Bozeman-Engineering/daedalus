@@ -20,7 +20,7 @@
  * mirror's byte-exact raw value would commit a junk history entry on the
  * first blur of an untouched block.
  *
- * The open edit is a DRAFT (BlueprintEditorBase's three-way rule). A
+ * The open edit is a DRAFT (EditorPluginBase's three-way rule). A
  * foreign mutation's response (a style scrub from the Daedalus Stylish inspector,
  * an undo, an AI turn) swaps the root out from under the CKEditor: the
  * engine captures the draft as the swap detaches the root (captureDraft
@@ -50,13 +50,13 @@
  * enforces format access on write. Formats with no CKEditor are excluded
  * from this widget by design: a loud failure beats a secret degraded mode.
  *
- * @see daedalus_edit/js/daedalus_edit/plugins/blueprint-editor-base.js
+ * @see daedalus_edit/js/daedalus_edit/plugins/editor-plugin-base.js
  * @see daedalus_edit/js/daedalus_edit/plugins/inline-editor.js
  * @see daedalus_edit/js/daedalus_edit/composed/verb-widgets.js
  * @see ../daedalus_edit_formatted_text_block.page_builder.block_type.formatted_text.yml
  */
 (window.DaedalusEditQueue ||= []).push(
-  ({ BlueprintEditorBase, editors, verbWidgets }) => {
+  ({ EditorPluginBase, editors, verbWidgets }) => {
     const FIELD = 'field_formatted_text_text';
 
     // Phosphor's text-aa glyph, the site's icon language (daedalus_ui
@@ -85,7 +85,7 @@
      * - formatSwitch: the in-flight format-switch chain; a second pick lands
      *   after the first finishes rebuilding the editor.
      */
-    class FormattedTextEditor extends BlueprintEditorBase {
+    class FormattedTextEditor extends EditorPluginBase {
       id = 'formatted_text';
 
       /**
@@ -230,10 +230,11 @@
         // The shared attach machinery's create guard keys on this class; it
         // also keeps clicks on the editing surface from ending the edit.
         pageElement.classList.add('daedalus-edit-inline-editing');
-        const attached = Drupal.behaviors.DaedalusEditInlineEditors.attachEditor(
-          pageElement,
-          drupalSettings.editor.formats[EditableElement.format],
-        );
+        const attached =
+          Drupal.behaviors.DaedalusEditInlineEditors.attachEditor(
+            pageElement,
+            drupalSettings.editor.formats[EditableElement.format],
+          );
         // attachEditor stamps the instance id synchronously; the leaf carries
         // it because a markup swap destroys the stamped element.
         const id = pageElement.dataset.ckeditor5Id;
@@ -243,7 +244,7 @@
         // must record the pre-edit truth even when a picker format switch
         // has already moved EditableElement.format by the time create
         // resolves (the switch must diff as a change).
-        const format = EditableElement.format;
+        const { format } = EditableElement;
         attached.then(() => {
           // Only this attach's own editor re-baselines: a swap during the
           // create window tears this one down and a resume attaches another.
@@ -431,9 +432,7 @@
         }
         EditableElement.format = format;
         this.syncFormatPicker(EditableElement);
-        EditableElement.getPageElement().classList.add(
-          'daedalus-edit-blueprint-editing',
-        );
+        EditableElement.getPageElement().classList.add('daedalus-edit-editing');
         this.openSurface(EditableElement, seed.value ?? '');
         return Promise.resolve();
       }
@@ -454,7 +453,9 @@
       teardownEditor(EditableElement) {
         const id = EditableElement.ckeditorId;
         EditableElement.ckeditorId = null;
-        const editor = id ? Drupal.Daedalus.Edit.Ckeditor5Instances.get(id) : null;
+        const editor = id
+          ? Drupal.Daedalus.Edit.Ckeditor5Instances.get(id)
+          : null;
         if (!editor) {
           return Promise.resolve();
         }
@@ -471,14 +472,14 @@
        * element's attributes at attach and restores them on destroy, which
        * resurrects the editing classes (and the data-ckeditor5-id stamp) that
        * were on the element when the editor attached, including the
-       * daedalus-edit-blueprint-editing mark defocus() already removed.
+       * daedalus-edit-editing mark defocus() already removed.
        *
        * @param {Element} pageElement
        *   The composed root.
        */
       releaseSurface(pageElement) {
         pageElement.classList.remove('daedalus-edit-inline-editing');
-        pageElement.classList.remove('daedalus-edit-blueprint-editing');
+        pageElement.classList.remove('daedalus-edit-editing');
         pageElement.removeAttribute('data-ckeditor5-id');
       }
 
@@ -518,19 +519,25 @@
           icon: FORMAT_ICON,
           showLabel,
         });
-        const popover = verbWidgets.buildPopover(
-          EditableElement,
-          container,
-          'formats',
-        );
-        popover.classList.add('daedalus-edit-format-picker');
-        popover.setAttribute('role', 'group');
-        popover.setAttribute('aria-label', Drupal.t('Text format'));
+        const popover = verbWidgets.buildPopover(EditableElement, 'formats', {
+          // The surface closing with focus on a format button (a pick, a
+          // scroll, a press outside) hands focus back to the editing root.
+          returnFocus: (element) => element.getPageElement(),
+        });
+        // The picker is the kit's segmented control on the surface's card
+        // (daedalus_ui/panel_controls): one track, one segment per format,
+        // the pressed format raised by daedalus-ui-segment--active.
+        const formats = document.createElement('div');
+        formats.className = 'daedalus-edit-format-picker daedalus-ui-segments';
+        formats.setAttribute('role', 'group');
+        formats.setAttribute('aria-label', Drupal.t('Text format'));
+        popover.append(formats);
         Object.entries(EditableElement.settings.formats ?? {}).forEach(
           ([format, label]) => {
             const button = document.createElement('button');
             button.type = 'button';
-            button.className = 'daedalus-edit-format-picker__format';
+            button.className =
+              'daedalus-edit-format-picker__format daedalus-ui-segment';
             button.dataset.format = format;
             button.textContent = label;
             // Reached by roving focus (arrows/Tab within the popover), never by
@@ -547,18 +554,19 @@
                 this.applyFormat(EditableElement, format);
               }
             });
-            popover.append(button);
+            formats.append(button);
           },
         );
         // Roving focus within the open picker: arrows and Tab cycle the
-        // format buttons (trapped — leaving the picker is Escape's job),
-        // Escape closes it and returns to the editing surface.
+        // format buttons (trapped — leaving the picker is Escape's job, and
+        // Escape is the surface's: it closes the picker at document capture
+        // and returns focus to the editing surface, the opener).
         // stopPropagation keeps these presses from the document-level hotkey
-        // dispatcher, so the session's Tab/Escape grammar only sees keys from
-        // the surface itself.
-        popover.addEventListener('keydown', (event) => {
+        // dispatcher, so the session's Tab grammar only sees keys from the
+        // surface itself.
+        formats.addEventListener('keydown', (event) => {
           const buttons = Array.from(
-            popover.querySelectorAll('.daedalus-edit-format-picker__format'),
+            formats.querySelectorAll('.daedalus-edit-format-picker__format'),
           );
           const index = buttons.indexOf(document.activeElement);
           let target = null;
@@ -574,12 +582,6 @@
             (event.key === 'Tab' && event.shiftKey)
           ) {
             target = buttons[(index - 1 + buttons.length) % buttons.length];
-          } else if (event.key === 'Escape') {
-            event.preventDefault();
-            event.stopPropagation();
-            verbWidgets.togglePopover(EditableElement, 'formats', false);
-            EditableElement.getPageElement()?.focus();
-            return;
           } else {
             return;
           }
@@ -603,10 +605,9 @@
           ?.get('formats')
           ?.popover?.querySelectorAll('.daedalus-edit-format-picker__format')
           .forEach((button) => {
-            button.setAttribute(
-              'aria-pressed',
-              String(button.dataset.format === EditableElement.format),
-            );
+            const pressed = button.dataset.format === EditableElement.format;
+            button.setAttribute('aria-pressed', String(pressed));
+            button.classList.toggle('daedalus-ui-segment--active', pressed);
           });
       }
 
@@ -760,10 +761,11 @@
             return;
           }
           pageElement.innerHTML = value ?? '';
-          const attached = Drupal.behaviors.DaedalusEditInlineEditors.attachEditor(
-            pageElement,
-            drupalSettings.editor.formats[format],
-          );
+          const attached =
+            Drupal.behaviors.DaedalusEditInlineEditors.attachEditor(
+              pageElement,
+              drupalSettings.editor.formats[format],
+            );
           EditableElement.ckeditorId = pageElement.dataset.ckeditor5Id;
           return attached;
         });

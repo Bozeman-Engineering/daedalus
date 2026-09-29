@@ -24,6 +24,7 @@ use Drupal\daedalus_blueprint_api\Render\SelectableKey;
 use Drupal\daedalus_ui\Event\EditableFieldAttributes;
 use Drupal\daedalus_ui\Presentation\Presentation;
 use Drupal\daedalus_ui\ElementModel\ElementModel;
+use Drupal\daedalus_ui\Render\ElementAddress;
 use Drupal\daedalus_ui\Render\LiveAttributionDemand;
 use Drupal\layout_builder\OverridesSectionStorageInterface;
 use Drupal\layout_builder\Plugin\SectionStorage\OverridesSectionStorage;
@@ -69,7 +70,6 @@ final class DaedalusUi implements TrustedCallbackInterface {
     private readonly RequestStack $requestStack,
     private readonly ModeState $modeState,
     private readonly ModePluginManager $modeManager,
-    private readonly ToolPluginManager $toolManager,
     private readonly SidebarPluginManager $sidebarManager,
     private readonly RouteMatchInterface $routeMatch,
     private readonly AdminContext $routerAdminContext,
@@ -93,8 +93,8 @@ final class DaedalusUi implements TrustedCallbackInterface {
   /**
    * Wrap and attribute fields for editing.
    *
-   * We add a wrapper around the field and let tools add the attributes needed
-   * to make the tools work.
+   * We add a wrapper around the field and let the editing modules add the
+   * attributes their grammars need.
    *
    * @param array $variables
    *   The variables from hook_preprocess_field.
@@ -104,6 +104,14 @@ final class DaedalusUi implements TrustedCallbackInterface {
     $variables['#cache']['contexts'][] = 'daedalus_ui_mode';
     $element = $variables['element'] ?? [];
     $entity = $element['#object'] ?? NULL;
+    // The field root's element address, in every mode and for every
+    // visitor: the same field renders the selectable key below stamp (or
+    // would stamp, for an editor) carry it. Core's page-title inline label
+    // render (#is_page_title) is not a field root on the page (the title
+    // element is the carrier, see below) and never wears it.
+    if ($entity instanceof FieldableEntityInterface && !empty($element['#field_name']) && empty($element['#is_page_title'])) {
+      $variables['attributes'][ElementAddress::ATTRIBUTE] = ElementAddress::FIELD;
+    }
     $mode = $this->getMode();
     if ($mode !== 'edit') {
       // Live render: stamp only the selection identity, and only when a
@@ -209,7 +217,7 @@ final class DaedalusUi implements TrustedCallbackInterface {
    * unavailable mode means the panel is omitted entirely rather than rendered
    * hidden on every page. Visibility: a present panel is shown or hidden per
    * isSidebarVisible(), then flipped client-side, so the wrappers are never
-   * re-rendered on a mode or tool switch. An <aside> is emitted only for a side
+   * re-rendered on a mode switch. An <aside> is emitted only for a side
    * that has at least one present panel. A no-mode (always-on) panel also gets
    * a standalone fixed-position toggle button, since -- unlike a mode-bound
    * panel, whose toggle lives in that mode's top bar -- it has no top bar to
@@ -275,7 +283,7 @@ final class DaedalusUi implements TrustedCallbackInterface {
         if (!empty($button)) {
           $slot = $definition['slot'] ?? 'top';
           $button['#cache']['contexts'][] = "cookies:{$definition['side']}_{$slot}_sidebar";
-          if ($this->isSidebarVisible($id, $definition['side'], $slot, NULL, $definition['tool'] ?? NULL, $definition['default_open'] ?? FALSE)) {
+          if ($this->isSidebarVisible($id, $definition['side'], $slot, NULL, $definition['default_open'] ?? FALSE)) {
             $button['wrapper']['#attributes']['class'][] = 'active';
           }
           $fab_buttons[$id] = $button;
@@ -303,7 +311,6 @@ final class DaedalusUi implements TrustedCallbackInterface {
           'contexts' => [
             'user.permissions',
             'daedalus_ui_mode',
-            'cookies:activeTool',
             "cookies:{$side}_sidebar_width",
           ],
         ],
@@ -353,7 +360,6 @@ final class DaedalusUi implements TrustedCallbackInterface {
     $side = $definition['side'];
     $slot = $definition['slot'] ?? 'top';
     $mode = $definition['mode'] ?? NULL;
-    $tool = $definition['tool'] ?? NULL;
     $default_open = $definition['default_open'] ?? FALSE;
 
     // The plugin id is the verbatim DOM id; the side carries the offset. The
@@ -392,7 +398,7 @@ final class DaedalusUi implements TrustedCallbackInterface {
       $panel['#attributes']['data-sidebar-default-open'] = '';
     }
 
-    if ($this->isSidebarVisible($id, $side, $slot, $mode, $tool, $default_open)) {
+    if ($this->isSidebarVisible($id, $side, $slot, $mode, $default_open)) {
       $panel['#attributes']["data-offset-$side"] = '';
     }
     else {
@@ -407,9 +413,6 @@ final class DaedalusUi implements TrustedCallbackInterface {
     if ($mode !== NULL) {
       $panel['#cache']['contexts'][] = 'daedalus_ui_mode';
     }
-    if ($tool !== NULL) {
-      $panel['#cache']['contexts'][] = 'cookies:activeTool';
-    }
 
     return $panel;
   }
@@ -417,11 +420,9 @@ final class DaedalusUi implements TrustedCallbackInterface {
   /**
    * Decide whether a present sidebar panel is currently shown.
    *
-   * Visibility is the AND of three conditions: the panel's mode binding matches
-   * the active mode (or it is mode-independent), its tool binding matches the
-   * active tool (or it is not tool-bound), and its (side, slot) open-panel
-   * cookie names this panel. The active tool is read straight from the
-   * activeTool cookie to keep the heavy tool plugins off this render path.
+   * Visibility is the AND of two conditions: the panel's mode binding matches
+   * the active mode (or it is mode-independent), and its (side, slot)
+   * open-panel cookie names this panel.
    *
    * @param string $id
    *   The sidebar plugin id; also the value its "{side}_{slot}_sidebar" cookie
@@ -433,8 +434,6 @@ final class DaedalusUi implements TrustedCallbackInterface {
    *   selects the "{side}_{slot}_sidebar" cookie to read.
    * @param string|null $mode
    *   The mode the panel is bound to, or NULL when mode-independent.
-   * @param string|null $tool
-   *   The tool the panel is bound to, or NULL when not tool-bound.
    * @param bool $default_open
    *   Whether the panel shows when its (side, slot) cookie has never been
    *   set. An absent cookie (NULL) shows the panel; an empty cookie means the
@@ -446,11 +445,8 @@ final class DaedalusUi implements TrustedCallbackInterface {
    * @return bool
    *   TRUE when the panel should be shown.
    */
-  public function isSidebarVisible(string $id, string $side, string $slot, ?string $mode, ?string $tool, bool $default_open = FALSE): bool {
+  public function isSidebarVisible(string $id, string $side, string $slot, ?string $mode, bool $default_open = FALSE): bool {
     if ($mode !== NULL && $this->getMode() !== $mode) {
-      return FALSE;
-    }
-    if ($tool !== NULL && $this->getActiveTool() !== $tool) {
       return FALSE;
     }
     $cookie = $this->requestStack->getCurrentRequest()->cookies->get("{$side}_{$slot}_sidebar");
@@ -487,13 +483,13 @@ final class DaedalusUi implements TrustedCallbackInterface {
    */
   public function getRailWidths(): array {
     $widths = ['left' => NULL, 'right' => NULL];
-    $contexts = ['cookies:activeTool', 'cookies:left_sidebar_width', 'cookies:right_sidebar_width'];
+    $contexts = ['cookies:left_sidebar_width', 'cookies:right_sidebar_width'];
     foreach ($this->sidebarManager->getSidebars() as $id => $sidebar) {
       $definition = $sidebar->getPluginDefinition();
       $side = $definition['side'];
       $slot = $definition['slot'] ?? 'top';
       $contexts[] = "cookies:{$side}_{$slot}_sidebar";
-      if ($widths[$side] === NULL && $this->isSidebarVisible($id, $side, $slot, $definition['mode'] ?? NULL, $definition['tool'] ?? NULL, $definition['default_open'] ?? FALSE)) {
+      if ($widths[$side] === NULL && $this->isSidebarVisible($id, $side, $slot, $definition['mode'] ?? NULL, $definition['default_open'] ?? FALSE)) {
         $widths[$side] = $this->getRailWidthCookie($side) ?? self::RAIL_DEFAULT_WIDTH;
       }
     }
@@ -519,39 +515,6 @@ final class DaedalusUi implements TrustedCallbackInterface {
    */
   public function getMode(string $cookie_name = 'navigationMode'): string {
     return $this->modeState->getMode($cookie_name);
-  }
-
-  /**
-   * Get active tool.
-   *
-   * @return string
-   *   The active tool.
-   */
-  public function getActiveTool(): string {
-    return $this->requestStack->getCurrentRequest()->cookies->get('activeTool') ?? 'selector';
-  }
-
-  /**
-   * Get tool plugins.
-   *
-   * @return \Drupal\daedalus_ui\ToolInterface[]
-   *   An array of tool plugins that apply to the routed entity.
-   *
-   * @throws \Drupal\Component\Plugin\Exception\PluginException
-   */
-  public function getToolPlugins(): array {
-    $tool_definitions = $this->toolManager->getDefinitions();
-    $tools = [];
-    if (!empty($tool_definitions)) {
-      $entity = $this->deriveEntityFromRoute();
-      foreach ($tool_definitions as $tool_definition) {
-        $tool = $this->toolManager->createInstance($tool_definition['id']);
-        if ($entity && $tool->applies($entity)) {
-          $tools[$tool_definition['id']] = $tool;
-        }
-      }
-    }
-    return $tools;
   }
 
   /**

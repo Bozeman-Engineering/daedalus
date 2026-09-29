@@ -22,10 +22,39 @@
  * The clear itself lives in ai_chatbot's deepchat-init.js, which exposes
  * Drupal.clearDeepchatMessages() and arrives through the ai_chatbot/deepchat
  * dependency. Its absence is a broken dependency, so it throws rather than
- * warning and doing nothing.
+ * warning and doing nothing. Before the reset, the thread's attachments are
+ * released through daedalus_ai's release route: ai_chatbot's reset hands
+ * the same thread id straight back to the next conversation, so a file
+ * left held would bleed into it (the cron sweep only catches threads whose
+ * session is gone, and the next conversation writes it again).
  */
 
-((Drupal, once) => {
+((Drupal, drupalSettings, once) => {
+  /**
+   * Releases the thread's attachments (daedalus_ai.attachments_release).
+   *
+   * The token rides the X-CSRF-Token header the way every page-builder post
+   * does; a failed release is an error, since the reset that follows would
+   * hand the held files to the next conversation.
+   */
+  const releaseAttachments = async (threadId) => {
+    const tokenResponse = await fetch(Drupal.url('session/token'));
+    const token = await tokenResponse.text();
+    const response = await fetch(Drupal.url('daedalus-ai/attachments/release'), {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRF-Token': token,
+      },
+      body: JSON.stringify({ thread_id: threadId }),
+    });
+    if (!response.ok) {
+      throw new Error(
+        `Daedalus AI: releasing the attachments of thread ${threadId} failed (${response.status}).`,
+      );
+    }
+  };
+
   /**
    * Flips the design posture: on brand <-> workshopping.
    */
@@ -43,12 +72,13 @@
    * buttons hand it, only to stop its propagation; the menu runs items
    * without an event, so a detached one satisfies the signature.
    */
-  const clearHistory = () => {
+  const clearHistory = async () => {
     if (typeof Drupal.clearDeepchatMessages !== 'function') {
       throw new Error(
         'Daedalus AI: Drupal.clearDeepchatMessages is missing; ai_chatbot/deepchat did not initialize the chat.',
       );
     }
+    await releaseAttachments(drupalSettings.ai_deepchat.thread_id);
     Drupal.clearDeepchatMessages(new Event('click'));
   };
 
@@ -98,4 +128,4 @@
       );
     },
   };
-})(Drupal, once);
+})(Drupal, drupalSettings, once);

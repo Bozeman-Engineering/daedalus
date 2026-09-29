@@ -2,7 +2,9 @@
  * Self-asserting tests for the canvas-highlight claim stack: latest
  * claim wins, releases fall back to the next claim instead of
  * clearing, re-claims update in place, unknown releases no-op, and the
- * per-source wiring clears every claim on selection change.
+ * per-source wiring clears every claim on any move of the styling
+ * address (a target move under the same selection, a selection move),
+ * heard on the source's one target-aware subscription.
  *
  * Run directly: `node tests/js/highlight-claims.test.mjs`. Exits
  * non-zero on failure.
@@ -13,7 +15,7 @@ import { createHighlightClaims, highlightClaimsFor } from '../../js/src/highligh
 const tests = [];
 const test = (name, run) => tests.push([name, run]);
 
-const spec = (properties) => ({ key: 'block:b1', sub: null, properties });
+const spec = (properties) => ({ key: 'block:b1', selector: null, properties });
 
 const harness = () => {
   const applied = [];
@@ -82,25 +84,43 @@ test('clear drops every claim and applies null once', () => {
   assert.equal(applied.length, count, 'clearing an empty stack applies nothing');
 });
 
-test('highlightClaimsFor binds one stack per source and wipes it on selection change', () => {
+test('highlightClaimsFor binds one stack per source and wipes it on a target move as on a selection move', () => {
   const applied = [];
-  let selectionListener = null;
+  let targetListener = null;
+  // The source's target-aware subscription (the selection facade's
+  // onTargetChange shape: fires on a selection move OR a target move,
+  // with ({selected, target}, previous)); the registry binds nothing
+  // else, so a stub without onSelectionChange is the honest one.
   const source = {
     setCanvasHighlight: (value) => applied.push(value),
-    onSelectionChange: (callback) => {
-      selectionListener = callback;
+    onTargetChange: (callback) => {
+      targetListener = callback;
       return () => {};
     },
   };
   const claims = highlightClaimsFor(source);
   assert.equal(highlightClaimsFor(source), claims, 'one stack per source');
+  // A focus-held row claim keyed at the element; the switcher seats an
+  // ancestor rule under the SAME selection: the claim is at the old
+  // address now and goes.
   claims.claim('row', spec(['gap']));
-  selectionListener('block:other');
+  targetListener(
+    { selected: 'block:b1', target: { key: 'container:c1', selector: '> pb-text' } },
+    { selected: 'block:b1', target: null },
+  );
   assert.equal(applied.at(-1), null);
   // The wiped claim cannot resurrect through a later release.
   claims.release('row');
   assert.equal(applied.at(-1), null);
   assert.equal(applied.length, 2);
+  // A selection move arrives on the same subscription and wipes too.
+  claims.claim('row', { key: 'container:c1', selector: '> pb-text', properties: ['gap'] });
+  targetListener(
+    { selected: 'block:other', target: null },
+    { selected: 'block:b1', target: { key: 'container:c1', selector: '> pb-text' } },
+  );
+  assert.equal(applied.at(-1), null);
+  assert.equal(applied.length, 4);
 });
 
 // --- runner ---------------------------------------------------------------

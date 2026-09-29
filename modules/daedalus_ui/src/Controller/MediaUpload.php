@@ -6,16 +6,12 @@ namespace Drupal\daedalus_ui\Controller;
 
 use Drupal\file\FileInterface;
 use Drupal\media\Entity\Media;
-use Drupal\Core\File\FileExists;
-use Drupal\media\MediaTypeInterface;
-use Drupal\Core\File\FileSystemInterface;
-use Drupal\Component\Utility\Bytes;
 use Drupal\Core\Entity\EntityInterface;
 use Drupal\Core\Controller\ControllerBase;
-use Drupal\file\Upload\FormUploadedFile;
+use Drupal\daedalus_ui\File\FileLane;
+use Drupal\daedalus_ui\File\FileLaneException;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\JsonResponse;
-use Drupal\file\Upload\FileUploadHandlerInterface;
 use Drupal\daedalus_tempstore\EntityTempstoreRepository;
 use Drupal\Core\Entity\EntityTypeBundleInfoInterface;
 use Symfony\Component\HttpFoundation\File\UploadedFile;
@@ -29,18 +25,27 @@ use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
 
 /**
  * Media upload.
+ *
+ * The human upload lane's HTTP adapter: the dropped file is saved through
+ * the daedalus_ui file lane (validators, the SVG sanitizer, renaming on
+ * collision) as a permanent file under public://media, and a refusal is
+ * answered as a 400 whose body names the reasons.
  */
 final class MediaUpload extends ControllerBase {
 
   use LoadEditablePageResponseTrait;
 
+  /**
+   * Where the human upload lane keeps its files.
+   */
+  private const DIRECTORY = 'public://media';
+
   public function __construct(
     private EntityTempstoreRepository $tempstoreRepository,
-    private FileUploadHandlerInterface $fileUploadHandler,
+    private FileLane $fileLane,
     private EntityDisplayRepositoryInterface $entityDisplayRepository,
     private EntityTypeBundleInfoInterface $entityTypeBundleInfo,
     private EventDispatcherInterface $eventDispatcher,
-    private FileSystemInterface $fileSystem,
   ) {}
 
   /**
@@ -49,11 +54,10 @@ final class MediaUpload extends ControllerBase {
   public static function create(ContainerInterface $container) {
     return new static(
       $container->get('daedalus_tempstore.entity_tempstore_repository'),
-      $container->get('file.upload_handler'),
+      $container->get('daedalus_ui.file_lane'),
       $container->get('entity_display.repository'),
       $container->get('entity_type.bundle.info'),
       $container->get('event_dispatcher'),
-      $container->get('file_system'),
     );
   }
 
@@ -90,9 +94,12 @@ final class MediaUpload extends ControllerBase {
       throw new \InvalidArgumentException(sprintf('Invalid view mode for %s', $entity->label()));
     }
 
-    $file = $request->files->get('file');
-    if (!empty($file)) {
-      $file = $this->uploadFile($request, $this->getNewMediaValidators());
+    // The target media bundle is not known yet (the user picks it on the
+    // later file-association form), so the lane's full accepted set applies:
+    // "could this file become some media here?".
+    $upload = $request->files->get('file');
+    if ($upload instanceof UploadedFile) {
+      $file = $this->saveUpload($upload);
       $session = $request->getSession();
       $session->set('uploaded_file', $file);
     }
@@ -139,11 +146,36 @@ final class MediaUpload extends ControllerBase {
       throw new \InvalidArgumentException(sprintf('Invalid media bundle %s', $entity->label()));
     }
 
+    $upload = $request->files->get('file');
+    if (!$upload instanceof UploadedFile) {
+      throw new BadRequestHttpException('Invalid file');
+    }
+
     $entity = $this->tempstoreRepository->get($entity);
-    $file = $this->uploadFile($request, $this->getReplaceMediaValidators($media_bundle));
+    // The target bundle is known, so the lane is narrowed to its source
+    // field's extensions.
+    $media_type = $this->entityTypeManager()->getStorage('media_type')->load($media_bundle);
+    $file = $this->saveUpload($upload, $this->fileLane->mediaTypeExtensions($media_type));
     $media = $this->createMedia($file, $media_bundle);
 
     return $this->replacePageElementWithNewMedia($request, $media, $entity, $view_mode, $media_reference);
+  }
+
+  /**
+   * Saves the dropped file through the lane, a refusal answered as a 400.
+   *
+   * @param \Symfony\Component\HttpFoundation\File\UploadedFile $upload
+   *   The dropped file.
+   * @param list<string>|null $extensions
+   *   A narrowing of the lane's accepted extensions, or NULL for the full set.
+   */
+  private function saveUpload(UploadedFile $upload, ?array $extensions = NULL): FileInterface {
+    try {
+      return $this->fileLane->fromRequest($upload, self::DIRECTORY, TRUE, $extensions);
+    }
+    catch (FileLaneException $e) {
+      throw new BadRequestHttpException($e->getMessage(), $e);
+    }
   }
 
   /**
@@ -269,154 +301,6 @@ final class MediaUpload extends ControllerBase {
     ]);
     $media->save();
     return $media;
-  }
-
-  /**
-   * Upload file.
-   *
-   * Validates the uploaded file and writes it to public://media as a permanent
-   * File entity using Drupal core's file upload handler. The handler applies
-   * the supplied validators (extension/size) and the core filename sanitizer,
-   * so this is the single point where the browser upload becomes a saved file.
-   *
-   * @param \Symfony\Component\HttpFoundation\Request $request
-   *   The current request.
-   * @param array $validators
-   *   File validators keyed by validator plugin ID, in the format expected by
-   *   \Drupal\file\Validation\FileValidatorInterface (e.g. 'FileExtension',
-   *   'FileSizeLimit'). An empty array lets core apply its default extension
-   *   list.
-   *
-   * @return \Drupal\file\FileInterface
-   *   The uploaded file entity.
-   *
-   * @throws \Drupal\Core\Entity\EntityStorageException
-   * @throws \Symfony\Component\HttpKernel\Exception\HttpException
-   *   Thrown when validation fails.
-   */
-  public function uploadFile(Request $request, array $validators = []): FileInterface {
-    $file = $request->files->get('file');
-    if (!$file instanceof UploadedFile) {
-      throw new \InvalidArgumentException('Invalid file');
-    }
-
-    $directory = 'public://media';
-    // Core's file upload handler does not create the destination directory; it
-    // assumes the caller has prepared it. (The legacy file.repository path used
-    // to do this implicitly.) Ensure it exists and is writable before handing
-    // off, or moveUploadedFile() fails with "Could not move uploaded file".
-    $this->fileSystem->prepareDirectory($directory, FileSystemInterface::CREATE_DIRECTORY | FileSystemInterface::MODIFY_PERMISSIONS);
-    $result = $this->fileUploadHandler->handleFileUpload(
-      new FormUploadedFile($file),
-      $validators,
-      $directory,
-      FileExists::Rename,
-    );
-
-    if ($result->hasViolations()) {
-      $messages = [];
-      foreach ($result->getViolations() as $violation) {
-        $messages[] = (string) $violation->getMessage();
-      }
-      throw new BadRequestHttpException(implode(' ', $messages));
-    }
-
-    $uploaded_file = $result->getFile();
-    // The handler creates the file as temporary (status 0); media uploads are
-    // intended to persist, so mark it permanent.
-    $uploaded_file->setPermanent();
-    $uploaded_file->save();
-    return $uploaded_file;
-  }
-
-  /**
-   * Builds file validators for a new-media upload.
-   *
-   * At new-media time the target media bundle is not yet known (the user picks
-   * it on the later file-association form), so the extension validator is the
-   * union of every media type's source-field extensions: "could this file
-   * become some media here?". This mirrors daedalus_layout
-   * NewMedia::getCompatibleMediaTypes() and fails early with a clear error
-   * instead of dead-ending at the association form.
-   *
-   * @return array
-   *   File validators keyed by validator plugin ID.
-   */
-  protected function getNewMediaValidators(): array {
-    $media_types = $this->entityTypeManager()->getStorage('media_type')->loadMultiple();
-    $extensions = [];
-    foreach ($media_types as $media_type) {
-      $settings = $this->getMediaSourceFieldSettings($media_type);
-      if ($settings === NULL) {
-        continue;
-      }
-      // An empty file_extensions setting means "allow any extension"; if any
-      // media type allows anything, the union allows anything.
-      if (empty($settings['file_extensions'])) {
-        return [];
-      }
-      foreach (explode(' ', $settings['file_extensions']) as $extension) {
-        $extension = trim($extension);
-        if ($extension !== '') {
-          $extensions[$extension] = $extension;
-        }
-      }
-    }
-
-    $validators = [];
-    if (!empty($extensions)) {
-      $validators['FileExtension'] = ['extensions' => implode(' ', $extensions)];
-    }
-    return $validators;
-  }
-
-  /**
-   * Builds file validators for a replace-media upload.
-   *
-   * The target media bundle is known here, so validators are derived directly
-   * from that bundle's source field: its allowed extensions and (if set) its
-   * maximum file size.
-   *
-   * @param string $media_bundle
-   *   The media bundle the file will be saved into.
-   *
-   * @return array
-   *   File validators keyed by validator plugin ID.
-   */
-  protected function getReplaceMediaValidators(string $media_bundle): array {
-    $media_type = $this->entityTypeManager()->getStorage('media_type')->load($media_bundle);
-    $settings = $media_type ? $this->getMediaSourceFieldSettings($media_type) : NULL;
-
-    $validators = [];
-    if ($settings === NULL) {
-      return $validators;
-    }
-    if (!empty($settings['file_extensions'])) {
-      $validators['FileExtension'] = ['extensions' => $settings['file_extensions']];
-    }
-    if (!empty($settings['max_filesize'])) {
-      $validators['FileSizeLimit'] = ['fileLimit' => (int) Bytes::toNumber($settings['max_filesize'])];
-    }
-    return $validators;
-  }
-
-  /**
-   * Gets a media type's source-field settings.
-   *
-   * @param \Drupal\media\MediaTypeInterface $media_type
-   *   The media type.
-   *
-   * @return array|null
-   *   The source field settings (containing keys such as 'file_extensions' and
-   *   'max_filesize'), or NULL if the source has no source field.
-   */
-  protected function getMediaSourceFieldSettings(MediaTypeInterface $media_type): ?array {
-    $source = $media_type->getSource();
-    $source_field = $source->getSourceFieldDefinition($media_type);
-    if ($source_field === NULL) {
-      return NULL;
-    }
-    return $source_field->getSettings();
   }
 
 }

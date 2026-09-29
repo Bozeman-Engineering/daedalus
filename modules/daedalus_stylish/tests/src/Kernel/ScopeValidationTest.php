@@ -48,6 +48,7 @@ class ScopeValidationTest extends KernelTestBase {
     'twig_events',
     'daedalus_tempstore',
     'daedalus_blueprint_api',
+    'file',
     'daedalus_ui',
     'daedalus_stylish',
     'daedalus_stylish_guide_test',
@@ -144,37 +145,37 @@ class ScopeValidationTest extends KernelTestBase {
   }
 
   /**
-   * The '::>' children pseudo-part validates like a declared part.
+   * The '::> *' children pseudo-part validates like a declared part.
    *
    * The container kind declares children (layout), the twocol layout's
    * .band-content part declares its own, so root and
    * part-composed children keys validate against the children section's
    * property groups; malformed suffixes fail the key grammar; strict mode
-   * rejects undeclared properties on declared children and the '::>' key
+   * rejects undeclared properties on declared children and the '::> *' key
    * itself on elements declaring none.
    */
   public function testChildrenPseudoPart(): void {
     // The root element's children: declared on the container kind.
     $this->assertSame([], $this->validator->validateAt([
-      '::>' => [
+      '::> *' => [
         'default' => ['flex-grow' => '1', 'flex-basis' => '0%'],
         'narrow' => ['flex-grow' => '0'],
       ],
     ], Address::fromString('kind:container')));
 
-    // A part's children ('::.class::>'), on the layout scope's part.
+    // A part's children ('::.class > *'), on the layout scope's part.
     $this->assertSame([], $this->validator->validateAt([
-      '::.band-content::>' => ['default' => ['flex-grow' => '1']],
+      '::.band-content > *' => ['default' => ['flex-grow' => '1']],
     ], Address::fromString('layout:layout_twocol_section')));
 
     // Open site, element without a children declaration: grammar-checked
     // only, like an undeclared part.
     $this->assertSame([], $this->validator->validateAt([
-      '::>' => ['default' => ['flex-grow' => '1']],
+      '::> *' => ['default' => ['flex-grow' => '1']],
     ], Address::fromString('kind:block')));
 
     // The children suffix never doubles and is always last.
-    foreach (['::>::>', '::>::.card', '::>x'] as $bad) {
+    foreach (['::>::>', '::>::.card', '::>x', '::>', '::.band-content::>'] as $bad) {
       $codes = $this->codes($this->validator->validateAt([
         $bad => ['default' => ['flex-grow' => '1']],
       ], Address::fromString('kind:container')));
@@ -186,17 +187,17 @@ class ScopeValidationTest extends KernelTestBase {
     // Strict: the children declaration is the closed world; a recognized
     // property outside its groups is rejected with the declared set.
     $codes = $this->codes($this->validator->validateAt([
-      '::>' => ['default' => ['flex-grow' => '1', 'font-size' => '2rem']],
+      '::> *' => ['default' => ['flex-grow' => '1', 'font-size' => '2rem']],
     ], Address::fromString('kind:container')));
-    $this->assertSame(['STYLE_PROPERTY_NOT_DECLARED'], $codes['::>.default.font-size']);
-    $this->assertArrayNotHasKey('::>.default.flex-grow', $codes);
+    $this->assertSame(['STYLE_PROPERTY_NOT_DECLARED'], $codes['::> *.default.font-size']);
+    $this->assertArrayNotHasKey('::> *.default.flex-grow', $codes);
 
-    // Strict: '::>' on an element with no children declaration is
+    // Strict: '::> *' on an element with no children declaration is
     // rejected as a whole.
     $codes = $this->codes($this->validator->validateAt([
-      '::>' => ['default' => ['flex-grow' => '1']],
+      '::> *' => ['default' => ['flex-grow' => '1']],
     ], Address::fromString('kind:block')));
-    $this->assertSame(['STYLE_CHILDREN_NOT_DECLARED'], $codes['::>']);
+    $this->assertSame(['STYLE_CHILDREN_NOT_DECLARED'], $codes['::> *']);
   }
 
   /**

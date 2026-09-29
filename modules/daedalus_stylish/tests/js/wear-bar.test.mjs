@@ -14,7 +14,6 @@
 import { strict as assert } from 'node:assert';
 import {
   wornRows,
-  wearAtPose,
   wornProperties,
   outlineGesture,
   overriddenWearing,
@@ -161,99 +160,6 @@ test('wornProperties: a fragment wearing reads its own slice root', () => {
   assert.deepEqual(wornProperties(LIBRARY, { variant: 'hero', fragment: 'block(text,1)' }), ['margin']);
 });
 
-// The posed read's fixtures: the condition table in declaration order
-// (cascade ties break on it), an entrance carrying default +
-// reduced-motion (the shipped fade_in shape), Lift carrying a hover block,
-// and a layout variant addressing width and scheme separately.
-const CONDITIONS = {
-  hover: { label: 'Hover', wrapper: ':hover', axis: 'state' },
-  narrow: { label: 'Narrow', wrapper: '@container (max-width: 767px)', axis: 'width' },
-  dark: { label: 'Dark', wrapper: '@media (prefers-color-scheme: dark)', axis: 'scheme' },
-  'reduced-motion': { label: 'Reduced motion', wrapper: '@media (prefers-reduced-motion: reduce)', axis: 'motion' },
-};
-const POSED_LIBRARY = [
-  variantRecord('fade_in', {
-    label: 'Fade in',
-    group: 'animation',
-    value: { '': { default: { 'animation-name': 'motion-fade_in', 'animation-duration': '600ms' }, 'reduced-motion': { animation: 'none' } } },
-  }),
-  variantRecord('lift', {
-    label: 'Lift',
-    group: 'hover',
-    value: {
-      '': {
-        default: { transition: 'transform 150ms ease-out' },
-        hover: { transform: 'translateY(-4px)', 'box-shadow': '0 8px 24px rgb(0 0 0 / 0.12)' },
-        'reduced-motion': { transition: 'none', transform: 'none' },
-      },
-    },
-  }),
-  variantRecord('columns', {
-    label: 'Columns',
-    group: 'container_layout',
-    value: {
-      '': {
-        default: { display: 'flex', 'flex-direction': 'row', gap: '1rem' },
-        // Written dark-first: stored order is write order and carries
-        // no cascade meaning.
-        dark: { gap: '2rem' },
-        narrow: { 'flex-direction': 'column', gap: '0.5rem' },
-        'narrow+dark': { padding: '1rem' },
-        // An empty block applies but sets nothing.
-        hover: {},
-      },
-      'block(text,1)': { default: { margin: '0' }, hover: { color: 'red' } },
-    },
-  }),
-];
-
-test('wearAtPose: at the default pose nothing but default applies, so nothing is posed', () => {
-  assert.deepEqual(wearAtPose({ variant: 'lift', fragment: '' }, POSED_LIBRARY, 'default', CONDITIONS), { applies: false, declarations: {} });
-});
-
-test('wearAtPose: an entrance sets nothing at Hover (default is the row, not the pose)', () => {
-  assert.deepEqual(wearAtPose({ variant: 'fade_in', fragment: '' }, POSED_LIBRARY, 'hover', CONDITIONS), { applies: false, declarations: {} });
-  // Its own reduced-motion block is what it sets at that pose.
-  assert.deepEqual(wearAtPose({ variant: 'fade_in', fragment: '' }, POSED_LIBRARY, 'reduced-motion', CONDITIONS), { applies: true, declarations: { animation: 'none' } });
-});
-
-test('wearAtPose: Lift contributes its hover block at Hover', () => {
-  assert.deepEqual(wearAtPose({ variant: 'lift', fragment: '' }, POSED_LIBRARY, 'hover', CONDITIONS), {
-    applies: true,
-    declarations: { transform: 'translateY(-4px)', 'box-shadow': '0 8px 24px rgb(0 0 0 / 0.12)' },
-  });
-  // A compound covering hover still activates the hover block; the
-  // reduced-motion block joins and, later in cascade order, wins transform.
-  assert.deepEqual(wearAtPose({ variant: 'lift', fragment: '' }, POSED_LIBRARY, 'hover+reduced-motion', CONDITIONS), {
-    applies: true,
-    declarations: { transform: 'none', 'box-shadow': '0 8px 24px rgb(0 0 0 / 0.12)', transition: 'none' },
-  });
-});
-
-test('wearAtPose: every block the compound covers merges in cascade order, later wins per property', () => {
-  const ref = { variant: 'columns', fragment: '' };
-  // narrow alone: the dark block does not apply.
-  assert.deepEqual(wearAtPose(ref, POSED_LIBRARY, 'narrow', CONDITIONS), {
-    applies: true,
-    declarations: { 'flex-direction': 'column', gap: '0.5rem' },
-  });
-  // narrow+dark: singles in table order (narrow, then dark: dark's gap
-  // wins although it was written first), then the compound's own block.
-  assert.deepEqual(wearAtPose(ref, POSED_LIBRARY, 'narrow+dark', CONDITIONS), {
-    applies: true,
-    declarations: { 'flex-direction': 'column', gap: '2rem', padding: '1rem' },
-  });
-  // An applying block with no declarations sets nothing.
-  assert.deepEqual(wearAtPose(ref, POSED_LIBRARY, 'hover', CONDITIONS), { applies: false, declarations: {} });
-});
-
-test('wearAtPose: a fragment wearing reads its own slice root; an unresolved wearing sets nothing', () => {
-  assert.deepEqual(wearAtPose({ variant: 'columns', fragment: 'block(text,1)' }, POSED_LIBRARY, 'hover', CONDITIONS), { applies: true, declarations: { color: 'red' } });
-  assert.deepEqual(wearAtPose({ variant: 'gone', fragment: '' }, POSED_LIBRARY, 'hover', CONDITIONS), { applies: false, declarations: {} });
-  assert.deepEqual(wearAtPose(null, POSED_LIBRARY, 'hover', CONDITIONS), { applies: false, declarations: {} });
-  assert.deepEqual(wearAtPose({ variant: 'lift', fragment: '' }, null, 'hover', CONDITIONS), { applies: false, declarations: {} });
-});
-
 test('reachesBeyond: the slice is the fragment suffix space', () => {
   const hero = LIBRARY[2].value;
   // A root wearing of a composition reaches its children.
@@ -376,12 +282,29 @@ test('overriddenWearing: the lost declarations, the own properties hiding them, 
 
 const menuTypes = (items) => items.map((item) => (item.separator ? '|' : item.type));
 
+test('overriddenWearing at a rule: the rule\'s own values and its continuations by descent shadow the wearing', () => {
+  const RULE = 'container:root::> pb-text';
+  const map = {
+    [RULE]: { variants: [{ variant: 'hero', fragment: '' }], default: { padding: '1rem' } },
+    [`${RULE} .inner`]: { default: { gap: '2rem' } },
+    // A sibling rule and an unrelated part: not the wearing's slice.
+    'container:root::> pb-image': { default: { padding: '3rem' } },
+    'container:root::.inner': { default: { gap: '3rem' } },
+  };
+  const overridden = overriddenWearing(map, RULE, 'hero', LIBRARY);
+  assert.deepEqual(overridden.lost, ['padding', 'gap']);
+  assert.deepEqual(overridden.by, ['padding', 'gap']);
+  assert.deepEqual(resetOverrideOps(map, RULE, 'hero', LIBRARY), [
+    { op: 'update_style', key: RULE, properties: { padding: null } },
+    { op: 'update_style', key: `${RULE} .inner`, properties: { gap: null } },
+  ]);
+});
+
 test('wearRowMenu: the full worn roster, grouped', () => {
   const items = wearRowMenu({
     stale: false,
     worn: LIBRARY[2],
     ref: { variant: 'hero', fragment: '' },
-    codeView: false,
     outlined: false,
     canEditFull: true,
     hasSettings: true,
@@ -394,14 +317,12 @@ test('wearRowMenu: the full worn roster, grouped', () => {
   assert.equal(items.some((item) => item.type === 'reset'), false);
 });
 
-test('wearRowMenu: code view adds Variant tints; the jump offers for every resolved wearing', () => {
+test('wearRowMenu: the jump offers for every resolved wearing', () => {
   const items = wearRowMenu({
     stale: false,
     worn: LIBRARY[0],
     ref: { variant: 'cta', fragment: '' },
-    codeView: true,
     outlined: true,
-    tints: true,
     canEditFull: true,
     hasSettings: false,
   });
@@ -409,9 +330,8 @@ test('wearRowMenu: code view adds Variant tints; the jump offers for every resol
   // overrides; no settings doorway wired. The edit doorway still offers —
   // the editing session is the one place ANY resolved variant is
   // edited, single-slot variants included (reach no longer gates it).
-  assert.deepEqual(menuTypes(items), ['outline', 'tints', '|', 'detach', 'remove', '|', 'edit-full']);
+  assert.deepEqual(menuTypes(items), ['outline', '|', 'detach', 'remove', '|', 'edit-full']);
   assert.equal(items[0].checked, true);
-  assert.equal(items[1].checked, true);
 });
 
 test('wearRowMenu: a fragment wearing offers the edit jump, not Re-apply', () => {
@@ -419,7 +339,6 @@ test('wearRowMenu: a fragment wearing offers the edit jump, not Re-apply', () =>
     stale: false,
     worn: LIBRARY[2],
     ref: { variant: 'hero', fragment: 'block(text,1)' },
-    codeView: false,
     outlined: false,
     canEditFull: true,
     hasSettings: true,
@@ -432,20 +351,18 @@ test('wearRowMenu: Update from this element leads the lifecycle group when grant
     stale: false,
     worn: LIBRARY[2],
     ref: { variant: 'hero', fragment: '' },
-    codeView: true,
     outlined: false,
     canUpdate: true,
     updatable: true,
     canEditFull: true,
     hasSettings: false,
   });
-  assert.deepEqual(menuTypes(items), ['outline', 'tints', 'reapply', '|', 'detach', 'remove', '|', 'update', 'edit-full']);
+  assert.deepEqual(menuTypes(items), ['outline', 'reapply', '|', 'detach', 'remove', '|', 'update', 'edit-full']);
   // Without the grant, or with nothing differing, the doorway stays away.
   const ungranted = wearRowMenu({
     stale: false,
     worn: LIBRARY[2],
     ref: { variant: 'hero', fragment: '' },
-    codeView: false,
     outlined: false,
     canUpdate: false,
     updatable: true,
@@ -457,7 +374,6 @@ test('wearRowMenu: Update from this element leads the lifecycle group when grant
     stale: false,
     worn: LIBRARY[2],
     ref: { variant: 'hero', fragment: '' },
-    codeView: false,
     outlined: false,
     canUpdate: true,
     updatable: false,
@@ -475,7 +391,6 @@ test('wearRowMenu: an origin-bearing wearing keeps the plain worn roster', () =>
     stale: false,
     worn: LIBRARY[1],
     ref: { variant: 'row', fragment: '', via: null },
-    codeView: false,
     outlined: false,
     canEditFull: true,
     hasSettings: true,
@@ -484,7 +399,6 @@ test('wearRowMenu: an origin-bearing wearing keeps the plain worn roster', () =>
     stale: false,
     worn: LIBRARY[1],
     ref: { variant: 'row', fragment: '', via: 'card_left' },
-    codeView: false,
     outlined: false,
     canEditFull: true,
     hasSettings: true,
@@ -498,13 +412,42 @@ test('wearRowMenu: a stale row keeps only resolution-free gestures', () => {
     stale: true,
     worn: null,
     ref: { variant: 'gone', fragment: '' },
-    codeView: true,
     outlined: false,
     canEditFull: true,
     hasSettings: true,
   });
-  // No document to jump to and no tints duty: Outline, Detach, Remove.
+  // No document to jump to: Outline, Detach, Remove.
   assert.deepEqual(menuTypes(items), ['outline', '|', 'detach', 'remove']);
+});
+
+test('wearRowMenu: read-only (a drilled part) keeps Outline and offers Select wearer alone', () => {
+  // The wearing belongs to the whole element: under a drilled part every
+  // wear gesture (detach, remove, re-apply, update, edit, settings)
+  // waits behind selecting the wearer, whatever the host
+  // wires and whether the row is worn or stale.
+  const worn = wearRowMenu({
+    stale: false,
+    worn: LIBRARY[2],
+    ref: { variant: 'hero', fragment: '' },
+    readOnly: true,
+    outlined: true,
+    canUpdate: true,
+    updatable: true,
+    canEditFull: true,
+    hasSettings: true,
+  });
+  assert.deepEqual(menuTypes(worn), ['outline', '|', 'select-wearer']);
+  assert.equal(worn[0].checked, true);
+  const stale = wearRowMenu({
+    stale: true,
+    worn: null,
+    ref: { variant: 'gone', fragment: '' },
+    readOnly: true,
+    outlined: false,
+    canEditFull: true,
+    hasSettings: true,
+  });
+  assert.deepEqual(menuTypes(stale), ['outline', '|', 'select-wearer']);
 });
 
 test('outlineGesture: one toggle over one identity across entry points', () => {

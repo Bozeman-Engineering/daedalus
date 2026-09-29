@@ -43,7 +43,8 @@ use Drupal\workspaces\WorkspaceManagerInterface;
  * The workspace-preview edge mirrors the swatch file: this file
  * always holds the LIVE (default-revision, published) animations. Inside a
  * workspace staged revisions (and workspace-minted animations) inline per
- * page (workspaceInlineCss(), embedded by daedalus_stylish_page_top()); later in
+ * page (workspaceInlineCss(), printed inside the token scope element by
+ * daedalus_stylish_preprocess_off_canvas_page_wrapper()); later in
  * the document than the compiled <link>, a redefinition of the same
  * keyframes name wins (the last @keyframes of a name in document order
  * takes effect). The repository memoizes per workspace, so the inline
@@ -66,7 +67,8 @@ class AnimationStylesheet extends CompiledStylesheetBase {
    * Invalidated on every recompile.
    *
    * Rendered pages attach the "daedalus_stylish/animations" library and carry this
-   * tag (daedalus_stylish_page_top()), so animation saves reach already-cached
+   * tag (daedalus_stylish_page_attachments()), so animation saves reach
+   * already-cached
    * pages.
    */
   public const CACHE_TAG = 'daedalus_stylish_animations';
@@ -149,7 +151,8 @@ class AnimationStylesheet extends CompiledStylesheetBase {
    * The workspace-preview edge at page level, the swatch file's exact
    * shape: the compiled file is per-site and library assets cannot vary by
    * workspace, so inside a workspace the (possibly staged) published
-   * animations print into a page-level <style> tag (daedalus_stylish_page_top())
+   * animations print into a page-level <style> tag (inside the token scope
+   * element, daedalus_stylish_preprocess_off_canvas_page_wrapper())
    * as the same named at-rules, and the later definition of a keyframes
    * name wins. Workspace-minted animations are covered too: the repository
    * queried inside the workspace reads the workspace's tracked revisions.

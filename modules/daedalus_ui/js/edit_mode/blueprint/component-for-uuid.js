@@ -9,7 +9,7 @@
  * may carry children, since region nodes are transparent grouping), so
  * the facade resolves both halves of the selectable vocabulary
  * (`block:{uuid}` and `container:{uuid}`) with one recursion. Moved here
- * from daedalus_edit's BlueprintEditorBase when daedalus_layout's verbs became the
+ * from daedalus_edit's editor base when daedalus_layout's verbs became the
  * second consumer: mirror lookups are facade capability, not a per-module
  * helper, exactly as isFormOnlyStub is.
  *

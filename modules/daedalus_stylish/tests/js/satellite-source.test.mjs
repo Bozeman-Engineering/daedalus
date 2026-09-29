@@ -15,6 +15,7 @@ import { strict as assert } from 'node:assert';
 import { createSatelliteSource } from '../../js/src/sources/satellite-source.js';
 import { createPopoutLeader } from '../../js/src/broadcast/popout-leader.js';
 import { failureText } from '../../js/src/gesture-transport.js';
+import { MEDIA_PICK_PLACEHOLDER } from '../../js/src/media-library.js';
 
 // The satellite touches window only for lifecycle wiring; a listener
 // sink suffices.
@@ -67,34 +68,41 @@ test('notify rides this window\'s messenger, never the wire, and is never load-b
   wire.close();
 });
 
-test('a pick-media intent relays the companions map verbatim', async () => {
+test('a pick-media intent relays the routed changes verbatim', async () => {
   const wire = listen();
   const source = createSatelliteSource(SCOPE);
   // Before the leader's broadcast arms the gate, the intent is refused
   // (honest chrome: nothing would open over there).
-  const companions = { 'background-size': 'cover', 'background-repeat': 'no-repeat' };
-  const target = {
-    key: 'block:aaaaaaaa-1111-2222-3333-444444444444',
+  const pick = {
     condition: 'default',
     property: 'background-image',
     label: 'Styled Background',
-    companions,
+    // The pipeline's routed list: the placeholder and the seed grouped on
+    // the anchor, a replaced band's null on the root it lives on.
+    changes: [
+      {
+        key: 'block:aaaaaaaa-1111-2222-3333-444444444444::a',
+        properties: { 'background-image': MEDIA_PICK_PLACEHOLDER, 'background-size': 'cover' },
+      },
+      { key: 'block:aaaaaaaa-1111-2222-3333-444444444444', properties: { 'background-color': null } },
+    ],
   };
-  assert.equal(source.pickMedia(target), false);
+  assert.equal(source.pickMedia(pick), false);
   // The leader says its library can open.
   const leader = new BroadcastChannel(`daedalus_stylish:${SCOPE}`);
   leader.postMessage({ type: 'state', state: { mediaLibraryAvailable: true } });
   await settle();
-  assert.equal(source.pickMedia(target), true);
+  assert.equal(source.pickMedia(pick), true);
   await settle();
-  // The intent frame carries the seed verbatim: the popout leader hands
-  // the payload to source.pickMedia unchanged, so what crosses the wire
-  // here is exactly what the leader merges into its one commit.
+  // The intent frame carries the routed changes verbatim (a plain
+  // placeholder, no function): the popout leader hands the payload to
+  // source.pickMedia unchanged, so what crosses the wire here is exactly
+  // what the leader fills and commits.
   const intents = wire.frames.filter((frame) => frame.type === 'intent' && frame.intent === 'pick-media');
   assert.deepEqual(intents, [{
     type: 'intent',
     intent: 'pick-media',
-    ...target,
+    ...pick,
   }]);
   leader.close();
   wire.close();
@@ -162,57 +170,50 @@ test('materials: the satellite boots from its own envelope, follows the wire, re
   delete globalThis.drupalSettings;
 });
 
-test('the leader relays the selection\'s canvas tags; the satellite answers readCanvasTag from them', async () => {
-  // A leader source stub: the selection is a drilled heading block whose
-  // rendered root is an h2 and whose drilled part renders as a span. The
-  // leader reads both live; the satellite has no canvas at all.
-  const selection = { key: 'block:aaaaaaaa-1111-2222-3333-444444444444', part: '.eyebrow' };
-  const tags = { [`${selection.key}|`]: 'h2', [`${selection.key}|.eyebrow`]: 'span' };
-  const partListeners = new Set();
+test('the snapshot carries the selection, its target and the tree, and no canvas read of its own', async () => {
+  // A leader source stub: a heading block selected with its eyebrow part
+  // targeted. The satellite renders the same selection and target the
+  // leader holds and reads every tag from the relayed tree (the read
+  // subject's, style-stack.js subjectTag), never from a canvas.
+  const selection = { key: 'block:aaaaaaaa-1111-2222-3333-444444444444', selector: '.eyebrow' };
+  const tree = [{ kind: 'block', uuid: 'aaaaaaaa-1111-2222-3333-444444444444', block_type: 'heading', _element: { markup: { tag: 'h2', parts: { '.eyebrow': { tag: 'span' } } } } }];
+  const targetListeners = new Set();
   const leaderSource = {
     getSelected: () => selection.key,
-    getSelectedPart: () => selection.part,
-    readCanvasTag: (key, sub) => tags[`${key}|${sub ?? ''}`] ?? null,
+    getTarget: () => (selection.selector ? { key: selection.key, selector: selection.selector } : null),
     getStyleMap: () => ({}),
     getRootUuid: () => 'root',
     getBlockTypes: () => ({}),
     getSectionLayouts: () => ({}),
     getLayout: () => [],
+    getTree: () => tree,
     getLayoutContext: () => null,
     getMediaUrls: () => ({}),
     canPickMedia: () => false,
     getCanvasVector: () => null,
     getForceState: () => null,
     getPlace: () => ({ place: 'styles', editing: null }),
-    onPartChange: (callback) => partListeners.add(callback),
+    onTargetChange: (callback) => targetListeners.add(callback),
     onStyleMapChange: () => {},
     onForceStateChange: () => {},
     onPlaceChange: () => {},
     onCanvasVectorChange: () => () => {},
   };
   const satellite = createSatelliteSource(SCOPE);
-  // Before any broadcast the satellite knows no selection and no tag.
-  assert.equal(satellite.readCanvasTag(selection.key, null), null);
+  assert.equal(satellite.getTree(), null);
   createPopoutLeader({ scope: SCOPE, url: 'about:blank', source: leaderSource });
-  // The leader's leader-ready provokes the satellite's hello, whose
-  // snapshot carries the selection's tags beside the (key, part) pair.
   await settle();
   assert.equal(satellite.getSelected(), selection.key);
-  assert.equal(satellite.getSelectedPart(), '.eyebrow');
-  assert.equal(satellite.readCanvasTag(selection.key, null), 'h2');
-  assert.equal(satellite.readCanvasTag(selection.key, '.eyebrow'), 'span');
-  // Only the broadcast selection is answerable: another key, or a part
-  // other than the drilled one, is honestly unknown.
-  assert.equal(satellite.readCanvasTag('block:bbbbbbbb-1111-2222-3333-444444444444', null), null);
-  assert.equal(satellite.readCanvasTag(selection.key, '.quote'), null);
-  assert.equal(satellite.readCanvasTag(null, null), null);
-  // Deselecting relays no tags; the satellite answers null again.
+  assert.deepEqual(satellite.getTarget(), { key: selection.key, selector: '.eyebrow' });
+  assert.deepEqual(satellite.getTree(), tree);
+  assert.equal('readCanvasTag' in satellite, false);
+  // Deselecting relays the empty selection.
   selection.key = null;
-  selection.part = null;
-  partListeners.forEach((callback) => callback({ key: null, part: null }, { key: 'x', part: '.eyebrow' }));
+  selection.selector = null;
+  targetListeners.forEach((callback) => callback({ selected: null, target: null }, { selected: 'x', target: { key: 'x', selector: '.eyebrow' } }));
   await settle();
   assert.equal(satellite.getSelected(), null);
-  assert.equal(satellite.readCanvasTag('block:aaaaaaaa-1111-2222-3333-444444444444', null), null);
+  assert.equal(satellite.getTarget(), null);
 });
 
 test('a satellite commitBatch settles with the leader\'s op-queue result, success and failure alike', async () => {
@@ -223,8 +224,7 @@ test('a satellite commitBatch settles with the leader\'s op-queue result, succes
   const minted = { kind: 'swatch', id: 'ember', label: 'Ember', group: 'color', value: '#ff5a1f' };
   const leaderSource = {
     getSelected: () => null,
-    getSelectedPart: () => null,
-    readCanvasTag: () => null,
+    getTarget: () => null,
     getStyleMap: () => ({}),
     getRootUuid: () => 'root',
     getBlockTypes: () => ({}),
@@ -236,7 +236,7 @@ test('a satellite commitBatch settles with the leader\'s op-queue result, succes
     getCanvasVector: () => null,
     getForceState: () => null,
     getPlace: () => ({ place: 'styles', editing: null }),
-    onPartChange: () => {},
+    onTargetChange: () => {},
     onStyleMapChange: () => {},
     onForceStateChange: () => {},
     onPlaceChange: () => {},
@@ -271,6 +271,56 @@ test('a satellite commitBatch settles with the leader\'s op-queue result, succes
   assert.equal(batches.length, 2);
 });
 
+test('a satellite parseCss relays the fragment to the leader\'s door and settles with its answer', async () => {
+  // The leader source stub: parseCss is the route fetch, the door's
+  // answer on 200 (entries, wear, errors) or an Error carrying .payload
+  // when the transport refuses (a stranger key).
+  const reads = [];
+  const answer = { key: 'container:x', entries: [{ key: 'container:x', condition: 'hover', properties: { color: 'red' } }], wear: [], errors: [] };
+  const leaderSource = {
+    getSelected: () => null,
+    getTarget: () => null,
+    getStyleMap: () => ({}),
+    getRootUuid: () => 'root',
+    getBlockTypes: () => ({}),
+    getSectionLayouts: () => ({}),
+    getLayout: () => [],
+    getLayoutContext: () => null,
+    getMediaUrls: () => ({}),
+    canPickMedia: () => false,
+    getCanvasVector: () => null,
+    getForceState: () => null,
+    getPlace: () => ({ place: 'styles', editing: null }),
+    onTargetChange: () => {},
+    onStyleMapChange: () => {},
+    onForceStateChange: () => {},
+    onPlaceChange: () => {},
+    onCanvasVectorChange: () => () => {},
+    parseCss: (key, css) => {
+      reads.push([key, css]);
+      if (key === 'container:stranger') {
+        const error = new Error('The key names no element on this page.');
+        error.payload = { errors: [{ code: 'INVALID_REQUEST', message: 'The key names no element on this page.' }] };
+        return Promise.reject(error);
+      }
+      return Promise.resolve(answer);
+    },
+  };
+  const scope = `${SCOPE}-door`;
+  const satellite = createSatelliteSource(scope);
+  createPopoutLeader({ scope, url: 'about:blank', source: leaderSource });
+  await settle();
+  const ok = await satellite.parseCss('container:x', '&:hover { color: red; }');
+  // The leader read the fragment under the key verbatim and the
+  // satellite got the door's own answer: the island lands it itself.
+  assert.deepEqual(reads, [['container:x', '&:hover { color: red; }']]);
+  assert.deepEqual(ok, answer);
+  await assert.rejects(
+    satellite.parseCss('container:stranger', 'color: red;'),
+    (error) => error.message === 'The key names no element on this page.',
+  );
+});
+
 test('every op intent carries a request id and settles from the leader\'s answer; a rejection toasts here', async () => {
   // The leader source stub: each op is the op queue's promise, a payload
   // on success or an Error carrying .payload on failure (the shape
@@ -287,8 +337,7 @@ test('every op intent carries a request id and settles from the leader\'s answer
   };
   const leaderSource = {
     getSelected: () => null,
-    getSelectedPart: () => null,
-    readCanvasTag: () => null,
+    getTarget: () => null,
     getStyleMap: () => ({}),
     getRootUuid: () => 'root',
     getBlockTypes: () => ({}),
@@ -300,7 +349,7 @@ test('every op intent carries a request id and settles from the leader\'s answer
     getCanvasVector: () => null,
     getForceState: () => null,
     getPlace: () => ({ place: 'styles', editing: null }),
-    onPartChange: () => {},
+    onTargetChange: () => {},
     onStyleMapChange: () => {},
     onForceStateChange: () => {},
     onPlaceChange: () => {},
@@ -361,6 +410,84 @@ test('every op intent carries a request id and settles from the leader\'s answer
   assert.equal(failureText({ payload: { errors: [{ message: 'That label is taken.', hint: 'Pick another name.' }] } }), 'That label is taken. Pick another name.');
   assert.deepEqual(heard, Array(4).fill({ text: 'That label is taken. Pick another name.', type: 'error' }));
   delete globalThis.Drupal;
+  wire.close();
+});
+
+test('an address pick crosses the wire as a target intent and echoes back in the snapshot\'s target', async () => {
+  // The leader source stub seats the target the way the leader source
+  // does (the spine holds it, the target-aware subscription announces
+  // it); the popout leader relays the satellite's intent into it and
+  // broadcasts the change back. The switcher's pick and "Edit at" ride
+  // this one road: no write-address state, intent or snapshot field.
+  const selected = 'block:aaaaaaaa-1111-2222-3333-444444444444';
+  let held = { key: selected, selector: '.text-block-link' };
+  const targetListeners = new Set();
+  const leaderSource = {
+    getSelected: () => selected,
+    getTarget: () => held,
+    target: (key, selector) => {
+      const previous = held;
+      held = { key, selector };
+      targetListeners.forEach((callback) =>
+        callback({ selected, target: held }, { selected, target: previous }),
+      );
+    },
+    select: (key) => {
+      const previous = held;
+      held = null;
+      targetListeners.forEach((callback) =>
+        callback({ selected: key, target: null }, { selected, target: previous }),
+      );
+    },
+    getStyleMap: () => ({}),
+    getRootUuid: () => 'root',
+    getBlockTypes: () => ({}),
+    getSectionLayouts: () => ({}),
+    getLayout: () => [],
+    getTree: () => [],
+    getLayoutContext: () => null,
+    getMediaUrls: () => ({}),
+    canPickMedia: () => false,
+    getCanvasVector: () => null,
+    getForceState: () => null,
+    getPlace: () => ({ place: 'styles', editing: null }),
+    onTargetChange: (callback) => targetListeners.add(callback),
+    onStyleMapChange: () => {},
+    onForceStateChange: () => {},
+    onPlaceChange: () => {},
+    onCanvasVectorChange: () => () => {},
+  };
+  const scope = `${SCOPE}-address`;
+  const wire = new BroadcastChannel(`daedalus_stylish:${scope}`);
+  const frames = [];
+  wire.onmessage = (event) => frames.push(event.data);
+  const satellite = createSatelliteSource(scope);
+  const heard = [];
+  satellite.onTargetChange(({ target }) => heard.push(target));
+  createPopoutLeader({ scope, url: 'about:blank', source: leaderSource });
+  await settle();
+  // The snapshot carries the facet below the selection as the target.
+  assert.deepEqual(satellite.getTarget(), { key: selected, selector: '.text-block-link' });
+  assert.equal(satellite.getWriteAddress, undefined);
+  assert.equal(satellite.setWriteAddress, undefined);
+  assert.deepEqual(heard, [{ key: selected, selector: '.text-block-link' }]);
+  const address = { key: 'container:bbbbbbbb-1111-2222-3333-444444444444', selector: 'a' };
+  satellite.target(address.key, address.selector);
+  await settle();
+  // The intent carries the address alone, the leader's spine seats it,
+  // and the echo lands here once as the snapshot's target.
+  assert.deepEqual(frames.filter((frame) => frame.intent === 'target'), [{ type: 'intent', intent: 'target', ...address }]);
+  assert.deepEqual(held, address);
+  assert.deepEqual(satellite.getTarget(), address);
+  assert.deepEqual(heard, [{ key: selected, selector: '.text-block-link' }, address]);
+  assert.equal(frames.some((frame) => frame.intent === 'write-address'), false);
+  // Dropping to the bare element is a select intent; the target echoes
+  // back null.
+  satellite.select(selected);
+  await settle();
+  assert.equal(held, null);
+  assert.equal(satellite.getTarget(), null);
+  assert.deepEqual(heard, [{ key: selected, selector: '.text-block-link' }, address, null]);
   wire.close();
 });
 

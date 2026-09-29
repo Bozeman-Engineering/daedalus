@@ -57,10 +57,3 @@ daedalus_ui.mode.plugin:
         PluginExists:
           manager: plugin.manager.modes
           interface: '\Drupal\daedalus_ui\ModeInterface'
-daedalus_ui.mode.edit:
-  type: daedalus_ui.mode.plugin
-  label: 'Edit Mode'
-  mapping:
-    default_tool:
-      type: string
-      label: 'Default tool'

@@ -198,11 +198,14 @@ final class InspectorSidebar extends SidebarPluginBase implements ContainerFacto
 
     // The pop-out needs a channel scope, which needs a main entity; without
     // one (an admin page, an ambiguous route) the client renders no pop-out
-    // control and the panel stays in-page only.
+    // control and the panel stays in-page only. The scope itself is the
+    // edit session's identity, delivered once by the Edit mode as
+    // daedalusUi.editSession.scope (the leader pairs on that); this setting
+    // carries only the satellite's URL, with the scope forwarded as ?scope
+    // per the pop-out route contract (Chromeless).
     $scope = $entity !== NULL ? $this->editSessionScope->derive($entity) : NULL;
     if ($scope !== NULL) {
       $build['#attached']['drupalSettings']['daedalusStylish']['popout'] = [
-        'scope' => $scope,
         'url' => Url::fromRoute('daedalus_stylish.inspector_popout', [], ['query' => ['scope' => $scope]])->toString(),
       ];
     }

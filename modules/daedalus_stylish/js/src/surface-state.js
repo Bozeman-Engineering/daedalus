@@ -5,10 +5,13 @@ import { entryRefs } from './variant-scope.js';
  *
  * The inspector answers four questions with four controls, each shown
  * only where its question exists: the PLACE (styles or materials, the
- * Materials toggle on the row under the panel title), the styling MODE
- * (basic / advanced / code, the segments on the same row, a preference
- * over the styling place; ui-mode.js), the code SCOPE (code mode only)
- * and the POSE (the chip row, the styling place only). Exactly one of
+ * Materials toggle on the mode row, pinned under the subject line and
+ * the pose group), the styling MODE (basic / advanced / code, the
+ * segments on the same row, a preference over the styling place;
+ * ui-mode.js), the code SCOPE (code mode only, the showing row's
+ * sentence at the top of the code body; page-view.js) and the POSE
+ * (the chip row above the mode row,
+ * the styling place only). Exactly one of
  * the row's four buttons is lit: a mode click always lands in the
  * styling place, Materials always in the catalog. This module owns the
  * place half: the vocabulary and the rules decidable without a DOM.
@@ -27,9 +30,9 @@ import { entryRefs } from './variant-scope.js';
  * other window as a document.
  *
  * This module owns everything decidable without a DOM: the vocabulary,
- * the selection-move rule (on a selection move an editing session
- * survives only when
- * the new selection wears the edited document; otherwise it exits,
+ * the selection-move rule (on a selection or target move an editing
+ * session survives only when the new styling target's wear key, an
+ * element or a rule, wears the edited document; otherwise it exits,
  * prompting when pending work would be left behind), and the
  * session-anchoring reads (an update session's pending lines are
  * variant-relative, so the session survives a wearer-to-wearer move and
@@ -63,13 +66,14 @@ export const normalizePlace = (place) =>
   PLACES.includes(place) ? place : 'styles';
 
 /**
- * Whether an element's entry wears the edited document.
+ * Whether a wear key's entry wears the edited document.
  *
  * A reference IS the variant's record id (one identity, one string), so
  * wearing is a verbatim match over the entry's references.
  *
  * @param {?object} entry
- *   The element's ROOT style entry (references live on base entries).
+ *   The wear key's style entry: an element's root entry or a rule's
+ *   (references live on element and rule entries, never on parts).
  * @param {?string} reference
  *   The edited document's reference.
  *
@@ -90,18 +94,20 @@ export const wearsDocument = (entry, reference) =>
  * keeps `editing` null while its session holds the panel, so moves pass
  * through here too — the draft's own subtree rule (its holder's
  * business) decides when it leaves. An editing session survives the move
- * when the new selection wears the edited document — cheap because
- * pending lines are variant-relative, so only the preview re-anchors
- * (reanchorSession). Otherwise the session exits with `editing` cleared;
- * `prompt` says the leave-prompt must fire first (pending work would be
- * left behind — nothing committable discards silently).
+ * (of the selection, or of the styling target on it) when the new wear
+ * key wears the edited document — cheap because pending lines are
+ * variant-relative, so only the preview re-anchors (reanchorSession).
+ * Otherwise the session exits with `editing` cleared; `prompt` says the
+ * leave-prompt must fire first (pending work would be left behind —
+ * nothing committable discards silently).
  *
  * @param {{place: string, editing: ?string}} state
  *   The current place and the edited document's reference (null = no
  *   editing session mounted).
  * @param {object} context
  * @param {?object} context.entry
- *   The NEW selection's root style entry.
+ *   The NEW wear key's style entry (the selected element's, or the
+ *   rule the target names).
  * @param {number} context.pending
  *   The open session's pending row count (pending.js sessionCount()).
  *
@@ -118,18 +124,20 @@ export const selectionMove = (
 };
 
 /**
- * Re-anchors an update session on a wearer-to-wearer selection move.
+ * Re-anchors an update session on a wearer-to-wearer move.
  *
  * The session's staged lines are variant-relative — nothing in them names
  * the old wearer — so anchoring is ONE field: the wearer whose context
- * previews the document. Only update sessions re-anchor (a save session's
+ * previews the document, the styling target's wear key (an element, or
+ * a rule wearing the document: a selection move and a target move
+ * re-anchor alike). Only update sessions re-anchor (a save session's
  * anchor is its capture root: the capture IS that element's look), and a
  * no-op move returns the same object so subscribers can skip re-rendering.
  *
  * @param {?object} session
  *   The open pending session (pending.js shapes).
  * @param {string} key
- *   The new wearer's selectable key.
+ *   The new wearer's key: an element's selectable key or a rule key.
  *
  * @return {?object}
  */

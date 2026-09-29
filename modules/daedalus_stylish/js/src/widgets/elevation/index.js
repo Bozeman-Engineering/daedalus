@@ -1,6 +1,7 @@
 import { h } from 'preact';
-import { controlWidgets } from '../../controls.js';
+import { controlWidgets, litValues } from '../../controls.js';
 import { ChoiceRow } from '../lib/choice-row.js';
+import { styleTarget } from '../lib/use-highlight.js';
 import { widgetClasses } from '../lib/widget-classes.js';
 
 /**
@@ -26,6 +27,7 @@ const Elevation = ({
   model,
   guide,
   materials,
+  source,
   onPreview,
   onRelease,
   onCommit,
@@ -36,14 +38,18 @@ const Elevation = ({
     <ChoiceRow
       guide={guide}
       materials={materials}
+      source={source}
+      highlight={styleTarget(model.keys['box-shadow'])}
       condition={model.condition}
       label={model.label}
       property="box-shadow"
-      value={model.values['box-shadow']}
+      value={litValues(model.reads)['box-shadow']}
       definition={model.propertyDefinitions?.['box-shadow'] ?? {}}
       constraints={model.constraints?.['box-shadow'] ?? {}}
-      entry={model.entry}
-      provenance={model.provenance}
+      stack={model.stacks['box-shadow']}
+      read={model.reads['box-shadow']}
+      disabled={Boolean(model.withheld?.['box-shadow'])}
+      disabledTitle={model.withheld?.['box-shadow'] ?? null}
       onPickCondition={onPickCondition}
       onOpenDocument={onOpenDocument}
       onPreview={onPreview}

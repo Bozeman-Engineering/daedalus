@@ -57,7 +57,7 @@ const refId = (ref) => `${ref.variant}#${ref.fragment}`;
  * The condition blocks whose content differs.
  *
  * Everything in an entry except the `variants` list is a condition-keyed
- * block of overrides, so the names ARE the WHEN axis,
+ * block of overrides, so the names ARE the condition axis,
  * exactly what a reader wants to see changed.
  */
 const changedConditions = (before, after) => {

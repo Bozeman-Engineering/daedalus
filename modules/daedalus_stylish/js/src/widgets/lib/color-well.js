@@ -22,9 +22,10 @@ import { useSwatchWell } from './swatch-well.js';
  *   own stops (gradient kinds, the synthetic media stop) append AFTER
  *   them, so the popover's grid lists colors first.
  * - The face over the value space (color-field-model.js colorFace, the
- *   color field's read) is derived from the draft-layered value, so a
- *   staged picker color is what the well wears; the lane's hex and the
- *   mint gate derive from it.
+ *   color field's read) is derived from the draft-layered value (the
+ *   winner's at the pose beneath the draft, controls.js litValues), so
+ *   a staged picker color is what the well wears; the lane's hex and
+ *   the mint gate derive from it.
  * - The color lane (native-picker.js useColorLane) opens the browser's
  *   color chooser over the property's value: the hidden picker's input
  *   events stage the draft (the well repaints its literal face live and
@@ -40,11 +41,6 @@ import { useSwatchWell } from './swatch-well.js';
  *   the same pick door a stop takes.
  * - The well and its popover (swatch-well.js useSwatchWell) carry the
  *   consumer's lanes AFTER the color lane, and the mint row beneath.
- * - The ghost beneath an unset well is the consumer's `ghost`: the raw
- *   resting value its origin read carries (choice-row-model.js
- *   originFor's `ghost`, the same read that hues the row's mark), faced
- *   by the well at the model's condition. The state read never learns
- *   about it.
  *
  * Every write leaves through ONE door, `onPick(stop, appended)`: a grid
  * pick (the lit stop as null, the Segments contract), a settled literal
@@ -76,8 +72,8 @@ import { useSwatchWell } from './swatch-well.js';
  *   useGesture's stage: the color lane's input events stage
  *   `{[property]: hex}` through it.
  * @param {Function} options.onPreview
- *   The widget's preview handler, called with (property, value) for a
- *   settled literal's preview spelling.
+ *   The widget's preview handler, called with `{[property]: value}` for
+ *   a settled literal's preview spelling.
  * @param {Function} options.state
  *   Called with the color stop table; returns the well's mapped state
  *   ({selected, custom, value, ...}, useSwatchWell's `state`).
@@ -93,11 +89,11 @@ import { useSwatchWell } from './swatch-well.js';
  *   The save-as-swatch grant.
  * @param {?object} [options.source]
  *   The state source the mint commits through (required with canMint).
- * @param {?string} [options.customTitle]
- *   useSwatchWell's custom-face tooltip override.
- * @param {?string} [options.ghost]
- *   The RAW resting value beneath an unset well (originFor's `ghost`),
- *   or null.
+ * @param {boolean} [options.disabled]
+ *   useSwatchWell's inert posture (the write address withholds the
+ *   property), `disabledTitle` its reason; the color lane's picker
+ *   closes with it.
+ * @param {?string} [options.disabledTitle]
  *
  * @return {{well: object, input: ?object, popover: ?object, closed:
  *   boolean, stops: Array, space: object, face: object}}
@@ -120,8 +116,8 @@ export const useColorWell = ({
   lanes = [],
   canMint = false,
   source = null,
-  customTitle = null,
-  ghost = null,
+  disabled = false,
+  disabledTitle = null,
 }) => {
   const constraints = model.constraints?.[property] ?? null;
   const definition = model.propertyDefinitions?.[property] ?? null;
@@ -155,13 +151,13 @@ export const useColorWell = ({
       return;
     }
     if (preview !== null) {
-      onPreview(property, preview);
+      onPreview({ [property]: preview });
     }
     onPick({ value: spelling }, false);
   };
   const colorLane = useColorLane({
     face,
-    disabled: closed,
+    disabled: closed || disabled,
     onInput: (event) => stage({ [property]: event.target.value }),
     onChange: (event) => settleLiteral(event.target.value),
   });
@@ -176,15 +172,14 @@ export const useColorWell = ({
     stops: [...colorStops, ...stops],
     state: mapped,
     custom: mapped.custom ? mapped.value : null,
-    ghost,
-    condition: model.condition,
     guide,
     materials,
     closed,
     onPick: (stop) => onPick(stop, stop !== null && stops.includes(stop)),
     lanes: [...(closed ? [] : [colorLane.lane]), ...lanes],
     below: mint.row,
-    customTitle,
+    disabled,
+    disabledTitle,
   });
   return {
     well,

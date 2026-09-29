@@ -1,8 +1,9 @@
 import store from '../store/store';
 import {
   setHover,
-  setHoverPart,
+  setHoverSelector,
   setSelected,
+  setTarget,
   toggleSelected,
   removeSelected,
   setSelectedSet,
@@ -10,9 +11,17 @@ import {
   clearSelection,
 } from '../store/slices/selection-slice';
 import { elementForKey } from './resolver';
-import { enqueueOperations, isDraining, applyResponse } from '../ops/op-queue';
+import {
+  enqueueOperations,
+  enqueueJob,
+  isDraining,
+  drained,
+  applyResponse,
+} from '../ops/op-queue';
 import { reportMutationFailure } from '../ops/failure-report';
-import { labelForKey } from './label-for-key';
+import { preserveScroll } from '../ops/preserve-scroll';
+import { labelForKey, targetLabel } from './label-for-key';
+import { projectionIndex } from '../components/page-elements/projection-index';
 import { typeForKey } from './type-for-key';
 import { isFormOnlyStub } from '../blueprint/form-only-stub';
 import { componentForUuid } from '../blueprint/component-for-uuid';
@@ -21,6 +30,7 @@ import { resolveElement } from '../blueprint/element-resolver';
 import { warnMissingEntityUi } from '../utilities/warn';
 import { selectRoster } from '../store/slices/materials-slice';
 import { MATERIAL_KINDS, scopesPair } from '../materials/roster';
+import { canonicalSelector } from '../materials/relative-selector';
 import {
   KIND,
   SLOT,
@@ -41,13 +51,57 @@ import {
 /**
  * The public face of selection and mutation for code outside the app.
  *
- * Non-app consumers — the AI chat panel, tool JS that has not yet folded
- * into the app, third-party modules — read and drive selection through
+ * Non-app consumers (the AI chat panel, module JS that has not yet folded
+ * into the app, third-party modules) read and drive selection through
  * this facade instead of touching the store. Keys are selectable keys
  * (data-selectable attribute values).
  */
+/**
+ * The relative selector a public write carries, canonicalized through the
+ * grammar twin (relative-selector.js): null for an element-only write,
+ * else the one canonical spelling the projection index addresses and
+ * style-map keys carry. Text outside the grammar is a caller bug, never
+ * an address to seat: it throws rather than committing one nothing can
+ * resolve.
+ */
+const relativeSelector = (selector) => {
+  if (selector === null || selector === undefined) {
+    return null;
+  }
+  const canonical = canonicalSelector(selector);
+  if (canonical === null) {
+    throw new TypeError(
+      `"${selector}" is not a relative selector (a part as '.cls', the children as '> *', a type as '> pb-text', a tag as 'p').`,
+    );
+  }
+  return canonical;
+};
+
+/**
+ * Whether `key` is an element-tier ancestor of `of` in the projection
+ * index (the panel's own nesting, parts transparent). Unknown keys have
+ * no ancestry: a key the index cannot place, or no index yet, answers
+ * false.
+ */
+const isAncestor = (index, key, of) => {
+  let cursor = index?.get(of)?.parent ?? null;
+  while (cursor) {
+    if (cursor === key) {
+      return true;
+    }
+    cursor = index.get(cursor)?.parent ?? null;
+  }
+  return false;
+};
+
 export const initSelectionFacade = () => {
   Drupal.Daedalus = Drupal.Daedalus || {};
+
+  /**
+   * The seam every canvas replacer runs its DOM removal through
+   * (ops/preserve-scroll.js): a canvas subtree swap never moves the window.
+   */
+  Drupal.Daedalus.preserveScroll = preserveScroll;
 
   Drupal.Daedalus.Selection = {
     /**
@@ -56,12 +110,17 @@ export const initSelectionFacade = () => {
     getSelected: () => store.getState().selection.selectedKey,
 
     /**
-     * The committed selection's part facet — the part id sub-selected on
-     * the selected element, or null. Its owner is always getSelected();
-     * the facet never outlives its key (any element-only selection
-     * gesture clears it).
+     * The styling target, or null when styling acts on the selected
+     * element itself: {key, selector}, the address every styling gesture
+     * acts at (`${key}::${selector}` is its style-map key). Four shapes:
+     * a declared part of the selection ({selected, '.cls'}), a tag tier
+     * of it ({selected, 'p'}), a chain seated from code mode ({selected,
+     * '> pb-text .quote'}), or an ancestor rule reaching it ({ancestor
+     * key, '> pb-text'}). Its key is always getSelected() or an ancestor
+     * of it, and it never outlives the selection: every selection write
+     * clears it.
      */
-    getSelectedPart: () => store.getState().selection.selectedPart,
+    getTarget: () => store.getState().selection.target,
 
     /**
      * The hovered (would-select) selectable key, or null.
@@ -69,11 +128,11 @@ export const initSelectionFacade = () => {
     getHovered: () => store.getState().selection.hoverKey,
 
     /**
-     * The hovered part as {key, part}, or null. It carries its own owner
-     * key because part hover need not ride element hover: a tree part-row
-     * hover lights a part without touching getHovered().
+     * The hovered selector as {key, selector}, or null. It carries its own
+     * owner key because selector hover need not ride element hover: a tree
+     * part-row hover lights a part without touching getHovered().
      */
-    getHoveredPart: () => store.getState().selection.hoverPart,
+    getHoveredSelector: () => store.getState().selection.hoverSelector,
 
     /**
      * Programmatically drives the transient hover — the same state the
@@ -81,20 +140,28 @@ export const initSelectionFacade = () => {
      * surface (canvas outline, panel row, any subscribed panel) follows
      * one key. Callers mirror the panel rows' contract: set on enter,
      * and on leave clear only a hover you set (getHovered() still yours),
-     * never clobber another surface's. Pass a part to hover a part of the
-     * element too (canvas Cmd-hover's shape); a bare key clears the part
-     * facet.
+     * never clobber another surface's. Pass a selector to hover an
+     * address under the element too (canvas Cmd-hover's shape, a part as
+     * '.cls'); a bare key clears the selector facet. The selector is
+     * canonicalized through the grammar, and text outside it throws.
      */
-    hover: (key, part = null) => store.dispatch(setHover({ key, part })),
+    hover: (key, selector = null) =>
+      store.dispatch(setHover({ key, selector: relativeSelector(selector) })),
 
     /**
-     * Drives ONLY the part-hover facet, leaving the element hover alone —
-     * the shape of a tree part-row hover, which lights the part without
-     * lighting the owner element's hover outline. Pass the part's owner
-     * key with it; hoverPart(null) clears.
+     * Drives ONLY the selector-hover facet, leaving the element hover
+     * alone — the shape of a tree part-row hover, which lights the part
+     * without lighting the owner element's hover outline. Pass the
+     * selector's owner key with it; hoverSelector(null) clears. The
+     * selector is canonicalized through the grammar, and text outside it
+     * throws.
      */
-    hoverPart: (key, part = null) =>
-      store.dispatch(setHoverPart(key && part ? { key, part } : null)),
+    hoverSelector: (key, selector = null) => {
+      const canonical = relativeSelector(selector);
+      store.dispatch(
+        setHoverSelector(key && canonical ? { key, selector: canonical } : null),
+      );
+    },
 
     /**
      * The DOM element currently carrying a selectable key, or null.
@@ -109,11 +176,43 @@ export const initSelectionFacade = () => {
 
     /**
      * Programmatically selects a selectable key (e.g. from a panel row).
-     * The set collapses to this one key. Pass a part to sub-select a part
-     * of the element; omitting it clears any part facet (a part is only
-     * ever selected explicitly).
+     * The set collapses to this one key, and the styling target clears: a
+     * selection is an element identity, and a target is only ever set
+     * explicitly on top of it (target()). Re-selecting the selected key
+     * is the gesture that drops a target back to the whole element.
      */
-    select: (key, part = null) => store.dispatch(setSelected({ key, part })),
+    select: (key) => store.dispatch(setSelected(key)),
+
+    /**
+     * Sets the styling target on the current single selection: `key` is
+     * the selected element (a part as '.cls', a tag tier as 'p', a chain
+     * as '> pb-text .quote') or one of its ancestors per the projection
+     * index's ancestry (an ancestor rule as '> pb-text', the inspector's
+     * switcher). The selector is canonicalized through the grammar; text
+     * outside it, a key that is neither the selection nor an ancestor,
+     * or no single selection to target under, throws rather than seating
+     * an address nothing can resolve. Whether the address is a member of
+     * the element's address set (an ancestor rule that reaches it) is
+     * the styling module's judgement, not the spine's.
+     */
+    target: (key, selector) => {
+      const canonical = relativeSelector(selector);
+      if (canonical === null) {
+        throw new TypeError('A styling target needs a relative selector.');
+      }
+      const { selectedKey, selectedKeys } = store.getState().selection;
+      if (!selectedKey || selectedKeys.length !== 1) {
+        throw new TypeError(
+          'A styling target needs a single selected element to belong to.',
+        );
+      }
+      if (key !== selectedKey && !isAncestor(projectionIndex(), key, selectedKey)) {
+        throw new TypeError(
+          `Styling target key "${key}" is neither the selected element "${selectedKey}" nor an ancestor of it.`,
+        );
+      }
+      store.dispatch(setTarget({ key, selector: canonical }));
+    },
 
     /**
      * Toggles a key's membership in the multi-select set — the
@@ -147,17 +246,17 @@ export const initSelectionFacade = () => {
     drill: (key) => store.dispatch(setDrill(key)),
 
     /**
-     * Clears selection, hover, drill, and part-facet state.
+     * Clears selection, hover, drill, target and hover-selector state.
      */
     clear: () => store.dispatch(clearSelection()),
 
     /**
      * Subscribes to selection changes — KEY changes only, deliberately:
-     * this fires when the selected ELEMENT changes, never on a part-facet
-     * change under the same key, so element-scoped consumers that clear
-     * state on any fire (force-state stamps, highlight claims) are not
-     * disturbed by part drills. Part-aware consumers subscribe to
-     * onPartChange instead.
+     * this fires when the selected ELEMENT changes, never on a styling
+     * target change under the same key, so element-scoped consumers that
+     * clear state on any fire (force-state stamps, highlight claims) are
+     * not disturbed by target moves. Target-aware consumers subscribe to
+     * onTargetChange instead.
      *
      * @param {Function} callback
      *   Called with (selectedKey, previousKey) whenever the committed
@@ -179,28 +278,34 @@ export const initSelectionFacade = () => {
     },
 
     /**
-     * Subscribes to the committed (key, part) pair — the part-aware
-     * counterpart of onChange: fires when the selected element OR its part
-     * facet changes, so part surfaces (canvas part paint, tree part rows,
-     * inspector target, code mode) track sub-selection from one
-     * subscription.
+     * Subscribes to the selection and its styling target — the
+     * target-aware counterpart of onChange: fires when the selected
+     * element OR the target changes (the target value-compared on its
+     * key and selector), so styling surfaces (canvas selector paint,
+     * tree part rows, the inspector, code mode) track the address from
+     * one subscription.
      *
      * @param {Function} callback
-     *   Called with ({key, part}, {key, part}) — current then previous;
-     *   part is null for an element-only selection, key is null for none.
+     *   Called with ({selected, target}, {selected, target}) — current
+     *   then previous; selected is the selected key (null for none),
+     *   target is {key, selector} or null.
      *
      * @return {Function}
      *   Unsubscribe.
      */
-    onPartChange: (callback) => {
+    onTargetChange: (callback) => {
       const read = () => {
-        const { selectedKey, selectedPart } = store.getState().selection;
-        return { key: selectedKey, part: selectedPart };
+        const { selectedKey, target } = store.getState().selection;
+        return { selected: selectedKey, target };
       };
       let previous = read();
       return store.subscribe(() => {
         const current = read();
-        if (current.key !== previous.key || current.part !== previous.part) {
+        if (
+          current.selected !== previous.selected ||
+          current.target?.key !== previous.target?.key ||
+          current.target?.selector !== previous.target?.selector
+        ) {
           const last = previous;
           previous = current;
           callback(current, last);
@@ -233,25 +338,26 @@ export const initSelectionFacade = () => {
     },
 
     /**
-     * Subscribes to part-hover changes — the transient part facet the part
-     * paint surfaces render from. Value-compared (owner key + part id), so
-     * re-asserting the same part does not fire. Like onHoverChange, fires
-     * at pointer speed; consumers should paint, not recompute.
+     * Subscribes to selector-hover changes — the transient selector facet
+     * the selector paint surfaces render from. Value-compared (owner key +
+     * selector), so re-asserting the same selector does not fire. Like
+     * onHoverChange, fires at pointer speed; consumers should paint, not
+     * recompute.
      *
      * @param {Function} callback
-     *   Called with (hoverPart, previousHoverPart) — each {key, part} or
-     *   null.
+     *   Called with (hoverSelector, previousHoverSelector) — each
+     *   {key, selector} or null.
      *
      * @return {Function}
      *   Unsubscribe.
      */
-    onHoverPartChange: (callback) => {
-      let previous = store.getState().selection.hoverPart;
+    onHoverSelectorChange: (callback) => {
+      let previous = store.getState().selection.hoverSelector;
       return store.subscribe(() => {
-        const current = store.getState().selection.hoverPart;
+        const current = store.getState().selection.hoverSelector;
         if (
           current?.key !== previous?.key ||
-          current?.part !== previous?.part
+          current?.selector !== previous?.selector
         ) {
           const last = previous;
           previous = current;
@@ -286,13 +392,30 @@ export const initSelectionFacade = () => {
   };
 
   /**
-   * The mutation entry point for verbs, tools, and third parties: queue a
+   * The mutation entry point for verbs, sub-modules, and third parties: queue a
    * blueprint operation batch against the endpoint and have the response
    * (markup swaps, assets, commands) applied to the page.
    */
   Drupal.Daedalus.Blueprint = {
     mutate: enqueueOperations,
+
+    /**
+     * Queues a write that answers the mutation-response contract by its
+     * own transport (daedalus_edit's form commit: the panel form's AJAX
+     * submit, whose response carries the payload as one
+     * daedalusBlueprintApplyResponse command). The job runs FIFO with the
+     * ops around it and resolves with the applied payload, so a form
+     * commit and a spine op never overtake each other.
+     */
+    enqueueJob,
     isDraining,
+
+    /**
+     * Resolves once nothing is queued or in flight: the wait Save takes
+     * before navigating to the save route, so a commit still on the wire
+     * lands in tempstore first.
+     */
+    drained,
 
     /**
      * Applies a mutation-response payload ({blueprint, markup, targets,
@@ -413,13 +536,24 @@ export const initSelectionFacade = () => {
     labelForKey,
 
     /**
+     * The words for a styling TARGET's selector ("every link", "Raster"):
+     * the label resolver's sibling seam (label-for-key.js targetLabel),
+     * the styling module's vocabulary where one registered a label seam,
+     * the raw selector otherwise. The breadcrumb's target crumb and the
+     * AI chat's target chip both read it here, so a target is worded one
+     * way everywhere.
+     */
+    targetLabel,
+
+    /**
      * The TYPE name for a selectable key: what kind of thing it is
      * ("Text", "Section", "Body"), never what it says. The label
      * resolver's sibling read of the same projection (type-for-key.js):
-     * the node's kind plus the blueprint's bundle. Never null: the
-     * selection frame's canvas chips read THIS resolver — the canvas
-     * already shows the content, so its chip speaks type — and any other
-     * surface wanting type wording reads it here, never re-deriving.
+     * the server-minted `_element.type` the projection carries on the
+     * node. Never null: the selection frame's canvas chips read THIS
+     * resolver — the canvas already shows the content, so its chip speaks
+     * type — and any other surface wanting type wording reads it here,
+     * never re-deriving.
      */
     typeForKey,
 

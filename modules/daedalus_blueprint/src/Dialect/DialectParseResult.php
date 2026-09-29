@@ -24,10 +24,15 @@ final class DialectParseResult {
    *   at the insertion point.
    * @param \Drupal\daedalus_blueprint\Dialect\DialectError[] $errors
    *   Structural errors, each with a line number where one applies.
+   * @param list<array{name: string, type: string, content: string, line: int}> $files
+   *   The document's <pb-file> declarations (bytes the author wrote, to be
+   *   saved through the file lane before the tree lands), in document
+   *   order. Always empty for a fragment: a declaration is a document's.
    */
   public function __construct(
     public readonly array $tree,
     public readonly array $errors,
+    public readonly array $files = [],
   ) {}
 
   /**

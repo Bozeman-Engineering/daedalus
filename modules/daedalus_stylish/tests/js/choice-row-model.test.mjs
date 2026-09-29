@@ -3,7 +3,9 @@
  * (js/src/choice-row-model.js): the hide rule, the offer joined from the
  * widget stop table and the value space, the lit state normalized onto
  * the offer (segmentState or a caller-supplied mapper), the grip's
- * detent-scrub eligibility, and the painted-space rule.
+ * detent-scrub eligibility, the painted-space rule, and the row's origin
+ * over its stack read (originFor: the winner lit, whichever layer
+ * delivers it, and the sentence naming that layer).
  *
  * Run directly: `node tests/js/choice-row-model.test.mjs`. Exits non-zero
  * on failure.
@@ -14,12 +16,12 @@ import {
   choiceState,
   choiceStops,
   dimensionShaped,
-  ghostFace,
+  originFor,
   paintedSpace,
-  restingValue,
   rowHidden,
   scrubbable,
 } from '../../js/src/choice-row-model.js';
+import { buildStack, stackAt } from '../../js/src/style-stack.js';
 import { surfaceFor, valueSpaceFor } from '../../js/src/value-space.js';
 import { positionAxes, propertyStops } from '../../js/src/widget-values.js';
 import { STROKES, strokeState } from '../../js/src/widgets/lib/stroke-model.js';
@@ -267,84 +269,155 @@ test('scrubbable: keyword and shadow vocabularies hold the ring, the field scrub
   assert.equal(scrubbable(single, surfaceFor(single)), false);
 });
 
-// --- restingValue / ghostFace ---------------------------------------------
+// --- originFor over a stack read ---------------------------------------------
 
 // A guide with a width single and a scheme single, so a pose can sit at
-// Base, at one single, or at a compound; the entries below are the raw
-// condition-keyed shapes a control model's RESOLVED `entry` and the
-// provenance's two defaults entries carry.
+// Base, at one single, or at a compound; the stack is built the way a
+// control model builds it (a text block's root, the skin's and the
+// declaration's block_type blocks, a worn variant, the own entry).
+const UUID = 'aaaaaaaa-1111-2222-3333-444444444444';
+const KEY = `block:${UUID}`;
 const posedGuide = {
   ...guide,
   conditions: {
     medium: { label: 'Medium', axis: 'width' },
     dark: { label: 'Dark', axis: 'scheme' },
   },
+  skinEditUrl: '/admin/appearance/skins/1',
 };
-const restingAt = (condition, entry, skinEntry = null, declaredEntry = null) =>
-  restingValue({
-    guide: posedGuide,
-    condition,
-    property: 'font-size',
-    entry,
-    provenance: { skinEntry, declaredEntry },
+const library = [{
+  id: 'loud',
+  label: 'Loud',
+  scope: 'block_type:text',
+  value: { '': { dark: { 'font-size': '3rem' } } },
+}];
+const stackOf = ({ own = null, skin = null, declared = null, worn = false } = {}) =>
+  buildStack({
+    guide: {
+      ...posedGuide,
+      ...(skin ? { skinDefaults: { 'block_type:text': { '': skin } } } : {}),
+      ...(declared ? { declaredDefaults: { 'block_type:text': { '': declared } } } : {}),
+    },
+    map: { [KEY]: { ...(own ?? {}), ...(worn ? { variants: [{ variant: 'loud', fragment: '' }] } : {}) } },
+    key: KEY,
+    variants: library,
+    blockTypes: { [UUID]: 'text' },
   });
-
-test('restingValue: the skin delivers when the map sets nothing, raw', () => {
-  const skin = { default: { 'font-size': 'var(--text-body)' } };
-  const declared = { default: { 'font-size': '1rem' } };
-  assert.equal(restingAt('default', null, skin, declared), 'var(--text-body)', 'the var() spelling, never faced');
-  assert.equal(restingAt('medium', {}, skin, declared), 'var(--text-body)', 'the skin\'s Base block reaches Medium');
-  assert.equal(restingAt('medium+dark', {}, skin, declared), 'var(--text-body)');
+const originAt = (stack, condition, property = 'font-size') =>
+  originFor({ guide: posedGuide, materials: MATERIALS, condition, property, stack });
+// The block under a section whose `> pb-text` rule wears Loud (the worn
+// ancestor layer of T10), the guide naming the text type so the rule
+// reads in the switcher's words.
+const SECTION = 'container:cccccccc-1111-2222-3333-444444444444';
+const wordedGuide = { ...posedGuide, blockTypes: { text: { label: 'Text' } } };
+const underRule = () => buildStack({
+  guide: wordedGuide,
+  map: { [`${SECTION}::> pb-text`]: { variants: [{ variant: 'loud', fragment: '' }] } },
+  key: KEY,
+  variants: library,
+  blockTypes: { [UUID]: 'text' },
+  tree: [{ kind: 'container', uuid: SECTION.slice('container:'.length), layout_id: 'daedalus_stylish_container', _element: { name: 'Section', type: 'Section' }, children: [{ kind: 'block', uuid: UUID, block_type: 'text', _element: { name: 'Text', type: 'Text' } }] }],
 });
+const withDrupal = (run) => {
+  globalThis.Drupal = {
+    t: (text, args = {}) => Object.entries(args).reduce((out, [key, value]) => out.split(key).join(String(value)), text),
+  };
+  try {
+    run();
+  }
+  finally {
+    delete globalThis.Drupal;
+  }
+};
 
-test('restingValue: the declaration delivers beneath a skin that sets nothing for the property', () => {
-  const skin = { default: { 'line-height': '1.5' } };
-  const declared = { default: { 'font-size': '1rem' } };
-  assert.equal(restingAt('default', {}, skin, declared), '1rem');
-  assert.equal(restingAt('medium', {}, skin, declared), '1rem');
-  assert.equal(restingAt('medium', {}, null, declared), '1rem', 'no skin at all');
-});
+test('originFor: the skin delivers when the map sets nothing, lit in the skin hue, faced', () => withDrupal(() => {
+  const stack = stackOf({ skin: { default: { 'font-size': 'var(--radius-md)' } }, declared: { default: { 'font-size': '1rem' } } });
+  const base = originAt(stack, 'default');
+  assert.equal(base.delivers, true);
+  assert.equal(base.layer, 'skin:block_type:text');
+  assert.equal(base.header, '8px from the active skin', 'the reference faces at the pose, never its var() spelling');
+  assert.deepEqual(base.doorways.map((doorway) => doorway.id), ['skin']);
+  assert.equal(stackAt(stack, 'font-size', 'default').winner.value, 'var(--radius-md)', 'the read stays raw; only the sentence faces');
+  assert.equal(originAt(stack, 'medium').header, '8px from the active skin at Base', 'the skin\'s Base block reaches Medium');
+  assert.equal(originAt(stack, 'medium+dark').header, '8px from the active skin at Base');
+}));
 
-test('restingValue: an own Base value beats the defaults tier at another pose', () => {
-  const entry = { default: { 'font-size': '2rem' } };
-  const skin = { default: { 'font-size': 'var(--text-body)' }, medium: { 'font-size': '3rem' } };
-  assert.equal(restingAt('medium', entry, skin), '2rem', 'the map\'s Base value inherits into Medium over the skin\'s own Medium block');
-  assert.equal(restingAt('medium+dark', entry, skin), '2rem');
-});
+test('originFor: the declaration delivers beneath a skin that sets nothing for the property', () => withDrupal(() => {
+  const stack = stackOf({ skin: { default: { 'line-height': '1.5' } }, declared: { default: { 'font-size': '1rem' } } });
+  const origin = originAt(stack, 'medium');
+  assert.equal(origin.delivers, true);
+  assert.equal(origin.layer, 'declared:block_type:text');
+  assert.equal(origin.header, '1rem from the text block type declaration at Base');
+  assert.deepEqual(origin.doorways.map((doorway) => [doorway.id, doorway.disabled]), [['declared', true]]);
+  assert.equal(originAt(stackOf({ declared: { default: { 'font-size': '1rem' } } }), 'medium').layer, 'declared:block_type:text', 'no skin at all');
+}));
 
-test('restingValue: a worn variant\'s value at another condition rests beneath the compound', () => {
-  // The resolved entry already carries the worn variant's blocks; its
-  // Dark value is the row's value at Dark and the ghost at Medium+Dark.
-  const entry = { dark: { 'font-size': '3rem' } };
-  const skin = { default: { 'font-size': 'var(--text-body)' } };
-  assert.equal(restingAt('medium+dark', entry, skin), '3rem', 'Dark applies within Medium+Dark');
-  assert.equal(restingAt('dark', entry, skin), '3rem', 'at Dark itself the value is the row\'s own');
-  assert.equal(restingAt('medium', entry, skin), 'var(--text-body)', 'Dark does not reach Medium: the skin rests');
-});
+test('originFor: an own Base value beats the defaults tier at another pose', () => withDrupal(() => {
+  const stack = stackOf({
+    own: { default: { 'font-size': '2rem' } },
+    skin: { default: { 'font-size': 'var(--radius-md)' }, medium: { 'font-size': '3rem' } },
+  });
+  const origin = originAt(stack, 'medium');
+  assert.equal(origin.delivers, true, 'the map\'s Base value inherits into Medium over the skin\'s own Medium block');
+  assert.equal(origin.layer, 'element');
+  assert.equal(origin.header, '2rem from Base');
+  assert.deepEqual(origin.doorways.map((doorway) => doorway.id), ['drive'], 'the way to edit it is posing the canvas at Base');
+  assert.equal(originAt(stack, 'medium+dark').header, '2rem from Base');
+}));
 
-test('restingValue: a value set at the pose returns itself', () => {
-  const entry = { default: { 'font-size': '2rem' }, medium: { 'font-size': '2.5rem' } };
-  const skin = { default: { 'font-size': 'var(--text-body)' } };
-  assert.equal(restingAt('medium', entry, skin), '2.5rem');
-  assert.equal(restingAt('default', entry, skin), '2rem');
-});
+test('originFor: a worn variant\'s value at another condition is the lit value within the compound', () => withDrupal(() => {
+  const stack = stackOf({ worn: true, skin: { default: { 'font-size': 'var(--radius-md)' } } });
+  const compound = originAt(stack, 'medium+dark');
+  assert.equal(compound.delivers, true);
+  assert.equal(compound.layer, 'variant:loud');
+  assert.equal(compound.reference, 'loud');
+  assert.equal(compound.header, '3rem from Loud at Dark', 'Dark applies within Medium+Dark');
+  assert.deepEqual(compound.doorways.map((doorway) => doorway.id), ['document', 'drive']);
+  assert.equal(originAt(stack, 'dark').header, '3rem from Loud', 'at Dark itself no tail');
+  assert.equal(originAt(stack, 'medium').header, '8px from the active skin at Base', 'Dark does not reach Medium: the skin delivers');
+}));
 
-test('restingValue: nothing delivering returns null', () => {
-  assert.equal(restingAt('default', null), null);
-  assert.equal(restingAt('medium', {}, null, null), null);
-  assert.equal(restingAt('medium', { narrow: { 'font-size': '1rem' } }, { dark: { 'font-size': '2rem' } }), null, 'blocks outside the pose do not reach it');
-  assert.equal(restingAt('medium', { default: { 'font-size': null } }), null, 'a null is an unset, not a value');
-});
+test('originFor: a value set at the pose is the row\'s own; over a lower layer it overrides', () => withDrupal(() => {
+  const own = stackOf({ own: { default: { 'font-size': '2rem' }, medium: { 'font-size': '2.5rem' } } });
+  assert.equal(originAt(own, 'medium').atPose, true);
+  assert.equal(originAt(own, 'medium').title, '2.5rem set here at Medium. Also set at Base');
+  assert.equal(originAt(own, 'default').atPose, true);
+  assert.equal(originAt(own, 'default').header, '2rem set here');
+  const over = stackOf({ own: { default: { 'font-size': '2rem' } }, skin: { default: { 'font-size': 'var(--radius-md)' } } });
+  const origin = originAt(over, 'default');
+  assert.equal(origin.atPose, true);
+  assert.equal(origin.layer, 'element', 'the winner hues the mark; the beaten story is the sentence\'s');
+  assert.equal(origin.header, "Your 2rem overrides the active skin's 8px");
+  assert.deepEqual(origin.doorways.map((doorway) => doorway.id), ['unset', 'skin']);
+}));
 
-test('ghostFace: a reference faces at the pose, a literal as itself, nothing as null', () => {
-  assert.equal(ghostFace(guide, MATERIALS, 'var(--radius-md)', 'default'), '8px');
-  assert.equal(ghostFace(guide, MATERIALS, 'var(--radius-nope)', 'default'), 'var(--radius-nope)', 'an unresolvable reference faces honestly as its spelling');
-  assert.equal(ghostFace(guide, MATERIALS, '12px', 'default'), '12px');
-  assert.equal(ghostFace(guide, MATERIALS, 2, 'default'), '2', 'a number faces as its string');
-  assert.equal(ghostFace(guide, MATERIALS, null, 'default'), null);
-  assert.equal(ghostFace(guide, MATERIALS, undefined, 'default'), null);
-  assert.equal(ghostFace(guide, MATERIALS, '', 'default'), null);
-});
+test('originFor: a variant an ancestor\'s rule wears is the row\'s origin as a variant, the guide handed through for the rule\'s words', () => withDrupal(() => {
+  const origin = originFor({ guide: wordedGuide, materials: MATERIALS, condition: 'dark', property: 'font-size', stack: underRule() });
+  assert.equal(origin.delivers, true);
+  assert.equal(origin.reference, 'loud', 'the mark reads as a variant');
+  assert.equal(origin.header, '3rem from Loud at Text blocks directly in Section');
+  assert.deepEqual(origin.doorways.map((doorway) => [doorway.id, doorway.label]), [
+    ['document', 'Edit Loud at Dark…'],
+    ['ancestor', 'Edit at Text blocks directly in Section'],
+  ]);
+  assert.equal(origin.doorways[0].anchor, `${SECTION}::> pb-text`, 'the session anchors at the carrier');
+}));
+
+test('originFor: nothing delivering is "Not set" with no hue, or "not here" in the topmost author\'s hue; a read handed in is used as is', () => withDrupal(() => {
+  const empty = stackOf();
+  assert.equal(originAt(empty, 'default').delivers, false);
+  assert.equal(originAt(empty, 'default').color, null);
+  assert.equal(originAt(empty, 'default').title, 'Not set');
+  const outside = stackOf({ own: { narrow: { 'font-size': '1rem' } }, skin: { dark: { 'font-size': '2rem' } } });
+  assert.equal(originAt(outside, 'medium').delivers, false, 'blocks outside the pose do not reach it');
+  assert.equal(originAt(outside, 'medium').layer, 'element', 'the element authors above the skin');
+  assert.equal(originAt(outside, 'medium').title, 'Set at narrow, not here. Also set at Dark', 'the fixture labels no Narrow: the raw name');
+  // A caller's own read (a control model's reads[property]) wins over
+  // the stack's, so a widget never reads twice.
+  const stack = stackOf({ skin: { default: { 'font-size': '1rem' } } });
+  const read = stackAt(stack, 'font-size', 'default', posedGuide.conditions);
+  assert.equal(originFor({ guide: posedGuide, materials: MATERIALS, condition: 'default', property: 'font-size', stack, read }).title, '1rem from the active skin');
+}));
 
 // --- runner ---------------------------------------------------------------
 

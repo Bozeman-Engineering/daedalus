@@ -26,8 +26,9 @@ import { openChannel } from '../../broadcast/channel.js';
  * second tab on the same page) learns the mint the moment it lands:
  *
  * - channel `materials:<scope>`, scope = the edit session's
- *   (EditSessionScope, delivered as daedalusUi.responsivePreview.scope
- *   with the rest of the pairing settings);
+ *   (EditSessionScope, delivered once as daedalusUi.editSession.scope by
+ *   the Edit mode; a pop-out page carries the same value as
+ *   daedalusUi.popout.scope);
  * - one frame, `delta` {upsert, remove}, the response's delta verbatim.
  *
  * There is no hello/snapshot protocol: every window boots from the server
@@ -39,7 +40,7 @@ import { openChannel } from '../../broadcast/channel.js';
 let channel = null;
 
 const openWire = () => {
-  const scope = drupalSettings.daedalusUi?.responsivePreview?.scope;
+  const scope = drupalSettings.daedalusUi?.editSession?.scope;
   if (!scope) {
     return null;
   }

@@ -21,7 +21,7 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  * Tests the value grammar: what a string in a slot IS, how a material spells.
  *
  * Pins the resolution contract every former sniff site meets at: a whole
- * style value that is one var() or one media/generate url() resolves to
+ * style value that is one var() or one media/generate/file url() resolves to
  * its kind, anything else is a literal whose embedded references are
  * listed; class tokens, axis attribute values, stencil names and
  * animation names resolve through the roster's spelling index or come
@@ -110,6 +110,11 @@ class ValueGrammarTest extends KernelTestBase {
     $this->assertSame("url('generate:a calm lake')", $generate->spelling);
     $this->assertSame('', $grammar->resolve("url('generate:')", MaterialRecord::SLOT_STYLE, $roster)->id, 'An empty prompt is still a generate request; acceptability is the consumer\'s rule.');
 
+    $file = $grammar->resolve('url("File: Hero.svg ")', MaterialRecord::SLOT_STYLE, $roster);
+    $this->assertSame(['kind' => 'file', 'id' => 'Hero.svg', 'spelling' => "url('file:Hero.svg')"], $file->toArray(), 'The prefix reads quote- and case-agnostic; the name stays case-exact (file aliases are exact-match).');
+    $this->assertTrue(ValueKind::File->isInline());
+    $this->assertSame('', $grammar->resolve("url('file:')", MaterialRecord::SLOT_STYLE, $roster)->id, 'An empty name is still a file reference; acceptability is the consumer\'s rule.');
+
     foreach ([
       'red',
       '1px solid var(--swatch-lime_green)',
@@ -169,13 +174,14 @@ class ValueGrammarTest extends KernelTestBase {
       $ref->id,
     ], $refs);
 
-    $compound = "1px solid var(--swatch-lime_green), linear-gradient(var(--color-accent, red), url(x.png)), url('media:M1'), url('generate:sky')";
+    $compound = "1px solid var(--swatch-lime_green), linear-gradient(var(--color-accent, red), url(x.png)), url('media:M1'), url('generate:sky'), url('file:hero.svg')";
     $this->assertSame([
       ['swatch', 'lime_green'],
       ['token', 'color/accent'],
       ['media', 'm1'],
       ['generate', 'sky'],
-    ], $kinds($grammar->references($compound, MaterialRecord::SLOT_STYLE, $roster)), 'var() with a fallback, media and generate are listed; a file url() is not.');
+      ['file', 'hero.svg'],
+    ], $kinds($grammar->references($compound, MaterialRecord::SLOT_STYLE, $roster)), 'var() with a fallback, media, generate and file are listed; a plain url() is not.');
     $this->assertSame([['unknown', '--nope']], $kinds($grammar->references('var(--nope)', MaterialRecord::SLOT_STYLE, $roster)));
     $this->assertSame([], $grammar->references('red', MaterialRecord::SLOT_STYLE, $roster), 'A literal carries no reference.');
 
@@ -205,6 +211,7 @@ class ValueGrammarTest extends KernelTestBase {
     $this->assertSame("linear-gradient(red, blue), url('media:abc')", $grammar->canonical("linear-gradient(red, blue), $legacy", MaterialRecord::SLOT_STYLE, $roster));
     $this->assertSame('var(--color-accent, red) url(x.png)', $grammar->canonical('var( --color-accent, red) url(x.png)', MaterialRecord::SLOT_STYLE, $roster));
     $this->assertSame("url('generate:a dog')", $grammar->canonical('url(generate: a dog )', MaterialRecord::SLOT_STYLE, $roster));
+    $this->assertSame("url('file:hero.svg')", $grammar->canonical('url("file: hero.svg ")', MaterialRecord::SLOT_STYLE, $roster));
     $this->assertSame('var(--nope)', $grammar->canonical('var( --nope )', MaterialRecord::SLOT_STYLE, $roster), 'An unknown reference keeps its spelling; refusing it is the consumer\'s rule.');
     $this->assertSame('button nope', $grammar->canonical('  button   nope ', MaterialRecord::SLOT_CLASS, $roster));
     $this->assertSame('hero', $grammar->canonical(' hero ', MaterialRecord::SLOT_STENCIL, $roster));
@@ -225,6 +232,7 @@ class ValueGrammarTest extends KernelTestBase {
     $this->assertSame('motion-fade_in', $grammar->spell($roster->get(MaterialKind::Animation, 'fade_in'), MaterialRecord::SLOT_ANIMATION));
     $this->assertSame("url('media:abc')", ValueGrammar::spellMedia(' ABC '));
     $this->assertSame("url('generate:a dog')", ValueGrammar::spellGenerate('  a dog  '));
+    $this->assertSame("url('file:hero.svg')", ValueGrammar::spellFile('  hero.svg  '));
 
     $this->expectException(\InvalidArgumentException::class);
     $this->expectExceptionMessage('Swatch "lime_green" has no spelling in the class slot; it spells in: style.');
@@ -287,8 +295,9 @@ class ValueGrammarTest extends KernelTestBase {
     $style_values = [
       'var(--swatch-lime_green)', ' var( --color-accent ) ', 'var(--swatch-limegreen)', 'var(--color-accent, red)',
       'url("media:ABC-123")', "URL( 'Media:x' )", "url('generate: a calm lake ')", "url('generate:')", 'url(https://x/y.png)',
+      'url("File: Hero.svg ")', "url('file:')",
       'red', '', '1px solid var(--swatch-lime_green)',
-      "linear-gradient(var(--color-accent, red), url(x.png)), url('media:M1'), url('generate:sky')",
+      "linear-gradient(var(--color-accent, red), url(x.png)), url('media:M1'), url('generate:sky'), url('file:hero.svg')",
       'var(--nope) var(--swatch-lime_green)', 'button', 'hero', 'motion-fade_in',
     ];
     $slot_values = [
@@ -397,7 +406,9 @@ class ValueGrammarTest extends KernelTestBase {
     // Guard against a silently-degenerate battery: every kind answered.
     $kinds = array_unique(array_column($php['resolve'], 'kind'));
     sort($kinds);
-    $this->assertSame(['animation', 'generate', 'literal', 'media', 'stencil', 'swatch', 'token', 'unknown', 'variant'], $kinds);
+    $this->assertSame([
+      'animation', 'file', 'generate', 'literal', 'media', 'stencil', 'swatch', 'token', 'unknown', 'variant',
+    ], $kinds);
     $this->assertContains(TRUE, $php['applicable']);
     $this->assertContains(FALSE, $php['applicable']);
   }

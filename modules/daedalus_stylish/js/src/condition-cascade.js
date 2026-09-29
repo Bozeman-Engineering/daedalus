@@ -144,9 +144,9 @@ const isBlock = (block) =>
  * One property's set values across a condition-keyed entry, in the
  * buildSections row shape ({condition, value}, values stringified, the
  * `variants` lane skipped, nulls dropped), ordered Base first then the
- * guide's condition order: the `values` valueAtPose() and rowOrigin()
- * read for any condition-keyed entry (a control model's RESOLVED
- * `entry`, a skin or declared defaults entry).
+ * guide's condition order: the valueAtPose() and originOf() read for
+ * any condition-keyed entry (a stack layer's styles, the stack's
+ * delivered entry).
  *
  * @param {?object} entry
  *   A condition-keyed entry.

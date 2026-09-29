@@ -96,7 +96,9 @@ export const commitSession = ({
       // to the variant's values retire (competitor-safe, the exact save
       // re-attach rule), so an update-from-element diff lands as "this
       // element follows the variant again" instead of leaving identical
-      // shadows. A differing override is a live override and stays. The
+      // shadows. A differing override is a live override and stays. A
+      // rule anchor clears the same way over its own entry and its
+      // continuations by descent (captureSources at a rule key). The
       // pushed variant is the record the response's delta carried: the
       // shape the layer math speaks.
       const clearing = shadowClearingOps(

@@ -11,6 +11,7 @@ use Drupal\Core\Extension\ThemeHandlerInterface;
 use Drupal\daedalus_blueprint\DesignSystem\DesignSystemInterface;
 use Drupal\daedalus_blueprint\Entity\DesignSystem;
 use Drupal\daedalus_blueprint\Materials\Address;
+use Drupal\daedalus_blueprint\Materials\RelativeSelector;
 use Drupal\daedalus_blueprint\Materials\MaterialKind;
 use Drupal\daedalus_blueprint\Materials\MaterialRecord;
 use Drupal\daedalus_blueprint\Materials\MaterialsRoster;
@@ -51,9 +52,9 @@ use Drupal\daedalus_stylish\Vocabulary\VocabularyRosterBuilder;
  * one) and comes through validateAt().
  *
  * Two phases, mirroring daedalus_blueprint:
- * - Structural: keys parse (selectable keys with the ::.class sub-element
- *   extension, the dotless ::{tag} tag-tier extension over the declared
- *   instance tags, and the trailing ::> children pseudo-part, an element's
+ * - Structural: keys parse (selectable keys with a ::selector relative
+ *   selector extension, RelativeSelector's one grammar: a part, a tag, the
+ *   children, a type, their compounds; an element's
  *   direct children as one addressable; or, at an address, the slot-key
  *   grammar), an entry is a LAYERED object, an optional ordered "variants"
  *   reference list plus condition-keyed override blocks (overrides beat
@@ -184,6 +185,20 @@ class StyleMapValidator {
    * the client capture's exclusion.
    */
   public const INSTANCE_PART = '/^\.s-[a-z0-9]+$/';
+
+  /**
+   * The style map key grammar in one hint, for every door that refuses a key.
+   *
+   * The root half is the element key grammar (parseKey()); the selector
+   * half is RelativeSelector::GRAMMAR, composed here so no corrective can
+   * spell a suffix the parser does not read.
+   */
+  /**
+   * The element-relative (variant, skin) key grammar in one hint.
+   */
+  public const RELATIVE_KEY_GRAMMAR_HINT = 'Element-relative styles key by \'\' for the root element, a slot path of container(index), block(type,index) and field(name) segments the root structurally contains (e.g. "container(1)/block(text,1)"; a container\'s children are one ordered flow, so there are no region segments), and an optional "::" relative selector. ' . RelativeSelector::GRAMMAR;
+
+  public const KEY_GRAMMAR_HINT = 'Keys are selectable keys: entity:{uuid}, field:{uuid}:{field_name}, container:{uuid}, block:{component_uuid}, or block:{component_uuid}:{field_name}, optionally followed by "::" and a relative selector. ' . RelativeSelector::GRAMMAR . ' Sections are containers: the retired section:{uuid} spelling is container:{uuid} now, and regions are not addressable (no region keys); style the container itself or the child element.';
 
   /**
    * The kinds the "kind:{kind}" scope family speaks.
@@ -394,7 +409,7 @@ class StyleMapValidator {
       $key = (string) $key;
       $parsed = $this->parseKey($key);
       if ($parsed === NULL) {
-        $errors[] = new BlueprintError($key, 'INVALID_STYLE_KEY', sprintf('"%s" is not a valid style map key.', $key), [], 'Keys are selectable keys: entity:{uuid}, field:{uuid}:{field_name}, container:{uuid}, block:{component_uuid}, or block:{component_uuid}:{field_name}, optionally followed by ::.class-name for a sub-element, ::{tag} for the element-scoped tag tier (a declared instance tag, e.g. "::p"), and/or a trailing ::> for the element\'s direct children (the children pseudo-part). Sections are containers: the retired section:{uuid} spelling is container:{uuid} now, and regions are not addressable (no region keys) — style the container itself or the child element.');
+        $errors[] = new BlueprintError($key, 'INVALID_STYLE_KEY', sprintf('"%s" is not a valid style map key.', $key), [], self::KEY_GRAMMAR_HINT);
         continue;
       }
 
@@ -1092,8 +1107,9 @@ class StyleMapValidator {
    * Slotted entries validate at the ADDRESS THEIR SLOT RESOLVES TO, not
    * the root's (slotScope(): container slots at the universal container
    * kind, block slots at their bundle, field slots at the universal field
-   * kind), and a '::.class' part suffix or '::>' children suffix rides
-   * that address into the roster.
+   * kind), and a '::selector' suffix rides that address into the roster
+   * walk: tags and types are legal here exactly as on a host map (a
+   * structural relation transfers; only instance parts stay behind).
    *
    * Entries are ENTRY-SHAPED, exactly like style map entries (one grammar):
    * a fragment may carry a "variants" reference list beside its
@@ -1116,7 +1132,7 @@ class StyleMapValidator {
    *   Element-relative styles, the variant storage shape: '' maps the root
    *   element's entry, slash-separated slot paths (e.g.
    *   "container(1)/block(text,1)") its structural children's, and a
-   *   '::.class-name' suffix a declared part's.
+   *   '::selector' suffix a relative selector under one.
    * @param \Drupal\daedalus_blueprint\Materials\Address $address
    *   The ROOT address the styles are worn at: a variant's scope
    *   ("block_type:{bundle}", "layout:{layout_id}",
@@ -1149,15 +1165,15 @@ class StyleMapValidator {
    *
    * @return \Drupal\daedalus_blueprint\Result\BlueprintError[]
    *   Errors with paths relative to the styles map: root-element errors at
-   *   "{condition}.{property}" (entry-level at ''), sub-element errors at
+   *   "{condition}.{property}" (entry-level at ''), selector errors at
    *   "::.class.{condition}.{property}", a membership naming no design
    *   system at "design_system". The caller re-roots them onto its own
    *   path space. Empty when valid.
    *
    * @throws \InvalidArgumentException
-   *   When the address is not a root: a part or children address is a
-   *   key's business ('::.part', '::>'), never the address styles are
-   *   worn at. A caller bug, not bad data.
+   *   When the address is not a root: a selector is a key's business
+   *   ('::.part', '::> *'), never the address styles are worn at. A
+   *   caller bug, not bad data.
    */
   public function validateAt(array $styles, Address $address, array $context = []): array {
     if (!$address->isRoot()) {
@@ -1172,7 +1188,7 @@ class StyleMapValidator {
     // block_plugin addresses have no root kind, which parse() treats as
     // the path-less key space, exactly right: bare markup has no
     // structural children and plugin blocks carry no blueprint fields or
-    // slot space, so '' and '::.class' are their only legal keys.
+    // slot space, so '' and '::selector' are their only legal keys.
     $root_kind = SlotKey::rootKindForScope((string) $address);
     $errors = [];
 
@@ -1180,7 +1196,7 @@ class StyleMapValidator {
       $relative = (string) $relative;
       $slot = SlotKey::parse($relative, $root_kind);
       if ($slot === NULL) {
-        $errors[] = new BlueprintError($relative, 'INVALID_STYLE_KEY', sprintf('"%s" is not an element-relative style key for scope "%s".', $relative, $address), [], 'Element-relative styles key by \'\' for the root element, a slot path of container(index), block(type,index) and field(name) segments the root structurally contains (e.g. "container(1)/block(text,1)" — a container\'s children are one ordered flow, so there are no region segments), an optional \'::.class-name\' part suffix, and an optional trailing \'::>\' children pseudo-part (the element\'s direct children).');
+        $errors[] = new BlueprintError($relative, 'INVALID_STYLE_KEY', sprintf('"%s" is not an element-relative style key for scope "%s".', $relative, $address), [], self::RELATIVE_KEY_GRAMMAR_HINT);
         continue;
       }
       if (!is_array($entry) || (array_is_list($entry) && $entry !== [])) {
@@ -1194,13 +1210,16 @@ class StyleMapValidator {
       // "variants" reference list exactly like a style map entry. A ''
       // fragment reference scope-pairs against the address its SLOT
       // resolves to, because apply copies it onto the element that slot
-      // resolves to.
+      // resolves to; a rule entry's against the rule's LANDING under
+      // that element (slotLanding()), because apply places it at the
+      // same rule under the new wearer, where it delivers at the landing.
       if (array_key_exists('variants', $entry)) {
         $reserved_axis = $context['variant_axis'] ?? NULL;
+        $landing = $this->slotLanding($slot, $element, $theme);
         array_push($errors, ...$this->validateVariantList(
           $relative,
           $entry['variants'],
-          fn (string $reference_at, string $reference): array => $this->validateNestedRootReference($reference_at, $reference, $element),
+          fn (string $reference_at, string $reference): array => $this->validateNestedRootReference($reference_at, $reference, $landing, $relative),
           // Only the ROOT entry reserves the saved variant's own axis: a
           // slot entry's same-axis root reference is the flagship
           // composition case — it lands on the resolved child beside the
@@ -1217,11 +1236,12 @@ class StyleMapValidator {
       // matching gate for AI- and disk-authored variants, ahead of the
       // roster (whose part rule would answer them from the instance
       // namespaces, as it does for the element lane).
-      if ($slot->part !== NULL && preg_match(self::INSTANCE_PART, $slot->part)) {
-        $errors[] = new BlueprintError($relative, 'STYLE_INSTANCE_PART_IN_VARIANT', sprintf('"%s" is an instance-bound identity part; variants cannot carry it.', $slot->part), [], 'Identity classes (s-*) are minted per content instance, so their styles do not transfer: another element\'s text wears different ids. Style the element directly ("{key}::.s-…" in its own style map) instead of through a variant.');
+      $instance = self::instancePart($slot->selector);
+      if ($instance !== NULL) {
+        $errors[] = new BlueprintError($relative, 'STYLE_INSTANCE_PART_IN_VARIANT', sprintf('"%s" is an instance-bound identity part; variants cannot carry it.', $instance), [], 'Identity classes (s-*) are minted per content instance, so their styles do not transfer: another element\'s text wears different ids. Style the element directly ("{key}::.s-…" in its own style map) instead of through a variant.');
         continue;
       }
-      array_push($errors, ...$this->validateEntryAt($relative, $entry, Address::of($element->family, $element->id, $slot->part, $slot->children), $theme, $closed));
+      array_push($errors, ...$this->validateEntryAt($relative, $entry, $element->withSelector($slot->selector), $theme, $closed));
     }
 
     // The tree invariant, checked at save and never at render: the styles'
@@ -1244,8 +1264,8 @@ class StyleMapValidator {
    * - The scope vocabulary is the variant scope vocabulary
    *   (variantScope(): the base:{tag} family included; kind:region is not
    *   a scope anywhere, see SCOPE_KINDS).
-   * - Keys are element-only ('' and '::.class' parts): a slot path names a
-   *   position inside ONE placement, but defaults have no placement to
+   * - Keys are element-only ('' and '::selector' keys): a slot path names
+   *   a position inside ONE placement, but defaults have no placement to
    *   distribute fragments through — nothing could ever carry the class.
    * - Entries carry their styles directly: variant references are per-
    *   element choices, never global defaults (default_variants covers the
@@ -1290,7 +1310,7 @@ class StyleMapValidator {
         continue;
       }
       if (!is_array($styles) || (array_is_list($styles) && $styles !== [])) {
-        $errors[] = new BlueprintError($scope, 'INVALID_SKIN_DEFAULTS_ENTRY', sprintf('The "%s" defaults are not element-relative styles.', $scope), [], 'Provide an object of element-relative keys — "" for the scope\'s element, "::.class-name" for a declared part — each mapping conditions to CSS properties, e.g. {"": {"default": {"max-width": "80rem"}}}.');
+        $errors[] = new BlueprintError($scope, 'INVALID_SKIN_DEFAULTS_ENTRY', sprintf('The "%s" defaults are not element-relative styles.', $scope), [], 'Provide an object of element-relative keys ("" for the scope\'s element, "::" plus a relative selector for a part, its paragraphs, its children, ...), each mapping conditions to CSS properties, e.g. {"": {"default": {"max-width": "80rem"}}}. ' . RelativeSelector::GRAMMAR);
         continue;
       }
       foreach ($styles as $relative => $entry) {
@@ -1300,7 +1320,7 @@ class StyleMapValidator {
         // default has no placement to distribute a fragment through, so it
         // would be data that can never deliver — rejected, not inert.
         if ($relative !== '' && !str_starts_with($relative, '::')) {
-          $errors[] = new BlueprintError($at, 'SKIN_DEFAULT_KEY_NOT_ELEMENT', sprintf('"%s" is a slot path; site defaults style the scope\'s element itself.', $relative), [], 'Defaults keys are "" (the scope\'s element) and "::.class-name" (a declared part). To style a composed subtree, save a variant and apply it where placed.');
+          $errors[] = new BlueprintError($at, 'SKIN_DEFAULT_KEY_NOT_ELEMENT', sprintf('"%s" is a slot path; site defaults style the scope\'s element itself.', $relative), [], 'Defaults keys are "" (the scope\'s element) and "::" plus a relative selector under it. To style a composed subtree, save a variant and apply it where placed.');
           unset($styles[$relative]);
           continue;
         }
@@ -1419,28 +1439,24 @@ class StyleMapValidator {
    * Parses a style map key.
    *
    * @return array|null
-   *   ['kind' => element kind, 'uuid' => qualifier uuid, 'sub' => sub-element
-   *   selector or NULL, 'children' => bool], or NULL when the key does not
-   *   parse. block:{uuid} parses to kind "block"; block:{uuid}:{field} to
-   *   kind "field" (a field of an inline block styles like any field).
-   *   children is TRUE for keys carrying the trailing '::>' children
-   *   pseudo-part suffix ("{key}::>", "{key}::.class::>"): the entry styles
-   *   the addressed element's direct children. A sub WITHOUT the leading
-   *   dot ("{key}::p") is a TAG-TIER key: the element-scoped tag tier of
-   *   the three-tier text model, styling every one of the element's text
-   *   elements of that tag. The grammar here is charset only; the tag
-   *   vocabulary (the spine's declared instance tags) is semantic and
-   *   enforced by resolveRoster(). This is the ELEMENT key grammar
-   *   (a kind qualified by a live uuid); the part and children suffixes
-   *   are the address grammar's (Address::splitSuffixes(), one suffix
-   *   grammar), and captureScope() resolves an element key to its address.
+   *   ['kind' => element kind, 'uuid' => qualifier uuid, 'selector' => the
+   *   RelativeSelector after the key's "::" or NULL], or NULL when the key
+   *   does not parse. block:{uuid} parses to kind "block";
+   *   block:{uuid}:{field} to kind "field" (a field of an inline block
+   *   styles like any field). The grammar here is charset only: which
+   *   tags, types and parts a selector may name is semantic and enforced
+   *   by resolveRoster() through the roster walk. This is the ELEMENT key
+   *   grammar (a kind qualified by a live uuid); the selector suffix is
+   *   the one relative selector grammar every key shares
+   *   (RelativeSelector::splitKey(), canonical spelling only), and
+   *   captureScope() resolves an element key to its address.
    */
   public function parseKey(string $key): ?array {
-    $split = Address::splitSuffixes($key);
+    $split = RelativeSelector::splitKey($key);
     if ($split === NULL) {
       return NULL;
     }
-    [$key, $sub, $children] = $split;
+    [$key, $selector] = $split;
     $uuid = self::UUID;
     $name = self::MACHINE_NAME;
     $forms = [
@@ -1452,30 +1468,29 @@ class StyleMapValidator {
     ];
     foreach ($forms as [$pattern, $kind]) {
       if (preg_match($pattern, $key, $matches)) {
-        return ['kind' => $kind, 'uuid' => $matches[1], 'sub' => $sub, 'children' => $children];
+        return ['kind' => $kind, 'uuid' => $matches[1], 'selector' => $selector];
       }
     }
     return NULL;
   }
 
   /**
-   * Captures the variant scope of an element: its address.
+   * The styling address a style map key resolves to.
    *
    * The address is the granularity the declaring style-guide YAML speaks:
-   * blocks are scoped per block type ("block_type:{bundle}") or, for
+   * blocks are addressed per block type ("block_type:{bundle}") or, for
    * plugin placements, per base block plugin ("block_plugin:{plugin_id}"),
    * containers per layout plugin ("layout:{layout_id}"), every other
-   * element by its kind ("kind:{entity|field}"). Save-as-variant captures
-   * this from the source element and the variant entity stores its print;
-   * applying a variant requires the target's address to pair
-   * (scopeMatches()). The rule is ONE resolution rule at every depth: a
-   * container's declaration IS its layout's declaration, whether the
-   * container is a top-level row or nested inside another container
-   * (nesting is position, not kind).
-   *
-   * Sub-element keys capture their parent's address, a ROOT one: a
-   * variant is saved from (and applied to) elements, and its own
-   * sub-element rules travel with it.
+   * element by its kind ("kind:{entity|field}"), and a key's relative
+   * selector rides the address so the roster walk resolves it
+   * ("layout:{id}::> pb-text"). The rule is ONE resolution rule at every
+   * depth: a container's declaration IS its layout's declaration, whether
+   * the container is a top-level row or nested inside another container
+   * (nesting is position, not kind). The one derivation every reader of
+   * "what does this key address" shares: validation's roster
+   * (resolveRoster()), the media constraints (MediaValueResolver), the
+   * style stack's floor (its root), and the variant scope captureScope()
+   * lands on.
    *
    * @param string $key
    *   A style map key.
@@ -1485,22 +1500,58 @@ class StyleMapValidator {
    *
    * @return \Drupal\daedalus_blueprint\Materials\Address|null
    *   The address, or NULL when the key does not parse. A block placement
-   *   whose bundle cannot be resolved captures "kind:block", a container
+   *   whose bundle cannot be resolved addresses "kind:block", a container
    *   whose layout cannot be resolved "kind:container", the universal-kind
-   *   degradation of resolveAddress(), the one derivation this is the
-   *   root of.
+   *   degradation of resolveAddress().
    */
-  public function captureScope(string $key, array $context = []): ?Address {
+  public function keyAddress(string $key, array $context = []): ?Address {
     $parsed = $this->parseKey($key);
-    return $parsed === NULL ? NULL : $this->resolveAddress($parsed, $context)->root();
+    return $parsed === NULL ? NULL : $this->resolveAddress($parsed, $context);
   }
 
   /**
-   * Whether a variant scope matches an element's own scope.
+   * Captures the variant scope of a key: the element scope wear pairs at.
+   *
+   * An element key captures its own address (keyAddress()): save-as-
+   * variant captures this from the source element and the variant entity
+   * stores its print, and applying a variant requires the target's scope
+   * to pair (scopeMatches()). A rule key ("{key}::{selector}") captures
+   * its LANDING, the element its last compound names (the vocabulary
+   * roster's landingScope(): a type compound's root address, a tag
+   * compound's base tag), because a rule's wear is delivered at the
+   * rule's targets, so that is what the variant must be scoped for: a
+   * text variant wears at "container:X::> pb-text", never a container
+   * variant. A rule whose targets are no element scope (a part, the
+   * children, a subjectless compound, a generated box: "::&::before",
+   * "::> pb-text::after") captures NULL: no variant pairs there, and
+   * validateVariantReference() says so.
+   *
+   * @param string $key
+   *   A style map key.
+   * @param array $context
+   *   The validate() context; "entity" enables block bundle and section
+   *   layout resolution, "theme" the declarations the roster is built for.
+   *
+   * @return \Drupal\daedalus_blueprint\Materials\Address|null
+   *   The scope, a root address; NULL when the key does not parse or its
+   *   rule lands on no element scope.
+   */
+  public function captureScope(string $key, array $context = []): ?Address {
+    $address = $this->keyAddress($key, $context);
+    if ($address === NULL) {
+      return NULL;
+    }
+    $theme = $context['theme'] ?? ($this->themeHandler->getDefault() ?: NULL);
+    return $this->vocabulary->build($address, $theme)->landingScope();
+  }
+
+  /**
+   * Whether a variant scope matches a key's captured scope.
    *
    * The pairing rule is the address's (Address::pairsWith(), the one
    * family rule the materials roster's applicability predicate, the
-   * dialect catalog and the client twin share): a variant designed around
+   * dialect catalog and the client twin share) against captureScope():
+   * an element's own address, a rule's landing. A variant designed around
    * a layout's parts and slots is offered and applied layout-exact, the
    * block family's two refinements never pair with each other, and a kind
    * on EITHER side pairs with any address of its family.
@@ -1718,7 +1769,7 @@ class StyleMapValidator {
         new BlueprintError("$at.fragment", 'INVALID_STYLE_FRAGMENT', sprintf('"%s" is not a fragment of the "%s" variant\'s scope ("%s").', $fragment, $reference, $scope), $held !== [] ? [
           'variant_scope' => $scope,
           'variant_fragments' => $held,
-        ] : ['variant_scope' => $scope], 'A fragment is an element-relative slot key the variant\'s scope structurally contains: "" for the root, slash-separated container(index), block(type,index) and field(name) segments for a structural child, with an optional \'::.class-name\' part suffix.' . ($held !== [] ? sprintf(' Fragments the variant currently holds: %s.', implode(', ', array_map(static fn (string $key): string => "\"$key\"", $held))) : '')),
+        ] : ['variant_scope' => $scope], 'A fragment is an element-relative slot key the variant\'s scope structurally contains: "" for the root, slash-separated container(index), block(type,index) and field(name) segments for a structural child, with an optional "::" relative selector suffix.' . ($held !== [] ? sprintf(' Fragments the variant currently holds: %s.', implode(', ', array_map(static fn (string $key): string => "\"$key\"", $held))) : '')),
       ];
     }
     return [];
@@ -1738,8 +1789,8 @@ class StyleMapValidator {
    * kind in the roster), a field slot the universal field kind. Part
    * suffixes ride their slot's address, exactly as sub-element keys
    * capture their parent's; a nested '' fragment reference pairs against
-   * this address because apply copies it onto the element the slot
-   * resolves to.
+   * this address (slotLanding() for a selector'd slot) because apply
+   * copies it onto the element the slot resolves to.
    */
   protected function slotScope(SlotKey $slot, Address $scope): Address {
     if ($slot->segments === []) {
@@ -1751,6 +1802,27 @@ class StyleMapValidator {
       'block' => Address::blockType($segment['name']),
       'field' => Address::kind('field'),
     };
+  }
+
+  /**
+   * The element scope a variant style entry's nested references pair at.
+   *
+   * The slot's element (slotScope()) for an element entry; for a slot
+   * carrying a selector, that RULE's landing under the slot's element
+   * (captureScope()'s rule for a host key, through the vocabulary
+   * roster: a type compound's root address, a tag's base tag, NULL for a
+   * part, the children or a subjectless compound, where no variant
+   * pairs). Apply places a rule entry's references at the same rule
+   * under the new wearer, where they deliver at the rule's landing.
+   *
+   * @return \Drupal\daedalus_blueprint\Materials\Address|null
+   *   The scope, NULL for a rule landing on no element scope.
+   */
+  protected function slotLanding(SlotKey $slot, Address $element, ?string $theme): ?Address {
+    if ($slot->selector === NULL) {
+      return $element;
+    }
+    return $this->vocabulary->build($element->withSelector($slot->selector), $theme)->landingScope();
   }
 
   /**
@@ -1779,25 +1851,35 @@ class StyleMapValidator {
    * @return \Drupal\daedalus_blueprint\Result\BlueprintError[]
    *   Errors at that path.
    */
-  protected function validateNestedRootReference(string $at, string $reference, Address $carrier): array {
+  protected function validateNestedRootReference(string $at, string $reference, ?Address $carrier, string $relative = ''): array {
     $variant = $this->loadVariant($reference);
     if ($variant === NULL) {
       $available = $this->availableVariantsForScope($carrier);
-      $applies = sprintf('this slot\'s scope ("%s")', $carrier);
+      $applies = $carrier === NULL ? sprintf('this rule ("%s")', $relative) : sprintf('this slot\'s scope ("%s")', $carrier);
       if ($inactive = $this->inactiveMember($reference)) {
         return [$this->inactiveMemberError($at, $reference, $inactive, $available, $applies, 'reference one of the active system\'s, or put the properties in this entry directly.')];
       }
       if ($withheld = $this->withheldMember($reference)) {
         return [$this->nonconformingError($at, $reference, $withheld, $available, $applies, 'A nested reference must name an offered variant: fix the referenced variant\'s own styles (update_material with kind variant) so the site offers it again, reference one of the variants listed instead, or put the properties in this entry directly.')];
       }
-      $lead = $available !== []
-        ? sprintf('Variants among the site\'s materials that apply to this slot\'s scope ("%s"): %s. ', $carrier, MaterialsRoster::describe($available))
-        : sprintf('No saved variants apply to this slot\'s scope ("%s"). ', $carrier);
+      $lead = match (TRUE) {
+        $carrier === NULL => sprintf('No variant applies at this rule ("%s"): it lands on no element scope. ', $relative),
+        $available !== [] => sprintf('Variants among the site\'s materials that apply to this slot\'s scope ("%s"): %s. ', $carrier, MaterialsRoster::describe($available)),
+        default => sprintf('No saved variants apply to this slot\'s scope ("%s"). ', $carrier),
+      };
       return [
         new BlueprintError($at, 'STYLE_VARIANT_NOT_FOUND', sprintf('"%s" is not a saved style variant.', $reference), self::candidateContext($reference, $available), $lead . 'A nested reference must name an existing variant — save the referenced variant first, or put the properties in this entry directly.'),
       ];
     }
     $scope = $variant->getScope();
+    if ($carrier === NULL) {
+      return [
+        new BlueprintError($at, 'STYLE_VARIANT_SCOPE_MISMATCH', sprintf('The "%s" variant is scoped to "%s", but "%s" lands on no element scope.', $reference, $scope, $relative), [
+          'variant_scope' => $scope,
+          'element_scope' => NULL,
+        ] + self::candidateContext($reference, []), 'A rule entry wears a variant at its landing, the element its last compound names: a type ("::> pb-text" wears text variants) or a declared tag ("::a" wears link variants). A part ("::.class-name"), the children ("::> *") and a compound with no subject land on no element scope, so no variant pairs there: put the properties in this entry directly, or reference the variant from the rule entry that names the element.'),
+      ];
+    }
     if (!Address::fromString($scope)->pairsWith($carrier)) {
       $available = $this->availableVariantsForScope($carrier);
       $hint = 'A nested reference applies to the element its slot resolves to, so its variant must be scoped to that element\'s kind. '
@@ -1917,7 +1999,12 @@ class StyleMapValidator {
    * and is published but is not on the roster is refused by NAME of the
    * reason it left, an inactive design system (inactiveMember()) or the
    * style guide's verdict on its values (withheldMember()), before the
-   * plain not-found case.
+   * plain not-found case. At a rule key two more refusals stand before
+   * scope: a composition variant (any slot path among its style keys:
+   * STYLE_VARIANT_COMPOSITION_AT_RULE, a rule has no one subtree to bind)
+   * and a landing that is no element scope (captureScope() NULL:
+   * STYLE_VARIANT_SCOPE_MISMATCH naming the landing rule). Root-only
+   * depth is the apply gesture's (RootOnlyVariantChecker), as on elements.
    *
    * @param string $key
    *   The style map key of the entry wearing the reference.
@@ -1955,12 +2042,34 @@ class StyleMapValidator {
       ];
     }
     $scope = $variant->getScope();
+    $rule = $this->parseKey($key)['selector'] ?? NULL;
+    if ($rule !== NULL && ($paths = self::slotPaths($variant->getStyles())) !== []) {
+      // A composition binds ONE subtree by ordinal at apply time; a rule
+      // has many matches and no subtree to bind, so its slot paths could
+      // never resolve (distribution is refused by the KEYS, never tried).
+      return [
+        new BlueprintError($at, 'STYLE_VARIANT_COMPOSITION_AT_RULE', sprintf('The "%s" variant is a composition (it styles %s), and "%s" is a rule: a rule wears flat variants only.', $reference, self::listedPaths($paths), $key), [
+          'variant_scope' => $scope,
+          'slot_paths' => $paths,
+        ], 'A composition variant resolves its slot paths against ONE element\'s subtree when it is applied, and a rule\'s matches are many. Wear it on the element itself (the key without "::"), or wear a flat variant (one whose styles hold only "" and "::…" entries) at the rule.'),
+      ];
+    }
     if (!$this->scopeMatches($scope, $key, $context)) {
       $captured = $this->captureScope($key, $context);
       $available = $this->availableVariantsForScope($captured);
-      $hint = 'A variant applies only to elements of the scope it was saved from. '
-        . ($available !== [] ? sprintf('Variants among the site\'s materials that DO apply to this element: %s. ', MaterialsRoster::describe($available)) : '')
-        . 'Copy/paste styles to move a treatment across scopes; it pastes as detached custom styles validated against the target.';
+      if ($rule !== NULL && $captured === NULL) {
+        return [
+          new BlueprintError($at, 'STYLE_VARIANT_SCOPE_MISMATCH', sprintf('The "%s" variant is scoped to "%s", but "%s" lands on no element scope.', $reference, $scope, $key), [
+            'variant_scope' => $scope,
+            'element_scope' => NULL,
+          ] + self::candidateContext($reference, []), 'A rule wears a variant at its landing, the element its last compound names: a type ("::> pb-text" wears text variants) or a declared tag ("::a" wears link variants). A part ("::.class-name", "::> pb-text .link"), the children ("::> *"), a compound with no subject and a generated box ("::&::before", "::> pb-text::after") land on no element scope, so no variant pairs there: style that rule with properties instead, or wear the variant at the rule that names the element.'),
+        ];
+      }
+      $hint = 'A variant applies only to elements of the scope it was saved from' . ($rule === NULL ? '. ' : ', and a rule wears one for its landing, the element its last compound names. ')
+        . ($available !== [] ? sprintf('Variants among the site\'s materials that DO apply %s: %s. ', $rule === NULL ? 'to this element' : 'at this rule', MaterialsRoster::describe($available)) : '')
+        . ($rule === NULL
+          ? 'Set custom styles on this element instead, or give it and its siblings one treatment through a selector entry on their container (container:{uuid}::> pb-text styles every text block child at once, and wears their variants); a variant never crosses its scope.'
+          : 'Set custom styles at this rule instead, or wear the variant at the rule whose landing is its scope; a variant never crosses its scope.');
       return [
         new BlueprintError($at, 'STYLE_VARIANT_SCOPE_MISMATCH', sprintf('The "%s" variant is scoped to "%s", but "%s" is "%s".', $reference, $scope, $key, $captured), [
           'variant_scope' => $scope,
@@ -1969,6 +2078,40 @@ class StyleMapValidator {
       ];
     }
     return [];
+  }
+
+  /**
+   * The slot paths among a variant's style keys: what makes it a composition.
+   *
+   * A style key is `{slot path}::{selector}` or `{slot path}` (SlotKey);
+   * a non-empty path binds a subtree element by ordinal. The read is by
+   * the keys alone, never by resolving them: the one fact that decides
+   * whether the variant may be worn at a rule.
+   *
+   * @return string[]
+   *   The distinct non-empty slot paths, in stored key order.
+   */
+  protected static function slotPaths(array $styles): array {
+    $paths = [];
+    foreach (array_keys($styles) as $relative) {
+      $relative = (string) $relative;
+      $path = ($pos = strpos($relative, Address::SUFFIX)) === FALSE ? $relative : substr($relative, 0, $pos);
+      if ($path !== '') {
+        $paths[$path] = TRUE;
+      }
+    }
+    return array_keys($paths);
+  }
+
+  /**
+   * Renders slot paths as prose: "block(text,1)", "block(text,1) and container(1)".
+   *
+   * @param string[] $paths
+   *   The paths.
+   */
+  protected static function listedPaths(array $paths): string {
+    $last = array_pop($paths);
+    return $paths === [] ? $last : implode(', ', $paths) . ' and ' . $last;
   }
 
   /**
@@ -2201,10 +2344,9 @@ class StyleMapValidator {
    *
    * The element lane's half of the one derivation: the root by key kind
    * (a block's refinement by bundle or base plugin, a container's layout,
-   * else the universal kind; captureScope() is this root), then the tag
-   * tier, the part, or the children pseudo-part the key's suffix names,
-   * carried as the address's own suffixes so the roster resolves them by
-   * the one part rule. Depth-blind by design: one layout, one address,
+   * else the universal kind; captureScope() is this root), then the
+   * relative selector the key carries, riding the address so the roster
+   * walk resolves it. Depth-blind by design: one layout, one address,
    * any placement. A container's grant is its layout's grant whether it
    * is a page band or nested inside one; placement curates offers and
    * birth (the section-created defaults, the root-only axes), never what
@@ -2222,7 +2364,7 @@ class StyleMapValidator {
     else {
       $root = Address::kind($parsed['kind']);
     }
-    return Address::of($root->family, $root->id, $parsed['sub'], $parsed['children']);
+    return $root->withSelector($parsed['selector']);
   }
 
   /**
@@ -2230,31 +2372,44 @@ class StyleMapValidator {
    *
    * The declared-place gates over the roster: a root address always
    * names a declared place (an undeclared refinement degrades to its
-   * kind), a suffixed address only when the declaration carries the
-   * part, tag or children section (VocabularyRoster::declared()). Which
-   * suffix failed decides the corrective:
-   * - A dotless part ("{key}::p") is a TAG-TIER key: the element-scoped
+   * kind), a selector address only when every compound of the roster
+   * walk landed on a declaration (VocabularyRoster::declared(); the
+   * walk is VocabularyRosterBuilder's). The first compound that did not
+   * (VocabularyRoster::undeclared()) decides the corrective:
+   * - A tag compound ("{key}::p") is the TAG TIER: the element-scoped
    *   middle tier of the three-tier text model (skin base:{tag} -> this
    *   element's tag tier -> minted part), a live descendant tag rule
    *   catching future instances of the tag too. Its vocabulary is the
    *   site declaration's base section, the ONE declaration of a prose
    *   tag's styleability (the same tags a skin's defaults may set), and
    *   an undeclared tag is rejected in EVERY enforcement mode: the key is
-   *   only grammar for declared base tags, never an
-   *   open-ended tag selector lane.
+   *   only grammar for declared base tags, never an open-ended tag
+   *   selector lane.
    * - A class part resolves by the one part rule (an exact declaration
-   *   anywhere in the owner's elements tree, then an owner PATTERN part
-   *   covering the class namespace its prefix matches, then the site
-   *   instance namespaces covering minted identity classes on ANY owner:
-   *   carrier ownership is a DOM fact, so the vocabulary cannot live on
-   *   one owner kind). Undeclared, it follows the grant posture: a strict
-   *   site rejects the key naming the owner's declared parts, an open
-   *   site accepts it grammar-checked only (the roster with no grant).
-   * - The children pseudo-part is declared like a part, as a `children`
+   *   anywhere in the landing owner's elements tree, then an owner
+   *   PATTERN part covering the class namespace its prefix matches, then
+   *   the site instance namespaces covering minted identity classes on
+   *   ANY owner: carrier ownership is a DOM fact, so the vocabulary
+   *   cannot live on one owner kind). Undeclared, it follows the grant
+   *   posture: a strict site rejects the key naming the owner's declared
+   *   parts, an open site accepts it grammar-checked only (the roster
+   *   with no grant).
+   * - The children ("> *") are declared like a part, as a `children`
    *   section beside the element's own property_groups (an elements tree
    *   declares markup shells; "all direct children" is a styling
    *   addressable with no shell of its own); undeclared, the part posture
    *   again.
+   * - A type compound ("> pb-text") lands on that type's own declaration;
+   *   a bundle no declaration covers is undeclared, the part posture
+   *   again, the corrective naming the declared types.
+   * - A terminal pseudo-element ("&::before", ".quote::after", "> pb-text
+   *   ::before") is the generated box of the chain's landing. Existence
+   *   is universal, so only its vocabulary is declared: the host's pseudo
+   *   section names it, else the roster derives the host's grant plus
+   *   the pseudo-only groups (the walk) and reports the box undeclared
+   *   (VocabularyRoster::KIND_PSEUDO); the part posture again, the strict
+   *   corrective (STYLE_PSEUDO_NOT_DECLARED) naming the section to write.
+   *   An undeclared host is corrected first: the box is never reached.
    *
    * @param \Drupal\daedalus_blueprint\Materials\Address $address
    *   The entry's address.
@@ -2273,36 +2428,64 @@ class StyleMapValidator {
    */
   protected function resolveRoster(Address $address, ?string $theme, string $at, bool $closed, array &$errors): ?VocabularyRoster {
     $roster = $this->vocabulary->build($address, $theme);
-    if ($roster->declared()) {
+    $undeclared = $roster->undeclared();
+    if ($undeclared === NULL) {
       return $roster;
     }
-    if ($address->part !== NULL && !$this->vocabulary->build(Address::of($address->family, $address->id, $address->part), $theme)->declared()) {
-      if (!str_starts_with($address->part, '.')) {
-        $tags = $this->styleGuide->baseTags($theme);
-        $hint = $tags === []
-          ? 'A "::{tag}" suffix is the element-scoped tag tier over the site\'s declared base tags, and this site declares no base section, so no tag tier exists. To style a sub-element, use a declared part ("::.class-name").'
-          : sprintf('A "::{tag}" suffix styles every one of the element\'s text elements of that tag (the element-scoped tag tier over the site\'s base vocabulary). Declared base tags: %s. To style ONE text element, use its minted identity class ("::.s-…").', implode(', ', $tags));
-        $errors[] = new BlueprintError($at, 'STYLE_TAG_NOT_DECLARED', sprintf('"%s" is not a declared base tag.', $address->part), ['declared_tags' => $tags], $hint);
-        return NULL;
-      }
-      if ($closed) {
-        // The owner the corrective names: the entry's own key up to the
-        // suffix (a live element key, or a variant's slot path), else the
-        // address the root entry is worn at.
-        $owner = strpos($at, Address::SUFFIX) > 0 ? substr($at, 0, strpos($at, Address::SUFFIX)) : (string) $address->root();
-        $declared = array_keys($this->vocabulary->build($address->root(), $theme)->parts());
-        $errors[] = new BlueprintError($at, 'STYLE_ELEMENT_NOT_DECLARED', sprintf('The style guide does not declare a "%s" sub-element on "%s".', $address->part, $owner), ['declared_elements' => $declared], $declared ? sprintf('Declared sub-elements: %s.', implode(', ', $declared)) : 'This element declares no stylable sub-elements.');
-        return NULL;
-      }
-      // Undeclared part on an open site: stylable, grammar-checked only.
-      return $roster;
-    }
-    if ($closed) {
-      $errors[] = new BlueprintError($at, 'STYLE_CHILDREN_NOT_DECLARED', 'The style guide does not declare the children pseudo-part ("::>") on this element.', [], 'The "::>" suffix styles an element\'s direct children as one addressable; the element\'s declaration must carry a children section (with the property groups it accepts) for it to be stylable here.');
+    $name = $undeclared['name'];
+    if ($undeclared['kind'] === RelativeSelector::TAG) {
+      $tags = $this->styleGuide->baseTags($theme);
+      $hint = $tags === []
+        ? 'A tag compound is the element-scoped tag tier over the site\'s declared base tags, and this site declares no base section, so no tag tier exists. To style a sub-element, use a declared part ("::.class-name").'
+        : sprintf('A tag compound ("::p", "::> pb-text p") styles every one of the element\'s text elements of that tag (the element-scoped tag tier over the site\'s base vocabulary). Declared base tags: %s. To style ONE text element, use its minted identity class ("::.s-…").', implode(', ', $tags));
+      $errors[] = new BlueprintError($at, 'STYLE_TAG_NOT_DECLARED', sprintf('"%s" is not a declared base tag.', $name), ['declared_tags' => $tags], $hint);
       return NULL;
     }
-    // Undeclared children on an open site: stylable, grammar-checked only.
-    return $roster;
+    if (!$closed) {
+      // Undeclared part, children or type on an open site: stylable,
+      // grammar-checked only.
+      return $roster;
+    }
+    // The owner the corrective names: the entry's own key up to the
+    // suffix (a live element key, or a variant's slot path), else the
+    // address the root entry is worn at.
+    $owner = strpos($at, Address::SUFFIX) > 0 ? substr($at, 0, strpos($at, Address::SUFFIX)) : (string) $address->root();
+    switch ($undeclared['kind']) {
+      case RelativeSelector::CLASS_PART:
+        $declared = array_keys($roster->landingParts());
+        $errors[] = new BlueprintError($at, 'STYLE_ELEMENT_NOT_DECLARED', sprintf('The style guide does not declare a "%s" sub-element on "%s".', $name, $owner), ['declared_elements' => $declared], $declared ? sprintf('Declared sub-elements: %s.', implode(', ', $declared)) : 'This element declares no stylable sub-elements.');
+        return NULL;
+
+      case RelativeSelector::TYPE:
+        $declared = array_map(static fn (string $bundle): string => RelativeSelector::typeName(Address::blockType($bundle)), $this->styleGuide->getBlockTypes($theme));
+        $errors[] = new BlueprintError($at, 'STYLE_TYPE_NOT_DECLARED', sprintf('"%s" is not a declared element type.', $name), ['declared_types' => $declared], sprintf('A type compound is spelled as the page language spells the element: %s, plus %s (any container) and %s (any other block).', $declared === [] ? 'no block type is declared' : implode(', ', $declared), RelativeSelector::TYPE_CONTAINER, RelativeSelector::TYPE_BLOCK));
+        return NULL;
+
+      case VocabularyRoster::KIND_PSEUDO:
+        $host = $address->selector->compounds === [] ? $owner : RelativeSelector::printCompounds($address->selector->compounds);
+        $errors[] = new BlueprintError($at, 'STYLE_PSEUDO_NOT_DECLARED', sprintf('The style guide does not declare the ::%s pseudo-element of "%s".', $name, $host), ['pseudo' => $name], sprintf('Every element has a ::before and an ::after box, but this site enforces its style guide, so a generated box may be styled only where its host\'s declaration carries a pseudo section naming what it may style: {pseudo: {%s: {property_groups: {…}}}} on the element, part or type the selector lands on. The box shows once "content" is set ("", none or one media reference url(\'media:<uuid>\'); text belongs in a field).', $name));
+        return NULL;
+
+      default:
+        $errors[] = new BlueprintError($at, 'STYLE_CHILDREN_NOT_DECLARED', sprintf('The style guide does not declare the children ("> *") of "%s".', $owner), [], 'A "> *" compound styles an element\'s direct children as one addressable; the element\'s declaration must carry a children section (with the property groups it accepts) for it to be stylable here.');
+        return NULL;
+    }
+  }
+
+  /**
+   * The instance part a selector carries, or NULL when it carries none.
+   *
+   * Identity classes (INSTANCE_PART) are minted per content instance and
+   * never travel in variants or defaults, wherever they stand in the
+   * selector (first, or after a type compound).
+   */
+  public static function instancePart(?RelativeSelector $selector): ?string {
+    foreach ($selector?->classes() ?? [] as $class) {
+      if (preg_match(self::INSTANCE_PART, $class)) {
+        return $class;
+      }
+    }
+    return NULL;
   }
 
   /**
@@ -2449,6 +2632,14 @@ class StyleMapValidator {
     $group_id = $this->recognizeProperty($path, $property, $value, $closed);
     if ($group_id instanceof BlueprintError) {
       return [$group_id];
+    }
+    // A pseudo-only group's property (content, the existence switch of a
+    // generated box) means nothing on a real box: refused in every mode,
+    // before the grant, since no roster of a real element grants it.
+    if ($roster->address()->selector?->pseudo === NULL && $this->propertyGroups->isPseudoOnly($group_id)) {
+      return [
+        new BlueprintError($path, 'STYLE_PROPERTY_PSEUDO_ONLY', sprintf('"%s" applies to a generated box only, and "%s" is not a pseudo-element.', $property, $at), ['pseudo_elements' => RelativeSelector::PSEUDOS], sprintf('%s styles the ::before or ::after box of an element: address the box with a terminal pseudo-element, "{key}::&::before" for the element\'s own, "{key}::.part::after" for a part\'s, "{key}::> pb-text::before" for a rule\'s. The box shows once content is "" (none removes it, and one media reference url(\'media:<uuid>\') shows an image at its own size); text belongs in a field.', $property)),
+      ];
     }
     $granted = $roster->grantsProperty($property);
     if (!$granted && $closed) {

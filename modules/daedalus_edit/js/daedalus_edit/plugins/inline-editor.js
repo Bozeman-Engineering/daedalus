@@ -1,22 +1,23 @@
 import * as ckeditor5EditorInline from '../../../assets/vendor/ckeditor5/editor-inline.js'; // Do not remove!
 import * as core from '../copied_from_core/copied-from-core.js';
 import * as editableElement from '../editable-element.js';
-import { FormEditorBase } from './form-editor-base.js';
-import * as entityForm from '../entity-form.js';
+import { EditorPluginBase, equals } from './editor-plugin-base.js';
 import { Identity } from '../ckeditor/identity.js';
 
 /**
  * InlineEditor field editor.
  *
- * Canvas-native rich text: the inline CKEditor attaches to the rendered
- * page element itself, so editing formatted text feels like editing plain
- * text (textfield.js) — on the canvas, styled by the page's own CSS.
+ * Canvas-native rich text over a form-edited leaf: the inline CKEditor
+ * attaches to the rendered page element itself, so editing formatted text
+ * feels like editing plain text (textfield.js) — on the canvas, styled by
+ * the page's own CSS.
  *
  * The wrinkle that shapes everything here: the canvas shows the FILTERED
  * output while the editor must edit the RAW value. At edit start the page
  * element's filtered markup is saved and swapped for the raw value from
  * the form's textarea; on blur the editor data goes back into the textarea
- * and the tempstore update re-renders the filtered output. When nothing
+ * (the item's value store: the widget) and the form transport commits
+ * the field, whose response re-renders the filtered output. When nothing
  * changed (or the edit is canceled) no re-render happens, so the saved
  * filtered markup is restored by hand.
  *
@@ -25,19 +26,18 @@ import { Identity } from '../ckeditor/identity.js';
  * as the edit's ancillary UI. Text formats with no CKEditor configured
  * fall back to editing the revealed textarea in the panel.
  *
- * The open edit is a DRAFT (FormEditorBase's three-way landing). A foreign
+ * The open edit is a DRAFT (the one base's three-way landing). A foreign
  * mutation's response swaps the page element out from under the canvas
- * CKEditor and, when the mutation changed the owning entity, evicts the
- * form with the textarea. captureDraft reads the live editor's data into
- * the textarea and returns it as the draft, tearing down the orphan editor
- * (it rides the element being replaced). On a surviving resume, reseed
- * writes the draft into the (possibly refetched) textarea, so the reveal
- * seeds a fresh canvas editor from it as on a fresh entry; the filtered
- * markup is re-saved from the swapped-in page element on the way. The
- * recorded original data stays the edit's opening value, so blur diffs the
- * draft against it and commits.
+ * CKEditor and, when it wrote the field, refetches the subject form with
+ * the textarea. captureDraft reads the live editor's data into the
+ * textarea and returns it as the draft, tearing down the orphan editor
+ * (it rides the element being replaced). On a surviving resume the draft
+ * is written into the (possibly refetched) textarea, so the mount seeds a
+ * fresh canvas editor from it as on a fresh entry; the filtered markup is
+ * re-saved from the swapped-in page element on the way. The snapshot
+ * becomes the remote, so blur diffs the draft against it and commits.
  */
-class InlineEditor extends FormEditorBase {
+class InlineEditor extends EditorPluginBase {
   id = 'inline_editor';
 
   /**
@@ -48,20 +48,11 @@ class InlineEditor extends FormEditorBase {
   supportedWidgets = ['text_textarea', 'text_textarea_with_summary'];
 
   /**
-   * Original data.
-   *
-   * The raw value at edit start so we can determine if it's been changed.
-   *
-   * @type {Map<any, any>}
-   */
-  originalData = new Map();
-
-  /**
    * Original markup.
    *
    * The page element's FILTERED innerHTML at edit start. Restored when the
-   * edit ends without a data change (no tempstore re-render happens then)
-   * and on cancel.
+   * edit ends without a data change (no re-render happens then) and on
+   * cancel.
    *
    * @type {Map<any, any>}
    */
@@ -82,28 +73,66 @@ class InlineEditor extends FormEditorBase {
     return formatElement?.value;
   }
 
-  replacePageElementWithFormItem(EditableElement) {
-    const formItem = EditableElement.getFormItem();
+  /**
+   * The field's textarea: the value store, and what the submit serializes.
+   */
+  textarea(item) {
+    return item.getFormItem().querySelector('textarea');
+  }
+
+  /**
+   * The live canvas editor riding the page element, or null.
+   */
+  liveEditor(item) {
+    const id = item.getPageElementHandle()?.dataset.ckeditor5Id;
+    return id ? Drupal.Daedalus.Edit.Ckeditor5Instances.get(id) : null;
+  }
+
+  /**
+   * The raw value: the live editor's data while one stands, else the
+   * textarea's (the no-editor tier, the seed before the async create
+   * resolves, or the draft the capture wrote back).
+   */
+  readProperties(item) {
+    const editor = this.liveEditor(item);
+    return {
+      [item.info.fieldName]: editor
+        ? editor.getData()
+        : this.textarea(item).value,
+    };
+  }
+
+  /**
+   * Writes the raw value into the textarea, where the mount seeds from.
+   */
+  writeProperties(item, properties) {
+    if (item.info.fieldName in properties) {
+      this.textarea(item).value = properties[item.info.fieldName] ?? '';
+    }
+  }
+
+  mount(item) {
+    const formItem = item.getFormItem();
     const textarea = formItem.querySelector('textarea');
     const format = this.getFormat(formItem);
     const editorConfig = drupalSettings.editor?.formats?.[format];
 
     if (!editorConfig) {
-      // No CKEditor for this format: the base panel reveal with the
-      // textarea unhidden — editing happens in the panel.
-      super.replacePageElementWithFormItem(EditableElement);
+      // No CKEditor for this format: the panel reveal with the textarea
+      // unhidden — editing happens in the panel.
+      this.revealFormItem(item, true);
       textarea.classList.remove('daedalus-edit-hidden');
       return;
     }
 
     // Canvas-native tier. Reveal the form item in the panel for its
-    // ancillary UI (the format selector) — but without the base gesture's
-    // panel-editing outline: the page element is not a dimmed selection
-    // here, it IS the editor.
-    EditableElement.getFormItemWrapper().classList.remove('daedalus-edit-hidden');
-    EditableElement.getFormItemHandle().classList.remove('daedalus-edit-hidden');
+    // ancillary UI (the format selector) — but without the panel-editing
+    // outline: the page element is not a dimmed selection here, it IS the
+    // editor.
+    item.getFormItemWrapper().classList.remove('daedalus-edit-hidden');
+    item.getFormItemHandle().classList.remove('daedalus-edit-hidden');
 
-    const pageElement = EditableElement.getPageElementHandle();
+    const pageElement = item.getPageElementHandle();
     if (pageElement.dataset.ckeditor5Id) {
       // An editor already rides this element (e.g. a validation-error
       // re-open before teardown finished).
@@ -112,10 +141,7 @@ class InlineEditor extends FormEditorBase {
 
     // Swap filtered output for the raw value and put the editor on the
     // real element.
-    this.originalMarkup.set(
-      EditableElement.info.elementId,
-      pageElement.innerHTML,
-    );
+    this.originalMarkup.set(item.info.elementId, pageElement.innerHTML);
     pageElement.innerHTML = textarea.value;
     pageElement.classList.add('daedalus-edit-inline-editing');
     Drupal.behaviors.DaedalusEditInlineEditors.attachEditor(
@@ -124,27 +150,22 @@ class InlineEditor extends FormEditorBase {
     );
   }
 
-  replaceFormItemWithPageElement(EditableElement) {
-    super.replaceFormItemWithPageElement(EditableElement);
+  /**
+   * Re-hides the panel's ancillary UI once the edit is over.
+   */
+  hideAncillary(item) {
+    this.hideFormItem(item);
     // Re-hide the textarea in case the no-editor tier revealed it.
-    EditableElement.getFormItem()
+    item.getFormItem()
       .querySelector('textarea')
       .classList.add('daedalus-edit-hidden');
   }
 
-  rememberOriginal(EditableElement) {
-    // Remember what the original data was so that we can update the
-    // tempstore if it has changed. The textarea always holds the raw value
-    // at edit start: the editor is seeded from it.
-    const textarea = EditableElement.getFormItem().querySelector('textarea');
-    this.originalData.set(EditableElement.info.elementId, textarea.value);
-  }
-
-  focusElement(EditableElement) {
+  focusElement(item) {
     // A canvas editor focuses itself when its async create resolves
     // (see attachEditor). Only the panel textarea needs focusing here.
-    if (!EditableElement.getPageElementHandle().dataset.ckeditor5Id) {
-      EditableElement.getFormItem().querySelector('textarea').focus();
+    if (!item.getPageElementHandle().dataset.ckeditor5Id) {
+      this.textarea(item).focus();
     }
   }
 
@@ -158,24 +179,26 @@ class InlineEditor extends FormEditorBase {
    * replaced, so it is torn down here by its stamped id; a create still in
    * flight finds the editing mark gone on its element and destroys its
    * own orphan (attachEditor's guard). The saved filtered markup dies with
-   * the old element; the reveal re-saves it from the swapped-in one.
+   * the old element; the mount re-saves it from the swapped-in one.
    *
-   * @param {EditableElement} EditableElement
+   * @param {EditableElement} item
    *   The element being edited.
    *
-   * @return {string}
-   *   The raw draft value.
+   * @return {Object<string, string>}
+   *   The raw draft value, keyed by the field.
    */
-  captureDraft(EditableElement) {
-    const elementId = EditableElement.info.elementId;
-    const textarea = EditableElement.getFormItem().querySelector('textarea');
-    const pageElement = EditableElement.getPageElementHandle();
+  captureDraft(item) {
+    const pageElement = item.getPageElementHandle();
     const ckeditor5Id = pageElement.dataset.ckeditor5Id;
-    const editor = ckeditor5Id
-      ? Drupal.Daedalus.Edit.Ckeditor5Instances.get(ckeditor5Id)
-      : null;
+    const editor = this.liveEditor(item);
+    // The draft is read off the live editor and never written into the
+    // textarea here: the textarea is the widget's store, which resume()
+    // re-snapshots as the remote (the base, or the refetched value) before
+    // writing the surviving draft back for the mount to seed from. Writing
+    // the draft here would make the remote read as the draft, and blur
+    // would then find nothing to commit.
+    const draft = editor ? editor.getData() : this.textarea(item).value;
     if (editor) {
-      textarea.value = editor.getData();
       this.defocusCkeditor(editor);
     }
     pageElement.classList.remove('daedalus-edit-inline-editing');
@@ -185,36 +208,22 @@ class InlineEditor extends FormEditorBase {
         ckeditor5Id,
       );
     }
-    this.originalMarkup.delete(elementId);
-    return textarea.value;
+    this.originalMarkup.delete(item.info.elementId);
+    return { [item.info.fieldName]: draft };
   }
 
-  reseed(EditableElement, draft) {
-    EditableElement.getFormItem().querySelector('textarea').value = draft;
-  }
-
-  concede(EditableElement) {
-    super.concede(EditableElement);
-    const elementId = EditableElement.info.elementId;
-    this.originalData.delete(elementId);
-    this.originalMarkup.delete(elementId);
-  }
-
-  blurElement(EditableElement) {
-    const elementId = EditableElement.info.elementId;
-    const textarea = EditableElement.getFormItem().querySelector('textarea');
-    const pageElement = EditableElement.getPageElementHandle();
-    const originalData = this.originalData.get(elementId);
+  blurElement(item) {
+    const { elementId, fieldName } = item.info;
+    const textarea = this.textarea(item);
+    const pageElement = item.getPageElementHandle();
     const ckeditor5Id = pageElement.dataset.ckeditor5Id;
-    const editor = ckeditor5Id
-      ? Drupal.Daedalus.Edit.Ckeditor5Instances.get(ckeditor5Id)
-      : null;
+    const editor = this.liveEditor(item);
 
     const finish = (data) => {
       textarea.value = data;
-      this.replaceFormItemWithPageElement(EditableElement);
-      if (data !== originalData) {
-        entityForm.updateTempstore(EditableElement, data.length === 0);
+      this.hideAncillary(item);
+      if (!equals(data, item.snapshot?.[fieldName])) {
+        this.commit(item, { [fieldName]: data });
       } else if (this.originalMarkup.has(elementId)) {
         // No re-render is coming; put the filtered output back ourselves.
         pageElement.innerHTML = this.originalMarkup.get(elementId);
@@ -244,9 +253,9 @@ class InlineEditor extends FormEditorBase {
   /**
    * Defocus CKEditor before destroying it.
    *
-   * Delegates to the shared canvas-editor machinery; both commit paths
-   * (this form-swap editor and the blueprint formatted-text editor) tear
-   * down canvas CKEditors and need the same workaround.
+   * Delegates to the shared canvas-editor machinery; both the form-path
+   * canvas editor and the blueprint formatted-text editor tear down canvas
+   * CKEditors and need the same workaround.
    *
    * @see Drupal.behaviors.DaedalusEditInlineEditors.defocusEditor
    */
@@ -254,27 +263,24 @@ class InlineEditor extends FormEditorBase {
     Drupal.behaviors.DaedalusEditInlineEditors.defocusEditor(editor);
   }
 
-  cancelElement(EditableElement) {
+  cancelElement(item) {
     this.removeClientsideValidationMessage(this.validationMessageHandle());
 
-    const elementId = EditableElement.info.elementId;
-    const textarea = EditableElement.getFormItem().querySelector('textarea');
-    const pageElement = EditableElement.getPageElementHandle();
-    const originalData = this.originalData.get(elementId);
+    const { elementId, fieldName } = item.info;
+    const textarea = this.textarea(item);
+    const pageElement = item.getPageElementHandle();
     const ckeditor5Id = pageElement.dataset.ckeditor5Id;
-    const editor = ckeditor5Id
-      ? Drupal.Daedalus.Edit.Ckeditor5Instances.get(ckeditor5Id)
-      : null;
+    const editor = this.liveEditor(item);
 
     const finish = () => {
       pageElement.removeAttribute('data-ckeditor5-id');
       pageElement.classList.remove('daedalus-edit-inline-editing');
-      textarea.value = originalData;
+      textarea.value = item.snapshot?.[fieldName] ?? '';
       if (this.originalMarkup.has(elementId)) {
         pageElement.innerHTML = this.originalMarkup.get(elementId);
         this.originalMarkup.delete(elementId);
       }
-      this.replaceFormItemWithPageElement(EditableElement);
+      this.hideAncillary(item);
     };
 
     if (editor) {
@@ -289,60 +295,37 @@ class InlineEditor extends FormEditorBase {
   }
 
   getFocusedSelectors() {
-    const selectors = super.getFocusedSelectors();
     // The page element being edited must keep focus when clicked — it is
     // the editor.
-    selectors.push('.daedalus-edit-inline-editing');
-    return selectors;
+    return [...super.getFocusedSelectors(), '.daedalus-edit-inline-editing'];
   }
 
-  /**
-   * Get data.
-   *
-   * Gets the user input from either the canvas CKEditor or the panel
-   * textarea.
-   *
-   * @param formItem
-   *   The form item to retrieve data from.
-   *
-   * @return {*}
-   *   The user input, or null while a canvas editor is still building.
-   */
-  getInputValue(formItem) {
-    const EditableElement = Drupal.Daedalus.Edit.CurrentlyEditingElement;
-    const ckeditor5Id =
-      EditableElement?.getPageElementHandle().dataset.ckeditor5Id;
-    if (ckeditor5Id) {
-      const editor = Drupal.Daedalus.Edit.Ckeditor5Instances.get(ckeditor5Id);
-      // The editor's async create hasn't resolved yet — no user input can
-      // exist. Callers treat null as "unchanged".
-      return editor ? editor.getData() : null;
-    }
-    return formItem.querySelector('textarea').value;
+  inputs(item) {
+    return item.getFormItemInputs();
   }
 
   isValid(e = null) {
-    const EditableElement = Drupal.Daedalus.Edit.CurrentlyEditingElement;
-    const formItem = EditableElement.getFormItem();
-
+    const item = Drupal.Daedalus.Edit.CurrentlyEditingElement;
     // Sync the textarea so HTML5/server validation and form serialization
     // see the editor's current data.
-    const data = this.getInputValue(formItem);
-    const textarea = formItem.querySelector('textarea');
-    if (data !== null && textarea.value !== data) {
-      textarea.value = data;
+    const editor = this.liveEditor(item);
+    if (editor) {
+      const data = editor.getData();
+      const textarea = this.textarea(item);
+      if (textarea.value !== data) {
+        textarea.value = data;
+      }
     }
-
     return super.isValid(e);
   }
 
   validationMessageHandle() {
-    const EditableElement = Drupal.Daedalus.Edit.CurrentlyEditingElement;
-    const pageElement = EditableElement.getPageElementHandle();
+    const item = Drupal.Daedalus.Edit.CurrentlyEditingElement;
+    const pageElement = item.getPageElementHandle();
     if (pageElement.dataset.ckeditor5Id) {
       return pageElement;
     }
-    return EditableElement.getFormItem().querySelector('textarea');
+    return this.textarea(item);
   }
 
   clearValidationMessageOnUserInput(validationMessageHandle) {
@@ -379,10 +362,10 @@ class InlineEditor extends FormEditorBase {
    * Inline Editors.
    *
    * Editors are created lazily at edit time, directly on the canvas element
-   * (see InlineEditor.replacePageElementWithFormItem) — nothing attaches at
-   * form load. This behavior only wires up the text format selectors so a
-   * mid-edit format switch rebuilds the canvas editor with the new format's
-   * toolbar and plugins.
+   * (see InlineEditor.mount) — nothing attaches at form load. This
+   * behavior only wires up the text format selectors so a mid-edit format
+   * switch rebuilds the canvas editor with the new format's toolbar and
+   * plugins.
    */
   Drupal.behaviors.DaedalusEditInlineEditors = {
     attach: (context, settings) => {
@@ -499,7 +482,7 @@ class InlineEditor extends FormEditorBase {
 
       // Every canvas editor carries the eager-identity plugin: the live
       // mirror of the server's IdentityMinter (sid attribute, converters,
-      // postfixer). Both the form-swap inline_editor and the blueprint
+      // postfixer). Both the form-path inline_editor and the blueprint
       // formatted_text editor attach through here, so this one injection
       // covers them all.
       const extraPlugins = [...core.selectPlugins(plugins), Identity];

@@ -29,6 +29,14 @@ use Drupal\workspaces\WorkspaceManagerInterface;
  * catalog, the schema and the gestures agree on what the site offers.
  * The partition rides the pointer's config tag; a switch mid-request
  * resets the memo (ActiveDesignSystemSubscriber).
+ *
+ * The roster's cache metadata never depends on the records: it is the
+ * pointer's config tag, each provider's own cacheMetadata() (static per
+ * provider by contract) and the workspace context, so cacheMetadata()
+ * answers it without reading a provider's records, and partition() builds
+ * its roster over the same call. A consumer whose dependency on the
+ * roster is conditional (delivery resolving a reference) attaches
+ * cacheMetadata() and builds only when it reads a record.
  */
 class MaterialsRosterBuilder {
 
@@ -101,19 +109,34 @@ class MaterialsRosterBuilder {
    */
   protected function partition(?string $design_system): MaterialsRoster {
     $records = [];
-    $metadata = (new CacheableMetadata())->addCacheTags(['config:' . ActiveDesignSystem::CONFIG_NAME]);
     foreach ($this->providers as ['provider' => $provider]) {
       foreach ($provider->records() as $record) {
         if ($record->designSystem === NULL || $record->designSystem === $design_system) {
           $records[] = $record;
         }
       }
+    }
+    return new MaterialsRoster($records, $this->cacheMetadata());
+  }
+
+  /**
+   * What any built roster derives from, answered without building one.
+   *
+   * The active design system pointer's config tag, every provider's
+   * cacheMetadata() and the workspace context when workspaces is
+   * installed: the metadata every roster this builder returns carries,
+   * identical for build() and buildFor() since the partition changes
+   * which records join, never what they derive from. Reads no records.
+   */
+  public function cacheMetadata(): CacheableMetadata {
+    $metadata = (new CacheableMetadata())->addCacheTags(['config:' . ActiveDesignSystem::CONFIG_NAME]);
+    foreach ($this->providers as ['provider' => $provider]) {
       $metadata->addCacheableDependency($provider->cacheMetadata());
     }
     if ($this->workspaceManager !== NULL) {
       $metadata->addCacheContexts(['workspace']);
     }
-    return new MaterialsRoster($records, $metadata);
+    return $metadata;
   }
 
   /**

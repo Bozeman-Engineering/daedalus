@@ -11,12 +11,13 @@ use Drupal\daedalus_edit\DaedalusEditMediaLibraryOpener;
 use Drupal\entity_test\Entity\EntityTest;
 use Drupal\file\Entity\File;
 use Drupal\image\Entity\ImageStyle;
-use Drupal\KernelTests\KernelTestBase;
 use Drupal\layout_builder\SectionComponent;
 use Drupal\media\Entity\Media;
+use Drupal\daedalus_blueprint\Materials\Address;
 use Drupal\daedalus_stylish\DefaultsStylesheet;
+use Drupal\daedalus_ui\Render\ElementAddress;
+use Drupal\Tests\daedalus\Kernel\BlueprintKernelTestBase;
 use Drupal\Tests\media\Traits\MediaTypeCreationTrait;
-use Drupal\Tests\user\Traits\UserCreationTrait;
 use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Session\Session;
@@ -39,25 +40,26 @@ use Symfony\Component\Routing\Route;
  * tier gate — plus the style guide serving this module's part/controls
  * declaration and the declared defaults it ships (the box facts the
  * markup needs) reaching the compiled defaults stylesheet and stamping
- * the rendered root.
+ * the rendered root. It also pins the bundle's placement contract: an
+ * image block placed with sample population references a published media
+ * item when the site has one and is otherwise the empty form, never a
+ * fabricated reference, and never carries a link.
  *
  * @group daedalus_edit_image_block
  */
 #[RunTestsInSeparateProcesses]
-class ImageBlockComposedRenderTest extends KernelTestBase {
+class ImageBlockComposedRenderTest extends BlueprintKernelTestBase {
 
   use MediaTypeCreationTrait;
-  use UserCreationTrait;
 
   /**
    * {@inheritdoc}
+   *
+   * The daedalus_ui hard dependencies (daedalus_blueprint +
+   * daedalus_blueprint_api) are invisible to kernel environments and
+   * must be listed explicitly or the container fails to compile.
    */
   protected static $modules = [
-    'system',
-    'user',
-    'field',
-    'text',
-    'filter',
     'link',
     'options',
     'editor',
@@ -73,13 +75,13 @@ class ImageBlockComposedRenderTest extends KernelTestBase {
     'navigation',
     'twig_events',
     'daedalus_tempstore',
-    'daedalus_blueprint',
     'daedalus_blueprint_api',
     'daedalus_ui',
     'field_sample_value',
     'daedalus_edit',
-    // The shipped block type carries an daedalus_layout third-party palette icon,
-    // so installing the module's config needs daedalus_layout's TPS schema.
+    // The shipped block type carries a daedalus_layout third-party palette
+    // icon, so installing the module's config needs daedalus_layout's TPS
+    // schema.
     'daedalus_layout',
     'svg_image_field',
     // Daedalus Stylish consumes the block type's page_builder declaration (the
@@ -90,7 +92,6 @@ class ImageBlockComposedRenderTest extends KernelTestBase {
     // tests see no behavior change from its presence beyond the stamps.
     'daedalus_stylish',
     'daedalus_edit_image_block',
-    'entity_test',
   ];
 
   /**
@@ -103,11 +104,12 @@ class ImageBlockComposedRenderTest extends KernelTestBase {
    */
   protected function setUp(): void {
     parent::setUp();
-    $this->installEntitySchema('user');
     $this->installEntitySchema('file');
     $this->installSchema('file', ['file_usage']);
     $this->installEntitySchema('media');
-    $this->installEntitySchema('block_content');
+    // The Layout Builder host for placement (installs block_content's schema
+    // before the bundle's field config lands on it).
+    $this->enableLayoutBuilder();
     // This module DECLARES defaults, and every defaults compile builds the
     // style guide, which validates them through a validator whose materials
     // roster reads all four daedalus_stylish storages. Compiles fire on config saves
@@ -279,7 +281,6 @@ class ImageBlockComposedRenderTest extends KernelTestBase {
    * attribution still rides the root.
    */
   public function testMediaLibraryUrlInEditorSettings(): void {
-    $this->installEntitySchema('entity_test');
     $host = EntityTest::create(['name' => 'Host page']);
     $host->save();
 
@@ -459,12 +460,13 @@ class ImageBlockComposedRenderTest extends KernelTestBase {
 
     $this->assertStringStartsWith('<img', $html);
     $this->assertStringNotContainsString('data-daedalus-edit-editor', $html);
-    // The property segment is 'value': the form-side lookup ids hardcode it
-    // for configurable fields, and the two sides only ever match each other.
+    // The property segment is the field's main property (target_id): the
+    // one minter (EditIdentity) on both sides, so the leaf and its form-item
+    // wrapper always match.
     $id = $block->id();
-    $this->assertStringContainsString(sprintf('data-daedalus-edit-field-value-wrapper="block_content::%s::field_image::value"', $id), $html);
-    $this->assertStringContainsString(sprintf('data-daedalus-edit-id="block_content::image::%s::field_image::0::en::entity_reference::entity_reference_entity_view::value"', $id), $html);
-    $this->assertStringContainsString(sprintf('data-daedalus-edit-page-element-id="block_content::%s::field_image::0::value"', $id), $html);
+    $this->assertStringContainsString(sprintf('data-daedalus-edit-field-value-wrapper="block_content::%s::field_image::target_id"', $id), $html);
+    $this->assertStringContainsString(sprintf('data-daedalus-edit-id="block_content::image::%s::field_image::0::en::entity_reference::entity_reference_entity_view::target_id"', $id), $html);
+    $this->assertStringContainsString(sprintf('data-daedalus-edit-page-element-id="block_content::%s::field_image::0::target_id"', $id), $html);
     // The drop-to-replace bag rides both tiers.
     $this->assertStringContainsString('data-media-reference="field_image"', $html);
   }
@@ -517,10 +519,11 @@ class ImageBlockComposedRenderTest extends KernelTestBase {
    * no design system active at all, and a live render's linked root must
    * wear the family class and this bundle's scope class the rules address.
    * The root is rendered through the layout builder component (the real
-   * page path) rather than the hand-built bag: the stamps land at entity
-   * view on the block content build and reach the composed root through
-   * the hoisted bag, which is exactly the seam this pins for this bundle.
-   * The mechanism itself is daedalus_stylish's coverage (DefaultsStylesheetTest).
+   * page path) rather than the hand-built bag: the element address lands
+   * on the placement build (daedalus_ui LayoutBuilderBlockAttributes) and
+   * reaches the composed root through the hoisted bag, which is exactly
+   * the seam this pins for this bundle. The mechanism itself is
+   * daedalus_stylish's coverage (DefaultsStylesheetTest).
    */
   public function testDeclaredDefaultsDeliverAndStampTheRoot(): void {
     $this->installConfig(['daedalus_stylish']);
@@ -540,9 +543,10 @@ class ImageBlockComposedRenderTest extends KernelTestBase {
     $uri = \Drupal::state()->get(DefaultsStylesheet::STATE_KEY);
     $this->assertIsString($uri, 'The defaults stylesheet compiles with no skin.');
     $css = file_get_contents($uri);
-    $scope_root = '@scope (.' . DefaultsStylesheet::SCOPE_CLASS . ' .' . DefaultsStylesheet::scopeClass('block_type:image') . ')';
-    $this->assertStringContainsString($scope_root . " {\n  :scope {\n    display: block;\n    width: fit-content;\n  }", $css, 'The root rule prints at :scope inside the stamped scope class.');
-    $this->assertStringContainsString($scope_root . " {\n  :scope.image-block-image, .image-block-image {\n    display: block;\n  }", $css, 'The part rule prints with the root-hoist alternative.');
+    $selector = DefaultsStylesheet::elementSelector(Address::fromString('block_type:image'));
+    $this->assertSame(':where(.' . DefaultsStylesheet::SCOPE_CLASS . ' [' . ElementAddress::ATTRIBUTE . '="block_type:image"])', $selector);
+    $this->assertStringContainsString($selector . " {\n  display: block;\n  width: fit-content;\n}", $css, 'The root rule prints bare at the bundle address.');
+    $this->assertStringContainsString($selector . " :where(.image-block-image) {\n  display: block;\n}", $css, 'The part rule prints as a :where() descendant.');
 
     $block = $this->createBlock([
       'field_image' => $this->media->id(),
@@ -558,11 +562,93 @@ class ImageBlockComposedRenderTest extends KernelTestBase {
     $html = trim((string) $this->container->get('renderer')->renderInIsolation($build));
     $this->assertStringStartsWith('<a', $html, 'The linked block renders its anchor root with no sandwich.');
     $this->assertMatchesRegularExpression(
-      '/^<a[^>]*class="[^"]*\b' . preg_quote(DefaultsStylesheet::scopeClass('kind:block'), '/') . '\b[^"]*\b' . preg_quote(DefaultsStylesheet::scopeClass('block_type:image'), '/') . '\b/',
+      '/^<a[^>]*\s' . ElementAddress::ATTRIBUTE . '="block_type:image"/',
       $html,
-      'The anchor root wears the family class and the image bundle scope class.',
+      'The anchor root wears the image bundle address the rule selects by.',
     );
+    $this->assertStringNotContainsString('daedalus-stylish-defaults--', $html);
     $this->assertMatchesRegularExpression('/<img[^>]*class="image-block-image"/', $html, 'The picture inside wears the part class the part rule addresses.');
+  }
+
+  /**
+   * Places an image block with sample population and reads it back.
+   *
+   * The host is a fresh Layout Builder entity_test seeded with one plugin
+   * block as the add_element anchor; the placed inline block comes back out
+   * of its component's serialized configuration.
+   */
+  protected function placeWithSample(string $uuid): BlockContent {
+    $anchor = '7a3f08ce-2f70-4c98-8f5b-3d1f6a9be0c4';
+    $host = $this->createTestEntity([
+      'name' => 'Image block placement',
+      'layout_builder__layout' => [
+        $this->createSection('layout_onecol', [
+          [
+            'uuid' => $anchor,
+            'region' => 'content',
+            'weight' => 0,
+            'configuration' => [
+              'id' => 'system_powered_by_block',
+              'provider' => 'system',
+              'label' => 'Anchor seed',
+              'label_display' => '0',
+            ],
+          ],
+        ]),
+      ],
+    ]);
+
+    $result = $this->container->get('daedalus_blueprint.operations')->addElement($host, [
+      'anchor' => $anchor,
+      'placement' => 'after',
+    ], [
+      'block_type' => 'image',
+      'uuid' => $uuid,
+      'populate' => 'sample',
+    ]);
+    $this->assertTrue($result->isSuccess(), print_r($result->toArray()['errors'] ?? [], TRUE));
+
+    $components = $result->getEntity()->get('layout_builder__layout')->getSection(0)->getComponents();
+    $block = $this->unserializeBlock($components[$uuid]->get('configuration')['block_serialized']);
+    $this->assertInstanceOf(BlockContent::class, $block);
+    return $block;
+  }
+
+  /**
+   * Placement: the site's media answers, and a media-less site places empty.
+   *
+   * The sample ladder's placement entrance fills a field from its default
+   * value, else its configured sample policy, else nothing. field_image's
+   * entity_reference policy picks a published media item, so a site with one
+   * places a real reference; with none published the policy's empty answer is
+   * final and the block is the empty form (the placeholder in edit, nothing
+   * live), never core's fabricated unsaved media. field_image_url has no
+   * policy and stays empty: core's random external link is not a placement
+   * rung, so a placed image block never carries an anchor.
+   */
+  public function testPlacementReferencesPublishedMediaOrStaysEmpty(): void {
+    $block = $this->placeWithSample('f0f45ea4-c594-783b-9ccb-94c896ee4891');
+    $this->assertSame($this->media->id(), $block->get('field_image')->target_id, 'The published media item is the site\'s answer on placement.');
+    $this->assertTrue($block->get('field_image_url')->isEmpty(), 'The policy-less url field is left empty: core\'s random link is not a placement rung.');
+
+    $html = trim($this->renderComposed($block, $this->editBag()));
+    $this->assertStringStartsWith('<img', $html, 'A placed image block with a media answer renders the unlinked img root.');
+    $this->assertStringContainsString('alt="A test image"', $html);
+    $this->assertStringNotContainsString('<a', $html, 'A placed image block carries no anchor.');
+
+    // The only media item goes unpublished: the configured generator finds
+    // nothing, and its empty answer is final.
+    $this->media->setUnpublished()->save();
+    $block = $this->placeWithSample('0c1d2e3f-4a5b-6c7d-8e9f-0a1b2c3d4e5f');
+    $this->assertTrue($block->get('field_image')->isEmpty(), 'With no published media the image field stays empty: the policy\'s empty answer is final, and core never fabricates a reference on placement.');
+    $this->assertTrue($block->get('field_image_url')->isEmpty());
+
+    $this->assertSame('', trim($this->renderComposed($block)), 'A media-less placement renders nothing live.');
+    $html = trim($this->renderComposed($block, $this->editBag()));
+    $this->assertStringStartsWith('<div', $html, 'A media-less placement is the empty form in edit.');
+    $this->assertStringContainsString('daedalus-edit-image-block-placeholder', $html);
+    $this->assertStringContainsString('Add an image', $html);
+    $this->assertStringNotContainsString('<a', $html);
   }
 
 }

@@ -19,6 +19,19 @@
   pointer-events: none;
 }
 
+/* Under a canvas view (html[data-daedalus-ui-canvas-view], the axis
+   documented in daedalus_ui.api.php) every caret box is placed from a
+   viewport rect that, with the canvas transformed, is the 2D box of a
+   projected quad, so the boxes stand down until the view ends. The drop
+   placeholder below is canvas content, not measured chrome, and stays. */
+html[data-daedalus-ui-canvas-view] .daedalus-ui-caret__line,
+html[data-daedalus-ui-canvas-view] .daedalus-ui-caret__container,
+html[data-daedalus-ui-canvas-view] .daedalus-ui-caret__empty,
+html[data-daedalus-ui-canvas-view] .daedalus-ui-caret__chip,
+html[data-daedalus-ui-canvas-view] .daedalus-ui-caret__element {
+  display: none;
+}
+
 /* The gap line. The element is zero-sized on its thin axis; the visible
    bar is drawn around it so the geometry stays centered on the gap. */
 .daedalus-ui-caret__line::before {

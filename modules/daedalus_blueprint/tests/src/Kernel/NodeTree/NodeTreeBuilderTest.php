@@ -49,8 +49,10 @@ class NodeTreeBuilderTest extends BlueprintKernelTestBase {
       'block',
       'block_content',
       'layout_builder',
+      'file',
       'daedalus_ui',
       'daedalus_tempstore',
+      'daedalus_blueprint_api',
       'daedalus_layout',
       'daedalus_blueprint_test',
     ]);
@@ -124,7 +126,7 @@ class NodeTreeBuilderTest extends BlueprintKernelTestBase {
         'default' => ['padding-block' => 'var(--space-16)'],
         'hover' => ['background-color' => '#eee'],
       ],
-      "container:$root_uuid::>" => ['default' => ['gap' => '1rem']],
+      "container:$root_uuid::> *" => ['default' => ['gap' => '1rem']],
       "block:$block_uuid" => [
         'default' => ['text-align' => 'center'],
         'variants' => [['variant' => 'button', 'fragment' => '']],
@@ -148,11 +150,11 @@ class NodeTreeBuilderTest extends BlueprintKernelTestBase {
     $this->assertArrayNotHasKey('section_index', $container);
 
     // Styles landed on the node, keyed by the local remainder: '' is the
-    // element's own entry, '::>' the children entry — the flat map's
+    // element's own entry, '::> *' the children entry — the flat map's
     // grammar, minus the node identity.
     $this->assertSame([
       '' => $style_map["container:$root_uuid"],
-      '::>' => $style_map["container:$root_uuid::>"],
+      '::> *' => $style_map["container:$root_uuid::> *"],
     ], $container['styles']);
 
     // Ordered flow: the block, then the nested container — one child axis.

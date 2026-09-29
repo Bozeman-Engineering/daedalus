@@ -79,7 +79,7 @@ class EditorSettings {
    * Gets the current user's editing chrome density.
    *
    * The one server-side read of the preference: the SSR stamp
-   * (daedalus_ui_preprocess_html) and the settings sidebar select both
+   * (DaedalusUiHooks::preprocessHtml) and the settings sidebar select both
    * come through here. The save route is generic, so normalize on read:
    * anything but a known tier collapses to the 'full' default.
    *

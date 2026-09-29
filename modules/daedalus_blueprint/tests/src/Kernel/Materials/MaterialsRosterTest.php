@@ -28,8 +28,9 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  * stencil ownership, band stencils derived from their root's wearings),
  * the one did-you-mean formatter, the record's
  * delivery shape, loud refusal of duplicate ids and spellings, the
- * builder's per-request memo with reset and merged cache metadata, and the
- * partition by design system (global records and the active system's).
+ * builder's per-request memo with reset and merged cache metadata, the
+ * builder's cacheMetadata() answered without a build, and the partition
+ * by design system (global records and the active system's).
  */
 #[Group('daedalus_blueprint')]
 #[RunTestsInSeparateProcesses]
@@ -458,6 +459,28 @@ class MaterialsRosterTest extends KernelTestBase {
   }
 
   /**
+   * The builder answers its cache metadata without building a roster.
+   *
+   * The metadata never depends on the records (the pointer's config tag,
+   * the providers' own metadata, the workspace context), so a consumer
+   * whose roster dependency is conditional can attach it without paying
+   * for a build; and the built roster carries the same derivation.
+   */
+  public function testCacheMetadataReadsNoRecords(): void {
+    $builder = $this->builder();
+    $metadata = $builder->cacheMetadata();
+    $this->assertSame(0, TestMaterialsProvider::$builds, 'cacheMetadata() reads no provider records.');
+    $this->assertSame(['config:daedalus_blueprint.settings', 'materials_test_list'], $metadata->getCacheTags());
+    $this->assertSame(['user.permissions'], $metadata->getCacheContexts());
+
+    $built = $builder->build()->getCacheableMetadata();
+    $this->assertSame(1, TestMaterialsProvider::$builds);
+    $this->assertSame($built->getCacheTags(), $metadata->getCacheTags(), 'The built roster carries the same tags.');
+    $this->assertSame($built->getCacheContexts(), $metadata->getCacheContexts(), 'The built roster carries the same contexts.');
+    $this->assertSame($built->getCacheMaxAge(), $metadata->getCacheMaxAge());
+  }
+
+  /**
    * With Workspaces installed the roster varies by workspace.
    */
   public function testWorkspaceCacheContext(): void {
@@ -466,6 +489,8 @@ class MaterialsRosterTest extends KernelTestBase {
     $this->installEntitySchema('path_alias');
     $this->installSchema('workspaces', ['workspace_association']);
 
+    $this->assertContains('workspace', $this->builder()->cacheMetadata()->getCacheContexts(), 'The builder answers the workspace context without a build.');
+    $this->assertSame(0, TestMaterialsProvider::$builds);
     $roster = $this->builder()->build();
     $this->assertContains('workspace', $roster->getCacheableMetadata()->getCacheContexts());
     $this->assertContains('materials_test_list', $roster->getCacheableMetadata()->getCacheTags());

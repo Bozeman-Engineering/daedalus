@@ -8,8 +8,8 @@
    * (SIDE, SLOT): sides (left/right) and slots within a side (top/bottom) are
    * independent, so a left-rail tree (top) and palette (bottom) coexist while
    * panels sharing the same side AND slot are mutually exclusive. Every
-   * opener -- toggle buttons, the chat FAB, tools, daedalus_edit forms -- routes
-   * through here; there is no other open/close path.
+   * opener (toggle buttons, the chat FAB, hotkeys, daedalus_edit forms)
+   * routes through here; there is no other open/close path.
    *
    * There is no in-memory record of "what's open". The DOM is the single source
    * of truth: the open panel in a (side, slot) is the one without the
@@ -147,8 +147,8 @@
      * Open a sidebar, closing whatever currently holds its (side, slot).
      *
      * The plugin type is read from the element's data-sidebar-type, so callers
-     * pass only the id. A no-op when the panel is not present (e.g. a tool
-     * whose sidebar did not render on this page) or already open. Panels in
+     * pass only the id. A no-op when the panel is not present (e.g. a sidebar
+     * plugin that did not render on this page) or already open. Panels in
      * the side's other slots are untouched -- slots stack, they don't compete.
      *
      * @param {string} id

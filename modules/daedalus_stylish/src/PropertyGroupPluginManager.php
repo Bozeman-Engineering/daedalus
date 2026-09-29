@@ -77,6 +77,54 @@ final class PropertyGroupPluginManager extends DefaultPluginManager {
   }
 
   /**
+   * Gets the ids of the groups granted only at a pseudo-element.
+   *
+   * The groups whose definition carries the `pseudo` flag
+   * (PropertyGroup::$pseudo): the vocabulary roster grants every one of
+   * them wherever its walk lands on a pseudo-element ("&::before",
+   * ".quote::after"), declared or derived, and the guide build refuses one
+   * declared on a real element.
+   *
+   * @return string[]
+   *   The plugin ids, in getGroups() order.
+   */
+  public function getPseudoGroups(): array {
+    return array_keys(array_filter(
+      $this->getGroups(),
+      static fn (PropertyGroupInterface $group): bool => !empty($group->getPluginDefinition()['pseudo']),
+    ));
+  }
+
+  /**
+   * Gets the groups a declaration may name on a real element.
+   *
+   * Every group but the pseudo-only ones (getPseudoGroups()), which the
+   * guide build refuses on a real element and the roster grants at every
+   * pseudo-element by itself. Consumers that declare a part open to every
+   * group (discovery's unconstrained parts, the guide scaffold) read this
+   * list.
+   *
+   * @return \Drupal\daedalus_stylish\PropertyGroupInterface[]
+   *   The group instances keyed by plugin ID, in getGroups() order.
+   */
+  public function getElementGroups(): array {
+    return array_filter(
+      $this->getGroups(),
+      static fn (PropertyGroupInterface $group): bool => empty($group->getPluginDefinition()['pseudo']),
+    );
+  }
+
+  /**
+   * Whether a group is granted only at a pseudo-element.
+   *
+   * The validator's read behind STYLE_PROPERTY_PSEUDO_ONLY: a property
+   * such a group owns is refused outside a pseudo-element in every mode.
+   */
+  public function isPseudoOnly(string $group_id): bool {
+    return $this->hasDefinition($group_id) && !empty($this->getDefinition($group_id)['pseudo']);
+  }
+
+  /**
    * Gets the group that owns a CSS property.
    *
    * Every stylable property is owned by exactly one group. If two groups

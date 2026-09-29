@@ -27,8 +27,7 @@
  *   toggling a lit button off unsets; only picking a stop writes its
  *   canonical value.
  * - `label` is an untranslated string; components wrap it in Drupal.t()
- *   (the KIND_LABELS precedent — this module runs under node where
- *   Drupal.t does not exist).
+ *   (this module runs under node where Drupal.t does not exist).
  * - `paint` (stopsFor-derived stops) is the display value a swatch face
  *   paints, straight from the material record — never a var() the browser
  *   would have to resolve. Stops without it paint their `value` (Segments).
@@ -78,12 +77,12 @@ const AXIS_LABELS = {
 };
 
 /**
- * The position widget's stop values, one table per property (canonical
- * write + the aliases a stop honestly represents).
+ * The position widget's stop values for its alignment properties, one
+ * table per property (canonical write + the aliases a stop honestly
+ * represents).
  *
- * Canonical writes are the modern start/end spellings — the widget is
- * grid-first (Stack's canonical container upgrade is display grid) and
- * every current engine resolves them in flex containers too. The flex
+ * Canonical writes are the modern start/end spellings, which every
+ * current engine resolves in flex and grid containers alike. The flex
  * legacy spellings and the self-* forms are aliases; 'stretch', 'baseline'
  * and 'auto' stay custom, per the honesty rule. left/right exist only for
  * justify-self (they are not valid align-self values).
@@ -115,38 +114,144 @@ const positionAxis = (orientation, property, write) => ({
 });
 
 /**
+ * The margin axis: a flex column's main-axis placement, spelled as the
+ * child's auto margins.
+ *
+ * In a flex container free space on the main axis goes to auto margins
+ * before justify-content (CSS Flexbox 8.1), so `margin-bottom: auto`
+ * pins a stacked child to the top of a tall band, `margin-top: auto` to
+ * its bottom, and both center it. No single child property says this
+ * (justify-self is ignored by flex), so the axis writes the PAIR: each
+ * stop's pair (MARGIN_PAIRS, by stop id) is what a pick sets on the two
+ * sides, `auto` on the side that takes the free space and null on the
+ * other, which only clears a standing `auto` there (marginAxisWrite: a
+ * typed margin on the other side is left alone, never overwritten by a
+ * placement). The row's `value` is the placement token marginAxisValue
+ * reads from which sides are `auto` (a stop's `value` and `matches`, so
+ * the row's state maps through segmentState like every other axis),
+ * never a CSS spelling: `property` names the pair for the row's identity
+ * and is not written. The pair lives here by id rather than on the stop
+ * because the choice row's offer (choice-row-model.js choiceStops) is a
+ * projection of the stop table and hands a pick back by id.
+ */
+const MARGIN_PAIR = ['margin-top', 'margin-bottom'];
+
+const MARGIN_PAIRS = {
+  start: { 'margin-top': null, 'margin-bottom': 'auto' },
+  center: { 'margin-top': 'auto', 'margin-bottom': 'auto' },
+  end: { 'margin-top': 'auto', 'margin-bottom': null },
+};
+
+const marginAxis = (orientation) => ({
+  label: orientation === 'horizontal' ? 'Horizontal' : 'Vertical',
+  orientation,
+  property: 'margin-block',
+  pair: MARGIN_PAIR,
+  write: 'local',
+  stops: Object.keys(MARGIN_PAIRS).map((id, index) => ({
+    id,
+    value: id,
+    matches: [id],
+    label: AXIS_LABELS[orientation][index],
+  })),
+});
+
+const marginAuto = (values, side) => normalizeValue(values?.[side]) === 'auto';
+
+/**
+ * The margin axis's shown value: which stop the child's auto margins
+ * light, read from the pair.
+ *
+ * `margin-bottom: auto` alone is Top, `margin-top: auto` alone is
+ * Bottom, both are Middle; neither is unset. A numeric margin on either
+ * side is not a placement and never reads as custom: the axis owns only
+ * the `auto` spelling, so a typed 2rem beside an auto is left alone by
+ * the read exactly as by the write.
+ *
+ * @param {Object<string, ?string>} values
+ *   The widget's shown values (margin-top and margin-bottom among them).
+ *
+ * @return {?string}
+ *   The stop id ('start', 'center', 'end') or null when unset.
+ */
+export const marginAxisValue = (values) => {
+  const top = marginAuto(values, 'margin-top');
+  const bottom = marginAuto(values, 'margin-bottom');
+  if (top && bottom) {
+    return 'center';
+  }
+  if (top) {
+    return 'end';
+  }
+  if (bottom) {
+    return 'start';
+  }
+  return null;
+};
+
+/**
+ * The margin axis's write for a pick: the stop's pair, with a null
+ * kept only where it clears a standing `auto`.
+ *
+ * A stop sets `auto` on its side(s) and clears the other side's `auto`
+ * (Middle to Top must drop the top auto); a null pick (unset, the lit
+ * stop clicked) clears every `auto`. A side that reads anything else (a
+ * typed margin, nothing) is omitted: the placement never overwrites a
+ * margin it did not write, and a null over nothing would remove nothing.
+ *
+ * @param {?string} id
+ *   The picked stop's id ('start', 'center', 'end'), or null for unset.
+ * @param {Object<string, ?string>} values
+ *   The widget's shown values at the pose.
+ *
+ * @return {Object<string, ?string>}
+ *   The properties to commit as one gesture; empty when nothing changes.
+ */
+export const marginAxisWrite = (id, values) => {
+  const pair =
+    MARGIN_PAIRS[id] ??
+    Object.fromEntries(MARGIN_PAIR.map((side) => [side, null]));
+  return Object.fromEntries(
+    Object.entries(pair).filter(
+      ([side, value]) => value !== null || marginAuto(values, side),
+    ),
+  );
+};
+
+/**
  * The position widget's two axes for the selection's parent context: the
  * child-positions-itself half of the Figma split (the layout widget's
  * alignment rows are the container half).
  *
- * The child's whole vocabulary is align-self + justify-self; what varies
- * with the parent's layout mode is which screen axis each property means
- * and whether a write can take effect (`write`):
- * - 'local': the property places the child right now — a plain own-key
- *   write.
- * - 'upgrade': the property is inert until the parent leaves block flow,
- *   so a pick must ride in with the parent's display: grid, the
- *   compound gesture (the component guards it with positionUpgrade and
- *   falls back to a disabled row).
- * - 'none': the parent owns this axis (a flex container's main axis
+ * The child's vocabulary is align-self + justify-self plus the auto-margin
+ * pair; what varies with the parent's layout mode is which screen axis
+ * each property means and whether a write can take effect (`write`):
+ * - 'local': the property places the child right now, a plain own-key
+ *   write (the margin axis writes its pair, still on the child's key).
+ * - 'none': the parent owns this axis (a flex row's main axis
  *   distributes children via justify-content; no child property exists),
- *   or its display mode places nothing. The row renders disabled — a
+ *   or its display mode places nothing. The row renders disabled, so a
  *   committed value stays visible, never silently broken.
  *
  * Modes:
- * - grid parent: both axes local (the reason grid is the canonical
- *   upgrade); align-self vertical, justify-self horizontal.
- * - flex parent: align-self is the cross axis (vertical under row,
- *   horizontal under column); justify-self is ignored by flex and takes
- *   the leftover axis as 'none', so a committed value still has a row.
- * - plain block parent ('block'): both axes upgrade — this is the gorilla
- *   scenario, one tap away through the compound commit.
- * - any other display (inline, table, ...): both axes 'none'; upgrading a
- *   non-block box to grid is not a near-no-op, so basic mode stays out.
+ * - flex column parent (every stacked container by the declared tier):
+ *   align-self is the horizontal (cross) axis; the vertical (main) axis
+ *   is the margin axis, the flex spec's own per-child main-axis
+ *   placement.
+ * - flex row parent (Columns): align-self is the vertical cross axis;
+ *   justify-self is ignored by flex and takes the horizontal axis as
+ *   'none', so a committed value still has a row.
+ * - grid parent (a hand-made grid): both axes local; align-self
+ *   vertical, justify-self horizontal.
+ * - plain block parent ('block', a field inside a block wrapper) and any
+ *   other display (inline, table, ...): both axes 'none'. Nothing places
+ *   a child there and no upgrade rides in: a container is always flex
+ *   by declaration, the Layout section (container-only) writes no
+ *   display, and a hand-written display is the code view's; the rows
+ *   state the fact and prescribe no gesture.
  * - unknown parent (null facts): both axes local. The registry gate
  *   (positionGate) hides the widget here unless a value is set, and a set
- *   value must stay visible and unsettable — plain local writes, never a
- *   guessed companion.
+ *   value must stay visible and unsettable: plain local writes.
  *
  * @param {?{display: string, flexDirection: string}} parent
  *   The selection's parent facts (source.getLayoutContext()?.parent).
@@ -160,7 +265,7 @@ export const positionAxes = (parent) => {
     return direction.startsWith('column')
       ? {
           horizontal: positionAxis('horizontal', 'align-self', 'local'),
-          vertical: positionAxis('vertical', 'justify-self', 'none'),
+          vertical: marginAxis('vertical'),
         }
       : {
           horizontal: positionAxis('horizontal', 'justify-self', 'none'),
@@ -170,9 +275,7 @@ export const positionAxes = (parent) => {
   const write =
     display === null || display === 'grid' || display === 'inline-grid'
       ? 'local'
-      : display === 'block'
-        ? 'upgrade'
-        : 'none';
+      : 'none';
   return {
     horizontal: positionAxis('horizontal', 'justify-self', write),
     vertical: positionAxis('vertical', 'align-self', write),
@@ -182,12 +285,12 @@ export const positionAxes = (parent) => {
 /**
  * The position widget's dynamic gate: is the parent context KNOWN?
  *
- * Every position row is parent-relative — which axis a property means,
- * whether a write needs the compound grid upgrade — so with no parent
- * facts every row would be a guess. Unlike textGate this does NOT degrade
- * to offering on unknown (the widget has no context-free row the way
- * text_alignment has its text row); a set value still offers through the
- * registry's value-set OR, rendered as plain local writes.
+ * Every position row is parent-relative (which axis a property means,
+ * whether a write can take effect), so with no parent facts every row
+ * would be a guess. Unlike textGate this does NOT degrade to offering on
+ * unknown (the widget has no context-free row the way text_alignment has
+ * its text row); a set value still offers through the registry's
+ * value-set OR, rendered as plain local writes.
  *
  * @param {?object} self
  *   The selection's own facts (unused; the offer rule passes them first).
@@ -198,33 +301,6 @@ export const positionAxes = (parent) => {
  */
 export const positionGate = (self, parent) =>
   normalizeValue(parent?.display) !== null;
-
-/**
- * Whether the compound grid upgrade may accompany a position pick.
- *
- * The compound companion writes display: grid to the parent's key, so it
- * is only honest when that key IS the box whose block flow gates the child
- * (parent.isSelectable: the immediate parent box is itself the selectable
- * element the key names — wrapper markup between them would receive the
- * grid while the key's element did not), and only safe when no committed
- * display exists on that key (the layout widget's stack-upgrade rule: a deliberate
- * display, even 'block', is never clobbered — computed facts cannot tell
- * chosen from defaulted, but the style map can).
- *
- * @param {?{key: ?string, isSelectable: boolean}} parent
- *   The selection's parent facts (layout.parent).
- * @param {*} committedDisplay
- *   The parent key's committed display as seen from the editing
- *   compound (the compound's own value, the default-condition one
- *   beneath it as fallback — the caller resolves the layering).
- *
- * @return {boolean}
- */
-export const positionUpgrade = (parent, committedDisplay) =>
-  parent?.isSelectable === true &&
-  typeof parent?.key === 'string' &&
-  parent.key !== '' &&
-  normalizeValue(committedDisplay) === null;
 
 /**
  * The "controlled by <parent>" read: container-driven alignment the child
@@ -242,7 +318,9 @@ export const positionUpgrade = (parent, committedDisplay) =>
  * @param {?{alignItems: string}} parent
  *   The selection's parent facts (source.getLayoutContext()?.parent).
  * @param {*} localValue
- *   The child's committed align-self (model.values['align-self']).
+ *   The child's shown align-self (the winner at the pose, controls.js
+ *   litValues over the model's reads, with the in-flight draft over it:
+ *   useGesture's `values`).
  * @param {Array<{id: string, value: string, matches: string[]}>} stops
  *   The align-self axis's stop row (positionAxes(parent) — the axis whose
  *   property is align-self).
@@ -523,7 +601,7 @@ export const paletteFallback = (guide, materials) =>
 /**
  * The <image> rows' unconstrained vocabulary: every gradient-kind swatch
  * as a reference stop, roster (label) order — fallbackFor's answer for a
- * media-capable definition, and the unconstrained tier of the color
+ * free <image> definition (imageSlot), and the unconstrained tier of the color
  * widgets' gradient row (widget-gradients.js gradientStops). No token
  * scale shape maps onto images, so swatches are the whole offer; a
  * gradient swatch minted mid-session is here the moment the store learns
@@ -606,7 +684,7 @@ export const gapGate = (self) =>
  * @param {?{childCount: number, partChildCount: Object<string, number>}} self
  *   The selection's own facts (layout.self), or null when unknown.
  * @param {?string} element
- *   The control's bound part selector (model.element), null for a root
+ *   The control's home part selector (model.home.element), null for a root
  *   binding.
  *
  * @returns {?number}
@@ -634,7 +712,7 @@ export const boundChildCount = (self, element) => {
  * @param {?{childCount: number, partChildCount: Object<string, number>}} self
  *   The selection's own facts (layout.self), or null when unknown.
  * @param {?string} element
- *   The control's bound part selector (model.element), null for a root
+ *   The control's home part selector (model.home.element), null for a root
  *   binding.
  *
  * @returns {boolean}
@@ -770,16 +848,20 @@ const STROKE_STYLES = ['solid', 'dashed', 'dotted', 'double'].map((style) => ({
  *   spelling: shadow grammar has too many exactly-equivalent forms for
  *   normalized-string matching to claim any of them honestly.
  * - padding (+ longhands): SPACING_STEPS, see above.
- * - gap: the px steps the Layout section's field row magnetizes to (the
- *   resting default is the row's ghost, never a stop); labels are the
- *   values themselves (values, never names, on every face), the px
- *   spelling is the id, the commit, and the only alias. The spacing
- *   control's gap row (a block laying out its fields) reads the same
- *   entry: one gap vocabulary, whichever surface offers it.
+ * - gap: the rem steps the Layout section's field row magnetizes to (the
+ *   resting default is the row's placeholder hint, never a stop), the
+ *   spacing tables' unit (one unit per value space: the built-in
+ *   spacing vocabulary never spoke px beside rem padding on purpose);
+ *   labels are the values themselves (values, never names, on every
+ *   face), the rem spelling is the id, the commit, and the only alias,
+ *   zero spelled bare and matching every unit's zero (the spacing
+ *   table's rule, so a declared `gap: 0px` floor lights it). The
+ *   spacing control's gap row (a block laying out its fields) reads the
+ *   same entry: one gap vocabulary, whichever surface offers it.
  * - width: fractional presets. 'Full' is 100% — 'auto' is
  *   content-driven, a different idea, and renders as custom rather than
  *   pretending to be a preset.
- * - timeline-trigger / animation-trigger: the WHEN of an animation, the
+ * - timeline-trigger / animation-trigger: the trigger of an animation, the
  *   two shorthands of the CSS Animation Triggers draft spelled verbatim
  *   (the printer prints them as-is; the daedalus_stylish/motion_triggers runtime
  *   reads the same spellings where the browser lacks them). Every stop
@@ -885,12 +967,15 @@ export const FALLBACKS = {
   'padding-right': SPACING_STEPS,
   'padding-bottom': SPACING_STEPS,
   'padding-left': SPACING_STEPS,
-  gap: [0, 8, 16, 24, 40].map((px) => ({
-    id: `${px}px`,
-    value: `${px}px`,
-    matches: [`${px}px`],
-    label: `${px}px`,
-  })),
+  gap: [
+    { id: '0', value: '0', matches: ['0', '0px', '0rem', '0em'], label: '0' },
+    ...['0.5rem', '1rem', '1.5rem', '2.5rem'].map((rem) => ({
+      id: rem,
+      value: rem,
+      matches: [rem],
+      label: rem,
+    })),
+  ],
   width: [
     { id: 'quarter', value: '25%', matches: ['25%'], label: '25%' },
     { id: 'half', value: '50%', matches: ['50%'], label: '50%' },
@@ -983,8 +1068,8 @@ const triggerOff = (value) => {
  * @param {Object<string, ?string>} properties
  *   The settling row's write ({property: value}, null for unset).
  * @param {Object<string, string>} values
- *   The control's committed values at the pose (model.values: the
- *   effective pair, a worn variant's included).
+ *   The control's shown values at the pose (controls.js litValues over
+ *   the model's reads: the winner's pair, a worn variant's included).
  *
  * @return {Object<string, ?string>}
  *   The properties to commit as one gesture.
@@ -1026,6 +1111,27 @@ const keywordStops = (keywords) =>
   }));
 
 /**
+ * Whether a media-capable definition is a free <image> slot.
+ *
+ * The offer follows the type; the media flag adds the picker. A media
+ * definition whose type leaves the value free (background-image, type
+ * text) takes anything an <image> can be, so the gradient swatches, the
+ * gradient builder and every swatch kind offer beside the media picker.
+ * A keyword-typed media definition (content: `""`, `none` or exactly one
+ * media token) takes no gradient and no swatch reference the server
+ * would accept, so its offer is its keywords plus the picker alone: a
+ * stop the server refuses is a lie in the row. Read by fallbackFor, the
+ * code view's token completions and the advanced row's gradient half.
+ *
+ * @param {?object} definition
+ *   The property's guide definition ({type, keywords, media, ...}).
+ *
+ * @return {boolean}
+ */
+export const imageSlot = (definition) =>
+  definition?.media === true && definition?.type !== 'keyword';
+
+/**
  * A property's unconstrained vocabulary: the ONE fallback both modes
  * read, keyed by the property definition.
  *
@@ -1033,16 +1139,19 @@ const keywordStops = (keywords) =>
  * - The property's FALLBACKS entry (a curated table beats the shape rule:
  *   text-align keeps its iconic direction-relative stops, box-shadow its
  *   elevation presets).
- * - A media-capable definition offers the store's gradient swatches
+ * - A keyword definition offers its keywords (keywordStops), whatever
+ *   else it carries: the row is detented around CSS grammar, free entry
+ *   (var(), calc(), the CSS-wide keywords the server accepts) staying
+ *   open. Judged before the media branch so a keyword-typed media
+ *   property (content) offers `""` and `none`, never a gradient the
+ *   server refuses there (imageSlot).
+ * - A free <image> definition offers the store's gradient swatches
  *   (gradientFallback); a color-shaped one the whole color palette
  *   (paletteFallback) — so a swatch minted mid-session appears in every
  *   color and image space at once, in both modes.
  * - A keyframes-name definition (`animation_name`) offers the store's
  *   animations by their motion-{name} spellings plus its keywords
  *   (animationFallback): the advanced Motion row's one-name offer.
- * - A keyword definition offers its keywords (keywordStops): the row is
- *   detented around CSS grammar, free entry (var(), calc(), the CSS-wide
- *   keywords the server accepts) staying open.
  * - Anything else has no built-in vocabulary: [] (a free space until a
  *   constraint shapes it).
  *
@@ -1064,7 +1173,14 @@ export const fallbackFor = (guide, materials, property, definition) => {
   if (Array.isArray(table)) {
     return table;
   }
-  if (definition?.media) {
+  if (
+    definition?.type === 'keyword' &&
+    Array.isArray(definition.keywords) &&
+    definition.keywords.length
+  ) {
+    return keywordStops(definition.keywords);
+  }
+  if (imageSlot(definition)) {
     return gradientFallback(guide, materials);
   }
   if (definition?.type === 'color') {
@@ -1075,13 +1191,6 @@ export const fallbackFor = (guide, materials, property, definition) => {
       materials,
       Array.isArray(definition.keywords) ? definition.keywords : [],
     );
-  }
-  if (
-    definition?.type === 'keyword' &&
-    Array.isArray(definition.keywords) &&
-    definition.keywords.length
-  ) {
-    return keywordStops(definition.keywords);
   }
   return [];
 };
@@ -1144,7 +1253,8 @@ export const propertyStops = (
  * custom state, never as "nothing set".
  *
  * @param {*} value
- *   The committed editing-compound value (model.values[property]).
+ *   The shown value at the pose (the stack winner's: style-stack.js
+ *   stackAt, or a draft layered over it).
  * @param {Array<{id: string, value: string, matches: string[]}>} stops
  *
  * @return {{selected: ?string, custom: boolean}}

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Drupal\daedalus_edit\EventSubscriber;
 
 use Drupal\Core\Render\Element;
+use Drupal\daedalus_edit\EditIdentity;
 use Drupal\daedalus_edit\Event\FieldAttributes;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 
@@ -34,11 +35,14 @@ class FormMediaFieldAttributes implements EventSubscriberInterface {
       $form_item['#attributes']['class'][] = 'daedalus-edit-hidden';
       $form_item['#attributes']['class'][] = 'daedalus-edit-form-item-wrapper';
       $form_item['#attributes']['data-daedalus-edit-handle'] = 'wrapper';
-      $form_item['#attributes']['data-daedalus-edit-form-item-wrapper-id'] = sprintf('%s::%s::%s::%s', $entity->getEntityTypeId(), daedalus_ui_entity_identifier($entity), $field_name, 'value');
+      // The identities the render side mints (EditIdentity): a media
+      // reference's main property is target_id on both sides.
+      $main_property = EditIdentity::mainProperty($entity->getFieldDefinition($field_name));
+      $form_item['#attributes']['data-daedalus-edit-form-item-wrapper-id'] = EditIdentity::fieldWrapperId($entity, $field_name, $main_property);
       $form_item['#attributes']['data-daedalus-edit-form-item-widget'] = self::getWidget($event);
       $form_item['widget']['#type'] = 'container';
       $form_item['widget']['#attributes']['class'][] = 'daedalus-edit-form-item';
-      $form_item['widget']['#attributes']['data-daedalus-edit-form-item-id'] = sprintf('%s::%s::%s::%s::%s', $entity->getEntityTypeId(), daedalus_ui_entity_identifier($entity), $field_name, 0, 'value');
+      $form_item['widget']['#attributes']['data-daedalus-edit-form-item-id'] = EditIdentity::itemId($entity, $field_name, 0, $main_property);
       $form_item['widget']['#attributes']['data-daedalus-edit-media-value'] = self::getMediaValue($form_item);
 
       // There could be multiple identical field widgets on the same page. e.g.

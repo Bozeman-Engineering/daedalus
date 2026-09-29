@@ -1,7 +1,9 @@
 import { h, Fragment } from 'preact';
 import { useState } from 'preact/hooks';
-import { parseKey, KIND_LABELS } from './style-guide.js';
+import { parseKey } from './style-guide.js';
+import { createMatcher } from './selector-matcher.js';
 import {
+  COLUMNS_VARIANT,
   ROW_VARIANT,
   CONTAINER_LAYOUT_AXIS,
   containerChildren,
@@ -18,19 +20,18 @@ import {
   presetActive,
   presetPlan,
   modeOps,
-  gapState,
   gapValueOps,
-  ownAt,
   rootField,
   addColumnPlan,
   removalPlan,
 } from './layout-widget.js';
 import { compoundLabel } from './condition-cascade.js';
-import { axisVocabulary, effectiveEntry } from './variant-scope.js';
-import { provenanceFor } from './provenance-model.js';
+import { axisVocabulary } from './variant-scope.js';
+import { buildStack, stackAt } from './style-stack.js';
 import { ALIGNMENT_ICONS } from './widgets/lib/alignment-icons.js';
 import { ChoiceRow } from './widgets/lib/choice-row.js';
 import { styleTarget } from './widgets/lib/use-highlight.js';
+import { addressKey, withheldAt } from './write-address.js';
 
 /**
  * The layout widget's inspector surface (mode + share, and the Arrange
@@ -39,7 +40,7 @@ import { styleTarget } from './widgets/lib/use-highlight.js';
  * Two dedicated basic-mode sections over layout-widget.js's pure facts —
  * deliberately NOT ControlWidgets (controls are one-part/style-only by
  * contract; this surface writes structure and multi-key batches): the
- * container's Layout section (Stack | Columns segment, mode-scoped
+ * container's Layout section (Stack | Row | Columns segment, mode-scoped
  * alignment rows, proportion strip, count stepper, generated presets,
  * the gap row in both modes) and the child-of-a-row Column section
  * (the parent's strip with this segment highlighted and draggable — the
@@ -267,15 +268,36 @@ const PresetChips = ({
 /**
  * What every root-bound row of this section reads its value-space and
  * origin facts from: the blueprint's type rosters (the root's
- * declaration lookup), the root's RESOLVED condition-keyed entry (the
- * value the row was read from) and its origin inputs (provenanceFor,
- * the same assembly a control model carries), so a value the worn row
+ * declaration lookup) and the container root's layer stack (buildStack,
+ * the same model a control model carries, the root's tag from the tree
+ * keying the skin's base:{tag} block), so a value the worn row
  * variant supplies wears that variant's hue on the row's mark and the
  * row menu opens it at the delivering condition.
+ *
+ * Under a write address the rows also carry the address's grant
+ * judgement, `withheld` (property → reason): the rows keep the
+ * container's vocabulary (rootField over `selected`: a grant is a yes or
+ * no, not a different scale) but the write lands at the address, whose
+ * landing declaration may not grant what the container's does (a `> *`
+ * rule lands on the declaration's `children` node, which grants the
+ * flex-item family and no gap or alignment axis), and the server judges
+ * the write there. The judge is the roster's, write-address.js
+ * withheldAt, the one the pipeline (controls.js `withheld`) and the
+ * Advanced roster use, so a withheld row renders disabled with the same
+ * reason as its title. Empty without an address.
  */
-const rootFacts = (source, guide, styleMap, selected, variants) => {
+const rootFacts = (
+  source,
+  guide,
+  styleMap,
+  selected,
+  variants,
+  writeAddress,
+  properties,
+) => {
   const blockTypes = source.getBlockTypes?.() ?? {};
   const sectionLayouts = source.getSectionLayouts?.() ?? {};
+  const tree = source.getTree?.() ?? null;
   const axes = axisVocabulary(
     guide,
     selected,
@@ -283,42 +305,72 @@ const rootFacts = (source, guide, styleMap, selected, variants) => {
     sectionLayouts,
     source.getLayout?.() ?? [],
   );
-  const { entry } = effectiveEntry(styleMap, selected, variants, axes);
-  const provenance = provenanceFor(
+  // Under a write address the rows' editable layer is that rule's
+  // ancestor layer in the container's stack (the inspector's rows read
+  // the same way), so a value the container's own entry shadows wears
+  // the overridden mark instead of reading as the row's own.
+  const stack = buildStack({
     guide,
-    styleMap,
-    selected,
+    map: styleMap,
+    key: selected,
     variants,
     axes,
     blockTypes,
     sectionLayouts,
-    source.readCanvasTag?.(selected, null) ?? null,
-  );
-  return { blockTypes, sectionLayouts, entry, provenance };
+    tree,
+    editable: writeAddress,
+  });
+  const withheld = writeAddress
+    ? withheldAt({
+        guide,
+        address: writeAddress,
+        properties,
+        blockTypes,
+        sectionLayouts,
+        tree,
+      })
+    : {};
+  return { blockTypes, sectionLayouts, stack, withheld };
 };
 
 /**
  * The mode-scoped alignment rows: how the container arranges its
  * contents on each screen axis (the folded-in Arrange control), each a
- * ChoiceRow over the axis property on the container root. Stack shows
- * both axes over the grid vocabulary — the first pick on a plain stack
- * rides in with the canonical display: grid upgrade as one compound
- * commit (alignOps) — and Columns shows only the cross axis
- * (align-items on the flex row).
+ * ChoiceRow over the axis property at the section's write target
+ * (`target`: the container root, or the ancestor rule the panel's
+ * target chip names, whose every matching container then arranges the
+ * same way; the stack the rows read is the container's, `selected`,
+ * with the rule's layer editable). The container
+ * is a flex box at every pose (a column by declaration, a row under
+ * either worn variant), so every mode speaks flex and a pick writes its
+ * axis property alone (alignOps): Stack shows both screen axes
+ * (align-items across, justify-content along the column), Row both
+ * (justify-content along the line with the Spread stop, align-items
+ * across it) and Columns only the cross axis (align-items on the flex
+ * row).
  *
  * The vocabulary is axis-relative (one value set faced per screen
  * axis), so the axis table rides in as the row's `fallback` and a guide
  * constraint on the property displaces it; the surface is the spine's
- * (three icon faces read as chips). The row's lit state is
- * alignmentState (the root's own value at the compound, the custom
- * honesty rule) and the pick is this section's own batch path, so the
- * row hands the gesture back (`onPick`) rather than committing a lone
- * property; the field contract it also speaks routes through the same
- * batch for the one shape that could ever earn it.
+ * (three icon faces read as chips). The row's value and lit state are
+ * the axis property's read off the root's layer stack at the pose
+ * (stackAt over rootFacts' stack, the Gap row's read: alignmentState
+ * lights the winner, so a default-block centre lights at Narrow and a
+ * worn variant's alignment lights in its hue, with the custom honesty
+ * rule), the same read the row's mark and menu tell their story from;
+ * the pick is this section's own batch path at the compound (alignOps),
+ * so the row hands the gesture back (`onPick`) rather than committing a
+ * lone property; the field contract it also speaks routes through the
+ * same batch for the one shape that could ever earn it. Under a write
+ * address an axis the address's landing does not grant renders disabled
+ * with the roster's reason (rootFacts' `withheld`), the vocabulary still
+ * the container's.
  */
 const AlignmentRows = ({
   source,
   selected,
+  target,
+  writeAddress,
   styleMap,
   state,
   variants,
@@ -329,17 +381,21 @@ const AlignmentRows = ({
   onPickCondition,
   onOpenDocument,
 }) => {
-  const { blockTypes, sectionLayouts, entry, provenance } = rootFacts(
+  const axes = alignmentAxes(state.mode);
+  const { blockTypes, sectionLayouts, stack, withheld } = rootFacts(
     source,
     guide,
     styleMap,
     selected,
     variants,
+    writeAddress,
+    axes.map((axis) => axis.property),
   );
   return (
     <Fragment>
-      {alignmentAxes(state.mode).map((axis) => {
-        const axisState = alignmentState(styleMap, selected, axis, condition);
+      {axes.map((axis) => {
+        const read = stackAt(stack, axis.property, condition, conditions);
+        const axisState = alignmentState(read, axis);
         const { definition, constraints } = rootField(
           guide,
           selected,
@@ -350,12 +406,10 @@ const AlignmentRows = ({
         const commit = (value) => {
           const operations = alignOps(
             styleMap,
-            selected,
+            target,
             axis,
             value,
-            state.mode,
             condition,
-            conditions,
           );
           return operations.length
             ? source.commitBatch({
@@ -369,14 +423,18 @@ const AlignmentRows = ({
             key={axis.property}
             guide={guide}
             materials={materials}
+            source={source}
+            highlight={styleTarget(target)}
             condition={condition}
             label={Drupal.t(axis.label)}
             property={axis.property}
-            value={ownAt(styleMap, selected, axis.property, condition)}
+            value={read.winner?.value ?? null}
             definition={definition}
             constraints={constraints}
-            entry={entry}
-            provenance={provenance}
+            stack={stack}
+            read={read}
+            disabled={Boolean(withheld[axis.property])}
+            disabledTitle={withheld[axis.property] ?? null}
             fallback={axis.stops}
             icons={
               ALIGNMENT_ICONS[
@@ -391,14 +449,15 @@ const AlignmentRows = ({
             }}
             onPickCondition={onPickCondition}
             onOpenDocument={onOpenDocument}
-            onPreview={(property, value) =>
-              source.preview(selected, condition, property, value)
+            onPreview={(properties) =>
+              Object.entries(properties).forEach(([property, value]) =>
+                source.preview(target, condition, property, value),
+              )
             }
             onRelease={(properties) =>
-              source.previewRelease(selected, condition, properties)
+              source.previewRelease(target, condition, properties)
             }
             onCommit={(properties) => commit(properties[axis.property] ?? null)}
-            highlight={{ source, ...styleTarget(selected) }}
           />
         );
       })}
@@ -408,9 +467,10 @@ const AlignmentRows = ({
 
 /**
  * The gap row, offered in both modes: the shared ChoiceRow (the one
- * basic-mode row every single-property control renders) over the
- * container root's gap. The tick strip died here: its faces went
- * value-only with the vocabulary (`1rem 1.5rem 2rem ...`) and
+ * basic-mode row every single-property control renders) over the gap
+ * at the section's write target (the container root, or the ancestor
+ * rule the panel's target chip names). The tick strip died here: its
+ * faces went value-only with the vocabulary (`1rem 1.5rem 2rem ...`) and
  * overflowed the sidebar, and the field the pencil used to reveal is the
  * row itself. The vocabulary is the value-space spine's (guide + the
  * root's resolved gap constraints + gap's one built-in table,
@@ -418,29 +478,34 @@ const AlignmentRows = ({
  * too: a scale-constrained gap renders chips or the well over the
  * minted stops with detent scrub on the grip, each pick committing its
  * var() reference; an open gap renders the free field with sticky
- * magnets at the built-in px stops, a settled value matching a minted
- * token capturing the reference. The committed root gap at the compound
- * is the row's value; what the layer stack delivers at the pose
- * (gapState) is its ghost, so nothing written reads as nothing set and a
- * closed row minting nothing hides (the choice row's rule).
+ * magnets at the built-in rem stops, a settled value matching a minted
+ * token capturing the reference. The row's value is what the container
+ * root's layer stack delivers at the pose (stackAt over rootFacts'
+ * stack: the root's own gap, the worn arrangement variant's, the skin's,
+ * the container declaration's `gap` floor), lit in its layer's hue, and
+ * a null winner is honestly unset; a closed row minting nothing hides
+ * (the choice row's rule).
  *
  * The field speaks this section's own batch path instead of the widget
- * contract: gapValueOps IS the row's primitive, so a settled value
- * carries the stack upgrade exactly like an alignment pick does.
- * Previews mirror the whole batch, upgrade included, so the canvas
- * paints the real gesture mid-scrub rather than an inert gap.
+ * contract: gapValueOps IS the row's primitive (the gap alone on the
+ * root, in both modes: the container is a flex box by declaration, so
+ * the gap acts the moment it lands), and previews mirror the same batch
+ * so the canvas paints the real gesture mid-scrub.
  *
- * The row's origin is the container root's (rootFacts: provenanceFor
- * over the root's resolved entry, the same assembly a control model
- * carries), so a gap the worn row variant supplies wears that variant's
- * hue on the grip, and the row menu opens it at the delivering
- * condition.
+ * The row's origin is the container root's (rootFacts: the root's
+ * layer stack, the same model a control model carries), so a gap the
+ * worn row variant supplies wears that variant's hue on the grip, and
+ * the row menu opens it at the delivering condition. Under a write
+ * address whose landing does not grant gap the row renders disabled
+ * with the roster's reason (rootFacts' `withheld`), the vocabulary
+ * still the container's.
  */
 const GapRow = ({
   source,
   selected,
+  target,
+  writeAddress,
   styleMap,
-  state,
   variants,
   guide,
   materials,
@@ -449,14 +514,16 @@ const GapRow = ({
   onPickCondition,
   onOpenDocument,
 }) => {
-  const gap = gapState(styleMap, selected, variants, condition, conditions);
-  const { blockTypes, sectionLayouts, entry, provenance } = rootFacts(
+  const { blockTypes, sectionLayouts, stack, withheld } = rootFacts(
     source,
     guide,
     styleMap,
     selected,
     variants,
+    writeAddress,
+    ['gap'],
   );
+  const gap = stackAt(stack, 'gap', condition, conditions);
   const { definition, constraints } = rootField(
     guide,
     selected,
@@ -464,25 +531,27 @@ const GapRow = ({
     blockTypes,
     sectionLayouts,
   );
-  const batchFor = (value) =>
-    gapValueOps(styleMap, selected, value, state.mode, condition, conditions);
+  const batchFor = (value) => gapValueOps(target, value, condition);
   return (
     <ChoiceRow
       guide={guide}
       materials={materials}
+      source={source}
+      highlight={styleTarget(target)}
       condition={condition}
       label={Drupal.t('Gap')}
       property="gap"
-      value={gap.raw}
-      placeholder={gap.ghost}
+      value={gap.winner?.value ?? null}
       definition={definition}
       constraints={constraints}
-      entry={entry}
-      provenance={provenance}
+      stack={stack}
+      read={gap}
+      disabled={Boolean(withheld.gap)}
+      disabledTitle={withheld.gap ?? null}
       onPickCondition={onPickCondition}
       onOpenDocument={onOpenDocument}
-      onPreview={(property, value) =>
-        batchFor(value).forEach((operation) => {
+      onPreview={(properties) =>
+        batchFor(properties.gap ?? null).forEach((operation) => {
           Object.entries(operation.properties).forEach(([name, next]) => {
             source.preview(operation.key, condition, name, next);
           });
@@ -502,7 +571,6 @@ const GapRow = ({
               : Drupal.t('Set the gap'),
         })
       }
-      highlight={{ source, ...styleTarget(selected) }}
     />
   );
 };
@@ -510,7 +578,7 @@ const GapRow = ({
 /**
  * The axes the Layout section CLAIMS while it is mounted.
  *
- * The Stack | Columns segment is the surface of the container_layout
+ * The Stack | Row | Columns segment is the surface of the container_layout
  * wearing, so a worn row on that axis would be a second surface over one
  * reference, shadowing it. The inspector aggregates the
  * claims of the sections it mounts for the current mode and hands them
@@ -523,11 +591,15 @@ export const LAYOUT_SECTION_CLAIMS = [CONTAINER_LAYOUT_AXIS];
 /**
  * The Layout section's gate: the container the selection arranges.
  *
- * The section renders only for a container selection (no drilled part,
- * no children pseudo-part) whose children form an arrangeable flow. The
- * gate is a pure read so the host deciding whether to MOUNT the section
- * (the inspector handing it to BasicControls as the Layout group's
- * host) answers exactly as the section itself does.
+ * The section renders only for a container selection whose children
+ * form an arrangeable flow; the key is the selection's own (a rule key
+ * never answers). Which facets of that selection mount it is the host's
+ * call (the inspector mounts it for the root and under a shell-part
+ * drill, where the owner's panel keeps its structural sections, never
+ * under an instance drill or a rule facet). The gate is a pure read so
+ * the host deciding whether to MOUNT the section (the inspector handing
+ * it to BasicControls as the Layout group's host) answers exactly as
+ * the section itself does.
  *
  * @return {?{parsed: object, children: Array<object>}}
  *   The parsed container key and its child entries, or null when the
@@ -535,7 +607,7 @@ export const LAYOUT_SECTION_CLAIMS = [CONTAINER_LAYOUT_AXIS];
  */
 export const layoutSectionTarget = (source, selected) => {
   const parsed = parseKey(selected);
-  if (!parsed || parsed.kind !== 'container' || parsed.sub || parsed.children) {
+  if (!parsed || parsed.kind !== 'container' || parsed.selector) {
     return null;
   }
   const children = containerChildren(source.getLayout?.() ?? [], parsed.uuid);
@@ -548,10 +620,12 @@ export const layoutSectionTarget = (source, selected) => {
  * Self-gating (layoutSectionTarget): renders only for a container
  * selection whose children form an arrangeable flow. Stack is the
  * zero-entries state (a container is just a div until you say otherwise)
- * carrying both alignment axes and the gap row; Columns is the worn row
- * variant with the strip, the presets, the count stepper and the
- * cross-axis alignment row; Custom is the honest state for hand-written
- * layout styles, where clicking Stack/Columns IS the explicit takeover
+ * carrying both alignment axes and the gap row; Row is the worn row
+ * variant (natural-width children, wrapping) with both alignment axes,
+ * the main one carrying Spread; Columns is the worn columns variant with
+ * the strip, the presets, the count stepper and the cross-axis
+ * alignment row; Custom is the honest state for hand-written
+ * layout styles, where clicking Stack, Row or Columns IS the explicit takeover
  * gesture (no remove button; the hint points at code view). Posed where
  * the worn variant stacks, the segment still reads Columns (the wear),
  * the sub-line names the variant's decision, and the rows are the
@@ -559,13 +633,23 @@ export const layoutSectionTarget = (source, selected) => {
  * structural and stays with the wear).
  *
  * One Layout header: this section is ALSO the host of the control
- * roster's Layout group (BasicControls' `leading` slot). `more` is the
- * header's hasMore chip row for the group's controls and `children` are
+ * roster's Layout group (BasicControls' `leading` slot). `children` are
  * the group's bound widgets (Spacing, Width), rendered after the
  * structural rows: structure first, then the bound controls, under the
  * one header. A host that returns null would swallow its children, so
  * the inspector mounts it as a host only when layoutSectionTarget
  * answers.
+ *
+ * Two keys: the STRUCTURAL gestures (the column strip's grows, the
+ * stepper's add and remove) act on the selected container's children,
+ * `selected`; the layout PROPERTY rows (the Stack | Row | Columns wear, the
+ * alignment axes, the gap) read and write at the panel's write target,
+ * `writeAddress` (an ancestor rule the target chip names, whose every
+ * matching container then arranges the same way) when one is set, else
+ * the container root. The property rows keep the container's vocabulary
+ * under an address and judge the GRANT at the address (rootFacts'
+ * `withheld`, the roster's reason): a row the address's landing does not
+ * grant is disabled, never offered for the server to refuse.
  */
 export const LayoutSection = ({
   source,
@@ -575,26 +659,31 @@ export const LayoutSection = ({
   styleMap,
   variants = [],
   condition = 'default',
+  writeAddress = null,
   onOpenDocument = null,
   onPickCondition = null,
-  more = null,
   children: bound = null,
 }) => {
-  const target = layoutSectionTarget(source, selected);
-  if (!target) {
+  const gate = layoutSectionTarget(source, selected);
+  if (!gate) {
     return null;
   }
-  const { parsed, children } = target;
+  const { parsed, children } = gate;
+  const target = writeAddress ? addressKey(writeAddress) : selected;
   const conditions = guide?.conditions ?? {};
   const state = arrangementState(
     styleMap,
-    selected,
+    target,
     variants,
     condition,
     conditions,
   );
   const childKeys = children.map((child) => child.key);
-  const worn = state.mode !== 'custom' && state.wearing !== null;
+  // The wear each mode button reflects, at every pose (Columns posed
+  // where it stacks still reads Columns: the segment is the wear).
+  const wornRow = state.mode !== 'custom' && state.wearing === ROW_VARIANT;
+  const wornColumns =
+    state.mode !== 'custom' && state.wearing === COLUMNS_VARIANT;
   // The posed sub-line's vocabulary: the variant's label from its record,
   // the pose as the compound's site label (compoundLabel, the one
   // spelling the wear bar's sub-line reads too).
@@ -606,17 +695,16 @@ export const LayoutSection = ({
     ? compoundLabel(state.via.condition, conditions)
     : null;
 
+  const flipLabels = {
+    stack: Drupal.t('Stacked the container'),
+    row: Drupal.t('Arranged as a row'),
+    columns: Drupal.t('Arranged as columns'),
+  };
   const flip = (mode) => {
-    const operations = modeOps(selected, state, mode);
+    const operations = modeOps(target, state, mode);
     if (operations.length) {
       source
-        .commitBatch({
-          operations,
-          label:
-            mode === 'row'
-              ? Drupal.t('Arranged as columns')
-              : Drupal.t('Stacked the container'),
-        })
+        .commitBatch({ operations, label: flipLabels[mode] })
         .catch(() => {});
     }
   };
@@ -638,9 +726,12 @@ export const LayoutSection = ({
       return;
     }
     if (!removal.empty) {
-      const label = Drupal.t(
-        KIND_LABELS[parseKey(removal.key)?.kind] ?? 'Element',
-      );
+      // The child's minted type word (the tree node's `_element.type`).
+      const nodeTree = source.getTree?.() ?? null;
+      const label =
+        (Array.isArray(nodeTree)
+          ? createMatcher(nodeTree).facts(removal.key)?.type
+          : null) ?? Drupal.t('Element');
       const confirmed = await Drupal.Daedalus.dialog.confirm({
         message: Drupal.t('Remove "@label" and its content?', {
           '@label': label,
@@ -666,7 +757,6 @@ export const LayoutSection = ({
         <h3 className="daedalus-stylish-inspector__control-section-title">
           {Drupal.t('Layout')}
         </h3>
-        {more}
         <span
           className="daedalus-stylish-inspector__segments daedalus-ui-segments"
           role="group"
@@ -677,9 +767,17 @@ export const LayoutSection = ({
             Drupal.t('Stack'),
             state.mode !== 'custom' && state.wearing === null,
           )}
-          {modeButton('row', Drupal.t('Columns'), worn)}
+          {modeButton('row', Drupal.t('Row'), wornRow)}
+          {modeButton('columns', Drupal.t('Columns'), wornColumns)}
           {state.mode === 'custom' && (
-            <span className="daedalus-stylish-inspector__segment daedalus-ui-segment daedalus-ui-segment--static daedalus-stylish-inspector__segment--custom daedalus-stylish-inspector__layout-custom-pill">
+            /* No prose inside the section; the reason rides the pill's
+               title, the Segments primitive's own idiom for Custom. */
+            <span
+              className="daedalus-stylish-inspector__segment daedalus-ui-segment daedalus-ui-segment--static daedalus-stylish-inspector__segment--custom daedalus-stylish-inspector__layout-custom-pill"
+              title={Drupal.t(
+                'Hand-written layout styles are set on this container. Edit them in code view; picking Stack, Row or Columns replaces them.',
+              )}
+            >
               {Drupal.t('Custom')}
             </span>
           )}
@@ -713,14 +811,7 @@ export const LayoutSection = ({
           })}
         </button>
       )}
-      {state.mode === 'custom' && (
-        <div className="daedalus-stylish-inspector__layout-note daedalus-stylish-inspector__layout-note--custom">
-          {Drupal.t(
-            'Hand-written layout styles are set on this container. Edit them in code view; picking Stack or Columns replaces them.',
-          )}
-        </div>
-      )}
-      {state.mode === 'row' && childKeys.length > 1 && (
+      {state.mode === 'columns' && childKeys.length > 1 && (
         <ProportionStrip
           source={source}
           styleMap={styleMap}
@@ -729,7 +820,7 @@ export const LayoutSection = ({
           conditions={conditions}
         />
       )}
-      {state.mode === 'row' && (
+      {state.mode === 'columns' && (
         <PresetChips
           source={source}
           styleMap={styleMap}
@@ -739,43 +830,47 @@ export const LayoutSection = ({
           conditions={conditions}
         />
       )}
-      {worn && (
+      {wornColumns && (
         <div className="daedalus-stylish-inspector__widget-row">
-          <span className="daedalus-stylish-inspector__widget-axis">
-            {Drupal.t('Columns')}
-          </span>
-          <span className="daedalus-stylish-inspector__layout-stepper">
-            <button
-              type="button"
-              className="daedalus-stylish-inspector__layout-step"
-              aria-label={Drupal.t('Remove the last column')}
-              disabled={!removal}
-              onClick={remove}
-            >
-              −
-            </button>
-            <span className="daedalus-stylish-inspector__layout-count">
-              {childKeys.length}
+          <span className="daedalus-stylish-inspector__widget-label">
+            <span className="daedalus-stylish-inspector__widget-axis">
+              {Drupal.t('Columns')}
             </span>
-            <button
-              type="button"
-              className="daedalus-stylish-inspector__layout-step"
-              aria-label={Drupal.t('Add a column')}
-              onClick={() => {
-                const { operations } = addColumnPlan(
-                  parsed.uuid,
-                  mintWith(source),
-                );
-                source
-                  .commitBatch({
-                    operations,
-                    label: Drupal.t('Added a column'),
-                  })
-                  .catch(() => {});
-              }}
-            >
-              +
-            </button>
+          </span>
+          <span className="daedalus-stylish-inspector__widget-value">
+            <span className="daedalus-stylish-inspector__layout-stepper">
+              <button
+                type="button"
+                className="daedalus-stylish-inspector__layout-step"
+                aria-label={Drupal.t('Remove the last column')}
+                disabled={!removal}
+                onClick={remove}
+              >
+                −
+              </button>
+              <span className="daedalus-stylish-inspector__layout-count">
+                {childKeys.length}
+              </span>
+              <button
+                type="button"
+                className="daedalus-stylish-inspector__layout-step"
+                aria-label={Drupal.t('Add a column')}
+                onClick={() => {
+                  const { operations } = addColumnPlan(
+                    parsed.uuid,
+                    mintWith(source),
+                  );
+                  source
+                    .commitBatch({
+                      operations,
+                      label: Drupal.t('Added a column'),
+                    })
+                    .catch(() => {});
+                }}
+              >
+                +
+              </button>
+            </span>
           </span>
         </div>
       )}
@@ -784,6 +879,8 @@ export const LayoutSection = ({
           <AlignmentRows
             source={source}
             selected={selected}
+            target={target}
+            writeAddress={writeAddress}
             styleMap={styleMap}
             state={state}
             variants={variants}
@@ -797,8 +894,9 @@ export const LayoutSection = ({
           <GapRow
             source={source}
             selected={selected}
+            target={target}
+            writeAddress={writeAddress}
             styleMap={styleMap}
-            state={state}
             variants={variants}
             guide={guide}
             materials={materials}
@@ -835,8 +933,7 @@ export const ColumnSection = ({
   const parsed = parseKey(selected);
   if (
     !parsed ||
-    parsed.sub ||
-    parsed.children ||
+    parsed.selector ||
     (parsed.kind !== 'container' && parsed.kind !== 'block')
   ) {
     return null;
@@ -854,7 +951,7 @@ export const ColumnSection = ({
     condition,
     conditions,
   );
-  if (parentState.mode !== 'row') {
+  if (parentState.mode !== 'columns') {
     return null;
   }
   const childKeys = (containerChildren(layout, parent.uuid) ?? []).map(

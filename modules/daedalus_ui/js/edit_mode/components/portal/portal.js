@@ -17,8 +17,8 @@ import { portalForTarget, portalIdentity, portalNavigation } from './portal-mode
  * selection universe (the projection) and a portal is outside that
  * universe by design: nothing inside it resolves, so it can never be
  * hovered, selected, or edited on this page. This component owns its own
- * pointer listeners instead, gated the way the Selector's grammar is
- * (selector-events.js: the Selector tool is current), and reads only the
+ * pointer listeners instead, gated the way the selection grammar is
+ * (selector-events.js: Edit Mode is on), and reads only the
  * two attributes the server stamped on the placement root
  * (DaedalusUiHooks::entityView): the editing URL and the label.
  *
@@ -39,8 +39,8 @@ import { portalForTarget, portalIdentity, portalNavigation } from './portal-mode
  * not change and no accidental click leaves the page.
  */
 const Portal = () => {
-  const currentTool = useSelector((state) => state.tool.currentTool);
-  const active = currentTool === 'selector';
+  const mode = useSelector((state) => state.mode.mode);
+  const active = mode === 'edit';
   // The hovered portal's placement root; identity is the element itself,
   // never a key, because a portal has no key in the selection universe.
   const [portal, setPortal] = useState(null);
@@ -67,8 +67,8 @@ const Portal = () => {
 
   useEffect(() => {
     if (!active) {
-      // Leaving the Selector tool drops the transient hover, as the
-      // selector's own hover does.
+      // Leaving Edit Mode drops the transient hover, as the selection's
+      // own hover does.
       setPortal(null);
       return undefined;
     }

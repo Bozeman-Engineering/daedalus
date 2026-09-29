@@ -1,5 +1,5 @@
 import { h } from 'preact';
-import { controlWidgets } from '../../controls.js';
+import { controlWidgets, litValues } from '../../controls.js';
 import { boundGapGate } from '../../widget-values.js';
 import { ChoiceRow } from '../lib/choice-row.js';
 import { styleTarget } from '../lib/use-highlight.js';
@@ -15,7 +15,7 @@ import { widgetClasses } from '../lib/widget-classes.js';
  * the row's write lands at `entity:{uuid}::.daedalus-layout-layout`, the same
  * part-keyed address the AI writes, through the ordinary widget contract
  * (one op per pick, the field contract on the open surface). The value
- * space is gap's own (widget-values.js FALLBACKS.gap, the px steps the
+ * space is gap's own (widget-values.js FALLBACKS.gap, the rem steps the
  * Layout section's row magnetizes to; a guide constraint on the part
  * displaces it), so the surface is whatever that space earns.
  *
@@ -42,24 +42,27 @@ const Gap = ({ model, guide, materials, source, onPreview, onRelease, onCommit, 
     <ChoiceRow
       guide={guide}
       materials={materials}
+      source={source}
+      highlight={styleTarget(model.keys.gap)}
       condition={model.condition}
       label={model.label}
       property="gap"
-      value={model.values.gap}
+      value={litValues(model.reads).gap}
       definition={model.propertyDefinitions?.gap ?? {}}
       constraints={model.constraints?.gap ?? {}}
-      entry={model.entry}
-      provenance={model.provenance}
+      stack={model.stacks.gap}
+      read={model.reads.gap}
+      disabled={Boolean(model.withheld?.gap)}
+      disabledTitle={model.withheld?.gap ?? null}
       onPickCondition={onPickCondition}
       onOpenDocument={onOpenDocument}
       onPreview={onPreview}
       onRelease={onRelease}
       onCommit={onCommit}
-      highlight={{ source, ...styleTarget(model.key) }}
     />
   </div>
 );
 
 controlWidgets.register('gap', Gap, {
-  applicable: (self, parent, model) => boundGapGate(self, model?.element ?? null),
+  applicable: (self, parent, model) => boundGapGate(self, model?.home?.element || null),
 });

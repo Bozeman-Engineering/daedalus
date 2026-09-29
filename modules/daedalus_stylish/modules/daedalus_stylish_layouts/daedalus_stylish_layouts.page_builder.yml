@@ -5,7 +5,7 @@
 # does alone: the root paints its own background edge to edge, constrains
 # its content with `padding-inline: max(gutter, calc((100% - W) / 2))`
 # (the width variants), and arranges its children with flex on itself (the
-# row variant, the '::>' children pseudo-part). Width and Layout therefore
+# columns variant, the '> *' children selector). Width and Layout therefore
 # act on the element the editor selected, in every mode and at every depth.
 #
 # The treatment axes live here, on the universal container kind, rather
@@ -23,13 +23,17 @@
 #   offers and birth, never legality: the grant below is the same at
 #   every depth. Owns the inline inset and the content cap its variants
 #   write (padding-left, padding-right, max-width).
-# - container_layout (label "Layout"): the mode half of mode + share. ONE
-#   count-independent shipped variant (row, labeled "Columns") makes the
-#   root a flex row with equal-fill children (the children pseudo-part
-#   below); unequal ratios are per-child flex-grow overrides (the share
-#   half), so no track string exists anywhere and nothing goes stale as
-#   children come and go. Offered at every depth (nested rows are
-#   ordinary rows).
+# - container_layout (label "Layout"): the mode half of mode + share. The
+#   declared default below makes every container a flex column (the
+#   stack); TWO count-independent shipped variants flip the direction to
+#   a row: columns (labeled "Columns") with equal-fill children (the
+#   children pseudo-part below; unequal ratios are per-child flex-grow
+#   overrides, the share half, so no track string exists anywhere and
+#   nothing goes stale as children come and go) and row (labeled "Row")
+#   with natural-width children that wrap. Offered at every depth
+#   (nested rows are ordinary rows). Owns the direction its variants flip
+#   (flex-direction): a direct write of it on a container root draws the
+#   wear-the-axis warning, doctrine rather than legality.
 # - animation: the entrance a container wears (the block kind's twin,
 #   declared in daedalus_stylish.page_builder.yml), fed by the shipped entrance
 #   variants below in daedalus_stylish_layouts.daedalus_stylish.variants.yml. A page band
@@ -55,7 +59,7 @@ container:
   composed: true
   # The root's arranging display is CODE, not skin data: a gap only acts
   # on a grid or flex box, and this declaration grants `spacing` (gap) on
-  # the root and `layout` on the '::>' children pseudo-part below, so the
+  # the root and `layout` on the '> *' children section below, so the
   # box fact those grants need must ship with the markup they address.
   # Declared defaults follow markup ownership (StyleGuide): the kind is
   # composed, it renders its own root, so it may default it; a skin
@@ -63,15 +67,32 @@ container:
   # three of five shipped skins forgot the display and a stacked
   # container's Gap row was a visible no-op on them. Token-free (the
   # declared tier validates in the empty minted universe), compiled into
-  # the defaults file at the kind:container family class with the
-  # container donut, ranked before every layout refinement, stamped on
-  # every section root by ContainerDefaultsStamp with no skin at all. A
-  # grid with no gap is visually today's flush stacking; the row variant's
-  # flex still wins (a variant beats a default).
+  # the defaults file as a bare zero-specificity rule selecting every
+  # section by the layout address daedalus_ui stamps on its root
+  # (data-element), ranked before every layout refinement, with no skin
+  # at all.
+  #
+  # The stack is a FLEX COLUMN, not a grid. A single-column grid stretches
+  # its rows (`align-content: normal` acts as stretch on auto tracks), so
+  # a band taller than its content spreads that surplus between its
+  # children, the space nobody asked for; a flex column packs its children
+  # at the top (items grow 0), still honors the gap, and gives per-child
+  # vertical placement a real spelling (free main-axis space goes to auto
+  # margins before justify-content, so a child with `margin-top: auto`
+  # sits at the band's foot). It is also ONE arranging model with the
+  # Columns variant below: the variant flips the direction, and its
+  # narrow block IS the stack. The gap is declared beside it because the
+  # stack holds only what the page builder owns: a plain stack's zero gap
+  # (flex's initial gap, flush stacking) arrives at the inspector's Gap
+  # row as this declared layer, named as such, never as a literal the
+  # widget invents; a skin's or the columns variant's gap beats it, and so
+  # does the columns variant's direction (a variant beats a default).
   defaults:
     '':
       default:
-        display: grid
+        display: flex
+        flex-direction: column
+        gap: 0px
   variant_axes:
     - width:
         depth: root
@@ -82,7 +103,9 @@ container:
           - max-width
     - container_layout:
         label: 'Layout'
-        description: 'How a container arranges its children: stacked unless it wears columns, and then every direct child is an equal column (unequal shares are per-child flex-grow overrides). Nested rows are ordinary rows.'
+        description: 'How a container arranges its children: stacked as a flex column unless it wears one of two arrangements. Columns flips the direction to a row where every direct child is an equal column that stacks on narrow pages (unequal shares are per-child flex-grow overrides); Row lays the children side by side at their natural width and wraps them when they run out of room, for a line of buttons, a logo strip or a tag list. Nested arrangements are ordinary arrangements.'
+        owns:
+          - flex-direction
     - animation:
         label: 'Animation'
         description: 'The entrance a container plays as it enters the view. A container is born still; reach for an entrance on a band that should arrive, not on every band.'
@@ -147,7 +170,7 @@ container:
       label: 'Motion trigger'
       widget: motion_trigger
   # The container's direct children (its content flow) as ONE declared
-  # addressable ("{key}::>"), printed as a ':scope > *' extension of the
+  # addressable ("{key}::> *"), printed as a ':scope > *' extension of the
   # root's own targets. This is what lets a kind-scoped variant style all
   # columns with zero per-child map entries (equal flex fill); layout owns
   # the flex facts, sizing the min-width guard.

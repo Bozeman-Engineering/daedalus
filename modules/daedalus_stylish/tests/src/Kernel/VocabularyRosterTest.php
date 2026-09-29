@@ -7,6 +7,7 @@ namespace Drupal\Tests\daedalus_stylish\Kernel;
 // cspell:ignore zzzzqx
 use Drupal\daedalus_blueprint\DesignSystem\ActiveDesignSystem;
 use Drupal\daedalus_blueprint\Materials\Address;
+use Drupal\daedalus_blueprint\Materials\RelativeSelector;
 use Drupal\KernelTests\KernelTestBase;
 use Drupal\daedalus_ui\ElementModel\PageBuilderDeclarations;
 use Drupal\daedalus_stylish\Entity\DaedalusStylishSkin;
@@ -58,6 +59,7 @@ class VocabularyRosterTest extends KernelTestBase {
     'twig_events',
     'daedalus_tempstore',
     'daedalus_blueprint_api',
+    'file',
     'daedalus_ui',
     'daedalus_stylish',
     'daedalus_stylish_guide_test',
@@ -298,14 +300,14 @@ class VocabularyRosterTest extends KernelTestBase {
     $band = $this->roster('layout:layout_twocol_section::.band-content');
     $this->assertSame(['sizing'], $band->groups());
     $this->assertTrue($band->childrenDeclared());
-    $children = $this->roster('layout:layout_twocol_section::.band-content::>');
+    $children = $this->roster('layout:layout_twocol_section::.band-content > *');
     $this->assertTrue($children->declared());
     $this->assertSame(['layout'], $children->groups());
 
     // The container kind declares children; the block kind does not.
-    $this->assertSame(['layout'], $this->roster('kind:container::>')->groups());
+    $this->assertSame(['layout'], $this->roster('kind:container::> *')->groups());
     $this->assertTrue($this->roster('kind:container')->childrenDeclared());
-    $undeclared = $this->roster('kind:block::>');
+    $undeclared = $this->roster('kind:block::> *');
     $this->assertFalse($undeclared->declared());
     $this->assertSame([], $undeclared->granted());
 
@@ -324,6 +326,106 @@ class VocabularyRosterTest extends KernelTestBase {
     // A part or children address carries its element's axes.
     $this->assertSame($testimonial->axisNames(), $quote->axisNames());
     $this->assertSame($layout->axisNames(), $children->axisNames());
+  }
+
+  /**
+   * A terminal pseudo-element lands on its host's generated box.
+   *
+   * Existence is universal, vocabulary declared-or-derived: undeclared,
+   * the box carries its host's grant (allowlists and constraints with it)
+   * plus the pseudo-only generated_content group and reports itself
+   * undeclared as a KIND_PSEUDO compound after the chain, so a strict
+   * site can refuse it while an open one grants the derivation; declared
+   * by the host's pseudo section, the box carries that section's grant
+   * plus generated_content. The anchor lands on the owner's root, a part
+   * pseudo on the part, a type's on the type's root, a tag's on the base
+   * tag; an undeclared host ends the walk before the box; no variant
+   * pairs at a box (landingScope() NULL); generated_content is never
+   * granted on a real box.
+   */
+  public function testPseudoElements(): void {
+    // Derived on the owner's root: the testimonial's groups plus the
+    // existence switch, the host's constraints riding along.
+    $before = $this->roster('block_type:testimonial::&::before');
+    $this->assertFalse($before->declared());
+    $this->assertSame(['combinator' => NULL, 'kind' => VocabularyRoster::KIND_PSEUDO, 'name' => 'before', 'qualifiers' => [], 'position' => 0], $before->undeclared());
+    $this->assertSame(['motion', 'effects', 'shadow', 'spacing', 'typography', 'generated_content'], $before->groups());
+    $this->assertSame(['content'], $before->grants()['generated_content']);
+    $this->assertTrue($before->grantsProperty('content'));
+    $this->assertSame('generated_content', $before->groupOf('content'));
+    $this->assertSame('2rem', $before->valueSpace('font-size')['max'], 'The host\'s constraints ride the derivation.');
+    $this->assertSame([], $before->valueSpace('content'));
+    $this->assertSame([], $before->parts());
+    $this->assertFalse($before->childrenDeclared());
+    $this->assertNull($before->landingScope());
+    $this->assertSame([], $before->variants());
+    $this->assertSame($this->roster('block_type:testimonial')->axisNames(), $before->axisNames(), 'A box carries its element\'s axes.');
+    $this->assertSame('block_type:testimonial::&::before', (string) $before);
+
+    // Derived on a part: the part's grant and constraint.
+    $quote = $this->roster('block_type:testimonial::.testimonial__quote::after');
+    $this->assertFalse($quote->declared());
+    $this->assertSame('after', $quote->undeclared()['name']);
+    $this->assertSame(1, $quote->undeclared()['position']);
+    $this->assertSame(['typography', 'generated_content'], $quote->groups());
+    $this->assertSame('1.75rem', $quote->valueSpace('font-size')['max']);
+    $this->assertNull($quote->landingScope());
+
+    // Derived on a type's root and on a base tag: the landing's grant, and
+    // still no element scope to pair at.
+    $type = $this->roster('kind:container::> pb-testimonial::before');
+    $this->assertSame(['motion', 'effects', 'shadow', 'spacing', 'typography', 'generated_content'], $type->groups());
+    $this->assertNull($type->landingScope());
+    $this->assertSame([], $type->variants());
+    $tag = $this->roster('kind:block::p::after');
+    $this->assertSame(['typography', 'spacing', 'background', 'border', 'generated_content'], $tag->groups());
+    $this->assertNull($tag->landingScope());
+
+    // An undeclared host ends the walk before the box: the compound is
+    // named, the box grants nothing.
+    $nope = $this->roster('kind:block::.nope::before');
+    $this->assertFalse($nope->declared());
+    $this->assertSame(RelativeSelector::CLASS_PART, $nope->undeclared()['kind']);
+    $this->assertSame('.nope', $nope->undeclared()['name']);
+    $this->assertSame([], $nope->granted());
+    $this->assertSame(RelativeSelector::TAG, $this->roster('kind:block::em::before')->undeclared()['kind']);
+
+    // A real box never grants the existence switch.
+    $this->assertFalse($this->roster('block_type:testimonial')->grantsProperty('content'));
+    $this->assertFalse($this->roster('block_type:testimonial::.testimonial__quote')->grantsProperty('content'));
+    $this->assertFalse($this->roster('kind:container::> *')->grantsProperty('content'));
+
+    // Declared: the host's pseudo section is the box's grant, the
+    // existence switch appended; the other box stays derived; a layout
+    // over the kind carries the section like any map.
+    $this->container->get('state')->set('daedalus_stylish_guide_test_extra.kinds', [
+      'container' => [
+        'pseudo' => [
+          'before' => [
+            'property_groups' => [
+              'background' => ['constraints' => ['background-color' => ['allowed' => ['gold']]]],
+              'sizing' => ['properties' => ['width', 'height']],
+            ],
+          ],
+        ],
+      ],
+    ]);
+    $this->container->get('daedalus_stylish.style_guide')->resetCache();
+    $declared = $this->roster('kind:container::&::before');
+    $this->assertTrue($declared->declared());
+    $this->assertNull($declared->undeclared());
+    $this->assertSame(['background', 'sizing', 'generated_content'], $declared->groups());
+    $this->assertSame(['width', 'height'], $declared->grants()['sizing'], 'An allowlist narrows a box\'s grant like any node\'s.');
+    $this->assertSame(['allowed' => ['gold']], $declared->valueSpace('background-color'));
+    $this->assertFalse($declared->grantsProperty('padding'), 'A declared box grants its section, not its host.');
+    $this->assertTrue($declared->grantsProperty('content'));
+    $this->assertNull($declared->landingScope());
+    $after = $this->roster('kind:container::&::after');
+    $this->assertFalse($after->declared());
+    $this->assertSame(['spacing', 'background', 'generated_content'], $after->groups(), 'The undeclared box derives the host.');
+    $this->assertTrue($this->roster('layout:layout_onecol::&::before')->declared());
+    $this->assertSame(['background', 'sizing', 'generated_content'], $this->roster('layout:layout_onecol::&::before')->groups());
+    $this->assertSame(['spacing', 'background'], $this->roster('kind:container')->groups(), 'The host itself is untouched.');
   }
 
   /**
@@ -506,8 +608,21 @@ class VocabularyRosterTest extends KernelTestBase {
     // The kind is the family wildcard on either side: the block kind
     // wears the block type's variants too.
     $this->assertSame($block, array_keys($this->roster('kind:block')->variants()));
-    // A part wears its element's materials.
-    $this->assertSame($block, array_keys($this->roster('block_type:testimonial::.testimonial__quote')->variants()));
+    // Variants pair by the LANDING: a part is no element scope and wears
+    // nothing (its element wears); a rule wears at its matches, so a type
+    // compound lands on that type's roster and a tag compound on the base
+    // tag's (the tag treatment alone).
+    $this->assertNull($this->roster('block_type:testimonial::.testimonial__quote')->landingScope());
+    $this->assertSame([], array_keys($this->roster('block_type:testimonial::.testimonial__quote')->variants()));
+    $this->assertSame([], array_keys($this->roster('kind:container::> *')->variants()));
+    $this->assertSame('block_type:testimonial', (string) $this->roster('kind:container::> pb-testimonial')->landingScope());
+    $this->assertSame($block, array_keys($this->roster('kind:container::> pb-testimonial')->variants()));
+    $this->assertSame('base:a', (string) $this->roster('kind:container::a')->landingScope());
+    $this->assertSame(['link'], array_keys($this->roster('kind:container::a')->variants()));
+    // A type rule's matches may be any layout: the kind landing pairs
+    // with every container variant, the owner's own layout notwithstanding.
+    $this->assertSame('kind:container', (string) $this->roster('layout:layout_onecol::> pb-container')->landingScope());
+    $this->assertSame(['band', 'columns', 'link'], array_keys($this->roster('layout:layout_onecol::> pb-container')->variants()));
 
     // The read is the materials builder's live memo: a mint after the
     // roster was built is visible without a rebuild.
@@ -632,19 +747,29 @@ class VocabularyRosterTest extends KernelTestBase {
    * address derivation (declarationForKey) over the served nodes must
    * answer exactly what the builder answers for the address, for kinds,
    * refinements, degraded refinements, parts at any depth, the children
-   * pseudo-part, the tag tier, an instance namespace and an undeclared
-   * place; a narrowed grant, node and site value spaces, root-only axes,
-   * axis descriptions and owns and the enforcement predicates included.
-   * PHP is authoritative;
+   * pseudo-part, the tag tier, an instance namespace, an undeclared
+   * place and the generated boxes (a declared one served as a node, the
+   * derived ones the client builds from the host node); a narrowed
+   * grant, node and site value spaces, root-only axes, axis descriptions
+   * and owns, the declared() verdict and the enforcement predicates
+   * included. PHP is authoritative;
    * tests/js/vocabulary-cases.mjs is the client side of the pipe.
    */
   public function testClientTwinEquivalence(): void {
-    // A narrowed grant and a root-only axis on the container kind, and a
-    // site instance namespace, so the battery exercises every lane the
-    // payload serves.
+    // A narrowed grant, a root-only axis and a declared ::before box on
+    // the container kind, and a site instance namespace, so the battery
+    // exercises every lane the payload serves.
     $this->container->get('state')->set('daedalus_stylish_guide_test_extra.kinds', [
       'container' => [
         'property_groups' => ['spacing' => ['properties' => ['padding-top', 'padding-bottom', 'row-gap', 'column-gap']]],
+        'pseudo' => [
+          'before' => [
+            'property_groups' => [
+              'background' => ['constraints' => ['background-color' => ['allowed' => ['gold']]]],
+              'sizing' => ['properties' => ['width', 'height']],
+            ],
+          ],
+        ],
         'variant_axes' => [
           [
             'width' => [
@@ -683,12 +808,14 @@ class VocabularyRosterTest extends KernelTestBase {
       'border-radius',
       'display',
       'text-wrap',
+      'content',
+      'width',
     ];
     $battery = [
       ['kind:container', "container:$uuid", NULL],
-      ['kind:container::>', "container:$uuid::>", NULL],
+      ['kind:container::> *', "container:$uuid::> *", NULL],
       ['kind:block', "block:$uuid", NULL],
-      ['kind:block::>', "block:$uuid::>", NULL],
+      ['kind:block::> *', "block:$uuid::> *", NULL],
       ['kind:field', "field:$uuid:body", NULL],
       ['kind:entity', "entity:$uuid", NULL],
       ['block_type:testimonial', "block:$uuid", 'testimonial'],
@@ -698,7 +825,7 @@ class VocabularyRosterTest extends KernelTestBase {
       ['block_plugin:undeclared', "block:$uuid", 'plugin:undeclared'],
       ['layout:layout_twocol_section', "container:$uuid", 'layout_twocol_section'],
       ['layout:layout_twocol_section::.band-content', "container:$uuid::.band-content", 'layout_twocol_section'],
-      ['layout:layout_twocol_section::.band-content::>', "container:$uuid::.band-content::>", 'layout_twocol_section'],
+      ['layout:layout_twocol_section::.band-content > *', "container:$uuid::.band-content > *", 'layout_twocol_section'],
       ['layout:layout_onecol', "container:$uuid", 'layout_onecol'],
       ['kind:block::.nope', "block:$uuid::.nope", NULL],
       ['kind:block::.s-a3', "block:$uuid::.s-a3", NULL],
@@ -707,6 +834,23 @@ class VocabularyRosterTest extends KernelTestBase {
       ['kind:block::p', "block:$uuid::p", NULL],
       ['kind:field::a', "field:$uuid:body::a", NULL],
       ['kind:block::em', "block:$uuid::em", NULL],
+      // The generated boxes: the container's declared ::before (served),
+      // its derived ::after, and derived boxes on a refinement's root, a
+      // part at depth, the children, a type, a tag, an instance part, a
+      // degraded refinement; an undeclared host ends the walk before
+      // either box.
+      ['kind:container::&::before', "container:$uuid::&::before", NULL],
+      ['kind:container::&::after', "container:$uuid::&::after", NULL],
+      ['layout:layout_twocol_section::&::before', "container:$uuid::&::before", 'layout_twocol_section'],
+      ['block_type:testimonial::&::before', "block:$uuid::&::before", 'testimonial'],
+      ['block_type:testimonial::.testimonial__quote::after', "block:$uuid::.testimonial__quote::after", 'testimonial'],
+      ['layout:layout_twocol_section::.band-content > *::before', "container:$uuid::.band-content > *::before", 'layout_twocol_section'],
+      ['kind:container::> pb-testimonial::before', "container:$uuid::> pb-testimonial::before", NULL],
+      ['kind:block::p::after', "block:$uuid::p::after", NULL],
+      ['kind:block::.s-a3::before', "block:$uuid::.s-a3::before", NULL],
+      ['block_type:undeclared::&::after', "block:$uuid::&::after", 'undeclared'],
+      ['kind:block::.nope::before', "block:$uuid::.nope::before", NULL],
+      ['kind:block::em::after', "block:$uuid::em::after", NULL],
     ];
 
     $php = [];
@@ -717,6 +861,7 @@ class VocabularyRosterTest extends KernelTestBase {
         $spaces[$property] = $roster->valueSpace($property) ?: NULL;
       }
       $php[] = [
+        'declared' => $roster->declared(),
         'groups' => $roster->groups(),
         'granted' => array_values(array_filter($properties, $roster->grantsProperty(...))),
         'spaces' => $spaces,
@@ -759,7 +904,34 @@ class VocabularyRosterTest extends KernelTestBase {
     $this->assertSame(['width' => ['padding-top', 'padding-bottom']], $php[0]['owns']);
     $this->assertSame([], $php[2]['owns']);
     $this->assertSame([], $php[15]['groups']);
+    $this->assertFalse($php[15]['declared']);
+    $this->assertTrue($php[8]['declared'], 'A degraded refinement is a declared place.');
     $this->assertTrue($js['closed']);
+    // The boxes answered: the declared ::before serves its section
+    // (allowlist, constraint, the existence switch appended) and is
+    // declared; a derived box carries its host's grant plus the switch
+    // and is not; the layout over the kind inherits the section; an
+    // undeclared host grants nothing at the box.
+    $this->assertTrue($php[22]['declared']);
+    $this->assertSame(['background', 'sizing', 'generated_content'], $php[22]['groups']);
+    $this->assertSame(['background-color', 'content', 'width'], $php[22]['granted']);
+    $this->assertSame(['allowed' => ['gold']], $php[22]['spaces']['background-color']);
+    $this->assertFalse($php[23]['declared']);
+    $this->assertSame(['spacing', 'background', 'generated_content'], $php[23]['groups']);
+    $this->assertSame(['padding-top', 'gap', 'background-color', 'content'], $php[23]['granted']);
+    $this->assertTrue($php[24]['declared']);
+    $this->assertSame($php[22]['groups'], $php[24]['groups']);
+    $this->assertFalse($php[25]['declared']);
+    $this->assertSame('2rem', $php[25]['spaces']['font-size']['max'], 'The host\'s constraints ride the derivation.');
+    $this->assertContains('content', $php[25]['granted']);
+    $this->assertNotContains('content', $php[7]['granted'], 'A real box never grants the switch.');
+    $this->assertSame(['typography', 'generated_content'], $php[26]['groups']);
+    $this->assertSame(['layout', 'generated_content'], $php[27]['groups']);
+    $this->assertSame(['typography', 'generated_content'], $php[30]['groups']);
+    $this->assertSame([...$php[2]['groups'], 'generated_content'], $php[31]['groups'], 'A degraded refinement\'s box derives the kind.');
+    $this->assertFalse($php[32]['declared']);
+    $this->assertSame([], $php[32]['groups']);
+    $this->assertSame([], $php[33]['groups']);
   }
 
   /**

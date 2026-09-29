@@ -19,4 +19,10 @@ function daedalus_stylish_guide_test_extra_page_builder_declarations_alter(array
   foreach (\Drupal::state()->get('daedalus_stylish_guide_test_extra.kinds', []) as $kind => $declaration) {
     $declarations['kinds'][$kind] = PageBuilderDeclarations::merge($declarations['kinds'][$kind] ?? [], $declaration);
   }
+  // A state-injected site layer (a base element's label, say), merged
+  // above the shipped site declaration the same way a theme's would be.
+  $site = \Drupal::state()->get('daedalus_stylish_guide_test_extra.site');
+  if (is_array($site)) {
+    $declarations[PageBuilderDeclarations::SITE] = PageBuilderDeclarations::merge($declarations[PageBuilderDeclarations::SITE] ?? [], $site);
+  }
 }

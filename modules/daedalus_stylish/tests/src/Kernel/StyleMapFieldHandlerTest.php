@@ -51,6 +51,7 @@ class StyleMapFieldHandlerTest extends KernelTestBase {
     'twig_events',
     'daedalus_tempstore',
     'daedalus_blueprint_api',
+    'file',
     'daedalus_ui',
     'daedalus_stylish',
     'daedalus_stylish_guide_test',
@@ -155,7 +156,7 @@ class StyleMapFieldHandlerTest extends KernelTestBase {
   public function testStructuralValidation(): void {
     $result = $this->deserialize([
       'bogus:123' => ['default' => []],
-      "container:{$this->uuid}::.two classes" => ['default' => []],
+      "container:{$this->uuid}::.two .classes" => ['default' => []],
       "block:{$this->uuid}" => 'not-an-entry',
       // The dead single-reference grammar gets its own corrective error.
       "entity:{$this->uuid}" => ['variant' => 'cta_bold', 'default' => []],
@@ -165,7 +166,7 @@ class StyleMapFieldHandlerTest extends KernelTestBase {
     $prefix = 'fields.' . DaedalusStylishFieldManager::FIELD_NAME;
     $codes = $this->errorCodes($result);
     $this->assertSame(['INVALID_STYLE_KEY'], $codes["$prefix.bogus:123"]);
-    $this->assertSame(['INVALID_STYLE_KEY'], $codes["$prefix.container:{$this->uuid}::.two classes"]);
+    $this->assertSame(['INVALID_STYLE_KEY'], $codes["$prefix.container:{$this->uuid}::.two .classes"]);
     $this->assertSame(['INVALID_STYLE_ENTRY'], $codes["$prefix.block:{$this->uuid}"]);
     $this->assertSame(['INVALID_STYLE_ENTRY'], $codes["$prefix.entity:{$this->uuid}.variant"]);
     $this->assertSame(['INVALID_STYLE_CONDITION'], $codes["$prefix.field:{$this->uuid}:field_body.Hover!"]);
@@ -423,12 +424,14 @@ class StyleMapFieldHandlerTest extends KernelTestBase {
     // the one source the cached styling pointer shares; minting is never
     // the AI's initiative), the derived media-token rule (the shipped
     // site base declaration grants background on pre/code site-wide, so
-    // background-image is always in the granted vocabulary), and the
-    // open-world polarity sentence. Stencils join the materials only
-    // where the roster has them; this test runs without that module.
+    // background-image is always in the granted vocabulary, and content
+    // is granted at every generated box, so the two are named together),
+    // and the open-world polarity sentence. Stencils join the materials
+    // only where the roster has them; this test runs without that module.
     $this->assertStringContainsString(MaterialsProse::preferenceSentence(), $guide['guidance']);
     $this->assertStringContainsString('never mint a material unless the user asks', $guide['guidance']);
     $this->assertStringContainsString('media:<uuid>', $guide['guidance']);
+    $this->assertStringContainsString('background-image, content also accept an image media reference', $guide['guidance']);
     $this->assertStringContainsString('Any recognized CSS property', $guide['guidance']);
     $this->assertStringNotContainsString('stencils', $guide['guidance']);
 
@@ -500,8 +503,8 @@ class StyleMapFieldHandlerTest extends KernelTestBase {
     $this->assertNotContains('font-size', $container);
     $this->assertSame(implode(', ', $container), $entries['kinds.container']);
     // The container's children pseudo-part grants the layout group.
-    $this->assertArrayHasKey('kinds.container::>', $entries);
-    $this->assertStringNotContainsString('padding', $entries['kinds.container::>']);
+    $this->assertArrayHasKey('kinds.container::> *', $entries);
+    $this->assertStringNotContainsString('padding', $entries['kinds.container::> *']);
     // Blocks carry motion, effects and shadow from daedalus_stylish's own block
     // declaration beside the fixture's spacing: the widest roster, so it
     // prints in full and leads.
@@ -519,7 +522,7 @@ class StyleMapFieldHandlerTest extends KernelTestBase {
     $this->assertStringContainsString('font-size', $entries['block_types.testimonial::.testimonial__quote']);
     $this->assertStringContainsString('max-width', $entries['layouts.layout_twocol_section']);
     $this->assertStringContainsString('max-width', $entries['layouts.layout_twocol_section::.band-content']);
-    $this->assertArrayHasKey('layouts.layout_twocol_section::.band-content::>', $entries);
+    $this->assertArrayHasKey('layouts.layout_twocol_section::.band-content > *', $entries);
     $this->assertArrayNotHasKey('layouts.layout_onecol', $entries, 'A layout restating the container kind is omitted.');
 
     // Constraint law still reads from bindings + deviations, same lines

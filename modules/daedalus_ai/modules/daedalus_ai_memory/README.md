@@ -27,7 +27,10 @@ For each turn of an enabled agent the runner:
 - Trims chat history by whole turns when it grows past the configured
   limit, always keeping the first turn and the most recent turns, so a tool
   call and its result are never split apart.
-- Strips binary file data from messages before persisting them.
+- Strips file bytes from messages before persisting them, so the tempstore
+  holds no binaries and no later turn re-sends them at token cost; the
+  message text, with the ATTACHMENTS block naming each file by its handle,
+  survives, and `view_file` re-opens a handle on demand.
 - Drops the persisted record if the turn throws, so a corrupt thread cannot
   poison every later turn.
 

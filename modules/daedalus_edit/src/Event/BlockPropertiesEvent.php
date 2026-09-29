@@ -11,7 +11,12 @@ use Drupal\Core\Form\FormStateInterface;
 /**
  * Block properties event.
  *
- * Allows developers to add custom block properties to inline blocks.
+ * Allows developers to add custom block properties to inline blocks: form
+ * items on the block Configure dialog whose values the dialog commits as
+ * the component's configuration keys through the op spine
+ * (LayoutBuilderBlockFormAlter::formSubmit). A property is a managed
+ * configuration key of the block type (a daedalus_blueprint.managed_keys
+ * declaration); the spine refuses an undeclared one.
  */
 class BlockPropertiesEvent extends Event {
 
@@ -144,7 +149,7 @@ class BlockPropertiesEvent extends Event {
    * Add block property.
    *
    * Informs LayoutBuilderBlockFormAlter::formSubmit that a form item was added
-   * that needs to be saved.
+   * whose value is a configuration key to commit.
    *
    * @param string|array $block_property
    *   A form item key or an array of key paths for $form_state->getValue().

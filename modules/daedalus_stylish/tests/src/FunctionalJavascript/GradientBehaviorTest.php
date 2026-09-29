@@ -435,7 +435,7 @@ class GradientBehaviorTest extends WebDriverTestBase {
     // Enter Edit Mode the way the recipe starts a real page: the
     // server-rendered cookie path, which renders the full Edit Mode chrome
     // (the inspector sidebar, every tool's JS, the blueprint mirror boot).
-    $this->enterEditModeViaCookies($node->toUrl(), 'selector');
+    $this->enterEditModeViaCookies($node->toUrl());
     $this->assertJsCondition(
       'window.Drupal && Drupal.Daedalus && Drupal.Daedalus.Blueprint && !!Drupal.Daedalus.Blueprint.getRoot()',
       20000,
@@ -1431,19 +1431,29 @@ class GradientBehaviorTest extends WebDriverTestBase {
       'Unstyled, the skin base:a rule styles the anchor DIRECTLY (skin link color on the glyphs, not on the root): the interposer is real in this browser.',
     );
 
-    // Root color via the basic widget follows the claim. Select the text
-    // block and pick the Ember coral stop minted above: the ONE write
-    // target (the block root) through the ordinary basic-mode widget,
-    // committing color: var(--swatch-ember_coral). The companion rule
-    // rides the entity's inline map CSS at zero weight and must WIN
-    // against base:a on the anchor.
+    // Root color follows the claim. The Ember coral stop minted above is
+    // written at the block ROOT through the op spine: basic mode's text
+    // color row addresses a linked block's anchor first (the link-fill
+    // candidate rule, BasicStylingBehaviorTest's Background step), so
+    // the widget is not the root's door here; the ONE write target is
+    // the root entry, committing color: var(--swatch-ember_coral). The
+    // companion rule rides the entity's inline map CSS at zero weight
+    // and must WIN against base:a on the anchor.
     $session->executeScript("Drupal.Daedalus.Selection.select('$text_key');");
-    $this->openWell($text);
-    $this->clickPanel("$chips button[aria-label='Ember coral']");
+    $session->executeScript(<<<JS
+      (() => {
+        const Blueprint = Drupal.Daedalus.Blueprint;
+        Blueprint.mutate(Object.assign({}, Blueprint.rootContext(), {
+          operations: [{ op: 'update_style', key: '$text_key', properties: { color: 'var(--swatch-ember_coral)' } }],
+        })).catch((error) => {
+          window.__rootColorError = error.message;
+        });
+      })();
+      JS);
     $this->assertJsCondition(
       "$text_entry?.default?.['color'] === 'var(--swatch-ember_coral)'",
       20000,
-      'The color stop pick committed the swatch reference to the block ROOT entry (one write target, no part fork).',
+      'The root color write committed the swatch reference to the block ROOT entry (one write target, no part fork).',
     );
     $this->assertJsCondition(
       "[...document.querySelectorAll('style[data-daedalus-stylish-entity]')].some((tag) =>"

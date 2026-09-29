@@ -346,14 +346,13 @@ test('readLayoutContext: the full {self, parent} shape', () => {
   const { root } = canvas();
   assert.deepEqual(readFrom(root, 'block:aaaa'), {
     self: { display: 'block', flexDirection: 'row', isContainer: true, childCount: 1, hasText: true, parts: {}, partChildCount: {} },
-    parent: { display: 'flex', flexDirection: 'column', alignItems: 'center', isSelectable: true, key: 'region:s1:content' },
+    parent: { display: 'flex', flexDirection: 'column', alignItems: 'center', key: 'region:s1:content' },
   });
 });
 
 test('readLayoutContext: wrapper markup between child and selectable ancestor', () => {
   // Layout truth comes from the immediate parent box; the attribution key
-  // from the nearest selectable ancestor above it. isSelectable false is
-  // the compound-upgrade guard: the key does NOT name the layout parent.
+  // from the nearest selectable ancestor above it.
   const block = el({ attrs: { 'data-selectable': 'block:aaaa' } });
   const wrapper = el({ computed: { display: 'grid' }, childNodes: [block] });
   const region = el({
@@ -366,7 +365,6 @@ test('readLayoutContext: wrapper markup between child and selectable ancestor', 
     display: 'grid',
     flexDirection: 'row',
     alignItems: 'normal',
-    isSelectable: false,
     key: 'region:s1:content',
   });
   assert.deepEqual(context.self, { display: 'block', flexDirection: 'row', isContainer: false, childCount: 0, hasText: false, parts: {}, partChildCount: {} });

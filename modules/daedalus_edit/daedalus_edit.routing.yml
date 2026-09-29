@@ -18,15 +18,6 @@ daedalus_edit.tempstore.save:
   requirements:
     _permission: 'access inline editing'
 
-daedalus_edit.tempstore.delete:
-  path: '/daedalus-edit/tempstore/delete/{entities}'
-  defaults:
-    _title: 'Tempstore Delete'
-    _controller: '\Drupal\daedalus_edit\Controller\Tempstore::delete'
-  requirements:
-    _permission: 'access inline editing'
-
-
 daedalus_edit.delete_confirmation_form:
   path: '/daedalus-edit/tempstore/delete-confirm/{entities}'
   defaults:

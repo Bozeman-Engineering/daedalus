@@ -1,4 +1,6 @@
 import { openChannel } from '../../../../daedalus_ui/js/broadcast/channel.js';
+import { openPicker as openVariantPicker } from '../apply-variant-hotkey.js';
+import { runCollapseGesture } from '../code/collapse-seam.js';
 import { generateUuid } from '../../../../daedalus_ui/js/edit_mode/utilities/uuid.js';
 import { createRoster } from '../../../../daedalus_ui/js/edit_mode/materials/roster.js';
 import {
@@ -41,13 +43,15 @@ import { notify } from '../notify.js';
 export const createSatelliteSource = (scope) => {
   let state = {
     selected: null,
-    selectedPart: null,
-    selectionTags: null,
+    target: null,
     styleMap: {},
     rootUuid: null,
     blockTypes: {},
     sectionLayouts: {},
     layout: [],
+    // Unknown until the leader's first broadcast (null, never an empty
+    // tree): the readers that gate on tree facts degrade to offering.
+    tree: null,
     layoutContext: null,
     mediaUrls: {},
     mediaLibraryAvailable: false,
@@ -63,15 +67,15 @@ export const createSatelliteSource = (scope) => {
   // never rides the snapshot, so it starts (and stays) null until a
   // crossing is heard.
   let hovered = null;
-  // The part-hover facet, hovered's twin: transient {key, part} chrome
-  // outside `state` for the same reason.
-  let hoveredPart = null;
+  // The selector-hover facet, hovered's twin: transient {key, selector}
+  // chrome outside `state` for the same reason.
+  let hoveredSelector = null;
   const hoverListeners = new Set();
-  const hoverPartListeners = new Set();
+  const hoverSelectorListeners = new Set();
   const selectionListeners = new Set();
   const styleMapListeners = new Set();
   const connectionListeners = new Set();
-  const partListeners = new Set();
+  const targetListeners = new Set();
   const canvasHighlightListeners = new Set();
   const canvasPaintListeners = new Set();
   const canvasVectorListeners = new Set();
@@ -129,16 +133,20 @@ export const createSatelliteSource = (scope) => {
     if (state.styleMap !== previous.styleMap) {
       styleMapListeners.forEach((callback) => callback(state.styleMap));
     }
-    // The part-aware selection pair, the facade's onPartChange shape:
-    // fires on a key OR facet change, with (current, previous) pairs.
+    // The selection and its styling target, the facade's onTargetChange
+    // shape: fires on a selection OR target change (the target
+    // value-compared), with ({selected, target}, previous).
+    const target = state.target ?? null;
+    const previousTarget = previous.target ?? null;
     if (
       state.selected !== previous.selected ||
-      (state.selectedPart ?? null) !== (previous.selectedPart ?? null)
+      target?.key !== previousTarget?.key ||
+      target?.selector !== previousTarget?.selector
     ) {
-      partListeners.forEach((callback) =>
+      targetListeners.forEach((callback) =>
         callback(
-          { key: state.selected, part: state.selectedPart ?? null },
-          { key: previous.selected, part: previous.selectedPart ?? null },
+          { selected: state.selected, target },
+          { selected: previous.selected, target: previousTarget },
         ),
       );
     }
@@ -169,11 +177,14 @@ export const createSatelliteSource = (scope) => {
         hoverListeners.forEach((callback) => callback(hovered));
       }
     },
-    'hover-part': ({ key, part }) => {
-      const next = key && part ? { key, part } : null;
-      if (hoveredPart?.key !== next?.key || hoveredPart?.part !== next?.part) {
-        hoveredPart = next;
-        hoverPartListeners.forEach((callback) => callback(hoveredPart));
+    'hover-selector': ({ key, selector }) => {
+      const next = key && selector ? { key, selector } : null;
+      if (
+        hoveredSelector?.key !== next?.key ||
+        hoveredSelector?.selector !== next?.selector
+      ) {
+        hoveredSelector = next;
+        hoverSelectorListeners.forEach((callback) => callback(hoveredSelector));
       }
     },
     // The leader's answer to an op intent (settle below): the op queue's
@@ -199,6 +210,19 @@ export const createSatelliteSource = (scope) => {
     'leader-ready': () => channel.post('hello'),
     'leader-gone': () => setConnected(false),
     close: () => window.close(),
+    // The apply-variant hotkey resolved on the leader while the panel
+    // lives here (the press itself may have come from this window, over
+    // daedalus_ui's pop-out keyboard wire): open the picker through the
+    // opener seam the wear bar mounted in this document fills. Its
+    // verdict stays here; the leader already counted the press as
+    // handled when it routed it.
+    'open-variant-picker': () => openVariantPicker(),
+    // A collapse-all or expand-all hotkey resolved on the leader while
+    // the panel lives here: run the gesture over THIS window's outline
+    // posture through the seam the mounted page view fills (a collapse
+    // is a reading posture of one window; the leader's outline is
+    // displaced). Nothing to do when code mode is not showing here.
+    'collapse-outline': ({ gesture }) => runCollapseGesture(gesture),
   });
 
   channel.post('hello');
@@ -246,21 +270,31 @@ export const createSatelliteSource = (scope) => {
     getSelected: () => state.selected,
 
     /**
-     * The committed selection's part facet from the leader's last
-     * broadcast, or null (the whole element). The facet rides the
+     * The styling target from the leader's last broadcast ({key,
+     * selector}), or null (the whole element). The target rides the
      * selection channel: it is spine state on the leader, never a
      * satellite-local drill.
      */
-    getSelectedPart: () => state.selectedPart ?? null,
+    getTarget: () => state.target ?? null,
 
     /**
-     * Sends a select intent (the page tree's row click, the part
-     * breadcrumb clear); the leader drives the canvas selection, part
-     * facet included, and the change echoes back on the next state
-     * broadcast. The leader stays the one authority on selection.
+     * Sends a select intent (the page tree's row click, the subject
+     * chip's way back); the leader drives the canvas selection (which drops any
+     * target), and the change echoes back on the next state broadcast.
+     * The leader stays the one authority on selection.
      */
-    select: (key, part = null) => {
-      channel.post('intent', { intent: 'select', key, part });
+    select: (key) => {
+      channel.post('intent', { intent: 'select', key });
+    },
+
+    /**
+     * Sends a target intent (a code-mode row header seating a chain, the
+     * address switcher or "Edit at" seating an ancestor rule); the
+     * leader's spine seats it (its canvas paints the matches) and the
+     * change echoes back on the next state broadcast.
+     */
+    target: (key, selector) => {
+      channel.post('intent', { intent: 'target', key, selector });
     },
 
     /**
@@ -272,12 +306,12 @@ export const createSatelliteSource = (scope) => {
     },
 
     /**
-     * Subscribes to the committed (key, part) pair, the part-aware
-     * counterpart of onSelectionChange; returns unsubscribe.
+     * Subscribes to the selection and its styling target, the
+     * target-aware counterpart of onSelectionChange; returns unsubscribe.
      */
-    onPartChange: (callback) => {
-      partListeners.add(callback);
-      return () => partListeners.delete(callback);
+    onTargetChange: (callback) => {
+      targetListeners.add(callback);
+      return () => targetListeners.delete(callback);
     },
 
     /**
@@ -312,38 +346,43 @@ export const createSatelliteSource = (scope) => {
     },
 
     /**
-     * The part-hover facet from the leader's last hover-part broadcast.
+     * The selector-hover facet from the leader's last hover-selector
+     * broadcast.
      */
-    getHoveredPart: () => hoveredPart,
+    getHoveredSelector: () => hoveredSelector,
 
     /**
-     * Sends a hover-part intent (a code part header's enter/leave); the
-     * leader drives the spine's hoverPart facet — canvas dashed paint and
-     * tree part-row glow light up over there. hoverPart(null) clears.
+     * Sends a hover-selector intent (a code part header's enter/leave);
+     * the leader drives the spine's hoverSelector facet — canvas dashed
+     * paint and tree part-row glow light up over there.
+     * hoverSelector(null) clears.
      *
      * Locally echoed like hover(), so this window's own hot mark is
      * instant and the headers' leave guard reads exactly; the leader's
-     * hover-part broadcast then confirms as a no-op.
+     * hover-selector broadcast then confirms as a no-op.
      */
-    hoverPart: (key, part = null) => {
-      const next = key && part ? { key, part } : null;
-      if (hoveredPart?.key !== next?.key || hoveredPart?.part !== next?.part) {
-        hoveredPart = next;
-        hoverPartListeners.forEach((callback) => callback(hoveredPart));
+    hoverSelector: (key, selector = null) => {
+      const next = key && selector ? { key, selector } : null;
+      if (
+        hoveredSelector?.key !== next?.key ||
+        hoveredSelector?.selector !== next?.selector
+      ) {
+        hoveredSelector = next;
+        hoverSelectorListeners.forEach((callback) => callback(hoveredSelector));
       }
       channel.post('intent', {
-        intent: 'hover-part',
+        intent: 'hover-selector',
         key: next?.key ?? null,
-        part: next?.part ?? null,
+        selector: next?.selector ?? null,
       });
     },
 
     /**
-     * Subscribes to part-hover facet changes; returns unsubscribe.
+     * Subscribes to selector-hover facet changes; returns unsubscribe.
      */
-    onHoverPartChange: (callback) => {
-      hoverPartListeners.add(callback);
-      return () => hoverPartListeners.delete(callback);
+    onHoverSelectorChange: (callback) => {
+      hoverSelectorListeners.add(callback);
+      return () => hoverSelectorListeners.delete(callback);
     },
 
     /**
@@ -383,6 +422,13 @@ export const createSatelliteSource = (scope) => {
     getLayout: () => state.layout ?? [],
 
     /**
+     * The blueprint's lean node tree, from the leader's last broadcast
+     * (the selector matcher's input: ancestor layers, structural facts,
+     * the selector completion's children), null before it arrives.
+     */
+    getTree: () => state.tree ?? null,
+
+    /**
      * Mints a v4 uuid for client-built structural ops. The satellite has
      * no app, so it uses daedalus_ui's shared generator directly —
      * the same code the leader's app mint wraps, so both windows mint
@@ -417,36 +463,29 @@ export const createSatelliteSource = (scope) => {
      * Fire-and-forget like commit(): the committed token and the extended
      * URL table arrive on the next state broadcast.
      *
-     * The `companions` map rides the intent verbatim: a satellite pick
-     * carries its own computed seed (the widget computes it against this
-     * window's guide and broadcast state, the base:{tag} layer's tag
-     * from the relayed selection tags), and the leader merges it into
-     * the one commit exactly as it would its own.
+     * The routed `changes` list rides the intent verbatim: a satellite
+     * pick is routed in this window (the widget pipeline's route() over
+     * the picked property and the seed it computed against this window's
+     * guide and broadcast state), with the picked property holding the
+     * serializable MEDIA_PICK_PLACEHOLDER, and the leader fills and lands
+     * it exactly as it would its own. No function crosses the wire.
      *
-     * @param {object} target
-     *   {key, condition, property, label, companions}; same shape as the
-     *   leader's.
+     * @param {object} pick
+     *   {condition, property, label, changes}; same shape as the leader's.
      *
      * @return {boolean}
      *   Whether the intent was sent (mirrors the leader's opened boolean).
      */
-    pickMedia: ({
-      key,
-      condition = 'default',
-      property,
-      label = null,
-      companions = null,
-    }) => {
+    pickMedia: ({ condition = 'default', property, label = null, changes }) => {
       if (!(state.mediaLibraryAvailable ?? false)) {
         return false;
       }
       channel.post('intent', {
         intent: 'pick-media',
-        key,
         condition,
         property,
         label,
-        companions,
+        changes,
       });
       return true;
     },
@@ -584,35 +623,6 @@ export const createSatelliteSource = (scope) => {
     readCanvas: () => null,
 
     /**
-     * The selection's rendered tag, from the leader's last broadcast.
-     *
-     * No canvas here, but the tag is selection state the leader relays
-     * beside the (key, part) pair (`selectionTags`: the element's tag and
-     * the drilled part's), so the base:{tag} tier (skin defaults
-     * provenance, base variant offers) reads the same tag over here as
-     * on the leader. Only the broadcast selection is answerable: another
-     * key, or a part other than the selected one, is honestly null (the
-     * never-over-claim posture of every other leader-only read).
-     *
-     * @param {string} key
-     *   The style target's selectable key.
-     * @param {?string} sub
-     *   A declared part selector, or null for the element.
-     *
-     * @return {?string}
-     */
-    readCanvasTag: (key, sub = null) => {
-      if (!key || key !== state.selected) {
-        return null;
-      }
-      const tags = state.selectionTags ?? {};
-      if (sub === null || sub === undefined) {
-        return tags.element ?? null;
-      }
-      return sub === (state.selectedPart ?? null) ? (tags.part ?? null) : null;
-    },
-
-    /**
      * The canvas state vector from the leader's last broadcast, or null.
      */
     getCanvasVector: () => state.canvasVector ?? null,
@@ -640,15 +650,15 @@ export const createSatelliteSource = (scope) => {
      *
      * @param {string} key
      *   The style target's selectable key.
-     * @param {?string} sub
-     *   A declared part selector ('.quote'), or null for the element.
+     * @param {?string} selector
+     *   A canonical relative selector ('.quote'), or null for the element.
      *
      * @return {boolean}
      *   Whether the intent was sent (the leader's canvas answers whether
      *   anything replayed; no echo is needed here).
      */
-    replayMotion: (key, sub = null) => {
-      channel.post('intent', { intent: 'motion-replay', key, sub });
+    replayMotion: (key, selector = null) => {
+      channel.post('intent', { intent: 'motion-replay', key, selector });
       return true;
     },
 
@@ -720,7 +730,7 @@ export const createSatelliteSource = (scope) => {
     /**
      * Sends a canvas-highlight intent; the leader's bands render it.
      *
-     * Same spec as the leader source: null, or {key, sub, properties}.
+     * Same spec as the leader source: null, or {key, selector, properties}.
      */
     setCanvasHighlight: (spec) => {
       canvasHighlight = spec ?? null;
@@ -809,6 +819,23 @@ export const createSatelliteSource = (scope) => {
      * previews and answers with the batch's settlement (settle above).
      */
     commitBatch: (batch) => settle('commit-batch', { batch }),
+
+    /**
+     * Reads a CSS fragment under a style key through the leader's parse
+     * door (the code view's paste); the leader fetches the route on its
+     * page and answers with the door's result (settle above), a
+     * transport failure toasting here.
+     */
+    parseCss: (key, css) => settle('parse-css', { key, css }),
+
+    /**
+     * Prints one style key's own entries as CSS through the leader (the
+     * header's Copy CSS); the leader fetches the read route on its page
+     * and answers with the text (settle above), a transport failure
+     * toasting here. The clipboard write itself happens in this window,
+     * inside its own gesture.
+     */
+    readCss: (key) => settle('read-css', { key }),
 
     /**
      * Sends a commit intent; the leader runs the update_style op through

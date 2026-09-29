@@ -23,8 +23,9 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  * model, so the fixture is a hand-built blueprint array over real bundle
  * config — the wire shapes the serializer emits, without paying for a full
  * Layout Builder render. One uniform annotation on every owning node, the
- * root included: presentation, compose, the resolver's markup tree, and
- * per-field facts (existence + presentation + rich-text instances) all
+ * root included: the naming spine's `name` and `type`, presentation,
+ * compose, the resolver's markup tree, and per-field facts (existence +
+ * presentation + rich-text instances) all
  * ride `_element`. Markup for components resolves against the entities the
  * root's REAL section data carries, so the hand-built nodes here (no
  * backing section entity) carry no component markup, the annotation only
@@ -112,7 +113,7 @@ class BlueprintElementAnnotatorTest extends KernelTestBase {
   protected function createBlockType(string $type, array $fields = []): void {
     $this->container->get('entity_type.manager')
       ->getStorage('block_content_type')
-      ->create(['id' => $type, 'label' => ucfirst($type), 'revision' => TRUE])
+      ->create(['id' => $type, 'label' => ucfirst(str_replace('_', ' ', $type)), 'revision' => TRUE])
       ->save();
     foreach ($fields as $field_name => $field_type) {
       if (!FieldStorageConfig::loadByName('block_content', $field_name)) {
@@ -212,8 +213,11 @@ class BlueprintElementAnnotatorTest extends KernelTestBase {
     // declaration folds info's own row, while the root row still routes
     // editing to it (its canvas render is the page title on the editing
     // surface); the media reference maps to unit, open fields are omitted.
+    // Its name is the entity label, its type the bundle label.
     $this->assertSame(
       [
+        'name' => 'Root fixture',
+        'type' => 'Cta',
         'presentation' => ['mode' => Presentation::OPEN, 'edit_target' => 'info'],
         'markup' => $this->emptyMarkup(),
         'fields' => ['field_cta_image' => ['presentation' => Presentation::UNIT]],
@@ -228,8 +232,12 @@ class BlueprintElementAnnotatorTest extends KernelTestBase {
     // page_builder declaration); an absent composed key means the
     // sandwich. Its one open field emits no fact, and no markup is stamped:
     // the hand-built component has no backing section entity to resolve.
+    // Merged, it is NAMED by its content (the edit target's text), never by
+    // its configuration label, and typed by its block type's label.
     $this->assertSame(
       [
+        'name' => 'Some text',
+        'type' => 'Text block',
         'presentation' => ['mode' => Presentation::MERGED, 'label' => 'Text', 'edit_target' => 'field_text'],
         'composed' => TRUE,
       ],
@@ -237,27 +245,36 @@ class BlueprintElementAnnotatorTest extends KernelTestBase {
     );
 
     // The multi-field block stays OPEN and maps its media field to unit.
+    // Open, with a label that is not rendered, the label IS its name.
     $this->assertSame(
       [
+        'name' => 'CTA',
+        'type' => 'Cta',
         'presentation' => ['mode' => Presentation::OPEN],
         'fields' => ['field_cta_image' => ['presentation' => Presentation::UNIT]],
       ],
       $components[1]['_element'],
     );
 
-    // Plugin components are not fieldable bundles: no annotation — they
-    // present open, exactly as attribution stamps nothing on them.
-    // Compose is a block-TYPE fact, so plugin components never carry it,
-    // whatever their plugin id.
-    $this->assertArrayNotHasKey('_element', $components[2]);
-    $this->assertArrayNotHasKey('_element', $components[3]);
+    // Plugin components are not fieldable bundles: no presentation, no
+    // markup, no field facts, they present open. Compose is a block-TYPE
+    // fact, so plugin components never carry it, whatever their plugin id.
+    // They are still elements on the canvas with rows in the tree, so they
+    // carry the naming spine's two words: the plugin's admin label as the
+    // type and, unlabeled, as the name; a plugin the manager does not know
+    // degrades to its id, the one fact left.
+    $this->assertSame(['name' => 'Powered by Drupal', 'type' => 'Powered by Drupal'], $components[2]['_element']);
+    $this->assertSame(['name' => 'collapse_test_cooperative', 'type' => 'collapse_test_cooperative'], $components[3]['_element']);
 
     // The walk reaches nested sections: the section node presents AS a
     // section (no component annotation, no block facade) but carries the
     // layout's resolved markup, at NESTED depth — the container's
     // multi-form root resolves the plain div there — and its inner
-    // components are annotated like any others.
-    $this->assertSame(['markup'], array_keys($components[4]['_element']));
+    // components are annotated like any others. Nested, it is a Container
+    // in the layout vocabulary, and unrenamed its name is that type word.
+    $this->assertSame(['name', 'type', 'markup'], array_keys($components[4]['_element']));
+    $this->assertSame('Container', $components[4]['_element']['name']);
+    $this->assertSame('Container', $components[4]['_element']['type']);
     $this->assertSame('div', $components[4]['_element']['markup']['tag']);
     $this->assertSame([], $components[4]['_element']['markup']['attributes'], 'A populated section is not empty; the annotator fed the fact from its component lists.');
     $nested = $components[4]['regions']['content'][0];
@@ -265,8 +282,10 @@ class BlueprintElementAnnotatorTest extends KernelTestBase {
 
     // The top-level section resolves the same declaration at ROOT depth:
     // ONE box, a real <section>, no parts and no slots (children mount at
-    // the root per the mounting rule).
+    // the root per the mounting rule). At page depth it is a Section.
     $section = $annotated['layout_builder__layout'][0];
+    $this->assertSame('Section', $section['_element']['name']);
+    $this->assertSame('Section', $section['_element']['type']);
     $this->assertSame(
       [
         'tag' => 'section',
@@ -339,6 +358,8 @@ class BlueprintElementAnnotatorTest extends KernelTestBase {
 
     $this->assertSame(
       [
+        'name' => 'Some text',
+        'type' => 'Text block',
         'presentation' => ['mode' => Presentation::MERGED, 'label' => 'Text', 'edit_target' => 'field_text'],
         'composed' => TRUE,
       ],
@@ -348,7 +369,7 @@ class BlueprintElementAnnotatorTest extends KernelTestBase {
     // The nested container node presents AS a section (markup only, no
     // block facade) at NESTED depth — the multi-form root resolves the
     // plain div — and its inner components are annotated like any others.
-    $this->assertSame(['markup'], array_keys($children[1]['_element']));
+    $this->assertSame(['name', 'type', 'markup'], array_keys($children[1]['_element']));
     $this->assertSame('div', $children[1]['_element']['markup']['tag']);
     $this->assertSame([], $children[1]['_element']['markup']['attributes']);
     $this->assertTrue($children[1]['children'][0]['_element']['composed']);
@@ -423,6 +444,8 @@ class BlueprintElementAnnotatorTest extends KernelTestBase {
 
     $this->assertSame(
       [
+        'name' => 'Hello there',
+        'type' => 'Landing page',
         'presentation' => ['mode' => Presentation::OPEN, 'edit_target' => 'title'],
         'markup' => $this->emptyMarkup(),
         'fields' => [
@@ -432,6 +455,96 @@ class BlueprintElementAnnotatorTest extends KernelTestBase {
       ],
       $annotated['_element'],
     );
+  }
+
+  /**
+   * A field block of the root presents MERGED into the field it renders.
+   *
+   * A plugin component whose id is a Layout Builder field block derivative
+   * for the root's own type and bundle carries the model's field-block
+   * presentation (merged, labeled with the field's definition label,
+   * editing routed to the field) and names the presented field by its
+   * selectable key, the twin of the placement's data-presented-field
+   * stamp. A field block of another bundle, or any other plugin block,
+   * stays unannotated and presents open.
+   */
+  public function testFieldBlockAnnotation(): void {
+    $entity_type_manager = $this->container->get('entity_type.manager');
+    $entity_type_manager->getStorage('node_type')
+      ->create(['type' => 'landing_page', 'name' => 'Landing page'])
+      ->save();
+    FieldStorageConfig::create([
+      'field_name' => 'field_summary',
+      'entity_type' => 'node',
+      'type' => 'string',
+    ])->save();
+    FieldConfig::create([
+      'field_name' => 'field_summary',
+      'entity_type' => 'node',
+      'bundle' => 'landing_page',
+      'label' => 'Summary',
+    ])->save();
+    $root = $entity_type_manager->getStorage('node')
+      ->create(['type' => 'landing_page', 'title' => 'Hello there', 'field_summary' => 'Placed']);
+
+    $blueprint = [
+      'bundle' => 'landing_page',
+      'fields' => ['title' => 'Hello there', 'field_summary' => 'Placed'],
+      'layout_builder__layout' => [
+        [
+          'uuid' => 'section-uuid',
+          'layout_id' => 'layout_onecol',
+          'regions' => [
+            'content' => [
+              ['uuid' => 'summary-block-uuid', 'plugin_id' => 'field_block:node:landing_page:field_summary'],
+              ['uuid' => 'foreign-field-uuid', 'plugin_id' => 'field_block:node:article:field_summary'],
+              ['uuid' => 'missing-field-uuid', 'plugin_id' => 'field_block:node:landing_page:field_nope'],
+              ['uuid' => 'plugin-uuid', 'plugin_id' => 'system_powered_by_block'],
+              ['uuid' => 'named-plugin-uuid', 'plugin_id' => 'system_powered_by_block', 'label' => 'Footer credits', 'label_display' => '0'],
+              ['uuid' => 'headed-plugin-uuid', 'plugin_id' => 'system_powered_by_block', 'label' => 'Footer credits', 'label_display' => 'visible'],
+            ],
+          ],
+        ],
+      ],
+    ];
+
+    $annotated = $this->annotator->annotate($blueprint, $root, 'full');
+    $components = $annotated['layout_builder__layout'][0]['regions']['content'];
+
+    $this->assertSame(
+      [
+        'name' => 'Summary',
+        'type' => 'Summary',
+        'presentation' => ['mode' => Presentation::MERGED, 'label' => 'Summary', 'edit_target' => 'field_summary'],
+        'presented_field' => 'field:' . $root->uuid() . ':field_summary',
+      ],
+      $components[0]['_element'],
+      'The field block presents merged into the root field it renders and names it by key; the field label is both its name and its type.',
+    );
+    // A field block of another bundle, or of a field the root lacks,
+    // presents nothing of this root: no presentation, no presented field.
+    // Like any plugin block it still names itself, here by its id, since
+    // no such field block derivative exists to lend an admin label.
+    $this->assertSame(
+      ['name' => 'field_block:node:article:field_summary', 'type' => 'field_block:node:article:field_summary'],
+      $components[1]['_element'],
+      'A field block of another bundle presents nothing of this root.',
+    );
+    $this->assertSame(
+      ['name' => 'field_block:node:landing_page:field_nope', 'type' => 'field_block:node:landing_page:field_nope'],
+      $components[2]['_element'],
+      'A field block of a field the root lacks presents nothing of it.',
+    );
+    // A plain plugin block: the admin label is its type; a hidden
+    // configured label is its name, a rendered one is content, so the type
+    // stands in.
+    $this->assertSame(['name' => 'Powered by Drupal', 'type' => 'Powered by Drupal'], $components[3]['_element']);
+    $this->assertSame(['name' => 'Footer credits', 'type' => 'Powered by Drupal'], $components[4]['_element']);
+    $this->assertSame(['name' => 'Powered by Drupal', 'type' => 'Powered by Drupal'], $components[5]['_element']);
+    // The lean tree carries the same facts.
+    $tree_block = $annotated['_tree'][0]['children'][0]['children'][0];
+    $this->assertSame('summary-block-uuid', $tree_block['uuid']);
+    $this->assertSame('field:' . $root->uuid() . ':field_summary', $tree_block['_element']['presented_field']);
   }
 
   /**
@@ -944,6 +1057,162 @@ class BlueprintElementAnnotatorTest extends KernelTestBase {
       ],
       $components[1]['_element']['markup'],
     );
+  }
+
+  /**
+   * The naming spine: `name` and `type` ride every node of the lean tree.
+   *
+   * The two facts are minted once here and delivered as data, so the
+   * assertions read them off `_tree`, the shape the satellite receives
+   * over the broadcast channel (no facade, no `Drupal.t`), not only off
+   * `layout_builder__layout`. Per node kind and depth: a section of the
+   * root layout is a Section, one nested inside a component list a
+   * Container, and either is NAMED by its custom label when renamed, else
+   * by its type word (never a humanized layout id); a fresh text block
+   * with content is named by its content's first line, clamped at 80
+   * characters with an ellipsis (empty content falls to the presentation's
+   * label, the absorbed field's), and typed by its block type's label; a
+   * heading-style block (label rendered as content) names by that
+   * content through the same excerpt rule, so a long rendered label
+   * clamps like any content and an empty one falls to the type word, the
+   * rendered label never serving as a name by itself; a field block is
+   * named and typed by the field's label; the root by its entity label
+   * and bundle label.
+   */
+  public function testNamesAndTypesRideTheTree(): void {
+    $entity_type_manager = $this->container->get('entity_type.manager');
+    $entity_type_manager->getStorage('node_type')
+      ->create(['type' => 'landing_page', 'name' => 'Landing page'])
+      ->save();
+    FieldStorageConfig::create([
+      'field_name' => 'field_summary',
+      'entity_type' => 'node',
+      'type' => 'string',
+    ])->save();
+    FieldConfig::create([
+      'field_name' => 'field_summary',
+      'entity_type' => 'node',
+      'bundle' => 'landing_page',
+      'label' => 'Summary',
+    ])->save();
+    // A heading-style bundle: no content fields, so with a visible label
+    // the model merges it into its label row (edit_target 'label').
+    $this->createBlockType('heading');
+    $root = $entity_type_manager->getStorage('node')
+      ->create(['type' => 'landing_page', 'title' => 'Hello there', 'field_summary' => 'Placed']);
+
+    $long = str_repeat('Welcome to the widest headline anyone ever wrote ', 3);
+    $blueprint = [
+      'bundle' => 'landing_page',
+      'fields' => ['title' => 'Hello there', 'field_summary' => 'Placed'],
+      'layout_builder__layout' => [
+        [
+          'uuid' => 'renamed-band-uuid',
+          'layout_id' => 'daedalus_stylish_container',
+          'label' => 'Welcome',
+          'children' => [
+            [
+              'uuid' => 'fresh-text-uuid',
+              'block_type' => 'text_block',
+              'label' => '',
+              'label_display' => '0',
+              'block_fields' => ['field_text' => "Try it\nA second line the name never shows"],
+            ],
+            [
+              'uuid' => 'nested-container-uuid',
+              'layout_id' => 'daedalus_stylish_container',
+              'children' => [
+                [
+                  'uuid' => 'long-text-uuid',
+                  'block_type' => 'text_block',
+                  'label' => '',
+                  'label_display' => '0',
+                  'block_fields' => ['field_text' => $long],
+                ],
+                [
+                  'uuid' => 'empty-text-uuid',
+                  'block_type' => 'text_block',
+                  'label' => '',
+                  'label_display' => '0',
+                  'block_fields' => ['field_text' => '   '],
+                ],
+              ],
+            ],
+          ],
+        ],
+        [
+          'uuid' => 'fresh-band-uuid',
+          'layout_id' => 'layout_onecol',
+          'regions' => [
+            'content' => [
+              [
+                'uuid' => 'heading-uuid',
+                'block_type' => 'heading',
+                'label' => $long,
+                'label_display' => 'visible',
+                'block_fields' => [],
+              ],
+              [
+                'uuid' => 'blank-heading-uuid',
+                'block_type' => 'heading',
+                'label' => '',
+                'label_display' => 'visible',
+                'block_fields' => [],
+              ],
+              [
+                'uuid' => 'summary-block-uuid',
+                'plugin_id' => 'field_block:node:landing_page:field_summary',
+              ],
+            ],
+          ],
+        ],
+      ],
+    ];
+
+    $annotated = $this->annotator->annotate($blueprint, $root, 'full');
+    $tree = $annotated['_tree'];
+    $names = static fn (array $node): array => [$node['_element']['name'], $node['_element']['type']];
+
+    // The root (not a tree node) names by its entity label, types by its
+    // bundle label.
+    $this->assertSame(['Hello there', 'Landing page'], $names($annotated));
+
+    // A renamed band: the custom label is its name, Section its type.
+    $renamed = $tree[0];
+    $this->assertSame('renamed-band-uuid', $renamed['uuid']);
+    $this->assertSame(['Welcome', 'Section'], $names($renamed));
+
+    // A fresh text block with content: its first line, and the block
+    // type's label as the type (not the field label, not the machine id).
+    $this->assertSame(['Try it', 'Text block'], $names($renamed['children'][0]));
+
+    // A nested, unrenamed container: Container twice, never the layout id.
+    $nested = $renamed['children'][1];
+    $this->assertSame('nested-container-uuid', $nested['uuid']);
+    $this->assertSame(['Container', 'Container'], $names($nested));
+
+    // Content past the cap clamps to 79 characters plus an ellipsis, and
+    // whitespace-only content is no name: the presentation's own label
+    // (the absorbed field's definition label) stands in, before the type.
+    $this->assertSame(mb_substr($long, 0, 79) . '…', $nested['children'][0]['_element']['name']);
+    $this->assertSame(['Text', 'Text block'], $names($nested['children'][1]));
+
+    // A fresh, unrenamed band: Section twice.
+    $fresh = $tree[1];
+    $this->assertSame('fresh-band-uuid', $fresh['uuid']);
+    $this->assertSame(['Section', 'Section'], $names($fresh));
+
+    // The heading-style block: the rendered label is CONTENT, so it names
+    // through the excerpt rule (clamped like any content) and never as a
+    // label; with nothing rendered the type word stands in.
+    $blocks = $fresh['children'][0]['children'];
+    $this->assertTrue($blocks[0]['label_rendered']);
+    $this->assertSame([mb_substr($long, 0, 79) . '…', 'Heading'], $names($blocks[0]));
+    $this->assertSame(['Heading', 'Heading'], $names($blocks[1]));
+
+    // The field block: the field's label is both name and type.
+    $this->assertSame('summary-block-uuid', $blocks[2]['uuid']);
+    $this->assertSame(['Summary', 'Summary'], $names($blocks[2]));
   }
 
   /**

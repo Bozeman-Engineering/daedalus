@@ -15,15 +15,19 @@
  * This module owns everything the view can compute without a DOM — the
  * row roster, the per-row menu roster, the variant-reach read behind
  * Re-apply, the overridden read and its reset-overrides op builder (a
- * masked wearing's row action), and the posed read (what a wearing
- * contributes at the canvas's compound; wearAtPose) — for node-test
+ * masked wearing's row action), and the slice-root read every consumer
+ * of a wearing's own blocks shares (wornRootStyles) — for node-test
  * backpressure (the line-menu.js pattern). The view only renders and
  * dispatches.
  */
 
-import { axisLabel, entryRefs, findVariant } from './variant-scope.js';
+import {
+  axisLabel,
+  entryRefs,
+  findVariant,
+  relativeUnder,
+} from './variant-scope.js';
 import { fragmentStyles } from './slot-key.js';
-import { appliesWithin, cascadeOrder } from './condition-cascade.js';
 import { sharesGrain } from './widgets/lib/box-model.js';
 import { stencilLabel } from './library-model.js';
 
@@ -34,9 +38,18 @@ const isEntryObject = (value) =>
  * The condition blocks a wearing delivers to the worn element itself: the
  * root entry ('') of the wearing's slice (the variant's own root for a
  * root wearing, the fragment's root for a distributed one). Null when
- * the records cannot resolve the wearing.
+ * the records cannot resolve the wearing. The one read of a wearing's
+ * own blocks: the rows' claims (wornProperties) and the layout widget's
+ * effective arrangement at a pose (layout-widget.js) both start here.
+ *
+ * @param {?Array<object>} variants
+ *   The store's variant records.
+ * @param {?{variant: string, fragment: string}} ref
+ *   The wearing, or null.
+ *
+ * @return {?Object<string, object>}
  */
-const wornRootStyles = (variants, ref) => {
+export const wornRootStyles = (variants, ref) => {
   const worn = ref ? findVariant(variants ?? [], ref.variant) : null;
   if (!worn) {
     return null;
@@ -232,53 +245,6 @@ export const wornProperties = (variants, ref) => {
   return properties;
 };
 
-/**
- * What a wearing contributes to the worn element AT a posed compound: the
- * posed half of the pose doctrine for wear surfaces.
- *
- * A wear is unconditioned by construction (the reference list is a
- * sibling of the entry's condition keys; the material owns its WHEN), so
- * posing the canvas never retargets a wear. What the pose changes is
- * which of the variant's OWN condition blocks apply: this read answers
- * "what does this wearing set at Hover" the way the printer's cascade
- * would deliver it: every root-slice block other than default whose
- * parts the compound covers (appliesWithin), merged in structural
- * cascade order (cascadeOrder, later wins per property). The default
- * block is the row itself and is not part of the answer, so an entrance
- * variant that carries default + reduced-motion "sets nothing at Hover".
- * At the default pose nothing but default applies, so nothing is posed.
- * The one primitive every posed wear surface reads through (the wear
- * bar's sub-line, the layout segment's effective arrangement).
- *
- * @param {?{variant: string, fragment: string}} ref
- *   The wearing, or null.
- * @param {?Array<object>} variants
- *   The store's variant records.
- * @param {string} compound
- *   The editing compound ('default', a single, or 'a+b').
- * @param {object} conditions
- *   The condition table (guide.conditions), for cascade order.
- *
- * @return {{applies: boolean, declarations: Object<string, string>}}
- *   `applies` when at least one property is set by a block the pose
- *   activates; `declarations` those properties with their cascade-winning
- *   values, in first-declared order. An unresolved wearing sets nothing.
- */
-export const wearAtPose = (ref, variants, compound, conditions) => {
-  const root = wornRootStyles(variants, ref);
-  const posed = Object.keys(root ?? {}).filter(
-    (condition) =>
-      condition !== 'default' &&
-      isEntryObject(root[condition]) &&
-      appliesWithin(condition, compound),
-  );
-  const declarations = {};
-  for (const condition of cascadeOrder(posed, conditions)) {
-    Object.assign(declarations, root[condition]);
-  }
-  return { applies: Object.keys(declarations).length > 0, declarations };
-};
-
 export const reachesBeyond = (styles, fragment = '') =>
   Object.keys(styles ?? {}).some(
     (key) => key !== fragment && !key.startsWith(`${fragment}::`),
@@ -295,13 +261,15 @@ export const reachesBeyond = (styles, fragment = '') =>
  * `padding` masks a worn `padding-inline` (the band's own padding over
  * its width inset), an own `padding-top` does not, exactly as the
  * cascade delivers. The walk covers the wearing's whole delivered slice:
- * the element's base entry and its '::' part entries, each read through
- * the wearing's own fragment (fragmentStyles — the read delivery uses).
+ * the wearing key's own entry and the entries beneath it (an element's
+ * '::' parts, a rule's continuations by descent: variant-scope.js
+ * relativeUnder), each read through the wearing's own fragment
+ * (fragmentStyles, the read delivery uses).
  *
  * @param {?object} map
  *   The style map (mirror view).
  * @param {string} key
- *   The wearing element's selectable key.
+ *   The wearing key: an element's, or a rule's (`{key}::{selector}`).
  * @param {string} reference
  *   The worn reference, verbatim as the entry stores it.
  * @param {?Array<object>} variants
@@ -324,12 +292,17 @@ const shadowingTuples = (map, key, reference, variants) => {
   }
   const delivered = fragmentStyles(variant.value, ref.fragment);
   const tuples = [];
+  // The wearing key's own entry and its continuations (an element's
+  // parts, a rule's continuations by descent), each read through the
+  // wearing's own fragment at the same relative.
   const ownKeys = [
-    key,
-    ...Object.keys(map ?? {}).filter((mapKey) => mapKey.startsWith(`${key}::`)),
+    [key, ''],
+    ...Object.keys(map ?? {})
+      .map((mapKey) => [mapKey, relativeUnder(key, mapKey)])
+      .filter(([, relative]) => relative !== null),
   ];
-  ownKeys.forEach((mapKey) => {
-    const covered = delivered[mapKey.slice(key.length) || ''];
+  ownKeys.forEach(([mapKey, relative]) => {
+    const covered = delivered[relative];
     const own = map?.[mapKey];
     if (!isEntryObject(covered) || !isEntryObject(own)) {
       return;
@@ -397,7 +370,7 @@ const unsetOps = (tuples) => {
  * @param {?object} map
  *   The style map (mirror view).
  * @param {string} key
- *   The wearing element's selectable key.
+ *   The wearing key: an element's, or a rule's.
  * @param {string} reference
  *   The worn reference, verbatim as the entry stores it.
  * @param {?Array<object>} variants
@@ -427,7 +400,7 @@ export const resetOverrideOps = (map, key, reference, variants) =>
  * @param {?object} map
  *   The style map (mirror view).
  * @param {string} key
- *   The wearing element's selectable key.
+ *   The wearing key: an element's, or a rule's.
  * @param {string} reference
  *   The worn reference, verbatim as the entry stores it.
  * @param {?Array<object>} variants
@@ -568,11 +541,8 @@ export const wearRowHeader = (worn, guide, materials) => {
  * The right-click menu roster for one wearing row, as data.
  *
  * The view maps types to labels and handlers (line-menu.js's contract).
- * Grouped per the agreed shape: view gestures (Outline Variant always —
- * canvas coverage in the focus treatment; Variant tints only in the code
- * view — it acts on the islands, meaningless in the widget modes, and is
- * the one GLOBAL toggle here, the line-tints preference every row states
- * identically), Re-apply for a root wearing of a composition, the
+ * Grouped per the agreed shape: the view gesture (Outline Variant always,
+ * canvas coverage in the focus treatment), Re-apply for a root wearing of a composition, the
  * wearing pair (Detach; Remove — remove_variant finally exposed; Reset
  * overrides is the row's own action, overriddenWearing, not a menu
  * item), then the variant-object gestures (Update from this element when the
@@ -586,19 +556,24 @@ export const wearRowHeader = (worn, guide, materials) => {
  * alike: staleReason) keeps only the resolution-free gestures: Outline,
  * Detach, and Remove — no document to jump to.
  *
+ * READ-ONLY (the bar under a drilled part: the wearing belongs to the
+ * whole element, so every wear gesture lives on the wearer's panel) keeps
+ * Outline (coverage is a view) and offers exactly one doorway, Select
+ * wearer (the whole element the part belongs to), for worn and stale
+ * rows alike; Detach, Remove, Re-apply, the update and edit
+ * doorways and the settings card all wait behind that selection.
+ *
  * @param {object} context
  * @param {boolean} context.stale
  * @param {?object} context.worn
  *   The resolved variant record (null for stale rows).
  * @param {{variant: string, fragment: string}} context.ref
  *   The worn reference.
- * @param {boolean} context.codeView
- *   Whether the rows render in the code view.
+ * @param {boolean} context.readOnly
+ *   Whether the bar renders under a drilled part (the wearer's rows
+ *   shown for their marks, no wear gesture).
  * @param {boolean} context.outlined
  *   Whether this reference's coverage outline is on (the checkmark).
- * @param {boolean} context.tints
- *   Whether variant line tints are on (the global preference's
- *   checkmark; line-tints.js).
  * @param {boolean} context.canUpdate
  *   The update-variants grant (the pre-staged diff pushes site-wide).
  * @param {boolean} context.updatable
@@ -617,21 +592,21 @@ export const wearRowMenu = ({
   stale,
   worn,
   ref,
-  codeView,
+  readOnly = false,
   outlined,
-  tints = false,
   canUpdate = false,
   updatable = false,
   canEditFull,
   hasSettings,
 }) => {
   const items = [{ type: 'outline', checked: Boolean(outlined) }];
+  if (readOnly) {
+    items.push({ separator: true }, { type: 'select-wearer' });
+    return items;
+  }
   if (stale) {
     items.push({ separator: true }, { type: 'detach' }, { type: 'remove' });
     return items;
-  }
-  if (codeView) {
-    items.push({ type: 'tints', checked: Boolean(tints) });
   }
   if (ref.fragment === '' && reachesBeyond(worn?.value, '')) {
     items.push({ type: 'reapply' });

@@ -46,12 +46,11 @@ final class ComposedBlockRender implements EventSubscriberInterface, TrustedCall
   /**
    * Stamps only the sandwich-era consumers read; dropped on compose.
    *
-   * Data-block-type and data-layout-builder-region have no runtime
-   * consumers, and data-layout-builder-highlight-id feeds core's
-   * layout-builder.js, which daedalus_layout never attaches.
+   * Data-layout-builder-region has no runtime consumers, and
+   * data-layout-builder-highlight-id feeds core's layout-builder.js, which
+   * daedalus_layout never attaches.
    */
   private const DROPPED_ATTRIBUTES = [
-    'data-block-type',
     'data-layout-builder-region',
     'data-layout-builder-highlight-id',
   ];

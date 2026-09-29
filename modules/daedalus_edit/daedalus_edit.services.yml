@@ -5,7 +5,23 @@ services:
 
   daedalus_edit.form_alter.inline_entity_form:
     class: Drupal\daedalus_edit\Form\InlineEntityFormAlter
-    arguments: ['@entity_display.repository', '@field_sample_value.generator', '@daedalus_tempstore.entity_tempstore_repository', '@entity_type.manager', '@event_dispatcher', '@renderer', '@request_stack']
+    arguments: ['@entity_display.repository', '@daedalus_tempstore.entity_tempstore_repository', '@event_dispatcher', '@request_stack', '@daedalus_edit.form_commit']
+
+  # The form transport's server half: a panel form's submit hands the one
+  # property the client named to the op spine (update_element with an
+  # ExtractedValue off the form-built entity), persists, annotates history,
+  # and the AJAX callback answers the mutation-response payload as one
+  # daedalusBlueprintApplyResponse command.
+  daedalus_edit.form_commit:
+    class: Drupal\daedalus_edit\FormCommit
+    arguments:
+      - '@daedalus_blueprint.storage_handler'
+      - '@daedalus_blueprint.operations'
+      - '@daedalus_blueprint_api.mutation_response_builder'
+      - '@daedalus_tempstore.history_recorder'
+      - '@daedalus_tempstore.history_manager'
+      - '@daedalus_ui.messages.ajax'
+  Drupal\daedalus_edit\FormCommit: '@daedalus_edit.form_commit'
 
   daedalus_edit.form_alter.entity_edit:
     class: Drupal\daedalus_edit\Form\EntityEditFormAlter
@@ -18,7 +34,9 @@ services:
     class: Drupal\daedalus_edit\Form\FieldConfigFormAlter
 
   # Stamps the theme's page-title render as the root label's editable leaf
-  # when the label renders outside the entity (the root row's edit target).
+  # when the label renders outside the entity (the root row's edit target),
+  # and delivers that render on the mutation-response contract so a label
+  # write on the op spine swaps the H1 by key.
   daedalus_edit.page_title_editing:
     class: Drupal\daedalus_edit\PageTitleEditing
     arguments:
@@ -26,6 +44,9 @@ services:
       - '@daedalus_ui.ui'
       - '@daedalus_tempstore.entity_tempstore_repository'
       - '@current_user'
+      - '@renderer'
+      - '@daedalus_blueprint_api.subtree_renderer'
+      - '@daedalus_blueprint_api.target_key_mapper'
   Drupal\daedalus_edit\PageTitleEditing: '@daedalus_edit.page_title_editing'
 
   # Eager identity's server-side canonical guarantee: every semantic text
@@ -57,16 +78,14 @@ services:
       - '@daedalus_edit.entity_identity_minting'
   Drupal\daedalus_edit\IdentityBackfill: '@daedalus_edit.identity_backfill'
 
-  # Stage-time seam: outranks daedalus_blueprint's text handler so blueprint
-  # mutations (AI tools, endpoint verbs) stage minted HTML into tempstore;
-  # content staged without a save never renders identity-less.
-  daedalus_edit.field_handler.text_identity:
-    class: Drupal\daedalus_edit\FieldHandler\IdentityMintingTextFieldHandler
+  # Stage-time seam: rides the spine's FieldAppliedEvent so every field a
+  # blueprint mutation applies (AI tools, endpoint verbs, the form commit,
+  # grammar values and ExtractedValues alike) stages minted HTML into
+  # tempstore; content staged without a save never renders identity-less.
+  daedalus_edit.event_subscriber.field_applied_mint_identity:
+    class: Drupal\daedalus_edit\EventSubscriber\FieldAppliedMintIdentity
     arguments:
-      - '@entity_type.manager'
-      - '@daedalus_edit.identity_minter'
-    tags:
-      - { name: daedalus_blueprint.field_handler, field_types: 'text_long,text_with_summary', priority: 10 }
+      - '@daedalus_edit.entity_identity_minting'
 
   # Placement-time seam: sample-populated blocks are filled outside the
   # field-handler pipeline and staged without a save, so neither other seam
@@ -116,11 +135,3 @@ services:
 
   daedalus_edit.event_subscriber.suppress_inline_editing:
     class: Drupal\daedalus_edit\EventSubscriber\SuppressInlineEditing
-
-  daedalus_edit.event_subscriber.navigation_replace_media:
-    class: Drupal\daedalus_edit\EventSubscriber\DaedalusUiReplaceMediaClearForm
-
-  # Rides the mutation-response contract: value-changing mutations clear
-  # the owning entities' cached edit forms so the next edit fetches fresh.
-  daedalus_edit.event_subscriber.blueprint_mutation_clear_forms:
-    class: Drupal\daedalus_edit\EventSubscriber\BlueprintMutationClearForms

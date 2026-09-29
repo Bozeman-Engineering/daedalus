@@ -14,24 +14,34 @@ use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 
 /**
- * Drives daedalus_edit's inline-edit-to-tempstore pipeline on a real page.
+ * Drives daedalus_edit's entity-form path on a real page: one spine, two transports.
  *
- * The defining capability of daedalus_edit is "stage, don't save": clicking a field
- * on the rendered page edits it in place, and the change is written to
- * tempstore rather than committed to the entity, so iterative editing creates
- * no
- * revisions until an explicit save. The entry gesture is the armed edit
- * session: the Edit tool arms it, a click resolves to the editable leaf under
- * the cursor (no indicators), the real entity form loads in the sidebar, and a
- * CKEditor editor attaches to the rendered page element itself, seeded with
- * the field's raw value (the canvas-native gesture: rich text edits in place
- * on the canvas; the hidden sidebar textarea remains the serialization source
- * of truth).
+ * The defining capability of daedalus_edit is "stage, don't save": clicking a
+ * field on the rendered page edits it in place, and the change is written
+ * to tempstore rather than committed to the entity, so iterative editing
+ * creates no revisions until an explicit save. The entity form is a widget
+ * host and value extractor, never a write path: every edit is one field of
+ * one subject committed through the daedalus_blueprint op spine, by one of
+ * two transports chosen by the leaf's kind (a blueprint-edited leaf sends a
+ * value op; a form-edited leaf or a panel widget submits the subject's
+ * cached form naming the one field, FormCommit::FIELD_INPUT, and the
+ * server hands that field's items to the spine as an ExtractedValue), and
+ * answered by the one mutation response (markup by key, the blueprint
+ * mirror, an annotated history entry), applied through the app's one
+ * pipeline and sequenced through the op queue. The entry gesture is Edit
+ * Mode's one pointer grammar: a double-click at the leaf (or Enter on the
+ * selected leaf) calls the one editor door, the real entity form loads in
+ * the sidebar, and a CKEditor editor attaches to the rendered page element
+ * itself, seeded with the field's raw value.
+ *
  * This test drives that whole path plus the part that makes daedalus_edit
- * daedalus_edit: actually changing the value and confirming the change rounds
- * through the real tempstore pipeline without touching the saved entity — and
- * the session grammar around it (Tab commits, Escape cancels then exits,
- * Cmd+Enter and a press into non-keeping chrome commit and leave), plus the
+ * daedalus_edit: actually changing values and confirming they round through
+ * the spine into tempstore without touching the saved entity, the editing
+ * grammar around it (Tab across the canvas-panel seam, Escape, Cmd+Enter
+ * and the Update button, a press into non-keeping chrome), the panel's
+ * field-state judge and the Fill with sample verb, the panel widget
+ * editor's generic commit triggers (a native change, a widget's own AJAX
+ * round), the panel refresh from a foreign response's targets, and the
  * open edit's life as a DRAFT across a foreign mutation's re-render.
  *
  * The fixture is DaedalusFixtureTrait: the site the daedalus recipe
@@ -98,123 +108,117 @@ class InlineEditBehaviorTest extends WebDriverTestBase {
   }
 
   /**
+   * Installs a race-free counter of fully applied mutation responses.
+   *
+   * Every write (a form commit through the form transport, a value op, a
+   * foreign mutation) is one mutation response applied through the app's
+   * one pipeline, which reports the end of every application to the open
+   * edit (EditSession.mutationApplied, the applied seam). Wrapping
+   * it and counting invocations is a deterministic "the server staged it
+   * and the page shows it" signal that does not depend on observing a
+   * transient throbber between poll intervals. Per page load: a reload
+   * kills the JS context.
+   *
+   * @param string $variable
+   *   The window variable holding the count.
+   */
+  private function countApplied(string $variable): void {
+    $this->getSession()->executeScript(<<<JS
+      window.$variable = 0;
+      (() => {
+        const original = Drupal.Daedalus.EditSession.mutationApplied;
+        Drupal.Daedalus.EditSession.mutationApplied = function () {
+          window.$variable += 1;
+          return original.apply(this, arguments);
+        };
+      })();
+      JS);
+  }
+
+  /**
    * An inline field edit stages to tempstore without committing the entity.
    *
    * One fixture (the applied base recipe) drives daedalus_edit's signature
    * "stage, don't save" pipeline end to end on the fixture's 'plain'
    * bundle:
-   * - Open the field: Edit Mode is entered, the Edit tool activated (arming the
-   *   session), and the body field clicked — the armed session resolves the
-   *   click to the editable leaf, commits it as the selection, loads the real
-   *   entity form in the sidebar, and attaches a CKEditor editor to the page
+   * - Open the field: Edit Mode is entered and the body field double-clicked
+   *   with a real pointer — the click commits the leaf as the selection, the
+   *   dblclick at the leaf calls the editor door, which loads the real
+   *   entity form in the sidebar and attaches a CKEditor editor to the page
    *   element itself, seeded with the current raw value.
-   * - Edit and stage: a new value is typed into the inline editor and the field
-   *   blurred. Blurring is what daedalus_edit turns into its real updateTempstore()
-   *   server round-trip: the Update submit handler writes the changed entity to
-   *   tempstore (InlineEntityFormAlter::update -> tempstoreRepository->set,
-   *   never ::save), and the AJAX response re-renders the field from that
-   *   tempstore entity and invokes daedalusEditIsDoneUpdating(). Waiting on that
-   *   invocation is the deterministic signal that the server has staged the
-   *   edit, with no dependence on AJAX timing.
+   * - Edit and stage: a new value is typed into the inline editor and the
+   *   field blurred. Blurring is what the editor turns into the form
+   *   transport's commit: the form's own AJAX submit naming the body
+   *   (FormCommit::FIELD_INPUT), the submit handler handing the body's
+   *   items to the spine as an ExtractedValue (InlineEntityFormAlter::update
+   *   -> FormCommit::commit, never ::save), and the response carrying the
+   *   mutation payload as one daedalusBlueprintApplyResponse command that
+   *   swaps the field by key and moves the history timeline.
    * - tempstore, not the entity: the saved node, reloaded fresh from storage,
    *   still has its original body. The edit lives only in tempstore, exactly as
-   *   a real edit session leaves it before an explicit save. (This is the
-   *   daedalus_edit analog of daedalus_layout asserting an empty layout override after
-   *   staging a placement.)
+   *   a real edit session leaves it before an explicit save.
+   * - The root edit target: the theme's H1 has the pointer door (hover names
+   *   the root row, a double-click edits the title in place, the leaf under
+   *   the pointer routing the door since the H1 sits outside the entity
+   *   wrapper) and re-renders through the mutation response (the page-title
+   *   subscriber delivers the H1 under the label's key).
+   * - The root row's Edit verb presents the root through the door: the Page
+   *   form opens on the top-level subject with its first revealed widget as
+   *   the open edit.
+   * - Field state has one judge (panel-widget-visibility.js over the mirror
+   *   and the canvas): the title's widget stays hidden behind its H1 leaf;
+   *   the empty field_empty is revealed with the Fill with sample button and
+   *   the verb applies to it. A change in the revealed widget commits through
+   *   the form transport, the resulting leaf hides the widget and ends the
+   *   panel edit, and emptying the field through the leaf reveals the widget
+   *   (and the button) again.
+   * - The seam: Tab from a panel widget walks back onto the last canvas leaf
+   *   and forward onto the panel again; the Update button and Cmd+Enter from
+   *   a focused panel widget commit and stay with the selection kept, and
+   *   Enter on the selected leaf re-opens its editor.
    * - The honest panel and the slot contract: the related field
-   *   (entity_reference_autocomplete, the form-swap tier) opens with its real
-   *   widget revealed in-flow in the right/BOTTOM form panel — no sized
-   *   placeholder, no position: fixed projection — while the page element
-   *   keeps a selection outline, and the Styles inspector in the right/TOP
-   *   slot stays open through the whole form lifecycle (load, edit, update
-   *   round trip) instead of being evicted by it.
-   * - The staged value survives a reload: re-requesting the node in Edit Mode
-   *   (the server-rendered cookie path) renders the new body, because daedalus_edit
-   *   swaps in the tempstore version of the entity when a page is rendered in
-   *   Edit Mode. This is the user-facing other half of "stage": the change is
-   *   not lost, it is just not committed.
-   * - The graduated entity-form panel (EntityFormSidebar + the client-side
-   *   subject model): form loads retarget the panel's SUBJECT, a canceled
-   *   edit's subject death reverts the open panel to a fresh top-level form,
-   *   the reload's boot restore refills the server-rendered open panel, the
-   *   dumb icon opens the top-level form under the pointer tool, and an
-   *   armed blueprint-block edit (on a page-built page) leaves the panel
-   *   untouched — the subject model ignores non-form edits.
-   * - The dissolved accordion (sidebar-hosted forms replace core's advanced
-   *   vertical_tabs with a container of stacked details): a pane widget
-   *   still wires gesture-to-tempstore after the structural rebuild —
-   *   opening the URL alias pane on the page form and changing the alias
-   *   fires the pane's auto-submit and stages the value, never the entity —
-   *   and core's summary plumbing repaints the pane's at-a-glance line from
-   *   the same edit (the dissolve keeps the plain-details summary consumer
-   *   alive; no vertical-tabs DOM remains).
-   * - The pinned panel header: the daedalus-ui-panel__header title is panel-shell
-   *   chrome the client subject model writes from the subject form's
-   *   shipped title — it names the top-level bundle, flips to the block
-   *   bundle label when a block form becomes the subject, and reverts on
-   *   subject death.
-   * - The form-edited block (the fixture's form_block bundle, no composed
-   *   content class): its placement declares the block-form endpoint kind
-   *   in its attribution (data-daedalus-edit-form-endpoint="block-form",
-   *   stamped by BlockFormEndpoint), an armed field-leaf click fetches
-   *   UpdateBlockFormForEditTool into the panel's form cache with the
-   *   widget revealed in-flow, the fetch retargets the panel's subject to
-   *   the BLOCK (block AS subject), the widget edit rounds through the
-   *   same stage-don't-save pipeline, and a canceled block edit's subject
-   *   death reverts the open panel to the top-level entity.
-   * - Add-field-to-page (the fixture's empty-by-default field_empty): the
-   *   form's Add field button materializes a generated sample value onto
-   *   the canvas (populateEmptyField -> updatePage) as staged tempstore
-   *   state, and emptying the field through its inline edit reverses both
-   *   halves — the canvas render is removed and the button returns.
-   * - Panel widget visibility is a client fact (panel-widget-visibility.js
-   *   over server-hidden wrappers): a field's panel widget is hidden iff
-   *   the field has a canvas leaf. The title (a leaf: the fixture's H1)
-   *   stays hidden; the orphan field_empty is revealed with auto-submit,
-   *   a change stages it under the Selector, the resulting leaf hides the
-   *   widget again, and emptying it through the leaf reveals it once more.
-   * - The form-path media library (the fixture's field_media): the media
-   *   plugin reveals the real media_library_widget in the panel, the
-   *   selection swaps through the actual library modal (the widget-scoped
-   *   AJAX wrappers and opener parameters FormMediaFieldAttributes stamps,
-   *   the Insert selected routing ViewsFormMediaLibraryWidgetAlter reads),
-   *   and blur stages the swap through the same pipeline.
+   *   (entity_reference_autocomplete, a widget with no canvas editor) opens
+   *   with its real widget revealed in-flow in the right/BOTTOM form panel
+   *   through the panel widget editor, while the page element keeps a
+   *   selection outline, and the Styles inspector in the right/TOP slot stays
+   *   open through the whole form lifecycle; its native change commits.
+   * - The editing grammar: Tab commits, Escape cancels (restoring the
+   *   snapshot, the cached form untouched) and the next Escape clears the
+   *   selection, the panel and the mode untouched.
+   * - The staged value survives a reload; the boot restore refills the
+   *   server-rendered open panel.
+   * - Fill with sample: the empty field materializes on the canvas through
+   *   the spine's `_sample` request (the button on the widget's row), the
+   *   widget hides, and emptying the field through its leaf brings the widget
+   *   and the button back.
+   * - The form-path media library: the media widget reveals in the panel;
+   *   removing the selection and inserting a new one through the real
+   *   library modal each commit through the AJAX-touched trigger, with no
+   *   change event and no blur, and the canvas shows the new image without a
+   *   reload.
    * - The commit half the staging legs stop short of: the top bar's Save
-   *   navigates through Tempstore::save — the staged batch lands on the
-   *   real entity as ONE new revision attributed to the editor, the
-   *   tempstore entry is deleted, and Edit Mode drops on the redirect.
-   *   Discard is the other ending: a staged edit is thrown away through
-   *   ConfirmDiscardChangesForm's confirm dialog, restoring the committed
-   *   values with the tempstore entry deleted.
-   * - The block label (the block_property pseudo-field): a placement's
-   *   visible label renders as an attributed pseudo-field leaf
-   *   (daedalus_edit_preprocess_block's ...::label::block_property vocabulary)
-   *   whose in-place edit rounds through UpdateBlockFormForEditTool's
-   *   attributeLabel() form item and back onto the canvas re-attributed.
-   * - The open edit is a DRAFT (the form path's three-way landing): a
-   *   foreign mutation's response re-renders the canvas under the editor,
-   *   and on the form path a root-targeting value change also evicts the
-   *   root's cached form (a stale form would clobber the foreign change on
-   *   submit). The engine captures the draft as the swap detaches the leaf
-   *   and FormEditorBase.resume() judges it once the response has FULLY
-   *   applied, refetch included: base = the mirror value at edit open,
-   *   remote = the mirror after. A style scrub on the node (update_style
-   *   through the spine, the reported bug) leaves the field alone, so the
-   *   body's draft rides into ONE fresh canvas CKEditor over the swapped-in
-   *   element on a refetched form and blur stages it with the style intact;
-   *   the subtitle's typed text is re-seeded onto the new element and the
-   *   refetched input, which further typing keeps reaching. A foreign
-   *   update_element on the body (remote != base) ENDS the edit with the
-   *   remote standing on the canvas and in the refetched textarea, nothing
-   *   submitted. On a form-edited block, a block-key style scrub swaps the
-   *   block subtree without evicting the block's own form: the same edit
-   *   re-opens on the new page element and the panel widget's typed value
-   *   commits on blur.
-   * - Commit and leave: Cmd+Enter (the dialog's OK to Escape's cancel)
-   *   commits the open edit and leaves the session for the Selector with
-   *   the selection kept; a real press into chrome that keeps nothing (the
-   *   page-elements panel header) does the same, because under the Edit
-   *   tool a selection that is not editing is forbidden.
+   *   waits for the op queue to drain and navigates through Tempstore::save;
+   *   Discard throws a staged edit away through the confirm dialog.
+   * - The open edit is a DRAFT (the one base's three-way landing): a style
+   *   scrub leaves the field alone, so the body's draft rides into ONE fresh
+   *   canvas CKEditor over the swapped-in element on the SAME cached form and
+   *   blur commits it with the style intact; a foreign update_element on the
+   *   body (remote != base) refetches the subject form (its targets name the
+   *   edit's field) and the edit continues over the remote, the draft
+   *   dropped, nothing submitted; the subtitle's typed text is re-seeded onto
+   *   the new element and the input, which further typing keeps reaching.
+   * - The panel refresh from targets: a foreign write to a revealed field
+   *   refetches the subject form.
+   * - Commit and stay: Cmd+Enter and a real press into chrome that keeps
+   *   nothing commit the open edit with the selection kept.
+   * - On a page-built page: the icon presents the root through the door and
+   *   opens the Page form; a dissolved advanced pane's alias commits through the
+   *   form transport (the wrapper identity follows the grouped widget); a
+   *   blueprint-block edit leaves the panel untouched; the form-edited block
+   *   (block AS subject) commits its reference and its label, a canceled
+   *   dirty edit refetches the block form and keeps the block as subject, and
+   *   a block-key style scrub resumes the open panel-widget edit over the
+   *   swapped-in block with the typed value intact, which blur commits.
    */
   public function testInlineEditStagesToTempstore(): void {
     $editor_account = $this->loginAsEditor();
@@ -248,8 +252,8 @@ class InlineEditBehaviorTest extends WebDriverTestBase {
 
     // The fixture's 'plain' type configures its body field for inline
     // editing without Layout Builder: the simplest Edit-tool surface. Its
-    // related field (entity_reference_autocomplete) is the form-swap
-    // tier: a widget that edits in the form panel, not in place.
+    // related field (entity_reference_autocomplete) has no canvas editor:
+    // a widget that edits in the form panel, not in place.
     $node = Node::create([
       'type' => 'plain',
       'title' => 'Inline editing test node',
@@ -267,14 +271,15 @@ class InlineEditBehaviorTest extends WebDriverTestBase {
     ]);
     $node->save();
     $nid = (int) $node->id();
+    $node_uuid = $node->uuid();
 
     $this->drupalGet($node->toUrl());
 
     // A taller viewport than the WebDriver default. With the inspector open
     // the content column reflows, and on the default 1024x768 window the body
-    // field's click point lands under the fixed edit-mode toolbar pill, which
+    // field's click point lands under the fixed edit-mode chrome, which
     // intercepts the real pointer click below. More vertical room keeps the
-    // page content and the pill apart without giving up the real click.
+    // page content and the chrome apart without giving up the real click.
     $session->resizeWindow(1200, 1600);
 
     $this->enterEditMode();
@@ -291,28 +296,22 @@ class InlineEditBehaviorTest extends WebDriverTestBase {
       'The Styles inspector (right/top) opened by default on Edit Mode entry.',
     );
 
-    // Activate the Edit tool, arming the edit session. The body field has been
-    // attributed for inline editing (twig_events + daedalus_edit): it carries the
-    // field-value wrapper and the per-item editable id the session resolves.
-    $this->activateTool('edit');
-
+    // The body field has been attributed for inline editing (twig_events +
+    // daedalus_edit): it carries the field-value wrapper and the per-item
+    // editable id the editor door resolves.
     $wrapper = '[data-daedalus-edit-field-value-wrapper="node::' . $nid . '::body::value"]';
     $assert_session->waitForElement('css', $wrapper . ' .daedalus-edit-field-value');
 
-    // Click the body field itself — no indicator overlay: the armed session's
-    // document-level handler resolves the click to the editable leaf and opens
-    // its editor through the registered engine.
-    $session->getPage()->find('css', $wrapper . ' .daedalus-edit-field-value')->click();
+    // Double-click the body field itself with a real pointer — no indicator
+    // overlay: the click half commits the leaf's field as the selection
+    // (the one selection spine), and the dblclick at the leaf calls the
+    // editor door, which opens its editor through the registered engine.
+    $session->getPage()->find('css', $wrapper . ' .daedalus-edit-field-value')->doubleClick();
 
-    // The session commits the leaf's field as the selection (one selection
-    // spine for the Selector and the session).
     $this->assertJsCondition(
-      sprintf(
-        "Drupal.Daedalus.Selection.getSelected() === 'field:%s:body'",
-        $node->uuid(),
-      ),
+      "Drupal.Daedalus.Selection.getSelected() === 'field:$node_uuid:body'",
       20000,
-      'The armed click committed the body field as the selection.',
+      'The double-click\'s click half committed the body field as the selection.',
     );
 
     // The canvas-native gesture: the engine loads the real entity form in
@@ -351,26 +350,13 @@ class InlineEditBehaviorTest extends WebDriverTestBase {
       'The entity-form panel opened in right/bottom on the node subject and the right/top inspector stayed open through the form load.',
     );
 
-    // Install a race-free completion counter. daedalus_edit's update AJAX response
-    // invokes daedalusEditIsDoneUpdating() once the server has staged the edit
-    // (DaedalusUiFormTrait::updateAjaxSubmit, after the Update submit
-    // handler has written to tempstore). Wrapping it and counting invocations
-    // is
-    // a deterministic "the server is done staging" signal that does not depend
-    // on observing a transient throbber between poll intervals.
-    $session->executeScript(<<<JS
-      window.__daedalusEditDoneCount = 0;
-      const original = jQuery.fn.daedalusEditIsDoneUpdating;
-      jQuery.fn.daedalusEditIsDoneUpdating = function () {
-        window.__daedalusEditDoneCount++;
-        return original.apply(this, arguments);
-      };
-    JS);
+    $this->countApplied('__applied');
 
     // Type a new value into the inline editor and blur the field. Blurring is
-    // what the InlineEditor field plugin turns into the real updateTempstore()
-    // call: it detects the value changed against the original and submits the
-    // hidden Update button, which stages the edit on the server.
+    // what the InlineEditor plugin turns into the form transport's commit:
+    // it diffs the editor's data against the snapshot and submits the form
+    // naming the body, which stages the edit on the server through the
+    // spine and answers the mutation payload.
     $session->executeScript(<<<JS
       const editor = Drupal.Daedalus.Edit.Ckeditor5Instances.values().next().value;
       editor.setData('<p>New body text.</p>');
@@ -378,17 +364,31 @@ class InlineEditBehaviorTest extends WebDriverTestBase {
     JS);
 
     // The edit has reached the server (and therefore tempstore) exactly when
-    // the
-    // update AJAX response fires daedalusEditIsDoneUpdating().
-    $this->assertJsCondition('window.__daedalusEditDoneCount >= 1', 20000);
+    // the response has been applied.
+    $this->assertJsCondition('window.__applied >= 1', 20000);
 
-    // The field re-rendered with the new value (the AJAX response replaces the
-    // field markup with the tempstore-rendered field).
+    // The field re-rendered with the new value (the response's markup swap
+    // replaces the field's subtree by its key from the tempstore render).
     $assert_session->waitForElement('css', $wrapper);
     $this->assertStringContainsString(
       'New body text.',
       $session->getPage()->find('css', $wrapper)->getText(),
       'The edited field re-rendered with the new value.',
+    );
+
+    // The commit rode the spine: the history timeline gained a labeled
+    // entry targeting the body field (undo swaps the field, not the entity).
+    $this->assertJsCondition(<<<JS
+      (() => {
+        const entries = Drupal.Daedalus.History?.getState?.().entries ?? [];
+        const latest = entries[entries.length - 1];
+        return !!latest && latest.label === 'Edited Body'
+          && Array.isArray(latest.targets) && latest.targets.length === 1
+          && latest.targets[0].field_name === 'body';
+      })()
+      JS,
+      20000,
+      'The form commit annotated a history entry labeled by the field and targeted at it.',
     );
 
     // The headline: the edit is staged in tempstore, not committed. The saved
@@ -406,30 +406,38 @@ class InlineEditBehaviorTest extends WebDriverTestBase {
     // A node's title never renders inside the entity on its canonical page
     // (node preprocess pulls it out of content); the H1 is the theme's
     // page-title block. daedalus_edit attributes that render as the title
-    // field's editable leaf (PageTitleEditing + preprocess_page_title), so
-    // the armed session has a leaf to open on click. Only the click: the
-    // root row's Edit verb opens the Page form (the next leg) and never
-    // routes here. The click is synthetic like the later legs: the fixed
-    // edit-mode chrome overlaps the H1's coordinates.
+    // field's editable leaf (PageTitleEditing + preprocess_page_title), and
+    // the leaf has the pointer door every leaf has: the projection absorbed
+    // the title field into the root row (the label presents AS the entity
+    // row), so the resolver promotes the leaf's key to the root row inside
+    // the pointer chain, the same mapping the editing gate applies for the
+    // Tab walk. Hover on the H1 names the ROOT row, the double-click's
+    // click half selects it, and the dblclick at the leaf opens the title's
+    // in-place editor through the door, routed by the leaf under the
+    // pointer (the H1 sits outside the entity wrapper, where no key search
+    // finds it; the root's Enter keeps the key road and presents the panel
+    // form, pinned by the root Edit verb leg below).
     $title_wrapper = '[data-daedalus-edit-field-value-wrapper="node::' . $nid . '::title::value"]';
     $title_leaf = $title_wrapper . ' .daedalus-edit-field-value';
     $assert_session->waitForElement('css', $title_leaf);
-    $session->executeScript(
-      "document.querySelector('" . $title_leaf . "')"
-      . ".dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));"
-    );
-
-    // The leaf is the root's edit target, so the committed selection is the
-    // ROOT row: the projection absorbed the title field into it (the label
-    // presents AS the entity row), and a selection key the panel cannot
-    // name would lead nowhere.
+    $session->executeScript(<<<JS
+      document.querySelector('{$title_leaf}').dispatchEvent(
+        new MouseEvent('mousemove', { bubbles: true, cancelable: true }),
+      );
+    JS);
     $this->assertJsCondition(
-      sprintf(
-        "Drupal.Daedalus.Selection.getSelected() === 'entity:%s'",
-        $node->uuid(),
-      ),
+      "Drupal.Daedalus.Selection.getHovered() === 'entity:$node_uuid'",
       20000,
-      'Clicking the page title committed the ROOT row as the selection.',
+      'Hovering the page title names the ROOT row (the label leaf promotes to the row that presents it).',
+    );
+    $this->dispatchDoubleClick($title_leaf);
+
+    // The committed selection is the ROOT row, never the absorbed field key:
+    // a selection key the panel cannot name would lead nowhere.
+    $this->assertJsCondition(
+      "Drupal.Daedalus.Selection.getSelected() === 'entity:$node_uuid'",
+      20000,
+      'Double-clicking the page title committed the ROOT row as the selection.',
     );
 
     // The title is the in-place text tier: the H1 itself edits.
@@ -446,12 +454,12 @@ class InlineEditBehaviorTest extends WebDriverTestBase {
       h1.dispatchEvent(new Event('input', { bubbles: true }));
       Drupal.Daedalus.Edit.CurrentlyEditingElement.plugin.blur();
     JS);
-    $this->assertJsCondition('window.__daedalusEditDoneCount >= 2', 20000);
+    $this->assertJsCondition('window.__applied >= 2', 20000);
 
     // The commit REPLACED the H1 instead of removing it: the label is not
-    // in the entity render, so updatePage delivers a fresh page-title
-    // render beside the entity content for the wrapper selector to match,
-    // and that render arrives re-attributed for the next edit.
+    // in the entity render, so the page-title subscriber delivers a fresh
+    // H1 render under the label's key on the mutation response, and it
+    // arrives re-attributed for the next edit.
     $assert_session->waitForElement('css', $title_leaf);
     $this->assertStringContainsString(
       'A staged new title',
@@ -467,16 +475,15 @@ class InlineEditBehaviorTest extends WebDriverTestBase {
       'The title edit is staged in tempstore, not committed to the node.',
     );
 
-    // ----- The root row's Edit verb: the Page form, no tool change. -----
+    // ----- The root row's Edit verb: presents the root, opens the Page form. -----
     // The root's editor is the entity-form panel, never a canvas leaf: the
     // label may have no canvas render at all (daedalus_theme places no
-    // page title block; the H1 above is this fixture's own placement), so
-    // the verb opens the panel on the top-level subject and leaves the tool
-    // alone. Panel widgets stage to tempstore on change under any tool, so
-    // the Selector is the tool to prove it under: a route through the Edit
-    // tool would flip the cookie. Drop to the Selector and close the panel
-    // first, so the verb's open is the only thing that can bring it back.
-    $this->activateTool('selector');
+    // page title block; the H1 above is this fixture's own placement). The
+    // verb is the same editor door as Enter: the door, finding no canvas
+    // leaf for the root, asks the engine to present the root as the
+    // panel's subject and opens the panel's first revealed widget as the
+    // edit, the selection moving to that widget's field key. Close the
+    // panel first, so the verb is the only thing that can bring it back.
     $session->executeScript(
       "Drupal.Daedalus.SidebarManager.closeSidebar('daedalus_edit_entity_form');"
     );
@@ -486,12 +493,11 @@ class InlineEditBehaviorTest extends WebDriverTestBase {
       'The entity-form panel is closed ahead of the root Edit verb.',
     );
 
-    // The seam: the verb registry's applies gate admits the root (the
-    // delivered _element annotation carries an edit_target), and the verb's
-    // run goes to the sidebar manager, not the tool manager. verbsFor is
-    // the same lookup every face (chip button, context menu, tree row)
-    // uses, so this is the gesture minus the pointer.
-    $root_key = 'entity:' . $node->uuid();
+    // The seam: the verb registry's applies gate admits the root and the
+    // verb's run calls the door. verbsFor is the same lookup every face
+    // (chip button, context menu, tree row) uses, so this is the gesture
+    // minus the pointer.
+    $root_key = 'entity:' . $node_uuid;
     $session->executeScript(<<<JS
       (() => {
         const key = '{$root_key}';
@@ -508,106 +514,228 @@ class InlineEditBehaviorTest extends WebDriverTestBase {
       "(() => {"
       . " const panel = document.getElementById('daedalus_edit_entity_form');"
       . " const mount = document.getElementById('daedalus-edit-form-cache');"
+      . " const editing = Drupal.Daedalus.Edit.CurrentlyEditingElement;"
       . " return !!panel && !panel.classList.contains('daedalus-ui-hidden')"
       . " && mount.dataset.daedalusEditSubject === 'node::" . $nid . "'"
       . " && !!mount.querySelector(':scope > .daedalus-edit-form--subject[data-daedalus-edit-form-id=\"node::" . $nid . "\"]')"
-      . " && Drupal.Daedalus.getCookieValue('activeTool') === 'selector';"
+      . " && Drupal.Daedalus.EditSession.isEditing() === true"
+      . " && !!editing && editing.plugin.id === 'panel_widget'"
+      . " && (Drupal.Daedalus.Selection.getSelected() ?? '').startsWith('field:$node_uuid:');"
       . " })()",
       20000,
-      'The root Edit verb opened the entity-form panel on the top-level subject and left the Selector as the tool.',
+      'The root Edit verb presented the root through the door: the entity-form panel opened on the top-level subject with its first revealed widget as the open edit, the selection on that field.',
+    );
+    // Escape cancels the widget edit the door opened (nothing typed, so the
+    // cancel refetches nothing) and keeps the selection: the judge leg
+    // below reads field_empty's PLAIN face (the verb registry's edit-scope
+    // gate: a selection verb such as Fill with sample applies only while
+    // no live edit lands on the key), so the door's open edit must end
+    // first.
+    $this->pressHotkey('Escape');
+    $this->assertJsCondition(
+      "Drupal.Daedalus.EditSession.isEditing() === false"
+      . " && Drupal.Daedalus.Edit.CurrentlyEditingElement === null"
+      . " && (Drupal.Daedalus.Selection.getSelected() ?? '').startsWith('field:$node_uuid:')",
+      20000,
+      'Escape cancelled the panel widget edit the root door opened and kept the selection on its field.',
     );
 
-    // ----- Panel widget visibility: hidden iff the field has a canvas leaf. -----
+    // ----- Field state has one judge: hidden iff a leaf, sample iff empty. -----
     // The server ships every field wrapper hidden (FormDefaultFieldAttributes)
-    // and decides nothing else: whether a field renders on the canvas is a
-    // theme and layout fact only the client can see. One behavior
-    // (panel-widget-visibility.js) reveals the wrappers with no canvas leaf
-    // and gives them auto-submit; the rest stay hidden for their leaf's
-    // editor. On this fixture the placed title block gives the title a leaf
-    // (the H1 edited above), so its wrapper stays hidden; field_empty ships
-    // empty, so it has no leaf and its widget belongs to the panel. Still
-    // the Selector: the rule and the panel's staging are tool-blind.
+    // and decides nothing else. One behavior (panel-widget-visibility.js)
+    // judges every wrapper from the mirror value and the canvas: the placed
+    // title block gives the title a leaf (the H1 edited above), so its
+    // wrapper stays hidden; field_empty ships empty, so it has no leaf and
+    // its widget is revealed carrying the Fill with sample button, and the
+    // Fill with sample verb applies to its key (isEmptyValue over the
+    // mirror's flagged stub, the judge's own reading).
     $subject_form = '#daedalus-edit-form-cache .daedalus-edit-form--subject';
     $title_form_item = '[data-daedalus-edit-form-item-wrapper-id="node::' . $nid . '::title::value"]';
     $empty_form_item = '[data-daedalus-edit-form-item-wrapper-id="node::' . $nid . '::field_empty::value"]';
     $empty_wrapper = '[data-daedalus-edit-field-value-wrapper="node::' . $nid . '::field_empty::value"]';
+    $empty_key = 'field:' . $node_uuid . ':field_empty';
+    $empty_input = "{$subject_form} {$empty_form_item} input[name=\"field_empty[0][value]\"]";
+    $sample_button = "{$subject_form} {$empty_form_item} .daedalus-edit-sample-fill";
+    $empty_revealed = <<<JS
+      (() => {
+        const empty = document.querySelector('{$subject_form} {$empty_form_item}');
+        return !!empty && !empty.classList.contains('daedalus-edit-hidden')
+          && getComputedStyle(empty).visibility === 'visible'
+          && !!document.querySelector('{$sample_button}')
+          && !document.querySelector('{$empty_wrapper}')
+          && Drupal.Daedalus.Verbs.verbsFor('{$empty_key}').some((verb) => verb.id === 'daedalus_edit.fill_sample');
+      })()
+      JS;
+    $empty_hidden = <<<JS
+      (() => {
+        const empty = document.querySelector('{$subject_form} {$empty_form_item}');
+        return !!empty && empty.classList.contains('daedalus-edit-hidden')
+          && !document.querySelector('{$sample_button}')
+          && !!document.querySelector('{$empty_wrapper} .daedalus-edit-field-value')
+          && !Drupal.Daedalus.Verbs.verbsFor('{$empty_key}').some((verb) => verb.id === 'daedalus_edit.fill_sample');
+      })()
+      JS;
     $this->assertJsCondition(<<<JS
       (() => {
         const title = document.querySelector('{$subject_form} {$title_form_item}');
-        const empty = document.querySelector('{$subject_form} {$empty_form_item}');
-        return !!title && title.classList.contains('daedalus-edit-hidden')
-          && !title.hasAttribute('data-daedalus-edit-auto-submit')
-          && !!empty && !empty.classList.contains('daedalus-edit-hidden')
-          && empty.hasAttribute('data-daedalus-edit-auto-submit')
-          && getComputedStyle(empty).visibility === 'visible';
+        return !!title && title.classList.contains('daedalus-edit-hidden') && $empty_revealed;
       })()
       JS,
       20000,
-      'The title wrapper (its leaf is the H1) stays hidden without auto-submit; the orphan field_empty wrapper is revealed with auto-submit.',
+      'The title wrapper (its leaf is the H1) stays hidden; the empty field_empty wrapper is revealed with the Fill with sample button and the verb applies.',
     );
 
-    // Change the revealed widget: a plain change event, no inline editor,
-    // rides DaedalusEditEntityFormAutoSave into the same stage-don't-save
-    // pipeline as every leg. A panel submit names no single element, so
-    // updatePage swaps the whole entity.
+    // Press into the revealed widget: the open edit's press decision
+    // resolves a panel item before anything else, with or without an edit
+    // open, and edits it through the panel widget editor (the widget IS
+    // the editor), the field's key becoming the selection and the editing
+    // key.
+    $session->executeScript(
+      "document.querySelector('" . $empty_input . "')"
+      . ".dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));"
+    );
+    $this->assertJsCondition(
+      "Drupal.Daedalus.Edit.CurrentlyEditingElement !== null"
+      . " && Drupal.Daedalus.Edit.CurrentlyEditingElement.plugin.id === 'panel_widget'"
+      . " && Drupal.Daedalus.Edit.CurrentlyEditingElement.info.fieldName === 'field_empty'"
+      . " && Drupal.Daedalus.Selection.getSelected() === '$empty_key'"
+      . " && Drupal.Daedalus.EditSession.isEditing()",
+      20000,
+      'The press into the revealed widget opened a panel widget edit on the field key.',
+    );
+
+    // A native change is the panel widget editor's first generic trigger:
+    // the form transport commits field_empty (one field of one subject)
+    // and the response materializes its canvas leaf. The leaf's arrival
+    // ends the panel edit (the leaf edits now) and the judge hides the
+    // widget: a field with a leaf edits through the leaf, never through
+    // the panel.
     $session->executeScript(<<<JS
-      const orphanInput = document.querySelector('{$subject_form} {$empty_form_item} input[name="field_empty[0][value]"]');
+      const orphanInput = document.querySelector('{$empty_input}');
       orphanInput.value = 'A panel-staged orphan value';
       orphanInput.dispatchEvent(new Event('change', { bubbles: true }));
     JS);
-    $this->assertJsCondition('window.__daedalusEditDoneCount >= 3', 20000);
+    $this->assertJsCondition('window.__applied >= 3', 20000);
     $tempstore = \Drupal::service('daedalus_tempstore.entity_tempstore_repository');
     $storage->resetCache([$nid]);
     $this->assertSame(
       'A panel-staged orphan value',
       $tempstore->get($storage->load($nid))->get('field_empty')->value,
-      'The revealed widget staged the orphan field in tempstore.',
+      'The revealed widget committed the orphan field to tempstore through the form transport.',
     );
     $this->assertTrue(
       $storage->load($nid)->get('field_empty')->isEmpty(),
       'The orphan edit is staged in tempstore, not committed to the node.',
     );
-
-    // The staged value gave the field a canvas leaf, and the swap re-ran
-    // the rule (updateElement re-attaches behaviors): the same wrapper is
-    // hidden now with its auto-submit withdrawn. A field with a leaf edits
-    // through the leaf, never through the panel.
-    $this->assertNotNull(
-      $assert_session->waitForElement('css', $empty_wrapper . ' .daedalus-edit-field-value'),
-      'The panel-staged value rendered the field on the canvas.',
-    );
-    $this->assertJsCondition(<<<JS
-      (() => {
-        const empty = document.querySelector('{$subject_form} {$empty_form_item}');
-        return !!empty && empty.classList.contains('daedalus-edit-hidden')
-          && !empty.hasAttribute('data-daedalus-edit-auto-submit');
-      })()
-      JS,
+    $this->assertJsCondition(
+      $empty_hidden . ' && Drupal.Daedalus.Edit.CurrentlyEditingElement === null',
       20000,
-      'The new canvas leaf hid the panel widget and withdrew its auto-submit.',
+      'The new canvas leaf hid the panel widget, withdrew the sample verb, and ended the panel edit.',
     );
 
-    // Re-arm the Edit tool for the legs below with nothing selected: the
-    // armed session opens the selection's editor on arm, and the related
-    // leg wants to open its own edit from a clean click.
-    $session->executeScript('Drupal.Daedalus.Selection.clear();');
-    $this->activateTool('edit');
+    // ...and back through the leaf: emptying the field in place is the
+    // judge's other direction. The emptied value removes the canvas render
+    // (the response falls back to the whole-entity swap for a key with no
+    // subtree) and the judge reveals the wrapper again, button and all.
+    $empty_via_leaf = function () use ($session, $empty_wrapper): void {
+      $this->dispatchDoubleClick($empty_wrapper . ' .daedalus-edit-field-value');
+      $this->assertJsCondition(
+        "Drupal.Daedalus.Edit.CurrentlyEditingElement !== null"
+        . " && Drupal.Daedalus.Edit.CurrentlyEditingElement.info.fieldName === 'field_empty'"
+        . " && Drupal.Daedalus.Edit.CurrentlyEditingElement.plugin.id === 'textfield'",
+        20000,
+        'Double-clicking the field_empty leaf opened its in-place edit.',
+      );
+      $session->executeScript(<<<JS
+        const orphanLeaf = Drupal.Daedalus.Edit.CurrentlyEditingElement.getPageElementHandle();
+        orphanLeaf.textContent = '';
+        orphanLeaf.dispatchEvent(new Event('input', { bubbles: true }));
+        Drupal.Daedalus.Edit.CurrentlyEditingElement.plugin.blur();
+      JS);
+    };
+    $empty_via_leaf();
+    $this->assertJsCondition('window.__applied >= 4', 20000);
+    $this->assertJsCondition($empty_revealed, 20000, 'Emptying the field removed its canvas leaf and revealed its panel widget again, with the sample button.');
+    $storage->resetCache([$nid]);
+    $this->assertTrue(
+      $tempstore->get($storage->load($nid))->get('field_empty')->isEmpty(),
+      'The orphan field is staged empty again.',
+    );
 
-    // ...and back through the leaf. The add-field leg below needs
-    // field_empty EMPTY again (its Add field button, no canvas render), and
-    // emptying it in place is the rule's other direction: the emptied
-    // value removes the canvas render (updateElement treats a live-only
-    // selector as a removal) and rebuilds the form (the empty_field flag),
-    // and the behavior reveals the fresh wrapper with auto-submit again.
+    // ----- The seam: Tab walks the canvas and the panel as one list. -----
+    // A press into the revealed widget opens its panel edit; Shift+Tab from
+    // its first control steps to the entry before it in session order, the
+    // LAST canvas leaf (an edit opens on the canvas, the editing key leaves
+    // the panel); Tab from that leaf's edge steps forward onto the first
+    // panel widget again.
     $session->executeScript(
-      "document.querySelector('" . $empty_wrapper . " .daedalus-edit-field-value')"
+      "document.querySelector('" . $empty_input . "')"
       . ".dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));"
     );
     $this->assertJsCondition(
-      "Drupal.Daedalus.Edit.CurrentlyEditingElement !== null"
-      . " && Drupal.Daedalus.Edit.CurrentlyEditingElement.info.fieldName === 'field_empty'",
+      "Drupal.Daedalus.Edit.CurrentlyEditingElement?.info.fieldName === 'field_empty'"
+      . " && document.activeElement === document.querySelector('$empty_input')",
       20000,
-      'Clicking the panel-staged leaf opened its in-place edit.',
+      'The panel widget edit re-opened with its input focused for the seam leg.',
+    );
+    $this->pressHotkey('Tab', ['shiftKey' => TRUE]);
+    $this->assertJsCondition(<<<JS
+      (() => {
+        const editing = Drupal.Daedalus.Edit.CurrentlyEditingElement;
+        const mount = document.getElementById('daedalus-edit-form-cache');
+        const element = editing?.getPageElement();
+        return !!editing && editing.info.fieldName !== 'field_empty'
+          && !!element && !mount.contains(element);
+      })()
+      JS,
+      20000,
+      'Shift+Tab from the first panel widget stepped back onto the last canvas leaf.',
+    );
+    $this->pressHotkey('Tab');
+    $this->assertJsCondition(
+      "Drupal.Daedalus.Edit.CurrentlyEditingElement?.info.fieldName === 'field_empty'"
+      . " && Drupal.Daedalus.Edit.CurrentlyEditingElement.plugin.id === 'panel_widget'"
+      . " && Drupal.Daedalus.Selection.getSelected() === '$empty_key'",
+      20000,
+      'Tab from the last canvas leaf landed on the first panel widget again.',
+    );
+
+    // ----- The Update button: the visible commit door. -----
+    // The widget reported input (the explicit floor's dirty signal); the
+    // Update button's native press is the commit door (Cmd+Enter's visible
+    // twin): the open edit commits through the form transport and stays,
+    // the selection kept. Never the form's own submit.
+    $session->executeScript(<<<JS
+      const input = document.querySelector('{$empty_input}');
+      input.value = 'Committed by the Update button';
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      document.querySelector('{$subject_form} .daedalus-edit-update-button').click();
+    JS);
+    $this->assertJsCondition('window.__applied >= 5', 20000);
+    $storage->resetCache([$nid]);
+    $this->assertSame(
+      'Committed by the Update button',
+      $tempstore->get($storage->load($nid))->get('field_empty')->value,
+      'The Update button committed the panel widget through the form transport.',
+    );
+    $this->assertJsCondition(
+      "Drupal.Daedalus.Edit.CurrentlyEditingElement === null"
+      . " && Drupal.Daedalus.Selection.getSelected() === '$empty_key'",
+      20000,
+      'The Update button committed and stayed: no edit open, the field still selected.',
+    );
+    $this->assertJsCondition($empty_hidden, 20000, 'The committed value materialized the leaf and hid the widget.');
+
+    // Enter on the selection: the selected key owns a canvas leaf now, so
+    // the editor door (daedalus_ui's `edit.enter` binding, selection
+    // context) opens the leaf's in-place editor; empty it through the
+    // leaf for the next panel leg.
+    $this->pressHotkey('Enter');
+    $this->assertJsCondition(
+      "Drupal.Daedalus.Edit.CurrentlyEditingElement?.info.fieldName === 'field_empty'"
+      . " && Drupal.Daedalus.Edit.CurrentlyEditingElement.plugin.id === 'textfield'",
+      20000,
+      'Enter with the field_empty leaf selected opened its in-place editor through the door.',
     );
     $session->executeScript(<<<JS
       const orphanLeaf = Drupal.Daedalus.Edit.CurrentlyEditingElement.getPageElementHandle();
@@ -615,58 +743,72 @@ class InlineEditBehaviorTest extends WebDriverTestBase {
       orphanLeaf.dispatchEvent(new Event('input', { bubbles: true }));
       Drupal.Daedalus.Edit.CurrentlyEditingElement.plugin.blur();
     JS);
-    $this->assertJsCondition('window.__daedalusEditDoneCount >= 4', 20000);
-    $this->assertJsCondition(<<<JS
-      (() => {
-        const empty = document.querySelector('{$subject_form} {$empty_form_item}');
-        return !document.querySelector('{$empty_wrapper}')
-          && !!empty && !empty.classList.contains('daedalus-edit-hidden')
-          && empty.hasAttribute('data-daedalus-edit-auto-submit');
-      })()
-      JS,
-      20000,
-      'Emptying the field removed its canvas leaf and revealed its panel widget again.',
+    $this->assertJsCondition('window.__applied >= 6', 20000);
+    $this->assertJsCondition($empty_revealed, 20000, 'Emptied again: the widget and the sample button are back.');
+
+    // ----- Cmd+Enter from a focused panel widget: the dialog's OK. -----
+    // The selenium Chrome is Linux, where the binding's `mod` resolves to
+    // Ctrl. The keystroke lands in the typing context (focus is in the
+    // widget), which is why the session registers its twin there.
+    $session->executeScript(
+      "document.querySelector('" . $empty_input . "')"
+      . ".dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));"
     );
+    $this->assertJsCondition(
+      "Drupal.Daedalus.Edit.CurrentlyEditingElement?.plugin.id === 'panel_widget'"
+      . " && document.activeElement === document.querySelector('$empty_input')",
+      20000,
+      'The panel widget edit re-opened for the Cmd+Enter leg.',
+    );
+    $session->executeScript(<<<JS
+      const input = document.querySelector('{$empty_input}');
+      input.value = 'Committed by Cmd+Enter';
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    JS);
+    $this->pressHotkey('Enter', ['ctrlKey' => TRUE]);
+    $this->assertJsCondition('window.__applied >= 7', 20000);
     $storage->resetCache([$nid]);
-    $this->assertTrue(
-      $tempstore->get($storage->load($nid))->get('field_empty')->isEmpty(),
-      'The orphan field is staged empty again.',
+    $this->assertSame(
+      'Committed by Cmd+Enter',
+      $tempstore->get($storage->load($nid))->get('field_empty')->value,
+      'Cmd+Enter committed the panel widget through the form transport.',
+    );
+    $this->assertJsCondition(
+      "Drupal.Daedalus.Edit.CurrentlyEditingElement === null"
+      . " && Drupal.Daedalus.Selection.getSelected() === '$empty_key'",
+      20000,
+      'Cmd+Enter committed and stayed: no edit open, the field still selected.',
     );
 
-    // The honest-panel gesture (the form-swap tier). The related field
-    // is an entity_reference_autocomplete: a widget that looks like a form
-    // control wherever it is, so its plugin (EntityReferenceAutocompletePlugin
-    // extends DefaultPlugin) reveals the real widget in-flow in the form panel
-    // instead of projecting it position: fixed over the page. Clicking the
-    // field must therefore (a) open the edit with the widget visible in the
-    // right/bottom form panel — no sized placeholder, no fixed positioning —
-    // (b) keep the page element visible with the panel-editing outline, and
-    // (c) leave the right/top inspector open: the form panel's close/open
-    // cycle in getForm() is scoped to the bottom slot. The click is synthetic
-    // for the same reason as the re-click below: the open sidebar overlaps the
-    // field's coordinates in the headless layout.
-    // The wrapper's property suffix is 'value', not 'target_id': the
-    // attribute subscriber resolves the main property via
-    // getMainPropertyName(), which exists on base-field definitions but not
-    // on FieldConfig, so configurable fields take the 'value' fallback.
+    // ----- The honest panel: a widget with no canvas editor. -----
+    // The related field is an entity_reference_autocomplete: a widget that
+    // looks like a form control wherever it is, so the panel widget editor
+    // reveals the real widget in-flow in the form panel for the edit's
+    // duration instead of projecting it over the page. Double-clicking the
+    // leaf must therefore (a) open the edit with the widget visible in the
+    // right/bottom form panel, (b) keep the page element visible with the
+    // panel-editing outline, and (c) leave the right/top inspector open.
+    // Cleared first so the double-click is the only gesture.
+    $session->executeScript('Drupal.Daedalus.Selection.clear();');
     $related_wrapper = '[data-daedalus-edit-field-value-wrapper="node::' . $nid
-      . '::field_related::value"]';
-    $session->executeScript(<<<JS
-      (() => {
-        const target = document.querySelector('{$related_wrapper} .daedalus-edit-field-value');
-        if (!target) {
-          throw new Error('Related-content field value not found. Wrappers present: '
-            + [...document.querySelectorAll('[data-daedalus-edit-field-value-wrapper]')]
-              .map((el) => el.getAttribute('data-daedalus-edit-field-value-wrapper')).join(' | '));
-        }
-        target.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
-      })();
-      JS);
+      . '::field_related::target_id"]';
+    $related_form_item = '[data-daedalus-edit-form-item-wrapper-id="node::' . $nid . '::field_related::target_id"]';
+    $related_input = "{$subject_form} {$related_form_item} input.form-autocomplete";
+    $this->assertJsCondition(
+      "!!document.querySelector('{$related_wrapper} .daedalus-edit-field-value')",
+      20000,
+      'The related-content field value is on the canvas. Wrappers present: '
+      . implode(' | ', (array) $session->evaluateScript(
+        "[...document.querySelectorAll('[data-daedalus-edit-field-value-wrapper]')].map((el) => el.getAttribute('data-daedalus-edit-field-value-wrapper'))",
+      )),
+    );
+    $this->dispatchDoubleClick($related_wrapper . ' .daedalus-edit-field-value');
     $this->assertJsCondition(
       "Drupal.Daedalus.Edit.CurrentlyEditingElement !== null"
-      . " && Drupal.Daedalus.Edit.CurrentlyEditingElement.info.fieldName === 'field_related'",
+      . " && Drupal.Daedalus.Edit.CurrentlyEditingElement.info.fieldName === 'field_related'"
+      . " && Drupal.Daedalus.Edit.CurrentlyEditingElement.plugin.id === 'panel_widget'",
       20000,
-      'Clicking the related field opened its edit.',
+      'Double-clicking the related field opened its edit through the panel widget editor.',
     );
     $this->assertJsCondition(<<<JS
       (() => {
@@ -692,26 +834,24 @@ class InlineEditBehaviorTest extends WebDriverTestBase {
       'The widget revealed in-flow in the right/bottom panel with the node as the subject, the page element kept its outline, and the right/top inspector stayed open with no empty right/top cookie.',
     );
 
-    // Change the reference and blur: the same stage-don't-save pipeline the
-    // body edit proved, but through the panel-revealed widget. blurElement()
-    // diffs the input against the value captured on focus and submits the
-    // hidden Update button, so the tempstore round trip and the
-    // daedalusEditIsDoneUpdating() completion signal are identical.
+    // Change the reference: the widget's native change commits through the
+    // form transport (the autocomplete's chosen value leaves the widget
+    // only through the form's own submit), and the edit ends with the
+    // field's leaf re-rendered from tempstore.
     $session->executeScript(<<<JS
-      const editing = Drupal.Daedalus.Edit.CurrentlyEditingElement;
-      const input = editing.plugin.getFormItemInputs(editing)[0];
+      const input = document.querySelector('{$related_input}');
       input.value = 'Second referenced node ({$second_referenced->id()})';
-      editing.plugin.blur();
+      input.dispatchEvent(new Event('change', { bubbles: true }));
     JS);
-    $this->assertJsCondition('window.__daedalusEditDoneCount >= 5', 20000);
+    $this->assertJsCondition('window.__applied >= 8', 20000);
 
     // The field re-rendered from tempstore with the new reference; the saved
     // node still points at the original. Same headline as the body leg:
     // staged, not committed.
     $assert_session->waitForElement('css', $related_wrapper);
-    $this->assertStringContainsString(
-      'Second referenced node',
-      $session->getPage()->find('css', $related_wrapper)->getText(),
+    $this->assertJsCondition(
+      "document.querySelector('$related_wrapper')?.textContent.includes('Second referenced node')",
+      20000,
       'The related field re-rendered with the new reference.',
     );
     $storage->resetCache([$nid]);
@@ -721,9 +861,11 @@ class InlineEditBehaviorTest extends WebDriverTestBase {
       (int) $saved->get('field_related')->target_id,
       'The reference edit is staged in tempstore, not committed to the node.',
     );
+    $session->executeScript('Drupal.Daedalus.Edit.CurrentlyEditingElement?.plugin.blur();');
+    $this->assertJsCondition('Drupal.Daedalus.Edit.CurrentlyEditingElement === null', 20000, 'The related edit ended.');
 
-    // And the update round trip (which AJAX-replaces the field markup and the
-    // form wrapper) did not disturb the inspector either.
+    // And the round trip (which swaps the field markup by key) did not
+    // disturb the inspector either.
     $this->assertJsCondition(
       "(() => { const p = document.getElementById('daedalus_stylish_inspector');"
       . " return !!p && !p.classList.contains('daedalus-ui-hidden'); })()",
@@ -731,112 +873,81 @@ class InlineEditBehaviorTest extends WebDriverTestBase {
       'The inspector is still open after the panel-widget edit committed.',
     );
 
-    // The session grammar around editing. Re-opening the editor uses a
-    // synthetic click into the session's document-level handler (the same
-    // path as the real first click above): the sidebar form is open now and
-    // overlaps the field's coordinates in the headless layout, so WebDriver
-    // cannot land a real pointer on it.
-    $reclick = "document.querySelector('" . $wrapper . " .daedalus-edit-field-value')"
-      . ".dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));";
+    // The editing grammar around an open edit. Re-opening the editor uses
+    // a dispatched double-click into the pointer grammar's document-level
+    // handlers (the same three events the real first double-click above
+    // sent): the sidebar form is open now and overlaps the field's
+    // coordinates in the headless layout, so WebDriver cannot land a real
+    // pointer on it.
+    $body_leaf = $wrapper . ' .daedalus-edit-field-value';
 
     // The blurred editor's element can linger in the sidebar DOM, so "the
     // editor is open" is asserted on daedalus_edit's editing state, not markup.
     $body_editing = "Drupal.Daedalus.Edit.CurrentlyEditingElement !== null"
       . " && Drupal.Daedalus.Edit.CurrentlyEditingElement.info.fieldName === 'body'";
 
-    // Tab while editing commits the edit (with no following editable leaf on
-    // this page, nothing else opens): the body's edit ends. The synthetic
-    // keydown reaches the app's one hotkey dispatcher; while CKEditor holds
-    // focus the typing-context twin is what fires, so this also proves
-    // session keys survive the typing guard.
-    $session->executeScript($reclick);
-    $this->assertJsCondition($body_editing, 20000, 'Re-clicking the field re-opened its editor.');
+    // Tab while editing commits the edit and advances: the body's edit ends.
+    // The synthetic keydown reaches the app's one hotkey dispatcher; while
+    // CKEditor holds focus the typing-context twin is what fires, so this
+    // also proves the edit's keys survive the typing guard.
+    $this->dispatchDoubleClick($body_leaf);
+    $this->assertJsCondition($body_editing, 20000, 'Double-clicking the field re-opened its editor.');
     $this->pressHotkey('Tab');
     $this->assertJsCondition(
       "!Drupal.Daedalus.Edit.CurrentlyEditingElement || Drupal.Daedalus.Edit.CurrentlyEditingElement.info.fieldName !== 'body'",
       20000,
-      'Tab committed the body edit through the session dispatcher.',
+      'Tab committed the body edit through the dispatcher.',
     );
+    $session->executeScript('Drupal.Daedalus.Edit.CurrentlyEditingElement?.plugin.blur();');
 
-    // Escape follows the dialog convention: the first press cancels the
-    // current edit, the second exits the session back to the Selector.
-    $session->executeScript($reclick);
+    // Escape follows the dialog convention, one ladder: the first press
+    // cancels the current edit (the snapshot is restored, nothing
+    // submitted, and the cached form stays exactly as it is: its values
+    // are known), the second clears the selection, with the panel and
+    // Edit Mode untouched. Escape never switches anything and never
+    // traverses.
+    $this->dispatchDoubleClick($body_leaf);
     $this->assertJsCondition($body_editing, 20000, 'The editor re-opened for the Escape leg.');
+    $session->executeScript("window.__formBeforeCancel = document.querySelector('$subject_form');");
     $this->pressHotkey('Escape');
     $this->assertJsCondition(
-      'Drupal.Daedalus.Edit.CurrentlyEditingElement === null',
+      'Drupal.Daedalus.Edit.CurrentlyEditingElement === null'
+      . " && Drupal.Daedalus.Selection.getSelected() === 'field:$node_uuid:body'",
       20000,
-      'Escape while editing canceled the edit.',
+      'Escape while editing canceled the edit and kept the selection.',
     );
-
-    // Revert on subject death: the cancel evicted the subject's cached form
-    // (its values are unknowable after a discard), which is a subject-death
-    // path — the OPEN panel reverts to the top-level entity, re-fetching its
-    // form quietly. The panel stays open and the fresh node form is the
-    // subject again.
     $this->assertJsCondition(
       "(() => {"
       . " const panel = document.getElementById('daedalus_edit_entity_form');"
       . " const mount = document.getElementById('daedalus-edit-form-cache');"
       . " return !!panel && !panel.classList.contains('daedalus-ui-hidden')"
       . " && mount.dataset.daedalusEditSubject === 'node::" . $nid . "'"
-      . " && !!mount.querySelector(':scope > .daedalus-edit-form--subject[data-daedalus-edit-form-id=\"node::" . $nid . "\"]');"
+      . " && document.querySelector('" . $subject_form . "') === window.__formBeforeCancel;"
       . " })()",
       20000,
-      'The canceled edit killed the subject form and the open panel reverted to a fresh top-level form.',
+      'The canceled canvas edit left the cached subject form untouched: no refetch, the panel stays open on it.',
     );
     $this->pressHotkey('Escape');
     $this->assertJsCondition(
-      "Drupal.Daedalus.getCookieValue('activeTool') === 'selector'",
+      'Drupal.Daedalus.Selection.getSelected() === null'
+      . ' && Drupal.Daedalus.EditSession.isEditing() === false'
+      . " && !document.getElementById('daedalus_edit_entity_form').classList.contains('daedalus-ui-hidden')"
+      . " && document.documentElement.getAttribute('data-daedalus-ui-mode') === 'edit'",
       20000,
-      'Escape while armed (not editing) exited the session to the Selector tool.',
+      'The next Escape cleared the selection with the panel still open and Edit Mode unchanged.',
     );
-
-    // ——— The whole-entity refresh fallback (UpdateElement). ———
-    // daedalus_edit's update responses ride daedalus_ui's UpdateElement
-    // command. Its primary path replaces the selector-matched elements (the
-    // body and reference legs above proved it); its FALLBACK handles adds
-    // and removes: when a selector matches the freshly rendered content but
-    // nothing live (the element is new or changed identity), the command
-    // replaces the WHOLE entity wrapper instead — found in both trees by
-    // its canonical data-daedalus-ui-entity-wrapper id. Drive the
-    // command directly with content whose marker exists only in the
-    // rendered tree (a marked clone stands in for a server re-render) and
-    // assert the live wrapper was swapped wholesale. This pins the contract
-    // that both the rendered content and the live page carry the same
-    // canonical wrapper id on a replaceable element.
-    $swapped = $session->evaluateScript(<<<JS
-      (() => {
-        const live = document.querySelector('[data-daedalus-ui-entity-wrapper][data-main-entity]');
-        const clone = live.cloneNode(true);
-        clone.setAttribute('data-test-fallback-swap', '1');
-        const rendered = document.createElement('div');
-        rendered.appendChild(clone);
-        Drupal.AjaxCommands.prototype.updateElement({}, {
-          selectors: ['[data-test-fallback-swap="1"]'],
-          content: rendered.innerHTML,
-        });
-        const after = document.querySelector('[data-daedalus-ui-entity-wrapper][data-main-entity]');
-        return after.getAttribute('data-test-fallback-swap') === '1';
-      })()
-      JS);
-    $this->assertTrue(
-      $swapped,
-      'The unmatched-selector fallback replaced the whole entity wrapper by its canonical id.',
-    );
-
     // The staged value survives a fresh request: re-requesting the node in Edit
     // Mode (the server-rendered cookie path) renders the new body, because
     // daedalus_edit swaps in the tempstore version of the entity when a page
-    // renders
-    // in Edit Mode. This is the user-facing "stage" half: the change persists
-    // across a reload while the committed entity stays untouched.
-    $this->enterEditModeViaCookies($node->toUrl(), 'edit');
+    // renders in Edit Mode. This is the user-facing "stage" half: the change
+    // persists across a reload while the committed entity stays untouched.
+    $this->enterEditModeViaCookies($node->toUrl());
     $assert_session->pageTextContains('New body text.');
     $assert_session->pageTextNotContains('Original body text.');
     // The staged title too: the tempstore-swapped route entity feeds the
     // title resolver, so the theme's H1 renders the staged value.
     $assert_session->pageTextContains('A staged new title');
+    $assert_session->pageTextContains('Committed by Cmd+Enter');
 
     // Exactly ONE element answers to the title's identity on the SSR
     // edit-mode render. Core's buildTitle() inlines the rendered title
@@ -846,7 +957,7 @@ class InlineEditBehaviorTest extends WebDriverTestBase {
     // form-swap and markup replacement ambiguous.
     $this->assertJsCondition(
       "document.querySelectorAll('[data-daedalus-edit-field-value-wrapper=\"node::" . $nid . "::title::value\"]').length === 1"
-      . " && document.querySelectorAll('[data-selectable=\"field:" . $node->uuid() . ":title\"]').length === 1",
+      . " && document.querySelectorAll('[data-selectable=\"field:" . $node_uuid . ":title\"]').length === 1",
       20000,
       'The page title is the title field\'s ONE attributed render.',
     );
@@ -868,102 +979,63 @@ class InlineEditBehaviorTest extends WebDriverTestBase {
       'The reloaded open panel restored its top-level subject.',
     );
 
-    // The reload killed the previous JS context, so re-arm the Edit tool
-    // deterministically and install a fresh completion counter for the
-    // add-field, empty-field, and media legs below.
-    $this->activateTool('edit');
-    $session->executeScript(<<<JS
-      window.__nodeDoneCount = 0;
-      const nodeOriginal = jQuery.fn.daedalusEditIsDoneUpdating;
-      jQuery.fn.daedalusEditIsDoneUpdating = function () {
-        window.__nodeDoneCount++;
-        return nodeOriginal.apply(this, arguments);
-      };
-    JS);
+    // The reload killed the previous JS context, so install a fresh
+    // completion counter for the sample-fill and media legs below.
+    $this->countApplied('__nodeApplied');
 
-    // ——— Add-field-to-page: the empty field materializes on canvas. ———
-    // The fixture's field_empty ships empty by default, so the canonical
-    // page has nothing to click for it — the entity form grows an "Add
-    // field" button instead (DaedalusEditFormTrait::addFieldToPageButton).
-    // Clicking it runs populateEmptyField: a sample value is generated
-    // (field_sample_value's random_string), staged to tempstore, and
-    // updatePage re-renders the whole entity with the field ON the canvas,
-    // attributed for the next edit; the rebuilt form drops the button (the
-    // field is no longer empty).
-    $add_empty_button = '#daedalus-edit-form-cache [name="add_empty_field::field_empty"]';
-    $this->assertJsCondition(
-      "!!document.querySelector('" . $add_empty_button . "')",
-      20000,
-      'The restored top-level form offers the Add field button for the empty fixture field.',
-    );
-    $this->assertNull(
-      $session->getPage()->find('css', $empty_wrapper),
-      'The empty field has no canvas render before the add gesture.',
-    );
-    $session->executeScript("jQuery('" . $add_empty_button . "').mousedown();");
+    // ——— Fill with sample: the empty field materializes on canvas. ———
+    // field_empty holds the Cmd+Enter value (a leaf); empty it through the
+    // leaf so the panel offers the sample fill again.
+    $empty_via_leaf();
+    $this->assertJsCondition('window.__nodeApplied >= 1', 20000);
+    $this->assertJsCondition($empty_revealed, 20000, 'The empty field offers the Fill with sample button on its revealed widget.');
+
+    // The button runs the spine's `_sample` request on the field: a sample
+    // value is generated server-side (field_sample_value), staged to
+    // tempstore as an ExtractedValue, and the response re-renders the
+    // field ON the canvas, attributed for the next edit; the judge hides
+    // the widget (the field is no longer empty) and the verb withdraws.
+    $session->executeScript("document.querySelector('$sample_button').click();");
+    $this->assertJsCondition('window.__nodeApplied >= 2', 20000);
     $sample_leaf = $assert_session->waitForElement('css', $empty_wrapper . ' .daedalus-edit-field-value');
-    $this->assertNotNull($sample_leaf, 'The add gesture materialized the field on canvas.');
+    $this->assertNotNull($sample_leaf, 'The sample fill materialized the field on canvas.');
     $this->assertNotSame('', trim($sample_leaf->getText()), 'The materialized field carries a generated sample value.');
-    $this->assertJsCondition(
-      "document.querySelector('" . $add_empty_button . "') === null",
-      20000,
-      'The Add field button left the rebuilt form: the field is on the page now.',
-    );
+    $this->assertJsCondition($empty_hidden, 20000, 'The filled field hid its widget and withdrew the sample button and verb.');
     $storage->resetCache([$nid]);
+    $this->assertFalse(
+      $tempstore->get($storage->load($nid))->get('field_empty')->isEmpty(),
+      'The sample value is staged in tempstore.',
+    );
     $this->assertTrue(
       $storage->load($nid)->get('field_empty')->isEmpty(),
       'The materialized sample value is staged in tempstore, not committed.',
     );
 
-    // ...and the button RETURNS when the field empties again: emptying the
-    // field through its inline edit reverses both halves of the round trip
-    // — updatePage removes the canvas render (updateElement treats a
-    // live-only selector as a removal) and the rebuilt form regrows the
-    // button (the empty_field hidden input updateTempstore sets when a
-    // blur empties the value is what flags the form rebuild).
-    $session->executeScript(
-      "document.querySelector('" . $empty_wrapper . " .daedalus-edit-field-value')"
-      . ".dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));"
-    );
-    $this->assertJsCondition(
-      "Drupal.Daedalus.Edit.CurrentlyEditingElement !== null"
-      . " && Drupal.Daedalus.Edit.CurrentlyEditingElement.info.fieldName === 'field_empty'",
-      20000,
-      'Clicking the materialized field opened its in-place edit.',
-    );
-    $session->executeScript(<<<JS
-      const emptyLeaf = Drupal.Daedalus.Edit.CurrentlyEditingElement.getPageElementHandle();
-      emptyLeaf.textContent = '';
-      emptyLeaf.dispatchEvent(new Event('input', { bubbles: true }));
-      Drupal.Daedalus.Edit.CurrentlyEditingElement.plugin.blur();
-    JS);
-    $this->assertJsCondition('window.__nodeDoneCount >= 1', 20000);
-    $this->assertJsCondition(
-      "document.querySelector('" . $empty_wrapper . "') === null"
-      . " && !!document.querySelector('" . $add_empty_button . "')",
-      20000,
-      'Emptying the field removed its canvas render and the Add field button returned.',
-    );
+    // ...and the button RETURNS when the field empties again: emptying
+    // the field through its inline edit reverses both halves.
+    $empty_via_leaf();
+    $this->assertJsCondition('window.__nodeApplied >= 3', 20000);
+    $this->assertJsCondition($empty_revealed, 20000, 'Emptying the field removed its canvas render and the Fill with sample button returned.');
 
     // ——— The form-path media library. ———
-    // field_media rides media_library_widget, the widget the form-path
-    // media machinery is keyed to: FormMediaFieldAttributes serializes the
-    // widget's selection onto the form item (data-daedalus-edit-media-value,
-    // the value media.js diffs on blur) and scopes the widget's AJAX
-    // wrappers and library-opener parameters to THIS widget, so identical
-    // widgets on other cached forms cannot swallow the update.
-    $media_wrapper = '[data-daedalus-edit-field-value-wrapper="node::' . $nid . '::field_media::value"]';
-    $media_form_item = '[data-daedalus-edit-form-item-wrapper-id="node::' . $nid . '::field_media::value"]';
-    $session->executeScript(
-      "document.querySelector('" . $media_wrapper . " .daedalus-edit-field-value')"
-      . ".dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));"
-    );
+    // field_media rides media_library_widget, a widget with no canvas
+    // editor: the panel widget editor reveals it in the panel
+    // (FormMediaFieldAttributes serializes the widget's selection onto the
+    // form item and scopes the widget's AJAX wrappers and library-opener
+    // parameters to THIS widget, so identical widgets on other cached forms
+    // cannot swallow the update). The editor knows nothing about the widget:
+    // each of the widget's own AJAX rounds (remove, insert) is the
+    // AJAX-touched trigger, committing through the form transport with no
+    // change event and no blur.
+    $media_wrapper = '[data-daedalus-edit-field-value-wrapper="node::' . $nid . '::field_media::target_id"]';
+    $media_form_item = '[data-daedalus-edit-form-item-wrapper-id="node::' . $nid . '::field_media::target_id"]';
+    $this->dispatchDoubleClick($media_wrapper . ' .daedalus-edit-field-value');
     $this->assertJsCondition(
       "Drupal.Daedalus.Edit.CurrentlyEditingElement !== null"
       . " && Drupal.Daedalus.Edit.CurrentlyEditingElement.info.fieldName === 'field_media'"
-      . " && Drupal.Daedalus.Edit.CurrentlyEditingElement.plugin.id === 'media'",
+      . " && Drupal.Daedalus.Edit.CurrentlyEditingElement.plugin.id === 'panel_widget'",
       20000,
-      'Clicking the media field opened its edit through the media plugin.',
+      'Double-clicking the media field opened its edit through the panel widget editor.',
     );
     $this->assertJsCondition(
       "(() => {"
@@ -976,12 +1048,32 @@ class InlineEditBehaviorTest extends WebDriverTestBase {
       'The media widget revealed in the panel carrying the serialized current selection.',
     );
 
-    // Swap the selection through the real library: remove the current item
-    // (the widget-scoped AJAX wrapper rebuilds just this widget), open the
-    // library, pick the second image, Insert selected.
+    // Remove the current item: the widget-scoped AJAX wrapper rebuilds just
+    // this widget, and that round is the AJAX-touched trigger: the emptied
+    // field commits, its leaf leaves the canvas (the whole-entity swap for
+    // a key with no subtree) and the edit that rode the leaf ends; the
+    // widget stays revealed (no leaf) for the insert.
     $session->executeScript("jQuery('$media_form_item input[name^=\"field_media-0-media-library-remove-button\"]').mousedown();");
+    $this->assertJsCondition('window.__nodeApplied >= 4', 20000, 'Removing the media selection committed through the AJAX-touched trigger.');
+    $this->assertJsCondition(
+      "!document.querySelector('$media_wrapper')"
+      . " && Drupal.Daedalus.Edit.CurrentlyEditingElement === null"
+      . " && !document.querySelector('$media_form_item').classList.contains('daedalus-edit-hidden')",
+      20000,
+      'The emptied media field left the canvas, its edit ended, and the widget stays revealed.',
+    );
+    $storage->resetCache([$nid]);
+    $this->assertTrue(
+      $tempstore->get($storage->load($nid))->get('field_media')->isEmpty(),
+      'The removal is staged in tempstore.',
+    );
+
+    // Open the library from the revealed widget, pick the second image,
+    // Insert selected: the selection lands as the widget's own update
+    // round (ViewsFormMediaLibraryWidgetAlter routes it to THIS widget),
+    // and that round commits through the same trigger.
     $open_button = $assert_session->waitForElement('css', "$media_form_item .js-media-library-open-button", 20000);
-    $this->assertNotNull($open_button, 'Removing the selection revealed the Add media opener.');
+    $this->assertNotNull($open_button, 'The revealed media widget offers the Add media opener.');
     $session->executeScript("jQuery('$media_form_item .js-media-library-open-button').mousedown();");
     $second_checkbox = $assert_session->waitForElement(
       'css',
@@ -1000,25 +1092,13 @@ class InlineEditBehaviorTest extends WebDriverTestBase {
         button.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
       })();
       JS);
+    $this->assertJsCondition('window.__nodeApplied >= 5', 20000, 'Inserting the selection committed through the AJAX-touched trigger.');
     $this->assertJsCondition(
-      "(() => {"
-      . " const item = document.querySelector('$media_form_item [data-daedalus-edit-media-value]');"
-      . " return !document.querySelector('.media-library-widget-modal')"
-      . " && !!item && JSON.parse(item.dataset.daedalusEditMediaValue).map(String).join() === '$second_media_id';"
-      . " })()",
+      "!document.querySelector('.media-library-widget-modal')"
+      . " && !!document.querySelector('$media_wrapper img[src*=image-2]')"
+      . " && document.querySelector('$media_form_item').classList.contains('daedalus-edit-hidden')",
       20000,
-      'Insert selected landed the new media in THIS widget and re-serialized its selection.',
-    );
-
-    // Blur commits: media.js diffs the serialized selection against the
-    // value captured on focus and stages the swap through the same
-    // pipeline. Staged, not committed, like every leg before it.
-    $session->executeScript('Drupal.Daedalus.Edit.CurrentlyEditingElement.plugin.blur();');
-    $this->assertJsCondition('window.__nodeDoneCount >= 2', 20000);
-    $this->assertJsCondition(
-      "!!document.querySelector('$media_wrapper img[src*=image-2]')",
-      20000,
-      'The media field re-rendered from tempstore with the second image.',
+      'The media field re-rendered from tempstore with the second image, no change event and no blur, and the widget hid behind the new leaf.',
     );
     $storage->resetCache([$nid]);
     $this->assertSame(
@@ -1029,13 +1109,17 @@ class InlineEditBehaviorTest extends WebDriverTestBase {
 
     // ——— Save: the top bar commits the staged batch and drops Edit Mode. ———
     // Everything above stopped at "staged, not committed"; the Save button
-    // is the committing gesture. It navigates to Tempstore::save, which
-    // applies the staged tempstore entity onto the freshly loaded node,
-    // marks ONE new revision (the plain bundle's new_revision setting;
-    // revision metadata stamped to the editor, not the prior author),
-    // saves, deletes the tempstore entry, and redirects back with a
-    // path-scoped navigationMode=none cookie — the page lands committed
-    // and OUT of Edit Mode.
+    // is the committing gesture. It waits for the op queue to drain (a
+    // commit still on the wire must land first) and navigates to
+    // Tempstore::save, an adapter over the storage handler's commit door:
+    // the working copy (the staged entity) is loaded and committed as it
+    // is, no field copied or filtered, because the spine judged every
+    // write on the way in. The door marks ONE new revision (the plain
+    // bundle's new_revision setting; revision metadata stamped to the
+    // editor, not the prior author), saves, deletes the tempstore entry,
+    // and the controller redirects back with a path-scoped
+    // navigationMode=none cookie: the page lands committed and OUT of
+    // Edit Mode.
     $storage->resetCache([$nid]);
     $vids_before = $storage->getQuery()->accessCheck(FALSE)->allRevisions()->condition('nid', $nid)->execute();
     $session->executeScript("window.__preSave = true; document.querySelector('#daedalus-ui-save').click();");
@@ -1079,24 +1163,16 @@ class InlineEditBehaviorTest extends WebDriverTestBase {
     // values again.
     $session->executeScript("document.cookie = 'navigationMode=edit; path=' + window.location.pathname + ';';");
     $session->reload();
-    $this->activateTool('edit');
     $assert_session->waitForElement('css', $wrapper . ' .daedalus-edit-field-value');
-    $session->executeScript(<<<JS
-      window.__discardDoneCount = 0;
-      const discardOriginal = jQuery.fn.daedalusEditIsDoneUpdating;
-      jQuery.fn.daedalusEditIsDoneUpdating = function () {
-        window.__discardDoneCount++;
-        return discardOriginal.apply(this, arguments);
-      };
-    JS);
-    $session->executeScript($reclick);
+    $this->countApplied('__discardApplied');
+    $this->dispatchDoubleClick($body_leaf);
     $this->assertJsCondition($body_editing, 20000, 'The body editor opened for the discard leg.');
     $session->executeScript(<<<JS
       const doomedEditor = Drupal.Daedalus.Edit.Ckeditor5Instances.values().next().value;
       doomedEditor.setData('<p>Doomed edit.</p>');
       Drupal.Daedalus.Edit.CurrentlyEditingElement.plugin.blur();
     JS);
-    $this->assertJsCondition('window.__discardDoneCount >= 1', 20000);
+    $this->assertJsCondition('window.__discardApplied >= 1', 20000);
     $this->assertJsCondition(
       "document.querySelector('$wrapper').textContent.includes('Doomed edit.')",
       20000,
@@ -1136,45 +1212,32 @@ class InlineEditBehaviorTest extends WebDriverTestBase {
     $this->assertStringContainsString('New body text.', $storage->load($nid)->get('body')->value, 'The committed body survived the discard untouched.');
     $this->assertFalse($tempstore->has($committed), 'Discard deleted the tempstore entry.');
 
-    // ——— The open edit is a DRAFT: the form path's three-way landing. ———
+    // ——— The open edit is a DRAFT: the one base's three-way landing. ———
     // A foreign mutation during an open edit re-renders the canvas under
-    // the editor. On the form path a value-changing op that targets the
-    // root also EVICTS the root's cached form (BlueprintMutationClearForms:
-    // InlineEntityFormAlter::update writes the form's whole cached entity,
-    // so a stale form would clobber every foreign change on submit) and a
-    // style op's key has no stamped element, so the WHOLE entity subtree
-    // swaps. The engine captures the draft as the swap detaches the leaf
-    // (DaedalusEditDraft, trigger 'unload') and, once the response has fully
-    // applied (the eviction rides the piggybacked commands, AFTER the
-    // markup swap), FormEditorBase.resume() waits out the panel's refetch,
-    // re-resolves the fresh widget, and judges by the three-way rule: base
-    // = the mirror value at edit open, remote = the mirror after. Equal
-    // (a style scrub touched nothing the edit holds) re-projects the draft
-    // and re-opens the edit on the swapped-in element; different (the very
-    // field being edited changed) ENDS the edit with the remote standing,
-    // nothing committed. Only a browser sees this seam: the op queue's
-    // detach, the mirror replace, the eviction + refetch round trip and a
-    // real editing surface all take part. These legs run on the node
+    // the editor. The engine captures the draft as the swap detaches the
+    // leaf (DaedalusEditDraft, trigger 'unload') and, once the response has
+    // fully applied, refreshes the panel from the response's targets (a
+    // target naming the edit's field refetches the subject form, so the
+    // widget-backed store reads the remote) and hands the draft to
+    // resume(), which judges by the three-way rule: base = the widget's
+    // value at edit open, remote = the widget's value now. Equal (a style
+    // scrub touched nothing the edit holds) re-projects the draft over the
+    // swapped-in element on the SAME cached form; different (the very
+    // field being edited changed) drops the draft and the edit continues
+    // over the remote, nothing committed. Only a browser sees this seam:
+    // the op queue's detach, the mirror replace, the refetch round trip and
+    // a real editing surface all take part. These legs run on the node
     // after the discard (the committed page, no tempstore), re-entered in
     // Edit Mode so the blueprint mirror boots fresh and the ops below
     // enqueue through the spine with the plain node as the root.
-    $this->enterEditModeViaCookies($node->toUrl(), 'edit');
+    $this->enterEditModeViaCookies($node->toUrl());
     $this->assertJsCondition(
       'window.Drupal && Drupal.Daedalus && Drupal.Daedalus.Blueprint && !!Drupal.Daedalus.Blueprint.getRoot()',
       20000,
       'The blueprint mirror booted on the plain node for the draft legs.',
     );
-    $this->activateTool('edit');
     $assert_session->waitForElement('css', $wrapper . ' .daedalus-edit-field-value');
-    $session->executeScript(<<<JS
-      window.__draftDoneCount = 0;
-      const draftOriginal = jQuery.fn.daedalusEditIsDoneUpdating;
-      jQuery.fn.daedalusEditIsDoneUpdating = function () {
-        window.__draftDoneCount++;
-        return draftOriginal.apply(this, arguments);
-      };
-    JS);
-    $node_uuid = $node->uuid();
+    $this->countApplied('__draftApplied');
     $body_editor_open = $body_editing . ' && Drupal.Daedalus.Edit.Ckeditor5Instances.size === 1';
     // The body widget is text_textarea_with_summary: the form's FIRST
     // textarea is the summary, so the value textarea is addressed by its
@@ -1188,7 +1251,7 @@ class InlineEditBehaviorTest extends WebDriverTestBase {
     // and compared by identity after: the same edit object resumed, no
     // re-open. A rejected op is recorded so a grammar or validation
     // failure reads as its message instead of a blind timeout.
-    $session->executeScript($reclick);
+    $this->dispatchDoubleClick($body_leaf);
     $this->assertJsCondition($body_editor_open, 20000, 'The body editor re-opened for the style-scrub leg with one live editor.');
     $session->executeScript(<<<JS
       (() => {
@@ -1211,9 +1274,9 @@ class InlineEditBehaviorTest extends WebDriverTestBase {
         });
       })();
       JS);
-    // Resumed: the SAME edit, its form refetched (a fresh node form is the
-    // panel's subject), ONE live CKEditor and it sits on the swapped-in
-    // page element, holding the draft.
+    // Resumed: the SAME edit on the SAME cached form (a style write names
+    // no field, so nothing refetched), ONE live CKEditor and it sits on
+    // the swapped-in page element, holding the draft.
     $this->assertJsCondition(<<<JS
       (() => {
         if (window.__draftError !== undefined) { return true; }
@@ -1224,8 +1287,7 @@ class InlineEditBehaviorTest extends WebDriverTestBase {
         const pageElement = editing.getPageElementHandle();
         const instances = Drupal.Daedalus.Edit.Ckeditor5Instances;
         const editor = pageElement?.dataset.ckeditor5Id ? instances.get(pageElement.dataset.ckeditor5Id) : null;
-        return !!form && form !== window.__draftForm
-          && form.dataset.daedalusEditFormId === 'node::{$nid}'
+        return !!form && form === window.__draftForm
           && form.classList.contains('daedalus-edit-form--subject')
           && mount.dataset.daedalusEditSubject === 'node::{$nid}'
           && !!pageElement && pageElement !== window.__draftPageElement
@@ -1235,15 +1297,15 @@ class InlineEditBehaviorTest extends WebDriverTestBase {
       })()
       JS,
       20000,
-      'The body edit resumed over the swapped-in entity: same edit, refetched subject form, one fresh canvas editor holding the draft.',
+      'The body edit resumed over the swapped-in entity: same edit, same cached form, one fresh canvas editor holding the draft.',
     );
     $draft_error = $session->evaluateScript('window.__draftError ?? null');
     $this->assertNull($draft_error, 'The style scrub on the body failed: ' . ($draft_error ?? ''));
 
-    // Blur stages the draft through the refetched form, and the scrubbed
+    // Blur commits the draft through the form transport, and the scrubbed
     // style stands on the re-rendered field: both halves survived.
     $session->executeScript('Drupal.Daedalus.Edit.CurrentlyEditingElement.plugin.blur();');
-    $this->assertJsCondition('window.__draftDoneCount >= 1', 20000, 'Blur after the resume staged the draft.');
+    $this->assertJsCondition('window.__draftApplied >= 2', 20000, 'Blur after the resume committed the draft.');
     $this->assertJsCondition(
       "document.querySelector('$wrapper').textContent.includes('Draft typed across the scrub.')"
       . " && getComputedStyle(document.querySelector('$body_selectable')).fontSize === '32px'",
@@ -1251,16 +1313,20 @@ class InlineEditBehaviorTest extends WebDriverTestBase {
       'The re-rendered body shows the draft at the scrubbed 2rem (32px): the draft and the foreign style both survived.',
     );
 
-    // Remote wins: a foreign update_element on the body itself. The remote
-    // differs from the base, so the edit ENDS with nothing submitted; the
-    // canvas and the refetched textarea already hold the remote value and
-    // no editor is left behind.
-    $session->executeScript($reclick);
+    // Remote wins: a foreign update_element on the body itself. Its target
+    // names the edit's field, so the subject form is refetched (the
+    // textarea now holds the remote); the remote differs from the base, so
+    // the draft is dropped and the edit CONTINUES over the remote on the
+    // fresh form, nothing submitted. Escape then cancels it cleanly.
+    $this->dispatchDoubleClick($body_leaf);
     $this->assertJsCondition($body_editor_open, 20000, 'The body editor re-opened for the remote-wins leg.');
     $session->executeScript(<<<JS
       (() => {
+        const editing = Drupal.Daedalus.Edit.CurrentlyEditingElement;
         const editor = Drupal.Daedalus.Edit.Ckeditor5Instances.values().next().value;
         editor.setData('<p>Local draft the remote overrides.</p>');
+        window.__draftEdit = editing;
+        window.__draftForm = editing.getForm();
         window.__draftError = undefined;
         const Blueprint = Drupal.Daedalus.Blueprint;
         Blueprint.mutate(Object.assign({}, Blueprint.rootContext(), {
@@ -1274,39 +1340,56 @@ class InlineEditBehaviorTest extends WebDriverTestBase {
         });
       })();
       JS);
-    $this->assertJsCondition(
-      "window.__draftError !== undefined || (Drupal.Daedalus.Edit.CurrentlyEditingElement === null"
-      . " && Drupal.Daedalus.Edit.Ckeditor5Instances.size === 0"
-      . " && document.querySelector('$wrapper').textContent.includes('Remote body')"
-      . " && !document.querySelector('$wrapper').textContent.includes('Local draft the remote overrides.')"
-      . " && !!document.querySelector('$body_textarea')"
-      . " && document.querySelector('$body_textarea').value.includes('Remote body'))",
+    $this->assertJsCondition(<<<JS
+      (() => {
+        if (window.__draftError !== undefined) { return true; }
+        const editing = Drupal.Daedalus.Edit.CurrentlyEditingElement;
+        if (!editing || editing !== window.__draftEdit) { return false; }
+        const form = editing.getForm();
+        const pageElement = editing.getPageElementHandle();
+        const instances = Drupal.Daedalus.Edit.Ckeditor5Instances;
+        const editor = pageElement?.dataset.ckeditor5Id ? instances.get(pageElement.dataset.ckeditor5Id) : null;
+        const textarea = document.querySelector('$body_textarea');
+        return !!form && form !== window.__draftForm
+          && form.classList.contains('daedalus-edit-form--subject')
+          && !!textarea && textarea.value.includes('Remote body')
+          && instances.size === 1 && !!editor
+          && editor.getData().includes('Remote body')
+          && !editor.getData().includes('Local draft the remote overrides.');
+      })()
+      JS,
       20000,
-      'The foreign body change ended the edit: the canvas and the refetched textarea hold the remote, no editor left.',
+      'The foreign body change refetched the subject form and the edit continued over the remote: the fresh textarea and the one live editor hold the remote, the draft dropped.',
     );
     $draft_error = $session->evaluateScript('window.__draftError ?? null');
     $this->assertNull($draft_error, 'The foreign body update failed: ' . ($draft_error ?? ''));
-    $this->assertSame(1, (int) $session->evaluateScript('window.__draftDoneCount'), 'Conceding to the remote submitted nothing.');
+    $this->pressHotkey('Escape');
+    $this->assertJsCondition(
+      "Drupal.Daedalus.Edit.CurrentlyEditingElement === null"
+      . " && Drupal.Daedalus.Edit.Ckeditor5Instances.size === 0"
+      . " && document.querySelector('$wrapper').textContent.includes('Remote body')"
+      . " && !document.querySelector('$wrapper').textContent.includes('Local draft the remote overrides.')",
+      20000,
+      'Escape canceled the continued edit with the remote standing on the canvas, no editor left.',
+    );
+    $this->assertSame(3, (int) $session->evaluateScript('window.__draftApplied'), 'Nothing was submitted for the remote-won edit: only the foreign op applied.');
 
     // The plain-text tier under the same scrub: the subtitle's in-place
     // text mirrors into the form input on every keystroke, so its draft
-    // is the input's value at the detach. The resume re-seeds it onto the
-    // swapped-in page element AND the refetched input, and the input
+    // is the input's value at the detach. The resume writes it back onto
+    // the swapped-in page element AND the input (its store), and the input
     // listener re-binds to the new element, so typing on keeps reaching
-    // the input the blur submits.
+    // the input the commit submits.
     $subtitle_wrapper = '[data-daedalus-edit-field-value-wrapper="node::' . $nid . '::field_subtitle::value"]';
     $subtitle_leaf = $subtitle_wrapper . ' .daedalus-edit-field-value';
     $subtitle_input = '[data-daedalus-edit-form-item-wrapper-id="node::' . $nid . '::field_subtitle::value"] input';
-    $session->executeScript(
-      "document.querySelector('" . $subtitle_leaf . "')"
-      . ".dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));"
-    );
+    $this->dispatchDoubleClick($subtitle_leaf);
     $this->assertJsCondition(
       "Drupal.Daedalus.Edit.CurrentlyEditingElement !== null"
       . " && Drupal.Daedalus.Edit.CurrentlyEditingElement.info.fieldName === 'field_subtitle'"
       . " && document.querySelector('$subtitle_leaf')?.hasAttribute('contenteditable')",
       20000,
-      'Clicking the subtitle opened its in-place text edit.',
+      'Double-clicking the subtitle opened its in-place text edit.',
     );
     $session->executeScript(<<<JS
       (() => {
@@ -1344,7 +1427,7 @@ class InlineEditBehaviorTest extends WebDriverTestBase {
       })()
       JS,
       20000,
-      'The subtitle edit resumed with its draft re-seeded onto the swapped-in element and the refetched input.',
+      'The subtitle edit resumed with its draft re-projected onto the swapped-in element and the input.',
     );
     $draft_error = $session->evaluateScript('window.__draftError ?? null');
     $this->assertNull($draft_error, 'The style scrub on the subtitle failed: ' . ($draft_error ?? ''));
@@ -1356,50 +1439,86 @@ class InlineEditBehaviorTest extends WebDriverTestBase {
     $this->assertJsCondition(
       "document.querySelector('$subtitle_input')?.value === 'Subtitle draft, typed on'",
       20000,
-      'Typing after the resume reaches the refetched input.',
+      'Typing after the resume reaches the input.',
     );
     $session->executeScript('Drupal.Daedalus.Edit.CurrentlyEditingElement.plugin.blur();');
-    $this->assertJsCondition('window.__draftDoneCount >= 2', 20000, 'Blur after the subtitle resume staged the draft.');
+    $this->assertJsCondition('window.__draftApplied >= 5', 20000, 'Blur after the subtitle resume committed the draft.');
     $this->assertJsCondition(
       "document.querySelector('$subtitle_wrapper')?.textContent.includes('Subtitle draft, typed on')",
       20000,
       'The subtitle re-rendered with the resumed draft.',
     );
 
-    // ——— Cmd+Enter: the dialog's OK. ———
-    // Escape cancels; Cmd+Enter commits the open edit AND leaves the
-    // session for the Selector with the selection kept. Under the Edit
-    // tool "selected" means "editing", so a commit that stayed armed would
-    // land on the forbidden "selected but not editing"; the tool switch
-    // runs the Edit tool's own disable (commit the open edit, refuse on an
-    // invalid widget), so leaving IS the commit. The selenium Chrome is
-    // Linux, where the binding's `mod` resolves to Ctrl.
-    $session->executeScript($reclick);
+    // ——— The panel refresh from targets: a foreign write to a revealed field. ———
+    // field_empty is committed empty, so its widget is revealed. A foreign
+    // update_element on it (an AI turn's shape) names the field in its
+    // targets: the panel refetches the subject form (the client-side
+    // successor of server-side form eviction), and the judge hides the
+    // fresh widget behind the leaf the write materialized, its input
+    // holding the remote.
+    $this->assertJsCondition($empty_revealed, 20000, 'field_empty is revealed ahead of the foreign write.');
+    $session->executeScript(<<<JS
+      (() => {
+        window.__refreshForm = document.querySelector('{$subject_form}');
+        window.__refreshError = undefined;
+        const Blueprint = Drupal.Daedalus.Blueprint;
+        Blueprint.mutate(Object.assign({}, Blueprint.rootContext(), {
+          operations: [{
+            op: 'update_element',
+            element: '$node_uuid',
+            properties: { field_empty: 'A foreign value' },
+          }],
+        })).catch((error) => {
+          window.__refreshError = error.message;
+        });
+      })();
+      JS);
+    $this->assertJsCondition(<<<JS
+      (() => {
+        if (window.__refreshError !== undefined) { return true; }
+        const form = document.querySelector('{$subject_form}');
+        const input = document.querySelector('{$empty_input}');
+        return !!form && form !== window.__refreshForm
+          && !!input && input.value === 'A foreign value'
+          && $empty_hidden;
+      })()
+      JS,
+      20000,
+      'The foreign write to a revealed field refetched the subject form: the fresh widget holds the remote and hides behind the new leaf.',
+    );
+    $refresh_error = $session->evaluateScript('window.__refreshError ?? null');
+    $this->assertNull($refresh_error, 'The foreign write to field_empty failed: ' . ($refresh_error ?? ''));
+
+    // ——— Cmd+Enter on a canvas edit: the dialog's OK. ———
+    // Escape cancels; Cmd+Enter commits the open edit and STAYS, the
+    // selection kept and no edit open (there is no session to leave). The
+    // keystroke lands in the typing context (CKEditor holds focus), which
+    // is why the edit registers its twin there.
+    $this->dispatchDoubleClick($body_leaf);
     $this->assertJsCondition($body_editor_open, 20000, 'The body editor re-opened for the Cmd+Enter leg.');
     $session->executeScript(<<<JS
       Drupal.Daedalus.Edit.Ckeditor5Instances.values().next().value.setData('<p>Committed by Cmd+Enter.</p>');
     JS);
     $this->pressHotkey('Enter', ['ctrlKey' => TRUE]);
-    $this->assertJsCondition('window.__draftDoneCount >= 3', 20000, 'Cmd+Enter committed the open edit.');
+    $this->assertJsCondition('window.__draftApplied >= 7', 20000, 'Cmd+Enter committed the open edit.');
     $this->assertJsCondition(
       "Drupal.Daedalus.Edit.CurrentlyEditingElement === null"
+      . ' && Drupal.Daedalus.EditSession.isEditing() === false'
       . " && document.querySelector('$wrapper').textContent.includes('Committed by Cmd+Enter.')"
-      . " && Drupal.Daedalus.getCookieValue('activeTool') === 'selector'"
       . " && Drupal.Daedalus.Selection.getSelected() === 'field:$node_uuid:body'",
       20000,
-      'Cmd+Enter staged the draft and left the session for the Selector with the body still selected.',
+      'Cmd+Enter committed the draft and stayed: no edit open, the body still selected.',
     );
 
     // ——— The outside press: chrome that keeps nothing. ———
     // A REAL click into chrome outside the canvas that declares no
     // data-keeps-edit (the page-elements panel header; the AI chat is the
-    // other such surface) commits the open edit through the session's
-    // capture-phase press table and then, the selection staying, leaves
-    // for the Selector by the same rule as Cmd+Enter. The tree panel is
-    // default-open on the left rail, clear of the fixed chrome, so the
-    // pointer lands.
-    $this->activateTool('edit');
-    $session->executeScript($reclick);
+    // other such surface) commits the open edit through the open edit's
+    // capture-phase press decision, the selection staying (the press is
+    // outside the canvas, so the pointer grammar lands nothing). The tree
+    // panel is default-open on the left rail, clear of the fixed chrome,
+    // so the pointer lands.
+    $this->dispatchDoubleClick($body_leaf);
     $this->assertJsCondition($body_editor_open, 20000, 'The body editor re-opened for the outside-press leg.');
     $session->executeScript(<<<JS
       Drupal.Daedalus.Edit.Ckeditor5Instances.values().next().value.setData('<p>Committed by the outside press.</p>');
@@ -1410,21 +1529,20 @@ class InlineEditBehaviorTest extends WebDriverTestBase {
     $this->assertNotNull($tree_header, 'The page-elements panel header title (non-keeping chrome) is on the page.');
     $this->assertTrue($tree_header->isVisible(), 'The page-elements panel is open for the real outside press.');
     $tree_header->click();
-    $this->assertJsCondition('window.__draftDoneCount >= 4', 20000, 'The outside press committed the open edit.');
+    $this->assertJsCondition('window.__draftApplied >= 8', 20000, 'The outside press committed the open edit.');
     $this->assertJsCondition(
       "Drupal.Daedalus.Edit.CurrentlyEditingElement === null"
       . " && document.querySelector('$wrapper').textContent.includes('Committed by the outside press.')"
-      . " && Drupal.Daedalus.getCookieValue('activeTool') === 'selector'"
       . " && Drupal.Daedalus.Selection.getSelected() === 'field:$node_uuid:body'",
       20000,
-      'The outside press staged the draft and left the session for the Selector with the body still selected.',
+      'The outside press committed the draft and kept the body selected with no edit open.',
     );
 
     // ——— The graduated panel's own doors, on a page-built page. ———
-    // The icon is DUMB (it toggles the panel on the TOP-LEVEL entity's form
-    // under any tool, regardless of selection) and blueprint edits never
-    // touch the panel. Both need a page with blueprint-edited blocks, so
-    // this leg runs on the recipe's page bundle with a text block placed
+    // The icon opens the panel on the TOP-LEVEL entity's form and presents
+    // the root through the editor door, and blueprint edits never touch
+    // the panel. Both need a page with blueprint-edited blocks, so this
+    // leg runs on the recipe's page bundle with a text block placed
     // through the real mutation batch a palette drop enqueues.
     $page = Node::create([
       'type' => 'page',
@@ -1435,7 +1553,7 @@ class InlineEditBehaviorTest extends WebDriverTestBase {
 
     $this->drupalGet($page->toUrl());
     $session->resizeWindow(1200, 1600);
-    $this->enterEditModeViaCookies($page->toUrl(), 'selector');
+    $this->enterEditModeViaCookies($page->toUrl());
     $this->assertJsCondition(
       'window.Drupal && Drupal.Daedalus && Drupal.Daedalus.Blueprint && !!Drupal.Daedalus.Blueprint.getRoot()',
       20000,
@@ -1509,10 +1627,15 @@ class InlineEditBehaviorTest extends WebDriverTestBase {
       'The panel is closed ahead of the icon leg.',
     );
 
-    // Pointer tool + icon: the toggle opens the panel on the TOP-LEVEL
-    // entity's form, fetched on demand — no selection, no Edit tool. The
-    // form's content (its accordion details / form items) is reachable in
-    // the panel.
+    // The icon: the toggle opens the panel on the TOP-LEVEL entity's form,
+    // fetched on demand, selects the root row and presents the root
+    // through the editor door, which opens the panel's first revealed
+    // widget as the edit (the selection moving to that widget's field key)
+    // so the panel's widgets join the Tab walk. The form's content (its
+    // accordion details / form items) is reachable in the panel. The
+    // widget edit is then cancelled through Escape so the pane leg below
+    // starts with no edit open, the panel standing.
+    $page_uuid = $page->uuid();
     $session->executeScript(
       "document.querySelector('[data-sidebar-button-for=\"#daedalus_edit_entity_form\"]')"
       . ".dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));"
@@ -1521,13 +1644,24 @@ class InlineEditBehaviorTest extends WebDriverTestBase {
       "(() => {"
       . " const panel = document.getElementById('daedalus_edit_entity_form');"
       . " const mount = document.getElementById('daedalus-edit-form-cache');"
+      . " const editing = Drupal.Daedalus.Edit.CurrentlyEditingElement;"
       . " if (!panel || panel.classList.contains('daedalus-ui-hidden')) { return false; }"
       . " if (mount.dataset.daedalusEditSubject !== 'node::" . $pid . "') { return false; }"
       . " const form = mount.querySelector(':scope > .daedalus-edit-form--subject[data-daedalus-edit-form-id=\"node::" . $pid . "\"]');"
-      . " return !!form && !!form.querySelector('details, .form-item');"
+      . " return !!form && !!form.querySelector('details, .form-item')"
+      . " && (Drupal.Daedalus.Selection.getSelected() ?? '').startsWith('field:$page_uuid:')"
+      . " && Drupal.Daedalus.EditSession.isEditing() === true"
+      . " && !!editing && editing.plugin.id === 'panel_widget';"
       . " })()",
       20000,
-      'The icon opened the panel on the top-level entity form under the pointer tool, its content reachable.',
+      'The icon opened the panel on the top-level entity form, its content reachable, and presented the root through the door: its first revealed widget is the open edit.',
+    );
+    $this->pressHotkey('Escape');
+    $this->assertJsCondition(
+      'Drupal.Daedalus.EditSession.isEditing() === false'
+      . " && !document.getElementById('daedalus_edit_entity_form').classList.contains('daedalus-ui-hidden')",
+      20000,
+      'Escape cancelled the presented widget edit with the panel still open.',
     );
 
     // The pinned header names the subject: the panel's daedalus-ui-panel__header
@@ -1542,55 +1676,48 @@ class InlineEditBehaviorTest extends WebDriverTestBase {
       'The pinned panel header names the top-level subject by its bundle label.',
     );
 
-    // ——— The dissolved accordion: a pane widget stages to tempstore. ———
+    // ——— The dissolved accordion: a pane widget commits to tempstore. ———
     // Sidebar-hosted forms dissolve core's advanced vertical_tabs into a
     // container of stacked details (DaedalusEditFormTrait::dissolveAdvancedTabs
-    // + applyPanelGrammar), and the auto-submit traversal reads the
-    // dissolved container's group registry instead of the vertical-tabs
-    // structure. Kernel tests can't see the details DOM or the AJAX
-    // plumbing, so the wire is proven here: the URL alias pane renders as
-    // a stacked details inside the dissolved container with no
-    // vertical-tabs DOM anywhere in the form, and changing the alias in
-    // the opened pane fires the pane's auto-submit (a change event, no
-    // inline editor involved) through the same stage-don't-save pipeline
-    // as every field leg.
+    // + applyPanelGrammar). The path widget's delta is a details grouped
+    // into that container, so its field's wrapper identity FOLLOWS the
+    // grouped widget (followGroupedWidgets): the pane is the path field's
+    // wrapper, revealed by the judge (no leaf), and a change in the opened
+    // pane commits the path field through the form transport like every
+    // field leg. Kernel tests can't see the details DOM or the AJAX
+    // plumbing, so the wire is proven here.
+    $this->countApplied('__pageApplied');
     $path_pane = '#daedalus-edit-form-cache .daedalus-edit-form--subject details.path-form';
     $this->assertJsCondition(
       "(() => {"
       . " const form = document.querySelector('#daedalus-edit-form-cache .daedalus-edit-form--subject');"
       . " const pane = form?.querySelector('.daedalus-edit-advanced details.path-form');"
       . " return !!pane && pane.classList.contains('daedalus-ui-details')"
+      . " && pane.dataset.daedalusEditFormItemWrapperId === 'node::" . $pid . "::path::alias'"
+      . " && !pane.classList.contains('daedalus-edit-hidden')"
       . " && !form.querySelector('.vertical-tabs, .vertical-tabs__menu');"
       . " })()",
       20000,
-      'The URL alias pane is a stacked daedalus-ui-details inside the dissolved advanced container, with no vertical-tabs DOM.',
+      'The URL alias pane is a stacked daedalus-ui-details inside the dissolved advanced container carrying the path field\'s wrapper identity, revealed, with no vertical-tabs DOM.',
     );
-    $session->executeScript("document.querySelector('$path_pane > summary').click();");
+    $session->executeScript("document.querySelector('$path_pane').open = true;");
     $this->assertJsCondition(
       "document.querySelector('$path_pane').open === true",
       20000,
-      'Clicking the pane summary opened the accordion pane.',
+      'The accordion pane opened.',
     );
-    $session->executeScript(<<<JS
-      window.__aliasDoneCount = 0;
-      const aliasOriginal = jQuery.fn.daedalusEditIsDoneUpdating;
-      jQuery.fn.daedalusEditIsDoneUpdating = function () {
-        window.__aliasDoneCount++;
-        return aliasOriginal.apply(this, arguments);
-      };
-    JS);
     $session->executeScript(<<<JS
       const aliasInput = document.querySelector('{$path_pane} input[name="path[0][alias]"]');
       aliasInput.value = '/accordion-staged-alias';
       aliasInput.dispatchEvent(new Event('change', { bubbles: true }));
     JS);
-    $this->assertJsCondition('window.__aliasDoneCount >= 1', 20000);
+    $this->assertJsCondition('window.__pageApplied >= 1', 20000);
     $storage->resetCache([$pid]);
     $page_fresh = $storage->load($pid);
     $this->assertSame(
       '/accordion-staged-alias',
       $tempstore->get($page_fresh)->get('path')->alias,
-      'The pane auto-submit staged the alias edit in tempstore.',
+      'The pane widget committed the alias through the form transport.',
     );
     $this->assertNull(
       $page_fresh->get('path')->alias,
@@ -1611,21 +1738,22 @@ class InlineEditBehaviorTest extends WebDriverTestBase {
       'The URL alias summary line repainted with the staged alias.',
     );
 
-    // With the page form open, an ARMED BLUEPRINT-BLOCK EDIT leaves the
-    // sidebar untouched: the subject model ignores non-form edits — the
-    // blueprint path fetches no form and nothing else may reach the panel.
-    $this->activateTool('edit');
+    // With the page form open, a BLUEPRINT-BLOCK EDIT leaves the sidebar
+    // untouched: the subject model ignores non-form edits — the blueprint
+    // path fetches no form and nothing else may reach the panel. The block
+    // sits inside a section, so the gesture is Cmd+double-click: the deep
+    // clicks resolve the block under the pointer directly (a bare click
+    // would stop at the section) and the dblclick at the leaf is the door.
+    $session->executeScript('Drupal.Daedalus.Edit.CurrentlyEditingElement?.plugin.blur();');
     $forms_before = $session->evaluateScript(
       "document.getElementById('daedalus-edit-form-cache').children.length"
     );
-    $session->executeScript(
-      "document.querySelector(\"$blueprint_leaf\")"
-      . ".dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));"
-    );
+    $this->dispatchDoubleClick($blueprint_leaf, ['metaKey' => TRUE]);
     $this->assertJsCondition(
-      'Drupal.Daedalus.EditSession.isEditing()',
+      'Drupal.Daedalus.EditSession.isEditing()'
+      . " && Drupal.Daedalus.Selection.getSelected() === 'block:$component_uuid'",
       20000,
-      'The armed click opened the blueprint block edit.',
+      'Cmd+double-click opened the blueprint block edit.',
     );
     $this->assertJsCondition(
       "(() => {"
@@ -1636,14 +1764,14 @@ class InlineEditBehaviorTest extends WebDriverTestBase {
       . " && mount.children.length === $forms_before;"
       . " })()",
       20000,
-      'The armed blueprint-block edit left the panel untouched: open, same subject, no form fetched.',
+      'The blueprint-block edit left the panel untouched: open, same subject, no form fetched.',
     );
 
     // ——— The form-edited block: block-form endpoint, block AS subject. ———
     // The fixture's form_block bundle has NO composed content class, so a
     // placement of it rides the sidebar block form. First end the open
-    // blueprint edit (Escape cancels it; the session stays armed on the
-    // Edit tool), then place a form_block through the same mutation batch,
+    // blueprint edit (Escape cancels it, the selection standing), then
+    // place a form_block through the same mutation batch,
     // referencing the first target node. The placement carries a VISIBLE
     // label (label_display rides the fixture's managed-keys declaration
     // through the op spine) so the block-label leg at the end of this
@@ -1692,7 +1820,7 @@ class InlineEditBehaviorTest extends WebDriverTestBase {
     // an ancestor placement wrapper) carries the block-form attribution the
     // leaves resolve their fetch route from — and the block's field leaves
     // rendered attributed for the form path, with NO blueprint editor.
-    $fb_related_leaf = "$fb_wrapper [data-daedalus-edit-field-value-wrapper\$='::field_fb_related::value'] .daedalus-edit-field-value";
+    $fb_related_leaf = "$fb_wrapper [data-daedalus-edit-field-value-wrapper\$='::field_fb_related::target_id'] .daedalus-edit-field-value";
     $this->assertJsCondition(
       "(() => { const block = document.querySelector(\"$fb_wrapper\");"
       . " const leaf = document.querySelector(\"$fb_related_leaf\");"
@@ -1703,31 +1831,19 @@ class InlineEditBehaviorTest extends WebDriverTestBase {
       'The form-block placement wears the block-form endpoint declaration and form-path leaf attribution.',
     );
 
-    // A fresh completion counter for this page load (the node scenario's
-    // counter died with its page).
-    $session->executeScript(<<<JS
-      window.__fbDoneCount = 0;
-      const fbOriginal = jQuery.fn.daedalusEditIsDoneUpdating;
-      jQuery.fn.daedalusEditIsDoneUpdating = function () {
-        window.__fbDoneCount++;
-        return fbOriginal.apply(this, arguments);
-      };
-    JS);
-
-    // Armed click on the block's related leaf: the endpoint declaration
+    // Cmd+double-click on the block's related leaf (deep: the leaf's own
+    // key under the section, then the door): the endpoint declaration
     // routes the fetch to the block-form route (BlockFormController ->
-    // UpdateBlockFormForEditTool), which answers with the same
+    // PanelUpdateBlockForm), which answers with the same
     // append-into-the-form-cache contract as the entity form — and the
     // fetched BLOCK form retargets the panel's subject (block AS subject).
-    $session->executeScript(
-      "document.querySelector(\"$fb_related_leaf\")"
-      . ".dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));"
-    );
+    $this->dispatchDoubleClick($fb_related_leaf, ['metaKey' => TRUE]);
     $this->assertJsCondition(
       "Drupal.Daedalus.Edit.CurrentlyEditingElement !== null"
-      . " && Drupal.Daedalus.Edit.CurrentlyEditingElement.info.fieldName === 'field_fb_related'",
+      . " && Drupal.Daedalus.Edit.CurrentlyEditingElement.info.fieldName === 'field_fb_related'"
+      . " && Drupal.Daedalus.Edit.CurrentlyEditingElement.plugin.id === 'panel_widget'",
       20000,
-      "Clicking the form-block's related leaf opened its form edit.",
+      "Cmd+double-clicking the form-block's related leaf opened its form edit through the panel widget editor.",
     );
     $this->assertJsCondition(<<<JS
       (() => {
@@ -1760,60 +1876,69 @@ class InlineEditBehaviorTest extends WebDriverTestBase {
       'The pinned header flipped to the block bundle label with the block as subject.',
     );
 
-    // The widget edits: re-point the reference and blur — the same
-    // stage-don't-save round trip, through the block form's update cycle.
+    // The widget edits: re-point the reference and let its native change
+    // commit — the same stage-don't-save round trip, through the block
+    // form's transport (the block as the subject, the component as the
+    // spine element).
+    $fb_input = "#daedalus-edit-form-cache .daedalus-edit-form--subject [data-daedalus-edit-form-item-wrapper-id\$='::field_fb_related::target_id'] input.form-autocomplete";
     $session->executeScript(<<<JS
-      const fbEditing = Drupal.Daedalus.Edit.CurrentlyEditingElement;
-      const fbInput = fbEditing.plugin.getFormItemInputs(fbEditing)[0];
+      const fbInput = document.querySelector("{$fb_input}");
       fbInput.value = 'Second referenced node ({$second_referenced->id()})';
-      fbEditing.plugin.blur();
+      fbInput.dispatchEvent(new Event('change', { bubbles: true }));
     JS);
-    $this->assertJsCondition('window.__fbDoneCount >= 1', 20000);
+    $this->assertJsCondition('window.__pageApplied >= 2', 20000);
     $assert_session->waitForElement('css', $fb_wrapper);
     $this->assertJsCondition(
       "document.querySelector(\"$fb_wrapper\")?.textContent.includes('Second referenced node')",
       20000,
       'The block re-rendered from tempstore with the re-pointed reference.',
     );
-    // A committed edit keeps the cached block form AND the block subject:
-    // only subject DEATH reverts the panel.
+    // A committed edit keeps the cached block form AND the block subject.
     $this->assertJsCondition(
       "document.getElementById('daedalus-edit-form-cache')?.dataset.daedalusEditSubject?.startsWith('block_content::')",
       20000,
       'The committed block edit left the block as the panel subject.',
     );
+    $session->executeScript('Drupal.Daedalus.Edit.CurrentlyEditingElement?.plugin.blur();');
 
-    // Revert on block-subject death: re-open the block edit and cancel it.
-    // The cancel evicts the block's cached form (its values are unknowable
-    // after a discard), and the OPEN panel reverts to the top-level entity
-    // — whose form is already cached, so the revert is immediate.
-    $session->executeScript(
-      "document.querySelector(\"$fb_related_leaf\")"
-      . ".dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));"
-    );
+    // Cancel discards through a refetch: re-open the block edit, type into
+    // the widget (the dirty signal) and press Escape. The widget's
+    // uncommitted state is not the client's to restore, so the block form
+    // is fetched again: a FRESH form element, the block still the subject,
+    // the typed value gone.
+    $this->dispatchDoubleClick($fb_related_leaf, ['metaKey' => TRUE]);
     $this->assertJsCondition(
       "Drupal.Daedalus.Edit.CurrentlyEditingElement !== null"
       . " && Drupal.Daedalus.Edit.CurrentlyEditingElement.info.fieldName === 'field_fb_related'",
       20000,
       'The block edit re-opened for the cancel leg.',
     );
+    $session->executeScript(<<<JS
+      window.__fbFormBeforeCancel = Drupal.Daedalus.Edit.CurrentlyEditingElement.getForm();
+      const fbInput = document.querySelector("{$fb_input}");
+      fbInput.value = 'Typed and discarded';
+      fbInput.dispatchEvent(new Event('input', { bubbles: true }));
+    JS);
     $this->pressHotkey('Escape');
     $this->assertJsCondition(
       "(() => {"
       . " const mount = document.getElementById('daedalus-edit-form-cache');"
       . " const panel = document.getElementById('daedalus_edit_entity_form');"
+      . " const form = mount.querySelector(':scope > .daedalus-edit-form--subject');"
+      . " const input = document.querySelector(\"$fb_input\");"
       . " return Drupal.Daedalus.Edit.CurrentlyEditingElement === null"
       . " && !panel.classList.contains('daedalus-ui-hidden')"
-      . " && mount.dataset.daedalusEditSubject === 'node::" . $pid . "'"
-      . " && !mount.querySelector(':scope > [data-daedalus-edit-form-id^=\"block_content::\"]');"
+      . " && mount.dataset.daedalusEditSubject.startsWith('block_content::')"
+      . " && !!form && form !== window.__fbFormBeforeCancel"
+      . " && !!input && input.value.includes('Second referenced node');"
       . " })()",
       20000,
-      "The canceled block edit evicted the block form and the open panel reverted to the top-level subject.",
+      'The canceled dirty block edit refetched the block form, which stays the subject with the committed value in its widget.',
     );
     $this->assertJsCondition(
-      "document.getElementById('daedalus-edit-form-panel-title')?.textContent === 'Page'",
+      "document.getElementById('daedalus-edit-form-panel-title')?.textContent === 'Form Block Block'",
       20000,
-      'The pinned header reverted to the top-level bundle label on block-subject death.',
+      'The pinned header kept the block bundle label across the refetch.',
     );
 
     // ——— The block label: the block_property pseudo-field round trip. ———
@@ -1822,12 +1947,12 @@ class InlineEditBehaviorTest extends WebDriverTestBase {
     // renders as page content, so daedalus_edit attributes the title element
     // as a pseudo-field leaf (daedalus_edit_preprocess_block's
     // ...::label::block_property vocabulary) and routes its edit through
-    // the block form: UpdateBlockFormForEditTool::attributeLabel() rehomes
+    // the block form: PanelUpdateBlockForm::attributeLabel() rehomes
     // core's settings[label] input under the same lookup ids, so the
     // string_textfield editor drives it like any field. The round trip:
-    // in-place H2 edit -> blur -> the block form's update cycle writes the
-    // component configuration to the layout tempstore -> updatePage
-    // re-renders the title, re-attributed for the next edit.
+    // in-place H2 edit -> blur -> the form transport names 'label' -> the
+    // spine writes the placement label -> the response re-renders the
+    // block by key, re-attributed for the next edit.
     $fb_label_wrapper = "$fb_wrapper [data-daedalus-edit-field-value-wrapper\$='::label::block_property']";
     $fb_label_leaf = "$fb_label_wrapper .daedalus-edit-field-value";
     $this->assertJsCondition(
@@ -1835,16 +1960,13 @@ class InlineEditBehaviorTest extends WebDriverTestBase {
       20000,
       'The form-block placement renders its visible label as an attributed pseudo-field leaf.',
     );
-    $session->executeScript(
-      "document.querySelector(\"$fb_label_leaf\")"
-      . ".dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));"
-    );
+    $this->dispatchDoubleClick($fb_label_leaf, ['metaKey' => TRUE]);
     $this->assertJsCondition(
       "Drupal.Daedalus.Edit.CurrentlyEditingElement !== null"
       . " && Drupal.Daedalus.Edit.CurrentlyEditingElement.info.fieldName === 'label'"
       . " && document.querySelector(\"$fb_label_leaf\")?.hasAttribute('contenteditable')",
       20000,
-      'Clicking the block label opened its in-place edit through the block form path.',
+      'Cmd+double-clicking the block label opened its in-place edit through the block form path.',
     );
     $session->executeScript(<<<JS
       const labelLeaf = Drupal.Daedalus.Edit.CurrentlyEditingElement.getPageElementHandle();
@@ -1852,7 +1974,7 @@ class InlineEditBehaviorTest extends WebDriverTestBase {
       labelLeaf.dispatchEvent(new Event('input', { bubbles: true }));
       Drupal.Daedalus.Edit.CurrentlyEditingElement.plugin.blur();
     JS);
-    $this->assertJsCondition('window.__fbDoneCount >= 2', 20000);
+    $this->assertJsCondition('window.__pageApplied >= 3', 20000);
     $this->assertJsCondition(
       "document.querySelector(\"$fb_label_leaf\")?.textContent.trim() === 'Renamed block label'",
       20000,
@@ -1863,15 +1985,11 @@ class InlineEditBehaviorTest extends WebDriverTestBase {
     // The form-edited block's related leaf edits in the PANEL widget (the
     // draft lives in the widget, nothing to capture from the canvas). A
     // style scrub on the block key swaps the block subtree (the edited
-    // leaf detaches with it) but targets no block_content field, so
-    // BlueprintMutationClearForms leaves the block's cached form alone.
-    // The resume finds the same form, judges base == remote for the
-    // reference, and re-opens the same edit on the swapped-in page element
-    // with the widget's typed value untouched; blur commits it.
-    $session->executeScript(
-      "document.querySelector(\"$fb_related_leaf\")"
-      . ".dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));"
-    );
+    // leaf detaches with it) but targets no block_content field, so the
+    // block's cached form is left alone. The resume re-mounts the same
+    // edit on the swapped-in page element with the widget's typed value
+    // untouched; the explicit floor (blur) commits it.
+    $this->dispatchDoubleClick($fb_related_leaf, ['metaKey' => TRUE]);
     $this->assertJsCondition(
       "Drupal.Daedalus.Edit.CurrentlyEditingElement !== null"
       . " && Drupal.Daedalus.Edit.CurrentlyEditingElement.info.fieldName === 'field_fb_related'"
@@ -1882,8 +2000,9 @@ class InlineEditBehaviorTest extends WebDriverTestBase {
     $session->executeScript(<<<JS
       (() => {
         const editing = Drupal.Daedalus.Edit.CurrentlyEditingElement;
-        const input = editing.plugin.getFormItemInputs(editing)[0];
+        const input = document.querySelector("{$fb_input}");
         input.value = 'First referenced node ({$first_referenced->id()})';
+        input.dispatchEvent(new Event('input', { bubbles: true }));
         window.__fbEdit = editing;
         window.__fbForm = editing.getForm();
         window.__fbBlock = document.querySelector("$fb_wrapper");
@@ -1907,7 +2026,7 @@ class InlineEditBehaviorTest extends WebDriverTestBase {
         if (!editing || editing !== window.__fbEdit) { return false; }
         const block = document.querySelector("$fb_wrapper");
         const pageElement = editing.getPageElementHandle();
-        const input = editing.plugin.getFormItemInputs(editing)[0];
+        const input = document.querySelector("{$fb_input}");
         return editing.getForm() === window.__fbForm
           && !!block && block !== window.__fbBlock
           && !!pageElement && block.contains(pageElement)
@@ -1921,11 +2040,78 @@ class InlineEditBehaviorTest extends WebDriverTestBase {
     $fb_error = $session->evaluateScript('window.__fbError ?? null');
     $this->assertNull($fb_error, 'The style scrub on the form block failed: ' . ($fb_error ?? ''));
     $session->executeScript('Drupal.Daedalus.Edit.CurrentlyEditingElement.plugin.blur();');
-    $this->assertJsCondition('window.__fbDoneCount >= 3', 20000, 'Blur after the block resume staged the widget value.');
+    $this->assertJsCondition('window.__pageApplied >= 5', 20000, 'Blur after the block resume committed the widget value.');
     $this->assertJsCondition(
       "document.querySelector(\"$fb_wrapper\")?.textContent.includes('First referenced node')",
       20000,
-      'The block re-rendered from tempstore with the reference the re-projected draft committed.',
+      'The block re-rendered from tempstore with the reference the resumed edit committed.',
+    );
+
+    // ——— The Configure dialog on the transport: core's form, the spine's answer. ———
+    // daedalus_layout's Configure verb opens core's UpdateBlockForm in the
+    // edit-mode dialog. daedalus_edit's alter puts that form on the form
+    // transport (LayoutBuilderBlockFormAlter: core's whole-storage submit
+    // leaves the chain, the changed properties ride one update_element)
+    // and its client half runs the dialog's Update as a job on the op
+    // queue (configure-dialog.js). The seam only a browser sees: the verb's
+    // dialog, the form's own AJAX round, the payload applied through the
+    // app's pipeline, the close command on the dialog the verb opened. The
+    // proof of "by key": the placement's visible label is a keyed leaf of
+    // its own (block:{uuid}:label), so exactly that leaf is swapped while
+    // the block and its section elements survive, where core's path
+    // replaced the whole layout.
+    $session->executeScript(<<<JS
+      (() => {
+        window.__fbSectionBeforeDialog = document.querySelector("[data-selectable='container:$section_uuid']");
+        window.__fbBlockBeforeDialog = document.querySelector("$fb_wrapper");
+        window.__fbLabelLeafBeforeDialog = document.querySelector("$fb_label_leaf");
+        Drupal.Daedalus.Selection.select('block:$fb_uuid');
+        const verb = Drupal.Daedalus.Verbs.verbsFor('block:$fb_uuid')
+          .find((candidate) => candidate.id === 'daedalus_layout.configure');
+        verb.run('block:$fb_uuid');
+      })();
+      JS);
+    $dialog_form = '#layout-builder-modal form[data-daedalus-edit-configure-dialog="block:' . $fb_uuid . '"]';
+    $dialog_label = $assert_session->waitForElementVisible('css', "$dialog_form input[name=\"settings[label]\"]", 20000);
+    $this->assertNotNull($dialog_label, 'The Configure verb opened the block dialog, its form stamped for the transport.');
+    $this->assertSame('Renamed block label', $dialog_label->getValue(), 'The dialog shows the staged placement label.');
+    $dialog_label->setValue('Configured block label');
+    // Core's Layout Builder forms declare no actions container, so the
+    // Update button renders bare in the form (no .form-actions, no dialog
+    // button pane); the server stamps it for the client half, and a real
+    // click on it (mousedown first, which the takeover binds) is what a
+    // user does.
+    $update_button = $assert_session->waitForElementVisible('css', "$dialog_form [data-daedalus-edit-configure-dialog-submit]");
+    $this->assertNotNull($update_button, 'The dialog rendered its stamped Update button.');
+    $update_button->click();
+    $this->assertJsCondition('window.__pageApplied >= 6', 20000, 'The dialog submit rode the op queue and applied the mutation payload.');
+    $this->assertJsCondition(
+      "(() => {"
+      . " const block = document.querySelector(\"$fb_wrapper\");"
+      . " const section = document.querySelector(\"[data-selectable='container:$section_uuid']\");"
+      . " const leaf = document.querySelector(\"$fb_label_leaf\");"
+      . " const modal = document.querySelector('#layout-builder-modal');"
+      . " return block === window.__fbBlockBeforeDialog"
+      . " && section === window.__fbSectionBeforeDialog"
+      . " && !!leaf && leaf !== window.__fbLabelLeafBeforeDialog"
+      . " && leaf.textContent.trim() === 'Configured block label'"
+      . " && (!modal || modal.getClientRects().length === 0);"
+      . " })()",
+      20000,
+      'The dialog commit swapped the label leaf by key (the block and section elements survived) and closed the dialog.',
+    );
+    $this->assertJsCondition(<<<JS
+      (() => {
+        const entries = Drupal.Daedalus.History?.getState?.().entries ?? [];
+        const latest = entries[entries.length - 1];
+        return !!latest && latest.label === 'Configured Renamed block label'
+          && Array.isArray(latest.targets) && latest.targets.length === 1
+          && latest.targets[0].uuid === '$fb_uuid'
+          && latest.targets[0].field_name === 'label';
+      })()
+      JS,
+      20000,
+      'The dialog commit rode the spine: one history entry naming the placement, targeted at its label.',
     );
   }
 

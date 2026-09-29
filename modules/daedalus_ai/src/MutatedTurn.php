@@ -28,8 +28,7 @@ use Symfony\Component\HttpFoundation\Request;
  * response goes out. The client applies them through the app's one
  * applyResponse pipeline, so AI edits join the blueprint mirror, subtree
  * swaps, the undo timeline, the materials store and piggybacked commands
- * by construction; there is no parallel UpdateElement/selector refresh
- * path.
+ * by construction; there is no parallel selector-based refresh path.
  *
  * Two channels the page render does not describe ride the same payloads:
  * - `history`: the tools' tempstore writes are captured by the history

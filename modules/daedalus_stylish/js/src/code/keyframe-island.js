@@ -58,6 +58,9 @@ export const KeyframeIsland = ({
   const surfaceRef = useRef(null);
   const session = useRef({});
   const [hasErrors, setHasErrors] = useState(false);
+  // The posture as a class (the element island's rule): the surface
+  // reports each swap, the live island lifts (inspector.css `--live`).
+  const [live, setLive] = useState(false);
 
   // CM6 lives outside preact's render loop; its closures read the latest
   // props through this ref. The completion source reads the universal
@@ -198,6 +201,7 @@ export const KeyframeIsland = ({
         session.current.printed = view.state.doc.toString();
         return { texts: session.current.printed.split('\n'), marks: [] };
       },
+      onPosture: setLive,
     });
     surfaceRef.current = surface;
     surface.print(session.current.printed.split('\n'), []);
@@ -220,7 +224,7 @@ export const KeyframeIsland = ({
 
   return (
     <div
-      className={`daedalus-stylish-island daedalus-stylish-keyframes__island${hasErrors ? ' daedalus-stylish-island--invalid' : ''}`}
+      className={`daedalus-stylish-island daedalus-stylish-keyframes__island${live ? ' daedalus-stylish-island--live' : ''}${hasErrors ? ' daedalus-stylish-island--invalid' : ''}`}
     >
       <div className="daedalus-stylish-island__editor" ref={containerRef} />
     </div>

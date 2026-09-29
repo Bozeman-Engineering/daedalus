@@ -123,7 +123,7 @@ class FormattedTextBlockBlueprintEditBehaviorTest extends WebDriverTestBase {
     // (every tool's JS, the blueprint mirror boot).
     $this->drupalGet($node->toUrl());
     $session->resizeWindow(1200, 1600);
-    $this->enterEditModeViaCookies($node->toUrl(), 'selector');
+    $this->enterEditModeViaCookies($node->toUrl());
     $this->assertJsCondition(
       'window.Drupal && Drupal.Daedalus && Drupal.Daedalus.Blueprint && !!Drupal.Daedalus.Blueprint.getRoot()',
       20000,
@@ -214,10 +214,9 @@ class FormattedTextBlockBlueprintEditBehaviorTest extends WebDriverTestBase {
       'The settings stamp carries the stored format and only the accessible editor-backed formats.',
     );
 
-    // Arm the edit session and count blueprint POSTs: the "exactly one op
-    // per gesture" half of the commit grammar (the filter_xss round trip of
-    // a format switch is not a blueprint mutation and must not count).
-    $this->activateTool('edit');
+    // Count blueprint POSTs: the "exactly one op per gesture" half of the
+    // commit grammar (the filter_xss round trip of a format switch is not a
+    // blueprint mutation and must not count).
     $session->executeScript(<<<JS
       window.__blueprintPosts = 0;
       const originalFetch = window.fetch;
@@ -259,8 +258,19 @@ class FormattedTextBlockBlueprintEditBehaviorTest extends WebDriverTestBase {
       window.__filtered = document.querySelector("$leaf").innerHTML;
       document.querySelector("$leaf").scrollIntoView({ block: 'center' });
       JS);
-    $session->getPage()->find('css', "$leaf p")->click();
-    $this->assertJsCondition($editor_ready, 20000, 'Clicking the leaf opened the in-place rich text edit.');
+    // Every edit below opens through the one pointer grammar: the block sits
+    // inside a section, where a bare click stops at the section, so it is
+    // selected first (the facade's plain selection, the state a click on it
+    // or its tree row leaves) and its paragraph double-clicked with a real
+    // pointer: each click keeps the selected block by the deepen rule and
+    // the dblclick at the leaf is the editor door.
+    $open_edit = function () use ($session, $component_uuid, $leaf): void {
+      $session->executeScript("Drupal.Daedalus.Selection.select('block:$component_uuid');");
+      $session->executeScript("document.querySelector(\"$leaf\").scrollIntoView({ block: 'center' });");
+      $session->getPage()->find('css', "$leaf p")->doubleClick();
+    };
+    $open_edit();
+    $this->assertJsCondition($editor_ready, 20000, 'Double-clicking the leaf opened the in-place rich text edit.');
     $session->executeScript('Drupal.Daedalus.Edit.CurrentlyEditingElement.plugin.blur();');
     $this->assertJsCondition(
       <<<JS
@@ -271,7 +281,7 @@ class FormattedTextBlockBlueprintEditBehaviorTest extends WebDriverTestBase {
           && root.innerHTML === window.__filtered
           && !root.isContentEditable
           && !root.classList.contains('daedalus-edit-inline-editing')
-          && !root.classList.contains('daedalus-edit-blueprint-editing')
+          && !root.classList.contains('daedalus-edit-editing')
           && Drupal.Daedalus.Edit.Ckeditor5Instances.size === 0;
       })()
       JS,
@@ -283,8 +293,8 @@ class FormattedTextBlockBlueprintEditBehaviorTest extends WebDriverTestBase {
     // update_element op rides the queue. The mirror carrying the new value
     // is the deterministic "response applied" signal; the same response
     // swaps the canvas markup to the new FILTERED output.
-    $session->getPage()->find('css', "$leaf p")->click();
-    $this->assertJsCondition($editor_ready, 20000, 'Re-clicking the leaf opened the edit for the commit gesture.');
+    $open_edit();
+    $this->assertJsCondition($editor_ready, 20000, 'Double-clicking the leaf opened the edit for the commit gesture.');
     $session->executeScript(<<<JS
       (() => {
         const current = Drupal.Daedalus.Edit.CurrentlyEditingElement;
@@ -324,8 +334,8 @@ class FormattedTextBlockBlueprintEditBehaviorTest extends WebDriverTestBase {
     // Escape: destroy the editor, restore the filtered markup, send
     // nothing. The canvas baseline is the post-commit filtered output.
     $session->executeScript("window.__filtered = document.querySelector(\"$leaf\").innerHTML;");
-    $session->getPage()->find('css', "$leaf p")->click();
-    $this->assertJsCondition($editor_ready, 20000, 'Re-clicking the leaf opened the edit for the Escape gesture.');
+    $open_edit();
+    $this->assertJsCondition($editor_ready, 20000, 'Double-clicking the leaf opened the edit for the Escape gesture.');
     $session->executeScript(<<<JS
       (() => {
         const current = Drupal.Daedalus.Edit.CurrentlyEditingElement;
@@ -357,8 +367,8 @@ class FormattedTextBlockBlueprintEditBehaviorTest extends WebDriverTestBase {
     // the response swap re-stamps the settings with the new stored format.
     // The toggle acts on CLICK like every face button; the format buttons
     // inside the popover activate on mousedown so a pick keeps the caret.
-    $session->getPage()->find('css', "$leaf p")->click();
-    $this->assertJsCondition($editor_ready, 20000, 'Re-clicking the leaf opened the edit for the format switch.');
+    $open_edit();
+    $this->assertJsCondition($editor_ready, 20000, 'Double-clicking the leaf opened the edit for the format switch.');
     $session->executeScript(<<<JS
       window.__openingCkeditorId = Drupal.Daedalus.Edit.CurrentlyEditingElement.ckeditorId;
       document.querySelector("[data-daedalus-edit-toggle='formats']").click();
@@ -366,8 +376,10 @@ class FormattedTextBlockBlueprintEditBehaviorTest extends WebDriverTestBase {
     $this->assertJsCondition(
       <<<JS
       (() => {
+        // The picker rides the floating surface: mounted in the document
+        // while open, absent while closed.
         const popover = document.querySelector("[data-daedalus-edit-popover='formats']");
-        return !!popover && !popover.hidden
+        return !!popover
           && !!popover.querySelector("button[data-format='daedalus_edit_formatted_text']")
           && !!popover.querySelector("button[data-format='full_html']")
           && !popover.querySelector("button[data-format='restricted_html']")
@@ -388,10 +400,14 @@ class FormattedTextBlockBlueprintEditBehaviorTest extends WebDriverTestBase {
         if (!current || current.format !== 'full_html' || !current.ckeditorId) {
           return false;
         }
+        // The pick closed the picker (gone from the document); its pressed
+        // state lives on the detached content node the widget registry
+        // holds for the next open.
+        const picker = current.verbWidgets.get('formats').popover;
         return current.ckeditorId !== window.__openingCkeditorId
           && !!Drupal.Daedalus.Edit.Ckeditor5Instances.get(current.ckeditorId)
-          && document.querySelector("[data-daedalus-edit-popover='formats']").hidden
-          && document.querySelector("[data-daedalus-edit-popover='formats'] button[data-format='full_html']").getAttribute('aria-pressed') === 'true';
+          && !document.querySelector("[data-daedalus-edit-popover='formats']")
+          && picker.querySelector("button[data-format='full_html']").getAttribute('aria-pressed') === 'true';
       })()
       JS,
       20000,
@@ -429,8 +445,8 @@ class FormattedTextBlockBlueprintEditBehaviorTest extends WebDriverTestBase {
     // is seeded into ONE fresh CKEditor on the swapped-in root: same
     // current edit, the local draft in the editor, the editing marks and
     // the Text format widget standing, the snapshot still the remote.
-    $session->getPage()->find('css', "$leaf p")->click();
-    $this->assertJsCondition($editor_ready, 20000, 'Re-clicking the leaf opened the edit for the draft steps.');
+    $open_edit();
+    $this->assertJsCondition($editor_ready, 20000, 'Double-clicking the leaf opened the edit for the draft steps.');
     $session->executeScript(<<<JS
       (() => {
         window.__draftEdit = Drupal.Daedalus.Edit.CurrentlyEditingElement;
@@ -465,7 +481,7 @@ class FormattedTextBlockBlueprintEditBehaviorTest extends WebDriverTestBase {
           && editor.getData().includes('Local draft')
           && root.isContentEditable
           && root.classList.contains('daedalus-edit-inline-editing')
-          && root.classList.contains('daedalus-edit-blueprint-editing')
+          && root.classList.contains('daedalus-edit-editing')
           && !!document.querySelector("[data-daedalus-edit-toggle='formats']")
           && editing.format === 'full_html'
           && editing.snapshot.field_formatted_text_text.value.includes('Edited rich text canvas')
@@ -507,8 +523,8 @@ class FormattedTextBlockBlueprintEditBehaviorTest extends WebDriverTestBase {
     // server value, the snapshot re-baselines to it (Escape would now
     // restore server truth), the edit stays open, and the count grows by
     // the foreign op alone.
-    $session->getPage()->find('css', "$leaf p")->click();
-    $this->assertJsCondition($editor_ready, 20000, 'Re-clicking the leaf opened the edit for the remote-wins step.');
+    $open_edit();
+    $this->assertJsCondition($editor_ready, 20000, 'Double-clicking the leaf opened the edit for the remote-wins step.');
     $session->executeScript(<<<JS
       (() => {
         window.__draftEdit = Drupal.Daedalus.Edit.CurrentlyEditingElement;
@@ -550,7 +566,7 @@ class FormattedTextBlockBlueprintEditBehaviorTest extends WebDriverTestBase {
           && !data.includes('Superseded draft')
           && root.isContentEditable
           && root.classList.contains('daedalus-edit-inline-editing')
-          && root.classList.contains('daedalus-edit-blueprint-editing')
+          && root.classList.contains('daedalus-edit-editing')
           && editing.snapshot.field_formatted_text_text.value === data
           && window.__blueprintPosts === 5;
       })()

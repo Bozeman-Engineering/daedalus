@@ -78,6 +78,7 @@ class DressedDomOperationsTest extends BlueprintKernelTestBase {
       'twig_events',
       'daedalus_tempstore',
       'daedalus_blueprint_api',
+      'file',
       'daedalus_ui',
       'daedalus_layout',
       'daedalus_stylish',

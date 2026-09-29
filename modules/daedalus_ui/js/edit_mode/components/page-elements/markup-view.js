@@ -4,7 +4,7 @@
  *
  * While the Show menu's "Markup" toggle is on, the tree renders compose()'s
  * blueprint × declared-shells composition instead of the data projection:
- * shell rows (declared class rows with fold state) interleave the model
+ * shell rows (declared class rows with a collapse posture) interleave the model
  * rows, which keep their keys, verbs, and drags. Anatomy is daedalus_ui
  * vocabulary (the declarations' elements trees, delivered as
  * drupalSettings.daedalusUi.anatomy), so the view lives here; what a
@@ -12,7 +12,7 @@
  * another module's meaning, delegated to the registered part behavior
  * (view-registry.js: daedalus_stylish drills the style inspector and runs the
  * two-way hover sync). With no behavior registered the shell rows are
- * structure only: they fold, they read, they do nothing.
+ * structure only: they collapse, they read, they do nothing.
  *
  * A second row source rides the same seam: INSTANCE rows
  * (instance-rows.js), rows for identity-carrying rich-text elements,
@@ -24,27 +24,32 @@
  *
  * Instance rows are CONTENT, not markup: they exist because the user
  * authored paragraphs, headings, lists — the litmus is that a freshly
- * placed empty block would have none. So unlike shell rows they are not
- * gated behind this view's Show-menu toggle: the tree's DEFAULT model
- * projection carries them too (withInstanceRows below), minus the tag
- * chips, which are developer vocabulary and stay this view's own.
+ * placed empty block would have none. So their seam rows carry `source:
+ * 'instance'`, which reach (reach.js) depicts in every view, while shell
+ * rows carry this view's id and ride its Show-menu toggle: the tree's
+ * DEFAULT model projection appends instance rows too (withInstanceRows
+ * below), minus the tag chips, which are developer vocabulary and stay
+ * this view's own, and its draw filter keeps them because of the source
+ * they wear, not because this file appended them.
  */
 // cspell:ignore Hieah
 
 import { compose } from './compose.js';
 
 /**
- * The provider's Show-menu toggle id (the view slice's `parts` key).
+ * The provider's Show-menu toggle id (the view slice's `views` key).
  */
 export const MARKUP_VIEW_ID = 'markup';
 
 /**
  * An instance row (an annotation-derived {selector, label, tag?, sublabel?,
  * children} from the instances source) as a seam pseudo row, owned by the
- * model key whose annotation carries it. The annotation already resolved
- * the carrier's tag server-side, so its chip rides the row as-is — but
- * only while `chips` is on: the tag chip is markup vocabulary, worn in
- * this view alongside the shell rows' chips and nowhere else.
+ * model key whose annotation carries it. Its `source` is 'instance', the
+ * origin reach.js reads: content is depicted in every view, so the row
+ * is reachable whatever the Show menu says. The annotation already
+ * resolved the carrier's tag server-side, so its chip rides the row as-is
+ * — but only while `chips` is on: the tag chip is markup vocabulary, worn
+ * in this view alongside the shell rows' chips and nowhere else.
  */
 const toInstanceRow = (row, ownerKey, chips = true) => {
   const pseudoRow = {
@@ -52,6 +57,7 @@ const toInstanceRow = (row, ownerKey, chips = true) => {
     id: row.selector,
     parentKey: ownerKey,
     label: row.label,
+    source: 'instance',
     children: row.children.map((child) =>
       toInstanceRow(child, ownerKey, chips),
     ),
@@ -68,21 +74,23 @@ const toInstanceRow = (row, ownerKey, chips = true) => {
 /**
  * The model projection with instance rows appended — what the tree renders
  * with no active view provider (daedalus_stylish's basic mode over the simple
- * page-elements tree).
+ * page-elements tree), before its draw filter (reach.js depictedRows).
  *
  * Instance rows are content, so which view renders never decides whether
  * they exist: every keyed model row asks the same instance source the
  * markup view asks and appends the same seam pseudo rows — same ids, same
- * owner keys — so a carrier selected from the canvas (Cmd+click resolving
- * a part) highlights its row in either projection; the spine's
- * {selectedKey, selectedPart} pair matches the row identically in both.
+ * owner keys, same `source: 'instance'` — so a carrier selected from the
+ * canvas (Cmd+click resolving a part) highlights its row in either
+ * projection; the spine's styling target matches the row identically in
+ * both, and the draw filter keeps the row in both because of that source.
  * Only the chips differ: here the rows are chip-less, because the tag
  * chip belongs to the markup view's developer vocabulary (shell rows,
  * resolved tags), which stays behind its Show-menu toggle.
  *
- * Display-only, like every view: the selection universe (the projection
- * index) composes both tiers view-independently, so a pseudo row here is
- * the same `key::selector` address it is in the markup view.
+ * Display-only, like every view: existence (the projection index)
+ * composes both tiers view-independently, so a pseudo row here is the
+ * same `key::selector` address it is in the markup view, and reach
+ * (reach.js) reads the row's `source`, not the view that drew it.
  *
  * @param {object} node
  *   A projected model node (projection.js projectTree output).
@@ -119,7 +127,11 @@ export const withInstanceRows = (node, instances) => {
  * key compose stamped (at any depth), and `claims` (the slot kinds the
  * part claims) rides along when compose stamped it, so the tree can mark
  * the shell that claims the root's sections as the root flow's drop
- * surface. Value rows become keyless model rows
+ * surface. A shell row's `source` is this view's id (MARKUP_VIEW_ID),
+ * the origin the projection index records and reach.js reads: a shell
+ * EXISTS in the index whatever the Show menu says, and is REACHABLE
+ * (pointer, keyboard, breadcrumb) only while the Markup view is on.
+ * Value rows become keyless model rows
  * — display-only, the same unselectable rendering a uuid-less section row
  * gets, distinctly styled via kind 'value'.
  *
@@ -171,6 +183,7 @@ export const toViewTree = (node, instances = null, tags = null) => {
       id: node.selector,
       parentKey: node.parentKey,
       label: tags?.label?.(node.parentKey, node.selector) ?? node.label,
+      source: MARKUP_VIEW_ID,
       children: node.children.map((child) =>
         toViewTree(child, instances, tags),
       ),

@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace Drupal\daedalus_stylish\EventSubscriber;
 
-use Drupal\daedalus_blueprint\Materials\Address;
+use Drupal\daedalus_blueprint\Dialect\DialectCatalog;
 use Drupal\daedalus_blueprint\Dialect\Event\DialectCatalogBuildEvent;
+use Drupal\daedalus_blueprint\Materials\Address;
+use Drupal\daedalus_blueprint\Materials\RelativeSelector;
 use Drupal\daedalus_ui\ElementModel\PageBuilderDeclarations;
 use Drupal\daedalus_stylish\ConditionTypePluginManager;
 use Drupal\daedalus_stylish\Materials\DaedalusStylishMaterialsProvider;
@@ -42,8 +44,13 @@ use Symfony\Component\EventDispatcher\EventSubscriberInterface;
  *   is data.
  * - Conditions: the condition type plugins' name => wrapper roster, in
  *   declaration order (the canonical compound order).
- * - Parts: each declared block type's class-keyed elements
- *   (.text-block-link on <pb-text>).
+ * - Selector rosters per owner: the declared part classes of the
+ *   container (the container layout's elements, the kind's beneath), of
+ *   each declared block type (.text-block-link on <pb-text>) and of any
+ *   other block (the block kind's and every declared block plugin's,
+ *   since <pb-block> is the one spelling for all of them), each beside
+ *   the base tags a tag compound may name there (the site declaration's
+ *   base section, the one declaration of a prose tag's styleability).
  * - Instances: the spine's instance namespaces (identity classes and the
  *   declared tag vocabulary).
  * - Vocabulary rosters, in every posture: per element kind, the kind's
@@ -90,14 +97,13 @@ class DialectVocabularySubscriber implements EventSubscriberInterface {
   }
 
   /**
-   * Contributes axes, conditions, parts, instances, rosters, birth and dress.
+   * Contributes axes, conditions, selectors, instances, rosters, birth, dress.
    */
   public function onCatalogBuild(DialectCatalogBuildEvent $event): void {
     $this->contributeAxes($event);
     $this->contributeConditions($event);
-    $this->contributeParts($event);
+    $this->contributeSelectors($event);
     $this->contributeInstances($event);
-    $this->contributeTextTags($event);
     $this->contributeStylable($event);
     $this->contributeBirthDefaults($event);
     $this->contributeDressedTags($event);
@@ -209,30 +215,65 @@ class DialectVocabularySubscriber implements EventSubscriberInterface {
 
   /**
    * The condition vocabulary: name => wrapper, in canonical order.
+   *
+   * The structural facts among them ride the facts lane, so the dialect
+   * parses and prints them as pseudo-classes like states while teaching
+   * and correcting them apart.
    */
   protected function contributeConditions(DialectCatalogBuildEvent $event): void {
     $conditions = [];
+    $facts = [];
     foreach ($this->conditionTypeManager->getConditions() as $name => $definition) {
       $conditions[$name] = (string) $definition['wrapper'];
+      if ($this->conditionTypeManager->isFact($name)) {
+        $facts[] = $name;
+      }
     }
     $event->addConditions($conditions);
+    $event->addFacts($facts);
   }
 
   /**
-   * Declared part classes: each block type's class-keyed elements.
+   * The selector roster per owner: its declared parts and its tags.
+   *
+   * One owner per dialect spelling: <pb-container> reads the container
+   * layout's merged declaration (the kind's elements beneath the
+   * layout's), each declared block type its own, and <pb-block> (any
+   * plugin block or undeclared type) the block kind's plus every
+   * declared block plugin's, the union being what that one spelling may
+   * name. Parts are the class-keyed elements at every depth of the
+   * elements tree (flat, the map's own key grammar), labelled as the
+   * roster labels them; pattern parts (".s-*") are the instance lane's.
+   * The tags are the base section's, the same list on every owner: the
+   * tag tier resolves to site.base.{tag} whoever owns the rule
+   * (VocabularyRosterBuilder's walk), so the parser's corrective and
+   * the validator's verdict stay one fact.
    */
-  protected function contributeParts(DialectCatalogBuildEvent $event): void {
-    $parts = [];
+  protected function contributeSelectors(DialectCatalogBuildEvent $event): void {
     $theme = $this->declarations->siteTheme();
+    $tags = $this->styleGuide->baseTags($theme);
+    $owners = [];
+    $layout_id = $event->getContainerLayoutId();
+    $owners[RelativeSelector::TYPE_CONTAINER] = [$layout_id === '' ? $this->styleGuide->getKind('container', $theme) : $this->styleGuide->getLayout($layout_id, $theme)];
     foreach (array_keys($event->getBlockTypes()) as $bundle) {
-      $tag = 'pb-' . str_replace('_', '-', $bundle);
-      foreach (array_keys($this->styleGuide->getBlockType($bundle, $theme)['elements'] ?? []) as $element_key) {
-        if (str_starts_with((string) $element_key, '.')) {
-          $parts[substr((string) $element_key, 1)][] = $tag;
+      $owners[DialectCatalog::tagForBlockType((string) $bundle)] = [$this->styleGuide->getBlockType((string) $bundle, $theme)];
+    }
+    $owners[RelativeSelector::TYPE_BLOCK] = [$this->styleGuide->getKind('block', $theme)];
+    foreach ($this->styleGuide->getBlockPlugins($theme) as $plugin_id) {
+      $owners[RelativeSelector::TYPE_BLOCK][] = $this->styleGuide->getBlockPlugin($plugin_id, $theme);
+    }
+    foreach ($owners as $owner => $declarations) {
+      $parts = [];
+      foreach ($declarations as $declaration) {
+        foreach (PageBuilderDeclarations::flattenElements($declaration) as $selector => $part) {
+          $selector = (string) $selector;
+          if (preg_match(RelativeSelector::CLASS_PATTERN, $selector)) {
+            $parts[$selector] ??= (string) ($part['label'] ?? $selector);
+          }
         }
       }
+      $event->addSelectors((string) $owner, ['parts' => $parts, 'tags' => $tags]);
     }
-    $event->addParts($parts);
   }
 
   /**
@@ -261,23 +302,6 @@ class DialectVocabularySubscriber implements EventSubscriberInterface {
     }
     if ($instances !== []) {
       $event->addInstances($instances);
-    }
-  }
-
-  /**
-   * The addressable text-tag vocabulary: the site's declared base tags.
-   *
-   * The tag tier's vocabulary ("#id p" in the dialect, "{key}::p" on the
-   * map) is the site declaration's base section, the one declaration of
-   * a prose tag's styleability, the same read the validator resolves the
-   * tier through (StyleGuide::baseTagElement()); teaching the catalog the
-   * same list keeps the parser's corrective and the validator's verdict
-   * one fact.
-   */
-  protected function contributeTextTags(DialectCatalogBuildEvent $event): void {
-    $tags = $this->styleGuide->baseTags($this->declarations->siteTheme());
-    if ($tags !== []) {
-      $event->addTextTags($tags);
     }
   }
 

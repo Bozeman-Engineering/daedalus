@@ -24,15 +24,15 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  * - Preset with minting: [add_section x N, update_style flex-grow on the
  *   deviating children] — later ops key on the uuids earlier ones minted.
  * - Drag commit: [update_style flex-grow, update_style flex-grow] on the
- *   divider's pair, weight 1 spelled as UNSET (equal is the ::> rule).
+ *   divider's pair, weight 1 spelled as UNSET (equal is the ::> * rule).
  * - Gap override/reset: one update_style on the container root.
  * - Mode flip off: [remove_variant row] — the reference drops WITHOUT
  *   materializing, and the children's grow overrides stay in the map,
  *   inert, so flipping back restores the proportions.
- * - Alignment (the folded-in Arrange control): the first stack
- *   pick carries the canonical display: grid upgrade in ONE compound op
- *   on the root; the row cross-axis is a plain align-items override on
- *   the same key.
+ * - Alignment (the folded-in Arrange control): a stack pick is a plain
+ *   flex override on the root (align-items across the declared flex
+ *   column, justify-content along it), never a display of its own; the
+ *   row cross-axis is a plain align-items override on the same key.
  *
  * Styles land through the UNIVERSAL container-kind declaration
  * (daedalus_stylish_layouts.page_builder.yml) and the shipped row variant the
@@ -63,6 +63,7 @@ class LayoutWidgetBatchTest extends KernelTestBase {
     'twig_events',
     'daedalus_tempstore',
     'daedalus_blueprint_api',
+    'file',
     'daedalus_ui',
     'daedalus_layout',
     'daedalus_stylish',
@@ -176,29 +177,29 @@ class LayoutWidgetBatchTest extends KernelTestBase {
 
     // Mode flip to Columns then back to Stack: ONE apply_variant, ONE
     // remove_variant, nothing per child, no other write — equal columns at
-    // any count are the variant + the ::> rule. The row reference composes
+    // any count are the variant + the ::> * rule. The row reference composes
     // with the band's birth default on the width axis.
     $this->batch($entity, [
-      ['op' => 'apply_variant', 'key' => $key, 'variant' => 'row'],
+      ['op' => 'apply_variant', 'key' => $key, 'variant' => 'columns'],
     ]);
     $this->assertSame(
       [
         'variants' => [
         ['variant' => 'container_site', 'fragment' => ''],
-        ['variant' => 'row', 'fragment' => ''],
+        ['variant' => 'columns', 'fragment' => ''],
         ],
       ],
       $this->styleMap($entity)[$key] ?? NULL,
     );
     $this->batch($entity, [
-      ['op' => 'remove_variant', 'key' => $key, 'variant' => 'row'],
+      ['op' => 'remove_variant', 'key' => $key, 'variant' => 'columns'],
     ]);
     $this->assertSame(
       ['variants' => [['variant' => 'container_site', 'fragment' => '']]],
       $this->styleMap($entity)[$key] ?? NULL,
     );
     $this->batch($entity, [
-      ['op' => 'apply_variant', 'key' => $key, 'variant' => 'row'],
+      ['op' => 'apply_variant', 'key' => $key, 'variant' => 'columns'],
     ]);
 
     // Preset with minting on a childless band (the widget's [1, 2, 1]
@@ -230,7 +231,7 @@ class LayoutWidgetBatchTest extends KernelTestBase {
     $this->assertSame(['default' => ['flex-grow' => '1.5']], $map["container:$first"] ?? NULL);
     $this->assertSame(['default' => ['flex-grow' => '1.5']], $map["container:$second"] ?? NULL);
 
-    // Back toward equal: the pair unsets (equal fill is the ::> rule, so
+    // Back toward equal: the pair unsets (equal fill is the ::> * rule, so
     // equal means NO entry, never flex-grow 1).
     $this->batch($entity, [
       ['op' => 'update_style', 'key' => "container:$first", 'properties' => ['flex-grow' => NULL]],
@@ -256,7 +257,7 @@ class LayoutWidgetBatchTest extends KernelTestBase {
     // the cross-axis width reference and the child grow both stay (the
     // grow inert, ready for a flip back).
     $this->batch($entity, [
-      ['op' => 'remove_variant', 'key' => $key, 'variant' => 'row'],
+      ['op' => 'remove_variant', 'key' => $key, 'variant' => 'columns'],
     ]);
     $map = $this->styleMap($entity);
     $this->assertSame(
@@ -267,12 +268,12 @@ class LayoutWidgetBatchTest extends KernelTestBase {
 
     // Flipping back on restores the proportions purely by re-reference.
     $this->batch($entity, [
-      ['op' => 'apply_variant', 'key' => $key, 'variant' => 'row'],
+      ['op' => 'apply_variant', 'key' => $key, 'variant' => 'columns'],
     ]);
     $map = $this->styleMap($entity);
     $this->assertSame([
       ['variant' => 'container_site', 'fragment' => ''],
-      ['variant' => 'row', 'fragment' => ''],
+      ['variant' => 'columns', 'fragment' => ''],
     ], $map[$key]['variants'] ?? NULL);
     $this->assertSame(['default' => ['flex-grow' => '2']], $map["container:$second"] ?? NULL);
 
@@ -304,57 +305,56 @@ class LayoutWidgetBatchTest extends KernelTestBase {
       ],
     ]);
 
-    // The first alignment pick on a plain stack: ONE compound op carries
-    // the picked axis together with the canonical display: grid upgrade
-    // (the Position widget's compound-commit pattern) — one batch, one
-    // undo step, on the container ROOT (the one box that lays out the
-    // children at every depth). Until this pick the container cost
-    // nothing.
+    // An alignment pick on a plain stack is ONE plain override on the
+    // container ROOT (the one box that lays out the children at every
+    // depth): the kind's declaration already makes the box a flex
+    // column, so the pick carries no display of its own. Until this
+    // pick the container cost nothing.
     $this->batch($entity, [
-      ['op' => 'update_style', 'key' => $key, 'properties' => ['justify-items' => 'center', 'display' => 'grid']],
+      ['op' => 'update_style', 'key' => $key, 'properties' => ['align-items' => 'center']],
     ]);
     $this->assertSame(
-      ['justify-items' => 'center', 'display' => 'grid'],
+      ['align-items' => 'center'],
       $this->styleMap($entity)[$key]['default'] ?? NULL,
     );
 
-    // The second axis sees the committed upgrade and writes alone; a
-    // stack-mode gap tick is the same ordinary root override.
+    // The second axis (justify-content, along the column) writes alone;
+    // a stack-mode gap tick is the same ordinary root override.
     $this->batch($entity, [
-      ['op' => 'update_style', 'key' => $key, 'properties' => ['align-content' => 'center']],
+      ['op' => 'update_style', 'key' => $key, 'properties' => ['justify-content' => 'center']],
       ['op' => 'update_style', 'key' => $key, 'properties' => ['gap' => '8px']],
     ]);
     $this->assertSame(
-      ['justify-items' => 'center', 'display' => 'grid', 'align-content' => 'center', 'gap' => '8px'],
+      ['align-items' => 'center', 'justify-content' => 'center', 'gap' => '8px'],
       $this->styleMap($entity)[$key]['default'] ?? NULL,
     );
 
-    // Unsetting an axis clears only its own property: the upgrade stays
-    // (unset is a local statement and never re-arranges, the Position
-    // precedent), and the container still reads as an aligned stack.
+    // Unsetting an axis clears only its own property (unset is a local
+    // statement and never re-arranges), and the container still reads
+    // as an aligned stack.
     $this->batch($entity, [
-      ['op' => 'update_style', 'key' => $key, 'properties' => ['justify-items' => NULL]],
+      ['op' => 'update_style', 'key' => $key, 'properties' => ['align-items' => NULL]],
     ]);
     $this->assertSame(
-      ['display' => 'grid', 'align-content' => 'center', 'gap' => '8px'],
+      ['justify-content' => 'center', 'gap' => '8px'],
       $this->styleMap($entity)[$key]['default'] ?? NULL,
     );
 
-    // Columns over an aligned stack: the flip clears the upgrade (it
-    // would shadow the row variant's flex) while the alignment stays
-    // inert, exactly like grows stay inert under Stack; the row
-    // cross-axis is then a plain align-items override on the same key.
+    // Columns over an aligned stack: the flip is the variant apply alone
+    // (nothing to clear, the widget wrote no display) while the stack's
+    // alignment stays inert, exactly like grows stay inert under Stack;
+    // the row cross-axis is then a plain align-items override on the
+    // same key.
     $this->batch($entity, [
-      ['op' => 'update_style', 'key' => $key, 'properties' => ['display' => NULL]],
-      ['op' => 'apply_variant', 'key' => $key, 'variant' => 'row'],
+      ['op' => 'apply_variant', 'key' => $key, 'variant' => 'columns'],
       ['op' => 'update_style', 'key' => $key, 'properties' => ['align-items' => 'center']],
     ]);
     $map = $this->styleMap($entity);
     $this->assertSame(
-      ['align-content' => 'center', 'gap' => '8px', 'align-items' => 'center'],
+      ['justify-content' => 'center', 'gap' => '8px', 'align-items' => 'center'],
       $map[$key]['default'] ?? NULL,
     );
-    $this->assertContains(['variant' => 'row', 'fragment' => ''], $map[$key]['variants'] ?? []);
+    $this->assertContains(['variant' => 'columns', 'fragment' => ''], $map[$key]['variants'] ?? []);
   }
 
   /**

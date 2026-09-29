@@ -65,6 +65,7 @@ class ElementStylesTest extends KernelTestBase {
     'twig_events',
     'daedalus_tempstore',
     'daedalus_blueprint_api',
+    'file',
     'daedalus_ui',
     'daedalus_layout',
     'daedalus_stylish',
@@ -516,8 +517,11 @@ class ElementStylesTest extends KernelTestBase {
     // Scope capture: per-layout with the host in context, kind without.
     $this->assertSame('layout:layout_twocol_section', (string) $validator->captureScope("container:$section_uuid", ['entity' => $entity]));
     $this->assertSame('kind:container', (string) $validator->captureScope("container:$section_uuid"));
-    // Sub-element keys capture the parent's scope.
-    $this->assertSame('layout:layout_twocol_section', (string) $validator->captureScope("container:$section_uuid::.band-content", ['entity' => $entity]));
+    // A rule key captures its LANDING, the element its last compound
+    // names, and a part lands on no element scope (nothing wears there);
+    // keyAddress() still answers the full address under the layout.
+    $this->assertNull($validator->captureScope("container:$section_uuid::.band-content", ['entity' => $entity]));
+    $this->assertSame('layout:layout_twocol_section::.band-content', (string) $validator->keyAddress("container:$section_uuid::.band-content", ['entity' => $entity]));
 
     // Per-layout declaration enforcement on the declared part.
     $errors = $validator->validate([

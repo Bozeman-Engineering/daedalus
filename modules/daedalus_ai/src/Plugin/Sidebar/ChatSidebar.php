@@ -17,6 +17,7 @@ use Drupal\Core\StringTranslation\StringTranslationTrait;
 use Drupal\Core\StringTranslation\TranslatableMarkup;
 use Drupal\daedalus_ui\Attribute\Sidebar;
 use Drupal\daedalus_ui\ButtonBuilderTrait;
+use Drupal\daedalus_ui\File\FileLane;
 use Drupal\daedalus_ui\ModePluginManager;
 use Drupal\daedalus_ui\SidebarPluginBase;
 use Symfony\Component\DependencyInjection\ContainerInterface;
@@ -71,6 +72,7 @@ final class ChatSidebar extends SidebarPluginBase implements ContainerFactoryPlu
     protected CsrfTokenGenerator $csrfToken,
     protected AccountProxyInterface $currentUser,
     protected ModePluginManager $modeManager,
+    protected FileLane $fileLane,
   ) {
     parent::__construct($configuration, $plugin_id, $plugin_definition);
   }
@@ -92,6 +94,7 @@ final class ChatSidebar extends SidebarPluginBase implements ContainerFactoryPlu
       $container->get('csrf_token'),
       $container->get('current_user'),
       $container->get('plugin.manager.modes'),
+      $container->get('daedalus_ui.file_lane'),
     );
   }
 
@@ -226,9 +229,36 @@ final class ChatSidebar extends SidebarPluginBase implements ContainerFactoryPlu
             'show_copy_icon' => TRUE,
             'structured_results' => FALSE,
           ],
+          // The attachment lane as the client sees it: the context
+          // manager's interceptor refuses a file over the ceiling before
+          // uploading (deep-chat has no size gate of its own) and the
+          // widget's attach button and drop zone accept the same formats
+          // the lane does (the mixedFiles attribute below).
+          'daedalus_ai' => [
+            'attachments' => [
+              'accepted_formats' => $this->acceptedFormats(),
+              'size_limit' => FileLane::SIZE_LIMIT,
+            ],
+          ],
         ],
       ],
     ];
+  }
+
+  /**
+   * The lane's accepted extensions as deep-chat's acceptedFormats string.
+   *
+   * @return string
+   *   Comma-separated dotted extensions (".png,.svg,..."), the spelling
+   *   deep-chat matches attached files against and hands the file input's
+   *   accept attribute.
+   */
+  protected function acceptedFormats(): string {
+    $dotted = array_map(
+      static fn (string $extension): string => ".$extension",
+      $this->fileLane->acceptedExtensions(),
+    );
+    return implode(',', $dotted);
   }
 
   /**
@@ -364,6 +394,25 @@ final class ChatSidebar extends SidebarPluginBase implements ContainerFactoryPlu
       'boxShadow' => 'none',
     ];
     $params['textInput']['placeholder']['style']['color'] = 'var(--daedalus-text-muted)';
+    // The attach button sits inside the well at its start (mixedFiles below)
+    // and spans about 32px from the edge; toolbar.yml's inline 18px left
+    // padding overrides the clearance deep-chat's own inside-left class
+    // would give the text, so the text (and placeholder) started under the
+    // clip. 44px clears the button with a 12px gap; the right side keeps
+    // toolbar.yml's room for the submit button.
+    $params['textInput']['styles']['text']['padding'] = '16px 60px 16px 44px';
+
+    // Attachments: the attach button (deep-chat's mixedFiles, any kind the
+    // lane accepts, the formats from the lane so the widget refuses what
+    // the server would) inside the input well at its start, and the whole
+    // chat as a drop zone. The interceptor uploads the attached files and
+    // re-encodes the turn as JSON (daedalus-ai-context-manager.js); the
+    // widget never posts multipart itself.
+    $params['mixedFiles'] = [
+      'files' => ['acceptedFormats' => $this->acceptedFormats()],
+      'button' => ['position' => 'inside-left'],
+    ];
+    $params['dragAndDrop'] = TRUE;
 
     // Injected into deep-chat's shadow DOM. The chat-view rule keeps the
     // message list and input on separate grid rows. The text-input rules let
@@ -407,6 +456,8 @@ final class ChatSidebar extends SidebarPluginBase implements ContainerFactoryPlu
       'submitButtonStyles',
       'avatars',
       'names',
+      'mixedFiles',
+      'dragAndDrop',
     ];
     foreach ($keys as $key) {
       if (isset($params[$key])) {

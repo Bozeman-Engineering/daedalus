@@ -7,7 +7,6 @@ namespace Drupal\daedalus_ui\Controller;
 use Drupal\Core\Ajax\AjaxResponse;
 use Drupal\Core\Controller\ControllerBase;
 use Drupal\daedalus_ui\EditorSettings;
-use Drupal\daedalus_ui\ToolPluginManager;
 use Drupal\daedalus_ui\Ajax\EditModeMessageCommand;
 use Drupal\Core\StringTranslation\StringTranslationTrait;
 use Symfony\Component\DependencyInjection\ContainerInterface;
@@ -22,7 +21,6 @@ final class Settings extends ControllerBase {
   use StringTranslationTrait;
 
   public function __construct(
-    protected ToolPluginManager $toolManager,
     protected EditorSettings $editorSettings,
   ) {}
 
@@ -31,7 +29,6 @@ final class Settings extends ControllerBase {
    */
   public static function create(ContainerInterface $container) {
     return new static(
-      $container->get('plugin.manager.tools'),
       $container->get('daedalus_ui.editor_settings'),
     );
   }
@@ -79,12 +76,13 @@ final class Settings extends ControllerBase {
    * Save hotkey.
    *
    * Accepts a binding string: '+'-separated lowercase modifiers followed by
-   * a key ('v', 'mod+e', 'shift+escape', 'alt'). The binding id is a tool
-   * id or a JS-registered binding id (e.g. a verb); unknown ids are
-   * accepted since the JS hotkey registry — not the server — is the
-   * authority on which bindings exist.
+   * a key ('v', 'mod+e', 'shift+escape', 'alt'). The binding id is a panel
+   * toggle's ("sidebar.{id}") or a JS-registered binding id (e.g. a verb);
+   * unknown ids are accepted since the JS hotkey registry, not the server,
+   * is the authority on which bindings exist. The message names the
+   * binding by its id: the registry owns the labels.
    */
-  public function saveHotkey(string $tool_id, string $hotkey) {
+  public function saveHotkey(string $binding_id, string $hotkey) {
     if (strlen($hotkey) > 48 || !preg_match('/^(?:(?:mod|meta|ctrl|alt|shift)\+)*[a-z0-9]+$/', $hotkey)) {
       throw new BadRequestHttpException('Invalid hotkey.');
     }
@@ -93,22 +91,15 @@ final class Settings extends ControllerBase {
     if ($account->isAuthenticated()) {
       $user = $this->entityTypeManager()->getStorage('user')->load($account->id());
       $settings = $user->daedalus_ui_settings->getValue();
-      $settings[0]['hotkeys'][$tool_id] = $hotkey;
+      $settings[0]['hotkeys'][$binding_id] = $hotkey;
       $user->set('daedalus_ui_settings', $settings[0]);
 
       daedalus_ui_save_outside_workspace($user);
     }
 
-    if ($this->toolManager->hasDefinition($tool_id)) {
-      $label = $this->toolManager->createInstance($tool_id)->label();
-    }
-    else {
-      $label = $tool_id;
-    }
-
     $response = new AjaxResponse();
-    $this->messenger()->addStatus($this->t('Set the %tool hotkey to %hotkey.', [
-      '%tool' => $label,
+    $this->messenger()->addStatus($this->t('Set the %binding hotkey to %hotkey.', [
+      '%binding' => $binding_id,
       '%hotkey' => strtoupper($hotkey),
     ]));
     return $response;

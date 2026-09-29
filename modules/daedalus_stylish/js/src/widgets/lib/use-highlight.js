@@ -1,20 +1,22 @@
 import { useEffect, useRef } from 'preact/hooks';
 import { highlightClaimsFor } from '../../highlight-claims.js';
+import { pseudoOf } from '../../computed-read.js';
 
 /**
  * Splits a bound style key into the canvas-highlight target:
- * `${key}::${sub}` for a part binding, a plain selectable key
- * otherwise.
+ * `${key}::${selector}` for a selector binding (a part's '.cls', the
+ * children '> *'), a plain selectable key otherwise. The first `::`
+ * splits root from selector, the one split every key grammar shares.
  *
  * @param {string} modelKey
  *
- * @return {{key: string, sub: ?string}}
+ * @return {{key: string, selector: ?string}}
  */
 export const styleTarget = (modelKey) => {
   const pos = modelKey.indexOf('::');
   return pos === -1
-    ? { key: modelKey, sub: null }
-    : { key: modelKey.slice(0, pos), sub: modelKey.slice(pos + 2) };
+    ? { key: modelKey, selector: null }
+    : { key: modelKey.slice(0, pos), selector: modelKey.slice(pos + 2) };
 };
 
 /**
@@ -34,22 +36,26 @@ export const styleTarget = (modelKey) => {
  *
  * Rows never check paint eligibility: painterless properties claim
  * like any other and the painter registry silently paints nothing for
- * them (the property-keyed spine's contract).
+ * them (the property-keyed spine's contract). A row on a generated box
+ * (a `::before` / `::after` target) claims nothing at all, though: the
+ * bands are rect chrome and a box has no rect (computed-read.js), so
+ * the row withholds the claim rather than have the renderer withhold
+ * the paint on its behalf across the broadcast channel.
  *
  * @param {?object} source
  *   The state source (null/undefined degrades to inert handlers, so
  *   rows render fine without a host).
  * @param {?string} key
  *   The selectable key of the styled target.
- * @param {?string} sub
- *   The part selector under the key, or null for the whole element.
+ * @param {?string} selector
+ *   The relative selector under the key, or null for the whole element.
  * @param {string[]} properties
  *   The properties this row edits.
  *
  * @return {object}
  *   Handler props to spread on the row's container element(s).
  */
-export const useRowHighlight = (source, key, sub, properties) => {
+export const useRowHighlight = (source, key, selector, properties) => {
   const ownerRef = useRef(null);
   if (ownerRef.current === null) {
     ownerRef.current = {};
@@ -63,14 +69,14 @@ export const useRowHighlight = (source, key, sub, properties) => {
   // outlive its row.
   useEffect(() => () => claimsRef.current?.release(ownerRef.current), []);
 
-  if (!claims || !key) {
+  if (!claims || !key || pseudoOf(selector) !== null) {
     return {};
   }
 
   const update = () => {
     const { hovered, focused } = stateRef.current;
     if (hovered || focused) {
-      claims.claim(ownerRef.current, { key, sub, properties });
+      claims.claim(ownerRef.current, { key, selector, properties });
     } else {
       claims.release(ownerRef.current);
     }

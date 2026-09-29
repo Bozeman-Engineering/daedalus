@@ -65,7 +65,7 @@ class MediaFileDragBehaviorTest extends WebDriverTestBase {
     // The presentation legs need an UNCOLLAPSED media block: the recipe's
     // image block collapses to ONE composed <img> root (its media reference
     // field is hidden in the view display and renders no wrapper), so it can
-    // no longer exercise the field-tier unit root, the fold, or full
+    // no longer exercise the field-tier unit root, the collapsed posture, or full
     // structure. This fabricated 'photo' bundle is the faithful stand-in: a
     // plain media reference block rendering through the default
     // entity_reference_entity_view chain, exactly the shape the legs were
@@ -204,7 +204,7 @@ class MediaFileDragBehaviorTest extends WebDriverTestBase {
    * the media reference field is a UNIT presentation root by field-type
    * default, the
    * photo block type is set to "One element" (unit) mid-test to exercise
-   * the bundle tier, and the panel + armed-edit legs assert both faces of
+   * the bundle tier, and the panel + editing legs assert both faces of
    * the default stop. The fixture is the fabricated 'photo' bundle from
    * setUp(): the recipe's image block collapses to one composed element and
    * cannot carry these legs anymore.
@@ -223,9 +223,9 @@ class MediaFileDragBehaviorTest extends WebDriverTestBase {
     $nid = (int) $node->id();
 
     // Enter Edit Mode via the server-rendered cookie path so the full
-    // toolbar (and with it every tool's edit-mode JS) attaches.
+    // chrome (and with it every panel's edit-mode JS) attaches.
     $this->drupalGet($node->toUrl());
-    $this->enterEditModeViaCookies($node->toUrl(), 'selector');
+    $this->enterEditModeViaCookies($node->toUrl());
 
     $this->assertJsCondition(
       "typeof drupalSettings !== 'undefined' && drupalSettings['Daedalus Layout'] && !!drupalSettings['Daedalus Layout'].sectionStorage",
@@ -319,6 +319,68 @@ class MediaFileDragBehaviorTest extends WebDriverTestBase {
       'The placed media blocks are staged in tempstore, not committed to the node.',
     );
 
+    // --- Leg 3: a drop ON placed media replaces it through the spine. ---
+    //
+    // The element face: landing a file on a [data-media-reference] element
+    // uploads it and the server commits the replacement as ONE
+    // update_element op on the block (no layout re-render, no selector
+    // patching), answering the mutation payload; the drop is a job on the
+    // op queue, so the canvas swaps by key, the history timeline gains a
+    // labeled entry targeted at the block field, and Save's drain covers it.
+    $target_js = "document.querySelector('[data-media-reference=\"field_photo\"]')";
+    $before_src = $session->evaluateScript("$target_js.querySelector('img').getAttribute('src')");
+    $this->assertNotEmpty($before_src, 'The placed photo block renders its media inside the drop target.');
+    $replaced_uuid = $session->evaluateScript("$target_js.closest('[data-layout-builder-block-uuid]').dataset.layoutBuilderBlockUuid");
+    $this->assertNotEmpty($replaced_uuid, 'The drop target sits inside a placed block component.');
+    $entries_before = (int) $session->evaluateScript('(Drupal.Daedalus.History?.getState?.().entries ?? []).length');
+    // Counted relative to now: the two placements above made one image
+    // media each, beside whatever the recipe ships (its Druplicon).
+    $media_storage = \Drupal::entityTypeManager()->getStorage('media');
+    $image_media_before = count($media_storage->getQuery()->accessCheck(FALSE)->condition('bundle', 'image')->execute());
+
+    $this->dispatchFileDrag($target_js, 'center', TRUE, [
+      'name' => 'replacement.png',
+      'type' => 'image/png',
+      // A 1x1 PNG of another color: a distinct file, a distinct src.
+      'base64' => 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhAGAWjR9awAAAABJRU5ErkJggg==',
+    ]);
+    $this->assertJsCondition(
+      "(() => { const img = $target_js?.querySelector('img'); return !!img && img.getAttribute('src') !== " . json_encode($before_src) . " && img.getAttribute('src').includes('replacement'); })()",
+      20000,
+      'The drop replaced the media: the block re-rendered by key with the uploaded file.',
+    );
+    $this->assertJsCondition(<<<JS
+      (() => {
+        const entries = Drupal.Daedalus.History?.getState?.().entries ?? [];
+        const latest = entries[entries.length - 1];
+        return entries.length === {$entries_before} + 1
+          && !!latest && latest.label === 'Replaced Photo'
+          && Array.isArray(latest.targets) && latest.targets.length === 1
+          && latest.targets[0].uuid === '{$replaced_uuid}'
+          && latest.targets[0].field_name === 'field_photo';
+      })()
+      JS,
+      20000,
+      'The drop rode the spine: one history entry labeled by the field and targeted at the block field.',
+    );
+    $this->assertNull(
+      $session->getPage()->find('css', '[name="file_extension_association"]'),
+      'A drop on placed media never opens the chooser (it replaces, it does not place).',
+    );
+    $this->assertSame(
+      2,
+      (int) $session->evaluateScript("document.querySelectorAll('[data-selectable^=\"container:\"] img').length"),
+      'The replacement swapped the block in place; no block was added.',
+    );
+    // Server truth: the replacement made exactly one image media and the
+    // node is still untouched (staged in tempstore).
+    $this->assertCount($image_media_before + 1, $media_storage->getQuery()->accessCheck(FALSE)->condition('bundle', 'image')->execute(), 'The replacement drop created exactly one more image media.');
+    $node_storage->resetCache([$nid]);
+    $this->assertTrue(
+      $node_storage->load($nid)->get('layout_builder__layout')->isEmpty(),
+      'The replacement is staged in tempstore, not committed to the node.',
+    );
+
     // SKIPPED past this point: the legs below read fields inside an inline
     // block by their block:<component uuid>:<field> key, but the page
     // builder does not render inline blocks through a block template, so
@@ -327,7 +389,7 @@ class MediaFileDragBehaviorTest extends WebDriverTestBase {
     // test's. Remove the skip when the rewrite lands.
     $this->markTestSkipped('Inline-block field keys are not rewritten to block:<component>:<field>.');
 
-    // --- Leg 3: presentation: media presents as ONE element. ---
+    // --- Leg 4: presentation: media presents as ONE element. ---
     //
     // The field tier: a media reference field is a UNIT presentation root
     // by default, so data-presentation="unit" rides its wrapper and marks
@@ -357,7 +419,7 @@ class MediaFileDragBehaviorTest extends WebDriverTestBase {
     \Drupal::entityTypeManager()->getStorage('block_content_type')->load('photo')
       ->setThirdPartySetting('daedalus_ui', 'presentation', 'unit')
       ->save();
-    $this->enterEditModeViaCookies($node->toUrl(), 'selector');
+    $this->enterEditModeViaCookies($node->toUrl());
     $block_root = $assert_session->waitForElement(
       'css',
       sprintf('[data-selectable="block:%s"][data-presentation="unit"]', $component_uuid),
@@ -373,7 +435,7 @@ class MediaFileDragBehaviorTest extends WebDriverTestBase {
     $this->assertNotNull($folded_row, 'The unit block\'s tree row starts folded.');
     $this->assertNull(
       $session->getPage()->find('css', sprintf('.daedalus-ui-tree__row[data-tree-key="%s"]', $field_key)),
-      'The folded row\'s children are not rendered.',
+      'The collapsed row\'s children are not rendered.',
     );
 
     // Info rows are filtered: the block_content admin label is metadata
@@ -383,35 +445,35 @@ class MediaFileDragBehaviorTest extends WebDriverTestBase {
       'No tree row renders for the block_content info label.',
     );
 
-    // Selecting inside a folded subtree unfolds the path to the selection —
-    // deep select stays reachable in the panel.
+    // Selecting inside a collapsed subtree reveals the path to the
+    // selection (the outline's reveal rule): deep select stays reachable
+    // in the panel.
     $session->executeScript("Drupal.Daedalus.Selection.select('$field_key');");
-    $unfolded_child = $assert_session->waitForElement(
+    $revealed_child = $assert_session->waitForElement(
       'css',
       sprintf('.daedalus-ui-tree__row[data-tree-key="%s"]', $field_key),
     );
-    $this->assertNotNull($unfolded_child, 'Selecting a descendant unfolded the presentation root\'s row.');
+    $this->assertNotNull($revealed_child, 'Selecting a descendant revealed the presentation root\'s row.');
 
-    // --- Leg 4: armed editing stops at the collapse boundary. ---
+    // --- Leg 5: editing stops at the collapse boundary. ---
     //
     // The original media-guidance bug: clicking the media entity's inner
-    // image reached the innermost attributed field. The armed session now
-    // resolves the click through the collapse root: the media reference
-    // field on the block is what edits, not the media entity's own image
-    // field.
+    // image reached the innermost attributed field. The pointer grammar
+    // resolves the gesture through the collapse root: Cmd+double-click on
+    // the inner image (the deep gesture, so a nested leaf edits in one
+    // go) resolves the deepest PRESENTED key, the media reference field on
+    // the block, never the media entity's own image field, and the
+    // dblclick at that leaf calls the editor door: the media reference
+    // field is what edits.
     $session->executeScript('Drupal.Daedalus.Selection.clear();');
-    $this->activateTool('edit');
-    $session->executeScript(<<<JS
-      const img = document.querySelector('[data-selectable="block:$component_uuid"] img');
-      img.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
-      JS);
+    $this->dispatchDoubleClick("[data-selectable=\"block:$component_uuid\"] img", ['metaKey' => TRUE]);
     $this->assertJsCondition(
       "Drupal.Daedalus.Selection.getSelected() === '$field_key'",
       20000,
-      'The armed click on the inner image resolved to the media reference field — the presentation boundary.',
+      'Cmd+double-click on the inner image resolved to the media reference field — the presentation boundary.',
     );
 
-    // --- Leg 5: armed Tab traversal filters through collapse roots. ---
+    // --- Leg 6: Tab traversal from the open edit filters through collapse roots. ---
     //
     // A collapse root's subtree contributes exactly ONE Tab stop (its
     // boundary item): advancing from the first photo block lands on the
@@ -429,13 +491,13 @@ class MediaFileDragBehaviorTest extends WebDriverTestBase {
     $this->assertNotSame($component_uuid, $second_uuid, 'The two placed photo blocks are distinct components.');
     $second_field_key = "block:$second_uuid:$field_name";
 
-    // Wait for the armed click's edit to settle, then release widget focus
-    // so Tab takes the session's edge path (commit + advance) regardless of
-    // which widget input happened to hold focus.
+    // Wait for the double-click's edit to settle, then release widget focus
+    // so Tab takes the open edit's edge path (commit + advance) regardless
+    // of which widget input happened to hold focus.
     $this->assertJsCondition(
       '!!Drupal.Daedalus.Edit.CurrentlyEditingElement',
       20000,
-      'The armed click began editing the media reference field.',
+      'The Cmd+double-click began editing the media reference field.',
     );
     $session->executeScript('document.activeElement && document.activeElement.blur();');
     $session->executeScript(
@@ -447,7 +509,7 @@ class MediaFileDragBehaviorTest extends WebDriverTestBase {
       'Tab advanced to the second block\'s media reference — the presentation subtree was one stop.',
     );
 
-    // --- Leg 6: the projection is the selection universe. ---
+    // --- Leg 7: the projection is the selection universe. ---
     //
     // Every pointer gesture resolves within the presented tree — the same
     // projection the panel renders and the arrows traverse. A plain click
@@ -458,7 +520,6 @@ class MediaFileDragBehaviorTest extends WebDriverTestBase {
     // deeper (the shared media entity's own attributed fields), but those
     // have no projection row — a key the panel cannot name, label, or
     // traverse from can never become the selection.
-    $this->activateTool('selector');
     $session->executeScript('Drupal.Daedalus.Selection.clear();');
     $section_key = $session->evaluateScript(<<<JS
       (() => {
@@ -474,7 +535,7 @@ class MediaFileDragBehaviorTest extends WebDriverTestBase {
     $this->assertJsCondition(
       "Drupal.Daedalus.Selection.getSelected() === '$section_key'",
       20000,
-      'A plain Selector click on the nested image selected the section — the outermost boundary.',
+      'A plain click on the nested image selected the section — the outermost boundary.',
     );
 
     $innermost_key = $session->evaluateScript(<<<JS
@@ -500,7 +561,7 @@ class MediaFileDragBehaviorTest extends WebDriverTestBase {
       'Cmd+click deep-selected the deepest presented element — the media reference field, never a key without a panel row.',
     );
 
-    // --- Leg 7: the derived merge, and the Show menu. ---
+    // --- Leg 8: the derived merge, and the Show menu. ---
     //
     // Resetting the bundle to 'auto' lets the derived default run: a block
     // whose meaningful content is exactly one thing (info is metadata)
@@ -510,7 +571,7 @@ class MediaFileDragBehaviorTest extends WebDriverTestBase {
     \Drupal::entityTypeManager()->getStorage('block_content_type')->load('photo')
       ->setThirdPartySetting('daedalus_ui', 'presentation', 'auto')
       ->save();
-    $this->enterEditModeViaCookies($node->toUrl(), 'selector');
+    $this->enterEditModeViaCookies($node->toUrl());
     $merged_root = $assert_session->waitForElement(
       'css',
       sprintf('[data-selectable="block:%s"][data-presentation="merged"]', $component_uuid),
@@ -571,7 +632,7 @@ class MediaFileDragBehaviorTest extends WebDriverTestBase {
       'The outside pointerdown closed the Show menu.',
     );
 
-    // --- Leg 8: the VECTOR lane: an .svg drop rides the same pipeline. ---
+    // --- Leg 9: the VECTOR lane: an .svg drop rides the same pipeline. ---
     //
     // SVG is file-drag's proof that media-type compatibility is derived,
     // not enumerated: the vector_image media type's source field is an

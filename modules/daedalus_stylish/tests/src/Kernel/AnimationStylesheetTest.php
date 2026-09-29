@@ -51,6 +51,7 @@ class AnimationStylesheetTest extends KernelTestBase {
     'twig_events',
     'daedalus_tempstore',
     'daedalus_blueprint_api',
+    'file',
     'daedalus_ui',
     'daedalus_stylish',
   ];
@@ -184,7 +185,8 @@ CSS;
    */
   public function testLibraryResolvesCurrentFile(): void {
     // Before any animation exists the library is asset-less but defined:
-    // pages attach it unconditionally of compile state (daedalus_stylish_page_top()).
+    // pages attach it unconditionally of compile state
+    // (daedalus_stylish_page_attachments()).
     $discovery = $this->container->get('library.discovery');
     $library = $discovery->getLibraryByName('daedalus_stylish', 'animations');
     $this->assertNotFalse($library);

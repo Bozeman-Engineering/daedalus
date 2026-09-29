@@ -4,20 +4,19 @@ import { registerDragSource, makeDragDelegate } from './drag-controller';
 import * as builders from './ops-builders';
 
 /**
- * Selector drag: moving is a Selector gesture, not a mode.
+ * Selector drag: moving is a selection gesture, not a mode.
  *
- * The Move tool is gone. While the Selector tool is current, the element
- * hover resolution offers (what a click would select at the current drill
- * level) arms as a native drag source, promoted to the nearest MOVABLE
- * element at or above it — a block PLACEMENT (block:{uuid}; three-segment
- * keys are inline-block fields) or a section. A resolved field never drags
- * itself: grabbing it drags the placement that owns it. Deep hover
- * (Cmd/Ctrl, the deep-select policy) resolves the innermost leaf, so
- * deep-select+drag grabs its nearest movable ancestor the same way. And
- * because hover resolution is selection-aware (pointing at the selection
- * means the selection), a block selected from the panel or by deep select
- * drags as ITSELF under a plain pointer — never as the boundary group
- * around it.
+ * While Edit Mode is on, the element hover resolution offers (what a click
+ * would select at the current drill level) arms as a native drag source,
+ * promoted to the nearest MOVABLE element at or above it: a block PLACEMENT
+ * (block:{uuid}; three-segment keys are inline-block fields) or a section.
+ * A resolved field never drags itself: grabbing it drags the placement that
+ * owns it. Deep hover (Cmd/Ctrl, the deep-select policy) resolves the
+ * innermost leaf, so deep-select+drag grabs its nearest movable ancestor
+ * the same way. And because hover resolution is selection-aware (pointing
+ * at the selection means the selection), a block selected from the panel
+ * or by deep select drags as ITSELF under a plain pointer, never as the
+ * boundary group around it.
  *
  * Canvas elements are never their own drag handles: an `<svg>` block root
  * cannot start a native drag at all, and inner native draggables (images,
@@ -26,9 +25,7 @@ import * as builders from './ops-builders';
  * remembers WHICH movable a drag means and toggles the wrapper's
  * `draggable`, and the wrapper's dragstart carries that element — drag
  * image included, native inner drags reinterpreted. So the selection
- * layer, not DOM nesting, still decides what a drag means. Every other
- * tool keeps the wrapper's draggability OFF; in the armed edit session a
- * pointer gesture means editing, never moving. (The page-elements tree's
+ * layer, not DOM nesting, still decides what a drag means. (The page-elements tree's
  * movable rows are independent, always-armed drag sources feeding the same
  * move sources — see page-elements-tree.js.)
  */
@@ -118,11 +115,11 @@ const arm = (element) => {
 };
 
 // Arming follows the store: the hover key names WHAT the drag layer means,
-// the tool gates WHETHER dragging is on, and a blueprint replacement means
+// the mode gates WHETHER dragging is on, and a blueprint replacement means
 // a markup swap may have recreated the armed key's element — re-resolve.
 // Memoized on those three inputs so the per-dispatch cost is comparisons,
 // not DOM queries.
-let last = { tool: null, hoverKey: null, blueprint: null };
+let last = { mode: null, hoverKey: null, blueprint: null };
 
 const syncArming = () => {
   const state = store.getState();
@@ -133,19 +130,19 @@ const syncArming = () => {
     return;
   }
   const next = {
-    tool: state.tool.currentTool,
+    mode: state.mode.mode,
     hoverKey: state.selection.hoverKey,
     blueprint: state.blueprint.blueprint,
   };
   if (
-    next.tool === last.tool &&
+    next.mode === last.mode &&
     next.hoverKey === last.hoverKey &&
     next.blueprint === last.blueprint
   ) {
     return;
   }
   last = next;
-  if (next.tool !== 'selector') {
+  if (next.mode !== 'edit') {
     disarm();
     return;
   }

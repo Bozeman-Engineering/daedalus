@@ -178,26 +178,21 @@ export const selfFacts = (element, computed, parts = {}, selectors = []) => {
 
 /**
  * The immediate parent box's facts: the computed layout that places the
- * selection, plus the nearest selectable ancestor key for attribution.
- *
- * isSelectable says whether the immediate parent box IS the selectable
- * element `key` names (closest() finds itself first) — the honesty guard
- * for the position widget's compound grid upgrade: writing display to
- * `key` only changes this child's layout parent when they are the same
- * box; with wrapper markup between them the grid would land on the
- * ancestor while the real parent stayed block flow.
+ * selection, plus the nearest selectable ancestor key for attribution
+ * (closest() finds the parent itself first; with wrapper markup between
+ * them the layout truth is still the immediate box's and the name the
+ * ancestor's).
  *
  * @param {Element} parent
  * @param {CSSStyleDeclaration} computed
  *
  * @return {{display: string, flexDirection: string, alignItems: string,
- *   isSelectable: boolean, key: ?string}}
+ *   key: ?string}}
  */
 export const parentFacts = (parent, computed) => ({
   display: computed.display,
   flexDirection: computed.flexDirection,
   alignItems: computed.alignItems,
-  isSelectable: parent.matches('[data-selectable]'),
   key:
     parent.closest('[data-selectable]')?.getAttribute('data-selectable') ??
     null,
@@ -221,7 +216,7 @@ export const parentFacts = (parent, computed) => ({
  *   isContainer: boolean, childCount: number, hasText: boolean,
  *   parts: Object<string, boolean>, partChildCount: Object<string, number>},
  *   parent: ?{display: string, flexDirection: string, alignItems: string,
- *   isSelectable: boolean, key: ?string}}}
+ *   key: ?string}}}
  *   The selection facts, or null when the key has no canvas element
  *   (context unknown; widgets degrade rather than guess). parent is null
  *   for a parentless element (the document root); consumers of parent

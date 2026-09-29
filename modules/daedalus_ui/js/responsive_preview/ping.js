@@ -17,10 +17,11 @@ let channel = null;
  * Broadcasts a 'mutated' ping to any paired responsive preview window.
  */
 export const pingMutated = () => {
-  // The responsivePreview settings ride along only when the canvas vector
-  // cluster rendered (an edit session with a main entity); without a scope
-  // there is no channel a popup could be listening on.
-  const scope = drupalSettings.daedalusUi?.responsivePreview?.scope;
+  // The edit session's identity (daedalusUi.editSession.scope, the Edit
+  // mode's one delivery) rides along only for an edit session with a main
+  // entity; without a scope there is no channel a popup could be listening
+  // on.
+  const scope = drupalSettings.daedalusUi?.editSession?.scope;
   if (!scope) {
     return;
   }

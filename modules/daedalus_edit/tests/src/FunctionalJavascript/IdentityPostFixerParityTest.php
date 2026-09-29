@@ -147,17 +147,18 @@ class IdentityPostFixerParityTest extends WebDriverTestBase {
     $this->assertSame('ab', $stored_ids[1], 'The first s-ab carrier kept its id.');
     $this->assertNotSame('ab', $stored_ids[2], 'The duplicate re-minted at presave.');
 
-    // Open the canvas editor through the real gesture: Edit Mode, Edit
-    // tool, a click on the body field. attachEditor injects the Identity
-    // plugin into every canvas editor, which is what puts it under test.
+    // Open the canvas editor through the real gesture: Edit Mode, a real
+    // pointer double-click on the body field (the click selects the leaf,
+    // the dblclick at it is the editor door). attachEditor injects the
+    // Identity plugin into every canvas editor, which is what puts it
+    // under test.
     $this->drupalGet($node->toUrl());
     $session->resizeWindow(1200, 1600);
     $this->enterEditMode();
-    $this->activateTool('edit');
 
     $wrapper = '[data-daedalus-edit-field-value-wrapper="node::' . $nid . '::body::value"]';
     $assert_session->waitForElement('css', $wrapper . ' .daedalus-edit-field-value');
-    $session->getPage()->find('css', $wrapper . ' .daedalus-edit-field-value')->click();
+    $session->getPage()->find('css', $wrapper . ' .daedalus-edit-field-value')->doubleClick();
     $editor_element = $assert_session->waitForElement('css', $wrapper . ' .ck-editor__editable');
     $this->assertNotNull($editor_element, 'The canvas CKEditor attached to the body field.');
 
@@ -376,20 +377,25 @@ class IdentityPostFixerParityTest extends WebDriverTestBase {
     $this->assertServerNoOp($nested['outdented'], 'The outdented list satisfies the server.');
 
     // ----- Blur commits a value staging accepts unchanged. -----
-    // The client minted everything, so the tempstore round trip (stage
-    // seam + presave backstop, both running IdentityMinter) is a no-op on
-    // it: the re-rendered field carries exactly the ids the editor made.
+    // The client minted everything, so the spine round trip (the form
+    // transport's commit: the applied seam + presave backstop, both
+    // running IdentityMinter) is a no-op on it: the re-rendered field
+    // carries exactly the ids the editor made. The commit rides the op
+    // queue; the applied seam (EditSession.mutationApplied, called once
+    // per fully applied response) is the deterministic "staged" signal.
     $expected_ids = $this->ids($session->evaluateScript($get_data));
     $session->executeScript(<<<JS
-      window.__daedalusEditDoneCount = 0;
-      const original = jQuery.fn.daedalusEditIsDoneUpdating;
-      jQuery.fn.daedalusEditIsDoneUpdating = function () {
-        window.__daedalusEditDoneCount++;
-        return original.apply(this, arguments);
-      };
+      window.__daedalusEditAppliedCount = 0;
+      (() => {
+        const original = Drupal.Daedalus.EditSession.mutationApplied;
+        Drupal.Daedalus.EditSession.mutationApplied = function () {
+          window.__daedalusEditAppliedCount++;
+          return original.apply(this, arguments);
+        };
+      })();
       Drupal.Daedalus.Edit.CurrentlyEditingElement.plugin.blur();
       JS);
-    $this->assertJsCondition('window.__daedalusEditDoneCount >= 1', 20000);
+    $this->assertJsCondition('window.__daedalusEditAppliedCount >= 1', 20000);
     $assert_session->waitForElement('css', $wrapper);
     $rendered_ids = $this->ids($session->evaluateScript(
       "document.querySelector('{$wrapper}').innerHTML",

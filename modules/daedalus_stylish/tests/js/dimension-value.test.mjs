@@ -14,19 +14,25 @@ import {
   clamp,
   compareToBound,
   contextUnit,
+  convertLength,
   DEFAULT_UNITS,
   evaluateExpression,
   fieldState,
   formatDimension,
   formatNumber,
+  lengthIn,
   numberFace,
+  openChrome,
   parseDimension,
   quantize,
   SCRUB_PIXELS_PER_STEP,
   scrubAdvance,
+  scrubRate,
+  seedAnchor,
   settleText,
   stepSize,
   unitGrain,
+  unitMemory,
   unitOptions,
   unitPrecision,
   UNITS,
@@ -166,25 +172,49 @@ test('numberFace shows the number alone when a unit rides the select', () => {
   assert.equal(numberFace(null), '');
 });
 
-test('unitPrecision: whole pixels, hundredths of a rem, tenths elsewhere', () => {
+test('unitPrecision: whole pixels, tenths of a rem, tenths elsewhere', () => {
   assert.equal(unitPrecision('px'), 0);
   assert.equal(unitPrecision('pt'), 0);
-  assert.equal(unitPrecision('rem'), 2);
-  assert.equal(unitPrecision('em'), 2);
-  assert.equal(unitPrecision('ch'), 2);
-  assert.equal(unitPrecision(''), 2, 'bare numbers (line-height) carry hundredths');
+  assert.equal(unitPrecision('rem'), 1, '1.4rem is a padding; 1.41rem is nothing anyone wants');
+  assert.equal(unitPrecision('em'), 1);
+  assert.equal(unitPrecision('ch'), 1);
+  assert.equal(unitPrecision('ex'), 1);
+  assert.equal(unitPrecision(''), 1, 'bare numbers (line-height) carry tenths');
   assert.equal(unitPrecision('%'), 1);
   assert.equal(unitPrecision('vw'), 1);
   assert.equal(unitPrecision('dvh'), 1);
 });
 
+test('unitPrecision: the fine modifier gives the font-relative units hundredths, nothing else changes', () => {
+  assert.equal(unitPrecision('rem', true), 2, 'Alt keeps the DevTools fine ladder for the rare case');
+  assert.equal(unitPrecision('em', true), 2);
+  assert.equal(unitPrecision('ch', true), 2);
+  assert.equal(unitPrecision('ex', true), 2);
+  assert.equal(unitPrecision('', true), 2);
+  assert.equal(unitPrecision('px', true), 0, 'a fraction of a pixel is nothing a screen can draw');
+  assert.equal(unitPrecision('pt', true), 0);
+  assert.equal(unitPrecision('%', true), 1, 'a percent\'s fine step is already a tenth');
+  assert.equal(unitPrecision('vw', true), 1);
+  assert.equal(unitPrecision('rem', false), 1);
+  assert.equal(unitPrecision('rem', undefined), 1, 'an absent flag is not fine');
+});
+
 test('quantize rounds a gesture value to its unit\'s precision', () => {
   assert.equal(quantize(12.384, 'px'), 12);
   assert.equal(quantize(12.5, 'px'), 13);
-  assert.equal(quantize(8.656, 'rem'), 8.66);
-  assert.equal(quantize(8.654, 'rem'), 8.65);
+  assert.equal(quantize(8.656, 'rem'), 8.7);
+  assert.equal(quantize(8.64, 'rem'), 8.6);
+  assert.equal(quantize(1.41, 'rem'), 1.4, 'the free scrub\'s 1.41rem lands on 1.4rem');
   assert.equal(quantize(33.333, '%'), 33.3);
-  assert.equal(quantize(1.456, ''), 1.46);
+  assert.equal(quantize(1.456, ''), 1.5);
+});
+
+test('quantize under the fine modifier keeps hundredths of a rem, whole pixels still', () => {
+  assert.equal(quantize(8.656, 'rem', true), 8.66);
+  assert.equal(quantize(8.654, 'rem', true), 8.65);
+  assert.equal(quantize(1.456, '', true), 1.46);
+  assert.equal(quantize(12.384, 'px', true), 12);
+  assert.equal(quantize(33.333, '%', true), 33.3);
 });
 
 test('unitGrain: a pixel or a percent per step, a tenth of a rem', () => {
@@ -215,6 +245,20 @@ test('stepSize follows the DevTools modifier scheme', () => {
   assert.equal(stepSize({ ctrlKey: true }), 100);
   assert.equal(stepSize({ metaKey: true, shiftKey: true }), 100, 'largest modifier wins');
   assert.equal(stepSize({ altKey: true, shiftKey: true }), 0.1, 'alt means fine grain even with shift down');
+});
+
+test('scrubRate is the unit-independent multiplier twin of stepSize', () => {
+  assert.equal(scrubRate({}), 1);
+  assert.equal(scrubRate(), 1);
+  assert.equal(scrubRate({ shiftKey: true }), 10);
+  assert.equal(scrubRate({ altKey: true }), 0.1);
+  assert.equal(scrubRate({ metaKey: true }), 100);
+  assert.equal(scrubRate({ ctrlKey: true }), 100);
+  assert.equal(scrubRate({ metaKey: true, shiftKey: true }), 100, 'largest modifier wins, as in stepSize');
+  assert.equal(scrubRate({ altKey: true, shiftKey: true }), 0.1, 'alt means fine even with shift down, as in stepSize');
+  for (const modifiers of [{}, { shiftKey: true }, { altKey: true }, { metaKey: true }, { metaKey: true, shiftKey: true }, { altKey: true, shiftKey: true }]) {
+    assert.equal(scrubRate(modifiers), stepSize(modifiers, 'px') / stepSize({}, 'px'), 'the ladder is stepSize relative to the px grain');
+  }
 });
 
 test('applyStep adds without float noise', () => {
@@ -365,6 +409,209 @@ test('scrubAdvance keeps sub-step travel and strips float noise', () => {
   assert.equal(scrubAdvance(0.2, SCRUB_PIXELS_PER_STEP, { altKey: true }).number, 0.3, 'no 0.30000000000000004');
 });
 
+// --- contextUnit -----------------------------------------------------------
+
+test('contextUnit: a space that names its unit IS the unit; a pick or a remembered unit speaks only where it names none', () => {
+  assert.equal(contextUnit({ spaceUnit: 'rem', picked: 'em', last: 'px' }), 'rem', 'a labeled field reads no memory');
+  assert.equal(contextUnit({ spaceUnit: 'rem', last: 'px' }), 'rem', '`4/3` typed over a typed `10px` settles in the space\'s rem');
+  assert.equal(contextUnit({ spaceUnit: '', picked: 'em' }), 'em', 'a bare-only table names no unit');
+  assert.equal(contextUnit({ spaceUnit: null, picked: 'em', last: 'px' }), 'em', 'the select: an explicit pick first');
+  assert.equal(contextUnit({ spaceUnit: null, last: 'px', options: ['rem', 'px'] }), 'px', 'then the last parsed unit: `4/3` typed over `16px` stays px');
+});
+
+test('openChrome: the space\'s unit as a label, the select where it names none, nothing on a unitless property', () => {
+  assert.deepEqual(openChrome({ spaceUnit: 'rem' }), { unit: 'label', steppers: true });
+  assert.deepEqual(openChrome({ spaceUnit: 'rem', mode: 'empty' }), { unit: 'label', steppers: true }, 'an empty field wears the space\'s unit');
+  assert.deepEqual(openChrome({ spaceUnit: null }), { unit: 'select', steppers: true }, 'a free space offers the select');
+  assert.deepEqual(openChrome({ spaceUnit: '' }), { unit: 'select', steppers: true }, 'a bare-only table names no unit');
+  assert.deepEqual(openChrome(), { unit: 'select', steppers: true });
+  assert.deepEqual(openChrome({ unitless: true, spaceUnit: 'rem' }), { unit: 'none', steppers: true }, 'a unitless property carries no unit, whatever its stops say');
+});
+
+test('openChrome: degraded text wears no chrome, except for the keystroke it is mid-typed', () => {
+  assert.deepEqual(openChrome({ spaceUnit: 'rem', mode: 'text' }), { unit: 'none', steppers: false }, 'a per-side listing beside a rem label was the lie');
+  assert.deepEqual(openChrome({ spaceUnit: null, mode: 'text' }), { unit: 'none', steppers: false }, 'a calc() on a free space too');
+  assert.deepEqual(openChrome({ spaceUnit: 'rem', mode: 'text', typing: true }), { unit: 'label', steppers: true }, '`16*` in flight keeps the chrome');
+  assert.deepEqual(openChrome({ spaceUnit: null, mode: 'text', typing: true }), { unit: 'select', steppers: true });
+  assert.deepEqual(openChrome({ mode: 'text', typing: true, unitless: true }), { unit: 'none', steppers: true });
+});
+
+test('contextUnit falls to the offered list where the space names no unit; a placeholder has no say', () => {
+  // A rem scale beneath a px computed default labels the field rem:
+  // the stops are what the field magnetizes to; the placeholder is a
+  // measurement and converts INTO rem (lengthIn), so nothing here reads
+  // it.
+  assert.equal(contextUnit({ spaceUnit: 'rem', options: ['px', 'em', 'rem', '%'] }), 'rem');
+  assert.equal(contextUnit({ spaceUnit: null, options: ['rem', 'px'] }), 'rem', 'no vocabulary unit: the first offered');
+  assert.equal(contextUnit({ options: ['em', 'px'] }), 'em', 'nothing else: the first offered unit');
+  assert.equal(contextUnit(), 'px', 'the built-in list\'s first unit as the floor');
+  assert.equal(contextUnit({ spaceUnit: 'rem', hintUnit: 'px' }), 'rem', 'the retired hint key is not read');
+});
+
+test('contextUnit keeps the select\'s explicit pick above its last parsed unit', () => {
+  assert.equal(contextUnit({ picked: 'em', last: 'px' }), 'em');
+  assert.equal(contextUnit({ picked: 'em', last: 'px', options: ['rem'] }), 'em', 'a pick beats the offered list too');
+  assert.equal(contextUnit({ last: 'px' }), 'px', '`4/3` typed over `16px` stays px');
+});
+
+// --- convertLength / lengthIn ----------------------------------------------
+
+// The canvas's measured bases (computed-read.js lengthBases): the
+// document root's font size and the element's own, in px.
+const ROOT_16 = { rootPx: 16, fontPx: 16 };
+const ROOT_20 = { rootPx: 20, fontPx: 12 };
+
+test('convertLength converts through the MEASURED root, never an assumed 16', () => {
+  assert.equal(convertLength('32px', 'rem', ROOT_16), 2);
+  assert.equal(convertLength('32px', 'rem', ROOT_20), 1.6, 'a 20px root: the same side is 1.6rem');
+  assert.equal(convertLength('2rem', 'px', ROOT_20), 40, 'and back the other way through the same root');
+  assert.equal(convertLength('24px', 'em', ROOT_20), 2, 'em converts through the element\'s own font size');
+  assert.equal(convertLength('1.5em', 'rem', ROOT_20), 0.9, 'em to rem: 18px over a 20px root');
+  assert.equal(convertLength('12pt', 'px', null), 16, 'points are physical: no base needed');
+  assert.equal(convertLength('16px', 'px', null), 16, 'the same unit passes the number through');
+  assert.equal(convertLength('1.5', '', null), 1.5, 'a bare number in a unitless field likewise');
+  assert.equal(convertLength('17px', 'rem', ROOT_16), 1.0625, 'unrounded: the caller quantizes for a seed or a face');
+});
+
+test('convertLength answers null when incomparable or unmeasured', () => {
+  assert.equal(convertLength('50%', 'rem', ROOT_16), null, 'a percentage never converts into rem');
+  assert.equal(convertLength('2ch', 'px', ROOT_16), null);
+  assert.equal(convertLength('16px', '%', ROOT_16), null, 'nor px into a percentage');
+  assert.equal(convertLength('16', 'rem', ROOT_16), null, 'a bare number names no length');
+  assert.equal(convertLength('32px', 'rem', null), null, 'no bases (off canvas): rem cannot be measured, so nothing is assumed');
+  assert.equal(convertLength('32px', 'em', { rootPx: 16, fontPx: null }), null, 'an unmeasured em base likewise');
+  assert.equal(convertLength('32px', 'rem', { rootPx: 0, fontPx: 16 }), null, 'a zero root is no root');
+  assert.equal(convertLength('calc(1rem + 2px)', 'rem', ROOT_16), null, 'outside the grammar');
+  assert.equal(convertLength(null, 'rem', ROOT_16), null);
+  assert.equal(convertLength(undefined, 'rem', ROOT_16), null);
+  assert.equal(convertLength('', 'px', ROOT_16), null);
+});
+
+test('lengthIn re-spells a measurement in the gesture\'s unit at the unit\'s precision', () => {
+  assert.equal(lengthIn('32px', 'rem', ROOT_16), '2rem', 'the face beside a rem select reads 2, never 32px');
+  assert.equal(lengthIn('32px', 'rem', ROOT_20), '1.6rem');
+  assert.equal(lengthIn('17px', 'rem', ROOT_16), '1.1rem', 'rem precision: the face reads what an unmodified gesture starts from, 1.0625 is no rem a gesture may carry');
+  assert.equal(lengthIn('18px', 'rem', ROOT_16), '1.1rem', '1.125 rounds to the tenth');
+  assert.equal(lengthIn('0.9rem', 'px', ROOT_16), '14px', '14.4 shown whole');
+  assert.equal(lengthIn('16px', 'px', null), '16px', 'the same unit reads as itself, unrewritten');
+  assert.equal(lengthIn(' 16.0px ', 'px', null), '16.0px', 'a face never rewrites what it can parse');
+  assert.equal(lengthIn('50%', 'rem', ROOT_16), null, 'incomparable: the caller shows it whole');
+  assert.equal(lengthIn('32px', 'rem', null), null, 'unmeasured: the caller shows it whole');
+  assert.equal(lengthIn('calc(1rem + 2px)', 'rem', ROOT_16), null);
+  assert.equal(lengthIn(null, 'rem', ROOT_16), null);
+  assert.equal(lengthIn('32px', null, ROOT_16), null, 'a space naming no unit converts to nothing');
+});
+
+// --- seedAnchor ------------------------------------------------------------
+
+test('seedAnchor converts a px placeholder into the gesture\'s unit through the measured root', () => {
+  // The theme's computed 16px side beneath a rem scale: the first tick
+  // goes 1rem to 1.1rem, never 0 to 0.1rem.
+  assert.equal(seedAnchor('16px', 'rem', ROOT_16), 1);
+  assert.equal(seedAnchor('24px', 'rem', ROOT_16), 1.5);
+  assert.equal(seedAnchor('24px', 'em', ROOT_16), 1.5);
+  assert.equal(seedAnchor('32px', 'rem', ROOT_20), 1.6, 'the page\'s root, not 16');
+  assert.equal(seedAnchor('24px', 'em', ROOT_20), 2, 'the element\'s own font size for em');
+  assert.equal(seedAnchor('1.5rem', 'px', ROOT_16), 24, 'and back the other way');
+  assert.equal(seedAnchor('12pt', 'px'), 16, 'points ride the physical basis with no bases at all');
+  assert.equal(seedAnchor('16px', 'px'), 16, 'the same unit passes the number through');
+  assert.equal(seedAnchor('1.5', ''), 1.5, 'a bare number seeds a unitless field as itself');
+});
+
+test('seedAnchor rounds the converted seed to the unit\'s precision', () => {
+  assert.equal(seedAnchor('17px', 'rem', ROOT_16), 1.1, '1.0625 is no rem value a gesture may carry; the seed is the face\'s 1.1');
+  assert.equal(seedAnchor('1.06rem', 'px', ROOT_16), 17, '16.96 shown whole');
+  assert.equal(seedAnchor('0.9rem', 'px', ROOT_16), 14, '14.4 shown whole');
+});
+
+test('seedAnchor under the fine modifier seeds the hundredths the gesture will carry', () => {
+  assert.equal(seedAnchor('17px', 'rem', ROOT_16, true), 1.06, 'Alt held at the start: the seed matches the fine ladder');
+  assert.equal(seedAnchor('17px', 'rem', ROOT_16, false), 1.1);
+  assert.equal(seedAnchor('1.06rem', 'px', ROOT_16, true), 17, 'pixels stay whole under the fine modifier');
+  assert.equal(seedAnchor('50%', 'rem', ROOT_16, true), 0, 'incomparable still seeds 0');
+});
+
+test('seedAnchor seeds 0 for an incomparable, unmeasured or missing placeholder', () => {
+  assert.equal(seedAnchor('50%', 'rem', ROOT_16), 0, 'a percentage never converts into rem');
+  assert.equal(seedAnchor('2ch', 'px', ROOT_16), 0);
+  assert.equal(seedAnchor('16px', '%', ROOT_16), 0, 'nor px into a percentage');
+  assert.equal(seedAnchor('16px', 'rem'), 0, 'no bases (the satellite has no canvas): no root is assumed');
+  assert.equal(seedAnchor('0', 'rem', ROOT_16), 0, 'a bare zero is zero in every unit');
+  assert.equal(seedAnchor(null, 'rem', ROOT_16), 0, 'no placeholder: zero');
+  assert.equal(seedAnchor(undefined, 'rem', ROOT_16), 0);
+  assert.equal(seedAnchor('', 'px', ROOT_16), 0);
+  assert.equal(seedAnchor('calc(1rem + 2px)', 'rem', ROOT_16), 0, 'outside the grammar: zero, never a guess');
+});
+
+// --- unitMemory ------------------------------------------------------------
+
+test('unitMemory remembers a value that carries a unit and retires the pick', () => {
+  assert.deepEqual(
+    unitMemory(fieldState('16px'), { last: 'rem', picked: 'em' }),
+    { last: 'px', picked: null },
+  );
+  assert.deepEqual(
+    unitMemory(fieldState('1.5'), { last: 'px', picked: 'em', bareContext: true }),
+    { last: '', picked: null },
+    'a bare number where bare is a real context (line-height) is the context',
+  );
+  assert.deepEqual(
+    unitMemory(fieldState('16px'), { last: 'rem', picked: 'em', typing: true }),
+    { last: 'px', picked: null },
+    'a parsed value supersedes the pick even mid-typing',
+  );
+});
+
+test('unitMemory keeps the context while typing is in flight', () => {
+  assert.deepEqual(
+    unitMemory(fieldState('4/3'), { last: 'em', typing: true }),
+    { last: 'em', picked: null },
+    '`4/3` typed over `16em` stays em',
+  );
+  assert.deepEqual(
+    unitMemory(fieldState(''), { last: 'px', picked: null, typing: true }),
+    { last: 'px', picked: null },
+    'a clear typed in the field keeps its unit',
+  );
+  assert.deepEqual(
+    unitMemory(fieldState(''), { picked: 'em', typing: true }),
+    { last: null, picked: 'em' },
+    'a pick made while empty survives typing into the empty field',
+  );
+  assert.deepEqual(
+    unitMemory(fieldState('12'), { last: 'rem', typing: true }),
+    { last: 'rem', picked: null },
+    'mid-typed digits where bare is no context keep the unit they will settle in',
+  );
+});
+
+test('unitMemory forgets on any outside arrival that carries no unit', () => {
+  // Element A wearing own padding: 16px, then element B with only
+  // padding-top: 2rem under a rem scale: the field shows "top 2rem"
+  // (text mode) and must not settle a typed 3 as 3px.
+  assert.deepEqual(
+    unitMemory(fieldState('top 2rem'), { last: 'px', picked: null }),
+    { last: null, picked: null },
+    'a per-side listing arriving from outside forgets the last unit',
+  );
+  assert.deepEqual(
+    unitMemory(fieldState(''), { last: 'px', picked: 'em' }),
+    { last: null, picked: null },
+    'emptied from outside (an unset element, the row menu, an undo) forgets both',
+  );
+  assert.deepEqual(
+    unitMemory(fieldState('calc(1rem + 2px)'), { last: 'px' }),
+    { last: null, picked: null },
+    'a committed expression outside the grammar carries no unit',
+  );
+  assert.deepEqual(
+    unitMemory(fieldState('12'), { last: 'rem' }),
+    { last: null, picked: null },
+    'a bare number where bare is no context carries none either',
+  );
+  assert.deepEqual(unitMemory(fieldState('')), { last: null, picked: null }, 'nothing to forget is still nothing');
+});
+
 let failures = 0;
 for (const [name, run] of tests) {
   try {
@@ -381,19 +628,3 @@ if (failures) {
   process.exit(1);
 }
 console.log(`${tests.length} dimension-value tests passed.`);
-
-// --- contextUnit -----------------------------------------------------------
-
-test('contextUnit prefers the vocabulary\'s unit over the ghost\'s and the offered list', () => {
-  // A rem scale beneath a px computed default opens the select on rem:
-  // the stops are what the field magnetizes to; the ghost shows whole.
-  assert.equal(contextUnit({ spaceUnit: 'rem', ghostUnit: 'px', options: ['px', 'em', 'rem', '%'] }), 'rem');
-  assert.equal(contextUnit({ spaceUnit: null, ghostUnit: 'px', options: ['rem', 'px'] }), 'px', 'no vocabulary unit: the ghost\'s');
-  assert.equal(contextUnit({ options: ['em', 'px'] }), 'em', 'nothing else: the first offered unit');
-  assert.equal(contextUnit(), 'px', 'the built-in list\'s first unit as the floor');
-});
-
-test('contextUnit keeps an explicit pick and the last parsed unit above the vocabulary', () => {
-  assert.equal(contextUnit({ picked: 'em', last: 'px', spaceUnit: 'rem' }), 'em');
-  assert.equal(contextUnit({ last: 'px', spaceUnit: 'rem' }), 'px', '`4/3` typed over `16px` stays px');
-});

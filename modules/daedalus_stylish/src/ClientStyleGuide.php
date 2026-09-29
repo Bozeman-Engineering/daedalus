@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace Drupal\daedalus_stylish;
 
+use Drupal\Core\Entity\EntityTypeBundleInfoInterface;
 use Drupal\Core\Logger\LoggerChannelFactoryInterface;
 use Drupal\daedalus_blueprint\Materials\Address;
+use Drupal\daedalus_blueprint\Materials\RelativeSelector;
 use Drupal\daedalus_blueprint\Materials\MaterialsRosterBuilder;
 use Drupal\daedalus_ui\ElementModel\PageBuilderDeclarations;
 use Drupal\daedalus_stylish\Vocabulary\VocabularyRosterBuilder;
@@ -74,6 +76,7 @@ class ClientStyleGuide {
     protected LoggerChannelFactoryInterface $loggerFactory,
     protected VariantConformance $variantConformance,
     protected VocabularyRosterBuilder $rosterBuilder,
+    protected EntityTypeBundleInfoInterface $bundleInfo,
   ) {}
 
   /**
@@ -117,28 +120,34 @@ class ClientStyleGuide {
    *     or strict (strict is the closed world).
    *   - groups: property definitions per group id, in inspector panel order
    *     (weight, id), each {label, properties: {name: definition}} with
-   *     labels cast to plain strings. This is the TYPED catalog the
-   *     rosters' grants resolve against: the inspector renders real
-   *     controls from the definitions (type, keywords, repeat, negative),
-   *     a consumer-appropriate catalog beside the AI's prose. Curated
-   *     groups only: a grant keyed by an id absent from this catalog is by
-   *     construction a generated wide-tier group, whose granted names
-   *     still ride the node and whose values the client lints through
-   *     csstree's embedded tables instead.
+   *     labels cast to plain strings, plus `pseudo: true` on a group
+   *     granted only at a generated box (PropertyGroupPluginManager::
+   *     isPseudoOnly(): generated_content, the existence switch). This is
+   *     the TYPED catalog the rosters' grants resolve against: the
+   *     inspector renders real controls from the definitions (type,
+   *     keywords, repeat, negative), a consumer-appropriate catalog beside
+   *     the AI's prose. Curated groups only: a grant keyed by an id absent
+   *     from this catalog is by construction a generated wide-tier group,
+   *     whose granted names still ride the node and whose values the
+   *     client lints through csstree's embedded tables instead.
    *   - conditions: condition name => {label, wrapper, axis, band?,
-   *     preference?}, in declaration order ("default" is not listed; the
-   *     client knows it comes first). The wrapper carries live thresholds
-   *     — it is the same table the server printer dispatches on, so the
-   *     client printer can never disagree. The axis is the compound lane
-   *     (width/scheme/motion/state): entry keys may compound conditions
-   *     across axes ("narrow+dark"), one per axis, and the canonical part
-   *     order is the order axes first appear in this table. The structured
-   *     facts ride beside the wrapper exactly as the condition type
-   *     declares them (ConditionTypeInterface::getConditions()): `band`
-   *     {min?, max?} for a canvas-posable width band (the ruler's stops
-   *     and the "drive the canvas there" pose), `preference` {feature,
-   *     value} for a user preference the canvas emulates. The client
-   *     never recovers either from the wrapper text.
+   *     preference?, fact?}, in declaration order ("default" is not
+   *     listed; the client knows it comes first). The wrapper carries
+   *     live thresholds: it is the same table the server printer
+   *     dispatches on, so the client printer can never disagree. The axis
+   *     is the compound lane (state/structural/width/scheme/motion):
+   *     entry keys may compound conditions across axes ("narrow+dark"),
+   *     one per axis, and the canonical part order is the order axes
+   *     first appear in this table. The structured facts ride beside the
+   *     wrapper exactly as the condition type declares them
+   *     (ConditionTypeInterface::getConditions()): `band` {min?, max?}
+   *     for a canvas-posable width band (the ruler's stops and the "drive
+   *     the canvas there" pose), `preference` {feature, value} for a user
+   *     preference the canvas emulates, `fact` TRUE for a structural
+   *     pseudo-class the editor can neither force nor pose (the printer
+   *     twin prints it bare, the pose model skips it, the code view
+   *     lights its row when the selection satisfies it). The client
+   *     never recovers a band or preference from the wrapper text.
    *   - containerRoots: (bool) whether the page-container rule is enabled
    *     (the container_roots kill switch); the client preview must
    *     replicate the backend's page-level width-band query root only when
@@ -148,16 +157,30 @@ class ClientStyleGuide {
    *     valueSpaces, axes) plus the merged declaration's other sections
    *     as authored. Every part of its elements tree at any depth is
    *     served as the node at "kind:{kind}::{selector}", and a `children`
-   *     section as the node at "{address}::>" (the client resolves the
-   *     '::>' children pseudo-part to it, declarationForKey()). An owner
+   *     section as the node at "{address}::> *" (the client resolves the
+   *     '> *' compound to it, declarationForKey()). An owner
    *     PATTERN part ("{prefix}*", not an address) is served through the
    *     builder's node projection, so it answers exactly what the roster
-   *     of any concrete class it covers answers. The authored
-   *     property_groups and variant_axes never ride.
+   *     of any concrete class it covers answers. A DECLARED generated box
+   *     (a node's `pseudo: {before: …, after: …}` section) is served
+   *     under the node as `pseudo.before` / `pseudo.after`, the roster at
+   *     "{address}::&::before" (a root's) or "{address}::before" (a
+   *     part's), a pattern node's through the builder's pseudoNode()
+   *     projection; an UNDECLARED box is not served at all, since
+   *     existence is universal and its vocabulary derives from the host
+   *     node already served (style-guide.js pseudoNode(): the host's
+   *     grants plus the pseudo-only groups, the builder's own derivation
+   *     read off served answers), so the payload never doubles. The
+   *     authored property_groups and variant_axes never ride.
    *   - blockTypes: the served node per declared block type, the roster at
    *     "block_type:{bundle}" (the universal block kind layered underneath
    *     by the guide; an undeclared bundle falls back to kinds.block
-   *     client-side, which is already the effective node). A composed
+   *     client-side, which is already the effective node), carrying the
+   *     bundle's human `label` (the block_content type's, the one name
+   *     every type surface wears: the code view's selector rows and its
+   *     completion label a `pb-{bundle}` compound by it) when the bundle
+   *     exists on the site (a declaration for a dormant bundle serves
+   *     none). A composed
    *     bundle's node carries its composed: true as authored (the render
    *     composes to ONE root element tree, so no kind or field shells
    *     apply); the per-instance render fact rides the blueprint's
@@ -184,6 +207,14 @@ class ClientStyleGuide {
    *     (findBaseTagDeclaration(), declarationForKey()'s tag branch) and
    *     the code view's tag offer enumerates its keys; instance namespaces
    *     keep identity only.
+   *   - tagLabels: {tag: word} for EVERY closed base tag
+   *     (StyleGuide::baseTagLabels(): the base declaration's `label:`
+   *     where the site declares one, else the shipped word), the one word
+   *     a surface spells a tag tier by in prose (style-guide.js
+   *     tagWord()). It covers undeclared tags too, so a label read never
+   *     falls through to the tag itself for a closed tag; the instance
+   *     lane's tag words are identity for minted tags and answer only
+   *     for a tag outside the closed set.
    *     Each root node's `axes` entry carries {label, root_only,
    *     description, owns} as the roster serves it (VocabularyRoster::
    *     axes()): the description and the owned properties ride so the
@@ -196,11 +227,17 @@ class ClientStyleGuide {
    *   - controlWidgets: control widget definition per plugin id, each
    *     {label, section, properties} with labels cast to plain strings —
    *     the server half of the basic-mode control contract. The controls:
-   *     bindings themselves ride inside the blockTypes declarations as
-   *     authored (the guide validator has already vouched for them, a
-   *     binding's own section: override included); the client resolves
-   *     each binding's widget id against this table and its own component
-   *     registry.
+   *     bindings themselves ride inside the served declarations (kinds,
+   *     block types, block plugins, layouts, instance namespaces) with
+   *     one shape: `element` is always the ordered candidate list
+   *     StyleGuide::controlCandidates() normalizes the authored key to
+   *     ('' the root, else a declared part's selector), the guide validator
+   *     having vouched for every candidate and for a binding's own
+   *     section: override. The client never sees the authoring
+   *     shorthands (a string, an omitted key): its resolver
+   *     (controls.js resolveCandidates()) routes each owned property to
+   *     one candidate of the list, and it resolves each binding's widget
+   *     id against this table and its own component registry.
    *   - controlSections: the basic-mode section roster (ControlSection),
    *     section id => {label, weight} in weight order, the headers basic
    *     mode groups its controls under.
@@ -286,6 +323,12 @@ class ClientStyleGuide {
         'label' => (string) $group->label(),
         'properties' => $properties,
       ];
+      // The pseudo-only groups say so, the fact the client's derivation
+      // of an undeclared generated box reads (style-guide.js
+      // pseudoGroups()): granted at every box and nowhere else.
+      if ($this->propertyGroups->isPseudoOnly($id)) {
+        $groups[$id]['pseudo'] = TRUE;
+      }
     }
 
     $conditions = [];
@@ -294,7 +337,7 @@ class ClientStyleGuide {
         'label' => (string) $definition['label'],
         'wrapper' => $definition['wrapper'],
         'axis' => $definition['axis'],
-      ] + array_intersect_key($definition, ['band' => TRUE, 'preference' => TRUE]);
+      ] + array_intersect_key($definition, ['band' => TRUE, 'preference' => TRUE, 'fact' => TRUE]);
     }
 
     $axis_labels = [];
@@ -306,8 +349,12 @@ class ClientStyleGuide {
     }
 
     $block_types = [];
+    $bundle_labels = $this->bundleInfo->getBundleInfo('block_content');
     foreach ($this->styleGuide->getBlockTypes($theme) as $bundle) {
       $block_types[$bundle] = $this->serveRoot(Address::blockType($bundle), $this->styleGuide->getBlockType($bundle, $theme), $theme, $axis_labels);
+      if (isset($bundle_labels[$bundle]['label'])) {
+        $block_types[$bundle]['label'] = (string) $bundle_labels[$bundle]['label'];
+      }
     }
 
     $block_plugins = [];
@@ -423,6 +470,7 @@ class ClientStyleGuide {
       'layouts' => $layouts,
       'instances' => $instances,
       'base' => $base,
+      'tagLabels' => $this->styleGuide->baseTagLabels($theme),
       'controlWidgets' => $control_widgets,
       'controlSections' => ControlSection::roster(),
       'constraintDefaults' => $this->styleGuide->constraintDefaults($theme),
@@ -468,8 +516,17 @@ class ClientStyleGuide {
    * swaps its authored property_groups and variant_axes for the roster's
    * resolved `grants` and `valueSpaces`: the roster at the node's address
    * when it has one, else (a pattern node, not an address) the builder's
-   * node projection, the same derivation. Everything else on the node
-   * ships as authored, its parts and children served recursively.
+   * node projection, the same derivation. A control binding's element key
+   * is served as its normalized candidate list (StyleGuide::
+   * controlCandidates()), the one shape the client's resolver takes; a
+   * FALSE tombstone rides as-is. A declared generated box (the node's
+   * `pseudo` section, StyleGuide::pseudoNodes()) is served as the roster
+   * at the box's address (the pseudo appended to the node's selector, the
+   * anchor's for a root) or, on a pattern node, through the builder's
+   * pseudoNode() projection; a box the node does not declare is never
+   * served, the client deriving it from this node (style-guide.js
+   * pseudoNode()). Everything else on the node ships as authored, its
+   * parts and children served recursively.
    *
    * @param array $node
    *   The declaration node.
@@ -486,11 +543,23 @@ class ClientStyleGuide {
     else {
       $vocabulary = $this->rosterBuilder->vocabulary($node, $theme);
     }
+    foreach (StyleGuide::pseudoNodes($node) as $pseudo => $box) {
+      $node['pseudo'][$pseudo] = $address === NULL
+        ? $this->serveNode($this->rosterBuilder->pseudoNode($node, $pseudo), NULL, $theme)
+        : $this->serveNode($box, Address::of($address->family, $address->id, ($address->selector ?? RelativeSelector::ANCHOR) . RelativeSelector::SUFFIX . $pseudo), $theme);
+    }
     unset($node['property_groups'], $node['variant_axes']);
+    if (isset($node['controls']) && is_array($node['controls'])) {
+      foreach ($node['controls'] as $name => $control) {
+        if (is_array($control)) {
+          $node['controls'][$name]['element'] = StyleGuide::controlCandidates($control);
+        }
+      }
+    }
     if (isset($node['children']) && is_array($node['children'])) {
       $node['children'] = $this->serveNode(
         $node['children'],
-        $address === NULL ? NULL : Address::of($address->family, $address->id, $address->part, TRUE),
+        $address === NULL ? NULL : Address::of($address->family, $address->id, trim(($address->selector ?? '') . ' > *')),
         $theme,
       );
     }
@@ -502,7 +571,7 @@ class ClientStyleGuide {
           // A pattern part is not an address; a concrete part under any
           // depth of the tree is the part address of the root (the roster
           // finds it at any depth, as the client does).
-          $part_address = $root !== NULL && preg_match('/^(?:' . Address::PART . ')$/', $selector)
+          $part_address = $root !== NULL && preg_match(RelativeSelector::CLASS_PATTERN, $selector)
             ? Address::of($root->family, $root->id, $selector)
             : NULL;
           $node['elements'][$selector] = $this->serveNode($part, $part_address, $theme);
@@ -549,7 +618,8 @@ class ClientStyleGuide {
    * Collects one served node's un-minted stops, recursing into its parts.
    *
    * Walks the `valueSpaces` map of a served node (the root, each part of
-   * its elements tree, each children pseudo-part section) for {scale,
+   * its elements tree, each children pseudo-part section, each declared
+   * generated box) for {scale,
    * stops} blocks whose stop names the minted corpus lacks, skipping a
    * block equal to the site's authored default for the property (named
    * once by the caller). Grammar problems are not this walk's business:
@@ -576,6 +646,11 @@ class ClientStyleGuide {
     }
     if (is_array($node['children'] ?? NULL)) {
       $this->collectUnmintedStops($node['children'], sprintf('the children of %s', $where), $tokens, $defaults, $drift);
+    }
+    foreach (is_array($node['pseudo'] ?? NULL) ? $node['pseudo'] : [] as $pseudo => $box) {
+      if (is_array($box)) {
+        $this->collectUnmintedStops($box, sprintf('the ::%s box of %s', $pseudo, $where), $tokens, $defaults, $drift);
+      }
     }
     foreach (is_array($node['elements'] ?? NULL) ? $node['elements'] : [] as $selector => $part) {
       if (is_array($part)) {

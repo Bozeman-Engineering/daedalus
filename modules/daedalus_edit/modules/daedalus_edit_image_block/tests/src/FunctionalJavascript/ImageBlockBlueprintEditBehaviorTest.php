@@ -45,9 +45,9 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  *   lesson the text block pinned — an empty link field must snapshot as
  *   null, or linking an unlinked image spreads the stub into the sent value
  *   and the write silently no-ops. Linking wraps the root in an anchor with
- *   the whole identity migrating onto it; a real click on that anchor
- *   selects instead of navigating; Escape restores a previewed link without
- *   sending; clearing the input unlinks back to the bare img root.
+ *   the whole identity migrating onto it; a real double-click on that
+ *   anchor edits instead of navigating; Escape restores a previewed link
+ *   without sending; clearing the input unlinks back to the bare img root.
  * - The img part: the stable image-block-image class marks "the picture"
  *   in both link states — hoisted onto the root when the img IS the root,
  *   stamped literally (img, never the anchor) when linked. The client-side
@@ -75,7 +75,7 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  *   defaults geometry seam): the block type's declaration ships its box
  *   facts as declared defaults (root display: block; width: fit-content,
  *   picture display: block), compiled into the defaults stylesheet and
- *   stamped onto the root as daedalus-stylish-defaults-- scope classes. Without
+ *   selected by the data-element address stamped on the root. Without
  *   them the linked anchor root is display: inline, whose own border box
  *   is a font strip at the baseline, and every piece of geometry-driven
  *   chrome (the frame, hover, drag targets, the hit area) measures that
@@ -90,9 +90,16 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  *   media_library_widget, the same block renders with NO blueprint editor
  *   attribution — instead the form path's lookup attributes (all with the
  *   'value' property segment configurable fields resolve to) hoist onto the
- *   collapsed root, and a click edits the field through the real entity
- *   form in the sidebar. The form path is never taken away; it is how
- *   non-media-library widgets keep working.
+ *   collapsed root, and a double-click edits the field through the real
+ *   entity form in the sidebar. The form path is never taken away; it is
+ *   how non-media-library widgets keep working.
+ *
+ * Every edit opens through the one pointer grammar: the block sits inside
+ * a section, where a bare click stops at the section, so the block is
+ * selected first (the facade's plain selection, the state a click on it or
+ * its tree row leaves) and the leaf double-clicked with a real pointer:
+ * each click keeps the selected block by the deepen rule and the dblclick
+ * at the leaf is the editor door.
  *
  * The fixture is DaedalusFixtureTrait (the daedalus recipe's site, as
  * daedalus_editor); the recipe ships the image block type (via the
@@ -140,7 +147,7 @@ class ImageBlockBlueprintEditBehaviorTest extends WebDriverTestBase {
 
     $this->drupalGet($node->toUrl());
     $session->resizeWindow(1200, 1600);
-    $this->enterEditModeViaCookies($node->toUrl(), 'selector');
+    $this->enterEditModeViaCookies($node->toUrl());
     $this->assertJsCondition(
       'window.Drupal && Drupal.Daedalus && Drupal.Daedalus.Blueprint && !!Drupal.Daedalus.Blueprint.getRoot()',
       20000,
@@ -215,9 +222,6 @@ class ImageBlockBlueprintEditBehaviorTest extends WebDriverTestBase {
       'The placeholder root is the container root\'s direct child and carries the editor settings and the drop-to-replace bag.',
     );
 
-    // Arm the edit session.
-    $this->activateTool('edit');
-
     // A navigation sentinel (any page navigation produces a fresh JS context
     // without this property) plus a blueprint POST counter: the "exactly one
     // op per gesture" half of the commit grammar. Installed after the
@@ -234,12 +238,12 @@ class ImageBlockBlueprintEditBehaviorTest extends WebDriverTestBase {
       };
       JS);
 
-    // Click the placeholder: the edit opens with its Link widget on the
-    // chip, and — because the leaf is empty — edit() auto-opens the media
-    // library modal (the server-built URL from the editor settings, opened
-    // as a Drupal AJAX modal; the widget never constructs library state).
-    $session->executeScript("document.querySelector(\"$leaf\").scrollIntoView({ block: 'center' });");
-    $session->getPage()->find('css', $leaf)->click();
+    // Double-click the placeholder: the edit opens with its Link widget on
+    // the chip, and — because the leaf is empty — edit() auto-opens the
+    // media library modal (the server-built URL from the editor settings,
+    // opened as a Drupal AJAX modal; the widget never constructs library
+    // state).
+    $this->reopenEdit($component_uuid, $leaf);
     $this->assertJsCondition(
       <<<JS
       (() => {
@@ -249,7 +253,7 @@ class ImageBlockBlueprintEditBehaviorTest extends WebDriverTestBase {
       })()
       JS,
       20000,
-      'Clicking the empty placeholder opened the edit and auto-opened the media library modal.',
+      'Double-clicking the empty placeholder opened the edit and auto-opened the media library modal.',
     );
 
     // The media gesture is an EDIT-SCOPED verb on the selection chip's face
@@ -364,18 +368,27 @@ class ImageBlockBlueprintEditBehaviorTest extends WebDriverTestBase {
     // edit's snapshot must read it as null. A stub kept in the snapshot gets
     // spread into the sent value, which the server treats as "leave this
     // field alone", silently dropping the link the user just typed.
-    $session->executeScript("document.querySelector(\"$leaf\").scrollIntoView({ block: 'center' });");
-    $session->getPage()->find('css', $leaf)->click();
+    $this->reopenEdit($component_uuid, $leaf);
     $this->assertJsCondition(
-      "Drupal.Daedalus.Edit.CurrentlyEditingElement !== null && !!document.querySelector(\".daedalus-edit-link-input\")"
+      "Drupal.Daedalus.Edit.CurrentlyEditingElement !== null && !!document.querySelector(\"[data-daedalus-edit-toggle='link']\")"
       . " && !document.querySelector(\".media-library-widget-modal\")",
       20000,
-      'Re-clicking the img root opened the edit (and, non-empty now, did not auto-open the library).',
+      'Double-clicking the img root opened the edit (and, non-empty now, did not auto-open the library).',
     );
     $this->assertJsCondition(
       'Drupal.Daedalus.Edit.CurrentlyEditingElement.snapshot.field_image_url === null',
       20000,
       'The empty link field snapshots as null, not as the mirror\'s form-only stub.',
+    );
+    // The link input lives on the floating surface, absent until the Link
+    // toggle opens it (click, like every face button).
+    $session->executeScript(<<<JS
+      document.querySelector("[data-daedalus-edit-toggle='link']").click();
+      JS);
+    $this->assertJsCondition(
+      '!!document.querySelector(".daedalus-edit-link-input")',
+      20000,
+      'The Link toggle opened the link popover on the surface for the link-from-empty gesture.',
     );
     $session->executeScript(<<<JS
       (() => {
@@ -432,23 +445,32 @@ class ImageBlockBlueprintEditBehaviorTest extends WebDriverTestBase {
       'Linked server render: the img carries the part class, the anchor root does not.',
     );
 
-    // Links are selection surfaces, not navigation: with the session armed,
-    // a REAL pointer click on the rendered anchor must open the edit instead
-    // of leaving the page. Then a typed uri previews the href in place
-    // (identity stays on the root through the preview), and Escape restores
-    // the snapshot — previewed link included — sending nothing.
-    $session->executeScript("document.querySelector(\"$leaf\").scrollIntoView({ block: 'center' });");
-    $session->getPage()->find('css', $leaf)->click();
+    // Links are selection surfaces, not navigation: a REAL pointer
+    // double-click on the rendered anchor must open the edit instead of
+    // leaving the page (the pointer grammar's click handler prevents each
+    // click's default and the dblclick is the door). Then a typed uri
+    // previews the href in place (identity stays on the root through the
+    // preview), and Escape restores the snapshot — previewed link included
+    // — sending nothing.
+    $this->reopenEdit($component_uuid, $leaf);
     $this->assertJsCondition(
       <<<JS
       (() => {
         return window.__notNavigated === true
           && Drupal.Daedalus.Edit.CurrentlyEditingElement !== null
-          && !!document.querySelector(".daedalus-edit-link-input");
+          && !!document.querySelector("[data-daedalus-edit-toggle='link']");
       })()
       JS,
       20000,
-      'Clicking the rendered link did not navigate; it opened the in-place edit.',
+      'Double-clicking the rendered link did not navigate; it opened the in-place edit.',
+    );
+    $session->executeScript(<<<JS
+      document.querySelector("[data-daedalus-edit-toggle='link']").click();
+      JS);
+    $this->assertJsCondition(
+      '!!document.querySelector(".daedalus-edit-link-input")',
+      20000,
+      'The Link toggle opened the link popover on the surface for the href preview gesture.',
     );
     $session->executeScript(<<<JS
       (() => {
@@ -461,6 +483,24 @@ class ImageBlockBlueprintEditBehaviorTest extends WebDriverTestBase {
       "document.querySelector(\"$leaf\").getAttribute('href') === 'https://drupal.org/'",
       20000,
       'Typing a uri previewed the href on the anchor root in place.',
+    );
+    // Escape is one step on the floating surface: the first press, from the
+    // focused link input as a keyboard sends it, closes only the popover
+    // (the surface takes it at document capture and prevents its default,
+    // which the session's own Escape binding declines), so the edit and
+    // its previewed href survive; the second press, on document with no
+    // popover open, cancels the edit and restores the snapshot.
+    $this->pressKeyOnFocused('Escape');
+    $this->assertJsCondition(
+      <<<JS
+      (() => {
+        return !document.querySelector(".daedalus-edit-link-input")
+          && Drupal.Daedalus.Edit.CurrentlyEditingElement !== null
+          && document.querySelector("$leaf").getAttribute('href') === 'https://drupal.org/';
+      })()
+      JS,
+      20000,
+      'Escape from the link input closed only the popover; the edit and its previewed href survived.',
     );
     $this->pressHotkey('Escape');
     $this->assertJsCondition(
@@ -478,11 +518,19 @@ class ImageBlockBlueprintEditBehaviorTest extends WebDriverTestBase {
     // Unlink: clear the input and blur. The commit clears the field and the
     // swap re-renders the bare img root — the whole identity migrating back
     // off the anchor.
-    $session->getPage()->find('css', $leaf)->click();
+    $this->reopenEdit($component_uuid, $leaf);
     $this->assertJsCondition(
-      'Drupal.Daedalus.Edit.CurrentlyEditingElement !== null && !!document.querySelector(".daedalus-edit-link-input")',
+      "Drupal.Daedalus.Edit.CurrentlyEditingElement !== null && !!document.querySelector(\"[data-daedalus-edit-toggle='link']\")",
       20000,
-      'Re-clicking the anchor root opened the edit for the unlink gesture.',
+      'Double-clicking the anchor root opened the edit for the unlink gesture.',
+    );
+    $session->executeScript(<<<JS
+      document.querySelector("[data-daedalus-edit-toggle='link']").click();
+      JS);
+    $this->assertJsCondition(
+      '!!document.querySelector(".daedalus-edit-link-input")',
+      20000,
+      'The Link toggle opened the link popover on the surface for the unlink gesture.',
     );
     $session->executeScript(<<<JS
       (() => {
@@ -526,12 +574,11 @@ class ImageBlockBlueprintEditBehaviorTest extends WebDriverTestBase {
     // src and alt, with the edit surviving into a fresh snapshot again —
     // the verb face -> modal -> mediaSelected seam, the edit open the
     // whole way.
-    $session->executeScript("document.querySelector(\"$leaf\").scrollIntoView({ block: 'center' });");
-    $session->getPage()->find('css', $leaf)->click();
+    $this->reopenEdit($component_uuid, $leaf);
     $this->assertJsCondition(
-      'Drupal.Daedalus.Edit.CurrentlyEditingElement !== null && !!document.querySelector(".daedalus-edit-link-input")',
+      "Drupal.Daedalus.Edit.CurrentlyEditingElement !== null && !!document.querySelector(\"[data-daedalus-edit-toggle='link']\")",
       20000,
-      'Re-clicking the img root opened the edit for the replace gesture.',
+      'Double-clicking the img root opened the edit for the replace gesture.',
     );
     $replace_verb = ".daedalus-ui-frame--editing .daedalus-ui-frame__chip--primary"
       . " .daedalus-ui-frame__verbs button[aria-label='Replace image']";
@@ -641,8 +688,8 @@ class ImageBlockBlueprintEditBehaviorTest extends WebDriverTestBase {
 
     // ——— The frame hugs the picture: the declared defaults geometry. ———
     // The block is linked inside the container, so the anchor is the root.
-    // Select it with the Selector (the frame serves both selection grammars;
-    // this is the plain user gesture): the primary stroke paints the root's
+    // Select it through the facade (the plain selection a click or a tree
+    // row lands): the primary stroke paints the root's
     // own getBoundingClientRect(), so if the declaration's box facts did
     // not land (display: block; width: fit-content from the compiled
     // defaults stylesheet, reached through the stamped scope classes inside
@@ -652,7 +699,6 @@ class ImageBlockBlueprintEditBehaviorTest extends WebDriverTestBase {
     // within a pixel with the measurements in the message. The root
     // equalling the picture in BOTH dimensions is what tells fit-content
     // from a full-width block box.
-    $this->activateTool('selector');
     $session->executeScript("Drupal.Daedalus.Selection.select('block:$component_uuid');");
     $this->assertFrameHugsPicture($component_uuid, 'linked (anchor root)');
 
@@ -824,10 +870,8 @@ class ImageBlockBlueprintEditBehaviorTest extends WebDriverTestBase {
     // form path's lookup attributes hoist onto the collapsed root instead
     // (the hidden field renders no per-item wrappers to carry them), and a
     // click edits the field through the real entity form in the sidebar.
-    // The property segment is 'value', not target_id: configurable fields
-    // have no getMainPropertyName() for the render-side stamper to consult,
-    // and the form-side stampers hardcode 'value', so 'value' is the
-    // grammar's de facto property for every configurable field.
+    // The property segment is the field's main property (target_id for a
+    // media reference), the one minter's rule on both sides (EditIdentity).
     \Drupal::service('entity_display.repository')
       ->getFormDisplay('block_content', 'image')
       ->setComponent('field_image', ['type' => 'entity_reference_autocomplete'])
@@ -836,7 +880,7 @@ class ImageBlockBlueprintEditBehaviorTest extends WebDriverTestBase {
     // the reload below re-renders the block under the flipped widget.
     drupal_flush_all_caches();
 
-    $this->enterEditModeViaCookies($node->toUrl(), 'selector');
+    $this->enterEditModeViaCookies($node->toUrl());
     $this->assertJsCondition(
       'window.Drupal && Drupal.Daedalus && Drupal.Daedalus.Blueprint && !!Drupal.Daedalus.Blueprint.getRoot()',
       20000,
@@ -856,30 +900,28 @@ class ImageBlockBlueprintEditBehaviorTest extends WebDriverTestBase {
           const id = root.getAttribute('data-daedalus-edit-id') || '';
           const valueWrapper = root.getAttribute('data-daedalus-edit-field-value-wrapper') || '';
           return !root.hasAttribute('data-daedalus-edit-editor')
-            && id.includes('::field_image::') && id.endsWith('::value')
-            && valueWrapper.endsWith('::field_image::value')
-            && (root.getAttribute('data-daedalus-edit-page-element-id') || '').endsWith('::value')
+            && id.includes('::field_image::') && id.endsWith('::target_id')
+            && valueWrapper.endsWith('::field_image::target_id')
+            && (root.getAttribute('data-daedalus-edit-page-element-id') || '').endsWith('::target_id')
             && root.matches("img[src*='image-2']");
         })()
         JS),
-      'The fallback tier hoisted the form-path lookup attributes (property segment "value") onto the root and stamped no blueprint editor.',
+      'The fallback tier hoisted the form-path lookup attributes (property segment "target_id") onto the root and stamped no blueprint editor.',
     );
 
-    // Clicking the collapsed root on this tier opens the FORM path: the real
-    // entity form loads in the sidebar with the configured autocomplete
-    // widget revealed. The click is synthetic into the session's document
-    // -level handler, the same path as a real pointer click.
-    $this->activateTool('edit');
-    $session->executeScript(<<<JS
-      document.querySelector("$wrapper").scrollIntoView({ block: 'center' });
-      document.querySelector("$wrapper")
-        .dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
-      JS);
+    // Cmd+double-clicking the collapsed root on this tier opens the FORM
+    // path: the deep clicks resolve the block under the pointer (a bare
+    // click would stop at its section), the dblclick at the leaf is the
+    // door, and the real entity form loads in the sidebar with the
+    // configured autocomplete widget revealed. The gesture is dispatched
+    // into the pointer grammar's document-level handlers, the same path as
+    // a real pointer double-click.
+    $this->dispatchDoubleClick($wrapper, ['metaKey' => TRUE]);
     $this->assertJsCondition(
       "Drupal.Daedalus.Edit.CurrentlyEditingElement !== null"
       . " && Drupal.Daedalus.Edit.CurrentlyEditingElement.info.fieldName === 'field_image'",
       20000,
-      'Clicking the collapsed root on the fallback tier opened the field_image form edit.',
+      'Cmd+double-clicking the collapsed root on the fallback tier opened the field_image form edit.',
     );
     // The honest panel: the real entity form loaded in the sidebar and the
     // configured autocomplete widget revealed in-flow (the inline block's
@@ -904,6 +946,28 @@ class ImageBlockBlueprintEditBehaviorTest extends WebDriverTestBase {
       20000,
       'The sidebar entity form revealed the configured autocomplete widget in-flow.',
     );
+  }
+
+  /**
+   * Re-opens the block's edit the way a pointer does: select, double-click.
+   *
+   * The block is selected through the facade (a plain selection, the state
+   * a prior click on it or its tree row leaves; a bare click inside the
+   * section would stop at the section), then its root is double-clicked
+   * with a REAL pointer: each click keeps the selected block by the
+   * resolver's deepen rule and the dblclick at the leaf (chain index 0)
+   * calls the editor door.
+   *
+   * @param string $component_uuid
+   *   The block's component uuid (its selectable key is block:{uuid}).
+   * @param string $css
+   *   A CSS selector for the element to double-click (the block's root).
+   */
+  private function reopenEdit(string $component_uuid, string $css): void {
+    $session = $this->getSession();
+    $session->executeScript("Drupal.Daedalus.Selection.select('block:$component_uuid');");
+    $session->executeScript("document.querySelector(" . json_encode($css) . ").scrollIntoView({ block: 'center' });");
+    $session->getPage()->find('css', $css)->doubleClick();
   }
 
   /**
@@ -946,9 +1010,7 @@ class ImageBlockBlueprintEditBehaviorTest extends WebDriverTestBase {
           stroke: stroke ? rect(stroke) : null,
           rootTag: root ? root.tagName.toLowerCase() : null,
           display: root ? getComputedStyle(root).display : null,
-          stamps: root
-            ? [...root.classList].filter((name) => name.startsWith('daedalus-stylish-defaults--')).sort()
-            : [],
+          address: root ? root.getAttribute('data-element') : null,
           inTokenScope: !!(root && root.closest('.daedalus-stylish-token-scope')),
         };
       })()
@@ -989,11 +1051,7 @@ class ImageBlockBlueprintEditBehaviorTest extends WebDriverTestBase {
       );
     }
     $this->assertSame('block', $measured['display'], "The root is a block box from the declared defaults. $detail");
-    $this->assertSame(
-      ['daedalus-stylish-defaults--block_type-image', 'daedalus-stylish-defaults--kind-block'],
-      $measured['stamps'],
-      "The root wears the declared-defaults scope stamps. $detail",
-    );
+    $this->assertSame('block_type:image', $measured['address'], "The root wears the element address the declared defaults select by. $detail");
     $this->assertTrue($measured['inTokenScope'], "The root renders inside the token scope the compiled rules are scoped under. $detail");
   }
 

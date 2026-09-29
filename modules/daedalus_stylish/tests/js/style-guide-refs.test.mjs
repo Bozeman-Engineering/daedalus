@@ -7,13 +7,15 @@
  * granted names; valueSpaces: property => the effective constraint
  * block), never the authored declaration. These tests hold the client
  * half of those reads (declaredSets, grantsOf, propertyGranted,
- * constraintsFor, buildSections) over the served shape; the equivalence
- * with the PHP roster is locked by VocabularyRosterTest::
- * testClientTwinEquivalence through tests/js/vocabulary-cases.mjs. Exits
- * non-zero on failure.
+ * constraintsFor, buildSections) over the served shape, and the arrival
+ * posture a built section projects into the collapse model (autoOpen:
+ * the values signal and the pending-line signal over the section's
+ * visible rows); the equivalence with the PHP roster is locked by
+ * VocabularyRosterTest::testClientTwinEquivalence through
+ * tests/js/vocabulary-cases.mjs. Exits non-zero on failure.
  */
 import { strict as assert } from 'node:assert';
-import { buildSections, constraintsFor, declaredSets, grantsOf, propertyGranted } from '../../js/src/style-guide.js';
+import { autoOpen, buildSections, constraintsFor, declaredSets, grantsOf, propertyGranted } from '../../js/src/style-guide.js';
 
 const guide = {
   enforcement: 'guarded',
@@ -151,6 +153,28 @@ test('buildSections binds the grant at every placement depth', () => {
   assert.deepEqual(buildSections(guide, container, null)[0].rows.map((row) => row.property), ['gap']);
   assert.deepEqual(buildSections(guide, { grants: { spacing: ['padding', 'gap'] } }, null)[0].rows.map((row) => row.property), ['padding', 'gap'],
     'the whole group rows the shorthand wherever the container sits');
+});
+
+// The arrival posture (autoOpen): the section's default in the collapse
+// model, `folded: !autoOpen(...)`. The explicit postures over it are the
+// model's (daedalus_ui tests/js/collapse.test.mjs owns that rule).
+const visibleRows = [{ property: 'padding' }, { property: 'margin' }];
+const noPending = () => null;
+const pendingOn = (property) => (candidate) => (candidate.property === property ? 'set' : null);
+
+test('autoOpen: an empty section with no signals arrives closed', () => {
+  assert.equal(autoOpen({ hasValues: false }, visibleRows, { pendingFor: noPending }), false);
+  assert.equal(autoOpen({ hasValues: false }, [], { pendingFor: noPending }), false);
+});
+
+test('autoOpen: shown values open the section (the stack\'s delivered entry: own, variant, skin or declared alike)', () => {
+  assert.equal(autoOpen({ hasValues: true }, visibleRows, { pendingFor: noPending }), true);
+});
+
+test('autoOpen: a pending line on a visible row opens the section', () => {
+  assert.equal(autoOpen({ hasValues: false }, visibleRows, { pendingFor: pendingOn('margin') }), true);
+  // Only VISIBLE rows count: a pending line on a hidden row is not offered.
+  assert.equal(autoOpen({ hasValues: false }, [{ property: 'padding' }], { pendingFor: pendingOn('margin') }), false);
 });
 
 let failures = 0;

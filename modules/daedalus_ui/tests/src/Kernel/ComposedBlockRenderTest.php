@@ -409,10 +409,9 @@ class ComposedBlockRenderTest extends KernelTestBase {
     $build = $component->toRenderArray();
     $html = (string) $this->container->get('renderer')->renderInIsolation($build);
     $this->assertStringContainsString('Cooperative content', $html);
-    $this->assertStringContainsString('<p data-layout-builder-block-uuid="20000000-0000-0000-0000-000000000000"', $html, 'The composed root is the block: the bag rides the tag element.');
+    $this->assertStringContainsString('<p data-element="block_type:text" data-layout-builder-block-uuid="20000000-0000-0000-0000-000000000000"', $html, 'The composed root is the block: the address and the editing bag ride the tag element.');
     $this->assertStringContainsString('data-selectable="block:20000000-0000-0000-0000-000000000000"', $html);
     $this->assertStringNotContainsString('<div', $html, 'No sandwich renders at all.');
-    $this->assertStringNotContainsString('data-block-type', $html);
     $this->assertStringNotContainsString('data-layout-builder-region', $html);
     $this->assertStringNotContainsString('data-layout-builder-highlight-id', $html);
 

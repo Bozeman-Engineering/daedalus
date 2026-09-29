@@ -1,21 +1,53 @@
-import { islandLines, islandOps } from './island.js';
-import { ELEMENT_LAYER } from './layers.js';
+import { islandOps, stackLines } from './island.js';
 import {
-  effectiveEntry,
-  orderedEntryRefs,
-  findVariant,
-} from '../variant-scope.js';
-import { fragmentStyles } from '../slot-key.js';
+  ELEMENT_LAYER,
+  TIER_ANCESTOR,
+  ancestorLayerId,
+  ancestorRule,
+  ancestorVariant,
+  ancestorWearLayerId,
+  isAncestorLayer,
+} from './layers.js';
+import { buildStack, deliveredEntry, selectorSuffixes } from '../style-stack.js';
 import { parseKey } from '../style-guide.js';
+import { createMatcher, presentRoster } from '../selector-matcher.js';
+import { axisVocabulary } from '../variant-scope.js';
+import { facetOf } from '../write-address.js';
+import {
+  ANCHOR,
+  CLASS_PART,
+  CLASS_PATTERN,
+  PSEUDOS,
+  SUFFIX,
+  TAG,
+  TYPE,
+  TYPE_BLOCK,
+  TYPE_CONTAINER,
+  UNIVERSAL,
+  canonicalSelector,
+  parseSelector,
+  printSelector,
+} from '../../../../daedalus_ui/js/edit_mode/materials/relative-selector.js';
+
+/**
+ * The offer kind of a generated box option (`&::before`,
+ * `> pb-text::after`): the pseudo-element is the selector's terminal, not
+ * a compound, so it is not one of the grammar's compound kinds.
+ */
+export const PSEUDO = 'pseudo';
 
 /**
  * The single-element islands view model (pure; the view renders it).
  *
  * In the islands architecture ALL structure is chrome: which islands exist
- * for an element — its default declaration list, a WHEN row per condition
- * holding values, a part row per styled sub-element —
+ * for an element — its default declaration list, a condition row per condition
+ * holding values, a part row per styled sub-element, and on the SELECTED
+ * element a rule row per ancestor rule reaching it (DevTools' rule:
+ * inherited rules for the element you are inspecting, each an editable
+ * island writing at the ancestor's key) —
  * is a projection of the style map and the worn variants, never
- * something typing creates. This module computes that roster, the
+ * something typing creates. This module computes that roster, the two
+ * line projections the own and the rule islands print through, the
  * removal-gesture honesty reads, and the settle cadence filter (which of
  * an island's diffed ops have actually SETTLED and may commit). Everything
  * is data-in/data-out so the same logic serves both hosts and gets
@@ -59,8 +91,9 @@ export const orderConditions = (names, guide) => {
  * (unknown names last, stored order — inert data still shows honestly).
  *
  * @param {?object} entry
- *   The RESOLVED entry (effectiveEntry().entry): variant-supplied
- *   conditions get their WHEN rows exactly like own ones.
+ *   The MAP layers' delivered entry (deliveredEntry over the key's
+ *   floorless stack): variant-supplied conditions get their condition rows
+ *   exactly like own ones; the floor's conditions are not islands.
  * @param {object} guide
  *   The style guide payload (for the conditions vocabulary order).
  *
@@ -86,19 +119,48 @@ export const islandConditions = (entry, guide) => {
 };
 
 /**
+ * The map layers' conditions at one island key (the element's own and
+ * its worn references', through the stack), never the floor's: a
+ * skin's narrow block is not an island of the element.
+ */
+const mapConditions = (map, key, variants, axes, guide) =>
+  islandConditions(
+    deliveredEntry(buildStack({ map, key, variants, axes, floor: false })),
+    guide,
+  );
+
+/**
  * The island roster for one selected element.
  *
  * Enumerates what the chrome renders: the root's condition islands
- * (default always), and a part row per styled sub-element — own '::.class'
- * map entries AND parts the worn references supply (each reference read
- * through ITS OWN fragment, the delivery read), so a variant-styled part
- * gets its row with zero own overrides. TAG-TIER keys ('{key}::p', the
- * element-scoped middle tier of the three-tier text model) ride the same
- * list: a tag row is a sub row like a part row, rendered alongside them
- * (worn references never supply one — tag tiers are host-map-only).
- * Parts keep first-seen order: own map order, then reference delivery
- * order. Undeclared or malformed part selectors that cannot parse as
- * keys are skipped (nothing could commit to them).
+ * (default always), and a selector row per position the stack says the
+ * element styles. The positions are the stack's own enumeration,
+ * selectorSuffixes() (StyleStack::partSuffixes' twin), verbatim: the
+ * selectors the element's rules' wear continues under them (a rule
+ * '::> pb-text' wearing a variant with a '::.link' entry delivers at
+ * '::> pb-text .link'), then the selectors the element's own worn
+ * references supply (each reference read through ITS OWN fragment, the
+ * delivery read), then its own '::selector' map entries (a part
+ * '::.class', the tag tier '::p', the children '::> *', a type
+ * '::> pb-text', their compounds), in delivery order, deduplicated. The
+ * roster never walks the map itself: a row exists because the stack
+ * delivers there, and only the stack knows where variants deliver, so
+ * a rule's worn part row prints under the element with zero own entries
+ * exactly as a worn part of the element does. Each row's conditions are
+ * read from the stack at that position.
+ *
+ * With the blueprint's lean node tree (`tree`, the selected element's
+ * full body only; the tree scopes' sparse rows pass none) the roster
+ * also lists the ANCESTOR RULES reaching each island key (ancestorIslands:
+ * the key's stack's ancestor tier, one rule row per position, nearest
+ * ancestor first), at the root and per part row, each an island of the
+ * rule's own key. Under a write address (`address`, the spine's styling
+ * target when it is an ancestor rule the address set carries) the rule
+ * the address names joins the facet it reaches (write-address.js
+ * facetOf) whether the map holds it yet or not: a mintable rule lists
+ * as a virtual empty island, the type-here surface a seat from the
+ * subject line's chip opens, `existing` false until its first write
+ * mints the entry.
  *
  * @param {object} map
  *   The style map (mirror view).
@@ -110,58 +172,251 @@ export const islandConditions = (entry, guide) => {
  *   The store's variant records.
  * @param {?Array<string>} axes
  *   The root scope's axis vocabulary (delivery order).
+ * @param {object} blockTypes
+ *   The block types table (a rule's landing vocabulary).
+ * @param {object} sectionLayouts
+ *   The section layouts table (a rule's landing vocabulary).
+ * @param {?Array} tree
+ *   The blueprint's lean node tree, when the caller holds it and the
+ *   roster is the selection's full body; null lists no ancestor rules.
+ * @param {?{key: string, selector: string}} address
+ *   The write address (an ancestor rule), or null.
  *
  * @return {{conditions: string[],
- *   parts: Array<{sub: string, key: string, conditions: string[]}>}}
+ *   parts: Array<{selector: string, key: string, conditions: string[],
+ *   ancestors: Array<object>}>, ancestors: Array<{owner: string,
+ *   selector: string, key: string, conditions: string[],
+ *   existing: boolean}>}}
  */
-export const elementIslands = (map, key, guide, variants, axes = null) => {
-  const conditions = islandConditions(
-    effectiveEntry(map, key, variants, axes).entry,
+export const elementIslands = (
+  map,
+  key,
+  guide,
+  variants,
+  axes = null,
+  blockTypes = {},
+  sectionLayouts = {},
+  tree = null,
+  address = null,
+) => {
+  const conditions = mapConditions(map, key, variants, axes, guide);
+  // The facet the address reaches on the element (its island key), so
+  // the address's rule lists once, under that facet alone.
+  const facet =
+    tree !== null && address !== null
+      ? facetOf({ tree, key, target: address })
+      : null;
+  const addressedKey =
+    facet === null ? null : facet.selector === null ? key : `${key}::${facet.selector}`;
+  const ancestorsOf = (islandKey) =>
+    tree === null
+      ? []
+      : ancestorIslands({
+          guide,
+          map,
+          key: islandKey,
+          variants,
+          axes,
+          blockTypes,
+          sectionLayouts,
+          tree,
+          editable: islandKey === addressedKey ? address : null,
+        });
+  const parts = selectorSuffixes(
+    map,
+    key,
+    variants,
+    axes,
     guide,
-  );
-
-  const subs = [];
-  const push = (sub) => {
-    if (!subs.includes(sub) && parseKey(`${key}::${sub}`)) {
-      subs.push(sub);
-    }
-  };
-  Object.keys(map ?? {}).forEach((mapKey) => {
-    if (mapKey.startsWith(`${key}::`)) {
-      push(mapKey.slice(key.length + 2));
-    }
-  });
-  orderedEntryRefs(map?.[key], variants, axes).forEach((ref) => {
-    Object.keys(
-      fragmentStyles(findVariant(variants, ref.variant)?.value, ref.fragment),
-    ).forEach((relative) => {
-      if (relative.startsWith('::')) {
-        push(relative.slice(2));
-      }
-    });
-  });
-  const parts = subs.map((sub) => {
-    const partKey = `${key}::${sub}`;
+    blockTypes,
+    sectionLayouts,
+  ).map((suffix) => {
+    const partKey = key + suffix;
     return {
-      sub,
+      selector: suffix.slice(2),
       key: partKey,
-      conditions: islandConditions(
-        effectiveEntry(map, partKey, variants, axes).entry,
-        guide,
-      ),
+      conditions: mapConditions(map, partKey, variants, axes, guide),
+      ancestors: ancestorsOf(partKey),
     };
   });
 
-  return { conditions, parts };
+  return { conditions, parts, ancestors: ancestorsOf(key) };
 };
+
+/**
+ * The ancestor rules reaching one island key, as rule rows: DevTools'
+ * inherited rules for the element you are inspecting.
+ *
+ * Read off the key's own style stack (buildStack with the floor and the
+ * tree: the ancestor tier lists every rule position the selector
+ * matcher says reaches the key, farthest ancestor first, a GROUP of
+ * layers per position), one row per position, the group's own layer
+ * naming it (layers.js ancestorRule), re-ordered NEAREST ancestor first
+ * (the subject line's address set reads the same way; per owner the
+ * tier's own position order holds). Each row is an island of the rule's
+ * own key (`{owner}::{selector}`): its conditions are the rule's own map
+ * layers' (mapConditions at the rule key, the owner's axis vocabulary
+ * ordering the owner's wear), never the merged read this element gets,
+ * because the island EDITS the rule and a write lands at the condition
+ * the rule stores. `existing` says whether the map carries the rule
+ * (its entry, or a worn layer delivering at the position: a
+ * continuation); under a write address naming a rule nobody wrote yet
+ * (`editable`) the stack places a virtual empty own layer at the rule's
+ * delivery position (style-stack.js placeEditable), and the row lists
+ * there with `existing` false: the seat's type-here surface.
+ *
+ * @param {object} args
+ *   buildStack's arguments for the island key (guide, map, key,
+ *   variants, axes, blockTypes, sectionLayouts, tree) plus `editable`,
+ *   the write address to place when it names this key's facet, or null.
+ *
+ * @return {Array<{owner: string, selector: string, key: string,
+ *   conditions: string[], existing: boolean}>}
+ *   Nearest ancestor first; [] without a tree or when nothing reaches.
+ */
+export const ancestorIslands = ({
+  guide,
+  map,
+  key,
+  variants,
+  axes = null,
+  blockTypes = {},
+  sectionLayouts = {},
+  tree,
+  editable = null,
+}) => {
+  const stack = buildStack({
+    guide,
+    map,
+    key,
+    variants,
+    axes,
+    blockTypes,
+    sectionLayouts,
+    tree,
+    editable,
+  });
+  const groups = [];
+  stack.layers.forEach((layer) => {
+    if (layer.tier !== TIER_ANCESTOR) {
+      return;
+    }
+    const rule = ancestorRule(layer.id);
+    if (rule === null) {
+      return;
+    }
+    const ruleKey = `${rule.key}::${rule.selector}`;
+    let group = groups.find((candidate) => candidate.key === ruleKey);
+    if (!group) {
+      group = { owner: rule.key, selector: rule.selector, key: ruleKey, worn: 0 };
+      groups.push(group);
+    }
+    if (ancestorVariant(layer.id) !== null) {
+      group.worn += 1;
+    }
+  });
+  // The tier walks farthest ancestor first, owners contiguous; the rows
+  // read nearest first, each owner's positions in the tier's order.
+  const owners = [...new Set(groups.map((group) => group.owner))].reverse();
+  return owners
+    .flatMap((owner) => groups.filter((group) => group.owner === owner))
+    .map((group) => ({
+      owner: group.owner,
+      selector: group.selector,
+      key: group.key,
+      conditions: mapConditions(
+        map,
+        group.key,
+        variants,
+        axisVocabulary(guide, group.owner, blockTypes, sectionLayouts, tree),
+        guide,
+      ),
+      existing: group.worn > 0 || isEntryObject(map?.[group.key]),
+    }));
+};
+
+/**
+ * The lines an OWN island prints: its stack's lines without the ancestor
+ * tier's.
+ *
+ * On the selected element every ancestor rule reaching a key prints as
+ * a rule island of its own beneath (ancestorIslands), so the own
+ * islands drop the tier's lines (the rule's own entry and the variants
+ * the rule wears, layers.js isAncestorLayer) and keep the floor's:
+ * declared and skin lines still print here, and a floor line a rule
+ * beats keeps its strike and the rule's winner chip, because the
+ * winners are the whole stack's and only the printing moves.
+ *
+ * @param {Array<object>} lines
+ *   stackLines() over the key's stack at the island's condition.
+ *
+ * @return {Array<object>}
+ *   The same line shapes, the ancestor tier's lines left out.
+ */
+export const ownIslandLines = (lines) =>
+  lines.filter((line) => !isAncestorLayer(line.layer));
+
+/**
+ * The lines a RULE island prints: the rule's own document, struck where
+ * the selected element beats it.
+ *
+ * A rule island's stack is the rule's own key's (its wear and its entry,
+ * the map's layers alone), so its lines diff, commit and lift exactly
+ * as the owner's part row for the same rule: the rule's entry is the
+ * own layer (a deletion unsets at the rule key, an edit of a worn line
+ * overrides there). What this projection adds is display: a line the
+ * rule delivers to the SELECTED element that a layer above the rule's
+ * group beats there (`reaching`, the element's stack lines at the same
+ * condition: the element's own layer, a variant it wears, a nearer
+ * ancestor's rule) wears `beaten`, the beating layer's winner
+ * ({layer, variant}), which line-marks.js renders as the strike and
+ * the winner chip while islandDelta stays blind to it (the rule's own
+ * cascade is the diff's baseline: a beaten line is still the rule's
+ * effective value, and retyping it is no write). The match is by
+ * layer, property AND value, so a fact-merged read (a rule's
+ * `first-child` block merged into this element's default read) strikes
+ * nothing it cannot vouch for. A line the rule's own cascade already
+ * loses stays as it is.
+ *
+ * @param {Array<object>} lines
+ *   stackLines() over the rule key's floorless stack at the condition.
+ * @param {{owner: string, selector: string}} rule
+ *   The rule row (ancestorIslands' shape).
+ * @param {Array<object>} reaching
+ *   stackLines() over the selected facet's full stack at the same
+ *   condition (the floor and the tree).
+ *
+ * @return {Array<object>}
+ *   The rule's lines, `beaten` added where the element beats one.
+ */
+export const ruleIslandLines = (lines, rule, reaching) =>
+  lines.map((line) => {
+    if (line.lost) {
+      return line;
+    }
+    const id =
+      line.layer === ELEMENT_LAYER
+        ? ancestorLayerId(rule.owner, rule.selector)
+        : ancestorWearLayerId(rule.owner, rule.selector, line.variant);
+    const hit = reaching.find(
+      (candidate) =>
+        candidate.lost &&
+        candidate.layer === id &&
+        candidate.property === line.property &&
+        candidate.value === line.value,
+    );
+    return hit ? { ...line, beaten: hit.winner } : line;
+  });
 
 /**
  * Prunes unoccupied islands from a roster (the tree scopes' read for
  * UNSELECTED rows).
  *
  * An island survives only when its layered document prints at least one
- * line, own overrides or variant-supplied values alike (islandLines, lost
- * lines included), and a part row whose islands all prune drops whole.
+ * line, own overrides or variant-supplied values alike (stackLines over
+ * the key's stack built WITHOUT the floor, lost lines included: the floor
+ * prints on the selected element alone and never decides occupancy), and
+ * a part row whose islands all prune drops whole.
  * The single-element body and the selected tree row keep the full roster:
  * empty islands are the type-here surface there. On every other tree row
  * they are placeholder noise, and the way in is selecting the element.
@@ -183,8 +438,16 @@ export const elementIslands = (map, key, guide, variants, axes = null) => {
  *   The pruned roster, same shape.
  */
 export const occupiedRoster = (model, map, key, variants, axes = null) => {
-  const occupied = (islandKey) => (condition) =>
-    islandLines(map, islandKey, condition, variants, axes).length > 0;
+  const occupied = (islandKey) => {
+    const stack = buildStack({
+      map,
+      key: islandKey,
+      variants,
+      axes,
+      floor: false,
+    });
+    return (condition) => stackLines(stack, condition).length > 0;
+  };
   const parts = model.parts
     .map((part) => ({
       ...part,
@@ -201,7 +464,7 @@ export const occupiedRoster = (model, map, key, variants, axes = null) => {
 /**
  * Merges materialized drafts into the roster.
  *
- * A materialization gesture (`.` -> part, `&`/`@` -> condition) creates a
+ * A materialization gesture (a selector -> its row, `&`/`@` -> condition) creates a
  * chrome row + island BEFORE any declaration commits, so the row exists
  * only in view state until its first settled declaration writes it into
  * the map. This merge is where those drafts join the map-derived roster:
@@ -214,20 +477,24 @@ export const occupiedRoster = (model, map, key, variants, axes = null) => {
  * Merging never resurrects a pruned 'default' island (occupiedRoster):
  * a drafted named condition joins without dragging the empty default row
  * back in. Drafted NEW part rows keep their default island: that empty
- * island is exactly the draft's type-here surface.
+ * island is exactly the draft's type-here surface. A rule row (the
+ * root's and a part's ancestors) takes drafted conditions keyed by the
+ * rule's key, the `&` gesture on a rule island.
  *
- * @param {{conditions: string[], parts: Array<object>}} model
+ * @param {{conditions: string[], parts: Array<object>,
+ *   ancestors: Array<object>}} model
  *   elementIslands()'s roster.
  * @param {?{conditions: ?object, parts: ?string[]}} drafts
  *   Materialized-but-uncommitted rows: conditions maps island keys (the
- *   element key or a part key) to drafted condition names; parts lists
- *   drafted part selectors ('.quote').
+ *   element key, a selector key or a rule key) to drafted condition
+ *   names; parts lists drafted selectors ('.quote', 'p').
  * @param {string} key
  *   The selected element's key (the roster's root).
  * @param {object} guide
  *   The style guide payload.
  *
- * @return {{conditions: string[], parts: Array<object>}}
+ * @return {{conditions: string[], parts: Array<object>,
+ *   ancestors: Array<object>}}
  *   The roster with drafts merged, same shape as elementIslands().
  */
 export const draftRoster = (model, drafts, key, guide) => {
@@ -238,26 +505,38 @@ export const draftRoster = (model, drafts, key, guide) => {
       ? merged
       : merged.filter((name) => name !== 'default');
   };
+  const withDrafts = (rules) =>
+    (rules ?? []).map((rule) => ({
+      ...rule,
+      conditions: merge(rule.conditions, draftConditions[rule.key] ?? []),
+    }));
   const conditions = merge(model.conditions, draftConditions[key] ?? []);
   const parts = model.parts.map((part) => ({
     ...part,
     conditions: merge(part.conditions, draftConditions[part.key] ?? []),
+    ancestors: withDrafts(part.ancestors),
   }));
-  (drafts?.parts ?? []).forEach((sub) => {
-    if (parts.some((part) => part.sub === sub)) {
+  (drafts?.parts ?? []).forEach((selector) => {
+    if (parts.some((part) => part.selector === selector)) {
       return;
     }
-    const partKey = `${key}::${sub}`;
+    const partKey = `${key}::${selector}`;
     if (!parseKey(partKey)) {
       return;
     }
     parts.push({
-      sub,
+      selector,
       key: partKey,
       conditions: orderConditions(draftConditions[partKey] ?? [], guide),
+      ancestors: [],
     });
   });
-  return { ...model, conditions, parts };
+  return {
+    ...model,
+    conditions,
+    parts,
+    ancestors: withDrafts(model.ancestors),
+  };
 };
 
 /**
@@ -266,7 +545,7 @@ export const draftRoster = (model, drafts, key, guide) => {
  * The code-view twin of pose+edit minting a condition block in the widget
  * modes: when the canvas stands at a non-default compound the element
  * holds no island for, the roster gains an empty chrome-minted island at
- * the ROOT for that compound — ready to type into, wearing the POSED
+ * the ROOT for that compound — ready to type into, wearing the Posed
  * marker its condition already earns. Typing commits through the island's
  * ordinary settle path, which writes the condition block into the map and
  * makes the row roster-real. The ghost is DERIVED, never stored view
@@ -299,111 +578,376 @@ export const posedRoster = (model, posed, guide) => {
 };
 
 /**
- * The part-materialization completion set for a typed `.` token.
- *
- * Part selectors are REFERENCES into declared anatomy — typing cannot
- * create markup — so the completion offers the type's declared parts. On
- * a site whose world is not closed, an arbitrary well-formed class the
- * anatomy does not declare earns ONE extra entry, the explicit
- * confirm-materialize ("Create this part"): picking it is the confirmation,
- * nothing materializes from typing alone. Strict sites get no such entry —
- * their part vocabulary IS the declared anatomy.
- *
- * The offer is an ELEMENT projection (it projects the page, not the style
- * map), so it gates on DOM presence: a declared part whose presence fact
- * says ABSENT (the unlinked text block's anchor, svg media's img) is not
- * offered, styled or not — the same absolute rule the element-bound
- * controls follow in offered(). Rows already materialized from existing
- * declarations are the STORE projection and persist regardless; only the
- * offer to mint a new row gates here. Unknown presence (no facts, or a
- * selector the map never mentions — a satellite pre-broadcast) degrades
- * to offering; only a positive absence fact hides.
- *
- * @param {string} typed
- *   The token as typed, leading '.' included ('.qu').
- * @param {Array<{id: string, label: string}>} declared
- *   The declared anatomy (partsForKey()).
- * @param {object} options
- *   - closed: whether the guide's world is closed (propertiesClosed()).
- *   - presence: selector → bool DOM-presence facts for the owning
- *     element's declared parts (the layout context's self.parts), or null
- *     when unknown.
- *
- * @return {{options: Array<{sub: string, label: string}>, create: ?string}}
- *   Declared completions (the view lets the editor filter by the typed
- *   text) and the confirm-materialize selector, or null when the typed
- *   token is malformed, already declared, or the world is closed.
+ * The selector charset a gesture line may hold: compounds, the `>`, `+`
+ * and `~` combinators, the two qualifiers' parens, spaces, the owner's
+ * anchor `&`, and a generated box's `::` with its name (or the start of
+ * one) as the line's tail. A single colon opens a qualifier only
+ * (`:has(`, `:not(`); any other colon, a semicolon or a brace on the
+ * line is a declaration or structure, never a selector being typed. The
+ * charset gates; the grammar (canonicalSelector) judges the rest, so
+ * `&hover`, `::marker` and `&::before .x` pass here and fail there.
  */
-export const partGestureOptions = (
-  typed,
-  declared,
-  { closed = false, presence = null } = {},
-) => {
-  const options = (Array.isArray(declared) ? declared : [])
-    .filter((part) => presence?.[part.id] !== false)
-    .map((part) => ({ sub: part.id, label: part.label }));
-  const wellFormed =
-    typeof typed === 'string' && /^\.[A-Za-z0-9_-]+$/.test(typed);
-  // Declared-but-absent never falls through to the create entry: absence
-  // hides the part, it does not make its class an undeclared one.
-  const isDeclared = (Array.isArray(declared) ? declared : []).some(
-    (part) => part.id === typed,
-  );
-  const create = !closed && wellFormed && !isDeclared ? typed : null;
-  return { options, create };
+const SELECTOR_LINE = /^(?:[A-Za-z0-9_.*>+~()& -]|::(?=[A-Za-z]*\s*$)|:(?=has\(|not\())*$/;
+
+/**
+ * A line typing the owner's own generated box: the anchor alone, or the
+ * anchor with its `::` tail (`&`, `&::`, `&::b`, `&::before`).
+ */
+const ANCHOR_LINE = /^\s*&(?:::[A-Za-z]*)?$/;
+
+/**
+ * A line's generated-box tail (`::`, `::b`, `::before`), glued to the
+ * host before it.
+ */
+const BOX_TAIL = /::([A-Za-z]*)$/;
+
+/**
+ * Whether a selector line holds a relation (a sibling combinator or a
+ * qualifier): the completion offers nothing on one, a relation is typed
+ * whole (the `{` mint reads it through the grammar).
+ */
+const RELATION_LINE = /[+~(]/;
+
+/**
+ * Every addressable key of a lean tree, document order.
+ */
+const documentOrder = (tree) => {
+  const keys = [];
+  const walk = (list) => {
+    (Array.isArray(list) ? list : []).forEach((node) => {
+      if (node === null || typeof node !== 'object') {
+        return;
+      }
+      const kind = typeof node.kind === 'string' ? node.kind : 'layout_id' in node ? 'container' : 'block';
+      if (typeof node.uuid === 'string' && node.uuid !== '' && kind !== 'region') {
+        keys.push(`${kind}:${node.uuid}`);
+      }
+      walk(node.children);
+    });
+  };
+  walk(tree);
+  return keys;
 };
 
 /**
- * The tag-row materialization offer: base's tag vocabulary, gated on
- * content presence.
+ * Splits a typed selector line into its settled prefix and the token
+ * being completed.
  *
- * The tag tier's twin of partGestureOptions(), for a bare tag name typed
- * at a declaration position on an element island: picking an option
- * materializes a '{key}::{tag}' row alongside the part rows. The offer is
- * the site's base tag vocabulary (the one declaration of a prose tag's
- * styleability, labelled through the identity lane where an instance
- * namespace names the tag) and NOTHING else — there is no create entry on
- * any site, open or strict, because the tag tier is only grammar for
- * declared base tags (the server rejects an undeclared tag in every
- * enforcement mode).
- *
- * Like the part offer this is an ELEMENT projection, so it gates on
- * content presence: the key's markup annotation's `tags` fact (the
- * distinct tag names the element's prose contains, minted carriers and
- * never-minting tags alike) is the fact source, and a declared tag the
- * prose does not contain is not offered (a paragraph-only block does not
- * offer List; a block whose paragraphs link offers Link although no
- * carrier ever wears `a`). Rows already materialized from existing
- * declarations are the store projection and persist regardless. Unknown
- * presence (no annotation in reach — the satellite window pre-broadcast,
- * a block with no prose) degrades to offering; only positive absence
- * hides. Carriers (`instances`) stay the identity and label source and
- * never gate this offer.
- *
- * @param {Object<string, string>} tags
- *   The base tag vocabulary ({tag: label}).
- * @param {?Array<string>} present
- *   The element's `_element.markup.tags` fact, or null when no annotation
- *   is reachable.
- *
- * @return {Array<{tag: string, label: string}>}
- *   The offered tags, vocabulary order.
+ * @return {?{prefix: string, child: boolean, last: string,
+ *   landing: ?object, box: boolean}}
+ *   `prefix` is the canonical selector typed so far ('' at the owner),
+ *   `child` whether a `>` follows it (the next compound is a direct
+ *   child), `last` the partial token under the cursor ('' right after a
+ *   combinator or a space), `landing` the prefix's last compound or
+ *   null at the owner, `box` whether the token is a generated box's
+ *   `::` tail (the owner's anchor `&` counts: its only continuations are
+ *   its boxes). Null when the text is outside the grammar or holds a
+ *   relation (no offer inside a qualifier or after a sibling
+ *   combinator).
  */
-export const tagGestureOptions = (tags, present = null) => {
-  const options = Object.entries(tags ?? {}).map(([tag, label]) => ({
-    tag,
-    label,
-  }));
-  if (!Array.isArray(present)) {
-    return options;
+const splitTyped = (typed) => {
+  if (
+    typeof typed !== 'string' ||
+    !SELECTOR_LINE.test(typed) ||
+    RELATION_LINE.test(typed)
+  ) {
+    return null;
   }
-  return options.filter((option) => present.includes(option.tag));
+  if (typed.includes(ANCHOR)) {
+    // The anchor is the whole head of the owner's own box and nothing
+    // else (`& > p` and `&hover` are outside the grammar).
+    return ANCHOR_LINE.test(typed)
+      ? { prefix: '', child: false, last: typed.trim(), landing: null, box: true }
+      : null;
+  }
+  const tail = BOX_TAIL.exec(typed);
+  if (tail === null && typed.includes(SUFFIX)) {
+    // A settled box (`> pb-text::before `) takes no continuation.
+    return null;
+  }
+  if (tail !== null) {
+    // A box continues a whole selector, glued (`> pb-text::b`); a space
+    // before the `::`, a bare `::` and a box on a box are refused as the
+    // grammar refuses them.
+    const host = typed.slice(0, tail.index);
+    const parsed = host === '' || /\s$/.test(host) ? null : parseSelector(host);
+    if (parsed === null || parsed.pseudo !== null) {
+      return null;
+    }
+    return {
+      prefix: printSelector(parsed),
+      child: false,
+      last: tail[0],
+      landing: parsed.compounds[parsed.compounds.length - 1],
+      box: true,
+    };
+  }
+  const text = typed.replace(/\s*>\s*/g, ' > ').trimStart();
+  if (text.trim() === '') {
+    return null;
+  }
+  const open = /\s$/.test(text);
+  const tokens = text.trim().split(/\s+/);
+  let last = open ? '' : tokens.pop();
+  if (last === '>') {
+    tokens.push('>');
+    last = '';
+  }
+  const child = tokens[tokens.length - 1] === '>';
+  const settled = child ? tokens.slice(0, -1) : tokens;
+  if (settled.includes('>')) {
+    // A combinator inside the prefix rides its compound; a dangling one
+    // (`> > p`) is outside the grammar.
+    const parsed = parseSelector(settled.join(' '));
+    if (parsed === null) {
+      return null;
+    }
+    return {
+      prefix: printSelector(parsed),
+      child,
+      last,
+      landing: parsed.compounds[parsed.compounds.length - 1],
+      box: false,
+    };
+  }
+  if (!settled.length) {
+    return { prefix: '', child, last, landing: null, box: false };
+  }
+  const parsed = parseSelector(settled.join(' '));
+  if (parsed === null) {
+    return null;
+  }
+  return {
+    prefix: printSelector(parsed),
+    child,
+    last,
+    landing: parsed.compounds[parsed.compounds.length - 1],
+    box: false,
+  };
+};
+
+/**
+ * The selector completion for a selector typed at a declaration position.
+ *
+ * One completion for every relative selector shape (Plan: the `>`, `.`,
+ * `pb-` and tag-word gestures are one gesture): the typed line is a
+ * selector prefix plus the token under the cursor, and the offer is
+ * what that position can address, read off the ELEMENT (the selector
+ * matcher over the blueprint tree, the same engine the stack and the
+ * canvas paint read), never off the style map:
+ * - right after `>`: the universal `*` (every child, present and
+ *   future) first, then one type compound per type among the matched
+ *   set's direct children (`pb-text`, `pb-container` for a nested
+ *   section, `pb-block` for a plugin block), then one tag per declared
+ *   base tag those children's roots render as;
+ * - at a descendant position (the owner, or a space after a compound):
+ *   one type per type in the matched set's subtree, one tag per
+ *   declared base tag its subtree renders or contains (the owner's own
+ *   prose tags included at the owner), and, after a type, that type's
+ *   declared parts;
+ * - a `.` token: the owner's declared parts (gated on DOM presence, a
+ *   declared part absent from the canvas is not offered) or, after a
+ *   type, the type's declared parts; on an open site a well-formed
+ *   undeclared class additionally earns the explicit "Create this
+ *   part" entry (`create`), and nothing else ever creates;
+ * - a `::` tail, or the owner's anchor `&`: the two generated boxes of
+ *   the subject before it, `::before` then `::after` (`&::before` and
+ *   `&::after` at the owner, `> pb-text::before` after a type, a part's
+ *   or a tag's likewise). A box is universal (every element has both),
+ *   so nothing gates the offer here; a strict site's undeclared box is
+ *   the server's refusal on the first write, as for an undeclared tag.
+ *   The `::` must be glued to a whole selector (`> pb-text ::` offers
+ *   nothing, as the grammar reads it as every descendant's box), and a
+ *   box takes no continuation.
+ * Each option carries the FULL canonical selector to mint (`> pb-text`,
+ * `> pb-text .text-block-link`, `&::before`), its last compound's kind
+ * and name (a box's: the PSEUDO kind and the pseudo name), and the
+ * compound's human label (a type's bundle label, a tag's declared
+ * label, a part's label; null for `*` and for a box, whose word is the
+ * shared box vocabulary the view reads). The editor filters by the
+ * typed text; the offer is the whole set for the position. Rows already
+ * materialized from the map are the store projection and never pass
+ * through here.
+ *
+ * Unknown facts degrade to offering, never to hiding: with no tree in
+ * reach (the satellite before its broadcast) every declared type and
+ * base tag is offered; only the tree's positive absence hides a type or
+ * a tag. Selectors only the server can judge (an undeclared tag on a
+ * strict site) are its refusal on the first commit, as they are for the
+ * create entry.
+ *
+ * @param {string} typed
+ *   The line's text before the cursor, as typed ('> pb-', '.qu', 'p').
+ * @param {object} context
+ *   - key: the owner's selectable key.
+ *   - tree: the blueprint's lean node tree, or null when unknown.
+ *   - parts: the owner's declared parts (partsForKey()).
+ *   - partsFor: (type) => a type compound's declared parts, same shape.
+ *   - presence: selector → bool DOM-presence facts for the owner's
+ *     declared parts, or null when unknown.
+ *   - closed: whether the guide's world is closed (propertiesClosed()).
+ *   - tags: the declared base tag vocabulary ({tag: label}).
+ *   - present: the owner's `_element.markup.tags` fact, or null.
+ *   - types: the declared type compounds ({'pb-text': 'Text', …}, the
+ *     kinds included): the label table, and the universe when the tree
+ *     is unknown.
+ *
+ * @return {?{options: Array<{selector: string, kind: string, name: string,
+ *   label: ?string}>, create: ?string}}
+ *   The offer, or null when the typed text is not a selector prefix.
+ */
+export const selectorGestureOptions = (typed, context = {}) => {
+  const split = splitTyped(typed);
+  if (split === null) {
+    return null;
+  }
+  const { prefix, child, last, landing, box } = split;
+  const {
+    key = null,
+    tree = null,
+    parts = [],
+    partsFor = null,
+    presence = null,
+    closed = false,
+    tags = {},
+    present = null,
+    types = {},
+  } = context;
+  const mint = (name) =>
+    canonicalSelector([prefix, child ? '>' : '', name].filter(Boolean).join(' '));
+  const options = [];
+  const seen = new Set();
+  const offer = (kind, name, label) => {
+    const selector = mint(name);
+    if (selector === null || seen.has(selector)) {
+      return;
+    }
+    seen.add(selector);
+    options.push({ selector, kind, name, label: label ?? null });
+  };
+  const vocabulary = Array.isArray(tags) ? {} : (tags ?? {});
+  const typeTable = types ?? {};
+
+  if (box) {
+    // The subject's boxes, the anchor spelling the owner's own.
+    PSEUDOS.forEach((pseudo) => {
+      const selector = canonicalSelector(`${prefix || ANCHOR}${SUFFIX}${pseudo}`);
+      if (selector !== null) {
+        options.push({ selector, kind: PSEUDO, name: pseudo, label: null });
+      }
+    });
+    return { options, create: null };
+  }
+
+  if (last.startsWith('.')) {
+    const declared =
+      landing === null
+        ? (Array.isArray(parts) ? parts : []).filter(
+            (part) => presence?.[part.id] !== false,
+          )
+        : landing.kind === TYPE && typeof partsFor === 'function'
+          ? (partsFor(landing.name) ?? [])
+          : [];
+    declared.forEach((part) => offer(CLASS_PART, part.id, part.label));
+    const wellFormed = CLASS_PATTERN.test(last);
+    const isDeclared =
+      landing === null
+        ? (Array.isArray(parts) ? parts : []).some((part) => part.id === last)
+        : declared.some((part) => part.id === last);
+    const create =
+      !closed && wellFormed && !isDeclared && (landing === null || landing.kind === TYPE)
+        ? mint(last)
+        : null;
+    return { options, create };
+  }
+
+  if (child) {
+    offer(UNIVERSAL, '*', null);
+  }
+  const matcher = tree === null || typeof key !== 'string' ? null : createMatcher(tree);
+  if (matcher === null) {
+    Object.entries(typeTable).forEach(([name, label]) => offer(TYPE, name, label));
+    Object.entries(vocabulary).forEach(([tag, label]) => offer(TAG, tag, label));
+  } else {
+    // Descendants are the two kind families' matches merged back into
+    // document order (the tree walk), the owner itself never among them.
+    const nodes = child
+      ? matcher.matching(key, prefix ? `${prefix} > *` : '> *')
+      : documentOrder(tree).filter(
+          (node) =>
+            node !== key &&
+            (matcher.matches(key, prefix ? `${prefix} ${TYPE_BLOCK}` : TYPE_BLOCK, node) ||
+              matcher.matches(key, prefix ? `${prefix} ${TYPE_CONTAINER}` : TYPE_CONTAINER, node)),
+        );
+    // The set's types and tags (the matcher's presentRoster, the one
+    // "what is here" derivation): root tags only after `>`, the tags
+    // inside (the prose's and the parts') at a descendant position.
+    const { types: typeNames, tags: tagNames } = presentRoster(
+      nodes.map((node) => matcher.facts(node)),
+      { inner: !child },
+    );
+    if (!child && prefix === '') {
+      (Array.isArray(present) ? present : Object.keys(vocabulary)).forEach((tag) => {
+        if (tag && !tagNames.includes(tag)) {
+          tagNames.push(tag);
+        }
+      });
+    }
+    typeNames.forEach((name) => offer(TYPE, name, typeTable[name] ?? name));
+    Object.keys(vocabulary)
+      .filter((tag) => tagNames.includes(tag))
+      .forEach((tag) => offer(TAG, tag, vocabulary[tag]));
+  }
+  if (!child && landing?.kind === TYPE && typeof partsFor === 'function') {
+    (partsFor(landing.name) ?? []).forEach((part) =>
+      offer(CLASS_PART, part.id, part.label),
+    );
+  }
+  return { options, create: null };
+};
+
+/**
+ * The selector a typed `{` mints, or null when the brace is ordinary text.
+ *
+ * Typing `p {` (or `> pb-text {`, `.quote {`, `> p + p {`,
+ * `> pb-text:has(a) {`, `&::before {`, `.quote::after {`) at a
+ * declaration position is the materialize gesture without the pick: the
+ * brace lands only when the line before it is a whole selector in the
+ * grammar and nothing follows the cursor; the caller swallows the typed
+ * selector with the brace and mints the row, canonical (the grammar's
+ * spelling). A line holding a colon outside `:has(`, `:not(` or a
+ * terminal `::before` / `::after` is a declaration, a partial token
+ * (`> pb-`, `&::`) or a dangling combinator is not a selector, and a
+ * brace there stays text for the lint to name. A minted box row is
+ * empty chrome until its first write, which the op spine births with
+ * `content: ""`; the row then prints that line.
+ *
+ * @param {string} before
+ *   The line's text before the cursor.
+ * @param {string} after
+ *   The line's text after the cursor.
+ *
+ * @return {?string}
+ *   The canonical selector to mint.
+ */
+export const bracedSelector = (before, after) => {
+  if (typeof before !== 'string' || typeof after !== 'string') {
+    return null;
+  }
+  if (after.trim() !== '' || !SELECTOR_LINE.test(before)) {
+    return null;
+  }
+  const text = before.trim();
+  if (text === '') {
+    return null;
+  }
+  return canonicalSelector(text);
 };
 
 /**
  * The unset ops that remove one island's OWN styles (the removal gesture).
  *
- * Removing a WHEN row (or a part row, per condition) unsets every own
+ * Removing a condition row (or a part row, per condition) unsets every own
  * value under the (key, condition) pair in ONE multi-property op — one
  * gesture, one history entry. Variant-supplied values are untouched by
  * construction: only the own layer holds anything to unset, which is
@@ -472,12 +1016,15 @@ export const partRemovalOps = (map, key) => {
  * strip the element's own layer.
  *
  * @return {Array<object>}
- *   The variant-layer subset of islandLines(), same line shapes.
+ *   The variant-layer subset of stackLines() over the key's stack built
+ *   without the floor (the floor is not removal's concern), same line
+ *   shapes.
  */
 export const restoredLines = (map, key, condition, variants, axes = null) =>
-  islandLines(map, key, condition, variants, axes).filter(
-    (line) => line.layer !== ELEMENT_LAYER,
-  );
+  stackLines(
+    buildStack({ map, key, variants, axes, floor: false }),
+    condition,
+  ).filter((line) => line.layer !== ELEMENT_LAYER);
 
 /**
  * Should the buffer re-print to restore deleted variant-supplied lines?
@@ -501,7 +1048,7 @@ export const restoredLines = (map, key, condition, variants, axes = null) =>
  * @param {{declarations: Array<object>, held: Set<string>}} analysis
  *   analyzeIsland()'s result for the buffer.
  * @param {Array<{property: string, value: string, layer: string}>} lines
- *   The island's baseline lines (islandLines()).
+ *   The island's baseline lines (stackLines()).
  *
  * @return {boolean}
  *   TRUE when re-printing the baseline restores variant lines and loses
@@ -553,7 +1100,7 @@ export const shouldRestoreTinted = (key, condition, analysis, lines) => {
  * @param {{declarations: Array<object>, held: Set<string>}} analysis
  *   analyzeIsland()'s result for the buffer.
  * @param {Array<{property: string, value: string, variant: ?string}>} lines
- *   The island's baseline lines (islandLines()).
+ *   The island's baseline lines (stackLines()).
  * @param {object} options
  *   - cursor: the cursor offset in the buffer, or null (no active line).
  *   - includeActive: commit the cursor's declaration too (';' just typed,

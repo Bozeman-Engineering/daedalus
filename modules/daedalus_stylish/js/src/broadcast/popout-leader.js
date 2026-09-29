@@ -21,9 +21,10 @@ import { openChannel } from '../../../../daedalus_ui/js/broadcast/channel.js';
  *                              own slim message because hover moves at
  *                              pointer speed and the state snapshot
  *                              digests layout context per post.
- * - leader    → 'hover-part'   The part-hover facet `{ key, part }` (both
- *                              null when cleared) — hover's twin for the
- *                              same pointer-speed reason.
+ * - leader    → 'hover-selector' The selector-hover facet
+ *                              `{ key, selector }` (both null when
+ *                              cleared) — hover's twin for the same
+ *                              pointer-speed reason.
  * - leader    → 'leader-ready' I (re)booted; any satellite should hello.
  * - leader    → 'leader-gone'  I'm unloading. A refresh follows with
  *                              leader-ready; a real close leaves the
@@ -31,7 +32,8 @@ import { openChannel } from '../../../../daedalus_ui/js/broadcast/channel.js';
  * - satellite → 'intent'       A requested mutation `{ intent }`; the
  *                              leader applies it through the op queue.
  * - leader    → 'settled'      An op intent's outcome (commit,
- *                              commit-batch, apply-variant, detach-variant)
+ *                              commit-batch, apply-variant, detach-variant,
+ *                              parse-css, read-css)
  *                              `{ request, ok, payload | error }`: the op
  *                              queue's own settlement, relayed so the
  *                              satellite's promise settles like the
@@ -40,6 +42,29 @@ import { openChannel } from '../../../../daedalus_ui/js/broadcast/channel.js';
  *                              in the satellite's own messenger).
  * - satellite → 'bye'          Window closing; leader restores the panel.
  * - leader    → 'close'        Close yourself (the bring-back control).
+ * - leader    → 'open-variant-picker' Open the variant picker for the
+ *                              current selection in your window. The
+ *                              apply-variant hotkey resolves on the
+ *                              leader (a press in the satellite reaches
+ *                              it through daedalus_ui's pop-out keyboard
+ *                              wire), and while the panel is popped out
+ *                              the picker belongs where the panel is.
+ * - leader    → 'collapse-outline' Run one all-gesture `{ gesture }`
+ *                              ('collapse_all' or 'expand_all') over
+ *                              code mode's outline in your window. The
+ *                              outline's hotkeys resolve on the leader
+ *                              (same wire as above), a collapse is a
+ *                              reading posture of one window, and while
+ *                              the panel is popped out the leader's
+ *                              outline is displaced: the satellite
+ *                              applies the gesture to its own posture
+ *                              (code/collapse-seam.js).
+ *
+ * Keyboard is NOT on this channel: every Edit Mode shortcut pressed in
+ * the satellite is forwarded to the leader's dispatcher by daedalus_ui's
+ * pop-out keyboard wire (`daedalus_ui:<scope>`, hotkeys/popout-relay.js)
+ * and resolved there. This protocol carries only what an action decides
+ * once resolved.
  *
  * Presence is tracked by handshake, not connection state (BroadcastChannel
  * has none): hello marks the satellite present, bye marks it gone, and a
@@ -58,18 +83,6 @@ export const createPopoutLeader = ({ scope, url, source }) => {
     }
   };
 
-  const selectionTags = () => {
-    const selected = source.getSelected();
-    if (!selected) {
-      return null;
-    }
-    const part = source.getSelectedPart();
-    return {
-      element: source.readCanvasTag(selected, null),
-      part: part ? source.readCanvasTag(selected, part) : null,
-    };
-  };
-
   // Everything session-shaped the satellite renders from, pre-digested so
   // it needs no blueprint mirror of its own: the selection, the root map's
   // values, and the component → block type and section → layout tables its
@@ -77,19 +90,11 @@ export const createPopoutLeader = ({ scope, url, source }) => {
   // it is site configuration, served to the satellite page directly
   // (InspectorPopout).
   const snapshotState = () => ({
-    // The selection channel carries the part facet beside the key: the
-    // satellite renders the same (key, part) pair the leader's spine
-    // holds, never a parallel part state of its own.
+    // The selection channel carries the styling target beside the key:
+    // the satellite renders the same selection and target the leader's
+    // spine holds, never a parallel target state of its own.
     selected: source.getSelected(),
-    selectedPart: source.getSelectedPart(),
-    // The selection's rendered canvas tags (the element's, and the
-    // selected part's when one is drilled): a live-DOM fact only this
-    // page can read (readCanvasTag), relayed beside the (key, part) pair
-    // it describes so the satellite's base:{tag} tier (skin defaults
-    // provenance, base variant offers) reads the same tag the leader's
-    // does. Refreshes with every broadcast, so a markup swap that
-    // collapses or wraps the element follows on the style map change.
-    selectionTags: selectionTags(),
+    target: source.getTarget(),
     styleMap: source.getStyleMap(),
     rootUuid: source.getRootUuid(),
     blockTypes: source.getBlockTypes(),
@@ -97,6 +102,9 @@ export const createPopoutLeader = ({ scope, url, source }) => {
     // The staged layout's structural tree, so satellite-initiated variant
     // capture can walk the subtree the leader page stages.
     layout: source.getLayout(),
+    // The lean node tree, so the satellite's stacks carry the same
+    // ancestor layers and its fact rows light the same way.
+    tree: source.getTree?.() ?? [],
     // The selection's layout surroundings (parent computed display et al),
     // digested here because computed style needs the canvas document the
     // satellite lacks. Rides every broadcast, so it refreshes exactly when
@@ -179,7 +187,7 @@ export const createPopoutLeader = ({ scope, url, source }) => {
       source.setCanvasHighlight(null);
       source.setCanvasPaint(null);
       source.hover?.(null);
-      source.hoverPart?.(null);
+      source.hoverSelector?.(null);
     },
     // Satellite widget gestures, applied through the leader source — the
     // leader stays the single writer (one op queue, one preview tag). An
@@ -208,6 +216,17 @@ export const createPopoutLeader = ({ scope, url, source }) => {
         source.previewEntriesRelease(payload.keys);
       } else if (payload.intent === 'commit-batch') {
         settle(payload.request, source.commitBatch(payload.batch));
+      } else if (payload.intent === 'parse-css') {
+        // The code view's paste door: a write-nothing read of a CSS
+        // fragment under a key, fetched from this page (the CSRF token
+        // and the root entity are here); the entries go back for the
+        // satellite's island to land through its own commit-batch.
+        settle(payload.request, source.parseCss(payload.key, payload.css));
+      } else if (payload.intent === 'read-css') {
+        // The header's Copy CSS: the server print of a key's own entries,
+        // fetched from this page (the root entity is here); the text goes
+        // back for the satellite's own clipboard write.
+        settle(payload.request, source.readCss(payload.key));
       } else if (payload.intent === 'apply-variant') {
         settle(
           payload.request,
@@ -244,21 +263,28 @@ export const createPopoutLeader = ({ scope, url, source }) => {
           payload.steps,
         );
       } else if (payload.intent === 'select') {
-        // The satellite's selection intents (page tree row click, part
-        // breadcrumb clear): drive the canvas selection here (the spine
-        // lives on this page), part facet included; the change broadcasts
-        // back through the ordinary selection subscription.
-        source.select(payload.key, payload.part ?? null);
+        // The satellite's selection intents (page tree row click, the
+        // subject chip's way back): drive the canvas selection here (the
+        // spine lives on this page); the change broadcasts back through
+        // the ordinary selection subscription.
+        source.select(payload.key);
+      } else if (payload.intent === 'target') {
+        // The satellite's target intents (a code-mode row header, the
+        // address switcher, "Edit at"): seat the styling target on the
+        // spine here (the canvas paints its matches here); the change
+        // broadcasts back the same way.
+        source.target(payload.key, payload.selector);
       } else if (payload.intent === 'hover') {
         // The satellite page tree's row hover: drive the shared selection
         // hover here (canvas outline + page-elements row), the echo
         // returning on the hover broadcast — select's pattern.
         source.hover?.(payload.key);
-      } else if (payload.intent === 'hover-part') {
-        // The satellite's part-header hover: drive the spine's hoverPart
-        // facet here (canvas dashed paint + tree part-row glow), the echo
-        // returning on the hover-part broadcast — hover's pattern.
-        source.hoverPart?.(payload.key, payload.part ?? null);
+      } else if (payload.intent === 'hover-selector') {
+        // The satellite's part-header hover: drive the spine's
+        // hoverSelector facet here (canvas dashed paint + tree part-row
+        // glow), the echo returning on the hover-selector broadcast —
+        // hover's pattern.
+        source.hoverSelector?.(payload.key, payload.selector ?? null);
       } else if (payload.intent === 'canvas-highlight') {
         // Satellite hover/scrub signals: the bands render on THIS page
         // (the satellite has no canvas), driven through the one
@@ -277,7 +303,7 @@ export const createPopoutLeader = ({ scope, url, source }) => {
       } else if (payload.intent === 'motion-replay') {
         // A satellite Replay: the canvas and the motion-triggers runtime
         // live on this page, so the target re-arms here.
-        source.replayMotion(payload.key, payload.sub ?? null);
+        source.replayMotion(payload.key, payload.selector ?? null);
       } else if (payload.intent === 'place') {
         // A satellite place pick: the one place state lives on this
         // page; the new value broadcasts back on its change.
@@ -294,18 +320,18 @@ export const createPopoutLeader = ({ scope, url, source }) => {
   window.addEventListener('pagehide', () => channel.post('leader-gone'));
 
   const broadcast = () => channel.post('state', { state: snapshotState() });
-  // One selection subscription, the part-aware one: it fires on key AND
-  // facet changes, so the snapshot's (selected, selectedPart) pair always
-  // travels together.
-  source.onPartChange(broadcast);
+  // One selection subscription, the target-aware one: it fires on
+  // selection AND target changes, so the snapshot's selection and target
+  // always travel together.
+  source.onTargetChange(broadcast);
   // Hover rides its own slim message (see the protocol note): transient
   // pointer-speed chrome, deliberately outside the snapshot — a satellite
   // that connects mid-hover just waits for the next crossing.
   source.onHoverChange?.((key) => channel.post('hover', { key }));
-  source.onHoverPartChange?.((pair) =>
-    channel.post('hover-part', {
+  source.onHoverSelectorChange?.((pair) =>
+    channel.post('hover-selector', {
       key: pair?.key ?? null,
-      part: pair?.part ?? null,
+      selector: pair?.selector ?? null,
     }),
   );
   source.onStyleMapChange(broadcast);
@@ -348,5 +374,34 @@ export const createPopoutLeader = ({ scope, url, source }) => {
         satelliteWindow.close();
       }
     },
+
+    /**
+     * Opens the variant picker in the satellite window.
+     *
+     * The apply-variant action's popped-out branch (index.js): the wear
+     * bar that owns the picker is mounted over there, so the open goes
+     * over the wire and the satellite's opener seam answers it. The
+     * wire is one-way and asynchronous, so the satellite's verdict (no
+     * bar mounted, an apply in flight, an empty offer) never comes back;
+     * the action counts the press as handled once it is routed.
+     */
+    openVariantPicker: () => channel.post('open-variant-picker'),
+
+    /**
+     * Runs a collapse-all or expand-all gesture over the satellite's
+     * code mode outline.
+     *
+     * The outline hotkeys' popped-out branch (index.js): the posture is
+     * per window and the leader's view is unmounted while the panel is
+     * popped out, so the GESTURE (never a posture) goes over the wire
+     * and the satellite runs it over its own posture through the seam
+     * its mounted view fills. One-way, like the picker open: the
+     * routed press counts as handled.
+     *
+     * @param {string} gesture
+     *   'collapse_all' or 'expand_all'.
+     */
+    collapseOutline: (gesture) =>
+      channel.post('collapse-outline', { gesture }),
   };
 };

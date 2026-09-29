@@ -1142,8 +1142,12 @@ class VariantApplySubtreeTest extends NestedStorageKernelTestBase {
     $context = ['entity' => $entity];
 
     $this->assertSame('layout:daedalus_stylish_container', (string) $validator->captureScope("container:{$ids['nsec']}", $context));
-    // Sub-element keys capture the parent's scope.
-    $this->assertSame('layout:daedalus_stylish_container', (string) $validator->captureScope("container:{$ids['nsec']}::.daedalus-stylish-layout-container", $context));
+    // A rule key captures its LANDING: a part is no element scope (its
+    // element wears), a type compound its own kind (a rule's matches may
+    // be any layout), and the full address keeps the layout.
+    $this->assertNull($validator->captureScope("container:{$ids['nsec']}::.daedalus-stylish-layout-container", $context));
+    $this->assertSame('kind:container', (string) $validator->captureScope("container:{$ids['nsec']}::> pb-container", $context));
+    $this->assertSame('layout:daedalus_stylish_container::.daedalus-stylish-layout-container', (string) $validator->keyAddress("container:{$ids['nsec']}::.daedalus-stylish-layout-container", $context));
     // An ordinary inline block still scopes by block type, and a block
     // INSIDE the nested section resolves too (the locator walks depth).
     $this->assertSame('block_type:basic', (string) $validator->captureScope("block:{$ids['b1']}", $context));
@@ -1156,6 +1160,52 @@ class VariantApplySubtreeTest extends NestedStorageKernelTestBase {
     $this->assertFalse($validator->scopeMatches('layout:layout_twocol_section', "container:{$ids['nsec']}", $context));
     $this->assertFalse($validator->scopeMatches('kind:block', "container:{$ids['nsec']}", $context));
     $this->assertFalse($validator->scopeMatches('layout:daedalus_stylish_container', "block:{$ids['img']}", $context));
+  }
+
+
+  /**
+   * A rule wears flat variants only, and distributes nothing.
+   *
+   * A composition is refused at a rule by its keys (its slot paths could
+   * bind no one subtree), and a flat variant with a children entry lands
+   * as one reference on the rule, no fragment reference on any child:
+   * detach then continues the children entry under the rule by descent.
+   */
+  public function testRuleWearDistributesNothing(): void {
+    $tidy = DaedalusStylishVariant::create(['label' => 'Tidy', 'machine_name' => 'tidy', 'scope' => 'kind:container']);
+    $tidy->setStyles([
+      '' => ['default' => ['padding' => '1rem']],
+      '::> *' => ['default' => ['margin' => '0']],
+    ])->save();
+    $card = DaedalusStylishVariant::create(['label' => 'Card', 'machine_name' => 'card', 'scope' => 'layout:daedalus_stylish_container']);
+    $card->setStyles([
+      '' => ['default' => ['padding' => '0']],
+      'container(1)' => ['default' => ['gap' => '2rem']],
+    ])->save();
+    [$entity, $ids] = $this->buildComposition([]);
+    $rule = "container:{$ids['sec']}::> pb-container";
+
+    $result = $this->operations->batchOperations($entity, [
+      ['op' => 'apply_variant', 'key' => $rule, 'variant' => 'card'],
+    ]);
+    $this->assertFalse($result->isSuccess());
+    $error = $result->getErrors()[0];
+    $this->assertSame('STYLE_VARIANT_COMPOSITION_AT_RULE', $error->getCode());
+    $this->assertSame(['container(1)'], $error->getContext()['slot_paths']);
+    $this->assertSame([], $this->styleMap($entity));
+
+    $this->assertTrue($this->operations->batchOperations($entity, [
+      ['op' => 'apply_variant', 'key' => $rule, 'variant' => 'tidy'],
+    ])->isSuccess());
+    $this->assertSame([$rule => ['variants' => [self::ref('tidy')]]], $this->styleMap($entity));
+
+    $this->assertTrue($this->operations->batchOperations($entity, [
+      ['op' => 'detach_variant', 'key' => $rule, 'variant' => 'tidy'],
+    ])->isSuccess());
+    $this->assertSame([
+      $rule => ['default' => ['padding' => '1rem']],
+      "$rule > *" => ['default' => ['margin' => '0']],
+    ], $this->styleMap($entity));
   }
 
 }

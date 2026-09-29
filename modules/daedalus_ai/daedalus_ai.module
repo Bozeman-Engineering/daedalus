@@ -11,6 +11,9 @@
 function daedalus_ai_library_info_alter(array &$libraries, string $extension): void {
   if ($extension === 'ai_chatbot' && isset($libraries['deepchat'])) {
     $module_path = \Drupal::service('extension.list.module')->getPath('daedalus_ai');
+    // The attachment request helpers before the context manager whose
+    // interceptor consumes them.
+    $libraries['deepchat']['js']["/$module_path/js/daedalus-ai-attachment-request.js"] = [];
     $libraries['deepchat']['js']["/$module_path/js/daedalus-ai-context-manager.js"] = [];
     $libraries['deepchat']['js']["/$module_path/js/daedalus-ai-command-processor.js"] = [];
     $libraries['deepchat']['js']["/$module_path/js/daedalus-ai-step-message-sanitizer.js"] = [];
@@ -18,6 +21,9 @@ function daedalus_ai_library_info_alter(array &$libraries, string $extension): v
     $libraries['deepchat']['js']["/$module_path/js/daedalus-ai-followup-chat.js"] = [];
     $libraries['deepchat']['js']["/$module_path/js/daedalus-ai-trigger-deferred.js"] = [];
     $libraries['deepchat']['dependencies'][] = 'core/once';
+    // The context manager reads the attachment lane's ceiling and the
+    // thread id from drupalSettings.
+    $libraries['deepchat']['dependencies'][] = 'core/drupalSettings';
     // The scripts above attach Drupal.Daedalus.AiContext, AiCommands,
     // AiFollowup and AiDeferred to the root daedalus_ui defines.
     $libraries['deepchat']['dependencies'][] = 'daedalus_ui/daedalus';

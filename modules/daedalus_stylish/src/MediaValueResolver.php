@@ -349,16 +349,12 @@ class MediaValueResolver {
    *
    * Exactly validation's resolution: the key's address (captured per
    * bundle / per layout with the host entity in context, universal kind
-   * degradation without) with its part, tag-tier or children suffix,
-   * built by the one roster derivation. NULL when the key does not parse.
+   * degradation without) with its relative selector, built by the one
+   * roster derivation. NULL when the key does not parse.
    */
   protected function keyRoster(string $key, ?FieldableEntityInterface $entity): ?VocabularyRoster {
-    $parsed = $this->validator->parseKey($key);
-    $root = $parsed === NULL ? NULL : $this->validator->captureScope($key, $entity === NULL ? [] : ['entity' => $entity]);
-    if ($root === NULL) {
-      return NULL;
-    }
-    return $this->vocabulary->build(Address::of($root->family, $root->id, $parsed['sub'], $parsed['children']), $this->defaultTheme());
+    $address = $this->validator->keyAddress($key, $entity === NULL ? [] : ['entity' => $entity]);
+    return $address === NULL ? NULL : $this->vocabulary->build($address, $this->defaultTheme());
   }
 
   /**

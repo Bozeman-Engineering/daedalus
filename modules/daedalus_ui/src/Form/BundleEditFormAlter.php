@@ -9,7 +9,6 @@ use Drupal\Core\Entity\BundleEntityFormBase;
 use Drupal\daedalus_ui\ElementModel\ElementModel;
 use Drupal\daedalus_ui\ModePluginManager;
 use Drupal\daedalus_ui\Presentation\Presentation;
-use Drupal\daedalus_ui\ToolPluginManager;
 use Drupal\Core\Config\TypedConfigManagerInterface;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\StringTranslation\TranslatableMarkup;
@@ -27,7 +26,6 @@ class BundleEditFormAlter {
 
   public function __construct(
     protected ModePluginManager $modeManager,
-    protected ToolPluginManager $toolManager,
     protected EntityTypeManagerInterface $entityTypeManager,
     protected TypedConfigManagerInterface $typedConfigManager,
   ) {}
@@ -74,26 +72,27 @@ class BundleEditFormAlter {
     $options = ['none' => $this->t('None')];
     $configured_modes = $bundle_entity->getThirdPartySetting('daedalus_ui', 'modes', []);
     foreach ($modes as $plugin_id => $plugin_definition) {
-      if (array_search(PluginFormInterface::class, class_implements($plugin_definition['class']))) {
-        $options[$plugin_id] = $plugin_definition['label'];
-        $plugin = $this->modeManager->createInstance($plugin_id, $configured_modes[$plugin_id] ?? []);
-        $form['page_builder']['daedalus_ui']['modes'][$plugin_id] = [
-          'plugin_id' => [
-            '#markup' => $plugin_definition['label'],
-          ],
-          'summary' => [
-            '#markup' => $plugin->getSummary(),
-          ],
-          'operations' => [
-            '#type' => 'operations',
-            '#links' => $this->getOperations($plugin_id, $bundle_definition->getBundleOf(), $bundle_entity->id()),
-            // Allow links to use modals.
-            '#attached' => [
-              'library' => ['core/drupal.dialog.ajax'],
-            ],
-          ],
-        ];
+      if (empty($plugin_definition['per_bundle'])) {
+        continue;
       }
+      $options[$plugin_id] = $plugin_definition['label'];
+      $plugin = $this->modeManager->createInstance($plugin_id, $configured_modes[$plugin_id] ?? []);
+      $form['page_builder']['daedalus_ui']['modes'][$plugin_id] = [
+        'plugin_id' => [
+          '#markup' => $plugin_definition['label'],
+        ],
+        'summary' => [
+          '#markup' => $plugin->getSummary(),
+        ],
+        'operations' => [
+          '#type' => 'operations',
+          '#links' => $this->getOperations($plugin_id, $bundle_definition->getBundleOf(), $bundle_entity->id()),
+          // Allow links to use modals.
+          '#attached' => [
+            'library' => ['core/drupal.dialog.ajax'],
+          ],
+        ],
+      ];
     }
     if ($bundle_definition->getBundleOf() === 'block_content') {
       // The site-builder tier of the element model's presentation decision:
@@ -220,8 +219,12 @@ class BundleEditFormAlter {
       ];
     }
     else {
-      $operations['configure'] = [
-        'title' => new TranslatableMarkup('Configure'),
+      // Only a mode with a configuration form has anything to configure;
+      // the enable and disable operations are every per-bundle mode's.
+      $definition = \Drupal::service('plugin.manager.modes')->getDefinition($plugin_id);
+      if (is_subclass_of($definition['class'], PluginFormInterface::class)) {
+        $operations['configure'] = [
+          'title' => new TranslatableMarkup('Configure'),
         'weight' => 10,
         'url' => Url::fromRoute('daedalus_ui.mode.configure', [
           'plugin_id' => $plugin_id,
@@ -233,11 +236,12 @@ class BundleEditFormAlter {
             'use-ajax',
           ],
         ],
-        'ajax' => [
-          'dialogType' => 'modal',
-          'dialog' => ['height' => 400, 'width' => 700],
-        ],
-      ];
+          'ajax' => [
+            'dialogType' => 'modal',
+            'dialog' => ['height' => 400, 'width' => 700],
+          ],
+        ];
+      }
 
       $operations['disable'] = [
         'title' => new TranslatableMarkup('Disable'),

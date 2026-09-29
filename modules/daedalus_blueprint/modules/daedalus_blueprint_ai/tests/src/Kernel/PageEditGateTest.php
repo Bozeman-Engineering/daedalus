@@ -6,6 +6,7 @@ namespace Drupal\Tests\daedalus_blueprint_ai\Kernel;
 
 use Drupal\Component\Uuid\Php as PhpUuid;
 use Drupal\daedalus_blueprint_ai\Plugin\AiFunctionCall\PageEdit;
+use Drupal\daedalus_blueprint_test\TestFileDeclarationHandler;
 use Drupal\Tests\daedalus\Kernel\BlueprintKernelTestBase;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
@@ -18,7 +19,8 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  * same source the cached catalog teaches from, so a JSON-door op such as
  * add_section is refused with the whole set named and the batch never
  * reaches the spine. Without the stencil module the set is the six DOM
- * ops; StencilGestureAliasTest pins the eight-op set with it.
+ * ops and the file declaration; StencilGestureAliasTest pins the set with
+ * the stencil gestures beside them.
  */
 #[CoversClass(PageEdit::class)]
 #[Group('daedalus_blueprint')]
@@ -55,6 +57,7 @@ class PageEditGateTest extends BlueprintKernelTestBase {
       'twig_events',
       'daedalus_tempstore',
       'daedalus_blueprint_api',
+      'file',
       'daedalus_ui',
       'daedalus_layout',
       'daedalus_blueprint_test',
@@ -104,11 +107,43 @@ class PageEditGateTest extends BlueprintKernelTestBase {
     ]);
 
     $this->assertStringContainsString('op 1 ("add_section") is not in the page edit grammar', $output);
-    $this->assertStringContainsString('insert, replace, remove, move, set, style', $output);
+    $this->assertStringContainsString('insert, replace, remove, move, set, style, file', $output);
     $this->assertStringContainsString('detach', $output);
     // The batch never ran: op 0's rename did not land.
     $this->entityTypeManager->getStorage('entity_test')->resetCache();
     $this->assertSame('Host', $this->entityTypeManager->getStorage('entity_test')->load($this->entity->id())->get('name')->value);
+  }
+
+  /**
+   * The file declaration is a page-language op: the gate admits it.
+   *
+   * The batch reaches the spine with the tool's conversation, the seam
+   * receives the declaration, and the rename beside it lands.
+   */
+  public function testFileOpIsAdmitted(): void {
+    TestFileDeclarationHandler::$declared = [];
+    $this->container->get('daedalus_blueprint_ai.conversation_context')->set('thread-gate');
+    $output = $this->runTool('page_edit', [
+      'entity_type' => 'entity_test',
+      'entity_id' => $this->entity->id(),
+      'ops' => [
+        [
+          'op' => 'file',
+          'name' => 'logo.svg',
+          'type' => 'image/svg+xml',
+          'content' => '<svg xmlns="http://www.w3.org/2000/svg"/>',
+        ],
+        ['op' => 'set', 'ref' => 'root', 'attrs' => ['name' => 'Renamed']],
+      ],
+      'save' => TRUE,
+    ]);
+
+    $this->assertStringNotContainsString('is not in the page edit grammar', $output);
+    $this->assertStringNotContainsString('Error', $output);
+    $this->assertStringContainsString('persisted: database', $output);
+    $this->assertSame([['thread-gate', 'logo.svg', 'image/svg+xml', '<svg xmlns="http://www.w3.org/2000/svg"/>']], TestFileDeclarationHandler::$declared);
+    $this->entityTypeManager->getStorage('entity_test')->resetCache();
+    $this->assertSame('Renamed', $this->entityTypeManager->getStorage('entity_test')->load($this->entity->id())->label());
   }
 
 }

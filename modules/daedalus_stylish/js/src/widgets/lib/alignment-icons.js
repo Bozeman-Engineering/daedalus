@@ -22,6 +22,14 @@ export const ALIGNMENT_ICONS = {
       [3, 3.5, 9, 3.5],
       [6, 9, 6, 3.5],
     ],
+    // Spread (space-between, a Row's main axis): edge lines on both
+    // sides, the two bars pushed apart to hug them.
+    spread: [
+      [1.5, 2, 1.5, 12],
+      [13, 2, 1.5, 12],
+      [4, 3.5, 3, 9],
+      [9, 3.5, 3, 9],
+    ],
   },
   'align-items': {
     start: [

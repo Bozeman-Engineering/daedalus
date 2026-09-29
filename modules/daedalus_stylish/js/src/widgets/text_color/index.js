@@ -1,7 +1,13 @@
 import { h } from 'preact';
-import { controlWidgets } from '../../controls.js';
+import {
+  controlWidgets,
+  litValues,
+  ownAtPose,
+  withheldReasonFor,
+} from '../../controls.js';
 import { textGate } from '../../widget-values.js';
 import {
+  gradientImageStop,
   gradientStops,
   textGradientBatch,
   textGradientState,
@@ -11,8 +17,10 @@ import { spaceClosed } from '../../value-space.js';
 import { useGradientChip } from '../../gradient-chip.js';
 import { useGesture } from '../lib/use-gesture.js';
 import { useColorWell } from '../lib/color-well.js';
+import { useRowMenu } from '../lib/use-row-menu.js';
 import { originFor } from '../../choice-row-model.js';
 import { widgetClasses } from '../lib/widget-classes.js';
+import { Mark } from '../lib/mark.js';
 
 /**
  * text_color: one swatch well over the color + text-gradient recipe trio
@@ -48,22 +56,31 @@ import { widgetClasses } from '../lib/widget-classes.js';
  * (spaceClosed) unless that committed swatch reference makes the session
  * the offer.
  *
- * The row is the ordinary basic row: the leading provenance ring
- * (`.daedalus-stylish-inspector__mark`, hued through `--daedalus-stylish-origin` from the
- * choice row's originFor over the color half, `color`), the row label
- * (model.label, the one source the single-row widgets share), then the
- * well at the row's end; the hidden native picker rides the row too.
- * The same originFor read hands the well its ghost: while `color` is
- * unset, the well wears the resting value's paint muted (a skin's
- * `color: var(--color-accent)`, the Base value at a pose) instead of
- * the slashed blank, so the mark's "from the active skin" and the well
- * beneath it tell one story.
+ * The row is the ordinary basic row: the leading mark (lib/mark.js
+ * Mark: hue, fill at the pose and sentence from the
+ * choice row's originFor over the color half's stack read, `color`),
+ * the row label (model.label, the one source the single-row widgets
+ * share), then the well at the row's end; the hidden native picker
+ * rides the row too. The well wears the trio's WINNERS at the pose
+ * (controls.js litValues over the model's reads: a skin's `color:
+ * var(--color-accent)` lights its palette stop exactly as an own value
+ * does), so the mark's "from the active skin" and the lit well beneath
+ * it tell one story. The lit stop's unpick (the Unset gesture) exists
+ * only while the element's own entry delivers the lit half at the pose
+ * (ownAtPose); otherwise it does nothing, since a null write would
+ * remove nothing. Right-click opens the shared row menu
+ * (lib/use-row-menu.js) over the color half's origin: the doorways
+ * every property row offers, its unset the trio's unpick.
  *
  * Gated on the selection carrying real text (textGate at registration,
  * shared with text_alignment and typography): the universal block kind
  * sanctions typography on EVERY block, but only the canvas knows an image
  * block has no text; the pipeline hides the whole control there unless a
  * value is already set (registry.offered()).
+ *
+ * The well disables whole, the reason on its title, when the panel's
+ * write address withholds any of the trio (controls.js
+ * withheldReasonFor): a text-gradient pick writes all three at once.
  */
 const TextColor = ({
   model,
@@ -73,17 +90,32 @@ const TextColor = ({
   source,
   onPreview,
   onCommit,
+  onPickCondition = null,
+  onOpenDocument = null,
 }) => {
   const { values, invalid, stage, pick } = useGesture(
-    model,
+    model.home.key,
+    litValues(model.reads),
     onPreview,
     onCommit,
   );
-  const imageStops = gradientStops(
+  const gradientRow = gradientStops(
     guide,
     materials,
     model.constraints?.['background-image'],
   );
+  // A recipe over a lone gradient literal no offered stop claims lights
+  // as its own synthetic stop (gradientImageStop, the Background
+  // widget's posture): the well paints it and the grid's toggle is the
+  // unpick of the whole recipe.
+  const literalStop = gradientImageStop(
+    guide,
+    materials,
+    values['background-image'],
+    gradientRow,
+  );
+  const imageStops =
+    literalStop === null ? gradientRow : [...gradientRow, literalStop];
   const image =
     typeof values['background-image'] === 'string'
       ? values['background-image']
@@ -96,31 +128,55 @@ const TextColor = ({
     constraints: model.constraints?.['background-image'] ?? null,
     source,
     canMint: Boolean(swatches?.canCreate),
-    onPreview: (value) => {
-      // The optimistic paint covers the WHOLE gesture: a gradient behind
-      // opaque text previews as nothing like the commit, so the recipe's
-      // three properties stage together per builder input.
-      Object.entries(textGradientBatch(value)).forEach(([property, part]) =>
-        onPreview(property, part),
-      );
-    },
+    // The optimistic paint covers the WHOLE gesture: a gradient behind
+    // opaque text previews as nothing like the commit, so the recipe's
+    // three properties stage together per builder input.
+    onPreview: (value) => onPreview(textGradientBatch(value)),
     onCommit: (value) => pick(textGradientBatch(value)),
   });
+  const disabledTitle = withheldReasonFor(model, [
+    'color',
+    'background-image',
+    'background-clip',
+  ]);
+  const disabled = disabledTitle !== null;
   const gradientOffered =
-    !spaceClosed(guide, model.constraints?.['background-image'] ?? null) ||
-    gradient.swatch !== null;
-  // The row's origin (the mark's hue and story) and, beneath an unset
-  // well, its ghost: one read for both, so they never disagree.
-  const origin = model.provenance
-    ? originFor({
-        guide,
-        materials,
-        condition: model.condition,
-        property: 'color',
-        entry: model.entry,
-        provenance: model.provenance,
-      })
-    : null;
+    !disabled &&
+    (!spaceClosed(guide, model.constraints?.['background-image'] ?? null) ||
+      gradient.swatch !== null);
+  // The row's origin (the mark's hue and story) over the color half.
+  const origin = originFor({
+    guide,
+    materials,
+    condition: model.condition,
+    property: 'color',
+    stack: model.stacks.color,
+    read: model.reads.color,
+    blockTypes: source.getBlockTypes?.() ?? {},
+    sectionLayouts: source.getSectionLayouts?.() ?? {},
+  });
+  // The lit half the Unset gesture would remove: the gradient recipe
+  // while one is lit, the color otherwise.
+  const unsettable = ownAtPose(
+    model.reads[image === '' ? 'color' : 'background-image'],
+    model.condition,
+  );
+  // The one pick door (the well's grid, its lane, the menu's unset): a
+  // null stop is the unpick, refused while nothing own delivers at the
+  // pose and with a withheld row.
+  const choose = (stop, gradientPick = false) => {
+    if (stop === null && (!unsettable || disabled)) {
+      return;
+    }
+    pick(textPick(values, stop, gradientPick));
+  };
+  const onContextMenu = useRowMenu({
+    origin,
+    source,
+    onOpenDocument,
+    onPickCondition,
+    onUnset: () => choose(null),
+  });
   const {
     well,
     input,
@@ -136,29 +192,32 @@ const TextColor = ({
     state: (colorStops) =>
       textGradientState(guide, materials, values, colorStops, imageStops),
     stops: imageStops,
-    onPick: (stop, gradientPick) => pick(textPick(values, stop, gradientPick)),
+    onPick: choose,
     lanes: gradientOffered ? [gradient.lane] : [],
     canMint: Boolean(swatches?.canCreate),
     source,
-    ghost: origin?.ghost ?? null,
+    disabled,
+    disabledTitle,
   });
   return (
     <div className={widgetClasses('text-color', invalid)}>
       <div
         className="daedalus-stylish-inspector__widget-row"
         style={origin?.color ? { '--daedalus-stylish-origin': origin.color } : undefined}
+        onContextMenu={onContextMenu}
       >
-        <span
-          className="daedalus-stylish-inspector__mark daedalus-ui-dot"
-          title={origin?.title}
-          aria-hidden="true"
-        />
-        <span className="daedalus-stylish-inspector__widget-axis">{model.label}</span>
-        {well}
-        {/* The hidden picker rides the row (positioned), not the popover:
-            the lane closes the popover before it opens the chooser, and
-            the chooser's events must still land on a mounted input. */}
-        {input}
+        <span className="daedalus-stylish-inspector__widget-label">
+          <Mark origin={origin} />
+          <span className="daedalus-stylish-inspector__widget-axis">{model.label}</span>
+        </span>
+        <span className="daedalus-stylish-inspector__widget-value">
+          {well}
+          {/* The hidden picker rides the value cell (positioned), not the
+              popover: the lane closes the popover before it opens the
+              chooser, and the chooser's events must still land on a
+              mounted input. */}
+          {input}
+        </span>
       </div>
       {palette}
       {gradientOffered && gradient.popover}

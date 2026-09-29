@@ -32,7 +32,7 @@ import { entryAtPose } from './condition-cascade.js';
 import { mediaTokenUuid } from './media-token.js';
 import { isGradientLayer, splitLayers } from './gradient-model.js';
 import { resolvedConstraintsFor, propertyGranted } from './style-guide.js';
-import { gradientSwatchOf, inlineLiteral } from './materials.js';
+import { facePair, gradientSwatchOf, inlineLiteral } from './materials.js';
 
 /**
  * The single gradient a committed background-image value holds, or null.
@@ -224,6 +224,63 @@ export const mediaImageStop = (value, urls = null) => {
 };
 
 /**
+ * The committed lone gradient literal as a synthetic image stop, or null.
+ *
+ * The media posture's twin for a gradient no stop claims (a builder
+ * commit, an advanced-mode or AI-authored literal): a background-image
+ * that IS exactly one gradient function (singleGradient) and matches
+ * none of the offered image stops joins the widget's stop table as the
+ * one entry representing itself, so the EXISTING machinery does the
+ * rest: the state read's stop match lights it, the well wears it as the
+ * painted gradient face (wellFace's gradient kind, off the `gradient`
+ * flag: the value's own paint under the custom marker, since it is not
+ * from the palette), the grid shows it lit with its paint, and the lit
+ * chip's toggle is the unpick, which the pick mapping's corners rule
+ * resolves to clearing what is set. A value an offered stop already
+ * claims (an allowed literal, a gradient swatch's var()) derives nothing:
+ * that stop lights instead. Collisions never reach the stop: a color
+ * beside the gradient, a layered value, or the text recipe's occupancy
+ * all fall through the state reads to the honest custom face.
+ *
+ * `paint` is the value's own paint through the one face-paint rule
+ * (nested swatch references substituted), the scheme pair beside it.
+ *
+ * @param {object} guide
+ *   The style guide payload.
+ * @param {object} materials
+ *   The materials roster.
+ * @param {*} value
+ *   The (draft-layered) background-image value.
+ * @param {Array<{matches: string[]}>} stops
+ *   The offered image stops (gradientStops), whose claims win.
+ *
+ * @return {?object}
+ *   A widget-shape stop ({id, value, matches, label, paint, paintDark,
+ *   group}, plus {gradient: true}), or null.
+ */
+export const gradientImageStop = (guide, materials, value, stops = []) => {
+  const gradient = singleGradient(guide, materials, value);
+  if (gradient === null) {
+    return null;
+  }
+  const normalized = normalizeValue(gradient);
+  if (stops.some((stop) => stop.matches.includes(normalized))) {
+    return null;
+  }
+  const { paint, paintDark } = facePair(guide, materials, gradient);
+  return {
+    id: 'gradient:literal',
+    value: gradient,
+    matches: [normalized],
+    label: 'Custom gradient',
+    paint,
+    paintDark,
+    group: 'Gradient',
+    gradient: true,
+  };
+};
+
+/**
  * The best-guess companions a basic-mode media pick seeds beside the
  * image token: without them the browser defaults (repeat, auto size)
  * tile the image, so the common case would always need an advanced-mode
@@ -294,20 +351,18 @@ const sanctionedCompanion = (guide, declaration, property, value) => {
  * The companion map a basic-mode media pick seeds beside the image.
  *
  * Pure seed model: the Background widget computes this at the media chip
- * click and threads it through the `source.pickMedia` payload, so the
- * leader merges it into the ONE update_style commit beside the token
- * ({[property]: token, ...companions}). Each MEDIA_COMPANIONS entry
- * seeds only when the resolved stack does not already answer it:
- * - The effective entry (own entry + worn variants; the widgets'
- *   effectiveEntry read, model.entry) delivers a value at the write
- *   condition through the cascade: seeding would silently bury a
- *   variant's or the element's own styling under an override.
- * - The active skin's defaults (skinDefaultEntry, condition-keyed like
- *   the entry) answer the same way; the skin is the weakest layer, so a
- *   seed over it would override site styling the pick never asked to
- *   change. A satellite reads the base:{tag} layer's tag from the
- *   leader's relayed selection tags; a part binding outside the drilled
- *   part degrades that layer away there (accepted minor over-seed).
+ * click and hands it to onPickMedia beside the image, so the pipeline
+ * routes the seed with the token as one group (basic-controls.js) and
+ * the source commits them in the ONE update_style op on that box. Each
+ * MEDIA_COMPANIONS entry seeds only when the layer stack does not
+ * already answer it:
+ * - The stack's delivered entry (style-stack.js deliveredEntry over the
+ *   bound target's stack: the declared and skin tiers, the skin's
+ *   base:{tag} block where the rendered tag was known, the worn
+ *   variants, the own entry) delivers a value at the write condition
+ *   through the cascade: seeding would silently bury that layer's
+ *   styling under an override, the skin's site styling included (the
+ *   weakest layer, which the pick never asked to change).
  * - The guide sanctions the property for the bound target and the value
  *   survives its constraints (sanctionedCompanion); the companions are
  *   curated in the Background property group so the batch is
@@ -320,11 +375,8 @@ const sanctionedCompanion = (guide, declaration, property, value) => {
  *   The bound TARGET's effective declaration (the elements entry for a
  *   part binding), the sanction and constraint source.
  * @param {?object} entry
- *   The resolved condition-keyed entry behind the widget's values
- *   (model.entry), or null.
- * @param {?object} skinEntry
- *   The active skin's site-default entry for the key (skinDefaultEntry),
- *   or null.
+ *   The stack's delivered condition-keyed entry (deliveredEntry), or
+ *   null.
  * @param {string} [condition]
  *   The editing compound the pick writes at (model.condition).
  *
@@ -336,16 +388,12 @@ export const mediaCompanions = (
   guide,
   declaration,
   entry,
-  skinEntry = null,
   condition = 'default',
 ) => {
   const companions = {};
   const conditions = guide?.conditions ?? {};
   Object.entries(MEDIA_COMPANIONS).forEach(([property, value]) => {
-    if (
-      answersCompanion(entry, property, condition, conditions) ||
-      answersCompanion(skinEntry, property, condition, conditions)
-    ) {
+    if (answersCompanion(entry, property, condition, conditions)) {
       return;
     }
     const spelling = sanctionedCompanion(guide, declaration, property, value);
@@ -364,12 +412,13 @@ export const mediaCompanions = (
  * under the text recipe's occupancy, the recipe's set members) clears in
  * the SAME one-op batch as the token, never left as a silently buried
  * both-set compound the well would read custom. The widget merges this
- * under the seed into the `pickMedia` companions payload
- * ({...replacements, ...seed}); the maps never overlap, and the leader
- * already treats every companion value as a regular staged-and-
- * committed property (null = unset), so the nulls ride the existing
- * relay untouched. The seeded companions themselves are NOT cleared
- * here: replacing image A with image B keeps size/repeat/position
+ * under the seed into onPickMedia's companions ({...replacements,
+ * ...seed}); the maps never overlap, and the pipeline routes each null
+ * to the box its value lives on exactly as a commit's null (a root band
+ * beside an anchor-bound image is the multi-key batch), so the clear
+ * rides the one write rule untouched. The seeded companions themselves
+ * are NOT cleared here: replacing image A with image B keeps
+ * size/repeat/position
  * standing (a photo swap honors the art direction; the fresh seed skips
  * whatever is already answered).
  *
@@ -412,9 +461,10 @@ const rawValue = (values, properties) =>
  * The recipe's marker is `background-clip: text`: with it in force EVERY
  * background (image and color alike) clips to the glyphs, so nothing the
  * background widget writes paints the element's surface. The widget does
- * not own background-clip; it reads the marker from the posed entry
- * (model.entry[model.condition], the resolver's merge) so the
- * cross-widget collision is visible to the pair-only state and pick.
+ * not own background-clip; it reads the marker from the stack's
+ * delivered entry at the posed compound (deliveredEntry over the
+ * model's stack) so the cross-widget collision is visible to the
+ * pair-only state and pick.
  * Keyword case-insensitive, like the recipe reads (normalizeValue).
  *
  * @param {?Object<string, string>} siblings

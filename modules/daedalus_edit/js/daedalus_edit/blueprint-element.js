@@ -1,9 +1,14 @@
+import { valueTransport } from './transports.js';
+
 /**
  * Blueprint Editable Element.
  *
  * The state object for a blueprint-edited leaf — the counterpart of
- * EditableElement (the form-edited leaf's state). A blueprint leaf carries
- * only identity in its attribution, never values:
+ * EditableElement (the form-edited leaf's state). Its VALUE STORE is the
+ * blueprint mirror (committedValues reads the component's fields and
+ * label, never the DOM) and its COMMIT TRANSPORT is the value transport
+ * (transports.js): one `update_element` op with the changed bag. A
+ * blueprint leaf carries only identity in its attribution, never values:
  * - data-daedalus-edit-editor: the editor's registry key.
  * - data-daedalus-edit-editor-settings: JSON settings stamped by the template's
  *   preprocess (e.g. a tag field's allowed_values).
@@ -14,7 +19,7 @@
  * from the DOM.
  *
  * @see editable-element.js
- * @see plugins/blueprint-editor-base.js
+ * @see plugins/editor-plugin-base.js
  */
 export class BlueprintEditableElement {
   /**
@@ -46,6 +51,13 @@ export class BlueprintEditableElement {
    * @see edit-session-engine.js (DaedalusEditDraft, mutationApplied)
    */
   draft = undefined;
+
+  /**
+   * The commit transport: one `update_element` op on the spine.
+   *
+   * @type {Object}
+   */
+  transport = valueTransport;
 
   constructor(element) {
     this.editorId = element.dataset.daedalusEditEditor;
@@ -84,7 +96,7 @@ export class BlueprintEditableElement {
     /**
      * The inline editing editor plugin for this leaf.
      *
-     * @type {BlueprintEditorBase}
+     * @type {EditorPluginBase}
      */
     this.plugin = Drupal.Daedalus.Edit.Editors.get(this.editorId);
     if (!this.plugin) {
@@ -92,6 +104,58 @@ export class BlueprintEditableElement {
         `No editor "${this.editorId}" is registered for a blueprint-edited leaf.`,
       );
     }
+  }
+
+  /**
+   * The committed values of the edited properties, from the mirror.
+   *
+   * Inline-block fields live in the component's block_fields; placement
+   * properties (label) on the component itself — the same sorting the
+   * server applies to the flat bag, read in reverse. An EMPTY field
+   * serializes as a form-only stub, not a value; to the editing surface
+   * it is "no value". A stub kept in the snapshot poisons the gesture:
+   * spread into an outgoing value (a link's preserved title/options), its
+   * marker key makes the server treat the whole write as "leave this
+   * field alone" — a silent no-op.
+   *
+   * @param {string[]} names
+   *   The property names the editor reads.
+   *
+   * @return {Object<string, *>}
+   *   The mirror's values (the mirror's own objects; the editor clones).
+   */
+  committedValues(names) {
+    const { Blueprint } = Drupal.Daedalus;
+    const component = Blueprint.componentForUuid(
+      Blueprint.getBlueprint(),
+      this.componentUuid,
+    );
+    if (!component) {
+      throw new Error(
+        `No blueprint component "${this.componentUuid}" in the mirror; cannot edit "${this.editorId}".`,
+      );
+    }
+    const values = {};
+    names.forEach((name) => {
+      let value =
+        component.block_fields?.[name] !== undefined
+          ? component.block_fields[name]
+          : component[name];
+      if (Blueprint.isFormOnlyStub(value)) {
+        value = null;
+      }
+      values[name] = value;
+    });
+    return values;
+  }
+
+  /**
+   * The page element is its own handle: nothing swaps in for it.
+   *
+   * @return {?Element}
+   */
+  getPageElementHandle() {
+    return this.getPageElement();
   }
 
   /**

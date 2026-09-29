@@ -29,7 +29,7 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  *
  * Real declarations and real shipped variants (daedalus_stylish_layouts installed):
  * container_site is the root-only birth width, container_md another
- * root-only width, row the every-depth container_layout variant. The UI
+ * root-only width, columns the every-depth container_layout variant. The UI
  * drag and the AI's op lane issue the same move_element, so these pins
  * see every failure the browser would.
  */
@@ -57,6 +57,7 @@ class SectionMoveWearTest extends KernelTestBase {
     'twig_events',
     'daedalus_tempstore',
     'daedalus_blueprint_api',
+    'file',
     'daedalus_ui',
     'daedalus_layout',
     'daedalus_stylish',
@@ -206,13 +207,13 @@ class SectionMoveWearTest extends KernelTestBase {
 
     // The band wears the house width, Columns, and an own style block.
     $this->batch($entity, [
-      ['op' => 'apply_variant', 'key' => $key, 'variant' => 'row'],
+      ['op' => 'apply_variant', 'key' => $key, 'variant' => 'columns'],
     ]);
     $map = $this->styleMap($entity);
     $map[$key]['default'] = ['padding-top' => '2rem'];
     $this->writeStyleMap($entity, $map);
     $this->assertSame([
-      'variants' => [['variant' => 'container_site', 'fragment' => ''], ['variant' => 'row', 'fragment' => '']],
+      'variants' => [['variant' => 'container_site', 'fragment' => ''], ['variant' => 'columns', 'fragment' => '']],
       'default' => ['padding-top' => '2rem'],
     ], $this->styleMap($entity)[$key]);
 
@@ -221,7 +222,7 @@ class SectionMoveWearTest extends KernelTestBase {
     $result = $this->move($entity, $band_a, $band_b, 'inside');
     $this->assertTrue($this->isNested($entity, $band_a));
     $this->assertSame([
-      'variants' => [['variant' => 'row', 'fragment' => '']],
+      'variants' => [['variant' => 'columns', 'fragment' => '']],
       'default' => ['padding-top' => '2rem'],
     ], $this->styleMap($entity)[$key] ?? NULL);
     $this->assertDaedalusStylishTarget($result, $entity, TRUE);
@@ -251,7 +252,7 @@ class SectionMoveWearTest extends KernelTestBase {
     // The nested container wears Columns and an own style block; out to
     // root it gains the house width after what it already wears.
     $this->batch($entity, [
-      ['op' => 'apply_variant', 'key' => $key, 'variant' => 'row'],
+      ['op' => 'apply_variant', 'key' => $key, 'variant' => 'columns'],
     ]);
     $map = $this->styleMap($entity);
     $map[$key]['default'] = ['padding-top' => '2rem'];
@@ -259,7 +260,7 @@ class SectionMoveWearTest extends KernelTestBase {
     $result = $this->move($entity, $nested, $band_a, 'after');
     $this->assertFalse($this->isNested($entity, $nested));
     $this->assertSame([
-      'variants' => [['variant' => 'row', 'fragment' => ''], ['variant' => 'container_site', 'fragment' => '']],
+      'variants' => [['variant' => 'columns', 'fragment' => ''], ['variant' => 'container_site', 'fragment' => '']],
       'default' => ['padding-top' => '2rem'],
     ], $this->styleMap($entity)[$key] ?? NULL);
     $this->assertDaedalusStylishTarget($result, $entity, TRUE);
@@ -303,7 +304,7 @@ class SectionMoveWearTest extends KernelTestBase {
     $key = "container:$band_a";
 
     $this->batch($entity, [
-      ['op' => 'apply_variant', 'key' => $key, 'variant' => 'row'],
+      ['op' => 'apply_variant', 'key' => $key, 'variant' => 'columns'],
     ]);
     $map = $this->styleMap($entity);
     $map[$key]['default'] = ['padding-top' => '2rem'];
@@ -327,7 +328,7 @@ class SectionMoveWearTest extends KernelTestBase {
     // container (the validator stays depth-blind on references), beside
     // an every-depth Columns reference.
     $this->batch($entity, [
-      ['op' => 'apply_variant', 'key' => $key, 'variant' => 'row'],
+      ['op' => 'apply_variant', 'key' => $key, 'variant' => 'columns'],
     ]);
     $map = $this->styleMap($entity);
     $map[$key]['variants'][] = ['variant' => 'container_site', 'fragment' => ''];
@@ -337,7 +338,7 @@ class SectionMoveWearTest extends KernelTestBase {
     // Into the other band's region: still nested, and the width goes.
     $result = $this->move($entity, $nested, $band_b, 'inside');
     $this->assertTrue($this->isNested($entity, $nested));
-    $this->assertSame(['variants' => [['variant' => 'row', 'fragment' => '']]], $this->styleMap($entity)[$key] ?? NULL);
+    $this->assertSame(['variants' => [['variant' => 'columns', 'fragment' => '']]], $this->styleMap($entity)[$key] ?? NULL);
     $this->assertDaedalusStylishTarget($result, $entity, TRUE);
     $this->assertMapValid($entity);
   }
@@ -367,6 +368,42 @@ class SectionMoveWearTest extends KernelTestBase {
     $result = $this->move($entity, $block, $nested, 'inside');
     $this->assertSame($before, $this->styleMap($entity));
     $this->assertDaedalusStylishTarget($result, $entity, FALSE);
+  }
+
+  /**
+   * Both shipped arrangements import at install, on one every-depth axis.
+   *
+   * The install sync landed the container_layout family: columns (equal
+   * shares, its narrow block the stack) and row (natural widths, wrapping,
+   * no narrow block and no children rule), so the layout widget's three
+   * modes and the AI's apply_variant find both under the guide.
+   */
+  public function testShippedArrangementsImport(): void {
+    $storage = $this->container->get('entity_type.manager')->getStorage('daedalus_variant');
+    $arrangements = [];
+    foreach (['columns', 'row'] as $name) {
+      $variants = $storage->loadByProperties(['machine_name' => $name]);
+      $this->assertCount(1, $variants, "One shipped $name variant.");
+      /** @var \Drupal\daedalus_stylish\DaedalusStylishVariantInterface $variant */
+      $variant = reset($variants);
+      $this->assertTrue($variant->isShipped());
+      $this->assertFalse($variant->isModified());
+      $this->assertTrue($variant->isPublished());
+      $this->assertSame('daedalus_stylish_layouts', $variant->getProvider());
+      $this->assertSame('container_layout', $variant->getAxis());
+      $this->assertSame('kind:container', $variant->getScope());
+      $arrangements[$name] = $variant;
+    }
+    $this->assertSame('Columns', $arrangements['columns']->label());
+    $this->assertSame('Row', $arrangements['row']->label());
+
+    $row = $arrangements['row']->getStyles();
+    $this->assertSame([''], array_keys($row), 'Row styles the root alone: no children rule.');
+    $this->assertSame(['default'], array_keys($row['']), 'Row wraps rather than stacking: no narrow block.');
+    $this->assertSame(['flex-direction' => 'row', 'flex-wrap' => 'wrap', 'gap' => 'var(--space-gutter)'], $row['']['default']);
+    $columns = $arrangements['columns']->getStyles();
+    $this->assertSame(['', '::> *'], array_keys($columns));
+    $this->assertSame('column', $columns['']['narrow']['flex-direction']);
   }
 
 }

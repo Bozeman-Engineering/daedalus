@@ -75,8 +75,14 @@ class BlueprintSerializer implements BlueprintSerializerInterface {
       // definition a node. A field without a serialized value (empty, or no
       // serializable representation) gets an identity-only stub so the
       // panel and the presentation policy cover the same set the canvas can
-      // select. Summary mode keeps its sparse transport shape.
-      $fields[$field_name] = $field_value ?? FormOnlyStub::forDefinition($definition);
+      // select; the stub says whether the field is empty, which is the
+      // panel's one source for its "Fill with sample" verb (a visible
+      // field's emptiness is the user's to know). Summary mode keeps its
+      // sparse transport shape.
+      $fields[$field_name] = $field_value ?? FormOnlyStub::forDefinition(
+        $definition,
+        empty: $entity->get($field_name)->isEmpty(),
+      );
     }
 
     if (!empty($fields)) {

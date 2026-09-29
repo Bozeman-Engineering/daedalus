@@ -10,8 +10,11 @@ use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\Extension\ModuleHandlerInterface;
 use Drupal\daedalus_blueprint\BlueprintDeserializerInterface;
 use Drupal\daedalus_blueprint\DesignSystem\ActiveDesignSystem;
+use Drupal\daedalus_blueprint\Materials\Address;
 use Drupal\daedalus_blueprint\Result\BlueprintError;
 use Drupal\daedalus_stylish\Exception\ShippedVariantException;
+use Drupal\daedalus_stylish\Materials\DaedalusStylishMaterialsProvider;
+use Drupal\daedalus_stylish\StyleGuide;
 use Drupal\workspaces\WorkspaceManagerInterface;
 
 /**
@@ -231,6 +234,7 @@ class VariantImporter extends ShippedDefinitionsImporter {
     $design_system = $this->designSystemFor($module, $name, $definition);
 
     if ($variant === NULL) {
+      $this->checkSpellingCollision($module, $name, $definition);
       $variant = $this->deserialize($module, $name, [
         'entity_type' => 'daedalus_variant',
         'bundle' => 'daedalus_variant',
@@ -305,6 +309,49 @@ class VariantImporter extends ShippedDefinitionsImporter {
     $variant->setPublished();
     $variant->save();
     return self::UPDATED;
+  }
+
+  /**
+   * Refuses a new definition whose spelling a published variant already owns.
+   *
+   * A declared axis on a tagged scope spells its variants as an attribute
+   * value (DaedalusStylishMaterialsProvider::attrValue(): the machine name
+   * minus the scope prefix, else the label's slug), and the materials
+   * roster refuses two records spelling the same value in one slot by
+   * throwing from its constructor. A variant save compiles the roster, so
+   * landing such a definition would roll the save back and propagate a
+   * storage fault out of the whole sync: the cache rebuild, the update
+   * run. The collision is this definition's failure, not the run's: it
+   * lands on the report naming the variant that owns the spelling, and
+   * the rest of the file syncs. The case that meets it in practice is a
+   * shipped machine-name rename (row -> columns, both labeled "Columns"):
+   * the first rebuild after the code lands refuses the new name, and the
+   * rename's post-update retires the old entity and syncs again.
+   *
+   * @throws \Drupal\daedalus_stylish\Exception\ShippedVariantException
+   */
+  protected function checkSpellingCollision(string $module, string $name, array $definition): void {
+    $axis = $definition['axis'] ?? StyleGuide::STYLE_AXIS;
+    $scope = Address::fromString($definition['scope']);
+    if ($axis === StyleGuide::STYLE_AXIS || !DaedalusStylishMaterialsProvider::hasTag($scope)) {
+      return;
+    }
+    $spelling = DaedalusStylishMaterialsProvider::attrValue($scope, $name, (string) $definition['label']);
+    $storage = $this->entityTypeManager->getStorage('daedalus_variant');
+    $ids = $storage->getQuery()->accessCheck(FALSE)
+      ->condition('status', 1)
+      ->condition('scope', $definition['scope'])
+      ->condition('axis', $axis)
+      ->execute();
+    foreach ($storage->loadMultiple($ids) as $other) {
+      /** @var \Drupal\daedalus_stylish\DaedalusStylishVariantInterface $other */
+      if (DaedalusStylishMaterialsProvider::attrValue($scope, $other->getMachineName(), (string) $other->label()) !== $spelling) {
+        continue;
+      }
+      throw new ShippedVariantException($module, $name, [
+        new BlueprintError($name, 'SHIPPED_VARIANT_SPELLING_CONFLICT', sprintf('"%s" would spell %s="%s" on %s, the spelling the published "%s" variant already owns.', $name, DaedalusStylishMaterialsProvider::axisAttr($scope, $axis), $spelling, $definition['scope'], $other->getMachineName()), ['owner' => $other->getMachineName()], 'Two variants cannot share a spelling on one axis; retire or relabel the other variant and sync again (a shipped machine-name rename does this in its post-update).'),
+      ]);
+    }
   }
 
   /**
@@ -467,7 +514,7 @@ class VariantImporter extends ShippedDefinitionsImporter {
     }
     if (!is_string($definition['label']) || trim($definition['label']) === '' || !is_string($definition['scope']) || !is_array($definition['styles'])) {
       throw new ShippedVariantException($module, $name, [
-        new BlueprintError($name, 'INVALID_SHIPPED_VARIANT', sprintf('The "%s" entry has the wrong shape.', $name), [], 'label and scope are strings; styles is a map of element-relative keys ("" for the root, "::.class-name" for sub-elements).'),
+        new BlueprintError($name, 'INVALID_SHIPPED_VARIANT', sprintf('The "%s" entry has the wrong shape.', $name), [], 'label and scope are strings; styles is a map of element-relative keys ("" for the root, "::" plus a relative selector for what is inside it).'),
       ]);
     }
     if (array_key_exists('axis', $definition) && (!is_string($definition['axis']) || trim($definition['axis']) === '')) {

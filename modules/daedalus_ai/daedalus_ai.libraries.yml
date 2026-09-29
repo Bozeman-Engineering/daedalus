@@ -15,7 +15,6 @@ edit_mode:
     - daedalus_ui/edit_mode
     # The selection chips wear the kit's daedalus-ui-chip/daedalus-ui-icon-button recipes.
     - daedalus_ui/panel_controls
-    - daedalus_ui/update_element
 
 chat:
   js:

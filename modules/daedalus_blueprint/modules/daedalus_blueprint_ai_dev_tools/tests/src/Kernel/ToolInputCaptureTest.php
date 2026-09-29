@@ -70,6 +70,7 @@ class ToolInputCaptureTest extends BlueprintKernelTestBase {
       'twig_events',
       'daedalus_tempstore',
       'daedalus_blueprint_api',
+      'file',
       'daedalus_ui',
       // Section identity (the uuid the tree addresses containers by) is
       // daedalus_layout's third-party setting.

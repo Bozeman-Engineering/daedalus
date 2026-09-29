@@ -51,13 +51,20 @@ class ContainerPartHoist {
    * Strips the retired part segment from a style key or slot path.
    *
    * `container:{uuid}::.daedalus-stylish-layout-container` becomes the root key,
-   * `::.daedalus-stylish-layout-container::>` becomes the root's `::>` children entry,
-   * and a composition slot path (`container(1)::.daedalus-stylish-layout-container`)
-   * loses the segment the same way (SlotKey grammar: one part at most, the
-   * children suffix outermost).
+   * the part's children entry (`::.daedalus-stylish-layout-container > *`, or
+   * the legacy `::.daedalus-stylish-layout-container::>` spelling) becomes the
+   * root's `::> *` children entry, and a composition slot path
+   * (`container(1)::.daedalus-stylish-layout-container`) loses the segment the
+   * same way. The children spelling written is the relative selector
+   * grammar's canonical one (RelativeSelectorSweep converges the legacy
+   * spelling on every store this hoist does not reach first).
    */
   public function hoistKey(string $key): string {
-    return str_replace(ContainerMigration::CONTAINER_PART, '', $key);
+    return str_replace([
+      ContainerMigration::CONTAINER_PART . ' > *',
+      ContainerMigration::CONTAINER_PART . '::>',
+      ContainerMigration::CONTAINER_PART,
+    ], ['::> *', '::> *', ''], $key);
   }
 
   /**

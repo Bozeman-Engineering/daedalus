@@ -5,7 +5,7 @@
  * PrinterEquivalenceTest, which executes this file inside the PHPUnit suite.
  * PHP is authoritative for scope semantics (StyleMapValidator::captureScope
  * / scopeMatches); these tests lock the mirror to the same rules, plus the
- * element-relative entry math the save/push/copy/paste gestures share.
+ * element-relative entry math the save/push gestures share.
  * Exits non-zero on failure.
  */
 import { strict as assert } from 'node:assert';
@@ -19,22 +19,16 @@ import {
   axisLabel,
   axisOwns,
   axisVocabulary,
-  shadowedProperties,
   captureScope,
-  declaredDefaultEntry,
-  skinDefaultEntry,
   scopeMatches,
   applicableVariants,
+  continuedKey,
   elementEntries,
   hasCustomStyles,
-  entriesAtKey,
-  effectiveEntry,
-  effectiveElementMap,
+  relativeUnder,
   findVariant,
   isShipped,
   locked,
-  propertySuppliers,
-  suppliedValue,
   subtreeSlotTable,
   captureEntries,
   captureSources,
@@ -47,7 +41,6 @@ import {
 } from '../../js/src/variant-scope.js';
 import { formatSlotKey } from '../../js/src/slot-key.js';
 import { layoutTree } from '../../js/src/style-guide.js';
-import { computeOps } from '../../js/src/code/ops.js';
 import { EMPTY_MATERIALS, roster, stencilRecord, variantRecord } from './materials-fixture.mjs';
 
 const UUID_A = 'aaaaaaaa-1111-2222-3333-444444444444';
@@ -68,18 +61,33 @@ test('captureScope mirrors the server vocabulary', () => {
   assert.equal(captureScope(`field:${UUID_A}:field_body`), 'kind:field');
   // A field of an inline block styles (and scopes) as a field.
   assert.equal(captureScope(`block:${UUID_A}:field_quote`, blockTypes), 'kind:field');
-  // Sub-element keys capture the parent's scope.
-  assert.equal(captureScope(`block:${UUID_A}::.quote`, blockTypes), 'block_type:testimonial');
+  // A rule key captures its LANDING, the element its last compound
+  // names (PHP mirror: VocabularyRoster::landingScope()): a type's root
+  // address, a tag's base tag; a part, the children and a subjectless
+  // compound land on no element scope.
+  assert.equal(captureScope(`block:${UUID_A}::.quote`, blockTypes), null);
+  assert.equal(captureScope(`container:${UUID_A}::> pb-testimonial`, blockTypes), 'block_type:testimonial');
+  assert.equal(captureScope(`container:${UUID_A}::> pb-text > pb-container`), 'kind:container');
+  assert.equal(captureScope(`container:${UUID_A}::a`), 'base:a');
+  assert.equal(captureScope(`container:${UUID_A}::> p + p`), 'base:p');
+  assert.equal(captureScope(`container:${UUID_A}::> pb-text .link`), null);
+  assert.equal(captureScope(`container:${UUID_A}::> *`), null);
+  assert.equal(captureScope(`container:${UUID_A}::> *:not(pb-image)`), null);
+  // A generated box is no element scope, behind a type, a tag or the
+  // owner's own anchor: no variant pairs at a pseudo rule.
+  assert.equal(captureScope(`container:${UUID_A}::> pb-testimonial::before`, blockTypes), null);
+  assert.equal(captureScope(`container:${UUID_A}::a::after`), null);
+  assert.equal(captureScope(`block:${UUID_A}::&::before`, blockTypes), null);
   // Sections scope per layout when the table resolves them, degrading to
   // the kind exactly like blocks.
   assert.equal(captureScope(`container:${UUID_A}`, blockTypes, sectionLayouts), 'layout:layout_twocol_section');
-  assert.equal(captureScope(`container:${UUID_A}::.daedalus-stylish-layout-container`, blockTypes, sectionLayouts), 'layout:layout_twocol_section');
+  assert.equal(captureScope(`container:${UUID_A}::.daedalus-stylish-layout-container`, blockTypes, sectionLayouts), null);
   assert.equal(captureScope(`container:${UUID_B}`, blockTypes, sectionLayouts), 'kind:container');
   assert.equal(captureScope('bogus:123'), null);
   // A plugin placement (the table's 'plugin:{base id}' discriminator)
   // captures the block family's other refinement; sub-element keys ride.
   assert.equal(captureScope(`block:${UUID_P}`, blockTypes), 'block_plugin:system_menu_block');
-  assert.equal(captureScope(`block:${UUID_P}::.menu-item`, blockTypes), 'block_plugin:system_menu_block');
+  assert.equal(captureScope(`block:${UUID_P}::.menu-item`, blockTypes), null);
 });
 
 test('scopeMatches: one family rule — kind wildcard, exact refinements', () => {
@@ -123,6 +131,16 @@ test('scopeMatches: one family rule — kind wildcard, exact refinements', () =>
   assert.equal(scopeMatches('base:a', `block:${UUID_A}`, blockTypes), true);
   assert.equal(scopeMatches('base:a', `container:${UUID_A}`, blockTypes, sectionLayouts), true);
   assert.equal(scopeMatches('base:a', 'bogus'), false);
+  // A rule pairs by its landing: a text variant wears at the text rule,
+  // never the container's; nothing pairs at a part or the children.
+  assert.equal(scopeMatches('block_type:testimonial', `container:${UUID_A}::> pb-testimonial`), true);
+  assert.equal(scopeMatches('kind:block', `container:${UUID_A}::> pb-testimonial`), true);
+  assert.equal(scopeMatches('kind:container', `container:${UUID_A}::> pb-testimonial`), false);
+  assert.equal(scopeMatches('kind:container', `container:${UUID_A}::> pb-container`), true);
+  assert.equal(scopeMatches('base:a', `container:${UUID_A}::a`), true);
+  assert.equal(scopeMatches('kind:block', `container:${UUID_A}::a`), false);
+  assert.equal(scopeMatches('kind:container', `container:${UUID_A}::> *`), false);
+  assert.equal(scopeMatches('block_type:testimonial', `block:${UUID_A}::.quote`, blockTypes), false);
 });
 
 test('applicableVariants filters the store\'s variants by scope', () => {
@@ -299,11 +317,38 @@ test('elementEntries extracts element-relative custom entries only', () => {
   assert.equal(hasCustomStyles(map, `container:${UUID_B}`), false);
 });
 
-test('entriesAtKey projects relative entries onto full keys', () => {
-  assert.deepEqual(entriesAtKey(KEY, { '': { default: { margin: '1rem' } }, '::.x': { hover: { color: 'red' } } }), {
-    [KEY]: { default: { margin: '1rem' } },
-    [`${KEY}::.x`]: { hover: { color: 'red' } },
+test('continuedKey and relativeUnder: an element appends its relatives, a rule continues them by descent', () => {
+  const RULE = `container:${UUID_A}::> pb-text`;
+  assert.equal(continuedKey(KEY, ''), KEY);
+  assert.equal(continuedKey(KEY, '::.x'), `${KEY}::.x`);
+  assert.equal(continuedKey(RULE, ''), RULE);
+  assert.equal(continuedKey(RULE, '::.x'), `${RULE} .x`);
+  assert.equal(continuedKey(RULE, '::> pb-image'), `${RULE} > pb-image`);
+  // A suffix the grammar refuses under the rule (a class after a tag).
+  assert.equal(continuedKey(`container:${UUID_A}::a`, '::.icon'), null);
+  assert.equal(relativeUnder(KEY, `${KEY}::.x`), '::.x');
+  assert.equal(relativeUnder(KEY, KEY), null);
+  assert.equal(relativeUnder(KEY, `${KEY}:field_x`), null);
+  assert.equal(relativeUnder(RULE, `${RULE} .x`), '::.x');
+  assert.equal(relativeUnder(RULE, `${RULE} > pb-image`), '::> pb-image');
+  assert.equal(relativeUnder(RULE, RULE), null);
+  assert.equal(relativeUnder(RULE, `container:${UUID_A}::> pb-image`), null);
+  assert.equal(relativeUnder(RULE, `container:${UUID_A}`), null);
+});
+
+test('elementEntries at a rule key: the rule\'s entry and its continuations by descent', () => {
+  const RULE = `container:${UUID_A}::> pb-text`;
+  const ruleMap = {
+    [`container:${UUID_A}`]: { default: { padding: '1rem' } },
+    [RULE]: { variants: [{ variant: 'gritty', fragment: '' }], default: { color: 'red' } },
+    [`${RULE} .quote`]: { default: { 'font-style': 'italic' } },
+    [`container:${UUID_A}::> pb-image`]: { default: { margin: '0' } },
+  };
+  assert.deepEqual(elementEntries(ruleMap, RULE), {
+    '': { default: { color: 'red' } },
+    '::.quote': { default: { 'font-style': 'italic' } },
   });
+  assert.equal(hasCustomStyles(ruleMap, RULE), true);
 });
 
 test('findVariant resolves by record id alone', () => {
@@ -316,133 +361,6 @@ test('findVariant resolves by record id alone', () => {
   assert.equal(findVariant(variants, UUID_B), null);
   assert.equal(findVariant(variants, 'missing'), null);
   assert.equal(findVariant(null, 'gritty'), null);
-});
-
-test('effectiveEntry: the edit-mode resolver with provenance', () => {
-  const variants = [
-    {
-      id: 'gritty',
-      label: 'Gritty',
-      value: {
-        '': { default: { padding: '2rem', 'background-color': 'red' }, hover: { color: 'white' } },
-        '::.quote': { default: { 'font-style': 'italic' } },
-        'container(1)': { default: { display: 'flex' } },
-      },
-    },
-  ];
-  const refMap = { [`container:${UUID_B}`]: { variants: [{ variant: 'gritty', fragment: '' }] } };
-  // A custom entry passes through, provenance-free.
-  assert.deepEqual(effectiveEntry(map, KEY, variants), {
-    entry: { default: { padding: '2rem' } },
-    variant: null,
-    reference: null,
-  });
-  // No entry at all: honestly nothing.
-  assert.deepEqual(effectiveEntry(map, `entity:${UUID_A}`, variants), { entry: null, variant: null, reference: null });
-  // An on-variant root resolves the variant's '' styles, condition-keyed.
-  const root = effectiveEntry(refMap, `container:${UUID_B}`, variants);
-  assert.deepEqual(root.entry, { default: { padding: '2rem', 'background-color': 'red' }, hover: { color: 'white' } });
-  assert.equal(root.variant.label, 'Gritty');
-  assert.equal(root.reference, 'gritty');
-  // A part key resolves its '::.class' relative through the ROOT's ref.
-  const part = effectiveEntry(refMap, `container:${UUID_B}::.quote`, variants);
-  assert.deepEqual(part.entry, { default: { 'font-style': 'italic' } });
-  assert.equal(part.reference, 'gritty');
-  // A part the variant does not style: on the variant, but nothing to show.
-  assert.deepEqual(effectiveEntry(refMap, `container:${UUID_B}::.other`, variants), {
-    entry: null,
-    variant: variants[0],
-    reference: 'gritty',
-  });
-  // A uuid reference is unresolved (the findVariant semantics): the
-  // provenance flag survives, the entry is honestly empty.
-  assert.deepEqual(effectiveEntry({ [KEY]: { variants: [{ variant: UUID_A, fragment: '' }] } }, KEY, variants), { entry: null, variant: null, reference: UUID_A });
-  // Unresolvable reference: provenance survives, the entry is honestly
-  // empty (never the raw {variant} object leaking as styles).
-  assert.deepEqual(effectiveEntry(refMap, `container:${UUID_B}`, []), { entry: null, variant: null, reference: 'gritty' });
-  // Variant slot keys style CHILDREN via compiled selectors, never as the
-  // child's own entry: a child key resolves against its OWN root only.
-  assert.deepEqual(effectiveEntry(refMap, `container:${UUID_A}`, variants), { entry: null, variant: null, reference: null });
-  // A block-field key is its own element root: the block's ref never
-  // bleeds into it, and its own ref resolves.
-  const fieldMap = { [`block:${UUID_A}`]: { variants: [{ variant: 'gritty', fragment: '' }] }, [`block:${UUID_A}:field_quote`]: { default: { color: 'red' } } };
-  assert.deepEqual(effectiveEntry(fieldMap, `block:${UUID_A}:field_quote`, variants), {
-    entry: { default: { color: 'red' } },
-    variant: null,
-    reference: null,
-  });
-  assert.equal(effectiveEntry(fieldMap, `block:${UUID_A}`, variants).reference, 'gritty');
-  // Malformed input degrades to nothing.
-  assert.deepEqual(effectiveEntry(refMap, null, variants), { entry: null, variant: null, reference: null });
-});
-
-test('effectiveElementMap resolves a root variant reference', () => {
-  const variants = [
-    { id: 'section_wide', value: { '': { default: { padding: '4rem' } }, '::.inner': { default: { margin: '0' } } } },
-  ];
-  const effective = effectiveElementMap(map, `container:${UUID_B}`, variants);
-  assert.deepEqual(effective[`container:${UUID_B}`], { default: { padding: '4rem' } });
-  assert.deepEqual(effective[`container:${UUID_B}::.inner`], { default: { margin: '0' } });
-  // Non-referencing elements pass through untouched.
-  assert.deepEqual(effectiveElementMap(map, KEY, variants), map);
-  // Unknown reference: the ref key drops (nothing to resolve).
-  const unknown = effectiveElementMap(map, `container:${UUID_B}`, []);
-  assert.equal(unknown[`container:${UUID_B}`], undefined);
-  // Override layers win at PART keys too (effectiveEntry's rule): a part
-  // entry beside the worn variant merges OVER the variant's part styles
-  // instead of being clobbered by them.
-  const layered = {
-    ...map,
-    [`container:${UUID_B}::.inner`]: { default: { margin: '2rem' }, hover: { color: 'red' } },
-  };
-  assert.deepEqual(effectiveElementMap(layered, `container:${UUID_B}`, variants)[`container:${UUID_B}::.inner`], {
-    default: { margin: '2rem' },
-    hover: { color: 'red' },
-  });
-});
-
-test('effectiveElementMap projects element relatives only, never slot keys', () => {
-  // A composition variant's slot keys address CHILDREN through the staged
-  // layout; concatenating them onto the element's key would mint malformed
-  // map keys (the server's detach materialization
-  // resolves them onto the children's own keys instead).
-  const variants = [
-    {
-      id: 'hero',
-      value: {
-        '': { default: { padding: '4rem' } },
-        '::.inner': { default: { margin: '0' } },
-        'container(1)': { default: { display: 'flex' } },
-        'block(text,2)': { default: { color: 'red' } },
-        'block(text,2)::.quote': { default: { 'font-style': 'italic' } },
-        'field(field_x)': { default: { margin: '1rem' } },
-      },
-    },
-  ];
-  const refMap = { [`container:${UUID_B}`]: { variants: [{ variant: 'hero', fragment: '' }] } };
-  assert.deepEqual(effectiveElementMap(refMap, `container:${UUID_B}`, variants), {
-    [`container:${UUID_B}`]: { default: { padding: '4rem' } },
-    [`container:${UUID_B}::.inner`]: { default: { margin: '0' } },
-  });
-});
-
-test('paste ops: clipboard replaces the effective element styles', () => {
-  const conditions = { hover: { label: 'Hover', wrapper: ':hover' }, narrow: { label: 'Narrow', wrapper: '@container (max-width: 767px)' } };
-  const clipboard = { '': { default: { padding: '3rem' }, hover: { color: 'blue' } } };
-  const ops = computeOps(KEY, map, entriesAtKey(KEY, clipboard), conditions);
-  // Sets the pasted values, unsets what the clipboard doesn't carry —
-  // including the whole sub-element entry.
-  const byKey = Object.groupBy ? Object.groupBy(ops, (op) => op.key) : ops.reduce((acc, op) => ((acc[op.key] ??= []).push(op), acc), {});
-  const rootOps = byKey[KEY] ?? [];
-  const defaults = rootOps.find((op) => !op.condition);
-  assert.deepEqual(defaults.properties, { padding: '3rem' });
-  const hover = rootOps.find((op) => op.condition === 'hover');
-  assert.deepEqual(hover.properties, { color: 'blue' });
-  const sub = (byKey[`${KEY}::.quote`] ?? [])[0];
-  assert.deepEqual(sub.properties, { 'font-style': null });
-  // An identical clipboard produces no ops.
-  const same = elementEntries(map, KEY);
-  assert.deepEqual(computeOps(KEY, map, entriesAtKey(KEY, same), conditions), []);
 });
 
 // Composition capture: a container hosting two text blocks (a non-inline
@@ -508,10 +426,10 @@ test('captureEntries walks the staged subtree into slot keys', () => {
   const subtreeMap = {
     [`container:${SEC}`]: { default: { padding: '0' } },
     [`container:${SEC}::.daedalus-stylish-layout-container`]: { default: { gap: '1rem' } },
-    // Children pseudo-part entries ride their element like part entries:
-    // the root's own '::.class::>' stays a relative suffix, a subtree
-    // child's '::>' translates onto its slot key.
-    [`container:${SEC}::.daedalus-stylish-layout-container::>`]: { default: { 'flex-grow': '1' } },
+    // Children entries ride their element like part entries: the root's
+    // own '::.class > *' stays a relative suffix, a subtree child's
+    // '::> *' translates onto its slot key.
+    [`container:${SEC}::.daedalus-stylish-layout-container > *`]: { default: { 'flex-grow': '1' } },
     [`block:${T2}`]: { default: { margin: '0' }, hover: { color: 'red' } },
     [`block:${T2}::.quote`]: { default: { 'font-style': 'italic' } },
     [`block:${T2}:field_body`]: { default: { color: 'blue' } },
@@ -525,20 +443,20 @@ test('captureEntries walks the staged subtree into slot keys', () => {
     // container is a distinct element with its own stamped root.
     [`container:${NSEC}`]: { default: { padding: '9px', margin: '1px' } },
     [`container:${NSEC}::.daedalus-stylish-layout-container`]: { default: { 'max-width': '40rem' } },
-    [`container:${NSEC}::>`]: { default: { 'min-width': '0' } },
+    [`container:${NSEC}::> *`]: { default: { 'min-width': '0' } },
     [`block:${IMG}`]: { default: { 'border-radius': '4px' } },
   };
   assert.deepEqual(captureEntries(subtreeMap, `container:${SEC}`, layout), {
     '': { default: { padding: '0' } },
     '::.daedalus-stylish-layout-container': { default: { gap: '1rem' } },
-    '::.daedalus-stylish-layout-container::>': { default: { 'flex-grow': '1' } },
+    '::.daedalus-stylish-layout-container > *': { default: { 'flex-grow': '1' } },
     'block(text,1)': { variants: [{ variant: 'card', fragment: '' }] },
     'block(text,2)': { default: { margin: '0' }, hover: { color: 'red' } },
     'block(text,2)::.quote': { default: { 'font-style': 'italic' } },
     'block(text,2)/field(field_body)': { default: { color: 'blue' } },
     'container(1)': { default: { padding: '9px', margin: '1px' } },
     'container(1)::.daedalus-stylish-layout-container': { default: { 'max-width': '40rem' } },
-    'container(1)::>': { default: { 'min-width': '0' } },
+    'container(1)::> *': { default: { 'min-width': '0' } },
     'container(1)/block(image,1)': { default: { 'border-radius': '4px' } },
   });
   // Captured slot keys order SHALLOW-FIRST: a parent's fragment precedes
@@ -550,7 +468,7 @@ test('captureEntries walks the staged subtree into slot keys', () => {
   assert.deepEqual(captureEntries(subtreeMap, `container:${NSEC}`, layout), {
     '': { default: { padding: '9px', margin: '1px' } },
     '::.daedalus-stylish-layout-container': { default: { 'max-width': '40rem' } },
-    '::>': { default: { 'min-width': '0' } },
+    '::> *': { default: { 'min-width': '0' } },
     'block(image,1)': { default: { 'border-radius': '4px' } },
   });
   // From a plain block root: its field entries become field(name) paths.
@@ -596,6 +514,40 @@ test('capture: the root is overrides-only, children keep refs as refs', () => {
     '': { default: { padding: '0' } },
     'block(text,1)': { variants: [{ variant: 'card', fragment: '' }] },
     'block(text,2)': { variants: [{ variant: 'card', fragment: '' }], default: { margin: '0' } },
+  });
+});
+
+test('capture keeps a rule entry\'s references as refs, own and children\'s, the origin stripped', () => {
+  // A rule's wear is part of the look: the section's `> pb-text` rule
+  // wears "card" (delivered at every text child), a child's `> a` rule
+  // wears "link". Both travel as the captured '::selector' entry's
+  // reference list beside its overrides, exactly as a child's root
+  // references do; the capture root's own references stay behind, and
+  // a fragment reference at a rule never travels.
+  const subtreeMap = {
+    [`container:${SEC}`]: { variants: [{ variant: 'hero', fragment: '' }], default: { padding: '0' } },
+    [`container:${SEC}::> pb-text`]: {
+      variants: [{ variant: 'card', fragment: '', via: 'hero' }, { variant: 'hero', fragment: 'block(text,1)' }],
+      default: { margin: '0' },
+    },
+    [`container:${SEC}::p`]: { variants: [{ variant: 'prose', fragment: '' }] },
+    [`block:${T2}::> a`]: { variants: [{ variant: 'link', fragment: '' }], default: { color: 'teal' } },
+  };
+  assert.deepEqual(captureEntries(subtreeMap, `container:${SEC}`, layout), {
+    '': { default: { padding: '0' } },
+    '::> pb-text': { variants: [{ variant: 'card', fragment: '' }], default: { margin: '0' } },
+    '::p': { variants: [{ variant: 'prose', fragment: '' }] },
+    'block(text,2)::> a': { variants: [{ variant: 'link', fragment: '' }], default: { color: 'teal' } },
+  });
+  assert.deepEqual(captureSources(subtreeMap, `container:${SEC}`, layout).own.map(({ key, entry }) => [key, entry.variants ?? null]), [
+    [`container:${SEC}`, null],
+    [`container:${SEC}::> pb-text`, [{ variant: 'card', fragment: '' }]],
+    [`container:${SEC}::p`, [{ variant: 'prose', fragment: '' }]],
+  ]);
+  // elementEntries stays the values-only read.
+  assert.deepEqual(elementEntries(subtreeMap, `container:${SEC}`), {
+    '': { default: { padding: '0' } },
+    '::> pb-text': { default: { margin: '0' } },
   });
 });
 
@@ -662,30 +614,37 @@ test('capture excludes instance parts (identity classes never travel)', () => {
   assert.equal(hasCustomStyles({ [`block:${T2}::.s-a3`]: { default: { color: 'red' } } }, `block:${T2}`), true);
 });
 
-test('capture excludes tag-tier entries (host maps only)', () => {
-  // Tag tiers live in host maps only: the server's SlotKey charset
-  // rejects a dotless part in variant styles, so the capture walk leaves
-  // '::p' entries behind in BOTH buckets or the save itself would be
-  // rejected. Tag children ('::ul::>') ride the same exclusion; the '::>'
-  // children pseudo-part itself still travels.
+test('capture keeps every selector but instance parts (structure transfers)', () => {
+  // Tags, types and the children are structural relations and travel
+  // with the look, in BOTH buckets; only an instance part (a minted
+  // identity, wherever it stands in the selector) stays behind, since
+  // the server rejects it in variant styles.
   const map = {
     [`block:${T2}`]: { default: { margin: '0' } },
     [`block:${T2}::p`]: { default: { 'font-size': '1.25rem' } },
-    [`block:${T2}::ul::>`]: { default: { color: 'red' } },
-    [`block:${T2}::>`]: { default: { gap: '1rem' } },
+    [`block:${T2}::ul > *`]: { default: { color: 'red' } },
+    [`block:${T2}::> *`]: { default: { gap: '1rem' } },
+    [`block:${T2}::.s-a3`]: { default: { color: 'teal' } },
     [`container:${SEC}`]: { default: { padding: '0' } },
+    [`container:${SEC}::> pb-text`]: { default: { color: 'navy' } },
+    [`container:${SEC}::> pb-text .s-b4`]: { default: { color: 'olive' } },
   };
   assert.deepEqual(captureEntries(map, `block:${T2}`, layout), {
     '': { default: { margin: '0' } },
-    '::>': { default: { gap: '1rem' } },
+    '::p': { default: { 'font-size': '1.25rem' } },
+    '::ul > *': { default: { color: 'red' } },
+    '::> *': { default: { gap: '1rem' } },
   });
   assert.deepEqual(captureEntries(map, `container:${SEC}`, layout), {
     '': { default: { padding: '0' } },
+    '::> pb-text': { default: { color: 'navy' } },
     'block(text,2)': { default: { margin: '0' } },
-    'block(text,2)::>': { default: { gap: '1rem' } },
+    'block(text,2)::p': { default: { 'font-size': '1.25rem' } },
+    'block(text,2)::ul > *': { default: { color: 'red' } },
+    'block(text,2)::> *': { default: { gap: '1rem' } },
   });
   // Still the element's own custom styles (clipboard, styled indicators).
-  assert.equal(hasCustomStyles({ [`block:${T2}::p`]: { default: { color: 'red' } } }, `block:${T2}`), true);
+  assert.equal(hasCustomStyles({ [`block:${T2}::.s-a3`]: { default: { color: 'red' } } }, `block:${T2}`), true);
 });
 
 test('saveStyles folds the replaced same-axis values beneath overrides', () => {
@@ -834,6 +793,48 @@ test('pushStyles: attached merges over the variant, unattached replaces', () => 
   });
 });
 
+test('captureSources at a rule key: the entry and its continuations by descent, no subtree', () => {
+  // The editing session's anchor when a rule wears the document: its
+  // own sources are the rule's entry and the keys continued under it by
+  // descent, at the relatives delivery prints them; a sibling rule and
+  // the subtree's elements are not the rule's (a variant is saved from
+  // an element, so direct is empty).
+  const rule = `container:${SEC}::> pb-text`;
+  const map = {
+    [rule]: { variants: [{ variant: 'card', fragment: '' }], default: { margin: '0' } },
+    [`${rule} .quote`]: { variants: [{ variant: 'prose', fragment: '', via: 'card' }], default: { color: 'navy' } },
+    [`container:${SEC}::p`]: { default: { margin: '1px' } },
+    [`block:${T1}`]: { default: { padding: '0' } },
+  };
+  const { own, direct } = captureSources(map, rule, layout);
+  assert.deepEqual(own, [
+    { key: rule, relative: '', entry: { default: { margin: '0' } } },
+    { key: `${rule} .quote`, relative: '::.quote', entry: { variants: [{ variant: 'prose', fragment: '' }], default: { color: 'navy' } } },
+  ]);
+  assert.deepEqual(direct, []);
+});
+
+test('shadowClearingOps at a rule anchor retires the rule\'s redundant overrides and its continuations\'', () => {
+  const rule = `container:${SEC}::> pb-text`;
+  const look = {
+    id: 'text_look',
+    group: 'style',
+    value: { '': { default: { padding: '0', gap: '1rem' } }, '::.quote': { default: { color: 'navy' } } },
+  };
+  const map = {
+    // padding equals the pushed value (retires), gap differs (stays).
+    [rule]: { variants: [{ variant: 'text_look', fragment: '' }], default: { padding: '0', gap: '2rem' } },
+    // The continuation: color retires, margin is not covered.
+    [`${rule} .quote`]: { default: { color: 'navy', margin: '0' } },
+    // A sibling rule is no continuation of the anchor.
+    [`container:${SEC}::p`]: { default: { padding: '0' } },
+  };
+  assert.deepEqual(shadowClearingOps(map, rule, layout, look, [look]), [
+    { op: 'update_style', key: rule, properties: { padding: null } },
+    { op: 'update_style', key: `${rule} .quote`, properties: { color: null } },
+  ]);
+});
+
 test('shadowClearingOps retires exactly the redundant overrides', () => {
   const hero = {
     id: 'hero',
@@ -973,6 +974,7 @@ test('layoutTree pares the blueprint to what the walk needs', () => {
         uuid: SEC,
         layout_id: 'layout_twocol_section',
         extra: 'noise',
+        _element: { name: 'Section', type: 'Section' },
         regions: {
           first: [
             {
@@ -980,27 +982,35 @@ test('layoutTree pares the blueprint to what the walk needs', () => {
               layout_id: 'layout_onecol',
               label: 'Hero band',
               layout_settings: { label: 'Hero band' },
-              regions: { content: [{ uuid: IMG, block_type: 'image', fields: { huge: 'payload' } }] },
+              _element: { name: 'Hero band', type: 'Container' },
+              regions: { content: [{ uuid: IMG, block_type: 'image', _element: { name: 'Image', type: 'Image' }, fields: { huge: 'payload' } }] },
             },
-            { uuid: PLUGIN },
+            { uuid: PLUGIN, _element: { name: 'Main navigation', type: 'Main navigation' } },
           ],
         },
       },
     ],
   };
   const tree = layoutTree(blueprint);
+  // The naming spine's two words ride each pared node (the code view's
+  // row title, read off the broadcast alone in the satellite); the rest
+  // of the annotation stays behind.
   assert.deepEqual(tree, [
     {
       uuid: SEC,
       layout_id: 'layout_twocol_section',
+      type: 'Section',
+      name: 'Section',
       regions: {
         first: [
           {
             uuid: NSEC,
             layout_id: 'layout_onecol',
-            regions: { content: [{ uuid: IMG, block_type: 'image' }] },
+            type: 'Container',
+            name: 'Hero band',
+            regions: { content: [{ uuid: IMG, block_type: 'image', type: 'Image', name: 'Image' }] },
           },
-          { uuid: PLUGIN, block_type: null },
+          { uuid: PLUGIN, block_type: null, type: 'Main navigation', name: 'Main navigation' },
         ],
       },
     },
@@ -1097,6 +1107,27 @@ test('axisVocabulary reads the served roster, style-first', () => {
   assert.deepEqual(axisVocabulary(guide, 'bogus:123'), ['style']);
 });
 
+test('axisVocabulary at a rule key reads the landing\'s vocabulary, root-only axes dropped', () => {
+  const guide = {
+    kinds: { section: {}, block: {}, container: { axes: axesOf(['style', 'container_layout', 'width'], ['width']) } },
+    layouts: { layout_twocol_section: { axes: axesOf(['style', 'proportions', 'width'], ['width']) } },
+    blockTypes: { text: { axes: axesOf(['style', 'emphasis']) }, testimonial: { axes: axesOf(['style', 'emphasis']) } },
+    base: { p: { axes: axesOf(['style', 'prose']) } },
+  };
+  // A type chain lands on the type's own declaration.
+  assert.deepEqual(axisVocabulary(guide, `container:${UUID_A}::> pb-text`, blockTypes, sectionLayouts), ['style', 'emphasis']);
+  // A container rule lands on kind:container: root-only axes never offer
+  // at a rule (its matches are never top-level).
+  assert.deepEqual(axisVocabulary(guide, `container:${UUID_A}::> pb-container`, blockTypes, sectionLayouts), ['style', 'container_layout']);
+  // A tag tier lands on the base tag's declaration.
+  assert.deepEqual(axisVocabulary(guide, `block:${UUID_A}::p`, blockTypes, sectionLayouts), ['style', 'prose']);
+  // A part lands on no element scope: its root's vocabulary, as before.
+  assert.deepEqual(axisVocabulary(guide, `block:${UUID_A}::.quote`, blockTypes, sectionLayouts), ['style', 'emphasis']);
+  assert.deepEqual(axisVocabulary(guide, `container:${UUID_A}::> *`, blockTypes, sectionLayouts), ['style', 'proportions', 'width']);
+  // A landing declaring no axes: the universal vocabulary.
+  assert.deepEqual(axisVocabulary(guide, `block:${UUID_A}::a`, blockTypes, sectionLayouts), ['style']);
+});
+
 test('axisDescription and axisOwns read the served axis facts, null and [] otherwise', () => {
   const guide = {
     kinds: { section: {}, block: {} },
@@ -1187,107 +1218,6 @@ test('axisVocabulary drops root-only axes at nested depth', () => {
   );
 });
 
-test('effective resolution follows delivery order when axes are passed', () => {
-  const library = [
-    { id: 'aa_pop', group: 'emphasis', value: { '': { default: { color: 'red', padding: '1rem' } }, '::.quote': { default: { color: 'red' } } } },
-    { id: 'zz_calm', group: 'style', value: { '': { default: { color: 'blue' } } } },
-  ];
-  const axes = ['style', 'emphasis'];
-  // Stored so the two orders DISAGREE: list order ends on zz_calm (style),
-  // delivery order ends on aa_pop (emphasis sorts after style).
-  const flipped = { [KEY]: { variants: [{ variant: 'aa_pop', fragment: '' }, { variant: 'zz_calm', fragment: '' }] } };
-  const refMap = { [KEY]: { variants: [{ variant: 'zz_calm', fragment: '' }, { variant: 'aa_pop', fragment: '' }] } };
-  // List order: the later reference (zz_calm, style) wins the color.
-  assert.equal(effectiveEntry(flipped, KEY, library).entry.default.color, 'blue');
-  // Delivery order: emphasis sorts after style, so aa_pop wins, exactly
-  // what the compiled/edit-mode CSS shows.
-  assert.equal(effectiveEntry(flipped, KEY, library, axes).entry.default.color, 'red');
-  assert.equal(effectiveEntry(flipped, KEY, library, axes).entry.default.padding, '1rem');
-  // The provenance reference is the delivery-dominant layer.
-  assert.equal(effectiveEntry(flipped, KEY, library, axes).reference, 'aa_pop');
-  assert.equal(effectiveEntry(refMap, KEY, library, axes).reference, 'aa_pop');
-  // effectiveElementMap speaks the same order.
-  assert.equal(effectiveElementMap(flipped, KEY, library, axes)[KEY].default.color, 'red');
-  assert.equal(effectiveElementMap(flipped, KEY, library)[KEY].default.color, 'blue');
-});
-
-test('shadowedProperties flags own tuples beating a worn variant', () => {
-  const library = [
-    { id: 'aa_pop', group: 'emphasis', value: { '': { default: { padding: '1rem' } } } },
-    { id: 'zz_calm', group: 'style', value: { '': { default: { padding: '2rem', color: 'blue' }, hover: { color: 'navy' } }, '::.quote': { default: { 'font-style': 'italic' } } } },
-  ];
-  const axes = ['style', 'emphasis'];
-  const shadowMap = {
-    [KEY]: { variants: [{ variant: 'zz_calm', fragment: '' }, { variant: 'aa_pop', fragment: '' }], default: { padding: '3rem', margin: '0' }, hover: { color: 'black' } },
-    [`${KEY}::.quote`]: { default: { 'font-style': 'normal', color: 'red' } },
-  };
-  // padding is defined by BOTH variants: the delivery winner (emphasis
-  // after style) is reported; margin is nobody's.
-  assert.deepEqual(shadowedProperties(shadowMap, KEY, library, axes), {
-    default: { padding: 'aa_pop' },
-    hover: { color: 'zz_calm' },
-  });
-  // Without the vocabulary the stored-list winner is reported instead.
-  assert.deepEqual(shadowedProperties(shadowMap, KEY, library).default, { padding: 'aa_pop' });
-  // A part key resolves through the ROOT's references at its own relative.
-  assert.deepEqual(shadowedProperties(shadowMap, `${KEY}::.quote`, library, axes), {
-    default: { 'font-style': 'zz_calm' },
-  });
-  // No references, no own entry, or nothing overlapping: {}.
-  assert.deepEqual(shadowedProperties({ [KEY]: { default: { padding: '1rem' } } }, KEY, library, axes), {});
-  assert.deepEqual(shadowedProperties({ [KEY]: { variants: [{ variant: 'zz_calm', fragment: '' }] } }, KEY, library, axes), {});
-  assert.deepEqual(shadowedProperties({ [KEY]: { variants: [{ variant: 'zz_calm', fragment: '' }], default: { margin: '0' } } }, KEY, library, axes), {});
-  assert.deepEqual(shadowedProperties(shadowMap, null, library, axes), {});
-});
-
-test('shadowedProperties matches on the longhand grain: an own padding beats a worn padding-inline', () => {
-  const library = [
-    { id: 'site', group: 'width', value: { '': { default: { 'padding-inline': 'var(--inset)' } } } },
-  ];
-  const worn = (own) => ({ [KEY]: { variants: [{ variant: 'site', fragment: '' }], default: own } });
-  // The shorthand addresses all four sides, the inset the inline pair:
-  // they meet, and the own property is the reported key.
-  assert.deepEqual(shadowedProperties(worn({ padding: '3rem' }), KEY, library), { default: { padding: 'site' } });
-  // A side outside the inset's grain shadows nothing; one inside it does.
-  assert.deepEqual(shadowedProperties(worn({ 'padding-top': '3rem', 'padding-block': '1rem' }), KEY, library), {});
-  assert.deepEqual(shadowedProperties(worn({ 'padding-left': '0' }), KEY, library), { default: { 'padding-left': 'site' } });
-  // Outside the box families the match stays name-exact.
-  assert.deepEqual(shadowedProperties(worn({ 'padding-inline': '0', color: 'red' }), KEY, library), { default: { 'padding-inline': 'site' } });
-});
-
-test('propertySuppliers reports the delivery-winning variant per tuple', () => {
-  const library = [
-    { id: 'aa_pop', group: 'emphasis', value: { '': { default: { padding: '1rem' } } } },
-    { id: 'zz_calm', group: 'style', value: { '': { variants: [{ variant: 'aa_pop', fragment: '' }], default: { padding: '2rem', color: 'blue' }, hover: { color: 'navy' } }, '::.quote': { default: { 'font-style': 'italic' } } } },
-  ];
-  const axes = ['style', 'emphasis'];
-  const map = {
-    [KEY]: { variants: [{ variant: 'zz_calm', fragment: '' }, { variant: 'aa_pop', fragment: '' }], default: { padding: '3rem', margin: '0' } },
-  };
-  // Every variant-defined tuple is reported — shadowed by the own entry or
-  // not (padding: the own 3rem shadows it, still attributed) — with the
-  // delivery winner per property (emphasis sorts after style, so aa_pop
-  // takes padding). A fragment entry's reserved `variants` list is not a
-  // condition and never leaks in as one.
-  assert.deepEqual(propertySuppliers(map, KEY, library, axes), {
-    default: { padding: 'aa_pop', color: 'zz_calm' },
-    hover: { color: 'zz_calm' },
-  });
-  // Without the vocabulary the stored list order decides.
-  assert.deepEqual(propertySuppliers(map, KEY, library).default, { padding: 'aa_pop', color: 'zz_calm' });
-  // A part key resolves through the ROOT's references at its own relative.
-  assert.deepEqual(propertySuppliers(map, `${KEY}::.quote`, library, axes), {
-    default: { 'font-style': 'zz_calm' },
-  });
-  // No references (or no key): {}.
-  assert.deepEqual(propertySuppliers({ [KEY]: { default: { padding: '1rem' } } }, KEY, library, axes), {});
-  assert.deepEqual(propertySuppliers(map, null, library, axes), {});
-  // A distributed fragment reference supplies through ITS OWN fragment.
-  const hero = { id: 'hero', group: 'style', value: { 'block(text,2)': { default: { color: 'red' } } } };
-  const fragMap = { [`block:${T2}`]: { variants: [{ variant: 'hero', fragment: 'block(text,2)' }] } };
-  assert.deepEqual(propertySuppliers(fragMap, `block:${T2}`, [hero], axes), { default: { color: 'hero' } });
-});
-
 test('entryVariants mirrors the server read semantics', () => {
   assert.deepEqual(entryVariants({ variants: [{ variant: 'a', fragment: '' }, { variant: 'b', fragment: '' }] }), ['a', 'b']);
   // Malformed items (the retired bare-string form included) are
@@ -1342,45 +1272,6 @@ test('entryRefs carries the origin a distributed wear records', () => {
   assert.deepEqual(entryVariants({ variants: [{ variant: 'row', fragment: '', via: 'card_left' }] }), ['row']);
 });
 
-test('structured references resolve through their own fragment', () => {
-  const hero = {
-    id: 'hero',
-    label: 'Hero',
-    group: 'style',
-    value: {
-      '': { default: { padding: '4rem' } },
-      '::.inner': { default: { margin: '0' } },
-      'block(text,2)': { default: { color: 'red', margin: '1rem' } },
-      'block(text,2)::.quote': { default: { 'font-style': 'italic' } },
-    },
-  };
-  const library = [hero];
-  const childKey = `block:${T2}`;
-  const fragMap = {
-    [childKey]: { variants: [{ variant: 'hero', fragment: 'block(text,2)' }], default: { color: 'blue' } },
-  };
-  // effectiveEntry: the fragment's own entry resolves at the carrier's
-  // root, its part entries at the carrier's parts — with the carrier's
-  // overrides on top (the canvas/panel agreement the rework exists for).
-  const resolved = effectiveEntry(fragMap, childKey, library);
-  assert.deepEqual(resolved.entry, { default: { color: 'blue', margin: '1rem' } });
-  assert.equal(resolved.reference, 'hero');
-  assert.equal(resolved.variant.label, 'Hero');
-  assert.deepEqual(effectiveEntry(fragMap, `${childKey}::.quote`, library).entry, { default: { 'font-style': 'italic' } });
-  // effectiveElementMap projects the fragment's suffix space, never the
-  // variant's other fragments.
-  const effective = effectiveElementMap(fragMap, childKey, library);
-  assert.deepEqual(effective[childKey], { default: { color: 'blue', margin: '1rem' } });
-  assert.deepEqual(effective[`${childKey}::.quote`], { default: { 'font-style': 'italic' } });
-  assert.equal(effective[`${childKey}::.inner`], undefined);
-  // shadowedProperties badges the carrier's own overrides against the
-  // fragment's values, per-key uniform with root wearers.
-  assert.deepEqual(shadowedProperties(fragMap, childKey, library), { default: { color: 'hero' } });
-  // A root ('' fragment) reference resolves the variant's own root entry.
-  const rootMap = { [`container:${SEC}`]: { variants: [{ variant: 'hero', fragment: '' }] } };
-  assert.deepEqual(effectiveEntry(rootMap, `container:${SEC}`, library).entry, { default: { padding: '4rem' } });
-});
-
 test('orderedEntryRefs orders fragment refs by their variant axis', () => {
   const library = [
     { id: 'aa_pop', group: 'emphasis', value: {} },
@@ -1405,234 +1296,6 @@ test('orderedEntryRefs orders fragment refs by their variant axis', () => {
     { variant: 'aa_pop', fragment: 'container(1)', via: null },
     { variant: 'zz_calm', fragment: '', via: null },
   ]);
-});
-
-// --- skinDefaultEntry: the site defaults tier's provenance read. ---
-
-test('skinDefaultEntry resolves an element scope against the skin defaults', () => {
-  const guide = {
-    skinDefaults: {
-      'kind:container': {
-        '': { default: { padding: '2rem', gap: '1rem' } },
-        '::.daedalus-stylish-layout-container': { default: { 'max-width': '80rem' } },
-      },
-      'layout:twocol': { '': { default: { padding: '3rem' } } },
-      'block_type:cta': { '': { default: { margin: '1rem' } } },
-      'base:h2': { '': { default: { 'font-size': '2rem' } } },
-    },
-  };
-  const layouts = { [UUID_A]: 'twocol' };
-  // A refined section merges the refinement OVER the family kind
-  // (delivery rank order: the refinement's block prints later and wins).
-  assert.deepEqual(
-    skinDefaultEntry(guide, `container:${UUID_A}`, {}, layouts),
-    { default: { padding: '3rem', gap: '1rem' } },
-  );
-  // An unrefined section reads the kind layer alone.
-  assert.deepEqual(
-    skinDefaultEntry(guide, `container:${UUID_B}`, {}, {}),
-    { default: { padding: '2rem', gap: '1rem' } },
-  );
-  // A drilled part reads its own relative key.
-  assert.deepEqual(
-    skinDefaultEntry(guide, `container:${UUID_B}::.daedalus-stylish-layout-container`, {}, {}),
-    { default: { 'max-width': '80rem' } },
-  );
-  // Blocks resolve through the block family.
-  assert.deepEqual(
-    skinDefaultEntry(guide, `block:${UUID_A}`, { [UUID_A]: 'cta' }, {}),
-    { default: { margin: '1rem' } },
-  );
-  // Plugin blocks resolve through the block family's other refinement,
-  // merging their refinement over the kind:block layer.
-  const pluginGuide = {
-    skinDefaults: {
-      'kind:block': { '': { default: { padding: '1rem', margin: '2rem' } } },
-      'block_plugin:system_menu_block': { '': { default: { margin: '1rem' } } },
-    },
-  };
-  assert.deepEqual(
-    skinDefaultEntry(pluginGuide, `block:${UUID_P}`, blockTypes, {}),
-    { default: { padding: '1rem', margin: '1rem' } },
-  );
-  // Nothing defaulted for the scope: null, and base scopes are never
-  // captured by selectable elements.
-  assert.equal(skinDefaultEntry(guide, `entity:${UUID_A}`, {}, {}), null);
-  assert.equal(skinDefaultEntry({}, `container:${UUID_B}`, {}, {}), null);
-  assert.equal(skinDefaultEntry(guide, null, {}, {}), null);
-});
-
-test('skinDefaultEntry layers base:{tag} under the element scopes', () => {
-  const guide = {
-    skinDefaults: {
-      'kind:block': { '': { default: { 'font-size': '1rem' } } },
-      'block_type:text': { '': { default: { 'line-height': '1.2' } } },
-      'base:h2': {
-        '': { default: { 'font-size': '2rem', 'font-weight': '600' } },
-      },
-    },
-  };
-  const types = { [UUID_A]: 'text' };
-  // The rendered tag folds the base layer in UNDER kind and refinement
-  // (delivery rank order: base rules are unscoped and lose to every
-  // scoped block).
-  assert.deepEqual(
-    skinDefaultEntry(guide, `block:${UUID_A}`, types, {}, 'h2'),
-    { default: { 'font-size': '1rem', 'line-height': '1.2', 'font-weight': '600' } },
-  );
-  // A tag the skin defaults nothing for adds nothing; no tag (satellite,
-  // no canvas element) degrades the base layer away entirely.
-  assert.deepEqual(
-    skinDefaultEntry(guide, `block:${UUID_A}`, types, {}, 'div'),
-    { default: { 'font-size': '1rem', 'line-height': '1.2' } },
-  );
-  assert.deepEqual(
-    skinDefaultEntry(guide, `block:${UUID_A}`, types, {}),
-    { default: { 'font-size': '1rem', 'line-height': '1.2' } },
-  );
-  // A base-only hit still renders provenance: a collapsed heading block
-  // with no element-scope defaults reads the tag layer alone, at the ''
-  // entry even when drilled into a part (base defaults are element-only;
-  // the caller resolves the PART element's tag).
-  const baseOnly = { skinDefaults: { 'base:h2': { '': { default: { 'font-weight': '600' } } } } };
-  assert.deepEqual(
-    skinDefaultEntry(baseOnly, `block:${UUID_B}`, {}, {}, 'h2'),
-    { default: { 'font-weight': '600' } },
-  );
-  assert.deepEqual(
-    skinDefaultEntry(baseOnly, `block:${UUID_B}::.quote`, {}, {}, 'h2'),
-    { default: { 'font-weight': '600' } },
-  );
-});
-
-// --- declaredDefaultEntry: the declaration's own defaults, beneath the skin. ---
-
-test('declaredDefaultEntry layers the refinement scope over its family kind against the declared defaults', () => {
-  const guide = {
-    declaredDefaults: {
-      'block_type:testimonial': {
-        '': { default: { display: 'block', width: 'fit-content' } },
-        '::.testimonial__quote': { default: { display: 'block' } },
-      },
-      'block_plugin:system_menu_block': { '': { default: { display: 'flex' } } },
-      'layout:twocol': { '': { default: { display: 'grid' }, narrow: { display: 'block' } } },
-    },
-    // Skin defaults for the same scopes are the skin's read, never this
-    // one's: the two tiers stay apart so the origin can name the supplier.
-    skinDefaults: {
-      'kind:block': { '': { default: { padding: '1rem' } } },
-      'block_type:testimonial': { '': { default: { display: 'inline-block' } } },
-      'base:h2': { '': { default: { 'font-size': '2rem' } } },
-    },
-  };
-  const layouts = { [UUID_A]: 'twocol' };
-  // A block type's root and a drilled part read their own relative keys.
-  assert.deepEqual(
-    declaredDefaultEntry(guide, `block:${UUID_A}`, blockTypes, {}),
-    { default: { display: 'block', width: 'fit-content' } },
-  );
-  assert.deepEqual(
-    declaredDefaultEntry(guide, `block:${UUID_A}::.testimonial__quote`, blockTypes, {}),
-    { default: { display: 'block' } },
-  );
-  // A plugin block and a refined section resolve through their refinements.
-  assert.deepEqual(
-    declaredDefaultEntry(guide, `block:${UUID_P}`, blockTypes, {}),
-    { default: { display: 'flex' } },
-  );
-  assert.deepEqual(
-    declaredDefaultEntry(guide, `container:${UUID_A}`, {}, layouts),
-    { default: { display: 'grid' }, narrow: { display: 'block' } },
-  );
-  // No kind in this payload and no base layer: an unresolved bundle
-  // (kind:block) and an unrefined section read nothing, whatever the
-  // skin defaults for the kind, and a part the declaration does not name
-  // reads nothing.
-  assert.equal(declaredDefaultEntry(guide, `block:${UUID_B}`, blockTypes, {}), null);
-  assert.equal(declaredDefaultEntry(guide, `container:${UUID_B}`, {}, {}), null);
-  assert.equal(declaredDefaultEntry(guide, `block:${UUID_A}::.other`, blockTypes, {}), null);
-  assert.equal(declaredDefaultEntry(guide, `entity:${UUID_A}`, {}, {}), null);
-  // No payload, no key: null, never a throw.
-  assert.equal(declaredDefaultEntry({}, `block:${UUID_A}`, blockTypes, {}), null);
-  assert.equal(declaredDefaultEntry(guide, null, blockTypes, {}), null);
-  // The skin's read is unchanged by the declared tier's presence.
-  assert.deepEqual(
-    skinDefaultEntry(guide, `block:${UUID_A}`, blockTypes, {}),
-    { default: { padding: '1rem', display: 'inline-block' } },
-  );
-});
-
-test('declaredDefaultEntry reads a kind scope beneath its refinement, the delivery rank', () => {
-  // The ownership law: a composed kind declares its root (the container's
-  // display fact), any kind its declared parts (the entity's layout
-  // root); the payload carries them in delivery rank order, kinds first.
-  const guide = {
-    declaredDefaults: {
-      'kind:container': {
-        '': { default: { display: 'grid', 'align-items': 'start' }, narrow: { display: 'block' } },
-      },
-      'layout:twocol': { '': { default: { display: 'flex' }, medium: { 'align-items': 'center' } } },
-      'kind:entity': { '::.daedalus-layout-layout': { default: { display: 'grid' } } },
-    },
-  };
-  const layouts = { [UUID_A]: 'twocol' };
-  // A section whose layout declares no default reads the kind's alone.
-  assert.deepEqual(
-    declaredDefaultEntry(guide, `container:${UUID_B}`, {}, { [UUID_B]: 'onecol' }),
-    { default: { display: 'grid', 'align-items': 'start' }, narrow: { display: 'block' } },
-  );
-  // So does an unrefined section (its scope IS the kind).
-  assert.deepEqual(
-    declaredDefaultEntry(guide, `container:${UUID_B}`, {}, {}),
-    { default: { display: 'grid', 'align-items': 'start' }, narrow: { display: 'block' } },
-  );
-  // A layout default shadows the kind's per property, per condition: the
-  // refinement's display wins at Base, the kind's align-items and narrow
-  // block survive beneath, the refinement's Medium block joins.
-  assert.deepEqual(
-    declaredDefaultEntry(guide, `container:${UUID_A}`, {}, layouts),
-    {
-      default: { display: 'flex', 'align-items': 'start' },
-      narrow: { display: 'block' },
-      medium: { 'align-items': 'center' },
-    },
-  );
-  // The entity has no refinement: its declared part reads the kind's
-  // entry at the part's relative key; its root, undeclared, reads nothing.
-  assert.deepEqual(
-    declaredDefaultEntry(guide, `entity:${UUID_A}::.daedalus-layout-layout`, {}, {}),
-    { default: { display: 'grid' } },
-  );
-  assert.equal(declaredDefaultEntry(guide, `entity:${UUID_A}`, {}, {}), null);
-  // The block family: a kind:block entry would layer under a bundle the
-  // same way; this payload carries none, so the bundle reads nothing.
-  assert.equal(declaredDefaultEntry(guide, `block:${UUID_A}`, blockTypes, {}), null);
-});
-
-test('suppliedValue reads ONE worn reference\'s value at a tuple through its own fragment', () => {
-  const library = [
-    { id: 'aa_pop', group: 'emphasis', value: { '': { default: { padding: '1rem' } } } },
-    { id: 'zz_calm', group: 'style', value: { '': { default: { padding: '2rem', color: 'blue' }, hover: { color: 'navy' } }, '::.quote': { default: { 'font-style': 'italic' } } } },
-    { id: 'hero', group: 'style', value: { 'block(text,2)': { default: { color: 'red' } } } },
-  ];
-  const axes = ['style', 'emphasis'];
-  const map = {
-    [KEY]: { variants: [{ variant: 'zz_calm', fragment: '' }, { variant: 'aa_pop', fragment: '' }], default: { padding: '3rem' } },
-    [`block:${UUID_B}`]: { variants: [{ variant: 'hero', fragment: 'block(text,2)' }] },
-  };
-  // The beaten layer's value, whichever reference the caller names (the
-  // own 3rem shadows both; the provenance menu says what returns).
-  assert.equal(suppliedValue(map, KEY, library, 'aa_pop', 'default', 'padding', axes), '1rem');
-  assert.equal(suppliedValue(map, KEY, library, 'zz_calm', 'default', 'padding', axes), '2rem');
-  assert.equal(suppliedValue(map, KEY, library, 'zz_calm', 'hover', 'color', axes), 'navy');
-  // A part key resolves through the ROOT's references at its own relative.
-  assert.equal(suppliedValue(map, `${KEY}::.quote`, library, 'zz_calm', 'default', 'font-style', axes), 'italic');
-  // A distributed fragment reference supplies through ITS OWN fragment.
-  assert.equal(suppliedValue(map, `block:${UUID_B}`, library, 'hero', 'default', 'color', axes), 'red');
-  // Not worn here, nothing at the tuple, or no key: undefined.
-  assert.equal(suppliedValue(map, KEY, library, 'hero', 'default', 'color', axes), undefined);
-  assert.equal(suppliedValue(map, KEY, library, 'aa_pop', 'hover', 'padding', axes), undefined);
-  assert.equal(suppliedValue(map, null, library, 'aa_pop', 'default', 'padding', axes), undefined);
 });
 
 test('isShipped and locked: two record facts, the lock is the updatable flag', () => {

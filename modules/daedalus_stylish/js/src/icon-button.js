@@ -14,8 +14,8 @@ import { h } from 'preact';
  * shown on hover/focus.
  *
  * `tooltip` overrides the label as the pill's text and `show` forces the
- * pill visible — together they carry transient gesture feedback ("Styles
- * copied.") in place, instead of a message line the eye must go find.
+ * pill visible — together they carry transient gesture feedback ("CSS
+ * copied") in place, instead of a message line the eye must go find.
  */
 export const IconButton = ({
   label,

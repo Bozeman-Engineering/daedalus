@@ -1,17 +1,24 @@
 import { h, Fragment } from 'preact';
 import { normalizeValue } from '../../widget-values.js';
 import { valueSpaceFor, wearing } from '../../value-space.js';
-import { rowMenu, tokenItems } from '../../provenance-model.js';
-import { useMenu } from '../../menu.js';
+import { tokenItems } from '../../provenance-model.js';
 import { usePopover } from '../../popover.js';
 import { inlineLiteral } from '../../materials.js';
-import { ghostFace, originFor, rowHidden } from '../../choice-row-model.js';
-import { STROKE_PARTS, strokeState } from './stroke-model.js';
+import { originFor, rowHidden } from '../../choice-row-model.js';
+import { stackAt } from '../../style-stack.js';
+import { ownAtPose } from '../../controls.js';
+import {
+  STROKE_PARTS,
+  strokeState,
+  strokeUnsetProperties,
+} from './stroke-model.js';
 import { useColorWell } from './color-well.js';
 import { wellFace } from './swatch-well-model.js';
 import { ChoiceList } from './choice-row.js';
 import { DimensionField } from './dimension-field.js';
+import { Mark } from './mark.js';
 import { useFieldGesture, useGesture } from './use-gesture.js';
+import { useRowMenu } from './use-row-menu.js';
 
 /**
  * The stroke row: one basic-mode row over one STROKE (a border, an
@@ -19,7 +26,7 @@ import { useFieldGesture, useGesture } from './use-gesture.js';
  * the value column: `[color well][width field][style well]`.
  *
  * The scrubbable DimensionField over the width IS the row (the padding
- * row's posture: its grip is the row's leading provenance slot, its
+ * row's posture: its mark leads the row, its
  * scrub label the row label, and a consumer's tool (the Border row's ✎,
  * the door to the per-side ring) rides its `tools` slot); the color
  * well and the style well ride the field's `leading` and `trailing`
@@ -56,20 +63,28 @@ import { useFieldGesture, useGesture } from './use-gesture.js';
  * keyword paints one (groove, inset) and as the honest "?" face
  * otherwise (none, auto).
  *
- * Provenance per part: the field's grip (the row's leading mark) tells
- * the WIDTH's origin story (the ring cell's hue follows its width, the
- * same rule), and each well wears its own part's origin as the dot on
+ * Provenance per part: the row's leading mark (lib/mark.js, handed to
+ * the field) tells the WIDTH's origin story (the ring cell's hue
+ * follows its width, the same rule), and each well wears its own
+ * part's origin as the dot on
  * its corner and its hover sentence, so a skin-coloured, element-widened
- * border reads as two stories on one row. Each part's GHOST comes from
- * the same read as its mark (choice-row-model.js originFor's `ghost`:
- * the raw resting value, the skin's default or the Base value at a
- * pose): the width field's placeholder, the style well's muted line
- * glyph, the colour well's muted paint, so an unset part beneath a lit
- * mark is never blank. Right-click on a well opens
- * that part's row menu (the doorways: drive, open the supplying
- * document, unset, edit the skin); on the row it opens the width's,
+ * border reads as two stories on one row. Each part's origin is its
+ * stack read (choice-row-model.js originFor over the model's stacks at
+ * the part's property), the same read behind the lit value the
+ * consumer hands in: a part a skin or a variant delivers is lit in that
+ * layer's hue, never blank. Right-click on a well opens
+ * that part's row menu (the shared row menu, use-row-menu.js: the
+ * doorways every property row offers, edit at an ancestor's rule
+ * through `source` among them); on the row it opens the width's,
  * with the width field's token items. Unset through any doorway is the
- * stroke unset (the whole stroke clears), the completion rule's inverse.
+ * stroke unset (the whole stroke clears), the completion rule's inverse,
+ * and it exists only while the element's own entry delivers some part
+ * of the stroke at the exact pose under any spelling (controls.js
+ * ownAtPose over stroke-model.js strokeUnsetProperties: the parts, a
+ * border part's four side longhands, a side's family shorthand): with a
+ * lower layer delivering the whole stroke, the lit stops do nothing and
+ * an emptied width field releases, since there is nothing here to
+ * remove.
  *
  * Pure client over payload data and the widget contract, so it renders
  * in the satellite unchanged.
@@ -78,7 +93,7 @@ import { useFieldGesture, useGesture } from './use-gesture.js';
  * @param {?object} props.guide
  * @param {object} props.materials
  * @param {object} props.model
- *   The widget model (key, condition, entry, provenance, constraints,
+ *   The widget model (keys, stacks, home, condition, constraints,
  *   propertyDefinitions).
  * @param {string} props.label
  *   The row label.
@@ -87,16 +102,23 @@ import { useFieldGesture, useGesture } from './use-gesture.js';
  * @param {{width: Array, style: Array, color: Array}} props.stops
  *   One stop row per part (propertyStops for each).
  * @param {Object<string, ?string>} props.values
- *   The stroke's COMMITTED values keyed by the parts' property names
- *   (the effective stroke at the pose; the uniform read for the Border
- *   row, a side's longhands for a ring editor).
+ *   The stroke's SHOWN values keyed by the parts' property names (the
+ *   winners at the pose; the uniform read for the Border row, a side's
+ *   longhands for a ring editor).
  * @param {Function} props.write
  *   (properties, shown) → the update_style patch one gesture commits,
  *   or {} for a gesture that changes nothing.
  * @param {?object} [props.tools]
  *   The field's tools slot (the Border row's pencil).
+ * @param {boolean} [props.disabled]
+ *   Renders the whole stroke inert (the width field, both wells): the
+ *   panel's write address withholds a part of the stroke, and a stroke
+ *   writes whole. `disabledTitle` is the reason, on every part's title.
+ * @param {?string} [props.disabledTitle]
  * @param {?object} [props.source]
- *   The state source (the mint row commits through it).
+ *   The state source (the mint row commits through it, the row menu's
+ *   ancestor doorway seats the target on it, the origin's words read
+ *   its block types and layouts).
  * @param {?object} [props.swatches]
  *   The swatch grants ({canCreate}).
  * @param {Function} props.onPreview
@@ -117,20 +139,46 @@ export const StrokeRow = ({
   tools = null,
   source = null,
   swatches = null,
+  disabled = false,
+  disabledTitle = null,
   onPreview,
   onRelease,
   onCommit,
   onPickCondition = null,
   onOpenDocument = null,
 }) => {
+  // Each property's stack is its own box's (the model's per-property
+  // read): a part the address rule sent to another candidate reads and
+  // lights from there.
+  const stackFor = (name) => model.stacks?.[name] ?? null;
   const gesture = useGesture(
-    { key: `${model.key}::${parts.width}`, values },
+    `${model.keys?.[parts.width] ?? model.home.key}::${parts.width}`,
+    values,
     onPreview,
     onCommit,
   );
   const shown = gesture.values;
   const stroke = strokeState(shown, parts, stops);
-  const menu = useMenu();
+  const conditions = guide?.conditions ?? {};
+  // Each part's read at the pose, and the stroke's Unset gate: the
+  // element's own entry delivering the stroke here under any spelling
+  // (a part, a border part's side longhands, a side's family shorthand:
+  // strokeUnsetProperties).
+  const reads = Object.fromEntries(
+    STROKE_PARTS.map((part) => [
+      part,
+      stackFor(parts[part])
+        ? stackAt(stackFor(parts[part]), parts[part], model.condition, conditions)
+        : null,
+    ]),
+  );
+  const unsettable = strokeUnsetProperties(parts).some((name) => {
+    const stack = stackFor(name);
+    return (
+      !stack ||
+      ownAtPose(stackAt(stack, name, model.condition, conditions), model.condition)
+    );
+  });
 
   const patchFor = (properties) => write(properties, shown);
   const commit = (properties) => {
@@ -139,6 +187,14 @@ export const StrokeRow = ({
       gesture.pick(patch);
     }
   };
+  // A part's null pick is the stroke unset: refused while nothing own
+  // delivers the stroke at the pose.
+  const pickPart = (part) => (stop) => {
+    if (stop === null && !unsettable) {
+      return;
+    }
+    commit({ [parts[part]]: stop ? stop.value : null });
+  };
 
   // The width field speaks the field contract through the stroke
   // mapping: preview per input, one commit on settle, the emptied field
@@ -146,16 +202,13 @@ export const StrokeRow = ({
   const field = useFieldGesture(
     shown[parts.width] ?? '',
     parts.width,
-    (property, value) => {
-      Object.entries(patchFor({ [property]: value })).forEach(([name, next]) =>
-        onPreview(name, next),
-      );
-    },
+    (properties) => onPreview(patchFor(properties)),
     (properties) => onRelease(patchFor(properties)),
     (properties) => {
       const patch = patchFor(properties);
       return Object.keys(patch).length ? onCommit(patch) : Promise.resolve();
     },
+    unsettable ? (shown[parts.width] ?? '') : null,
   );
 
   const widthDefinition = model.propertyDefinitions?.[parts.width] ?? {};
@@ -172,52 +225,57 @@ export const StrokeRow = ({
   const origins = Object.fromEntries(
     STROKE_PARTS.map((part) => [
       part,
-      model.provenance
+      stackFor(parts[part])
         ? originFor({
             guide,
             materials,
             condition: model.condition,
             property: parts[part],
-            entry: model.entry,
-            provenance: model.provenance,
+            stack: stackFor(parts[part]),
+            read: reads[part],
+            blockTypes: source?.getBlockTypes?.() ?? {},
+            sectionLayouts: source?.getSectionLayouts?.() ?? {},
           })
         : null,
     ]),
   );
-  const onDoorway = (part) => (doorway) => {
-    switch (doorway.id) {
-      case 'drive':
-        onPickCondition?.(doorway.condition);
-        break;
-      case 'document':
-        onOpenDocument?.(doorway.reference, doorway.condition);
-        break;
-      case 'unset':
+  // One row menu per part over its own origin: the width's carries the
+  // field's token items, the wells' none. Unset through any is the
+  // stroke unset (the emptied width field, or a part's null pick),
+  // refused with a withheld stroke.
+  const usePartMenu = (part, tokens, face) =>
+    useRowMenu({
+      origin: origins[part],
+      source,
+      onOpenDocument,
+      onPickCondition,
+      onUnset: () => {
+        if (disabled) {
+          return;
+        }
         if (part === 'width') {
           field.settle('');
         } else {
-          commit({ [parts[part]]: null });
+          pickPart(part)(null);
         }
-        break;
-      case 'skin':
-        window.open(doorway.url, '_blank', 'noopener');
-        break;
-      default:
-        break;
-    }
-  };
-  const openMenu = (event, part, tokens, face) => {
-    const spec = rowMenu({
-      origin: origins[part],
+      },
       tokens,
       face,
-      onDoorway: onDoorway(part),
-      onCondition: onPickCondition,
     });
-    if (spec && menu.open({ x: event.clientX, y: event.clientY, ...spec })) {
-      event.preventDefault();
-      event.stopPropagation();
-    }
+  const menus = {
+    width: usePartMenu(
+      'width',
+      () =>
+        tokenItems(guide, materials, model.condition, widthSpace, field.shown, {
+          onPreview: field.preview,
+          onSettle: field.settle,
+        }),
+      () =>
+        wearing(guide, materials, widthSpace, field.shown, model.condition)
+          .face || field.shown,
+    ),
+    color: usePartMenu('color', [], () => stroke.parts.color.value ?? ''),
+    style: usePartMenu('style', [], () => stroke.parts.style.value ?? ''),
   };
 
   const color = useColorWell({
@@ -227,27 +285,29 @@ export const StrokeRow = ({
     materials,
     values: shown,
     stage: (properties) => gesture.stage(patchFor(properties)),
-    onPreview,
+    // The well's captured-literal preview (a typed literal settling on
+    // a token) rides the same mapping as its live picker, so the canvas
+    // wears the COMPLETED stroke on that tick too, not a colour alone.
+    onPreview: (properties) => onPreview(patchFor(properties)),
     state: () => ({
       ...stroke.parts.color,
       literal: stroke.parts.color.custom
         ? inlineLiteral(materials, stroke.parts.color.value)
         : null,
     }),
-    onPick: (stop) => commit({ [parts.color]: stop ? stop.value : null }),
+    onPick: pickPart('color'),
     canMint: Boolean(swatches?.canCreate),
     source,
-    ghost: origins.color?.ghost ?? null,
+    disabled,
+    disabledTitle,
   });
   const style = useStyleWell({
     stops: stops.style ?? [],
     state: stroke.parts.style,
-    ghost: origins.style?.ghost ?? null,
-    guide,
-    materials,
-    condition: model.condition,
     label: Drupal.t('@label style', { '@label': label }),
-    onPick: (stop) => commit({ [parts.style]: stop ? stop.value : null }),
+    onPick: pickPart('style'),
+    disabled,
+    disabledTitle,
   });
 
   // A closed width space minting nothing hides the row unless the stroke
@@ -270,24 +330,24 @@ export const StrokeRow = ({
   const originStyle = (part) => ({
     '--daedalus-stylish-origin': origins[part]?.color ?? 'initial',
   });
-  const onRowContextMenu = (event) =>
-    openMenu(
-      event,
-      'width',
-      tokenItems(guide, materials, model.condition, widthSpace, field.shown, {
-        onPreview: field.preview,
-        onSettle: field.settle,
-      }),
-      wearing(guide, materials, widthSpace, field.shown, model.condition)
-        .face || field.shown,
-    );
+  // A well's wrapper is that part's mark: the corner dot wears the
+  // part's hue and fills only at the pose (the row mark's fill rule,
+  // widgets/lib/mark.js, read off the part's own origin).
+  const partClasses = (part) =>
+    [
+      'daedalus-stylish-stroke-row__part',
+      `daedalus-stylish-stroke-row__part--${part}`,
+      origins[part]?.atPose ? 'daedalus-stylish-stroke-row__part--here' : '',
+    ]
+      .filter(Boolean)
+      .join(' ');
 
   return (
     <Fragment>
       <div
         className={rowClasses}
         style={originStyle('width')}
-        onContextMenu={onRowContextMenu}
+        onContextMenu={menus.width}
       >
         <DimensionField
           label={label}
@@ -298,18 +358,17 @@ export const StrokeRow = ({
           guide={guide}
           materials={materials}
           condition={model.condition}
-          placeholder={origins.width?.ghost ?? null}
           invalid={field.invalid}
-          gripTitle={origins.width?.title}
+          mark={<Mark origin={origins.width ?? null} />}
           tools={tools}
+          disabled={disabled}
+          disabledTitle={disabledTitle}
           leading={
             <span
-              className="daedalus-stylish-stroke-row__part daedalus-stylish-stroke-row__part--color"
+              className={partClasses('color')}
               style={originStyle('color')}
               title={origins.color?.title}
-              onContextMenu={(event) =>
-                openMenu(event, 'color', [], stroke.parts.color.value ?? '')
-              }
+              onContextMenu={menus.color}
             >
               {color.well}
               {/* The hidden picker rides the well's positioned wrapper,
@@ -321,12 +380,10 @@ export const StrokeRow = ({
           }
           trailing={
             <span
-              className="daedalus-stylish-stroke-row__part daedalus-stylish-stroke-row__part--style"
+              className={partClasses('style')}
               style={originStyle('style')}
               title={origins.style?.title}
-              onContextMenu={(event) =>
-                openMenu(event, 'style', [], stroke.parts.style.value ?? '')
-              }
+              onContextMenu={menus.style}
             >
               {style.well}
             </span>
@@ -380,15 +437,13 @@ const drawnStyle = (value) => {
 
 /**
  * The style well + its popover: the swatch well's posture (a face
- * button wearing the current value, the offer behind it) over a line
+ * button wearing the shown value, the offer behind it) over a line
  * style vocabulary. The face is the swatch well's own derivation
- * (swatch-well-model.js wellFace, the set value's drawable keyword as
- * its literal): the lit stop's line, the set value's own line when it
- * paints one the offer lacks, the "?" custom face otherwise, the muted
- * GHOST line when nothing is set but a resting style reaches the row
- * (the matching stop's, else the raw keyword's when it draws one; titled
- * "Unset; X applies"), the slashed empty face when unset with nothing
- * resting. The popover is the choice listbox (choice-row.js ChoiceList:
+ * (swatch-well-model.js wellFace, the shown value's drawable keyword as
+ * its literal): the lit stop's line, the shown value's own line when it
+ * paints one the offer lacks, the "?" custom face otherwise, the
+ * slashed empty face when no layer delivers a style. The popover is
+ * the choice listbox (choice-row.js ChoiceList:
  * the roving keyboard story, the lit row unsets) with each row's line
  * drawn before its name. A hook, not a component, for the two-slot
  * reason: the well sits inline on the row while the popover floats over
@@ -399,32 +454,22 @@ const drawnStyle = (value) => {
  *   The style vocabulary's stop table.
  * @param {{selected: ?string, custom: boolean, value: ?string}} options.state
  *   The style part's mapped state (stroke-model.js strokeState).
- * @param {?string} [options.ghost]
- *   The RAW resting style beneath an unset well (originFor's `ghost`),
- *   or null. Ignored while the state is set.
- * @param {?object} [options.guide]
- * @param {?object} [options.materials]
- * @param {string} [options.condition]
- *   The editing compound the ghost's title faces at.
  * @param {string} options.label
  * @param {Function} options.onPick
  */
 const useStyleWell = ({
   stops,
   state,
-  ghost = null,
-  guide = null,
-  materials = null,
-  condition = 'default',
   label,
   onPick,
+  disabled = false,
+  disabledTitle = null,
 }) => {
   const { open, setOpen, triggerRef, triggerProps, portal } = usePopover();
-  const face = wellFace(
-    stops,
-    { ...state, literal: state.custom ? drawnStyle(state.value) : null },
-    ghost,
-  );
+  const face = wellFace(stops, {
+    ...state,
+    literal: state.custom ? drawnStyle(state.value) : null,
+  });
   const lit = face.kind === 'stop' ? face.stop : null;
   const glyph = (() => {
     switch (face.kind) {
@@ -432,8 +477,6 @@ const useStyleWell = ({
         return face.stop.value;
       case 'literal':
         return face.literal;
-      case 'ghost':
-        return face.stop !== null ? face.stop.value : drawnStyle(face.literal);
       default:
         return null;
     }
@@ -448,10 +491,6 @@ const useStyleWell = ({
           'A line style these choices do not offer is set: !value. Pick a style to replace it.',
           { '!value': state.value },
         );
-      case 'ghost':
-        return Drupal.t('Unset; !value applies', {
-          '!value': ghostFace(guide, materials, ghost, condition),
-        });
       default:
         return Drupal.t('Pick a line style');
     }
@@ -467,12 +506,9 @@ const useStyleWell = ({
       type="button"
       className={`daedalus-stylish-swatch-well daedalus-stylish-stroke-well daedalus-stylish-swatch-well--${face.kind}${open ? ' daedalus-stylish-swatch-well--open' : ''}`}
       aria-label={label}
-      title={title}
+      title={disabled ? (disabledTitle ?? undefined) : title}
+      disabled={disabled}
     >
-      {/* The ghost's glyph rides the same modifier class the swatch
-          well's ghost paint does (inspector.css: a dashed ring, the line
-          muted), so an unset well shows the style that applies without
-          claiming one is set. */}
       {glyph !== null && <StyleGlyph value={glyph} />}
     </button>
   );

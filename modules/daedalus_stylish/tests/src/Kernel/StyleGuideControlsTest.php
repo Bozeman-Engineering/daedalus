@@ -7,6 +7,7 @@ namespace Drupal\Tests\daedalus_stylish\Kernel;
 use Drupal\KernelTests\KernelTestBase;
 use Drupal\daedalus_stylish\Exception\StyleGuideException;
 use Drupal\daedalus_stylish\StyleGuide;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 
@@ -14,13 +15,18 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  * Tests controls: declarations — parsing, layering, guide-build validation.
  *
  * Controls are the basic-mode curation layer: {label, widget, element}
- * bindings in block-type YAML that lift a declared part's properties onto
- * the block's inspector surface as one semantic widget. The element key is
- * optional: omitting it binds the control to the block root, validated
- * against the block's effective property groups. A binding that cannot work
- * (unknown widget, undeclared part, bound target whose property groups do
- * not cover the widget's owned properties) must fail LOUDLY when the guide
- * is built, not ship a control whose writes bounce at runtime.
+ * bindings in declaration YAML that lift a target's properties onto the
+ * inspector surface as one semantic widget. The element key is an ordered
+ * candidate list (StyleGuide::controlCandidates()): each entry '' for the
+ * root or a declared part, a string the one-candidate shorthand, an
+ * omitted key the root. Every candidate is validated on its own (declared,
+ * and its property groups covering the widget), the root against the
+ * declaration's effective groups. A binding that cannot work (unknown
+ * widget, malformed list, undeclared candidate, a candidate whose property
+ * groups do not cover the widget's owned properties) must fail LOUDLY when
+ * the guide is built, not ship a control whose writes bounce at runtime.
+ * The lane covers every refinement of the block kind: block types and
+ * block plugins alike.
  */
 #[Group('daedalus_stylish')]
 #[RunTestsInSeparateProcesses]
@@ -45,6 +51,7 @@ class StyleGuideControlsTest extends KernelTestBase {
     'twig_events',
     'daedalus_tempstore',
     'daedalus_blueprint_api',
+    'file',
     'daedalus_ui',
     'daedalus_stylish',
     'daedalus_stylish_control_test',
@@ -81,6 +88,18 @@ class StyleGuideControlsTest extends KernelTestBase {
    */
   protected function layerOverKind(string $kind, array $declaration): void {
     $this->container->get('state')->set('daedalus_stylish_control_test.kinds', [$kind => $declaration]);
+    $this->styleGuide->resetCache();
+  }
+
+  /**
+   * Layers a declaration over a block plugin and rebuilds the guide.
+   *
+   * No fixture ships a plugin declaration here, so the injected layer IS
+   * the plugin's declaration; the block kind merges underneath it the way
+   * getBlockPlugin() serves it.
+   */
+  protected function layerOverBlockPlugin(string $plugin_id, array $declaration): void {
+    $this->container->get('state')->set('daedalus_stylish_control_test.block_plugins', [$plugin_id => $declaration]);
     $this->styleGuide->resetCache();
   }
 
@@ -168,7 +187,7 @@ class StyleGuideControlsTest extends KernelTestBase {
       ],
     ]);
     $this->expectException(StyleGuideException::class);
-    $this->expectExceptionMessageMatches('/control "broken" of block type "media" names unknown control section "sparkle" under its section key; the sections are text, surface, layout, motion/');
+    $this->expectExceptionMessageMatches('/control "broken" of block type "media" names unknown control section "sparkle" under its section key; the sections are layout, text, surface, motion/');
     $this->styleGuide->getBlockType('media', self::THEME);
   }
 
@@ -279,20 +298,218 @@ class StyleGuideControlsTest extends KernelTestBase {
   }
 
   /**
-   * An element key that is present but empty is still malformed.
+   * The normalizer: omitted is the root, a string is one candidate, a list rides.
    *
-   * Only a genuinely absent key means "bind the block root"; an empty string
-   * is a mistake, not a root binding.
+   * The one grammar every consumer reads through (the validator per
+   * candidate, the client payload as served), so the shorthands are pinned
+   * here once. '' spells the root, the declared-defaults grammar's spelling.
    */
-  public function testEmptyElement(): void {
+  public function testControlCandidates(): void {
+    $this->assertSame([''], StyleGuide::controlCandidates(['label' => 'Alignment', 'widget' => 'test_alignment']));
+    $this->assertSame([''], StyleGuide::controlCandidates(['widget' => 'test_alignment', 'element' => '']));
+    $this->assertSame(['.media__frame'], StyleGuide::controlCandidates([
+      'widget' => 'test_alignment',
+      'element' => '.media__frame',
+    ]));
+    $this->assertSame(['.media__frame', ''], StyleGuide::controlCandidates([
+      'widget' => 'test_alignment',
+      'element' => ['.media__frame', ''],
+    ]));
+    $this->expectException(\InvalidArgumentException::class);
+    $this->expectExceptionMessageMatches('/not a candidate list/');
+    StyleGuide::controlCandidates(['widget' => 'test_alignment', 'element' => TRUE]);
+  }
+
+  /**
+   * An element key of '' spells the block root, exactly like omitting it.
+   *
+   * The declared-defaults grammar's root spelling, so a candidate list may
+   * name the root after a part; alone it is the root binding and validates
+   * against the block's effective groups, riding through as authored.
+   */
+  public function testRootSpelledElement(): void {
+    $this->layerOverMedia([
+      'property_groups' => ['layout' => []],
+      'controls' => [
+        'root_alignment' => ['label' => 'Alignment', 'widget' => 'test_alignment', 'element' => ''],
+      ],
+    ]);
+    $media = $this->styleGuide->getBlockType('media', self::THEME);
+    $this->assertSame('', $media['controls']['root_alignment']['element']);
+  }
+
+  /**
+   * A '' root binding is covered by the block's groups, or it fails as root.
+   */
+  public function testRootSpelledElementUncoveredProperties(): void {
     $this->layerOverMedia([
       'controls' => [
         'broken' => ['label' => 'Broken', 'widget' => 'test_alignment', 'element' => ''],
       ],
     ]);
     $this->expectException(StyleGuideException::class);
-    $this->expectExceptionMessageMatches('/must name a part selector under its element key, or omit the key to bind the block root/');
+    $this->expectExceptionMessageMatches('/control "broken" of block type "media" binds widget "test_alignment" to the block root, but the block type does not declare the "layout" property group that owns "justify-content"/');
     $this->styleGuide->getBlockType('media', self::THEME);
+  }
+
+  /**
+   * A candidate list binds a part first and the root second, and rides as authored.
+   *
+   * Both candidates cover the widget (.media__frame declares layout, the
+   * block root gains it here), so the guide builds and the effective
+   * declaration carries the list exactly as written: normalization is the
+   * client payload's business (ClientStyleGuideTest), never the
+   * declaration's.
+   */
+  public function testCandidateList(): void {
+    $this->layerOverMedia([
+      'property_groups' => ['layout' => []],
+      'controls' => [
+        'alignment' => ['element' => ['.media__frame', '']],
+      ],
+    ]);
+    $alignment = $this->styleGuide->getBlockType('media', self::THEME)['controls']['alignment'];
+    $this->assertSame(['.media__frame', ''], $alignment['element']);
+    $this->assertSame('test_alignment', $alignment['widget']);
+  }
+
+  /**
+   * Every candidate must be declared; the error names the offending one.
+   *
+   * The first candidate is the fixture's declared frame, so only the
+   * second can fail, and the message must say which selector is not a
+   * part: a list is only as good as its worst candidate, since the
+   * resolver may route any property to any of them.
+   */
+  public function testCandidateListUndeclared(): void {
+    $this->layerOverMedia([
+      'controls' => [
+        'alignment' => ['element' => ['.media__frame', '.media__nope']],
+      ],
+    ]);
+    try {
+      $this->styleGuide->getBlockType('media', self::THEME);
+      $this->fail('Expected a StyleGuideException.');
+    }
+    catch (StyleGuideException $e) {
+      $this->assertMatchesRegularExpression('/control "alignment" of block type "media" binds element "\.media__nope", which is not a declared part of the block type/', $e->getMessage());
+      $this->assertDoesNotMatchRegularExpression('/"\.media__frame"/', $e->getMessage(), 'The declared candidate is not named as a problem.');
+    }
+  }
+
+  /**
+   * Every candidate's groups must cover the widget; the error names the candidate.
+   *
+   * .media__frame covers the layout widget, .media__caption declares only
+   * typography: the second candidate fails coverage on its own, named by
+   * selector, while the first passes silently.
+   */
+  public function testCandidateListUncoveredSecond(): void {
+    $this->layerOverMedia([
+      'controls' => [
+        'alignment' => ['element' => ['.media__frame', '.media__caption']],
+      ],
+    ]);
+    try {
+      $this->styleGuide->getBlockType('media', self::THEME);
+      $this->fail('Expected a StyleGuideException.');
+    }
+    catch (StyleGuideException $e) {
+      $this->assertMatchesRegularExpression('/control "alignment" of block type "media" binds widget "test_alignment" to element "\.media__caption", but the part does not declare the "layout" property group that owns "justify-content"/', $e->getMessage());
+      $this->assertDoesNotMatchRegularExpression('/to element "\.media__frame"/', $e->getMessage(), 'The covered candidate is not named as a problem.');
+    }
+  }
+
+  /**
+   * An element key that is not a string, a list of distinct strings, or absent fails.
+   *
+   * @param mixed $element
+   *   The malformed element key.
+   */
+  #[DataProvider('malformedElementProvider')]
+  public function testMalformedElement(mixed $element): void {
+    $this->layerOverMedia([
+      'controls' => [
+        'broken' => ['label' => 'Broken', 'widget' => 'test_alignment', 'element' => $element],
+      ],
+    ]);
+    $this->expectException(StyleGuideException::class);
+    $this->expectExceptionMessageMatches('/control "broken" of block type "media" has .* under its element key, which is not a candidate list/s');
+    $this->styleGuide->getBlockType('media', self::THEME);
+  }
+
+  /**
+   * Malformed element keys: an empty list, a non-string entry, a map, a duplicate.
+   */
+  public static function malformedElementProvider(): array {
+    return [
+      'empty list' => [[]],
+      'non-string entry' => [['.media__frame', 5]],
+      'map' => [['first' => '.media__frame']],
+      'duplicate candidate' => [['.media__frame', '.media__frame']],
+      'boolean' => [TRUE],
+    ];
+  }
+
+  /**
+   * A block plugin binding validates in the lane getBlockPlugin() serves.
+   *
+   * The block kind's other refinement: the kind merges underneath, the
+   * plugin declares its parts and the binding lists a part first and the
+   * root second, both covering the widget. The effective declaration
+   * carries the list as authored, the same as a block type's.
+   */
+  public function testBlockPluginControlValidates(): void {
+    $this->layerOverBlockPlugin('fancy_menu', [
+      'property_groups' => ['layout' => []],
+      'elements' => [
+        '.menu-item' => ['label' => 'Menu item', 'property_groups' => ['layout' => []]],
+      ],
+      'controls' => [
+        'alignment' => ['label' => 'Alignment', 'widget' => 'test_alignment', 'element' => ['.menu-item', '']],
+      ],
+    ]);
+    $plugin = $this->styleGuide->getBlockPlugin('fancy_menu', self::THEME);
+    $this->assertSame([
+      'label' => 'Alignment',
+      'widget' => 'test_alignment',
+      'element' => ['.menu-item', ''],
+    ], $plugin['controls']['alignment']);
+  }
+
+  /**
+   * A block plugin binding whose candidate cannot cover the widget fails.
+   *
+   * Before this lane a theme's plugin binding reached the client
+   * unvalidated; now the same per-candidate check names the plugin, the
+   * part and the missing group.
+   */
+  public function testBlockPluginControlUncoveredProperties(): void {
+    $this->layerOverBlockPlugin('fancy_menu', [
+      'elements' => [
+        '.menu-item' => ['label' => 'Menu item', 'property_groups' => ['typography' => []]],
+      ],
+      'controls' => [
+        'broken' => ['label' => 'Broken', 'widget' => 'test_alignment', 'element' => ['.menu-item']],
+      ],
+    ]);
+    $this->expectException(StyleGuideException::class);
+    $this->expectExceptionMessageMatches('/control "broken" of block plugin "fancy_menu" binds widget "test_alignment" to element "\.menu-item", but the part does not declare the "layout" property group that owns "justify-content"/');
+    $this->styleGuide->getBlockPlugin('fancy_menu', self::THEME);
+  }
+
+  /**
+   * A block plugin binding an undeclared part fails, naming the plugin.
+   */
+  public function testBlockPluginControlUndeclaredElement(): void {
+    $this->layerOverBlockPlugin('fancy_menu', [
+      'controls' => [
+        'broken' => ['label' => 'Broken', 'widget' => 'test_alignment', 'element' => '.menu-nope'],
+      ],
+    ]);
+    $this->expectException(StyleGuideException::class);
+    $this->expectExceptionMessageMatches('/control "broken" of block plugin "fancy_menu" binds element "\.menu-nope", which is not a declared part of the block plugin/');
+    $this->styleGuide->getBlockPlugin('fancy_menu', self::THEME);
   }
 
   /**
@@ -417,17 +634,35 @@ class StyleGuideControlsTest extends KernelTestBase {
   }
 
   /**
-   * An empty element key on a kind control is malformed, not a root binding.
+   * A kind control may list a part and the '' root; the root is the kind's groups.
+   *
+   * The region root declares layout and the nested part declares it too,
+   * so both candidates cover the widget and the list rides as authored.
+   * Withdrawing the root's group fails the root candidate by name.
    */
-  public function testKindControlEmptyElement(): void {
+  public function testKindControlCandidateList(): void {
     $this->layerOverKind('region', [
       'property_groups' => ['layout' => []],
+      'elements' => [
+        '.region__inner' => ['property_groups' => ['layout' => []]],
+      ],
       'controls' => [
-        'broken' => ['label' => 'Broken', 'widget' => 'test_alignment', 'element' => ''],
+        'alignment' => ['label' => 'Alignment', 'widget' => 'test_alignment', 'element' => ['.region__inner', '']],
+      ],
+    ]);
+    $region = $this->styleGuide->getKind('region', self::THEME);
+    $this->assertSame(['.region__inner', ''], $region['controls']['alignment']['element']);
+
+    $this->layerOverKind('region', [
+      'elements' => [
+        '.region__inner' => ['property_groups' => ['layout' => []]],
+      ],
+      'controls' => [
+        'alignment' => ['label' => 'Alignment', 'widget' => 'test_alignment', 'element' => ['.region__inner', '']],
       ],
     ]);
     $this->expectException(StyleGuideException::class);
-    $this->expectExceptionMessageMatches('/control "broken" of kind "region" must name a part selector under its element key, or omit the key to bind the kind root/');
+    $this->expectExceptionMessageMatches('/control "alignment" of kind "region" binds widget "test_alignment" to the kind root, but the kind does not declare the "layout" property group that owns "justify-content"/');
     $this->styleGuide->getKind('region', self::THEME);
   }
 

@@ -27,9 +27,11 @@ use Masterminds\HTML5\Parser\Scanner;
  * - A self-closing slash closes ANY dialect element: authors who write
  *   <pb-teaser ... /> mean a closed element, and nothing in the dialect
  *   needs the browser's contrary reading.
- * - Rich-text and field bodies (pb-formatted-text, pb-field) and <style>
- *   are RAWTEXT: their content is captured verbatim (opaque to the
- *   dialect; rich text is governed by the text format filter downstream).
+ * - Rich-text and field bodies (pb-formatted-text, pb-field), file
+ *   declarations (pb-file) and <style> are RAWTEXT: their content is
+ *   captured verbatim (opaque to the dialect; rich text is governed by the
+ *   text format filter downstream, a declared file's bytes by the file
+ *   lane).
  * - Tokenizer-level parse errors (character reference recovery and
  *   friends) are not surfaced: HTML5 recovery is the point of choosing
  *   this parser. Structure is judged on the built tree.
@@ -39,7 +41,7 @@ final class DialectTreeBuilder implements EventHandler {
   /**
    * Tags whose bodies are captured verbatim (RAWTEXT).
    */
-  private const RAW_TEXT_TAGS = ['pb-formatted-text', 'pb-field', 'style'];
+  private const RAW_TEXT_TAGS = ['pb-formatted-text', 'pb-field', 'pb-file', 'style'];
 
   /**
    * Dialect tags that never take content and parse as void.

@@ -4,8 +4,9 @@
  * (page-elements-tree.js) renders.
  *
  * Two renamable kinds, ONE op: section rows write their custom label
- * through `update_element {label}` (empty CLEARS back to the
- * layout-derived name), while the root row is the entity's label field
+ * through `update_element {label}` (empty CLEARS back to the type word
+ * the annotator mints for an unrenamed section, "Section" or
+ * "Container"), while the root row is the entity's label field
  * presenting AS the entity row, so its commit is ONE `update_element` op
  * on the root element with properties keyed by the annotation's derived
  * edit_target, and an empty or unchanged commit CANCELS (the label field
@@ -20,10 +21,15 @@ import { rowRenamable, renameOperation } from '../../js/edit_mode/components/pag
 const ROOT = '99999999-1111-2222-3333-444444444444';
 const SECTION = 'aaaaaaaa-1111-2222-3333-444444444444';
 
-const rootNode = { key: `entity:${ROOT}`, kind: 'entity', children: [] };
+// Rows as the projection delivers them: `label` and `elementType` are the
+// server-minted words, `customLabel` the raw stored label the rename input
+// seeds from (empty for an unrenamed section, whose label is its type).
+const rootNode = { key: `entity:${ROOT}`, kind: 'entity', label: 'Hello there', elementType: 'Page', children: [] };
 const sectionNode = (customLabel = '') => ({
   key: `container:${SECTION}`,
   kind: 'container',
+  label: customLabel || 'Section',
+  elementType: 'Section',
   customLabel,
   children: [],
 });
@@ -80,8 +86,10 @@ test('a section commit writes the custom label through update_element', () => {
 });
 
 test('an empty section commit clears the custom label; unchanged is a no-op', () => {
-  // Unlike the root, sections HAVE a fallback (the layout-derived name),
-  // so empty means clear — a real op — while unchanged commits nothing.
+  // Unlike the root, sections HAVE a fallback (the minted type word), so
+  // empty means clear — a real op — while unchanged commits nothing. The
+  // anchor is the raw custom label, never the displayed label: an
+  // unrenamed section shows "Section" but stores nothing.
   assert.deepEqual(renameOperation(sectionNode('Hero'), '', {}), {
     op: 'update_element',
     element: SECTION,
@@ -89,4 +97,12 @@ test('an empty section commit clears the custom label; unchanged is a no-op', ()
   });
   assert.equal(renameOperation(sectionNode('Hero'), 'Hero', {}), null);
   assert.equal(renameOperation(sectionNode(''), '  ', {}), null);
+  // Typing the displayed type word into an unrenamed section IS a rename
+  // (it stores "Section" as a custom label); only the stored anchor is
+  // compared.
+  assert.deepEqual(renameOperation(sectionNode(''), 'Section', {}), {
+    op: 'update_element',
+    element: SECTION,
+    properties: { label: 'Section' },
+  });
 });

@@ -126,9 +126,9 @@ test('the face while editing = the applicable verbs: chipFace has no editing gat
   assert.deepEqual(clean.overflow, [link]);
 });
 
-test('a primary with no live edit keeps the face: nothing about the tool or an edit hides it', () => {
-  // A container selected under the armed session — or an editable leaf
-  // whose edit ended — is a plain selection, verbs and all.
+test('a primary with no live edit keeps the face: nothing but a live edit changes it', () => {
+  // A selected container, or an editable leaf whose edit ended, is a
+  // plain selection, verbs and all.
   const face = chipFace({ key: 'A', keys: ['A'], primary: 'A', verbs, density: 'clean' });
   assert.deepEqual(face.faceVerbs, [edit, duplicate]);
   assert.deepEqual(face.overflow, [insert, rename]);
@@ -136,9 +136,9 @@ test('a primary with no live edit keeps the face: nothing about the tool or an e
 
 test('the dash follows the live edit: editingKey IS the primary', () => {
   assert.equal(frameEditing({ editingKey: 'A', primary: 'A' }), true);
-  // No open edit: solid, even if the session is armed on an editable
-  // primary — the dash never predicts. This is the Escape path: the
-  // engine's null report retires the dash.
+  // No open edit: solid, even on an editable primary; the dash never
+  // predicts. This is the Escape path: the engine's null report retires
+  // the dash.
   assert.equal(frameEditing({ editingKey: null, primary: 'A' }), false);
   // An edit living on a non-primary key never dresses the frame.
   assert.equal(frameEditing({ editingKey: 'B', primary: 'A' }), false);

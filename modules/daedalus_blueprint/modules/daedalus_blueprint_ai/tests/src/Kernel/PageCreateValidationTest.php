@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Drupal\Tests\daedalus_blueprint_ai\Kernel;
 
+use Drupal\daedalus_blueprint\Dialect\DialectAliasMap;
+use Drupal\daedalus_blueprint_test\TestFileDeclarationHandler;
 use Drupal\daedalus_stylish\DaedalusStylishFieldManager;
 use Drupal\Tests\daedalus\Kernel\BlueprintKernelTestBase;
 use Drupal\Tests\daedalus\Traits\DesignSystemActivationTrait;
@@ -56,6 +58,7 @@ class PageCreateValidationTest extends BlueprintKernelTestBase {
       'twig_events',
       'daedalus_tempstore',
       'daedalus_blueprint_api',
+      'file',
       'daedalus_ui',
       // Section identity (the uuid the tree addresses containers by) is
       // daedalus_layout's third-party setting.
@@ -85,6 +88,8 @@ class PageCreateValidationTest extends BlueprintKernelTestBase {
     // The closed world (undeclared properties rejected) is strict mode;
     // guarded, the default, only makes authored constraints law.
     $this->enforce('strict');
+    TestFileDeclarationHandler::$declared = [];
+    TestFileDeclarationHandler::$uuids = [];
   }
 
   /**
@@ -257,6 +262,53 @@ class PageCreateValidationTest extends BlueprintKernelTestBase {
     // The id echo maps the author-chosen aliases to minted uuids.
     $this->assertStringContainsString('hero:', $output);
     $this->assertStringContainsString('intro:', $output);
+  }
+
+  /**
+   * A refused <pb-file> body creates nothing and names the declaration.
+   *
+   * The declaration's refusal is a fact of the same round as the grammar
+   * (the document is judged whole), addressed by line, and the total
+   * refusal holds: no entity, no block.
+   */
+  public function testRefusedFileDeclarationCreatesNothing(): void {
+    $this->container->get('daedalus_blueprint_ai.conversation_context')->set('thread-create');
+    $output = $this->runTool('page_create', [
+      'entity_type' => 'entity_test',
+      'bundle' => 'entity_test',
+      'fields' => ['name' => 'Broken page'],
+      'layout' => "<pb-container id=\"hero\"></pb-container>\n<pb-file name=\"bad.svg\" type=\"image/svg+xml\"><svg>" . TestFileDeclarationHandler::REFUSE . "</svg></pb-file>",
+    ]);
+
+    $this->assertStringContainsString('FILE_REJECTED', $output);
+    $this->assertStringContainsString('The file "bad.svg" was refused: The body was refused by the test seam. The declared type image/svg+xml was noted. (line 2)', $output);
+    $this->assertStringContainsString('Nothing was created', $output);
+    $this->assertSame([], $this->loadPages());
+    $this->assertNull($this->container->get('daedalus_blueprint.dialect_alias_map')->resolveFile('thread-create', 'bad.svg'));
+  }
+
+  /**
+   * A <pb-file> declaration lands with the page and its name settles.
+   */
+  public function testDeclaredFileLandsWithThePage(): void {
+    $this->container->get('daedalus_blueprint_ai.conversation_context')->set('thread-create');
+    $output = $this->runTool('page_create', [
+      'entity_type' => 'entity_test',
+      'bundle' => 'entity_test',
+      'fields' => ['name' => 'Iconed page'],
+      'layout' => "<pb-file name=\"logo.svg\" type=\"image/svg+xml\"><svg xmlns=\"http://www.w3.org/2000/svg\"/></pb-file>\n<pb-container id=\"hero\"><pb-basic id=\"intro\" heading=\"Hello\"></pb-basic></pb-container>",
+    ]);
+
+    $this->assertStringContainsString('Created page:', $output);
+    $this->assertStringNotContainsString('Error', $output);
+    $this->assertCount(1, $this->loadPages());
+    $this->assertSame([['thread-create', 'logo.svg', 'image/svg+xml', '<svg xmlns="http://www.w3.org/2000/svg"/>']], TestFileDeclarationHandler::$declared);
+    // The next request resolves the declared name: it settled with the
+    // document's batch, beside the element aliases.
+    $this->assertSame(
+      TestFileDeclarationHandler::$uuids['logo.svg'],
+      (new DialectAliasMap($this->container->get('tempstore.shared')))->resolveFile('thread-create', 'logo.svg'),
+    );
   }
 
   /**

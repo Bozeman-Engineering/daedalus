@@ -52,6 +52,7 @@ class StyleValueResolverTest extends KernelTestBase {
     'twig_events',
     'daedalus_tempstore',
     'daedalus_blueprint_api',
+    'file',
     'daedalus_ui',
     'daedalus_stylish',
     'daedalus_stylish_guide_test',
@@ -151,7 +152,7 @@ class StyleValueResolverTest extends KernelTestBase {
     $error = $resolution->getErrors()[0];
     $this->assertSame('UNKNOWN_STYLE_VALUE_MARKER', $error->getCode());
     $this->assertSame("$key.default.background-image", $error->getPath());
-    $this->assertSame(['_test_value', '_generate'], $error->getContext()['known_markers']);
+    $this->assertSame(['_test_value', '_generate', '_file'], $error->getContext()['known_markers']);
 
     // The handler's own shape check errors re-root onto the map path.
     $resolution = $this->resolver->check([

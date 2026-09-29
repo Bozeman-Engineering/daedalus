@@ -53,7 +53,7 @@ abstract class StyleMapSweepBase implements HostTransformInterface {
    * @param array $map
    *   The host's non-empty style map.
    * @param \Drupal\Core\Entity\ContentEntityInterface $host
-   *   The host, for sweeps that need more than the map (the row sweep reads
+   *   The host, for sweeps that need more than the map (the row-arrangement sweep reads
    *   the layout tree for each container's ordered children).
    * @param string $context
    *   The "entity_type:id" label the migrations prefix their report lines

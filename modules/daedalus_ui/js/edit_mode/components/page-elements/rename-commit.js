@@ -4,7 +4,8 @@
  * Rename is one affordance over ONE op: `update_element`. A SECTION row
  * writes its custom label through `update_element {label}`
  * (layout_settings.label server-side); an empty commit CLEARS the custom
- * label, falling back to the layout-derived name. The ROOT row is the
+ * label, and the row falls back to its type word (the name the annotator
+ * mints for an unrenamed section: "Section" or "Container"). The ROOT row is the
  * entity's label field presenting AS the entity row (the annotation's
  * derived edit_target), so its commit is `update_element` on the root
  * element with properties keyed by the edit target — AI parity, tempstore,

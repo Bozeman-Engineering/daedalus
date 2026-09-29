@@ -26,7 +26,7 @@ entity:
       element: false
   elements:
     # The layout root is the box that arranges the root bands (daedalus_layout
-    # renders it and declares its display: grid), so it gets the groups a
+    # renders it and declares it a flex column), so it gets the groups a
     # list's box gets, the .field__items shape below: spacing for the gap
     # between bands (the page-level Gap control daedalus_edit binds here, and
     # the same `gap` the AI writes at entity:{uuid}::.daedalus-layout-layout), and
@@ -222,7 +222,9 @@ site:
   # declare identity only; they never widen or narrow this vocabulary.
   # Values are skin data (the daedalus_skin defaults field): a shipped
   # skin carries its typography as base:{tag} defaults; theme CSS keeps
-  # only mechanics.
+  # only mechanics. The word prose spells a tag by ("Every link in
+  # Welcome") is code too (StyleGuide::BASE_TAG_LABELS, one per tag); a
+  # declaration overrides its word with `label:`.
   #
   # Block-level prose tags carry background + border beside typography +
   # spacing: the tag tier's callout gestures (a tinted paragraph band, a

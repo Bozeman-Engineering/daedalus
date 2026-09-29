@@ -99,13 +99,16 @@ final class StyleValueResolver {
    *   shape.
    * @param \Drupal\Core\Entity\FieldableEntityInterface|null $entity
    *   The entity being written, when the lane has one (handler context).
+   * @param string $conversation
+   *   The conversation the write belongs to (the op spine's 'conversation'
+   *   option), '' when the caller has none (handler context).
    *
    * @return \Drupal\daedalus_stylish\StyleValueResolution
    *   The resolution: errors when any input-tier value is unsound (do not
    *   validate or commit), otherwise the stand-in map to validate plus the
    *   pending commits.
    */
-  public function check(array $map, ?FieldableEntityInterface $entity = NULL): StyleValueResolution {
+  public function check(array $map, ?FieldableEntityInterface $entity = NULL, string $conversation = ''): StyleValueResolution {
     $errors = [];
     $pending = [];
     foreach ($map as $key => $entry) {
@@ -131,6 +134,7 @@ final class StyleValueResolver {
             'path' => $at,
             'layer' => NULL,
             'entity' => $entity,
+            'conversation' => $conversation,
           ];
           $layers = array_is_list($value)
             ? $this->checkLayers($value, $at, $context, $errors)

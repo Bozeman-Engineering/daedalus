@@ -344,13 +344,17 @@ class BlueprintSchemaBuilder implements BlueprintSchemaBuilderInterface {
     }
 
     // Include handler-provided guidance inline with the field, and the
-    // generation vocabulary a media-minting handler states (the page
-    // language projects its generate and sizing attributes from it).
+    // generation and file vocabularies a media-minting handler states (the
+    // page language projects its generate, sizing and file attributes
+    // from them).
     if (!empty($info['guidance'])) {
       $schema['guidance'] = $info['guidance'];
     }
     if (!empty($info['generation'])) {
       $schema['generation'] = $info['generation'];
+    }
+    if (!empty($info['file'])) {
+      $schema['file'] = $info['file'];
     }
 
     return $schema;

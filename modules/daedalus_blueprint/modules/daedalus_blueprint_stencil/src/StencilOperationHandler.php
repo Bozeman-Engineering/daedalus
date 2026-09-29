@@ -583,7 +583,7 @@ class StencilOperationHandler implements PageOnlyOperationsInterface {
     }
     $path = "$node_path.styles";
     if (!is_array($styles) || (array_is_list($styles) && $styles !== [])) {
-      $errors[] = new BlueprintError($path, 'INVALID_STENCIL', 'styles is a map of element-relative keys to style entries.', [], "Key by '' for the element itself and '::.class-name' for parts.");
+      $errors[] = new BlueprintError($path, 'INVALID_STENCIL', 'styles is a map of element-relative keys to style entries.', [], "Key by '' for the element itself and '::' plus a relative selector for what is inside it ('::.class-name' a part, '::> *' its children, '::p' its paragraphs).");
       return;
     }
 
@@ -608,8 +608,8 @@ class StencilOperationHandler implements PageOnlyOperationsInterface {
       }
       else {
         $hint = $section_uuid === NULL
-          ? "A block's styles key by '' for the block itself, ':field_name' for a field, and '::.class-name' for its parts."
-          : "A container's styles key by '' for the container itself and '::.class-name' for its parts.";
+          ? "A block's styles key by '' for the block itself, ':field_name' for a field, and '::' plus a relative selector ('::.class-name' a part, '::p' its paragraphs) for what is inside it."
+          : "A container's styles key by '' for the container itself and '::' plus a relative selector ('::.class-name' a part, '::> *' its children, '::> pb-text' the text blocks among them) for what is inside it.";
         $errors[] = new BlueprintError($entry_path, 'INVALID_STENCIL', sprintf('"%s" is not an element-relative style key.', $relative), [], $hint);
         continue;
       }

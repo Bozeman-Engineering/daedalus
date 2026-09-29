@@ -10,20 +10,22 @@ use Drupal\Core\StringTranslation\TranslatableMarkup;
  * The basic-mode sections a control widget files under.
  *
  * Basic mode renders one header per non-empty section, in this roster's
- * weight order, with the controls in declaration order beneath it; the
- * per-widget default rides the ControlWidget attribute and a controls:
- * binding may override it with a `section:` key. The roster is closed on
- * purpose: a section is a reading aid over ten-odd controls, and a
- * fifth heading a theme mints for one control would fragment the panel
- * it exists to group. An unknown name in YAML is a guide-build error
+ * weight order (Layout, Text, Surface, Motion; the panel opens on where
+ * a thing sits and Motion is always last), with the controls in
+ * declaration order beneath it; the per-widget default rides the
+ * ControlWidget attribute and a controls: binding may override it with
+ * a `section:` key. The roster is closed on purpose: a section is a
+ * reading aid over ten-odd controls, and a fifth heading a theme mints
+ * for one control would fragment the panel it exists to group. An
+ * unknown name in YAML is a guide-build error
  * (StyleGuide::validateControlSection()), the same fate as an unknown
  * widget id.
  */
 enum ControlSection: string {
 
+  case Layout = 'layout';
   case Text = 'text';
   case Surface = 'surface';
-  case Layout = 'layout';
   case Motion = 'motion';
 
   /**
@@ -31,9 +33,9 @@ enum ControlSection: string {
    */
   public function label(): TranslatableMarkup {
     return match ($this) {
+      self::Layout => new TranslatableMarkup('Layout'),
       self::Text => new TranslatableMarkup('Text'),
       self::Surface => new TranslatableMarkup('Surface'),
-      self::Layout => new TranslatableMarkup('Layout'),
       self::Motion => new TranslatableMarkup('Motion'),
     };
   }
@@ -43,9 +45,9 @@ enum ControlSection: string {
    */
   public function weight(): int {
     return match ($this) {
-      self::Text => 0,
-      self::Surface => 10,
-      self::Layout => 20,
+      self::Layout => 0,
+      self::Text => 10,
+      self::Surface => 20,
       self::Motion => 30,
     };
   }

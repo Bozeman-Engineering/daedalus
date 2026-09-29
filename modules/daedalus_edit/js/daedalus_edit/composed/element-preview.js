@@ -214,34 +214,48 @@ export function applyResolved(
   const nestedKey = oldTree.hoisted.find((key) => key in newTree.parts) ?? null;
   const hoistedKey =
     newTree.hoisted.find((key) => key in oldTree.parts) ?? null;
-  const oldRoot = root;
-  if (nestedKey !== null) {
-    // Nest: the old root element continues as the part; a fresh root
-    // wraps it and the identity bag migrates onto it.
-    root = createElement(newTree.tag);
-    oldRoot.replaceWith(root);
-    root.append(oldRoot);
-    migrateBag(oldRoot, root, ownAttributes, [classOf(nestedKey)]);
-    oldParts[nestedKey] = oldRoot;
-  } else if (hoistedKey !== null) {
-    // Un-nest: the part element continues as the root; the identity bag
-    // migrates back onto it and the old root wrapper dies.
-    root = oldParts[hoistedKey];
-    migrateBag(oldRoot, root, ownAttributes, oldTree.classes);
-    oldRoot.replaceWith(root);
-    delete oldParts[hoistedKey];
-  } else if (root.tagName.toLowerCase() !== newTree.tag) {
-    // Retag: a new element of the new tag takes over the root's
-    // attributes and children wholesale (modeled leftovers are removed
-    // below). The child nodes move as the same objects, which is what
-    // lets a caller's caret survive the swap.
-    root = createElement(newTree.tag);
-    Array.from(oldRoot.attributes).forEach(({ name, value }) => {
-      root.setAttribute(name, value);
-    });
-    root.append(...oldRoot.childNodes);
-    oldRoot.replaceWith(root);
-  }
+  // Each branch replaces the root and moves its child nodes into an element
+  // that has no renderers yet, a DOM removal the window scroll must hold
+  // across (WebKit clamps it synchronously inside the removal when the
+  // in-flow document is transiently shorter than the viewport, as when
+  // this element is the page's only tall content). preserveScroll is the
+  // seam every canvas replacer runs that removal through.
+  root = Drupal.Daedalus.preserveScroll(() => {
+    const oldRoot = root;
+    if (nestedKey !== null) {
+      // Nest: the old root element continues as the part; a fresh root
+      // wraps it and the identity bag migrates onto it.
+      const next = createElement(newTree.tag);
+      oldRoot.replaceWith(next);
+      next.append(oldRoot);
+      migrateBag(oldRoot, next, ownAttributes, [classOf(nestedKey)]);
+      oldParts[nestedKey] = oldRoot;
+      return next;
+    }
+    if (hoistedKey !== null) {
+      // Un-nest: the part element continues as the root; the identity bag
+      // migrates back onto it and the old root wrapper dies.
+      const next = oldParts[hoistedKey];
+      migrateBag(oldRoot, next, ownAttributes, oldTree.classes);
+      oldRoot.replaceWith(next);
+      delete oldParts[hoistedKey];
+      return next;
+    }
+    if (oldRoot.tagName.toLowerCase() !== newTree.tag) {
+      // Retag: a new element of the new tag takes over the root's
+      // attributes and children wholesale (modeled leftovers are removed
+      // below). The child nodes move as the same objects, which is what
+      // lets a caller's caret survive the swap.
+      const next = createElement(newTree.tag);
+      Array.from(oldRoot.attributes).forEach(({ name, value }) => {
+        next.setAttribute(name, value);
+      });
+      next.append(...oldRoot.childNodes);
+      oldRoot.replaceWith(next);
+      return next;
+    }
+    return oldRoot;
+  });
   applyModeled(
     root,
     nestedKey !== null ? {} : oldTree.attributes,

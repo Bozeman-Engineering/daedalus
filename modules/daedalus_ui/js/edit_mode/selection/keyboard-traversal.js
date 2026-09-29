@@ -1,6 +1,8 @@
 import store from '../store/store';
-import { setSelected, setDrill } from '../store/slices/selection-slice';
+import { setTarget, setDrill } from '../store/slices/selection-slice';
+import { commitAddress } from './commit-address';
 import { elementForKey } from './resolver';
+import { releasePanelFocus } from './panel-focus';
 import { register } from '../hotkeys/hotkeys';
 import { announce } from '../utilities/announce';
 import { labelForKey } from './label-for-key';
@@ -8,39 +10,61 @@ import {
   projectionRoot,
   projectionIndex,
 } from '../components/page-elements/projection-index';
+import {
+  reachPredicate,
+  seatAddress,
+} from '../components/page-elements/reach';
 import { seatOf, siblingOf, parentOf, firstRowOf } from './traversal';
 
 /**
  * Keyboard traversal of the ONE selection: arrows walk the tree the
  * panel projects (Up/Down among siblings, Left up to the parent, Right
  * drills to the first row) from the canvas or the panel alike, because
- * both surfaces render the same selection slice. The bindings live in the
- * dispatcher's TOOL context (Selector), not the selection context, so they
+ * both surfaces render the same selection slice. The bindings are GLOBAL
+ * (the one keyboard grammar of Edit Mode), not selection-context, so they
  * exist with nothing selected: any arrow then ENTERS the tree by selecting
  * the projection root, the keyboard's way in, matching how arrows are the
- * steering wheel once inside. The panel needs no key handling of its own,
- * only focusable rows (page-elements-tree.js) so screen readers track the
- * movement. Selection-context keys (verbs, the palette's insert session)
- * outrank traversal by context while a selection exists.
+ * steering wheel once inside; a landing is a plain selection, and Enter
+ * (edit-session.js, the editor door) is how the selection starts editing.
+ * The panel needs no key handling of its own, only focusable rows
+ * (page-elements-tree.js) so screen readers track the movement.
+ * Selection-context keys (verbs, the palette's insert session) and the
+ * open edit's keys outrank traversal by context; while typing nothing here
+ * fires (the dispatcher's typing partition).
  *
  * The traversal tree is the selection index over BOTH tiers of the
  * blueprint PROJECTION (the panel's model, projection-index.js), not the
- * DOM: zero-render-seam rows (form-only stubs) traverse like anything
- * else, merged rows are one stop by construction, and markup rows (a
- * linked image's Raster shell, a list and its items inside a formatted
- * text block) are stops of their own, so Right from Image lands on Raster
- * and Left from a list item climbs to its list. The moves themselves are
- * pure (traversal.js); this file binds them to the store, the canvas
- * reveal, and the announcer. A selection with no projection node (a
- * programmatic selection from outside the universe; canvas clicks cannot
- * produce one) declines the key and lets it propagate.
+ * DOM, read through REACH (reach.js: the rows the panel currently
+ * draws): zero-render-seam rows (form-only stubs) traverse like anything
+ * else, merged rows are one stop by construction, and markup rows are
+ * stops of their own exactly while the panel draws them (a linked
+ * image's Raster shell with the Markup view on, so Right from Image
+ * lands on Raster; the claimed field straight from Image with it off; a
+ * list and its items inside a formatted text block in every view, so
+ * Left from a list item always climbs to its list). The moves themselves
+ * are pure (traversal.js); this file binds them to the store, the canvas
+ * reveal, and the announcer, taking one reach predicate per keystroke.
+ * A selection with no projection node (a programmatic selection from
+ * outside the universe; canvas clicks cannot produce one) declines the
+ * key and lets it propagate.
  *
- * Left/Right also maintain the Selector's drill context the way the
- * pointer gestures do: Right = double-click's drill-in (the selection
- * becomes the context, its first row the selection), Left = Escape's
- * step-up (the parent becomes the selection, the grandparent the context).
- * The context is element-tier, so a part seats it at its owner's parent,
- * exactly where the breadcrumb's crumb click does (traversal.js `drill`).
+ * Left/Right also maintain the drill context: Right is the
+ * keyboard's drill-in, double-click's shape (the selection becomes the
+ * context, its first row the selection), and Left is the keyboard's
+ * step-up, the breadcrumb's shape (the parent becomes the selection, the
+ * grandparent the context). These two and the crumb click are the ONLY
+ * climbing gestures: Escape deselects and never moves. The context is
+ * element-tier, so a part seats it at its owner's parent, exactly where
+ * the crumb click does (traversal.js `drill`).
+ *
+ * The styling target rides the walk as the row it seats on: a placed,
+ * drawn part target IS its row (Up/Down among the owner's rows, Left to
+ * the row parent), while a target the index does not place (a tag tier,
+ * a chain seated from code mode, an ancestor rule, a hoisted part) or
+ * places on a row the panel is not drawing (a shell part with the
+ * Markup view off) sits on the selected element, and Left from it drops
+ * the target back to the bare element (the same drop Escape's target
+ * rung makes) instead of climbing past it.
  *
  * F6 toggles DOM focus between the page-elements panel and the canvas:
  * a FOCUS toggle, never a selection transfer, since selection is shared
@@ -48,43 +72,47 @@ import { seatOf, siblingOf, parentOf, firstRowOf } from './traversal';
  */
 
 /**
- * Commits a traversal step: select the pair, reveal on canvas, announce.
- * The canvas reveals the element the pair's key names (the owner, for a
- * part: a part has no element of its own to look up); the announcement
- * reads the row's own label (Raster, List item) from the one label
- * resolver. The panel row reveals (and takes focus when focus is in the
- * panel) through the tree's own selection effects.
+ * Commits a traversal step: select the element and target the part
+ * (commit-address.js), reveal on canvas, announce. The canvas reveals
+ * the element the step's key names (the owner, for a part: a part has no
+ * element of its own to look up) by the one reveal rule
+ * (Drupal.Daedalus.scrollReveal); the announcement reads the row's own
+ * label (Raster, List item) from the one label resolver. The panel row
+ * reveals (and takes focus when focus is in the panel) through the
+ * tree's own selection effects.
  */
 const commit = (step) => {
-  store.dispatch(
-    setSelected(step.part ? { key: step.key, part: step.part } : step.key),
-  );
-  elementForKey(step.key)?.scrollIntoView({
-    block: 'nearest',
-    behavior: 'smooth',
-  });
+  commitAddress(step.key, step.selector);
+  Drupal.Daedalus.scrollReveal(elementForKey(step.key), { behavior: 'smooth' });
   announce(labelForKey(step.address));
 };
 
 /**
  * Declines the key when the traversal grammar does not own it: focus sits
  * on an interactive control outside the panel tree (a verb button, a
- * toolbar link — their native keyboard behavior wins). The tool context
- * already gates on the Selector being current.
+ * toolbar link: their native keyboard behavior wins), the stroke's
+ * `control` fact as the keyboard sensor read it in whichever document
+ * the key was pressed. Typing (a contenteditable, an open editor's
+ * widget) is the dispatcher's typing partition, never reached here.
  */
-const declines = (event) =>
-  event.target instanceof Element &&
-  !!event.target.closest('button, a[href], select, [contenteditable="true"]') &&
-  !event.target.closest('.daedalus-ui-tree');
+const declines = (stroke) => stroke.control;
 
 /**
- * The selection pair and the index, or null when the index cannot seat
- * the selection (no selection, or no projection node for its key).
+ * The selection, the selector it seats on, the index and the reach
+ * predicate for this keystroke, or null when the index cannot seat the
+ * selection (no selection, or no projection node for its key). The
+ * selector is the target's when the target sits on the selected element
+ * (a part row, or an unplaced tag or chain); an ancestor-rule target
+ * seats the bare element.
  */
 const seated = () => {
-  const { selectedKey: key, selectedPart: part } = store.getState().selection;
+  const { selectedKey: key, target } = store.getState().selection;
+  const selector = target && target.key === key ? target.selector : null;
   const index = projectionIndex();
-  return key && seatOf(index, key, part) ? { index, key, part } : null;
+  const reach = reachPredicate();
+  return key && seatOf(index, reach, key, selector)
+    ? { index, reach, key, selector, target }
+    : null;
 };
 
 /**
@@ -102,18 +130,24 @@ const enter = () => {
     return false;
   }
   store.dispatch(setDrill(null));
-  commit({ address: root, key: root, part: null });
+  commit({ address: root, key: root, selector: null });
 };
 
-const traverseSiblings = (delta) => (event) => {
-  if (declines(event)) {
+const traverseSiblings = (delta) => (stroke) => {
+  if (declines(stroke)) {
     return false;
   }
   const current = seated();
   if (!current) {
     return enter();
   }
-  const step = siblingOf(current.index, current.key, current.part, delta);
+  const step = siblingOf(
+    current.index,
+    current.reach,
+    current.key,
+    current.selector,
+    delta,
+  );
   if (!step) {
     // At the edge of the sibling list: handled (no page scroll), no move.
     return;
@@ -121,33 +155,57 @@ const traverseSiblings = (delta) => (event) => {
   commit(step);
 };
 
-const traverseOut = (event) => {
-  if (declines(event)) {
+const traverseOut = (stroke) => {
+  if (declines(stroke)) {
     return false;
   }
   const current = seated();
   if (!current) {
     return enter();
   }
-  const step = parentOf(current.index, current.key, current.part);
+  // A target the index does not place, or places on a row the panel is
+  // not drawing, sits on the selected element: Left drops it back to the
+  // bare element (the drop Escape's target rung makes), the symmetric
+  // move to Right seating a part. A drawn part climbs its row parent
+  // like any row.
+  if (
+    current.target &&
+    seatOf(current.index, current.reach, current.key, current.selector)
+      .address === current.key
+  ) {
+    store.dispatch(setTarget(null));
+    announce(labelForKey(current.key));
+    return;
+  }
+  const step = parentOf(
+    current.index,
+    current.reach,
+    current.key,
+    current.selector,
+  );
   if (!step) {
     return;
   }
-  // Escape's step-up shape: the parent becomes the selection, the
-  // grandparent the drill context.
+  // The step-up shape (the breadcrumb's crumb click commits the same):
+  // the parent becomes the selection, the grandparent the drill context.
   commit(step);
   store.dispatch(setDrill(step.drill));
 };
 
-const traverseIn = (event) => {
-  if (declines(event)) {
+const traverseIn = (stroke) => {
+  if (declines(stroke)) {
     return false;
   }
   const current = seated();
   if (!current) {
     return enter();
   }
-  const step = firstRowOf(current.index, current.key, current.part);
+  const step = firstRowOf(
+    current.index,
+    current.reach,
+    current.key,
+    current.selector,
+  );
   if (!step) {
     return;
   }
@@ -164,21 +222,36 @@ const toggleSurfaceFocus = () => {
   if (!mount) {
     return false;
   }
-  if (mount.contains(document.activeElement)) {
+  if (releasePanelFocus()) {
     // To the canvas: canvas keys need no DOM focus (the dispatcher is
-    // document-level), so "focus" means releasing the panel and showing
-    // where the selection sits.
-    document.activeElement.blur();
-    elementForKey(store.getState().selection.selectedKey)?.scrollIntoView({
-      block: 'nearest',
-      behavior: 'smooth',
-    });
+    // document-level), so "focus" means releasing the panel (the door
+    // Escape's deselect shares, panel-focus.js) and showing where the
+    // selection sits.
+    Drupal.Daedalus.scrollReveal(
+      elementForKey(store.getState().selection.selectedKey),
+      { behavior: 'smooth' },
+    );
     announce(Drupal.t('Canvas focused.'));
     return;
   }
   const focusRow = () => {
-    const key = store.getState().selection.selectedKey;
+    // Focus follows the seat (reach.js seatAddress): the target's row
+    // while a placed, drawn part is targeted (the row the tree marks
+    // active), else the selected element's row, exactly where the walks
+    // and the breadcrumb stand.
+    const { selectedKey: key, target } = store.getState().selection;
+    const seat =
+      key &&
+      seatAddress(
+        projectionIndex(),
+        reachPredicate(),
+        key,
+        target && target.key === key ? target.selector : null,
+      );
     const row =
+      (seat &&
+        seat !== key &&
+        mount.querySelector(`[data-tree-address="${seat}"]`)) ||
       (key && mount.querySelector(`[data-tree-key="${key}"]`)) ||
       mount.querySelector('[data-tree-key]');
     if (row) {
@@ -203,25 +276,25 @@ const toggleSurfaceFocus = () => {
 export const initKeyboardTraversal = () => {
   [
     {
-      id: 'selector.traverse_next',
+      id: 'selection.traverse_next',
       key: 'arrowdown',
       label: Drupal.t('Select the next element'),
       action: traverseSiblings(1),
     },
     {
-      id: 'selector.traverse_previous',
+      id: 'selection.traverse_previous',
       key: 'arrowup',
       label: Drupal.t('Select the previous element'),
       action: traverseSiblings(-1),
     },
     {
-      id: 'selector.traverse_out',
+      id: 'selection.traverse_out',
       key: 'arrowleft',
       label: Drupal.t('Select the parent element'),
       action: traverseOut,
     },
     {
-      id: 'selector.traverse_in',
+      id: 'selection.traverse_in',
       key: 'arrowright',
       label: Drupal.t('Select the first child element'),
       action: traverseIn,
@@ -229,8 +302,7 @@ export const initKeyboardTraversal = () => {
   ].forEach((spec) =>
     register({
       ...spec,
-      when: 'tool',
-      tool: 'selector',
+      when: 'global',
       section: Drupal.t('Selection'),
       remappable: true,
     }),

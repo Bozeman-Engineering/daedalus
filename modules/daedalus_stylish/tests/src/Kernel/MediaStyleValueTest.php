@@ -10,6 +10,7 @@ use Drupal\media\Entity\Media;
 use Drupal\media\MediaInterface;
 use Drupal\daedalus_stylish\MediaToken;
 use Drupal\daedalus_stylish\PropertyGroupPluginManager;
+use Drupal\daedalus_stylish_value_handler_test\TestGenerateStyleValueHandler;
 use Drupal\Tests\media\Traits\MediaTypeCreationTrait;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
@@ -22,7 +23,10 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  * url('media:<uuid>') when the uuid names existing image or vector media,
  * reject malformed references, missing media, and media whose source is
  * neither, and unflagged properties reject tokens outright. Guide
- * constraints keep their exact semantics around tokens.
+ * constraints keep their exact semantics around tokens. The input tier
+ * (StyleValueResolver's layers list and handled objects) is locked on the
+ * second media-capable property, `content`, whose one-token grammar meets
+ * the same lanes background-image does.
  */
 #[Group('daedalus_stylish')]
 #[RunTestsInSeparateProcesses]
@@ -50,6 +54,9 @@ class MediaStyleValueTest extends KernelTestBase {
     'daedalus_blueprint_api',
     'daedalus_ui',
     'daedalus_stylish',
+    // The `_generate` marker without daedalus_ai's minting: the stub
+    // resolves every request to a fixed media token.
+    'daedalus_stylish_value_handler_test',
   ];
 
   /**
@@ -174,6 +181,62 @@ class MediaStyleValueTest extends KernelTestBase {
     // reference cannot tunnel through beside a var().
     $this->assertCode('MEDIA_NOT_FOUND', $background, 'background-image', 'var(--overlay), ' . MediaToken::build('123e4567-e89b-12d3-a456-426614174000'));
     $this->assertValid($background, 'background-image', "var(--overlay), $token");
+  }
+
+  /**
+   * The value lanes fall out of the media flag on `content`.
+   *
+   * `content` joined the media machinery by carrying `media: TRUE` (the one
+   * seam every consumer reads), so the input tier needs no code of its own:
+   * a one-layer list joins to the token and validates, a two-layer list
+   * joins to `url(a), url(b)`, which content's one-token grammar refuses
+   * with content's own corrective (the resolver admits the list on any
+   * media-capable property; the grammar is the validator's), and a
+   * `_generate` object checks clean (its stand-in `none` is content's own
+   * keyword) and resolves to the token on commit.
+   */
+  public function testContentValueLanes(): void {
+    $resolver = $this->container->get('daedalus_stylish.style_value_resolver');
+    $validator = $this->container->get('daedalus_stylish.style_map_validator');
+    $box = 'container:' . $this->container->get('uuid')->generate() . '::&::before';
+    $at = "$box.default.content";
+    $token = MediaToken::build($this->imageMedia->uuid());
+    $vector = MediaToken::build($this->vectorMedia->uuid());
+    $content = $this->manager->createInstance('generated_content');
+
+    // A content token validates at the group, raster or vector.
+    $this->assertValid($content, 'content', $token);
+    $this->assertValid($content, 'content', $vector);
+    $this->assertCode('MEDIA_NOT_IMAGE', $content, 'content', MediaToken::build($this->fileMedia->uuid()));
+
+    // A one-layer list joins to the token itself and resolves as such.
+    $resolution = $resolver->check([$box => ['default' => ['content' => [$token]]]]);
+    $this->assertSame([], $resolution->getErrors());
+    $this->assertSame($token, $resolution->getMap()[$box]['default']['content']);
+    $this->assertSame([], $validator->validate($resolution->getMap()));
+    $this->assertSame($token, $resolution->commit()[$box]['default']['content']);
+
+    // A two-layer list passes the resolver (content is media-capable, the
+    // list form is the grammar) and fails validation with content's
+    // corrective: one media reference as the whole value.
+    $resolution = $resolver->check([$box => ['default' => ['content' => [$token, $vector]]]]);
+    $this->assertSame([], $resolution->getErrors());
+    $this->assertSame("$token, $vector", $resolution->getMap()[$box]['default']['content']);
+    $errors = $validator->validate($resolution->getMap());
+    $this->assertCount(1, $errors);
+    $this->assertSame('INVALID_STYLE_VALUE', $errors[0]->getCode());
+    $this->assertSame($at, $errors[0]->getPath());
+    $this->assertSame(['keywords' => ['""', 'none']], $errors[0]->getContext());
+    $this->assertStringContainsString('one media reference', $errors[0]->getHint());
+
+    // A `_generate` object on content checks clean, validates on its
+    // stand-in and resolves to the token: image generation on a box works
+    // with no code of its own.
+    $resolution = $resolver->check([$box => ['default' => ['content' => ['_generate' => 'a gold rosette']]]]);
+    $this->assertSame([], $resolution->getErrors());
+    $this->assertSame('none', $resolution->getMap()[$box]['default']['content']);
+    $this->assertSame([], $validator->validate($resolution->getMap()));
+    $this->assertSame(MediaToken::build(TestGenerateStyleValueHandler::UUID), $resolution->commit()[$box]['default']['content']);
   }
 
   /**

@@ -49,7 +49,7 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  *   with instance rows in basic): a modifier click on a canvas
  *   paragraph resolves the instance part through the registered part
  *   behavior, and the BASIC tree's row for that paragraph highlights
- *   while the panel breadcrumb targets it, so canvas and tree agree on
+ *   while the panel's subject chip targets it, so canvas and tree agree on
  *   a selection universe that only exists because instance rows render
  *   in basic.
  * - List-item row styling in basic (seam: the universal-minting model
@@ -79,6 +79,14 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  *   inspector): ArrowLeft from the nested item commits its list as the
  *   part facet, so the inspector chip names the nested list's own
  *   identity and the breadcrumb shortens by one crumb.
+ * - The instance part's address set (seam: annotation instances to
+ *   matcher facts to switcher, live): with a minted paragraph targeted,
+ *   the subject chip's "Style this at" menu offers the element's own tag
+ *   tier ("Every paragraph here") and the section's tag rule ("Every
+ *   paragraph in the section"), and no entry names the identity class.
+ *   The node suites prove the switcher's shapes over a fixture; only a
+ *   browser proves the annotation the inspector hands the matcher carries
+ *   the instances rows the fold reads.
  *
  * The fixture is DaedalusFixtureTrait (the daedalus recipe's site as
  * daedalus_editor) as the recipe ships it: the olivero design system
@@ -127,8 +135,8 @@ class FormattedTextStylingBehaviorTest extends WebDriverTestBase {
    * - Entry: both sidebars open, the inspector confirmed in BASIC mode
    *   (the mode a fresh session starts in).
    * - Instance row styling: a real click on the target paragraph's
-   *   chip-less instance row selects it (row active, breadcrumb targets
-   *   the part), the curated text-alignment control renders from the
+   *   chip-less instance row selects it (row active, the subject chip
+   *   targets the part), the curated text-alignment control renders from the
    *   instance declaration, and a real click on its Center segment
    *   commits `text-align: center` to the part key. The canvas centers
    *   exactly that paragraph; the sibling is untouched.
@@ -140,7 +148,7 @@ class FormattedTextStylingBehaviorTest extends WebDriverTestBase {
    *   compute the lead size while block B's stays on the body value.
    * - Deep-select: a modifier click on the sibling paragraph in the
    *   canvas commits its part facet; the sibling's tree row highlights
-   *   and the panel breadcrumb retargets, in basic mode.
+   *   and the panel's subject chip retargets, in basic mode.
    * - List rows: block C stages a bulleted list with a nested list;
    *   universal minting stamps the wrappers and every item. A real
    *   click on one item's row selects it and a Center pick commits
@@ -148,13 +156,17 @@ class FormattedTextStylingBehaviorTest extends WebDriverTestBase {
    *   that item, not its sibling item.
    * - Nested sync: the nested list's item renders its own row in the
    *   basic tree; a modifier click on it in the canvas highlights that
-   *   row and retargets the breadcrumb (flat ownership at depth, live).
+   *   row and retargets the subject chip (flat ownership at depth, live).
    * - Breadcrumb depth: with the nested item selected, the selection
    *   indicator's breadcrumb ends "Formatted text › Bulleted list › List
    *   item › Bulleted list › List item" (markup parents, then the owner).
    * - Keyboard climb: ArrowLeft commits the nested list as the part
    *   facet; the inspector chip names its minted identity and the
    *   breadcrumb ends at "Bulleted list".
+   * - Address set: block A's target paragraph is targeted again through
+   *   the spine; the subject chip's "Style this at" menu lists "Every
+   *   paragraph here" before "Every paragraph in Section" and no
+   *   entry containing `.s-`.
    */
   public function testFormattedTextStylingScenario(): void {
     $this->loginAsEditor();
@@ -194,7 +206,7 @@ class FormattedTextStylingBehaviorTest extends WebDriverTestBase {
     // under `narrow` instead of `default`.
     $session->resizeWindow(1920, 1200);
 
-    $this->enterEditModeViaCookies($node->toUrl(), 'selector');
+    $this->enterEditModeViaCookies($node->toUrl());
     $this->assertJsCondition(
       'window.Drupal && Drupal.Daedalus && Drupal.Daedalus.Blueprint && !!Drupal.Daedalus.Blueprint.getRoot()',
       20000,
@@ -358,13 +370,13 @@ class FormattedTextStylingBehaviorTest extends WebDriverTestBase {
       20000,
       'The clicked instance row is active (the part facet committed on the spine).',
     );
-    // The basic panel retargeted the drilled part: the breadcrumb wears
-    // the part, and the curated control set is the instance
-    // declaration's, not the block root's.
+    // The basic panel retargeted the drilled part: the subject line's
+    // address chip stands at the part's own address, and the curated
+    // control set is the instance declaration's, not the block root's.
     $this->assertJsCondition(
-      "document.querySelector('.daedalus-stylish-inspector__part')?.getAttribute('title') === " . json_encode($target_part),
+      "document.querySelector('#daedalus_stylish_inspector .daedalus-stylish-inspector__address')?.dataset.daedalusStylishAddress === " . json_encode("$block_a_key::$target_part"),
       20000,
-      'The panel breadcrumb targets the selected paragraph part.',
+      'The panel subject line targets the selected paragraph part.',
     );
     $alignment = '#daedalus_stylish_inspector .daedalus-stylish-inspector__widget--text-alignment';
     $this->assertNotNull(
@@ -503,9 +515,9 @@ class FormattedTextStylingBehaviorTest extends WebDriverTestBase {
       'The deep-selected paragraph\'s instance row highlighted in the basic tree.',
     );
     $this->assertJsCondition(
-      "document.querySelector('.daedalus-stylish-inspector__part')?.getAttribute('title') === " . json_encode($sibling_part),
+      "document.querySelector('#daedalus_stylish_inspector .daedalus-stylish-inspector__address')?.dataset.daedalusStylishAddress === " . json_encode("$block_a_key::$sibling_part"),
       20000,
-      'The panel breadcrumb retargeted to the deep-selected paragraph: canvas, tree, and panel agree in basic.',
+      'The panel subject line retargeted to the deep-selected paragraph: canvas, tree, and panel agree in basic.',
     );
 
     // ----- List-item row styling in basic. -----
@@ -608,9 +620,9 @@ class FormattedTextStylingBehaviorTest extends WebDriverTestBase {
       'The clicked list-item row is active (the part facet committed on the spine).',
     );
     $this->assertJsCondition(
-      "document.querySelector('.daedalus-stylish-inspector__part')?.getAttribute('title') === " . json_encode(".$item_class"),
+      "document.querySelector('#daedalus_stylish_inspector .daedalus-stylish-inspector__address')?.dataset.daedalusStylishAddress === " . json_encode("$block_c_key::.$item_class"),
       20000,
-      'The panel breadcrumb targets the selected list item part.',
+      'The panel subject line targets the selected list item part.',
     );
     // The same curated instance controls render for an item (the
     // namespace declaration is tag-agnostic), bound to the item's key.
@@ -641,7 +653,7 @@ class FormattedTextStylingBehaviorTest extends WebDriverTestBase {
     // ----- Nested-list row selection sync in basic. -----
     // The nested item has its own row at depth; a modifier click on it
     // in the canvas resolves ITS part (the closest carrier) and the row
-    // highlights while the breadcrumb retargets — which only works when
+    // highlights while the subject chip retargets, which only works when
     // rows at depth carry the owning model key (flat ownership).
     $this->assertJsCondition(
       "!!window.__ft.exactRow('Eta nested item')",
@@ -659,9 +671,9 @@ class FormattedTextStylingBehaviorTest extends WebDriverTestBase {
       'The deep-selected nested item\'s row highlighted in the basic tree.',
     );
     $this->assertJsCondition(
-      "document.querySelector('.daedalus-stylish-inspector__part')?.getAttribute('title') === " . json_encode(".$nested_class"),
+      "document.querySelector('#daedalus_stylish_inspector .daedalus-stylish-inspector__address')?.dataset.daedalusStylishAddress === " . json_encode("$block_c_key::.$nested_class"),
       20000,
-      'The panel breadcrumb retargeted to the nested item: canvas, tree, and panel agree at depth.',
+      'The panel subject line retargeted to the nested item: canvas, tree, and panel agree at depth.',
     );
 
     // ----- Breadcrumb depth over the markup tier. -----
@@ -691,14 +703,68 @@ class FormattedTextStylingBehaviorTest extends WebDriverTestBase {
     $this->assertNotNull($nested_list_class, 'The nested list wrapper minted an identity at stage time.');
     $this->pressHotkey('ArrowLeft');
     $this->assertJsCondition(
-      "document.querySelector('.daedalus-stylish-inspector__part')?.getAttribute('title') === " . json_encode(".$nested_list_class"),
+      "document.querySelector('#daedalus_stylish_inspector .daedalus-stylish-inspector__address')?.dataset.daedalusStylishAddress === " . json_encode("$block_c_key::.$nested_list_class"),
       20000,
-      'ArrowLeft climbed from the nested item to its list: the inspector chip names the nested list part.',
+      'ArrowLeft climbed from the nested item to its list: the inspector chip stands at the nested list part.',
     );
     $this->assertJsCondition(
       "$crumbs.endsWith(" . json_encode(' › Formatted text › Bulleted list › List item › Bulleted list') . ')',
       20000,
       'The breadcrumb followed the climb: the trail now ends at the nested list.',
+    );
+
+    // ----- The instance part's address set. -----
+    // Seam: annotation instances to matcher facts to switcher, live. The
+    // annotation's instances rows (daedalus_ui's annotator, stamped with
+    // each minted element's tag) fold into the matcher's node facts as
+    // class to tag, and the switcher offers a minted paragraph its class
+    // of things by TAG: the element's own tag tier ("Every paragraph
+    // here", the `{block A}::p` rule the tier step above wrote), then the
+    // section's `p` rule and the chained shapes ending in `p`, never a
+    // chain ending in the identity class. The node suites
+    // (selector-matcher, write-address, parts) prove the model; only the
+    // live page proves that the annotation the inspector hands the
+    // matcher carries the rows the switcher reads. Back to block A's
+    // target paragraph through the spine's own calls (the row-click and
+    // canvas legs above already proved the selection gestures).
+    $session->executeScript("Drupal.Daedalus.Selection.select('$block_a_key'); Drupal.Daedalus.Selection.target('$block_a_key', '$target_part');");
+    $address_chip = '#daedalus_stylish_inspector .daedalus-stylish-inspector__address';
+    $this->assertJsCondition(
+      "(() => { const chip = document.querySelector('$address_chip');"
+      . ' return !!chip && chip.dataset.daedalusStylishAddress === ' . json_encode("$block_a_key::$target_part")
+      . " && chip.tagName === 'BUTTON'; })()",
+      20000,
+      'Annotation instances to matcher facts to switcher: the subject line\'s chip stands at the target paragraph part as a menu button (the switcher found more than the own entry to offer).',
+    );
+    $this->clickPanel($address_chip);
+    $this->assertJsCondition(
+      "!!document.querySelector('.daedalus-ui-menu') && document.querySelector('.daedalus-ui-menu .daedalus-ui-menu__header')?.textContent.trim() === 'Style this at'",
+      20000,
+      'Annotation instances to matcher facts to switcher: the chip opened the shared menu headed "Style this at".',
+    );
+    $menu_labels = json_decode((string) $session->evaluateScript(
+      "JSON.stringify(Array.from(document.querySelectorAll('.daedalus-ui-menu .daedalus-ui-menu__item'), (item) => item.querySelector('.daedalus-ui-menu__label')?.textContent.trim() ?? ''))"
+    ), TRUE);
+    $this->assertIsArray($menu_labels, 'Annotation instances to matcher facts to switcher: the menu read returned its entry labels.');
+    $this->assertContains(
+      'Every paragraph here',
+      $menu_labels,
+      'Annotation instances to matcher facts to switcher: the menu offers the element\'s own tag tier "Every paragraph here" (the matcher learned the paragraph\'s tag from the live annotation, so the switcher could name its class of things).',
+    );
+    $this->assertContains(
+      'Every paragraph in Section',
+      $menu_labels,
+      'Annotation instances to matcher facts to switcher: the menu offers the section\'s tag rule "Every paragraph in Section" (the label-less section reads "Section", its minted name; the tag rule reaches the minted paragraph through the folded instance fact).',
+    );
+    $this->assertLessThan(
+      array_search('Every paragraph in Section', $menu_labels, TRUE),
+      array_search('Every paragraph here', $menu_labels, TRUE),
+      'Annotation instances to matcher facts to switcher: the own tag tier precedes the ancestors\' shapes (the nearest owner that styles every paragraph at once comes first).',
+    );
+    $this->assertSame(
+      [],
+      array_values(array_filter($menu_labels, static fn (string $label) => str_contains($label, '.s-'))),
+      'Annotation instances to matcher facts to switcher: no entry names the identity class (a minted element\'s class of things is its tag; the chains end in `p`, never in `.s-*`).',
     );
   }
 

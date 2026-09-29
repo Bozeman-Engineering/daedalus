@@ -10,6 +10,7 @@ use Drupal\Core\Entity\EntityDisplayRepositoryInterface;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\StringTranslation\StringTranslationTrait;
 use Drupal\daedalus_edit\DaedalusEditMediaLibraryOpener;
+use Drupal\daedalus_edit\EditIdentity;
 use Drupal\media\MediaInterface;
 use Drupal\daedalus_ui\EventSubscriber\ReplaceMediaFieldAttributes;
 use Drupal\daedalus_ui\DaedalusUi;
@@ -174,22 +175,18 @@ final class ImageComposedContent implements ComposedBlockContentInterface {
       // The form path resolves its two required lookup attributes anywhere
       // in the DOM, so they hoist onto the composed root: the
       // partial-update selector then matches the root, making a field
-      // re-render a whole-root swap — which is exactly right for a
-      // composed block. The page-element id keeps the form-item →
+      // re-render a whole-root swap, which is exactly right for a
+      // composed block. The page-element id keeps the form-item to
       // page-element lookup working from the sidebar form side. The
-      // property segment is 'value', NOT the field type's main property
-      // (target_id): the form-side stampers hardcode 'value'
-      // (FormDefaultFieldAttributes / FormMediaFieldAttributes), and the
-      // render-side stamper agrees for every configurable field because
-      // FieldConfig has no getMainPropertyName() method to consult
-      // (RenderEditableFieldAttributes falls back to 'value'). The lookup
-      // ids only ever match each other, so the grammar's de facto property
-      // for configurable fields is 'value' — stamping target_id orphans
-      // the form-item wrapper lookup and setWidget() throws.
-      $id = daedalus_ui_entity_identifier($block_content);
-      $attributes['data-daedalus-edit-field-value-wrapper'] = sprintf('%s::%s::%s::%s', $block_content->getEntityTypeId(), $id, 'field_image', 'value');
-      $attributes['data-daedalus-edit-id'] = sprintf('%s::%s::%s::%s::%s::%s::%s::%s::%s', $block_content->getEntityTypeId(), $block_content->bundle(), $id, 'field_image', 0, $block_content->language()->getId(), 'entity_reference', 'entity_reference_entity_view', 'value');
-      $attributes['data-daedalus-edit-page-element-id'] = sprintf('%s::%s::%s::%s::%s', $block_content->getEntityTypeId(), $id, 'field_image', 0, 'value');
+      // identities are the one minter's (EditIdentity), property segment
+      // included: the field's main property (target_id for a media
+      // reference), which is what the form-side stampers mint too, so the
+      // leaf and its form-item wrapper always agree.
+      $definition = $block_content->get('field_image')->getFieldDefinition();
+      $property = EditIdentity::mainProperty($definition);
+      $attributes['data-daedalus-edit-field-value-wrapper'] = EditIdentity::fieldWrapperId($block_content, 'field_image', $property);
+      $attributes['data-daedalus-edit-id'] = EditIdentity::editId($block_content, 'field_image', 0, $block_content->language()->getId(), 'entity_reference', 'entity_reference_entity_view', $property);
+      $attributes['data-daedalus-edit-page-element-id'] = EditIdentity::itemId($block_content, 'field_image', 0, $property);
     }
 
     // The drop-to-replace bag, one vocabulary shared with the per-item

@@ -19,11 +19,13 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  * Tests the daedalus_stylish_layouts shipped styling: axes, variants, defaults.
  *
  * The container is ONE box, so both axes style the container ROOT (''):
- * - container_layout: mode + share. ONE count-independent row variant
- *   (flex on the root, the skin's gutter gap, stacking on the "narrow"
- *   width-band condition (the page-level band, measured at the one page
- *   query root), equal fill on the '::>' children pseudo-part; ratios are
- *   per-child flex-grow overrides).
+ * - container_layout: mode + share. The declared tier makes every
+ *   container a flex column (the stack); ONE count-independent row
+ *   variant flips the direction (flex-direction: row on the root, the
+ *   skin's gutter gap, stacking on the "narrow" width-band condition (the
+ *   page-level band, measured at the one page query root), equal fill on
+ *   the '::> *' children pseudo-part; ratios are per-child flex-grow
+ *   overrides). The axis owns flex-direction.
  * - width: the constrained content width as a padding-inline stop
  *   (`max(gutter, calc((100% - W) / 2))`) on the root itself — the band
  *   stays full-bleed, the content column centers, and a gutter comes free
@@ -62,6 +64,7 @@ class DaedalusStylishLayoutsVariantsTest extends KernelTestBase {
     'twig_events',
     'daedalus_tempstore',
     'daedalus_blueprint_api',
+    'file',
     'daedalus_ui',
     'daedalus_stylish',
     // The unbound site: the class writes literal paddings, gaps and sizes
@@ -128,12 +131,12 @@ class DaedalusStylishLayoutsVariantsTest extends KernelTestBase {
     $this->assertInstanceOf(DaedalusStylishVariantInterface::class, $variant);
     $this->assertSame('width', $variant->getAxis());
     $this->assertSame('kind:container', $variant->getScope());
-    $row = $this->loadVariant('row');
+    $row = $this->loadVariant('columns');
     $this->assertInstanceOf(DaedalusStylishVariantInterface::class, $row);
     $this->assertSame('container_layout', $row->getAxis());
     $this->assertSame('kind:container', $row->getScope());
     // The container ROOT backs every axis's properties: layout for the
-    // arrangement variant (display, gap), sizing and spacing for the
+    // arrangement variant (flex-direction, gap), sizing and spacing for the
     // width variants, motion for the entrances, effects and shadow for
     // the hover axis's Lift — the one box carries every group the widgets
     // and the shipped materials write.
@@ -142,7 +145,7 @@ class DaedalusStylishLayoutsVariantsTest extends KernelTestBase {
       $this->assertArrayHasKey($group, $groups, "container root lacks $group");
     }
     // The universal container kind itself carries the shared shape: the
-    // composed one-box root (forms, no parts) and the '::>' children
+    // composed one-box root (forms, no parts) and the '::> *' children
     // addressable, so the kind-scoped variants validate against it.
     $kind = $guide->getKind('container');
     $this->assertSame(['style', 'width', 'container_layout', 'animation', 'hover'], StyleGuide::axes($kind));
@@ -179,34 +182,37 @@ class DaedalusStylishLayoutsVariantsTest extends KernelTestBase {
    * The container_layout axis ships ONE count-independent row variant.
    *
    * Mode + share: the row variant carries everything shared about columns
-   * (flex on the container root, the gutter gap, narrow stacking,
-   * equal fill on the root's direct children via the '::>' children
-   * pseudo-part), so equal columns at every count are one worn reference
-   * with zero per-instance CSS, and a child added later joins at grow 1
-   * purely by CSS. Unequal ratios are per-child flex-grow overrides
-   * written by the layout widget; no track string exists anywhere, so
-   * nothing goes stale as children come and go. Authored on the ROOT: the
-   * container is one box at every depth, so the selected element IS the
-   * flex parent.
+   * (the row direction on the container root, the gutter gap, narrow
+   * stacking, equal fill on the root's direct children via the '::> *'
+   * children pseudo-part), so equal columns at every count are one worn
+   * reference with zero per-instance CSS, and a child added later joins
+   * at grow 1 purely by CSS. Unequal ratios are per-child flex-grow
+   * overrides written by the layout widget; no track string exists
+   * anywhere, so nothing goes stale as children come and go. Authored on
+   * the ROOT: the container is one box at every depth, so the selected
+   * element IS the flex parent. The variant states no display: the
+   * declared tier ships every container as a flex column, so the variant
+   * only flips the direction its axis owns, and its narrow block, which
+   * flips it back, is literally the stack.
    */
   public function testRowVariant(): void {
-    $variant = $this->loadVariant('row');
+    $variant = $this->loadVariant('columns');
     $this->assertInstanceOf(DaedalusStylishVariantInterface::class, $variant);
     $this->assertSame('container_layout', $variant->getAxis());
     $this->assertSame('kind:container', $variant->getScope());
     $styles = $variant->getStyles();
-    $this->assertSame(['', '::>'], array_keys($styles));
+    $this->assertSame(['', '::> *'], array_keys($styles));
     $root = $styles[''];
-    $this->assertSame('flex', $root['default']['display']);
-    $this->assertSame('var(--space-gutter)', $root['default']['gap']);
+    $this->assertSame(['flex-direction' => 'row', 'gap' => 'var(--space-gutter)'], $root['default'], 'The variant flips the direction and sets the gutter gap; the display is the declared tier\'s.');
     // Desktop-first stacking on the "narrow" width band (the page-level
-    // band: rows stack when the page is narrow, like a media query).
+    // band: rows stack when the page is narrow, like a media query): the
+    // declared column again, no display of its own.
     $this->assertSame(['flex-direction' => 'column'], $root['narrow']);
     // Equal fill on the children pseudo-part, spelled as the flex
     // longhands (the curated Layout group ships no `flex` shorthand):
     // `flex: 1 1 0` plus the min-width guard so content cannot force a
     // column wider than its share.
-    $children = $styles['::>'];
+    $children = $styles['::> *'];
     $this->assertSame([
       'flex-grow' => '1',
       'flex-shrink' => '1',
@@ -237,7 +243,7 @@ class DaedalusStylishLayoutsVariantsTest extends KernelTestBase {
    *
    * The install-time import is the compile trigger, so this locks the
    * container_layout axis's whole live delivery chain: the root rule for
-   * the flex facts (':scope' at the variant-class scope roots), the '::>'
+   * the flex facts (':scope' at the variant-class scope roots), the '::> *'
    * children rule with the child-shifted donut, the narrow blocks in the
    * container-query wrapper, and per-child overrides beating equal fill
    * on scope proximity (the children rule stays at ':scope' weight).
@@ -246,18 +252,20 @@ class DaedalusStylishLayoutsVariantsTest extends KernelTestBase {
     $uri = \Drupal::state()->get(VariantStylesheet::STATE_KEY);
     $this->assertIsString($uri);
     $css = file_get_contents($uri);
-    $variant = $this->loadVariant('row');
-    $this->assertStringContainsString("@scope (.daedalus-stylish-variant--row, .daedalus-stylish-variant--{$variant->uuid()})", $css);
-    // The root's own rule: the flex mode and the gutter gap, printed as
-    // the token reference (a strict law binding gap to the space scale
+    $variant = $this->loadVariant('columns');
+    $this->assertStringContainsString("@scope (.daedalus-stylish-variant--columns, .daedalus-stylish-variant--{$variant->uuid()})", $css);
+    // The root's own rule: the row direction and the gutter gap, printed
+    // as the token reference (a strict law binding gap to the space scale
     // accepts the minted reference verbatim; a literal it would withhold).
-    $this->assertStringContainsString('display: flex;', $css);
+    // No display: the declared tier's flex column carries it.
+    $this->assertStringContainsString('flex-direction: row;', $css);
     $this->assertStringContainsString('gap: var(--space-gutter);', $css);
+    $this->assertStringNotContainsString('display: flex;', $css, 'The variant restates no display; the declared tier owns the mechanic.');
     $this->assertStringContainsString('flex-direction: column;', $css);
-    // The children rule: ':scope > *' with the child-shifted donut, equal
-    // fill.
-    $this->assertStringContainsString(':scope > * {', $css);
-    $this->assertStringContainsString('to (:scope [data-selectable^="container:"] > *, :scope [data-selectable^="block:"] > *)', $css);
+    // The children rule: ':scope > *' with no donut (the child combinator
+    // self-limits), equal fill.
+    $this->assertStringContainsString(":scope > * {", $css);
+    $this->assertStringNotContainsString('to (:scope [data-selectable^="container:"] > *, :scope [data-selectable^="block:"] > *)', $css);
     $this->assertStringContainsString('flex-grow: 1;', $css);
     $this->assertStringContainsString('min-width: 0;', $css);
     // Narrow: stacked children opt out of flexing (`flex: none`).
@@ -348,21 +356,21 @@ class DaedalusStylishLayoutsVariantsTest extends KernelTestBase {
     $database = \Drupal::database();
     $database->update('daedalus_variant')
       ->fields(['axis' => 'arrangement'])
-      ->condition('machine_name', ['row', 'my_columns'], 'IN')
+      ->condition('machine_name', ['columns', 'my_columns'], 'IN')
       ->execute();
     $database->update('daedalus_variant')
       ->fields(['label' => 'Row'])
-      ->condition('machine_name', 'row')
+      ->condition('machine_name', 'columns')
       ->execute();
     $database->update('daedalus_variant_revision')
       ->fields(['label' => 'Row'])
-      ->condition('id', $this->loadVariant('row')->id())
+      ->condition('id', $this->loadVariant('columns')->id())
       ->execute();
 
     $lines = \Drupal::service('daedalus_stylish_layouts.container_migration')->migrateContainerLayoutAxis();
     $this->assertNotEmpty($lines);
 
-    $row = $this->loadVariant('row');
+    $row = $this->loadVariant('columns');
     $this->assertSame('container_layout', $row->getAxis());
     $this->assertSame('Columns', $row->label());
     $mine = $this->loadVariant('my_columns');

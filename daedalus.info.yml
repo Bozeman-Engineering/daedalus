@@ -1,5 +1,5 @@
 name: Daedalus
 type: module
-description: 'The page builder. Its sub-modules are its roles: UI, layout, edit, tempstore, blueprint, AI and daedalus_stylish.'
+description: 'The page builder. Its sub-modules are its roles: UI, layout, edit, tempstore, blueprint, AI, daedalus_stylish and daedalus_explode.'
 package: Daedalus
 core_version_requirement: '>=11.3 <11.5'

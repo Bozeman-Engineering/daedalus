@@ -9,11 +9,10 @@ import { createSlice } from '@reduxjs/toolkit';
  * receives write-through persistence, keyed site-wide (view preferences
  * are per editor, not per page).
  *
- * - parts: per-provider visibility of tree VIEWS (style targets…), keyed
- *   by the provider's displayToggle id. Absent = OFF: provider views are
- *   opt-in, the model projection is the default. (The key name predates
- *   the view-provider seam — it persists in localStorage, so it keeps the
- *   historical name.)
+ * - views: per-provider visibility of tree VIEWS (the built-in markup
+ *   view, contrib views), keyed by the provider's displayToggle id.
+ *   Absent = OFF: provider views are opt-in, the model projection is the
+ *   default.
  * - renameKey: the selectable key whose tree row is in inline-rename state,
  *   or null. Surface state, not a preference: the Rename verb and the
  *   label double-click write it, the row reads it, and commit/cancel clear
@@ -33,19 +32,19 @@ const seed = () => {
   try {
     const stored = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '{}');
     return {
-      parts:
-        typeof stored.parts === 'object' && stored.parts !== null
-          ? stored.parts
+      views:
+        typeof stored.views === 'object' && stored.views !== null
+          ? stored.views
           : {},
     };
   } catch (e) {
-    return { parts: {} };
+    return { views: {} };
   }
 };
 
 const persist = (state) => {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ parts: state.parts }));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ views: state.views }));
   } catch (e) {
     // Storage unavailable (private mode quirks): the session state works,
     // it just won't survive a reload.
@@ -58,8 +57,8 @@ const viewSlice = createSlice({
   // and persist() never writes them.
   initialState: { ...seed(), renameKey: null, markedKeys: [] },
   reducers: {
-    setPartVisibility: (state, action) => {
-      state.parts[action.payload.id] = action.payload.visible === true;
+    setViewVisibility: (state, action) => {
+      state.views[action.payload.id] = action.payload.visible === true;
       persist(state);
     },
     setRenameKey: (state, action) => {
@@ -73,6 +72,6 @@ const viewSlice = createSlice({
   },
 });
 
-export const { setPartVisibility, setRenameKey, setMarkedKeys } =
+export const { setViewVisibility, setRenameKey, setMarkedKeys } =
   viewSlice.actions;
 export default viewSlice.reducer;

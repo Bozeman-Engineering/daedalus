@@ -23,7 +23,7 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  * box. The single "content" region is a storage vestige and renders no
  * wrapper at either depth.
  *
- * Styling addresses the root key ('') and the '::>' children pseudo-part;
+ * Styling addresses the root key ('') and the '::> *' children pseudo-part;
  * the printer's donut rules scope-limit at nested section and block
  * roots, so an outer band's styles never restyle a nested container's
  * identical markup. This locks the delivery half the printer round-trip
@@ -134,7 +134,7 @@ class ContainerLayoutTest extends NestedStorageKernelTestBase {
   public function testRootStylesLandAtBothDepths(): void {
     [$entity, $root_uuid, $nested_uuid] = $this->containerEntity([
       'container:{root}' => ['default' => ['padding-inline' => 'max(24px, calc((100% - 60rem) / 2))']],
-      'container:{root}::>' => ['default' => ['min-width' => '0']],
+      'container:{root}::> *' => ['default' => ['min-width' => '0']],
       'container:{nested}' => ['default' => ['display' => 'grid']],
     ]);
     $html = $this->renderEntity($entity);
@@ -150,13 +150,12 @@ class ContainerLayoutTest extends NestedStorageKernelTestBase {
     }
     $this->assertStringContainsString('padding-inline: max(24px, calc((100% - 60rem) / 2));', $html);
     $this->assertStringContainsString('display: grid;', $html);
-    // The children pseudo-part rides the root one level down, with the
-    // child-shifted donut.
+    // The children selector rides the root one level down, with no
+    // donut: the child combinator self-limits.
     $this->assertStringContainsString(
-      sprintf('@scope ([data-selectable="container:%s"]) to (:scope [data-selectable^="container:"] > *, :scope [data-selectable^="block:"] > *) {', $root_uuid),
+      sprintf("@scope ([data-selectable=\"container:%s\"]) {\n  :scope > * {", $root_uuid),
       $html,
     );
-    $this->assertStringContainsString(':scope > * {', $html);
 
     // And the elements the ':scope' selectors match exist: the section
     // and div roots ARE the addressed elements (CSS + markup on one page).

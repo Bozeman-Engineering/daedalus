@@ -15,15 +15,16 @@
  * trip; today each wraps var() itself and sniffs "media:" on its own.
  * The grammar owns no vocabulary: material spellings come from the
  * roster records (createRoster in ./roster.js), so resolution is an
- * exact-match lookup per slot plus the three inline syntaxes the spine
- * defines: a literal (anything else), url('media:<uuid>') and
- * url('generate:<prompt>').
+ * exact-match lookup per slot plus the four inline syntaxes the spine
+ * defines: a literal (anything else), url('media:<uuid>'),
+ * url('generate:<prompt>') and url('file:<name>').
  *
  * A resolved value is {kind, id, spelling, record}:
  * - kind: one of KIND (a material kind, an inline kind, or 'unknown' for
  *   a reference-shaped value the roster does not carry: kept apart from
  *   'literal' so an unrostered reference is never let through as CSS).
- * - id: the record id for a material; a media uuid; a generate prompt;
+ * - id: the record id for a material; a media uuid; a generate prompt; a
+ *   file name;
  *   for 'unknown' the reference as written (the custom property, the
  *   class token, the attribute value, the stencil name, the animation
  *   name); null for a literal.
@@ -43,6 +44,7 @@ export const KIND = Object.freeze({
   ANIMATION: 'animation',
   MEDIA: 'media',
   GENERATE: 'generate',
+  FILE: 'file',
   LITERAL: 'literal',
   UNKNOWN: 'unknown',
 });
@@ -126,7 +128,10 @@ export const isMaterialKind = (kind) =>
  * Whether a value kind is an inline value (spelled without a mint).
  */
 export const isInlineKind = (kind) =>
-  kind === KIND.MEDIA || kind === KIND.GENERATE || kind === KIND.LITERAL;
+  kind === KIND.MEDIA ||
+  kind === KIND.GENERATE ||
+  kind === KIND.FILE ||
+  kind === KIND.LITERAL;
 
 const VAR_WHOLE_RE = /^var\(\s*(--[A-Za-z0-9_-]+)\s*\)$/;
 const URL_WHOLE_RE = /^url\(\s*(["']?)(.*?)\1\s*\)$/is;
@@ -134,6 +139,7 @@ const REFERENCE_RE =
   /var\(\s*(--[A-Za-z0-9_-]+)\s*|url\(\s*(["']?)(.*?)\2\s*\)/gis;
 const MEDIA_PREFIX = 'media:';
 const GENERATE_PREFIX = 'generate:';
+const FILE_PREFIX = 'file:';
 
 const assertSlot = (slot) => {
   if (!isSlot(slot)) {
@@ -171,6 +177,11 @@ export const spellGenerate = (prompt) =>
   `url('generate:${String(prompt).trim()}')`;
 
 /**
+ * The canonical spelling of a file reference: url('file:<name>').
+ */
+export const spellFile = (name) => `url('file:${String(name).trim()}')`;
+
+/**
  * The inline reference a url() argument names, or null for any other.
  */
 const urlReference = (argument) => {
@@ -194,6 +205,15 @@ const urlReference = (argument) => {
       record: null,
     };
   }
+  if (lower.startsWith(FILE_PREFIX)) {
+    const name = trimmed.slice(FILE_PREFIX.length).trim();
+    return {
+      kind: KIND.FILE,
+      id: name,
+      spelling: spellFile(name),
+      record: null,
+    };
+  }
   return null;
 };
 
@@ -202,7 +222,8 @@ const urlReference = (argument) => {
  *
  * The whole value is the reference: a style value that is exactly one
  * var() resolves to the material spelled so (or unknown); exactly one
- * url('media:…') / url('generate:…') resolves to the inline kind; any
+ * url('media:…') / url('generate:…') / url('file:…') resolves to the
+ * inline kind; any
  * other style value is a literal, even when references sit inside it
  * (references() lists those). A class token, an axis attribute value, a
  * stencil name and an animation name resolve to the variant, stencil or
@@ -239,8 +260,8 @@ export const resolveValue = (value, slot, roster) => {
  * Every reference a value carries, in source order (ValueGrammar::references()).
  *
  * A style value yields each var() reference (with or without a fallback)
- * and each media or generate url() inside it; a plain url() (a file URL)
- * is no reference. A class list yields one reference per token. An
+ * and each media, generate or file url() inside it; a plain url() (a
+ * path, an external URL) is no reference. A class list yields one reference per token. An
  * attribute value, a stencil name or an animation name yields its one
  * reference. Literals
  * never appear: the list is what must resolve for the value to be legal.
@@ -279,9 +300,9 @@ export const references = (value, slot, roster) => {
  * (ValueGrammar::canonical()).
  *
  * In a style value each var() head is normalized (whitespace dropped, a
- * fallback left untouched) and each media or generate url() is respelled
- * single-quoted with a lowercased uuid or a trimmed prompt; everything
- * else stays byte-identical. A class list canonicalizes to its tokens
+ * fallback left untouched) and each media, generate or file url() is
+ * respelled single-quoted with a lowercased uuid, a trimmed prompt or a
+ * trimmed name; everything else stays byte-identical. A class list canonicalizes to its tokens
  * joined by one space; an attribute value, a stencil name or an
  * animation name to its trimmed self. Unknown references keep their
  * spelling.

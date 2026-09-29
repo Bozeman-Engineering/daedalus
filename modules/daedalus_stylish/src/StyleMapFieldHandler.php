@@ -12,6 +12,7 @@ use Drupal\daedalus_blueprint\FieldHandler\FieldHandlerResult;
 use Drupal\daedalus_blueprint\Materials\Address;
 use Drupal\daedalus_blueprint\Materials\MaterialsProse;
 use Drupal\daedalus_blueprint\Materials\MaterialsRosterBuilder;
+use Drupal\daedalus_blueprint\Materials\RelativeSelector;
 use Drupal\daedalus_blueprint\Result\BlueprintError;
 use Drupal\daedalus_blueprint\Result\BlueprintWarning;
 use Drupal\daedalus_ui\ElementModel\PageBuilderDeclarations;
@@ -97,7 +98,7 @@ class StyleMapFieldHandler extends FieldHandlerBase {
     // (where handlers perform their effects and the canonical strings land)
     // waits until validation succeeded, so a failed write mints nothing.
     $entity = $options['entity'] ?? NULL;
-    $resolution = $this->valueResolver->check($value, $entity instanceof FieldableEntityInterface ? $entity : NULL);
+    $resolution = $this->valueResolver->check($value, $entity instanceof FieldableEntityInterface ? $entity : NULL, (string) ($options['conversation'] ?? ''));
     if ($resolution->getErrors()) {
       return new FieldHandlerResult(NULL, array_map(
         static fn (BlueprintError $error) => $error->withPath("fields.$field_name." . $error->getPath()),
@@ -142,7 +143,7 @@ class StyleMapFieldHandler extends FieldHandlerBase {
     if ($handlers = $this->valueResolver->getHandlerGuidance()) {
       $input_tier = ' A property value may also be written in the input tier: a handled-value object dispatched on its marker key, or, on a media-capable property, a LIST of layers (plain CSS strings and handled objects) that joins into the one comma-separated stored value. Handled values resolve at write time; what is stored and read back is always the plain CSS string. Handled values on this site: ' . implode(' ', $handlers);
     }
-    return 'A style map: an object keyed by selectable key — the data-selectable value of a page element (entity:{uuid}, field:{uuid}:{field_name}, container:{uuid} — a Layout Builder section IS a container, and its regions are not addressable — block:{component_uuid}, block:{component_uuid}:{field_name}; append ::.class-name to target a sub-element from the schema\'s anatomy trees (anatomy.kinds, anatomy.block_plugins, available_block_types[*].anatomy, available_layouts[*].anatomy), which model each element\'s markup shells; append ::> as the final suffix ({key}::> or {key}::.class-name::>) to target ALL direct children of that element at once — a child\'s own entry beats these children styles on conflict). Each entry may carry a "variants" reference list ({"variants": [{"variant": "variant_id", "fragment": ""}]}, ordered — later references take precedence, at most one reference per variant axis, and an element composes variants across axes; every reference is a {"variant": id, "fragment": slot-key} object — fragment "" wears the variant root, a non-empty fragment wears ONE fragment of a composition variant bound onto this element when the variant was applied to its container, and a fragment the variant no longer holds delivers nothing; a reference a composition variant\'s apply distributed onto this element also carries "via": that variant\'s id, the reference\'s provenance, so switching or removing the composition removes the reference while one applied directly to this element stays; never write fragment references or "via" by hand, apply the composition variant to the container instead) and/or condition-keyed CSS properties, e.g. {"default": {"padding": "2rem"}, "hover": {"background-color": "#eee"}} — "default" always applies, conditions on different axes combine with "+" into a compound that applies when every part does ("narrow+dark"; at most one condition per axis, any part order — writes normalize it), and an entry\'s own properties override its referenced variants. Values are plain semantic CSS; the field schema\'s style_guide key says what is valid on this site (the materials roster, the bindings and deviations lines, its guidance paragraph, and the valid condition names under conditions).' . $input_tier . ' This field\'s value in a read entity is the current styles; prefer the update_style, apply_variant, remove_variant, and detach_variant batch operations over writing the whole map — they validate one element\'s change precisely and leave the others untouched.';
+    return 'A style map: an object keyed by selectable key — the data-selectable value of a page element (entity:{uuid}, field:{uuid}:{field_name}, container:{uuid} — a Layout Builder section IS a container, and its regions are not addressable — block:{component_uuid}, block:{component_uuid}:{field_name}; append "::" and a relative selector to target inside the element: ::.class-name a declared part of the element, from the schema\'s anatomy trees (anatomy.kinds, anatomy.block_plugins, available_block_types[*].anatomy, available_layouts[*].anatomy), which model each element\'s markup shells; ::> * ALL its direct children at once; ::> pb-text the text blocks among them; ::p every paragraph inside it; ::&::before or ::&::after the element\'s own generated box, ::.class-name::after a part\'s, ::> pb-text::before each text block\'s (a box entry is born with content: "" at default, its existence switch: content takes "", none or one media reference url(\'media:<uuid>\') as the whole value and nothing else, since text belongs in a field; a content image shows at its own size, while background-image on the box sizes, positions and layers; content is refused anywhere but a box). ' . RelativeSelector::GRAMMAR . ' A "::" entry is a rule: its properties and its wear reach every element the selector matches under the key, never one element. The nearest element\'s own rule wins: a child\'s own entry beats an ancestor\'s children styles on conflict). Each entry may carry a "variants" reference list ({"variants": [{"variant": "variant_id", "fragment": ""}]}, ordered — later references take precedence, at most one reference per variant axis, and an element composes variants across axes; every reference is a {"variant": id, "fragment": slot-key} object — fragment "" wears the variant root, a non-empty fragment wears ONE fragment of a composition variant bound onto this element when the variant was applied to its container, and a fragment the variant no longer holds delivers nothing; a reference a composition variant\'s apply distributed onto this element also carries "via": that variant\'s id, the reference\'s provenance, so switching or removing the composition removes the reference while one applied directly to this element stays; never write fragment references or "via" by hand, apply the composition variant to the container instead; a RULE entry ("{key}::{selector}") wears a variant too, at every element it matches: the variant must be scoped for the rule\'s landing, the element its last compound names (::> pb-text wears text variants, ::a link variants; a part, ::> * and a subjectless compound land on no element and wear nothing), and a rule never wears a composition variant or a root-only axis) and/or condition-keyed CSS properties, e.g. {"default": {"padding": "2rem"}, "hover": {"background-color": "#eee"}} — "default" always applies, conditions on different axes combine with "+" into a compound that applies when every part does ("narrow+dark"; at most one condition per axis, any part order — writes normalize it), and an entry\'s own properties override its referenced variants. Values are plain semantic CSS; the field schema\'s style_guide key says what is valid on this site (the materials roster, the bindings and deviations lines, its guidance paragraph, and the valid condition names under conditions).' . $input_tier . ' This field\'s value in a read entity is the current styles; prefer the update_style, apply_variant, remove_variant, and detach_variant batch operations over writing the whole map — they validate one element\'s change precisely and leave the others untouched.';
   }
 
   /**
@@ -191,9 +192,9 @@ class StyleMapFieldHandler extends FieldHandlerBase {
    * States the instance namespace(s), the addressable tag vocabulary (the
    * site's base tags, the one declaration of a prose tag's styleability),
    * the three key spellings ({key}::.s-x one element, {key}::tag all of
-   * an element's text elements of a declared base tag, {key}::.s-x::> ONE
-   * list's items — the one-list gesture beside the li tag tier once li is
-   * declared), the identity preservation rule for body rewrites, authored
+   * an element's text elements of a declared base tag, {key}::.s-x > *
+   * ONE list's items — the one-list gesture beside the li tag tier once
+   * li is declared), the identity preservation rule for body rewrites, authored
    * identity for create-and-style, and the honesty line: every OTHER tag
    * is the text format's business (its allowlist strips at render) and is
    * never a styling target. Per-format allowed-tag rosters are
@@ -206,7 +207,7 @@ class StyleMapFieldHandler extends FieldHandlerBase {
     $namespaces = implode(', ', array_keys($instances));
     $tags = $this->styleGuide->baseTags($theme);
     return sprintf(
-      'Rich-text bodies style by element. The identity classes in a body (the %s namespace) address its elements: {key}::.s-x styles that ONE element, {key}::tag styles ALL the element\'s text elements of a declared tag (present and future), and {key}::.s-x::> styles ONE list\'s items (that element\'s direct children). Addressable tags: %s. The s-x classes are element IDENTITIES: keep them on elements you are keeping when rewriting a body (a dropped class orphans every style targeting it), and when you create rich text you intend to style per element, author your own classes in the namespace (one class names ONE element; the identity minter honors authored identity). Any other tag in a body is governed by the text format\'s allowed tags and strips at render; only the declared tags above are styling targets.',
+      'Rich-text bodies style by element. The identity classes in a body (the %s namespace) address its elements: {key}::.s-x styles that ONE element, {key}::tag styles ALL the element\'s text elements of a declared tag (present and future), and {key}::.s-x > * styles ONE list\'s items (that element\'s direct children). Addressable tags: %s. The s-x classes are element IDENTITIES: keep them on elements you are keeping when rewriting a body (a dropped class orphans every style targeting it), and when you create rich text you intend to style per element, author your own classes in the namespace (one class names ONE element; the identity minter honors authored identity). Any other tag in a body is governed by the text format\'s allowed tags and strips at render; only the declared tags above are styling targets.',
       $namespaces,
       $tags === [] ? 'none (the site declares no base tags)' : implode(', ', $tags),
     );
@@ -228,7 +229,7 @@ class StyleMapFieldHandler extends FieldHandlerBase {
   protected function guidanceParagraph(?string $theme): string {
     $guidance = 'The site\'s materials (the named values and saved variants' . ($this->rosterBuilder->build()->stencils() !== [] ? ', and the stencils' : '') . ' under the schema\'s materials key) are the design language\'s pre-validated parts. ' . MaterialsProse::preferenceSentence() . ' Standing procedure: when no material fits, compose freely with blocks and styles; novel styling stays on this page; if something deserves to join the design system, propose it and let the user decide.';
     if ($media = $this->styleGuide->mediaProperties($theme)) {
-      $guidance .= sprintf(' %s also accept%s an image media reference url(\'media:<uuid>\'): store the token, never a file URL (the file URL and its image-style derivative resolve at render; composes with gradients and layers).', implode(', ', $media), count($media) > 1 ? '' : 's');
+      $guidance .= sprintf(' %s also accept%s an image media reference url(\'media:<uuid>\'): store the token, never a file URL (the file URL and its image-style derivative resolve at render); the token composes with gradients and layers wherever the property\'s own grammar takes them.', implode(', ', $media), count($media) > 1 ? '' : 's');
     }
     return $guidance . ' ' . $this->prose()->polaritySentence();
   }
@@ -308,8 +309,8 @@ class StyleMapFieldHandler extends FieldHandlerBase {
   /**
    * The label of any address under a root.
    *
-   * The root's label, then the style map's own suffixes ("::.class-name" for a
-   * part, "::>" for the direct children), the key grammar of the map itself.
+   * The root's label, then the style map's own suffix ("::" and the
+   * relative selector), the key grammar of the map itself.
    */
   protected function label(Address $address): string {
     $root = (string) $address->root();
@@ -345,13 +346,13 @@ class StyleMapFieldHandler extends FieldHandlerBase {
     $addresses = [$root];
     $roster = $this->vocabulary->build($root, $theme);
     if ($roster->childrenDeclared()) {
-      $addresses[] = Address::of($root->family, $root->id, NULL, TRUE);
+      $addresses[] = Address::of($root->family, $root->id, '> *');
     }
     foreach (array_keys($roster->parts()) as $selector) {
       $part = Address::of($root->family, $root->id, (string) $selector);
       $addresses[] = $part;
       if ($this->vocabulary->build($part, $theme)->childrenDeclared()) {
-        $addresses[] = Address::of($root->family, $root->id, (string) $selector, TRUE);
+        $addresses[] = Address::of($root->family, $root->id, $selector . ' > *');
       }
     }
     return $addresses;
@@ -420,7 +421,7 @@ class StyleMapFieldHandler extends FieldHandlerBase {
       }
     }
     return [
-      'guidance' => $this->prose()->rosterSentence() . '. ' . $this->stylableGrammar(),
+      'guidance' => $this->prose()->rosterSentence() . '. ' . $this->stylableGrammar($theme),
       'entries' => $this->prose()->phrases($taught),
     ];
   }
@@ -439,15 +440,42 @@ class StyleMapFieldHandler extends FieldHandlerBase {
     if ($address->isKind() || $kind === NULL) {
       return FALSE;
     }
-    $twin = $this->vocabulary->build(Address::of(Address::FAMILY_KIND, $kind, $address->part, $address->children), $theme);
+    $twin = $this->vocabulary->build(Address::of(Address::FAMILY_KIND, $kind, $address->selector), $theme);
     return $twin->declared() && $twin->granted() === $roster->granted();
   }
 
   /**
    * The entry grammar of the stylable section, for this fragment's keys.
+   *
+   * @param string|null $theme
+   *   The theme the entries were built for, or NULL for the default.
    */
-  protected function stylableGrammar(): string {
-    return 'What each declared place may style, by property name: an entry per element (kinds.block, block_types.text, block_plugins.system_menu_block, layouts.layout_onecol), its declared sub-elements ("{key}::.class-name") and its direct children ("{key}::>"). A block type, block plugin, or layout absent here at one of those places styles exactly what its universal kind does there (kinds.block; kinds.container for layouts); a sub-element or children key absent here is not declared there.';
+  protected function stylableGrammar(?string $theme): string {
+    return 'What each declared place may style, by property name: an entry per element (kinds.block, block_types.text, block_plugins.system_menu_block, layouts.layout_onecol), its declared sub-elements ("{key}::.class-name") and its direct children ("{key}::> *"). A block type, block plugin, or layout absent here at one of those places styles exactly what its universal kind does there (kinds.block; kinds.container for layouts); a sub-element or children key absent here is not declared there. ' . $this->selectorGrammar('{key}', $theme);
+  }
+
+  /**
+   * The relative-selector grammar for a fragment's keys, types enumerated.
+   *
+   * The one grammar sentence (RelativeSelector::GRAMMAR) followed by
+   * where a type or tag compound's rules are judged (the named type's
+   * own entry, the base tag's) with every type spelling this site
+   * declares, so the JSON door enumerates the types the way the cached
+   * prompt does.
+   *
+   * @param string $key
+   *   The key placeholder the fragment spells ("{key}", "{scope}").
+   * @param string|null $theme
+   *   The theme the declarations are read for, or NULL for the default.
+   */
+  protected function selectorGrammar(string $key, ?string $theme): string {
+    $types = [];
+    foreach ($this->styleGuide->getBlockTypes($theme) as $bundle) {
+      $types[] = RelativeSelector::typeName(Address::blockType($bundle));
+    }
+    $types[] = RelativeSelector::TYPE_CONTAINER;
+    $types[] = RelativeSelector::TYPE_BLOCK;
+    return RelativeSelector::GRAMMAR . sprintf(' A type compound ("%s::> pb-text"; types: %s) styles against the named type\'s own entry, a tag compound ("%s::p") against the base tag\'s.', $key, implode(', ', $types), $key);
   }
 
   /**
@@ -457,14 +485,18 @@ class StyleMapFieldHandler extends FieldHandlerBase {
    * the live table — thresholds included — lets an AI know exactly when
    * each condition applies. The axis is the compound lane: conditions on
    * different axes combine with "+" ("narrow+dark"), at most one per axis.
+   * A structural fact (fact: true) qualifies the addressed element by its
+   * place among its siblings: it is never an interaction state.
    *
    * @return array
-   *   Condition name => {wrapper, axis} ("always applies" for default).
+   *   Condition name => {wrapper, axis, fact?} ("always applies" for
+   *   default).
    */
   protected function conditionsSchema(): array {
     $conditions = ['default' => 'always applies'];
     foreach ($this->conditionTypes->getConditions() as $name => $definition) {
-      $conditions[$name] = ['wrapper' => $definition['wrapper'], 'axis' => $definition['axis']];
+      $conditions[$name] = ['wrapper' => $definition['wrapper'], 'axis' => $definition['axis']]
+        + (($definition['fact'] ?? FALSE) === TRUE ? ['fact' => TRUE] : []);
     }
     return $conditions;
   }

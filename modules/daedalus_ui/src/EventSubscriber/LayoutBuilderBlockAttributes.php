@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace Drupal\daedalus_ui\EventSubscriber;
 
+use Drupal\block_content\BlockContentInterface;
 use Drupal\Core\Entity\EntityInterface;
+use Drupal\Core\Entity\FieldableEntityInterface;
 use Drupal\Core\Render\Element;
 use Drupal\Core\Session\AccountProxyInterface;
 use Drupal\layout_builder\LayoutBuilderEvents;
@@ -12,12 +14,21 @@ use Drupal\daedalus_ui\Presentation\Presentation;
 use Drupal\daedalus_ui\ElementModel\ElementModel;
 use Drupal\daedalus_blueprint_api\Render\SelectableKey;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
+use Drupal\daedalus_ui\Render\ElementAddress;
 use Drupal\daedalus_ui\Render\LiveAttributionDemand;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 use Drupal\layout_builder\Event\SectionComponentBuildRenderArrayEvent;
 
 /**
- * Section component route subscriber.
+ * Stamps a Layout Builder placement's attributes on its block build.
+ *
+ * Two tiers ride the block template root (or a composed block's composed
+ * root, which hoists the same bag): the element address (data-element,
+ * see ElementAddress), stamped in every mode for every visitor, and the
+ * editing attributes (the selectable key, the component uuid and region,
+ * the presentation), stamped for editors, with the selectable key alone
+ * also reaching visitors' markup where a live-attribution provider
+ * demands it.
  */
 final class LayoutBuilderBlockAttributes implements EventSubscriberInterface {
 
@@ -45,6 +56,19 @@ final class LayoutBuilderBlockAttributes implements EventSubscriberInterface {
       return;
     }
     $component = $event->getComponent();
+    $plugin_id = $component->getPluginId();
+    // The element address, in every mode and for every visitor: the
+    // declaration the placement resolves through. An entity-backed block
+    // (inline_block:{bundle}, block_content:{uuid}) is its bundle's
+    // declaration, read off the content entity the plugin built; any other
+    // plugin is its base plugin's. Inert bytes on the block template root
+    // (a composed block hoists the same bag onto its composed root), the
+    // one attribute the site's defaults tier and type-addressed rules
+    // select by.
+    $content_entity = $build['content']['#block_content'] ?? NULL;
+    $build['#attributes'][ElementAddress::ATTRIBUTE] = $content_entity instanceof BlockContentInterface
+      ? ElementAddress::blockType($content_entity->bundle())
+      : ElementAddress::blockPlugin($plugin_id);
     if (!$this->currentUser->hasPermission('use daedalus ui edit mode')) {
       // Live render: stamp only the selection identity, and only when a
       // provider demands it (e.g. the block, a sub-element, or one of its
@@ -62,8 +86,6 @@ final class LayoutBuilderBlockAttributes implements EventSubscriberInterface {
     }
 
     // Attribute the rendered blocks so editing tools are aware of them.
-    $plugin_id = $component->getPluginId();
-    $build['#attributes']['data-block-type'] = substr($plugin_id, strpos($plugin_id, ':') + 1);
     $build['#attributes']['data-layout-builder-block-uuid'] = $component->getUuid();
     $build['#attributes']['data-layout-builder-region'] = $component->getRegion();
     // The placement's selection identity: what move/delete/duplicate target.
@@ -107,6 +129,23 @@ final class LayoutBuilderBlockAttributes implements EventSubscriberInterface {
         if ($presentation->mode !== Presentation::OPEN) {
           $build['#attributes'][Presentation::ATTRIBUTE] = $presentation->mode;
         }
+      }
+    }
+    // A FIELD BLOCK presents one root field inside its placement: the same
+    // ONE model decides (ElementModel::fieldBlockPresentation). The
+    // placement carries the merged mode like a single-content inline block,
+    // so the canvas resolver promotes the inner field leaf's edit to the
+    // placement, and names the field it presents (the field's selectable
+    // key), the DOM twin of the delivered annotation's presented_field that
+    // folds the placement row and the field row as one in the panel.
+    elseif (str_starts_with($plugin_id, 'field_block:')) {
+      $entity = $this->contextEntity($event);
+      $definition = $entity instanceof FieldableEntityInterface
+        ? $this->elementModel->presentedField($plugin_id, $entity)
+        : NULL;
+      if ($definition !== NULL) {
+        $build['#attributes'][Presentation::ATTRIBUTE] = $this->elementModel->fieldBlockPresentation($definition)->mode;
+        $build['#attributes'][Presentation::PRESENTED_FIELD_ATTRIBUTE] = SelectableKey::field($entity->uuid(), $definition->getName());
       }
     }
     $event->setBuild($build);

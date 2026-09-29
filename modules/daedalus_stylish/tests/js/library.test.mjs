@@ -313,6 +313,15 @@ test('applyDoorway: offer membership answers fit', () => {
   assert.equal(applyDoorway(LIBRARY[1], MAP, 'container:root', null, null, MATERIALS), 'unfit');
 });
 
+test('applyDoorway: the target may be a rule; its own wearing reads worn', () => {
+  const RULE = 'container:root::> pb-text';
+  const map = { ...MAP, [RULE]: { variants: [{ variant: 'cta', fragment: '' }] } };
+  assert.equal(applyDoorway(LIBRARY[0], map, RULE, LIBRARY, null, MATERIALS), 'worn');
+  // The rule does not wear what its root wears.
+  assert.equal(applyDoorway(LIBRARY[0], map, 'container:root::> pb-image', [LIBRARY[0]], null, MATERIALS), 'ready');
+  assert.equal(applyDoorway(LIBRARY[1], map, RULE, [], null, MATERIALS), 'unfit');
+});
+
 test('applyDoorway: ownership names its own unfit reasons', () => {
   const owned = { ...LIBRARY[1], owned_by: 'call_to_action' };
   const orphaned = { ...LIBRARY[1], owned_by: 'deleted_stencil' };
@@ -329,7 +338,27 @@ test('applyDoorway: ownership names its own unfit reasons', () => {
   assert.equal(applyDoorway(LIBRARY[1], MAP, 'container:root', [], 'call_to_action', MATERIALS), 'unfit');
 });
 
-test('pageWearer: no wearer on this page is null; part keys never match', () => {
+test('pageWearer: a rule wearer anchors; the target wins, an element root wearer beats a rule, a rule beats a fragment', () => {
+  const rule = 'container:root::a';
+  const ruleMap = {
+    'block:frag': { variants: [{ variant: 'cta', fragment: 'block(text,1)' }] },
+    [rule]: { variants: [{ variant: 'cta', fragment: '' }] },
+  };
+  // The styling target wears it: the session anchors at the rule.
+  assert.deepEqual(pageWearer(ruleMap, LIBRARY[0], rule), {
+    key: rule,
+    reference: 'cta',
+    fragment: '',
+  });
+  // A non-wearing target falls through: the rule's root wearing beats
+  // the fragment wearing listed before it.
+  assert.equal(pageWearer(ruleMap, LIBRARY[0], 'block:other').key, rule);
+  // An element's root wearing beats a rule's (a read subject of its own).
+  const both = { ...ruleMap, 'container:root': { variants: [{ variant: 'cta', fragment: '' }] } };
+  assert.equal(pageWearer(both, LIBRARY[0], 'block:other').key, 'container:root');
+});
+
+test('pageWearer: no wearer on this page is null; an entry without the reference never matches', () => {
   assert.equal(pageWearer(MAP, LIBRARY[1], 'container:root'), null);
   assert.equal(pageWearer({}, LIBRARY[0], null), null);
   assert.equal(pageWearer(MAP, null, 'container:root'), null);

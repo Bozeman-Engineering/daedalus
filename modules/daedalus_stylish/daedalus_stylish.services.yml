@@ -86,6 +86,9 @@ services:
       # at its address (grants, value spaces, axes), never a declaration
       # the client re-derives.
       - '@daedalus_stylish.vocabulary_roster'
+      # The block_content bundle labels: a served block type carries its
+      # bundle's human name, what the code view labels a type compound by.
+      - '@entity_type.bundle.info'
   daedalus_stylish.style_map_validator:
     class: Drupal\daedalus_stylish\StyleMapValidator
     arguments:
@@ -180,10 +183,12 @@ services:
     tags:
       - { name: daedalus_blueprint.skill_type, type_id: skins }
   daedalus_stylish.style_stack:
-    # The stack projection (the code view's layered document, server side): one
-    # key's worn layers in delivery order with winners and losers, and the
-    # defaults floor beneath them, read by the AI's explain_element_styles
-    # tool.
+    # The stack projection (the client style stack's server twin): one key's
+    # layers in delivery order, the declared and skin tiers beneath the
+    # ancestor rules reaching the key (when the caller passes the tree)
+    # beneath the worn variants and the element's own entry, raw styles per
+    # layer, winners read per condition (linesAt()); read by the AI's
+    # explain_element_styles tool.
     class: Drupal\daedalus_stylish\StyleStack
     arguments:
       - '@daedalus_stylish.style_map_validator'
@@ -193,6 +198,12 @@ services:
       # active skin's defaults.
       - '@daedalus_stylish.style_guide'
       - '@daedalus_stylish.skin_manager'
+      # Theme resolution: the declaration spine's one answer (siteTheme()),
+      # resolved once per read for both the reference order and the
+      # declared tier.
+      - '@daedalus_ui.page_builder_declarations'
+      # The ancestor tier folds structural facts by their flag and wrapper.
+      - '@plugin.manager.daedalus_stylish_condition_type'
   daedalus_stylish.style_value_resolver:
     class: Drupal\daedalus_stylish\StyleValueResolver
     arguments:
@@ -839,6 +850,24 @@ services:
       - '@daedalus_stylish.width_band_migration'
     tags:
       - { name: daedalus_layout.host_transform, priority: -20 }
+
+  daedalus_stylish.relative_selector_convergence:
+    class: Drupal\daedalus_stylish\RelativeSelectorConvergence
+    arguments:
+      - '@entity_type.manager'
+      - '@logger.factory'
+  Drupal\daedalus_stylish\RelativeSelectorConvergence: '@daedalus_stylish.relative_selector_convergence'
+
+  # The relative selector grammar's convergence: every "::" suffix in its
+  # one canonical spelling (the retired "::>" children spelling rewritten
+  # to "::> *"). Registered permanently and LAST among the sweeps, so the
+  # container hoist's children entry converges in the same pass.
+  daedalus_stylish.relative_selector_sweep:
+    class: Drupal\daedalus_stylish\RelativeSelectorSweep
+    arguments:
+      - '@daedalus_stylish.relative_selector_convergence'
+    tags:
+      - { name: daedalus_layout.host_transform, priority: -25 }
 
   daedalus_stylish.form_alter.bundle_edit:
     class: Drupal\daedalus_stylish\Form\BundleEditFormAlter

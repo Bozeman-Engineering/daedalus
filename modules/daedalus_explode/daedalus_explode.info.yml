@@ -1,0 +1,8 @@
+name: 'Daedalus Explode'
+description: 'Explode the page into a tilted 3D stack of its projected elements, so the hierarchy reads as physical layers with real content on each.'
+type: module
+core_version_requirement: '>=11.3 <11.5'
+package: Daedalus
+dependencies:
+  - daedalus:daedalus
+  - daedalus:daedalus_ui

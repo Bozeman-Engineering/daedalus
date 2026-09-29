@@ -44,6 +44,11 @@ namespace Drupal\daedalus_stylish;
  *   bare object value.
  * - entity: (\Drupal\Core\Entity\FieldableEntityInterface|null) the entity
  *   being written, when the lane has one.
+ * - conversation: (string) the conversation the write belongs to (the op
+ *   spine's 'conversation' option, the chat thread id the page tools and
+ *   the HTTP op endpoint pass), '' when the caller has none. A handler
+ *   whose value names something the conversation holds (a file, by the
+ *   name the alias layer records) resolves it for this conversation.
  */
 interface StyleValueHandlerInterface {
 

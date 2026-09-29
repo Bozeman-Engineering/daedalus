@@ -278,7 +278,7 @@ class ElementLocatorTest extends BlueprintKernelTestBase {
       ],
     ]);
 
-    // Create the parent block that contains the nested layout.
+    // Create the outer block whose layout holds the nested section.
     $parent_block = $this->entityTypeManager->getStorage('block_content')->create([
       'type' => 'text_section',
       'reusable' => FALSE,

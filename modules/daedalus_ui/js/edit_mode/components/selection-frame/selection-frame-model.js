@@ -60,10 +60,10 @@ export const chipPlacement = ({
  * Whether the frame wears the editing dress — the dashed stroke: a LIVE
  * edit lands on the primary. One reading of the store's reactive
  * editingKey (the engine's editChanged report is its only writer),
- * never a prediction from the armed tool plus editability — so
- * canceling an edit (Escape) restores the solid stroke the moment the
- * engine reports the edit ended, even though the session is still armed
- * on an editable primary. The chip face never dresses for the edit: the
+ * never a prediction from editability — so canceling an edit (Escape)
+ * restores the solid stroke the moment the engine reports the edit
+ * ended, the editable primary still selected. The chip face never
+ * dresses for the edit: the
  * registry's applies gate swaps its verbs instead (chipFace).
  *
  * @param {object} args
@@ -97,7 +97,7 @@ export const frameEditing = ({ editingKey = null, primary = null }) =>
  * selection verbs while no live edit lands on the key, edit-scoped
  * verbs while the store's editingKey IS the key), so mid-edit the face
  * shows the edit's own verbs and the frame's only editing dress is the
- * dashed stroke (frameEditing). Neither the tool nor a prediction ever
+ * dashed stroke (frameEditing). Neither the edit state nor a prediction ever
  * hides what you can do.
  *
  * @param {object} args

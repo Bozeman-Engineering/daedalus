@@ -2,18 +2,31 @@
  * Projects the blueprint mirror into the page-elements tree.
  *
  * The mirror is the model of record (one shape, consumers project);
- * this is the panel's projection: a tree of {key, label, kind, bundle?,
- * children, presentation, editTarget?, formOnly?} nodes whose keys are
- * selectable keys, so a row and its canvas element are the same identity
- * and selection sync is string equality. Bundle-bearing nodes (blocks,
- * entities) carry their bundle machine name as a fact: the type resolver
- * (selection/type-for-key.js) derives its wording from it.
+ * this is the panel's projection: a tree of {key, label, elementType,
+ * kind, bundle?, children, presentation, editTarget?, formOnly?} nodes
+ * whose keys are selectable keys, so a row and its canvas element are the
+ * same identity and selection sync is string equality. Bundle-bearing
+ * nodes (blocks, entities) carry their bundle machine name as a fact.
  *
  * The element model is consumed HERE, from the delivered blueprint's
  * uniform `_element` annotation on every owning node, the root included,
  * never from the DOM: the canvas resolver reads the same model's
  * data-presentation attributes, so panel and canvas agree by construction.
  * The annotation mirrors the declaration grammar:
+ * - `_element.name` and `_element.type`: the element-naming spine, two
+ *   translated words minted by the server (BlueprintElementAnnotator) on
+ *   the root, every section at every depth and every component. A row's
+ *   `label` IS `name` (what the element says: a section's custom label
+ *   else its type word, a merged block's content excerpt, the root's
+ *   entity label) and its `elementType` IS `type` (what it is: "Section"
+ *   at page depth, "Container" nested, a block type's label, the root's
+ *   bundle label). Nothing here derives a word for an annotated node: the
+ *   label resolver and the type resolver (selection/label-for-key.js,
+ *   type-for-key.js) read these two row facts through the projection
+ *   index, so the tree, the chips, the breadcrumb and the AI's chips can
+ *   never word one element two ways. Rows the annotator does not name
+ *   (field rows, region rows, inline entities) humanize their own machine
+ *   name, the spine key's vocabulary.
  * - `_element.presentation` ({mode, label?, edit_target?}): merged
  *   component nodes absorb their wrapper chain into ONE row keyed by the
  *   block placement (the outermost carrier) — the row keeps the absorbed
@@ -25,8 +38,16 @@
  *   root's Edit is the entity-form panel, never a routed leaf.
  * - `_element.fields` ({name: {element: false} | {presentation: 'unit'}}):
  *   `element: false` is the EXISTENCE axis — nothing answers to the key in
- *   any view, so the row folds unconditionally; `presentation` is the
- *   field's own mode (absent = open).
+ *   the entity's own render, so the field's row folds unconditionally;
+ *   `presentation` is the field's own mode (absent = open).
+ * - `_element.presented_field` (a `field:{root}:{name}` key): a Layout
+ *   Builder FIELD BLOCK placement presents that root field (its
+ *   presentation is MERGED into it, edit_target the field name). The
+ *   placement row and the field row fold as ONE row keyed by the
+ *   placement, labeled live from the root field's value, exactly as a
+ *   merged inline block folds into its content; the field's own row under
+ *   the root, when the root display also renders it (preserved AND
+ *   placed), stays, two rows for two renders.
  *
  * Keys follow the blueprint's addressing: inline-block fields are qualified
  * by the COMPONENT uuid (block:{component_uuid}:{name}), inline entities
@@ -36,9 +57,14 @@
 
 import { isFormOnlyStub } from '../../blueprint/form-only-stub.js';
 
+/**
+ * The vocabulary for rows the annotator does not name: a field row's
+ * machine name, a region's, an inline entity's bundle (paragraphs carry
+ * no `_element`). Never an annotated node's word.
+ */
 const humanize = (machineName) => {
   const words = String(machineName)
-    .replace(/^(field_|layout_|daedalus_stylish_)/, '')
+    .replace(/^field_/, '')
     .replace(/[_-]+/g, ' ')
     .trim();
   return words.charAt(0).toUpperCase() + words.slice(1);
@@ -70,33 +96,6 @@ export const sectionChildren = (section) =>
   Array.isArray(section?.children) ? section.children : null;
 
 /**
- * A section's display name: its user-facing label (layout_settings.label,
- * surfaced by the serializer as the node's top-level `label`) when named,
- * the humanized layout otherwise ("Twocol" until renamed).
- */
-export const sectionLabel = (section) =>
-  section.label ?? humanize(section.layout_id ?? 'section');
-
-/**
- * A merged row's live label: the edit-target field's own text.
- *
- * A merged row IS its content (the heading precedent — there the displayed
- * label is the content and the row shows it), so when the edit target holds
- * plain text the panel shows what the canvas shows, live against the
- * mirror. Non-string values (link objects, references, multi-value arrays)
- * and empty strings fall through to the static label. Clamped to the first
- * line, 80 chars: a string_long can hold paragraphs, and the row is a
- * name, not a preview.
- */
-const contentLabel = (value) => {
-  if (typeof value !== 'string' || value.trim() === '') {
-    return null;
-  }
-  const line = value.trim().split('\n')[0];
-  return line.length > 80 ? `${line.slice(0, 79)}…` : line;
-};
-
-/**
  * An inline-serialized entity (a paragraph or other owned reference):
  * distinguishable from shared-reference values ({target_id, _label}) by
  * carrying its own uuid.
@@ -104,16 +103,25 @@ const contentLabel = (value) => {
 const isInlineEntity = (value) =>
   !!value && typeof value === 'object' && !Array.isArray(value) && !!value.uuid;
 
-const inlineEntityNode = (entity) => ({
-  key: `entity:${entity.uuid}`,
-  label: entity.label ?? humanize(entity.type ?? 'entity'),
-  kind: 'entity',
-  bundle: entity.type ?? null,
-  presentation: 'open',
-  children: Object.entries(entity.fields ?? {}).map(([name, value]) =>
-    fieldNode(`field:${entity.uuid}:${name}`, name, value),
-  ),
-});
+/**
+ * An inline entity row. Inline entities carry no `_element` (the
+ * annotator walks owning nodes of the root's layout, not paragraphs), so
+ * their words are the entity's own label and its humanized bundle.
+ */
+const inlineEntityNode = (entity) => {
+  const type = humanize(entity.type ?? 'entity');
+  return {
+    key: `entity:${entity.uuid}`,
+    label: entity.label ?? type,
+    elementType: type,
+    kind: 'entity',
+    bundle: entity.type ?? null,
+    presentation: 'open',
+    children: Object.entries(entity.fields ?? {}).map(([name, value]) =>
+      fieldNode(`field:${entity.uuid}:${name}`, name, value),
+    ),
+  };
+};
 
 /**
  * A field row. Inline-entity values (single or multi) become child rows;
@@ -122,13 +130,17 @@ const inlineEntityNode = (entity) => ({
  * presents under its definition label and offers ONLY the Edit verb
  * (formOnly), since the entity form is its one editing surface. The
  * presentation mode arrives from the owning node's `_element.fields` map
- * (annotation absent = open); 'unit' rows start folded in the tree.
+ * (annotation absent = open); 'unit' rows start collapsed in the tree. A
+ * field is what it is called: its one word is both its label and its
+ * type.
  */
 const fieldNode = (key, name, value, presentation = 'open') => {
   if (isFormOnlyStub(value)) {
+    const label = value._label || humanize(name);
     return {
       key,
-      label: value._label || humanize(name),
+      label,
+      elementType: label,
       kind: 'field',
       presentation,
       formOnly: true,
@@ -136,12 +148,62 @@ const fieldNode = (key, name, value, presentation = 'open') => {
     };
   }
   const values = Array.isArray(value) ? value : [value];
+  const label = humanize(name);
   return {
     key,
-    label: humanize(name),
+    label,
+    elementType: label,
     kind: 'field',
     presentation,
     children: values.filter(isInlineEntity).map(inlineEntityNode),
+  };
+};
+
+/**
+ * The root field a field-block placement presents, from its annotation.
+ *
+ * @param {Object} component
+ *   A block node.
+ *
+ * @return {?{key: string, name: string}}
+ *   The presented field's selectable key and machine name, or null for
+ *   any other component.
+ */
+export const presentedField = (component) => {
+  const key = component?._element?.presented_field;
+  if (typeof key !== 'string') {
+    return null;
+  }
+  const name = key.split(':')[2];
+  return name ? { key, name } : null;
+};
+
+/**
+ * The value a merged row presents: the presented root field's value for a
+ * field block, else the edit target's own block field. Undefined when the
+ * target is the placement label or nothing routable.
+ *
+ * @param {Object} component
+ *   A block node with a merged presentation.
+ * @param {Object} rootFields
+ *   The root blueprint's `fields` map.
+ *
+ * @return {{key: ?string, name: ?string, value: *}}
+ *   The absorbed field's key and name (null when none) and its value.
+ */
+export const mergedTarget = (component, rootFields) => {
+  const presented = presentedField(component);
+  if (presented) {
+    return { ...presented, value: rootFields?.[presented.name] };
+  }
+  const target = component._element?.presentation?.edit_target ?? null;
+  if (!target || target === 'label') {
+    return { key: null, name: target, value: undefined };
+  }
+  return {
+    key: `block:${component.uuid}:${target}`,
+    name: target,
+    value: component.block_fields?.[target],
   };
 };
 
@@ -158,40 +220,34 @@ const fieldNode = (key, name, value, presentation = 'open') => {
  */
 const fieldExists = (facts, name) => facts[name]?.element !== false;
 
-const componentNode = (component) => {
+const componentNode = (component, rootFields = {}) => {
   const element = component._element ?? {};
   const fieldFacts = element.fields ?? {};
   const presentation = element.presentation ?? { mode: 'open' };
 
   // MERGED: a container whose meaningful content is exactly one thing
   // presents AS that one thing: one row, keyed by the block placement so
-  // move/trash/duplicate/drag all arm, labeled from the annotation (the
-  // absorbed content's definition label; null keeps the component's own
-  // label, the heading case, where the displayed label IS the content),
-  // with the absorbed node's children retained (a single multi-value
-  // paragraph field's paragraph rows survive the merge).
+  // move/trash/duplicate/drag all arm, named by the annotation (the
+  // annotator's excerpt of the absorbed content, live against the mirror
+  // since every mutation response re-annotates), with the absorbed node's
+  // children retained (a single multi-value paragraph field's paragraph
+  // rows survive the merge).
   if (presentation.mode === 'merged') {
     const target = presentation.edit_target ?? null;
+    const absorbed = mergedTarget(component, rootFields);
     let children = [];
-    if (
-      target &&
-      target !== 'label' &&
-      component.block_fields?.[target] !== undefined
-    ) {
+    if (absorbed.key && absorbed.value !== undefined) {
       children = fieldNode(
-        `block:${component.uuid}:${target}`,
-        target,
-        component.block_fields[target],
-        fieldFacts[target]?.presentation,
+        absorbed.key,
+        absorbed.name,
+        absorbed.value,
+        fieldFacts[absorbed.name]?.presentation,
       ).children;
     }
     return {
       key: `block:${component.uuid}`,
-      label:
-        contentLabel(target ? component.block_fields?.[target] : null) ??
-        presentation.label ??
-        component.label ??
-        humanize(component.block_type ?? 'block'),
+      label: element.name,
+      elementType: element.type,
       kind: 'block',
       bundle: component.block_type ?? null,
       presentation: 'merged',
@@ -228,7 +284,8 @@ const componentNode = (component) => {
 
   return {
     key: `block:${component.uuid}`,
-    label: component.label ?? humanize(component.block_type ?? 'block'),
+    label: element.name,
+    elementType: element.type,
     kind: 'block',
     bundle: component.block_type ?? null,
     presentation: presentation.mode,
@@ -241,8 +298,10 @@ const componentNode = (component) => {
  * at every depth — anything else is a component. (Region nodes never reach
  * here; sectionNode unwraps them.)
  */
-const treeChildNode = (child) =>
-  child.kind === 'container' ? sectionNode(child) : componentNode(child);
+const treeChildNode = (child, rootFields) =>
+  child.kind === 'container'
+    ? sectionNode(child, rootFields)
+    : componentNode(child, rootFields);
 
 /**
  * A section row — top-level or nested, one shape, from a lean container
@@ -254,13 +313,17 @@ const treeChildNode = (child) =>
  * elements — no selection, no styling, no drop identity); they remain
  * pure grouping chrome until the multi-region layouts retire. (Without
  * daedalus_layout sections have no uuid; such a row still renders, unselectable,
- * so its blocks stay reachable.) The row carries the raw custom label
- * (customLabel) so the tree's rename affordance can seed its input with
- * what is actually stored, not the layout-derived fallback.
+ * so its blocks stay reachable.) The row's words are the annotation's:
+ * `name` (the custom label when renamed, else the type word) and `type`
+ * ("Section" at page depth, "Container" nested). The row also carries the
+ * raw custom label (customLabel) so the tree's rename affordance can seed
+ * its input with what is actually stored, not the minted fallback.
  */
-const sectionNode = (section) => {
+const sectionNode = (section, rootFields = {}) => {
+  const element = section._element ?? {};
   const list = section.children ?? [];
   const regions = list.filter((child) => child.kind === 'region');
+  const childNode = (child) => treeChildNode(child, rootFields);
   const children =
     regions.length > 1
       ? regions.map((region) => ({
@@ -268,15 +331,16 @@ const sectionNode = (section) => {
           label: humanize(region.region),
           kind: 'region',
           presentation: 'open',
-          children: (region.children ?? []).map(treeChildNode),
+          children: (region.children ?? []).map(childNode),
         }))
       : (regions.length === 1 ? (regions[0].children ?? []) : list).map(
-          treeChildNode,
+          childNode,
         );
 
   return {
     key: section.uuid ? `container:${section.uuid}` : null,
-    label: sectionLabel(section),
+    label: element.name,
+    elementType: element.type,
     customLabel: section.label ?? '',
     kind: 'container',
     presentation: 'open',
@@ -290,9 +354,11 @@ const sectionNode = (section) => {
  * The root consumes its own `_element` annotation like any other owning
  * node: nonexistent fields fold in every view, and the derived edit target
  * (the entity's label field presents AS the entity row) absorbs the label
- * field's row into the root row — the root shows its text live and renames
- * it, the same absorption a merged block row performs (the root's Edit
- * verb opens the entity-form panel; no leaf route is involved).
+ * field's row into the root row — the root shows its entity label (the
+ * annotation's `name`, re-minted with every mutation response, so a
+ * title edit shows live) and renames it, the same absorption a merged
+ * block row performs (the root's Edit verb opens the entity-form panel;
+ * no leaf route is involved).
  *
  * @param {Object} root
  *   The root identity envelope from the blueprint slice.
@@ -331,14 +397,13 @@ export const projectTree = (root, blueprint) => {
   // kind-discriminated container/region/block nodes, one child axis, styles
   // on the node, `_element` riding along.
   (blueprint._tree ?? []).forEach((section) => {
-    children.push(sectionNode(section));
+    children.push(sectionNode(section, blueprint.fields ?? {}));
   });
 
   return {
     key: `entity:${root.uuid}`,
-    label:
-      (editTarget ? contentLabel(blueprint.fields?.[editTarget]) : null) ??
-      (root.label || humanize(blueprint.bundle ?? 'page')),
+    label: element.name,
+    elementType: element.type,
     kind: 'entity',
     bundle: blueprint.bundle ?? null,
     presentation: 'open',

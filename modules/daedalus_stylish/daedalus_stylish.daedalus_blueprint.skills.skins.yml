@@ -26,9 +26,11 @@ instructions: |
     defaults per scope ("kind:container", "block_type:text",
     "block_plugin:system_menu_block" — plugin blocks such as menus and
     site branding, by base plugin id — "base:h2",
-    ...). Element keys are "" for the scope's root or "::.part-class" for
-    a declared anatomy part; values are the same condition-keyed CSS
-    property maps as element styles. Defaults restyle EXISTING placements
+    ...). Element keys are "" for the scope's root or "::" plus a relative
+    selector under it ("::.part-class" a declared anatomy part, "::p" its
+    paragraphs, "::> *" its direct children, "::> pb-text" the text blocks
+    among them); values are the same condition-keyed CSS property maps as
+    element styles. Defaults restyle EXISTING placements
     live; per-element styles and variants override them by cascade.
   The ACTIVE skin is the active design system's default_skin (the
   catalog above marks it): its tokens deliver as CSS custom properties

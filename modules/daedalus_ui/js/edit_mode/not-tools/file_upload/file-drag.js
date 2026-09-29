@@ -18,8 +18,10 @@ import { createUploadProgress } from './upload-progress.js';
    *   the file as a NEW media block (upload, then a stored association or
    *   the chooser dialog, then an ordinary add_element op). Its element
    *   face lands on compatible [data-media-reference] media and REPLACES
-   *   their file through the upload/replace pipeline — no blueprint ops,
-   *   the pipeline runs inside operations() and returns null.
+   *   their file through the upload/replace pipeline: a job on the op
+   *   queue (FIFO with ops, covered by drained()) whose server half
+   *   answers the mutation payload, so operations() returns null and the
+   *   drag layer sends no ops of its own.
    *
    * Target resolution, chrome (the caret's line for gaps, its highlight
    * ring for elements), hysteresis, and failure display are all the drag
@@ -234,8 +236,14 @@ import { createUploadProgress } from './upload-progress.js';
    * Runs inside the source's elements.operations, so the drag layer holds
    * its committing chrome on the landing element until this settles, and
    * its failure display owns any error thrown here (flash on the element,
-   * structured notification). Returns null: the replacement is applied by
-   * the response's AJAX commands, no blueprint ops ride the queue.
+   * structured notification). The round trip is a job on the op queue:
+   * the upload's response is a Drupal AJAX command list carrying the
+   * mutation payload (the server ran the replacement as one update_element
+   * op), applied through the app's one applyResponse pipeline by the
+   * daedalusBlueprintApplyResponse command handler and read back off the
+   * inert Drupal.Ajax instance that played it, so the job resolves with
+   * the applied payload and a failed result rejects as any op error.
+   * Returns null: the drag layer has no ops of its own to send.
    *
    * @param {Element} media
    *   The [data-media-reference] element being landed on.
@@ -251,6 +259,12 @@ import { createUploadProgress } from './upload-progress.js';
     const mode = editMode();
     const entityInfo = mode.getMainEntityInfo();
     let path = `/daedalus-ui/replace-media/${entityInfo.entityType}/${entityInfo.id}/${entityInfo.viewMode}/${media.dataset.mediaReference}/${media.dataset.mediaBundle}?navigationMode=edit`;
+    // The translation being edited rides the query as it does for every
+    // mutate request; absent, the server takes the default translation.
+    const langcode = Drupal.Daedalus.Blueprint.getRoot()?.langcode;
+    if (langcode) {
+      path += `&langcode=${encodeURIComponent(langcode)}`;
+    }
     const sectionStorageInfo = mode.getSectionStorageInfo(media);
     if (sectionStorageInfo) {
       path += `&${new URLSearchParams(sectionStorageInfo).toString()}`;
@@ -284,21 +298,36 @@ import { createUploadProgress } from './upload-progress.js';
     const timeout = media.dataset.timeout
       ? parseInt(media.dataset.timeout, 10)
       : undefined;
-    const progress = createUploadProgress();
-    try {
-      const response = await uploadFile(url, file, {
-        timeout,
-        onProgress: progress.onProgress,
-      });
-      // Bytes are sent; the AJAX media-field replacement is the remaining
-      // server work. Hold "Processing…" while its commands play.
-      progress.processing();
-      const inertAjax = new Drupal.ajax({ url });
-      Drupal.Ajax.prototype.success.call(inertAjax, response);
-      document.querySelector('.ajax-progress')?.remove();
-    } finally {
-      progress.remove();
-    }
+    await Drupal.Daedalus.Blueprint.enqueueJob({
+      run: async () => {
+        const progress = createUploadProgress();
+        try {
+          const response = await uploadFile(url, file, {
+            timeout,
+            onProgress: progress.onProgress,
+          });
+          // Bytes are sent; the op and its re-render are the remaining
+          // server work. Hold "Processing…" while the commands play.
+          progress.processing();
+          const inertAjax = new Drupal.ajax({ url });
+          await Promise.resolve(
+            Drupal.Ajax.prototype.success.call(inertAjax, response),
+          );
+          document.querySelector('.ajax-progress')?.remove();
+          const payload = inertAjax.daedalusBlueprintPayload;
+          if (!payload) {
+            throw new Error(
+              Drupal.t(
+                'The media replacement answered no mutation payload; nothing was staged.',
+              ),
+            );
+          }
+          return payload;
+        } finally {
+          progress.remove();
+        }
+      },
+    });
     return null;
   };
 
@@ -398,6 +427,9 @@ import { createUploadProgress } from './upload-progress.js';
     // data.fileExtensions for the element face's compatibility filter.
     app.drag.registerSource('media_file', {
       targets: 'block',
+      // A dropped file is new content: the landing opens the placed
+      // block's editor (the op queue's edit intent).
+      edit: true,
       // Gap face: place the file as a NEW media block. The drop resolves
       // the file to a block type + media entity (server upload, then a
       // stored association or the chooser dialog) and places it as an
@@ -433,7 +465,7 @@ import { createUploadProgress } from './upload-progress.js';
     window.listenToMultipleStates(
       [(state) => state.mode.mode, (state) => state.fileDrag.enabled],
       (mode, fileDrag) => {
-        if (mode?.mode === 'edit' && fileDrag.enabled === true) {
+        if (mode === 'edit' && fileDrag.enabled === true) {
           enable();
         } else {
           disable();

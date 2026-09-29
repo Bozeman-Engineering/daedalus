@@ -5,29 +5,27 @@ declare(strict_types=1);
 namespace Drupal\daedalus_ai\PendingMedia;
 
 use Drupal\daedalus_ai\ImageGenerationGate;
-use Drupal\Component\Utility\Unicode;
-use Drupal\Core\Access\AccessException;
+use Drupal\daedalus_ai\MediaMinter;
 use Drupal\Core\Config\ConfigFactoryInterface;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\Extension\ModuleExtensionList;
 use Drupal\Core\File\FileExists;
 use Drupal\Core\File\FileSystemInterface;
-use Drupal\daedalus_blueprint\Access\BlueprintAccessChecker;
 use Drupal\daedalus_blueprint\Result\BlueprintWarning;
 use Drupal\file\FileInterface;
 use Drupal\file\FileRepositoryInterface;
-use Drupal\media\MediaInterface;
 
 /**
  * Mints pending media: identity now, pixels later.
  *
  * The one capability behind every image-generation surface (media-reference
  * fields, CSS background values, future UI buttons). A mint saves a real
- * media:image entity synchronously, with a real uuid, the requested alt text,
- * and a placeholder FILE behind its source field, then registers a generation
- * job keyed by that uuid. References to the media (field target_id, CSS media
- * token) are therefore final at compose time; the deferred pipeline later
- * swaps only the file, and cache tags propagate the change.
+ * media:image entity synchronously through the shared MediaMinter, with a
+ * real uuid, the requested alt text, and a placeholder FILE behind its source
+ * field, then registers a generation job keyed by that uuid. References to
+ * the media (field target_id, CSS media token) are therefore final at compose
+ * time; the deferred pipeline later swaps only the file, and cache tags
+ * propagate the change.
  *
  * Gate-aware: when image generation is off (site-wide or per-user, see
  * ImageGenerationGate), the media is still minted but the placeholder file is
@@ -41,7 +39,11 @@ use Drupal\media\MediaInterface;
 class PendingMediaMinter {
 
   /**
-   * The media bundle minted media belong to.
+   * The media bundle every pending mint lands in.
+   *
+   * The placeholder and every seed file are raster, and the shared minter
+   * resolves a raster to this bundle; surfaces that gate access before a
+   * mint check against it.
    */
   const MEDIA_BUNDLE = 'image';
 
@@ -63,7 +65,7 @@ class PendingMediaMinter {
     protected ModuleExtensionList $moduleList,
     protected ImageGenerationGate $gate,
     protected GenerationJobStore $jobStore,
-    protected BlueprintAccessChecker $accessChecker,
+    protected MediaMinter $mediaMinter,
     protected string $appRoot,
   ) {}
 
@@ -90,15 +92,12 @@ class PendingMediaMinter {
    *   warning when the gate was off.
    *
    * @throws \Drupal\Core\Access\AccessException
-   *   When the current user may not create image media.
+   *   When the current user may not create image media (the shared minter
+   *   checks create access on the resolved bundle).
    */
   public function mint(string $prompt, string $alt_text, array $configuration = [], ?string $uuid = NULL, ?FileInterface $seed_file = NULL): MintResult {
-    if (!$this->accessChecker->createAccess('media', self::MEDIA_BUNDLE)) {
-      throw new AccessException('Access denied: cannot create media.');
-    }
-
     $file = $seed_file ?? $this->ensurePlaceholderFile();
-    $media = $this->createMedia($alt_text, $file, $uuid);
+    $media = $this->mediaMinter->mintFromFile($file, $alt_text, NULL, $uuid);
 
     if (!$this->gate->isEnabled()) {
       return new MintResult($media, FALSE, $this->buildDisabledWarning());
@@ -135,50 +134,6 @@ class PendingMediaMinter {
       'image_generation_disabled',
       sprintf('Image generation %s; the placeholder image was used as the final image. Tell the user: %s.', $state, $fix),
     );
-  }
-
-  /**
-   * Creates and saves the media entity carrying the placeholder file.
-   *
-   * @param string $alt_text
-   *   Alt text for the source field item (and the media name).
-   * @param \Drupal\file\FileInterface $file
-   *   The placeholder file.
-   * @param string|null $uuid
-   *   Optional uuid to assign.
-   *
-   * @return \Drupal\media\MediaInterface
-   *   The saved media entity.
-   */
-  protected function createMedia(string $alt_text, FileInterface $file, ?string $uuid): MediaInterface {
-    /** @var \Drupal\media\MediaTypeInterface $media_type */
-    $media_type = $this->entityTypeManager->getStorage('media_type')->load(self::MEDIA_BUNDLE);
-    $source_field_name = $media_type->getSource()
-      ->getSourceFieldDefinition($media_type)
-      ->getName();
-
-    // The alt text is often a generation prompt (CSS backgrounds have no alt
-    // slot, so the prompt rides in as library metadata) and can exceed the
-    // storage columns: media name is varchar 255, image alt varchar 512. The
-    // minter saves without entity validation, so clamp here, at the one choke
-    // point every mint surface funnels through.
-    $values = [
-      'bundle' => self::MEDIA_BUNDLE,
-      'name' => Unicode::truncate($alt_text, 255, TRUE, TRUE),
-      'status' => 1,
-      $source_field_name => [
-        'target_id' => $file->id(),
-        'alt' => Unicode::truncate($alt_text, 512, TRUE, TRUE),
-      ],
-    ];
-    if ($uuid !== NULL) {
-      $values['uuid'] = $uuid;
-    }
-
-    /** @var \Drupal\media\MediaInterface $media */
-    $media = $this->entityTypeManager->getStorage('media')->create($values);
-    $media->save();
-    return $media;
   }
 
   /**

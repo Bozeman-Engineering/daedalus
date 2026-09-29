@@ -9,6 +9,7 @@ use Drupal\Core\Routing\RouteObjectInterface;
 use Drupal\daedalus_blueprint\Materials\MaterialKind;
 use Drupal\daedalus_blueprint_stencil\Entity\Stencil;
 use Drupal\file\Entity\File;
+use Drupal\daedalus_layout\Plugin\Block\SectionBlock;
 use Drupal\daedalus_layout\Plugin\Sidebar\PlaceBlock;
 use Drupal\media\Entity\Media;
 use Drupal\Tests\media\Traits\MediaTypeCreationTrait;
@@ -173,6 +174,13 @@ class AddPanelIconTest extends NestedStorageKernelTestBase {
   public function testEmptyPromotedList(): void {
     $build = $this->buildPanel();
     $this->assertSame(['empty-section'], array_keys($this->itemStyles($build)));
+    // The item's word is the section block plugin's admin label, one source
+    // with core's Configure form; the panel keeps no literal of its own.
+    $definition = $this->container->get('plugin.manager.block')->getDefinition(SectionBlock::PLUGIN_ID);
+    $this->assertStringContainsString(
+      "<div class='daedalus-ui-panel-item__label'>{$definition['admin_label']}</div>",
+      (string) $build['promoted_blocks']['blocks'][0]['label']['#markup'],
+    );
     $this->assertArrayHasKey('filter', $build['promoted_blocks']);
     $this->assertStringContainsString('No blocks have been promoted', (string) $build['promoted_blocks']['promote']['#markup']);
     // An account without the grant gets none (the verbs and the item menu

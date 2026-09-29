@@ -21,12 +21,19 @@ final class Mode extends AttributeBase {
    * @param \Drupal\Core\StringTranslation\TranslatableMarkup|null $label
    *   The human-readable name of the module.
    * @param int $weight
-   *   The weight or order the tool shows in the toolbar.
+   *   The order of the mode's button among the mode buttons.
+   * @param bool $per_bundle
+   *   Whether a bundle enables the mode for its entities: the mode is
+   *   listed on the bundle form (enable / disable, plus configure when the
+   *   plugin implements PluginFormInterface) and offered as the bundle's
+   *   initial mode. FALSE for a mode that is a routing of another mode
+   *   (edit_front_page), which no bundle enables on its own.
    */
   public function __construct(
     public readonly string $id,
     public readonly ?TranslatableMarkup $label,
     public readonly int $weight,
+    public readonly bool $per_bundle = TRUE,
   ) {}
 
 }

@@ -115,7 +115,7 @@ final class IdentityMinter {
    *
    * The CKEditor Identity plugin (js/daedalus_edit/ckeditor/identity.js) is
    * the live mirror of this service; it reads THIS delivered contract
-   * (drupalSettings.daedalusEdit.identity, attached by the Edit tool) instead
+   * (drupalSettings.daedalusEdit.identity, attached by the form panel) instead
    * of carrying copies of the vocabulary, class shape, and id alphabet,
    * one server truth, zero client twins to drift — and the vocabulary
    * itself is read from the spine's instances declaration, so the client

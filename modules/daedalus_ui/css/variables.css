@@ -88,6 +88,11 @@
   --daedalus-disclosure-color: var(--daedalus-text-muted);
   /* The chrome typeface (@font-face in fonts.css). */
   --daedalus-font: "Open Sans", -apple-system, blinkmacsystemfont, "Segoe UI", sans-serif;
+  /* The code face: wherever the chrome prints CSS as text (the Styles
+     panel's islands and preludes). The system stack, no shipped webfont:
+     every system mono carries the italic the delivered-line reading
+     needs, and a webfont would ride every edit-mode page for one panel. */
+  --daedalus-font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
   /* The chrome type ramp: every chrome font-size wears the token for
      the role it plays, so a role retunes in one place. Icon and glyph
      sizes live on the icon ramp below, not here — they size icons,

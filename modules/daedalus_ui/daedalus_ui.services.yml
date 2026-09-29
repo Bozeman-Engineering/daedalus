@@ -11,6 +11,12 @@ services:
     class: Drupal\daedalus_ui\ModeState
   Drupal\daedalus_ui\ModeState: '@daedalus_ui.mode_state'
 
+  # The chromeless-document predicate (pop-out routes, preview mode): the
+  # one spine every pop-out and the preview iframe's document hang off.
+  daedalus_ui.chromeless:
+    class: Drupal\daedalus_ui\Chromeless
+  Drupal\daedalus_ui\Chromeless: '@daedalus_ui.chromeless'
+
   # Preview-mode requests render staged tempstore state; they must neither
   # read from nor write to the shared render cache (see the class docblock).
   daedalus_ui.preview_render_cache_bypass:
@@ -36,11 +42,6 @@ services:
     class: Drupal\daedalus_ui\ModePluginManager
     parent: default_plugin_manager
   Drupal\daedalus_ui\ModePluginManager: '@plugin.manager.modes'
-
-  plugin.manager.tools:
-    class: Drupal\daedalus_ui\ToolPluginManager
-    parent: default_plugin_manager
-  Drupal\daedalus_ui\ToolPluginManager: '@plugin.manager.tools'
 
   plugin.manager.daedalus_ui_sidebars:
     class: Drupal\daedalus_ui\SidebarPluginManager
@@ -103,6 +104,19 @@ services:
 
   daedalus_ui.event_subscriber.new_media_file_association:
     class: Drupal\daedalus_ui\EventSubscriber\NewMediaFileAssociationSettings
+
+  # THE file lane: every byte a user or the model supplies becomes a managed
+  # file through core's upload handler with this lane's validators and the
+  # FileValidationEvent chain (the sanitizer below). The upload controller,
+  # the chat attachment route and the model's file declarations are its
+  # adapters; none writes bytes any other way.
+  daedalus_ui.file_lane:
+    class: Drupal\daedalus_ui\File\FileLane
+    arguments:
+      - '@file.upload_handler'
+      - '@file_system'
+      - '@entity_type.manager'
+  Drupal\daedalus_ui\File\FileLane: '@daedalus_ui.file_lane'
 
   # Upload-time SVG sanitizer: rewrites SVG uploads in place during file
   # validation (one layer of the layered SVG security stack, see the class).

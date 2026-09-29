@@ -48,6 +48,7 @@ class PropertySetsTest extends KernelTestBase {
     'twig_events',
     'daedalus_tempstore',
     'daedalus_blueprint_api',
+    'file',
     'daedalus_ui',
     'daedalus_stylish',
     'daedalus_stylish_guide_test',
@@ -78,12 +79,14 @@ class PropertySetsTest extends KernelTestBase {
     // The media-capable names the guidance paragraph derives from:
     // background is referenced (kinds, block types, and daedalus_stylish's shipped
     // site base declaration), and background-image is its one
-    // media-flagged property. A site whose referenced sets grant no media
-    // slot would serve [] and never be taught the token.
-    $this->assertSame(['background-image'], $this->styleGuide->mediaProperties(self::THEME));
+    // media-flagged property; the pseudo-only generated_content group is
+    // never referenced by a declaration but granted at every generated
+    // box, so its content joins the list on every site. A site whose
+    // referenced sets grant no media slot would still serve content.
+    $this->assertSame(['background-image', 'content'], $this->styleGuide->mediaProperties(self::THEME));
 
     // Built once: the walk memoizes per theme.
-    $this->assertSame(['background-image'], $this->styleGuide->mediaProperties(self::THEME));
+    $this->assertSame(['background-image', 'content'], $this->styleGuide->mediaProperties(self::THEME));
   }
 
   /**

@@ -40,15 +40,15 @@ import {
  * which is where traversal clamps too), Right enters the container
  * beside the caret (routing through gap-less intermediates to the nearest
  * descendant with slots), Left pops out beside the container just exited —
- * Escape's step-up shape. One steering wheel for moving and traversing;
- * only the stepping order is keyboard-specific — the gap set, the
- * announcements, and the drop pipeline are the pointer's.
+ * traversal's ArrowLeft step-up shape. One steering wheel for moving and
+ * traversing; only the stepping order is keyboard-specific — the gap set,
+ * the announcements, and the drop pipeline are the pointer's.
  *
  * While lifted, the caret-walking bindings live in the dispatcher's LIFT
- * context (above selection/tool, below typing), so they outrank the arrow
- * traversal, the palette's insert-session keys, and the Selector's Escape
- * for exactly as long as the lift holds — the context gates on isLifted(),
- * nothing registers or unregisters dynamically.
+ * context (above editing and selection, below typing), so they outrank the
+ * arrow traversal, the palette's insert-session keys, and the selection's
+ * Escape for exactly as long as the lift holds: the context gates on
+ * isLifted(), nothing registers or unregisters dynamically.
  *
  * The element never moves during the walk — like a pointer drag, the caret
  * is the feedback and the drop is the commit — so Escape's "snap back" is
@@ -163,7 +163,7 @@ const nearestGapIndex = (gaps, near) => {
 
 /**
  * Watches the store while lifted: a selection change (the user clicked
- * elsewhere), a tool change (a session started), or a blueprint
+ * elsewhere), a mode change (Edit Mode left), or a blueprint
  * replacement (a mutation re-rendered the page — the enumerated gaps are
  * stale) cancels the lift. Unsubscribed BEFORE a drop commits, so the
  * drop's own mutation never reads as a cancel.
@@ -173,7 +173,7 @@ let unwatch = null;
 const watchStore = () => {
   const snapshot = (state) => ({
     selectedKey: state.selection.selectedKey,
-    tool: state.tool.currentTool,
+    mode: state.mode.mode,
     blueprint: state.blueprint.blueprint,
   });
   let previous = snapshot(store.getState());
@@ -181,7 +181,7 @@ const watchStore = () => {
     const current = snapshot(store.getState());
     if (
       current.selectedKey !== previous.selectedKey ||
-      current.tool !== previous.tool ||
+      current.mode !== previous.mode ||
       current.blueprint !== previous.blueprint
     ) {
       cancel();
@@ -277,22 +277,25 @@ const describeCurrentGap = () => {
 };
 
 /**
- * Commits a walk move: caret, reveal on both surfaces, announce. A move
- * that crosses into a different container names it first (an empty gap's
- * description already does).
+ * Commits a walk move: caret, reveal on both surfaces (the one reveal
+ * rule, Drupal.Daedalus.scrollReveal), announce. A move that crosses into
+ * a different container names it first (an empty gap's description
+ * already does).
  */
 const moveTo = (flatIndex) => {
   const from = lifted.walk.groupOf[lifted.index];
   lifted.index = flatIndex;
   const gap = lifted.gaps[flatIndex];
   setCurrentDrop(gap);
-  (gap.empty
-    ? gap.container
-    : gap.items[Math.min(gap.index, gap.items.length - 1)]
-  )?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  Drupal.Daedalus.scrollReveal(
+    gap.empty
+      ? gap.container
+      : gap.items[Math.min(gap.index, gap.items.length - 1)],
+    { behavior: 'smooth' },
+  );
   const row = treeRowForLocation(gap.location)?.row;
   if (row?.offsetParent) {
-    row.scrollIntoView({ block: 'nearest' });
+    Drupal.Daedalus.scrollReveal(row);
   }
   const crossed = lifted.walk.groupOf[flatIndex] !== from && !gap.empty;
   announce(
@@ -411,7 +414,7 @@ const stepIn = () => {
 
 /**
  * Pops out to the parent container's slots, landing just after the
- * container the caret was inside — Escape's step-up shape.
+ * container the caret was inside — traversal's ArrowLeft step-up shape.
  */
 const stepOut = () => {
   if (!lifted) {
@@ -489,17 +492,12 @@ export const initKeyboardLift = () => {
     label: Drupal.t('Move the selected element (lift / drop)'),
     section: Drupal.t('Selection'),
     remappable: true,
-    action: (event) => {
-      // The keyboard-move grammar is the Selector's, like the pointer's
-      // drag arming; and a focused control (a verb button, a link) keeps
-      // its native Space behavior.
-      if (store.getState().tool.currentTool !== 'selector') {
-        return false;
-      }
-      if (
-        event.target instanceof Element &&
-        event.target.closest('button, a[href], select')
-      ) {
+    action: () => {
+      // The keyboard-move grammar is Edit Mode's, like the pointer's drag
+      // arming. A focused control (a verb button, a link) keeps its
+      // native Space: the keyboard sensor's focused-control rule yields
+      // it before any binding resolves.
+      if (store.getState().mode.mode !== 'edit') {
         return false;
       }
       const key = store.getState().selection.selectedKey;

@@ -40,6 +40,7 @@ class VariantAiSurfaceTest extends KernelTestBase {
     'twig_events',
     'daedalus_tempstore',
     'daedalus_blueprint_api',
+    'file',
     'daedalus_ui',
     'daedalus_stylish',
     'daedalus_stylish_guide_test',
@@ -192,6 +193,28 @@ class VariantAiSurfaceTest extends KernelTestBase {
     $this->assertIsArray($materials, 'The fragment exists with no saved variants.');
     $this->assertArrayNotHasKey('variants', $materials);
     $this->assertStringContainsString('a kind absent here has no materials on this site', $materials['guidance']);
+  }
+
+
+  /**
+   * The op guidance and the JSON door teach wear at a rule.
+   *
+   * The three variant ops say an element key or a rule key and name the
+   * two refusals (a composition, a root-only axis); the style map field's
+   * guidance says which variants a rule may wear (its landing's).
+   */
+  public function testRuleWearGuidance(): void {
+    $guidance = $this->container->get('daedalus_stylish.operation_handler')->getGuidance();
+    foreach (['update_style', 'apply_variant', 'remove_variant', 'detach_variant'] as $op) {
+      $this->assertStringContainsString('an element or rule key', $guidance[$op], $op);
+    }
+    $this->assertStringContainsString('a rule wears at its matches, never a composition or root-only axis', $guidance['apply_variant']);
+    $this->assertStringContainsString("a rule's parts continue under it", $guidance['detach_variant']);
+
+    $door = $this->container->get('daedalus_stylish.field_handler.style_map')->getGuidance();
+    $this->assertStringContainsString('a RULE entry ("{key}::{selector}") wears a variant too', $door);
+    $this->assertStringContainsString('::> pb-text wears text variants, ::a link variants', $door);
+    $this->assertStringContainsString('a rule never wears a composition variant or a root-only axis', $door);
   }
 
 }

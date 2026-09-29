@@ -36,21 +36,23 @@ html[data-daedalus-ui-mode] .dialog-off-canvas-main-canvas {
   --admin-toolbar-color-focus: var(--daedalus-ui-secondary-color);
 }
 
-/* The mode and tool buttons are anchors (href for focus and hotkey
-   affordance), and Chrome and Safari drag any anchor with an href as a
-   link no matter what `draggable` says, ghosting "javascript:void(0)".
-   user-drag is the WebKit/Blink switch that actually stops it; the
-   markup's draggable="false" covers Firefox, which honors the attribute. */
-.daedalus-ui-mode-button,
-.daedalus-ui-tool-button {
+/* The mode button is an anchor (href for focus and hotkey affordance),
+   and Chrome and Safari drag any anchor with an href as a link no matter
+   what `draggable` says, ghosting "javascript:void(0)". user-drag is the
+   WebKit/Blink switch that actually stops it; the markup's
+   draggable="false" covers Firefox, which honors the attribute. */
+.daedalus-ui-mode-button {
   -webkit-user-drag: none;
   user-drag: none;
 }
 
 /* Scrolled-to canvas elements clear the fixed top bar. scroll-margin-top
-   redefines what "in view" means for every scrollIntoView caller at once
-   (arrow traversal, the lift walk, F6, breadcrumb clicks, notification
-   reveals), so none of them needs offset math of its own. The displace
+   redefines what "in view" means for the one selection reveal rule
+   (Drupal.Daedalus.scrollReveal, js/scroll-reveal.js) and so for every
+   caller of it at once (arrow traversal, the lift walk, F6, breadcrumb and
+   panel row clicks, notification reveals): the rule reads these margins to
+   decide whether the element is fully in view and scrollIntoView honors
+   them when it moves, so no caller needs offset math of its own. The displace
    offset is the aggregate of everything registered data-offset-top (the
    top bar, the classic toolbar if present), refreshed on mode changes by
    daedalus-ui.js. Scoped to the main canvas: the sidebars live in
@@ -58,11 +60,10 @@ html[data-daedalus-ui-mode] .dialog-off-canvas-main-canvas {
    scroll container's true edges. :where() keeps specificity at zero — an
    element's own scroll-margin always wins.
 
-   The bottom margin clears our own floating chrome instead: the tool pill
-   (bottom: 2.5rem + its height) and the selection indicator/drop trail
-   stacked around it carry no data-offset-* (they never displace the
-   canvas), so the displace var alone would be 0 — the constant is sized
-   to the pill + breadcrumb stack. */
+   The bottom margin clears our own floating chrome instead: the selection
+   indicator/drop trail at the bottom-left carries no data-offset-* (it
+   never displaces the canvas), so the displace var alone would be 0; the
+   constant is sized to the breadcrumb stack. */
 :where(html[data-daedalus-ui-mode] .dialog-off-canvas-main-canvas) * {
   scroll-margin-top: calc(var(--drupal-displace-offset-top, 0px) + 2rem);
   scroll-margin-bottom: calc(var(--drupal-displace-offset-bottom, 0px) + 10rem);

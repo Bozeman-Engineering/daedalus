@@ -10,22 +10,17 @@
  * rest of the row's arithmetic: whether the row renders at all, the
  * offer the chips and the well enumerate (one entry per value-space
  * stop, in the widget stop-table shape a pick hands back), the lit
- * state normalized onto that offer, whether the leading grip may
- * scrub the stops detent to detent, the row's origin (the mark's
- * posture, hue and story), and the resting value beneath an unset row
- * (restingValue, faced by ghostFace): the one derivation every ghost
- * reads, in basic and advanced mode alike.
+ * state normalized onto that offer, whether the leading mark may
+ * scrub the stops detent to detent, and the row's origin (the mark's
+ * supplier, at-pose fact and story), a projection of the row's stack read
+ * (style-stack.js stackAt) through provenance-model.js originOf: the
+ * shown value is always the winner's, lit, so no row rests on a ghost.
  */
 
 import { normalizeValue, segmentState } from './widget-values.js';
-import {
-  displayAt,
-  referenceVariable,
-  stopFace,
-  stopLabel,
-} from './value-space.js';
-import { propertyValues, valueAtPose } from './condition-cascade.js';
-import { defaultsAtPose, rowOrigin } from './provenance-model.js';
+import { displayAt, stopFace, stopLabel } from './value-space.js';
+import { originOf } from './provenance-model.js';
+import { stackAt } from './style-stack.js';
 
 /**
  * Whether a definition is dimension-shaped: a length or a bare number,
@@ -59,15 +54,15 @@ export const paintedSpace = (definition) =>
  * the active skin while constraints are law) has nothing legal to offer,
  * and a free space over a non-dimension property has no vocabulary and
  * no field basic mode may render (free text is advanced mode's): both
- * hide. A committed value is the exception: a set value always stays
- * visible and unsettable, mirroring the advanced rows' hiddenFor rule.
- * A placeholder (the ghost beneath an unset row) never counts as a
- * committed value.
+ * hide. A shown value is the exception: a value the row lights (its
+ * winner's, whichever layer delivers it) always stays visible,
+ * mirroring the advanced rows' hiddenFor rule. A caller's placeholder
+ * (a value attributed from outside the stack) never counts.
  *
  * @param {{kind: string, stops: Array<object>, definition: ?object}} space
  *   The property's value space (valueSpaceFor).
  * @param {*} value
- *   The committed value.
+ *   The shown value.
  * @param {?object} definition
  *   The property definition, defaulting to the space's own.
  *
@@ -193,7 +188,7 @@ export const choiceState = (space, offer, stops, value, state = null) => {
 };
 
 /**
- * Whether the row's leading grip scrubs the offer detent to detent: a
+ * Whether the row's leading mark scrubs the offer detent to detent: a
  * chips or well surface over a numeric ramp (every stop parses, so the
  * stops order by value and a sideways drag means "more" or "less"; a
  * closed radius or type scale). A field surface scrubs inside the field
@@ -213,112 +208,22 @@ export const scrubbable = (space, surface) =>
   space.stops.every((stop) => stop.number !== null);
 
 /**
- * What reaches a row at the pose: the property's values across the
- * resolved entry, the delivering block at the pose (condition-cascade.js
- * valueAtPose), and the defaults tier's delivering block at the same
- * pose (provenance-model.js defaultsAtPose: the skin's, else the
- * element's declaration's own, through the cascade). Raw values, the
- * var() spelling kept: the one read behind the origin's sentence and
- * the ghost beneath an unset row.
- */
-const deliveries = ({ guide, condition, property, entry, provenance }) => {
-  const conditions = guide?.conditions ?? {};
-  const values = propertyValues(entry, property, conditions);
-  return {
-    conditions,
-    values,
-    atPose: valueAtPose(values, condition, conditions),
-    defaults: defaultsAtPose(
-      provenance.skinEntry,
-      provenance.declaredEntry,
-      property,
-      condition,
-      conditions,
-    ),
-  };
-};
-
-/**
- * The resting rule, stated once: the map's delivering value at the
- * pose (the compound's own block, else the inheriting one), else the
- * defaults tier's, else nothing.
- */
-const resting = (atPose, defaults) =>
-  atPose?.value ?? defaults?.value ?? null;
-
-/**
- * The value a row RESTS on at the pose, raw: what the property shows
- * when the row itself commits nothing at the exact compound. The map's
- * delivering block wins (an own or worn value at the pose is the row's
- * value and the resting value is simply itself; from another condition
- * it is the ghost), else the defaults tier's block reaching the pose
- * (the skin's over the declaration's), else null. Handed raw (the var()
- * spelling kept) so a chip can match it against a stop's commit and
- * ghostFace can face it at the pose; never pre-faced.
- *
- * The one derivation behind every ghost: the basic rows' `origin.ghost`
- * (originFor) and advanced mode's placeholder beneath an uncommitted
- * property row, which gates it behind its own committed value.
- *
- * @param {object} input
- * @param {?object} input.guide
- * @param {string} input.condition
- *   The editing compound (the pose).
- * @param {string} input.property
- * @param {?object} input.entry
- *   The RESOLVED condition-keyed entry the row's value was read from (a
- *   control model's `entry`).
- * @param {{skinEntry: ?object, declaredEntry: ?object}} input.provenance
- *   The bound target's origin inputs (provenance-model.js provenanceFor);
- *   only the two defaults entries are read.
- *
- * @return {?string}
- */
-export const restingValue = (input) => {
-  const { atPose, defaults } = deliveries(input);
-  return resting(atPose, defaults);
-};
-
-/**
- * A ghost's display face: the resting value may itself be a reference
- * (a skin's `var(--text-body)`), and the user never sees var() outside
- * code mode, so a reference faces through displayAt at the pose (the
- * raw spelling when the roster cannot resolve it) and a literal faces
- * as itself. Nothing (null, undefined, '') faces as null.
- *
- * @param {?object} guide
- * @param {object} materials
- * @param {*} placeholder
- *   The raw resting value (restingValue, or a caller's own placeholder).
- * @param {string} condition
- *   The editing compound (the pose).
- *
- * @return {?string}
- */
-export const ghostFace = (guide, materials, placeholder, condition) => {
-  if (placeholder === null || placeholder === undefined || placeholder === '') {
-    return null;
-  }
-  return referenceVariable(placeholder) !== null
-    ? (displayAt(guide, materials, placeholder, condition) ??
-        String(placeholder))
-    : String(placeholder);
-};
-
-/**
- * The row's origin from its inputs (deliveries: the values across the
- * resolved entry, the delivering block at the pose, the defaults tier's
- * at the same pose), every value spoken as its display face for the
- * sentence (the field's own ref→display read at the pose, never a var()
- * spelling), plus `ghost`: the RAW resting value (restingValue) the row
- * shows beneath itself while it commits nothing at the pose. One read
- * behind the mark and the ghost, so the sentence's "@value from the
- * active skin" and the empty well beneath it can never disagree.
+ * The row's origin: the mark's supplier and hue, whether the value is
+ * set at the pose, its story, the menu's doorways, its "Also set at"
+ * entries and its "Also set on" box, from the row's stack read
+ * (provenance-model.js originOf over stackAt), every value spoken as
+ * its display face for the sentence (the field's own ref→display read
+ * at the pose, never a var() spelling).
  *
  * The one derivation behind every basic row's leading mark: the choice
- * row's own postures, and the color widgets' well rows (text_color,
- * background), which are ordinary rows around a well the spine did not
- * pick, so they read their ring's hue and story from the same place.
+ * row's own surfaces, the color widgets' well rows (text_color,
+ * background), the stroke row's three parts, which are ordinary rows
+ * around a well the spine did not pick, so they read their ring's hue
+ * and story from the same place. `read` is the row's own read when the
+ * caller already holds it (a control model's `reads[property]`); a
+ * caller without one (a stroke row over a ring side's longhand, the
+ * Layout section's rows) hands the stack alone and the read is taken
+ * here.
  *
  * @param {object} input
  * @param {?object} input.guide
@@ -326,41 +231,44 @@ export const ghostFace = (guide, materials, placeholder, condition) => {
  * @param {string} input.condition
  *   The editing compound (the pose).
  * @param {string} input.property
- * @param {?object} input.entry
- *   The RESOLVED condition-keyed entry the row's value was read from (a
- *   control model's `entry`).
- * @param {object} input.provenance
- *   The bound target's origin inputs (provenance-model.js provenanceFor).
+ * @param {object} input.stack
+ *   The bound target's stack (buildStack).
+ * @param {?{winner: ?object, beneath: Array<object>, own: ?object}} [input.read]
+ *   The property's read at the pose (stackAt), or null to take it here.
+ * @param {object} [input.blockTypes]
+ *   component uuid → bundle, for the words of a rule a worn value
+ *   arrives through (originOf); a caller without the table passes none.
+ * @param {object} [input.sectionLayouts]
+ *   section uuid → layout id, likewise.
  *
  * @return {object}
- *   rowOrigin() with `ghost` (?string, raw) beside it.
+ *   originOf()'s shape: {layer, tier, reference, color, atPose,
+ *   delivers, title, header, doorways, alsoAt, alsoOn}.
  */
-export const originFor = (input) => {
-  const { guide, materials, condition, property, provenance } = input;
-  const { conditions, values, atPose, defaults } = deliveries(input);
+export const originFor = ({
+  guide,
+  materials,
+  condition,
+  property,
+  stack,
+  read = null,
+  blockTypes = {},
+  sectionLayouts = {},
+}) => {
+  const conditions = guide?.conditions ?? {};
   const faceOf = (raw) =>
     raw == null
       ? raw
       : (displayAt(guide, materials, raw, condition) ?? String(raw));
-  return {
-    ...rowOrigin({
-      property,
-      values: values.map((row) => ({ ...row, value: faceOf(row.value) })),
-      atPose: atPose ? { ...atPose, value: faceOf(atPose.value) } : null,
-      condition,
-      conditions,
-      own: provenance.own,
-      suppliers: provenance.suppliers,
-      shadowed: provenance.shadowed,
-      defaults: defaults
-        ? { ...defaults, value: faceOf(defaults.value) }
-        : null,
-      skinEditUrl: guide?.skinEditUrl ?? null,
-      declaredScope: provenance.declaredScope ?? null,
-      labelOf: provenance.labelOf,
-      valueOf: (reference, at, name) =>
-        faceOf(provenance.valueOf(reference, at, name)),
-    }),
-    ghost: resting(atPose, defaults),
-  };
+  return originOf(read ?? stackAt(stack, property, condition, conditions), {
+    stack,
+    property,
+    pose: condition,
+    conditions,
+    guide,
+    blockTypes,
+    sectionLayouts,
+    skinEditUrl: guide?.skinEditUrl ?? null,
+    faceOf,
+  });
 };

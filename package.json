@@ -3,10 +3,10 @@
   "private": true,
   "scripts": {
     "test": "node --test \"modules/*/tests/js/*.test.mjs\"",
-    "build:dev": "webpack --config modules/daedalus_ui/webpack.config.js --config modules/daedalus_stylish/webpack.config.js --mode development",
-    "watch:dev": "webpack --config modules/daedalus_ui/webpack.config.js --config modules/daedalus_stylish/webpack.config.js --watch --mode development",
-    "build:prod": "webpack --config modules/daedalus_ui/webpack.config.js --config modules/daedalus_stylish/webpack.config.js --mode production",
-    "watch:prod": "webpack --config modules/daedalus_ui/webpack.config.js --config modules/daedalus_stylish/webpack.config.js --watch --mode production",
+    "build:dev": "webpack --config modules/daedalus_ui/webpack.config.js --config modules/daedalus_stylish/webpack.config.js --config modules/daedalus_explode/webpack.config.js --mode development",
+    "watch:dev": "webpack --config modules/daedalus_ui/webpack.config.js --config modules/daedalus_stylish/webpack.config.js --config modules/daedalus_explode/webpack.config.js --watch --mode development",
+    "build:prod": "webpack --config modules/daedalus_ui/webpack.config.js --config modules/daedalus_stylish/webpack.config.js --config modules/daedalus_explode/webpack.config.js --mode production",
+    "watch:prod": "webpack --config modules/daedalus_ui/webpack.config.js --config modules/daedalus_stylish/webpack.config.js --config modules/daedalus_explode/webpack.config.js --watch --mode production",
     "generate:wide-properties": "node modules/daedalus_stylish/js/src/tools/generate-wide-properties.mjs",
     "vendor-update": "drush daedalus_edit:update-ckeditor-version; npm install; drush daedalus_edit:move-library"
   },

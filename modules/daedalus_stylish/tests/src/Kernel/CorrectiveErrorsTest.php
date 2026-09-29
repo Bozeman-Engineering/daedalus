@@ -50,6 +50,7 @@ class CorrectiveErrorsTest extends KernelTestBase {
     'twig_events',
     'daedalus_tempstore',
     'daedalus_blueprint_api',
+    'file',
     'daedalus_ui',
     'daedalus_stylish',
     'daedalus_stylish_guide_test',
@@ -101,38 +102,42 @@ class CorrectiveErrorsTest extends KernelTestBase {
   }
 
   /**
-   * The map lane accepts '::>' keys and rejects them strictly like parts.
+   * The map lane accepts '::> *' keys and rejects them strictly like parts.
    *
-   * The children pseudo-part on style MAP keys: a container key's '::>'
+   * The children pseudo-part on style MAP keys: a container key's '::> *'
    * entry validates against the container kind's children declaration
    * (daedalus_stylish_guide_test declares layout on it); strict mode rejects
-   * out-of-declaration properties on it, and the '::>' key itself on
+   * out-of-declaration properties on it, and the '::> *' key itself on
    * elements declaring no children; malformed suffixes fail the key
    * grammar with the corrective naming the suffix.
    */
   public function testChildrenPseudoPartMapKeys(): void {
     $this->assertSame([], $this->validator->validate([
-      "container:{$this->uuid}::>" => [
+      "container:{$this->uuid}::> *" => [
         'default' => ['flex-grow' => '1'],
         'narrow' => ['flex-grow' => '0'],
       ],
-      "container:{$this->uuid}::.band-content::>" => ['default' => ['flex-grow' => '1']],
+      "container:{$this->uuid}::.band-content > *" => ['default' => ['flex-grow' => '1']],
     ]));
 
     $errors = $this->validator->validate([
       "container:{$this->uuid}::>::>" => ['default' => ['flex-grow' => '1']],
     ]);
     $error = $this->findError($errors, 'INVALID_STYLE_KEY');
-    $this->assertStringContainsString('::>', $error->getHint());
+    $this->assertStringContainsString('"> *"', $error->getHint());
+    $errors = $this->validator->validate([
+      "container:{$this->uuid}::>" => ['default' => ['flex-grow' => '1']],
+    ]);
+    $this->assertNotNull($this->findError($errors, 'INVALID_STYLE_KEY'), 'The retired pseudo-part spelling is not a key.');
 
     $this->enforce('strict');
     $errors = $this->validator->validate([
-      "container:{$this->uuid}::>" => ['default' => ['font-size' => '2rem']],
+      "container:{$this->uuid}::> *" => ['default' => ['font-size' => '2rem']],
     ]);
     $this->assertSame('STYLE_PROPERTY_NOT_DECLARED', $errors[0]->getCode());
 
     $errors = $this->validator->validate([
-      "block:{$this->uuid}::>" => ['default' => ['flex-grow' => '1']],
+      "block:{$this->uuid}::> *" => ['default' => ['flex-grow' => '1']],
     ]);
     $error = $this->findError($errors, 'STYLE_CHILDREN_NOT_DECLARED');
     $this->assertStringContainsString('children', $error->getHint());

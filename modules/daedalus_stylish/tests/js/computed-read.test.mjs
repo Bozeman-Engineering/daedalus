@@ -15,7 +15,7 @@
  * layout-context.test.mjs precedent.
  */
 import { strict as assert } from 'node:assert';
-import { resolveRoot, resolveTargets } from '../../js/src/computed-read.js';
+import { lengthBases, pseudoOf, readComputed, resolveRoot, resolveTargets } from '../../js/src/computed-read.js';
 
 const tests = [];
 const test = (name, run) => tests.push([name, run]);
@@ -28,39 +28,166 @@ const ENTITY_D = 'dddddddd-1111-2222-3333-444444444444';
 // --- Fake DOM ---------------------------------------------------------------
 
 /**
- * Matches the selector grammar this module actually uses: `.class`,
- * [attr="value"] and [attr^="prefix"], comma-separated.
+ * Matches one compound of the printed target grammar: `:scope`, `*`,
+ * `.class`, [attr="value"], [attr^="prefix"], `:where(...)` and
+ * `:is(a, b)` wrappers, and glued compounds such as `:scope.cls`.
  */
-const matchesOne = (node, selector) => {
-  const trimmed = selector.trim();
-  if (trimmed.startsWith('.')) {
-    return node.classes.includes(trimmed.slice(1));
-  }
-  const prefix = trimmed.match(/^\[([^\]^=]+)\^="([^"]*)"\]$/);
-  if (prefix) {
-    return (node.attributes[prefix[1]] ?? '').startsWith(prefix[2]);
-  }
-  const exact = trimmed.match(/^\[([^\]^=]+)="([^"]*)"\]$/);
-  if (exact) {
-    return node.attributes[exact[1]] === exact[2];
-  }
-  throw new Error(`Fake DOM cannot match selector: ${trimmed}`);
+const matchesCompound = (node, compound, scope) => {
+  let rest = compound.trim();
+  while (rest !== '') {
+    if (rest === '*') {
+      return true;
+    }
+    if (rest.startsWith(':scope')) {
+      if (node !== scope) {
+        return false;
+      }
+      rest = rest.slice(':scope'.length);
+      continue;
+    }
+    const nested = rest.match(/^:(where|is)\(/);
+    if (nested) {
+      // Peel one balanced group; its argument list (top-level commas)
+      // matches when any argument does, and a glued remainder
+      // (':scope:where(.cls)') continues after it.
+      let depth = 0;
+      let end = -1;
+      for (let i = nested[0].length - 1; i < rest.length; i += 1) {
+        if (rest[i] === '(') depth += 1;
+        if (rest[i] === ')') {
+          depth -= 1;
+          if (depth === 0) {
+            end = i;
+            break;
+          }
+        }
+      }
+      const inner = rest.slice(nested[0].length, end);
+      const args = [];
+      let argDepth = 0;
+      let current = '';
+      for (const char of inner) {
+        if (char === '(') argDepth += 1;
+        if (char === ')') argDepth -= 1;
+        if (char === ',' && argDepth === 0) {
+          args.push(current);
+          current = '';
+        } else {
+          current += char;
+        }
+      }
+      args.push(current);
+      if (!args.some((arg) => matchesCompound(node, arg, scope))) {
+        return false;
+      }
+      rest = rest.slice(end + 1);
+      continue;
+    }
+    if (rest.startsWith('.')) {
+      const name = rest.match(/^\.[A-Za-z0-9_-]+/)[0];
+      if (!node.classes.includes(name.slice(1))) {
+        return false;
+      }
+      rest = rest.slice(name.length);
+      continue;
+    }
+    const prefix = rest.match(/^\[([^\]^=]+)\^="([^"]*)"\]/);
+    if (prefix) {
+      if (!(node.attributes[prefix[1]] ?? '').startsWith(prefix[2])) {
+        return false;
+      }
+      rest = rest.slice(prefix[0].length);
+      continue;
+    }
+    const exact = rest.match(/^\[([^\]^=]+)="([^"]*)"\]/);
+    if (exact) {
+      if (node.attributes[exact[1]] !== exact[2]) {
+        return false;
+      }
+      rest = rest.slice(exact[0].length);
+      continue;
+    }
+    throw new Error(`Fake DOM cannot match selector: ${compound}`);
+  };
+  return true;
 };
 
-const matches = (node, selector) => selector.split(',').some((one) => matchesOne(node, one));
+/**
+ * Splits a complex selector into compounds with their combinators.
+ */
+const chainOf = (selector) => {
+  const chain = [];
+  let child = false;
+  let depth = 0;
+  let current = '';
+  const flush = () => {
+    if (current.trim() !== '') {
+      chain.push({ child, compound: current.trim() });
+      current = '';
+      child = false;
+    }
+  };
+  for (const char of selector) {
+    if (char === '(') depth += 1;
+    if (char === ')') depth -= 1;
+    if (depth === 0 && char === '>') {
+      flush();
+      child = true;
+      continue;
+    }
+    if (depth === 0 && /\s/.test(char)) {
+      flush();
+      continue;
+    }
+    current += char;
+  }
+  flush();
+  return chain;
+};
 
-const el = ({ selectable = null, classes = [], children = [] } = {}) => {
+/**
+ * Whether a node matches a complex selector, right to left, with `scope`
+ * as the :scope root.
+ */
+const matchesChain = (node, chain, scope) => {
+  const last = chain[chain.length - 1];
+  if (!matchesCompound(node, last.compound, scope)) {
+    return false;
+  }
+  if (chain.length === 1) {
+    return true;
+  }
+  const rest = chain.slice(0, -1);
+  if (last.child) {
+    return node.parent ? matchesChain(node.parent, rest, scope) : false;
+  }
+  for (let ancestor = node.parent; ancestor; ancestor = ancestor.parent) {
+    if (matchesChain(ancestor, rest, scope)) {
+      return true;
+    }
+  }
+  return false;
+};
+
+const matches = (node, selector, scope = node) =>
+  selector.split(/,(?![^(]*\))/).some((one) => matchesChain(node, chainOf(one), scope));
+
+const el = ({ selectable = null, element = null, classes = [], children = [] } = {}) => {
   const node = {
     classes,
-    attributes: selectable === null ? {} : { 'data-selectable': selectable },
+    attributes: {
+      ...(selectable === null ? {} : { 'data-selectable': selectable }),
+      ...(element === null ? {} : { 'data-element': element }),
+    },
     children,
     parent: null,
+    parentElement: null,
     matches: (selector) => matches(node, selector),
     querySelector: (selector) => node.querySelectorAll(selector)[0] ?? null,
     querySelectorAll: (selector) => {
       const found = [];
       const walk = (parent) => parent.children.forEach((child) => {
-        if (matches(child, selector)) {
+        if (matches(child, selector, node)) {
           found.push(child);
         }
         walk(child);
@@ -87,6 +214,7 @@ const el = ({ selectable = null, classes = [], children = [] } = {}) => {
   };
   children.forEach((child) => {
     child.parent = node;
+    child.parentElement = node;
   });
   return node;
 };
@@ -101,19 +229,19 @@ const buildCanvas = () => {
   const quoteInA = el({ classes: ['quote'] });
   const quoteInNested = el({ classes: ['quote'] });
   const quoteInBlock = el({ classes: ['quote'] });
-  const block = el({ selectable: `block:${BLOCK_C}`, children: [quoteInBlock] });
-  const nested = el({ selectable: `container:${SECTION_NESTED}`, children: [quoteInNested, block] });
-  const band = el({ selectable: `container:${SECTION_A}`, children: [quoteInA, nested] });
-  const canvas = el({ selectable: `entity:${ENTITY_D}`, children: [band] });
+  const block = el({ selectable: `block:${BLOCK_C}`, element: 'block_type:text', children: [quoteInBlock] });
+  const nested = el({ selectable: `container:${SECTION_NESTED}`, element: 'layout:daedalus_stylish_container', children: [quoteInNested, block] });
+  const band = el({ selectable: `container:${SECTION_A}`, element: 'layout:daedalus_stylish_container', children: [quoteInA, nested] });
+  const canvas = el({ selectable: `entity:${ENTITY_D}`, element: 'kind:entity', children: [band] });
   return { canvas, band, nested, block, quoteInA, quoteInNested, quoteInBlock };
 };
 
-const resolveFrom = (canvas, key, sub = null) => {
+const resolveFrom = (canvas, key, selector = null) => {
   globalThis.document = {
     querySelector: (selector) => (canvas.matches(selector) ? canvas : canvas.querySelector(selector)),
   };
   try {
-    return resolveTargets(key, sub);
+    return resolveTargets(key, selector);
   }
   finally {
     delete globalThis.document;
@@ -215,10 +343,114 @@ test('a block-owned part is not donut-limited', () => {
   assert.deepEqual(resolveFrom(canvas, `block:${BLOCK_C}`, '.quote'), [quoteInBlock]);
 });
 
-test('an illegal part selector resolves to nothing', () => {
+test('a selector outside the grammar resolves to nothing', () => {
   const { canvas } = buildCanvas();
   assert.deepEqual(resolveFrom(canvas, `container:${SECTION_A}`, 'div .quote'), []);
   assert.deepEqual(resolveFrom(canvas, `container:${SECTION_A}`, '.quote>.x'), []);
+  assert.deepEqual(resolveFrom(canvas, `container:${SECTION_A}`, '::>'), []);
+});
+
+test('the children selector hits every direct child, nested roots included', () => {
+  const { canvas, quoteInA, nested, quoteInNested, block } = buildCanvas();
+  assert.deepEqual(resolveFrom(canvas, `container:${SECTION_A}`, '> *'), [quoteInA, nested]);
+  assert.deepEqual(resolveFrom(canvas, `container:${SECTION_NESTED}`, '> *'), [quoteInNested, block]);
+});
+
+test('a type selector reaches by the element address, past nested roots', () => {
+  const { canvas, nested, block } = buildCanvas();
+  // Only the nested container is a direct child container of the band;
+  // the text block sits one level down, reached by the descendant form.
+  assert.deepEqual(resolveFrom(canvas, `container:${SECTION_A}`, '> pb-container'), [nested]);
+  assert.deepEqual(resolveFrom(canvas, `container:${SECTION_A}`, '> pb-text'), []);
+  assert.deepEqual(resolveFrom(canvas, `container:${SECTION_A}`, 'pb-text'), [block]);
+  assert.deepEqual(resolveFrom(canvas, `container:${SECTION_NESTED}`, '> pb-text'), [block]);
+  assert.deepEqual(resolveFrom(canvas, `container:${SECTION_A}`, '> pb-container > pb-text'), [block]);
+});
+
+test('a part reaching by > shifts the donut: nested roots are its children', () => {
+  const { canvas, band, nested, quoteInA } = buildCanvas();
+  // The band wears the hoisted part class on its own root: the dual half.
+  band.classes.push('region');
+  assert.deepEqual(resolveFrom(canvas, `container:${SECTION_A}`, '.region > *'), [quoteInA, nested]);
+  // A part continuing by a descendant combinator reaches the whole subtree.
+  assert.deepEqual(resolveFrom(canvas, `container:${SECTION_A}`, '.region pb-text').length, 1);
+});
+
+// --- Generated boxes ---------------------------------------------------------
+
+test('pseudoOf names the terminal box of a selector, null for an element target', () => {
+  assert.equal(pseudoOf(null), null);
+  assert.equal(pseudoOf(undefined), null);
+  assert.equal(pseudoOf('.quote'), null);
+  assert.equal(pseudoOf('> pb-text'), null);
+  assert.equal(pseudoOf('&::before'), 'before');
+  assert.equal(pseudoOf('.quote::after'), 'after');
+  assert.equal(pseudoOf('> pb-text:has(a)::before'), 'before');
+  // Outside the grammar there is no box to name (resolveTargets answers
+  // nothing for these; the name is not a second verdict).
+  assert.equal(pseudoOf('&::marker'), null);
+  assert.equal(pseudoOf('p ::before'), null);
+  assert.equal(pseudoOf('::before'), null);
+});
+
+test('a generated box resolves to its hosts: the root for the anchor, every match for a part or type box', () => {
+  const { canvas, band, block, quoteInA, quoteInBlock } = buildCanvas();
+  // The anchor is the owner's own box: the host is the root itself.
+  assert.deepEqual(resolveFrom(canvas, `block:${BLOCK_C}`, '&::before'), [block]);
+  assert.deepEqual(resolveFrom(canvas, `container:${SECTION_A}`, '&::after'), [band]);
+  // A part's box hosts on the part's matches, the donut holding exactly
+  // as for the part.
+  assert.deepEqual(resolveFrom(canvas, `block:${BLOCK_C}`, '.quote::after'), [quoteInBlock]);
+  assert.deepEqual(resolveFrom(canvas, `container:${SECTION_A}`, '.quote::before'), [quoteInA]);
+  // A type box hosts on the typed children.
+  assert.deepEqual(resolveFrom(canvas, `container:${SECTION_NESTED}`, '> pb-text::before'), [block]);
+  // No host, no box; a pseudo outside the grammar is no address.
+  assert.deepEqual(resolveFrom(canvas, `block:${'e'.repeat(8)}-1111-2222-3333-444444444444`, '&::before'), []);
+  assert.deepEqual(resolveFrom(canvas, `block:${BLOCK_C}`, '&::marker'), []);
+});
+
+test('readComputed reads a box through its host with the pseudo argument', () => {
+  const calls = [];
+  globalThis.getComputedStyle = (element, pseudo) => {
+    calls.push([element, pseudo]);
+    return { getPropertyValue: (property) => `${property}@${pseudo ?? 'element'}` };
+  };
+  const host = { id: 'host' };
+  try {
+    assert.deepEqual(readComputed(host, ['width'], 'before'), { width: 'width@::before' });
+    assert.deepEqual(readComputed(host, ['width', 'content'], 'after'), { width: 'width@::after', content: 'content@::after' });
+    assert.deepEqual(readComputed(host, ['width']), { width: 'width@element' });
+    assert.deepEqual(readComputed(host, ['width'], null), { width: 'width@element' });
+  }
+  finally {
+    delete globalThis.getComputedStyle;
+  }
+  assert.deepEqual(calls, [[host, '::before'], [host, '::after'], [host, null], [host, null]]);
+});
+
+test('lengthBases measures the root\'s font size for rem and the target\'s own for em, a box through its host', () => {
+  const root = { id: 'root' };
+  const host = { id: 'host' };
+  const calls = [];
+  globalThis.document = { documentElement: root };
+  globalThis.getComputedStyle = (element, pseudo) => {
+    calls.push([element, pseudo]);
+    const size = element === root ? '20px' : pseudo === '::before' ? '10px' : '12px';
+    return { getPropertyValue: (property) => (property === 'font-size' ? size : '') };
+  };
+  try {
+    assert.deepEqual(lengthBases(host), { rootPx: 20, fontPx: 12 }, 'the page\'s root is what it measures, never an assumed 16');
+    assert.deepEqual(lengthBases(host, 'before'), { rootPx: 20, fontPx: 10 }, 'a generated box\'s own font size, read with the pseudo argument');
+    assert.deepEqual(lengthBases(host, null), { rootPx: 20, fontPx: 12 });
+    globalThis.getComputedStyle = () => ({ getPropertyValue: () => '' });
+    assert.deepEqual(lengthBases(host), { rootPx: null, fontPx: null }, 'an empty read (a detached node) measures nothing: null, not 0, so no conversion divides by it');
+  }
+  finally {
+    delete globalThis.getComputedStyle;
+    delete globalThis.document;
+  }
+  assert.deepEqual(calls.slice(0, 2), [[root, undefined], [host, null]], 'the root is read plain; the target with the pseudo argument like readComputed');
+  assert.deepEqual(calls.slice(2, 4), [[root, undefined], [host, '::before']]);
 });
 
 // --- Runner -----------------------------------------------------------------

@@ -75,27 +75,4 @@ class SkinManager {
     return $skin instanceof DaedalusStylishSkinInterface ? $skin : NULL;
   }
 
-  /**
-   * The scopes the active skin carries site defaults for.
-   *
-   * The skin's half of the stamping demand (DefaultsStylesheet::scopes()
-   * unions it with the declared tier's scopes; the stamping seams read
-   * that union, never this alone). Reads resolve through
-   * loadActiveSkin(), so inside a workspace the staged revision answers,
-   * and the stamped markup always matches the CSS the page previews. An
-   * unpublished active skin defaults nothing, matching the compiled
-   * stylesheet's gate on the skin's tiers.
-   *
-   * @return string[]
-   *   The defaults' scope strings in stored order, [] without an active
-   *   published skin or defaults.
-   */
-  public function activeDefaultScopes(): array {
-    $skin = $this->loadActiveSkin();
-    if ($skin === NULL || !$skin->isPublished()) {
-      return [];
-    }
-    return array_map('strval', array_keys($skin->getDefaults()));
-  }
-
 }

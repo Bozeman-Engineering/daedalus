@@ -25,3 +25,35 @@ daedalus_ai.deferred_retry:
     parameters:
       entity:
         type: entity:{entity_type}
+
+# The chat's attachment lane: one multipart `file` plus the `thread_id` it
+# belongs to, saved temporary through daedalus_ui's file lane and held by the
+# attachment store; the answer is {name, mime, size}. The token rides the
+# X-CSRF-Token header (session/token), the way the page builder's own JS
+# fetches post.
+daedalus_ai.attach:
+  path: '/daedalus-ai/attach'
+  defaults:
+    _controller: '\Drupal\daedalus_ai\Controller\AttachmentController::attach'
+  methods: [POST]
+  requirements:
+    _permission: 'use ai assistant'
+    _user_is_logged_in: 'TRUE'
+    _csrf_request_header_token: 'TRUE'
+  options:
+    no_cache: TRUE
+
+# The eager release the chat's Clear History runs before ai_chatbot's reset:
+# the current user's files held by the `thread_id` (form or JSON body) lose
+# their usage and their names.
+daedalus_ai.attachments_release:
+  path: '/daedalus-ai/attachments/release'
+  defaults:
+    _controller: '\Drupal\daedalus_ai\Controller\AttachmentController::release'
+  methods: [POST]
+  requirements:
+    _permission: 'use ai assistant'
+    _user_is_logged_in: 'TRUE'
+    _csrf_request_header_token: 'TRUE'
+  options:
+    no_cache: TRUE

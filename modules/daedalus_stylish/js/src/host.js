@@ -43,8 +43,9 @@ const PopOutIcon = () => (
  * @param {object} [props.animations]
  *   The animation gesture gates (drupalSettings.daedalusStylish.animations).
  * @param {?object} [props.previewWindow]
- *   The responsive preview payload for the chip row's width-menu tail
- *   (drupalSettings.daedalusUi.responsivePreview).
+ *   The preview-window opener {url, scope} for the chip row's width-menu
+ *   tail, composed by the entry point from daedalusUi.responsivePreview.url
+ *   and daedalusUi.editSession.scope.
  */
 export const InspectorHost = ({
   source,

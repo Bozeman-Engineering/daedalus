@@ -119,7 +119,7 @@ final class HeadlessRenderer implements HeadlessRendererInterface {
       // so hide it. Everything vector-posed has already applied.
       $this->command('POST', "/session/$session/execute/sync", [
         'script' => 'const style = document.createElement("style");'
-        . ' style.textContent = "[data-canvas-chrome], .daedalus-ui-sidebar-wrapper, .daedalus-ui-sidebar-fabs, #edit-mode-toolbar { display: none !important; }";'
+        . ' style.textContent = "[data-canvas-chrome], .daedalus-ui-sidebar-wrapper, .daedalus-ui-sidebar-fabs { display: none !important; }";'
         . ' document.head.append(style);',
         'args' => [],
       ]);

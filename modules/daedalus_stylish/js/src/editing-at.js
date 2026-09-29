@@ -41,6 +41,7 @@
  */
 
 import { stopsFromConditions, stopPosePx } from './canvas-stops.js';
+import { createMatcher } from './selector-matcher.js';
 
 /**
  * The vector's resting pose: full width, follow the OS on both axes.
@@ -101,6 +102,26 @@ export const stateConditionNames = (conditions) =>
     .map(([name]) => name);
 
 /**
+ * Whether a condition is a structural FACT (the payload's `fact` flag).
+ *
+ * A fact (':first-child', ':empty') holds by the element's place in the
+ * markup, so no gesture can pose it: it never derives from the vector,
+ * never lights a chip, and the pose skips it. It is written only where a
+ * row addresses its own condition (the code view's islands, the AI).
+ */
+export const isFactCondition = (name, conditions) =>
+  conditions?.[name]?.fact === true;
+
+/**
+ * The structural fact names, in table order (the `&` gesture's Position
+ * group).
+ */
+export const factConditionNames = (conditions) =>
+  Object.keys(conditions ?? {}).filter((name) =>
+    isFactCondition(name, conditions),
+  );
+
+/**
  * The effective canvas width: the posed width, else the measured stage
  * width daedalus_ui publishes beside the axes on every vector
  * snapshot (the full width the unposed stage renders at). Null only when
@@ -150,7 +171,9 @@ const preferenceConditionFor = (axis, value, conditions) => {
 /**
  * The compound's parts for a vector pose + force state, in canonical
  * (axis-declaration) order. Empty when the pose activates nothing — the
- * default condition.
+ * default condition. Only the four canvas axes derive a part; a
+ * structural fact's axis is not a canvas axis, so a fact never lands in
+ * the editing compound (it is written where a row addresses it).
  */
 export const vectorParts = (vector, forceState, conditions) => {
   const pose = { ...DEFAULT_VECTOR, ...(vector ?? {}) };
@@ -186,7 +209,10 @@ export const vectorCondition = (vector, forceState, conditions) => {
  * lands exactly at the driven compound. Parts that cannot be posed, a
  * `@media` width condition (viewport-owned, the popout's business), an
  * unknown name, an axis the vector does not carry — leave their axis at
- * default and mark the pose incomplete.
+ * default and mark the pose incomplete. A structural FACT is skipped
+ * outright: it is the selection's place in the markup, not a canvas
+ * pose, so it neither drives an axis nor makes the pose incomplete
+ * (driving to 'hover+first-child' poses hover, complete).
  *
  * @return {{vector: Object, state: ?string, complete: boolean}}
  */
@@ -202,6 +228,9 @@ export const conditionPose = (condition, conditions) => {
   const stops = stopsFromConditions(conditions);
   for (const part of condition.split('+')) {
     const definition = conditions?.[part];
+    if (isFactCondition(part, conditions)) {
+      continue;
+    }
     const axis = definition?.axis;
     if (axis === 'state') {
       pose.state = part;
@@ -241,20 +270,26 @@ export const conditionPose = (condition, conditions) => {
  * vocabulary the inspector's axis selects offer. A condition the canvas
  * cannot pose (a site-provided @media width condition, the popout
  * viewport's business) is excluded: offering it would promise a pose the
- * select cannot deliver.
+ * select cannot deliver. A structural fact is never posable: the pose
+ * skips it rather than failing, so it is excluded by its flag.
  */
 export const poseableAxisConditions = (axis, conditions) =>
   Object.entries(conditions ?? {})
     .filter(
       ([name, definition]) =>
-        definition?.axis === axis && conditionPose(name, conditions).complete,
+        definition?.axis === axis &&
+        !isFactCondition(name, conditions) &&
+        conditionPose(name, conditions).complete,
     )
     .map(([name]) => name);
 
 /**
- * The conditions carrying styles on an element's (resolved) entry — what
- * the inspector's "Styled at" chips list. 'default' and the variants
- * reference list are not conditioned styles; empty blocks carry nothing.
+ * The conditions carrying styles on a condition-keyed entry — what the
+ * inspector's "Styled at" chips list, read over the target's floorless
+ * stack (style-stack.js deliveredEntry: the map's layers, every worn
+ * reference's conditions beside the own entry's). 'default' and the
+ * variants reference list are not conditioned styles; empty blocks carry
+ * nothing.
  */
 export const styledConditions = (entry) =>
   Object.entries(entry ?? {})
@@ -267,3 +302,75 @@ export const styledConditions = (entry) =>
         Object.keys(value).length > 0,
     )
     .map(([key]) => key);
+
+/**
+ * The structural facts an element satisfies, from the blueprint tree.
+ *
+ * The tree is the delivered lean node tree (the blueprint's `_tree`,
+ * source.getTree(): the leader reads the mirror, the satellite the
+ * broadcast), so the read works with or without a canvas. The element's
+ * place is its index among its tree siblings (a section's children, a
+ * region wrapper's nodes, or the root section list), evaluated by the
+ * selector matcher against each fact's printed WRAPPER
+ * (selector-matcher.js structuralHolds), so a site's own fact vocabulary
+ * needs no client code as long as it prints a structural pseudo-class
+ * the twin speaks. A key the tree does not carry (the entity, a field)
+ * satisfies nothing; a selector key reads its owner's place.
+ *
+ * @param {?Array} tree
+ *   The lean node tree.
+ * @param {?string} key
+ *   A selectable key ('block:{uuid}', 'container:{uuid}').
+ * @param {Object} conditions
+ *   guide.conditions.
+ *
+ * @return {Set<string>}
+ *   The satisfied fact names.
+ */
+export const satisfiedFacts = (tree, key, conditions) => {
+  const satisfied = new Set();
+  const facts = factConditionNames(conditions);
+  if (!facts.length || typeof key !== 'string') {
+    return satisfied;
+  }
+  const matcher = createMatcher(tree);
+  facts.forEach((name) => {
+    if (matcher.satisfies(key, conditions[name]?.wrapper ?? '')) {
+      satisfied.add(name);
+    }
+  });
+  return satisfied;
+};
+
+/**
+ * Whether a stored condition renders on the selection right now: its
+ * posable parts are exactly the posed compound and every fact part is
+ * one the selection satisfies.
+ *
+ * The code view's lit marker for a condition row. A pure pose ('hover')
+ * renders when the canvas stands there; a pure fact ('first-child')
+ * renders when the element is one, at any pose; a mixed compound needs
+ * both. 'default' never lights (it is the absence of conditions).
+ *
+ * @param {string} condition
+ *   The row's condition key.
+ * @param {string} posed
+ *   The editing compound the canvas derives (vectorCondition()).
+ * @param {Set<string>} satisfied
+ *   satisfiedFacts() for the row's element.
+ * @param {Object} conditions
+ *   guide.conditions.
+ */
+export const conditionRenders = (condition, posed, satisfied, conditions) => {
+  if (typeof condition !== 'string' || condition === 'default') {
+    return false;
+  }
+  const parts = condition.split('+');
+  const facts = parts.filter((part) => isFactCondition(part, conditions));
+  const posable = parts.filter((part) => !isFactCondition(part, conditions));
+  const posedParts = posed && posed !== 'default' ? posed.split('+') : [];
+  return (
+    posable.join('+') === posedParts.join('+') &&
+    facts.every((fact) => satisfied.has(fact))
+  );
+};

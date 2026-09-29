@@ -8,8 +8,12 @@
  * placement (anchoredPosition: hanging below with start edges aligned,
  * end alignment for a trigger at the inline end of its panel, the flip
  * above when only above fits, the clamp when neither side fits, and the
- * interplay of end alignment with the flip and the clamp); the explicit
- * align grammar (anything but 'start' or 'end' throws). The plain-DOM
+ * interplay of end alignment with the flip and the clamp); the side
+ * preference (side: 'above' hangs over the anchor, flips below when
+ * above is short, stays above clamped when neither fits; the default
+ * side is 'below' and unchanged by the grammar's arrival); the explicit
+ * side and align grammars (anything but 'below'/'above' or
+ * 'start'/'end' throws). The plain-DOM
  * host (js/popover/popover.js) measures and applies this; its dismissal,
  * Escape, and focus-return are DOM concerns covered by the FJS tier.
  *
@@ -139,6 +143,88 @@ test('anchored: clamps into the viewport when neither side fits', () => {
     anchoredPosition({ rect: { left: 700, right: 1000, top: 100, bottom: 130 }, align: 'end', width: 2000, height: 2000, ...viewport }),
     { left: 4, top: 4 },
     'an oversized surface pins to the top-left margin whatever the alignment',
+  );
+});
+
+test('anchored, side above: hangs over the anchor when above fits', () => {
+  // A widget popover over a selection chip mid-viewport: it must never
+  // cover the editing surface under the chip, so it prefers above even
+  // though below has plenty of room.
+  const rect = { left: 100, right: 130, top: 400, bottom: 430 };
+  assert.deepEqual(
+    anchoredPosition({ rect, side: 'above', ...size, ...viewport }),
+    { left: 100, top: 400 - 2 - 150 },
+    'above preferred and fitting: over the anchor, the gap between',
+  );
+  assert.deepEqual(
+    anchoredPosition({ rect, side: 'above', ...size, ...viewport, gap: 6 }),
+    { left: 100, top: 400 - 6 - 150 },
+    'the gap applies on the above side too',
+  );
+  assert.deepEqual(
+    anchoredPosition({ rect: { left: 600, right: 900, top: 400, bottom: 430 }, side: 'above', align: 'end', ...size, ...viewport }),
+    { left: 900 - 200, top: 400 - 2 - 150 },
+    'side and align compose: right edges aligned, above',
+  );
+});
+
+test('anchored, side above: flips below when above is short', () => {
+  // The reported bug: a chip just under the top rail, whose popover
+  // has no room above; it lands below the chip instead of under the bar.
+  const rect = { left: 100, right: 130, top: 60, bottom: 90 };
+  assert.deepEqual(
+    anchoredPosition({ rect, side: 'above', ...size, ...viewport }),
+    { left: 100, top: 92 },
+    'no room above: below the anchor, the gap on the other side',
+  );
+  // The above threshold counts the gap and the margin: top - gap - height
+  // >= margin; 156 - 2 - 150 = 4 fits exactly, one pixel less does not.
+  assert.deepEqual(
+    anchoredPosition({ rect: { left: 100, right: 130, top: 156, bottom: 186 }, side: 'above', ...size, ...viewport }),
+    { left: 100, top: 4 },
+    'fits above exactly',
+  );
+  assert.deepEqual(
+    anchoredPosition({ rect: { left: 100, right: 130, top: 155, bottom: 185 }, side: 'above', ...size, ...viewport }),
+    { left: 100, top: 187 },
+    'one pixel short above, room below: flips',
+  );
+  // 90 + 2 + 750 + 4 = 846 > 800: no room below either.
+  assert.deepEqual(
+    anchoredPosition({ rect, side: 'above', width: 200, height: 750, ...viewport }),
+    { left: 100, top: 4 },
+    'room neither side: stays above, clamped to the top margin',
+  );
+});
+
+test('anchored, side below: the default is unchanged by the side grammar', () => {
+  const rect = { left: 100, right: 130, top: 100, bottom: 130 };
+  assert.deepEqual(
+    anchoredPosition({ rect, side: 'below', ...size, ...viewport }),
+    anchoredPosition({ rect, ...size, ...viewport }),
+    'explicit below is the default',
+  );
+  assert.deepEqual(
+    anchoredPosition({ rect, side: 'below', ...size, ...viewport }),
+    { left: 100, top: 132 },
+    'below preferred and fitting: under the anchor',
+  );
+  assert.deepEqual(
+    anchoredPosition({ rect: { left: 100, right: 130, top: 700, bottom: 730 }, side: 'below', ...size, ...viewport }),
+    { left: 100, top: 700 - 2 - 150 },
+    'below preferred and short: flips above, as before',
+  );
+});
+
+test('anchored: side is an explicit grammar; anything else throws', () => {
+  const rect = { left: 100, right: 130, top: 100, bottom: 130 };
+  assert.throws(
+    () => anchoredPosition({ rect, side: 'top', ...size, ...viewport }),
+    /sides 'below' or 'above', not "top"/,
+  );
+  assert.throws(
+    () => anchoredPosition({ rect, side: null, ...size, ...viewport }),
+    /sides 'below' or 'above'/,
   );
 });
 

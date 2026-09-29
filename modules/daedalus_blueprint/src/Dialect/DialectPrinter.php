@@ -7,6 +7,7 @@ namespace Drupal\daedalus_blueprint\Dialect;
 use Drupal\daedalus_blueprint\FieldHandler\LinkFieldHandler;
 use Drupal\daedalus_blueprint\Materials\MaterialKind;
 use Drupal\daedalus_blueprint\Materials\MaterialRecord;
+use Drupal\daedalus_blueprint\Materials\RelativeSelector;
 
 /**
  * Prints the lean node tree as a canonical dialect document.
@@ -19,7 +20,7 @@ use Drupal\daedalus_blueprint\Materials\MaterialRecord;
  * one line per block; rich bodies verbatim; the <style> block printed
  * last, rules grouped per node in document order.
  *
- * Server residue never prints: info, form-only stubs, labels,
+ * Server residue never prints: info, form-only stubs, block labels,
  * label_rendered, layout_settings. What the model cannot write, it does
  * not read (the spec section 3 ruling).
  *
@@ -29,6 +30,14 @@ use Drupal\daedalus_blueprint\Materials\MaterialRecord;
  * parser takes the attribute back as an identity fact, never as a request
  * to re-instantiate). Only a stamp naming a rostered (published) stencil
  * prints: a dead stamp is residue the model could not write back.
+ *
+ * A container's name prints: a section carrying a label (the word the
+ * editor's tree, chips and panels call it by, the element-naming spine's
+ * one renamable slot) prints name="..." after its provenance, and the
+ * parser takes it back onto the same slot (DialectWalk::NAME_ATTR), so
+ * the model reads "Welcome", refers to the band by it and renames it
+ * through set {name}. A block's label stays residue: its name is derived
+ * from its content and is not renamable.
  *
  * The print teaches the write (dialect 0.4): every spelling the model
  * reads must be one it can write back verbatim. Attribute values are
@@ -43,15 +52,22 @@ use Drupal\daedalus_blueprint\Materials\MaterialRecord;
  * attribute where the variant spells as one on the element's tag (0.6:
  * every tag has an axis view, the container's and each block form's),
  * class otherwise. Canonical attribute order: id, data-alias, stencil,
- * axis attributes, class, field attributes, style.
+ * name (containers), axis attributes, class, field attributes, style.
  *
  * The printer is loud about spec v0.2's known gaps (DialectPrintException)
  * rather than printing something a parse could not round-trip: region
  * nodes (multi-region layouts), variant references outside the axis/class
  * rosters or carrying fragments, structured link values with title or
- * options, field-scoped style locals (':field_name'), states on '::>'
- * children entries, and structured values of fields with no attribute
- * contract.
+ * options, field-scoped style locals (':field_name'), and structured
+ * values of fields with no attribute contract. A '::' local prints as
+ * its relative selector after #id (`#id > pb-text .link`), the one
+ * grammar the parser reads back; states on the addressed element append
+ * to the selector's last compound and its generated box after them
+ * (`#id:hover::after` for the anchor's `::&::after` local, `#id >
+ * pb-text::before` for a chain's); the rule's own variant references
+ * print as wear declarations in its plain block (`#id > pb-text { tone:
+ * loud; class: button; color: red; }`), the attribute's twin
+ * (ruleWear()).
  */
 class DialectPrinter {
 
@@ -103,6 +119,137 @@ class DialectPrinter {
   }
 
   /**
+   * Prints a subtree's styles as <style> content, every entry a rule.
+   *
+   * The one per-element CSS print (the panel's "Copy CSS", the api's
+   * read mode css): what print() spells as the document's <style> block
+   * for these nodes, walked in document order, plus the one entry
+   * print() puts on the tag instead, the element's own default-condition
+   * styles, printed here as a `#id { }` rule because a clipboard text has
+   * no tag to carry a style="". Every rule is spelled exactly as print()
+   * spells it (rule()), so what a designer copies is what the AI reads
+   * and what the parser takes back: parseStyleBlock() over the print
+   * yields the entries the nodes hold.
+   *
+   * Two comment lines head each styled element, both blanked by the
+   * parser: its words (`/* Section: Welcome *\/`, the naming spine's
+   * `_element` type and name, which the lean tree carries when built over
+   * daedalus_ui's annotated sections; a bare tree prints no words), and
+   * its own wear (`/* wears tone="loud" class="button" *\/`, the tag's
+   * attribute spelling, variantAttrs()), because the dialect has no rule
+   * spelling for an element's own wear: the parser refuses it as
+   * WEAR_ON_ELEMENT, so it rides as a note, never as a declaration. A
+   * rule's wear prints inside its rule as print() does.
+   *
+   * Region nodes are transparent (their children print); an element
+   * with neither styles nor wear prints nothing.
+   *
+   * @param array $nodes
+   *   Lean nodes (NodeTreeBuilder's shape), a subtree or a pruned
+   *   element.
+   * @param \Drupal\daedalus_blueprint\Dialect\DialectCatalog $catalog
+   *   The dialect catalog the tree speaks.
+   * @param array $aliases
+   *   The uuid => alias pairings (unused by rules, which print the uuid
+   *   only; accepted for signature parity with print()).
+   *
+   * @return string
+   *   The <style> content, newline-terminated; '' when nothing prints.
+   */
+  public function printStyles(array $nodes, DialectCatalog $catalog, array $aliases = []): string {
+    $lines = [];
+    foreach ($nodes as $node) {
+      $this->collectStyleLines($node, $catalog, $lines);
+    }
+    return $lines === [] ? '' : implode("\n", $lines) . "\n";
+  }
+
+  /**
+   * Collects one node's CSS print lines, then its children's.
+   */
+  protected function collectStyleLines(array $node, DialectCatalog $catalog, array &$lines): void {
+    $kind = $node['kind'] ?? NULL;
+    if ($kind === 'region') {
+      foreach ($node['children'] ?? [] as $child) {
+        $this->collectStyleLines($child, $catalog, $lines);
+      }
+      return;
+    }
+    if ($kind !== 'container' && $kind !== 'block') {
+      throw new DialectPrintException(sprintf('unknown node kind "%s"; the CSS print covers container and block nodes', (string) $kind));
+    }
+    $rules = [];
+    $this->collectRules($node, $catalog, $kind === 'container', $rules, TRUE);
+    $wear = $this->variantAttrs($node, $catalog, $this->axesOf($node, $catalog), $this->tagOf($node, $catalog));
+    if ($rules !== [] || $wear !== []) {
+      $words = $this->words($node);
+      if ($words !== NULL) {
+        $lines[] = '  /* ' . $words . ' */';
+      }
+      if ($wear !== []) {
+        $lines[] = '  /* wears' . $this->attrString($wear) . ' */';
+      }
+      array_push($lines, ...$rules);
+    }
+    foreach ($node['children'] ?? [] as $child) {
+      $this->collectStyleLines($child, $catalog, $lines);
+    }
+  }
+
+  /**
+   * The element's words from the naming spine's annotation, if carried.
+   *
+   * `_element.type` and `_element.name` are daedalus_ui's annotator's
+   * facts (the type word "Section", the renamable or derived name), which
+   * ride the lean tree verbatim when it is built over annotated sections.
+   * "Type: Name" when the name says more than the type, the type alone
+   * when the element is called by its type, NULL when the tree carries no
+   * annotation.
+   */
+  protected function words(array $node): ?string {
+    $element = $node['_element'] ?? NULL;
+    if (!is_array($element)) {
+      return NULL;
+    }
+    $type = trim((string) ($element['type'] ?? ''));
+    $name = trim((string) ($element['name'] ?? ''));
+    if ($type === '' && $name === '') {
+      return NULL;
+    }
+    if ($type === '' || $name === '' || $name === $type) {
+      return $type !== '' ? $type : $name;
+    }
+    return $type . ': ' . $name;
+  }
+
+  /**
+   * The element's axis view, the way its tag print reads it.
+   */
+  protected function axesOf(array $node, DialectCatalog $catalog): array {
+    if (($node['kind'] ?? '') === 'container') {
+      return $catalog->axesFor(TRUE, NULL, NULL);
+    }
+    if (isset($node['plugin_id'])) {
+      return $catalog->axesFor(FALSE, NULL, (string) $node['plugin_id']);
+    }
+    return $catalog->axesFor(FALSE, (string) ($node['block_type'] ?? ''), NULL);
+  }
+
+  /**
+   * The element's dialect tag, for the wear print's exception.
+   */
+  protected function tagOf(array $node, DialectCatalog $catalog): string {
+    if (($node['kind'] ?? '') === 'container') {
+      return 'pb-container';
+    }
+    $block_type = (string) ($node['block_type'] ?? '');
+    if (isset($node['plugin_id']) || $block_type === '' || $catalog->blockType($block_type) === NULL) {
+      return 'pb-block';
+    }
+    return DialectCatalog::tagForBlockType($block_type);
+  }
+
+  /**
    * Prints one node and collects its <style> rules.
    */
   protected function printNode(array $node, DialectCatalog $catalog, int $depth, bool $top_level, array &$lines, array &$rules, array $aliases = []): void {
@@ -110,7 +257,7 @@ class DialectPrinter {
     $kind = $node['kind'] ?? NULL;
     switch ($kind) {
       case 'container':
-        $attrs = $this->identityAttr($node, $aliases) + $this->provenanceAttr($node, $catalog) + $this->variantAttrs($node, $catalog, $catalog->axesFor(TRUE, NULL, NULL), 'pb-container') + $this->styleAttr($node, $catalog);
+        $attrs = $this->identityAttr($node, $aliases) + $this->provenanceAttr($node, $catalog) + $this->nameAttr($node) + $this->variantAttrs($node, $catalog, $catalog->axesFor(TRUE, NULL, NULL), 'pb-container') + $this->styleAttr($node, $catalog);
         $lines[] = sprintf('%s<pb-container%s>', $indent, $this->attrString($attrs));
         $this->collectRules($node, $catalog, TRUE, $rules);
         foreach ($node['children'] ?? [] as $child) {
@@ -270,6 +417,23 @@ class DialectPrinter {
   }
 
   /**
+   * The name attribute from a container's label, when it carries one.
+   *
+   * The node's `label` key is the serializer's surface of the section's
+   * layout_settings.label (the tree's rename lands there through
+   * update_element {label}); the parser reads name="..." back onto the
+   * same key, so the round trip is lossless and one slot names the
+   * section on every door.
+   */
+  protected function nameAttr(array $node): array {
+    $label = $node['label'] ?? NULL;
+    if (!is_string($label) || $label === '') {
+      return [];
+    }
+    return [DialectWalk::NAME_ATTR => $label];
+  }
+
+  /**
    * The element's axis attributes, then class, from its own references.
    *
    * Every reference prints by its record's spelling: an axis attribute the
@@ -413,8 +577,21 @@ class DialectPrinter {
 
   /**
    * Collects a node's <style> rules: conditions and parts, in real CSS.
+   *
+   * @param array $node
+   *   The lean node.
+   * @param \Drupal\daedalus_blueprint\Dialect\DialectCatalog $catalog
+   *   The dialect catalog.
+   * @param bool $is_container
+   *   Whether the node is a container.
+   * @param string[] $rules
+   *   Collector for the printed rules (by reference).
+   * @param bool $own_default_as_rule
+   *   Whether the element's own default-condition entry prints as a
+   *   `#id { }` rule too (the CSS print, which has no tag for a style="")
+   *   instead of riding the tag alone (the document print).
    */
-  protected function collectRules(array $node, DialectCatalog $catalog, bool $is_container, array &$rules): void {
+  protected function collectRules(array $node, DialectCatalog $catalog, bool $is_container, array &$rules, bool $own_default_as_rule = FALSE): void {
     $identity = $node['uuid'] ?? $node['id'] ?? NULL;
     $styles = $node['styles'] ?? [];
     if ($styles === []) {
@@ -436,26 +613,85 @@ class DialectPrinter {
       if ($local !== '' && !str_starts_with($local, '::')) {
         throw new DialectPrintException(sprintf('style local "%s" on #%s is field-scoped; field-scoped styles have no dialect print yet', $local, $identity));
       }
-      if ($local !== '' && isset($entry['variants'])) {
-        throw new DialectPrintException(sprintf('variant references on part entry "%s" of #%s have no authored print', $local, $identity));
-      }
+      // A rule's references print as wear declarations in its plain
+      // block, before its own properties (the element's attributes print
+      // before its style="" the same way); the element's own ('') ride
+      // its tag as attributes (variantAttrs()).
+      $wear = $local === '' ? [] : $this->ruleWear($entry['variants'] ?? [], $catalog, $identity, $local);
+      $default_printed = FALSE;
       foreach ($entry as $condition => $properties) {
         $condition = (string) $condition;
         if ($condition === 'variants' || !is_array($properties) || $properties === []) {
           continue;
         }
-        if ($local === '' && $condition === 'default') {
+        if ($local === '' && $condition === 'default' && !$own_default_as_rule) {
           continue;
         }
-        $rules[] = $this->rule($identity, $local, $condition, $properties, $catalog);
+        $default_printed = $default_printed || $condition === 'default';
+        $rules[] = $this->rule($identity, $local, $condition, $properties, $catalog, $condition === 'default' ? $wear : []);
+      }
+      if ($wear !== [] && !$default_printed) {
+        $rules[] = $this->rule($identity, $local, 'default', [], $catalog, $wear);
       }
     }
   }
 
   /**
-   * Prints one rule, nested inside its condition wrappers.
+   * A rule's wear declarations: the attribute's twin, inside the rule.
+   *
+   * Each reference the rule's entry carries prints as the declaration its
+   * record spells: `{axis}: {value}` for a variant that is an axis
+   * attribute (in reference order), then one `class: a b` for the style
+   * classes (in reference order), exactly as the same variants print as
+   * attributes on an element's tag. A variant with neither spelling has
+   * no print and is refused loudly; a fragment or an origin-bearing
+   * reference cannot sit on a rule (the validator refuses compositions
+   * there), so none is skipped. The parser reads the declarations back
+   * (DialectCssParser::peelWear()), axis wear first, then class wear, so
+   * print(parse(x)) holds byte for byte.
+   *
+   * @param array $references
+   *   The rule entry's reference list.
+   * @param \Drupal\daedalus_blueprint\Dialect\DialectCatalog $catalog
+   *   The dialect catalog.
+   * @param string $identity
+   *   The owner's id, for the exception.
+   * @param string $local
+   *   The rule's style local ('::' plus the selector), for the exception.
+   *
+   * @return string[]
+   *   The declarations, `name: value`, in print order.
    */
-  protected function rule(string $identity, string $local, string $condition, array $properties, DialectCatalog $catalog): string {
+  protected function ruleWear(array $references, DialectCatalog $catalog, string $identity, string $local): array {
+    $declarations = [];
+    $classes = [];
+    foreach ($references as $reference) {
+      $variant = (string) ($reference['variant'] ?? '');
+      $axis = $catalog->axisForVariant($variant);
+      if ($axis !== NULL) {
+        $declarations[] = sprintf('%s: %s', $axis[0], $axis[1]);
+        continue;
+      }
+      $class = $catalog->classForVariant($variant);
+      if ($class === NULL) {
+        throw new DialectPrintException(sprintf('variant "%s" on the rule #%s %s spells as neither an axis attribute nor a published style class, so it has no print', $variant, $identity, substr($local, 2)));
+      }
+      $classes[] = $class;
+    }
+    if ($classes !== []) {
+      $declarations[] = 'class: ' . implode(' ', $classes);
+    }
+    return $declarations;
+  }
+
+  /**
+   * Prints one rule, nested inside its condition wrappers.
+   *
+   * @param string[] $wear
+   *   The rule's wear declarations (ruleWear()), printed before the
+   *   properties; only the default condition carries any.
+   */
+  protected function rule(string $identity, string $local, string $condition, array $properties, DialectCatalog $catalog, array $wear = []): string {
     $wrappers = [];
     $states = '';
     if ($condition !== 'default') {
@@ -473,32 +709,28 @@ class DialectPrinter {
       }
     }
 
-    if ($local === '::>') {
-      if ($states !== '') {
-        throw new DialectPrintException(sprintf('state conditions on the children entry of #%s have no selector in the grammar (#id > * takes no states)', $identity));
+    // A '::' local is a relative selector in its canonical spelling
+    // (the one grammar the parser reads back): #id, a space, the chain,
+    // the addressed element's states, and its generated box last of all
+    // (`#id:hover::after` for the anchor's `::&::after`, `#id > pb-text
+    // ::before` for a chain's box), the order CSS itself demands.
+    $selector = '#' . $identity;
+    $pseudo = '';
+    if ($local !== '') {
+      $relative = RelativeSelector::parse(substr($local, strlen(RelativeSelector::SUFFIX)));
+      if ($relative === NULL) {
+        throw new DialectPrintException(sprintf('style local "%s" on #%s is outside the relative selector grammar, so it has no dialect print', $local, $identity));
       }
-      $selector = sprintf('#%s > *', $identity);
+      $selector .= $relative->compounds === [] ? '' : ' ' . RelativeSelector::printCompounds($relative->compounds);
+      $pseudo = $relative->pseudo === NULL ? '' : RelativeSelector::SUFFIX . $relative->pseudo;
     }
-    elseif (str_starts_with($local, '::.') && str_ends_with($local, '::>')) {
-      // A part's children (one list's items): {key}::.s-x::> prints as
-      // the composed selector the parser accepts.
-      if ($states !== '') {
-        throw new DialectPrintException(sprintf('state conditions on the children entry of a part of #%s have no selector in the grammar', $identity));
-      }
-      $selector = sprintf('#%s .%s > *', $identity, substr($local, 3, -3));
-    }
-    elseif (str_starts_with($local, '::.')) {
-      $selector = sprintf('#%s .%s%s', $identity, substr($local, 3), $states);
-    }
-    elseif (str_starts_with($local, '::')) {
-      // The element-scoped tag tier: {key}::p prints as #id p.
-      $selector = sprintf('#%s %s%s', $identity, substr($local, 2), $states);
-    }
-    else {
-      $selector = '#' . $identity . $states;
-    }
+    $selector .= $states . $pseudo;
 
-    $rule = sprintf('%s { %s; }', $selector, $this->declarationList($properties, $catalog));
+    $declarations = $wear;
+    if ($properties !== []) {
+      $declarations[] = $this->declarationList($properties, $catalog);
+    }
+    $rule = sprintf('%s { %s; }', $selector, implode('; ', $declarations));
     $depth = count($wrappers);
     $rule = str_repeat('  ', $depth + 1) . $rule;
     for ($i = $depth - 1; $i >= 0; $i--) {

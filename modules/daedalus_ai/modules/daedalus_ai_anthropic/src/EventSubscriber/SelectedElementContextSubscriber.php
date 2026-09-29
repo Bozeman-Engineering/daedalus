@@ -15,11 +15,18 @@ use Symfony\Component\EventDispatcher\EventSubscriberInterface;
  * Injects selected element context using Anthropic conventions.
  *
  * Formats resolved elements as a numbered <system-reminder> ACTIVE SELECTION
- * block prepended to the last user message. Each element names what it
- * wears (its variants by label and spelling) and the stencil it was placed
- * from (by id and label) so imprecise references resolve against the
- * materials and "update the stencil this came from" needs no print read;
- * per-turn facts, never on the prefix. What an element KIND is for is not
+ * block prepended to the last user message. Each element names the
+ * styling target the user pointed at when it is a rule under the element
+ * (one sentence of vocabulary: the rule, its style-map key, and that
+ * styling acts on every match, so the AI writes at the rule rather than
+ * on the element), what it wears (its style stack's worn variants by
+ * label, at the target when one rides, each wearing with its origin:
+ * applied here with its spelling, via a composition, or a fragment of
+ * one; labels only, the values are explain_element_styles' answer) and
+ * the stencil it was placed from (by id and label) so imprecise references
+ * resolve against the materials and "update the stencil this came from"
+ * needs no print read; per-turn facts, never on the prefix. What an
+ * element KIND is for is not
  * repeated here: the cached design system brief and the schema teach
  * elements once, and a selection block that restated it paid that teaching
  * again per selected element per turn.
@@ -94,7 +101,7 @@ class SelectedElementContextSubscriber implements EventSubscriberInterface {
    *
    * @param \Drupal\ai_agents\PluginInterfaces\AiAgentInterface $agent
    *   The agent instance.
-   * @param array<int, array{description: string, materials?: string, placed_from?: string}> $elements
+   * @param array<int, array{description: string, target?: string, materials?: string, placed_from?: string}> $elements
    *   Resolved elements keyed by selection number.
    */
   protected function injectIntoLastUserMessage(AiAgentInterface $agent, array $elements): void {
@@ -106,6 +113,9 @@ class SelectedElementContextSubscriber implements EventSubscriberInterface {
     $lines = [];
     foreach ($elements as $number => $element) {
       $lines[] = '- Element ' . $number . ': ' . $element['description'];
+      if (!empty($element['target'])) {
+        $lines[] = '  Styling target: ' . $element['target'] . '.';
+      }
       if (!empty($element['materials'])) {
         $lines[] = '  Wears: ' . $element['materials'];
       }

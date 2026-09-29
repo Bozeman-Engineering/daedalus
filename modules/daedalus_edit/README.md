@@ -1,9 +1,10 @@
 # Daedalus Edit
 
 Daedalus Edit adds inline editing functionality. It does so by loading the entity
-form in the sidebar. When you click to edit a page element, it is replaced by
-the hidden form element. Doing it in this way means that all the back end is
-the same as the `/node/1/edit` page, so form_alters and what not still work.
+form in the sidebar. When you open a page element's edit (double-click it, or
+select it and press Enter), it is replaced by the hidden form element. Doing it
+in this way means that all the back end is the same as the `/node/1/edit` page,
+so form_alters and what not still work.
 
 ## Editing the page title
 
@@ -11,21 +12,27 @@ The entity's label field presents AS the page row in the element model, but
 on most sites the label never renders inside the entity: the H1 is the
 theme's page-title block. Daedalus Edit attributes that render as the title field's
 editable leaf (`PageTitleEditing`, mirroring the inline-block label
-attribution), so clicking the H1 edits the title in place and stages it to
-tempstore like any field. The page row's own Edit verb is a different door:
-it opens the Page form in the sidebar on every theme (the panel is the root's
-editor, whether or not a page-title block is placed) and never routes to the
-H1. Attribution only happens when the page title is provably the label's ONE
-render (a node's non-configurable title, or an unpreserved label on a Layout
-Builder display); anything ambiguous stays inert so leaf identities never
-duplicate.
+attribution), so the H1 is the title's editable leaf with the same pointer
+door as any leaf: hovering it names the page row, a click selects the page
+row, a double-click edits the title in place, staged to tempstore like any
+field, and the Tab walk reaches it as the page row's leaf. The page row's
+own Enter and Edit verb are a different door: they open the Page form in
+the sidebar on every theme (the panel is the root's editor, whether or not
+a page-title block is placed) and never route to the H1; the panel's Title
+widget and the page elements tree's root rename are the title's other two
+doors, and all three commit the same `update_element` on the label. A
+label write from any road (the form, an AI turn, undo) re-renders the H1
+by its key through the mutation response. Attribution only happens when the page title is
+provably the label's ONE render (a node's non-configurable title, or an
+unpreserved label on a Layout Builder display); anything ambiguous stays
+inert so leaf identities never duplicate.
 
 # Troubleshooting
 
 Daedalus Edit works by loading the relevant entity form into the sidebar as a
 "context" sidebar. The form items are hidden initially, but when an editable
-element is clicked on the page the form item is swapped into place for inline
-editing.
+element's edit is opened on the page (a double-click, or Enter on the selection)
+the form item is swapped into place for inline editing.
 
 ### Inline Editing z-index
 

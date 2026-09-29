@@ -46,6 +46,7 @@ class DaedalusStylishVariantTest extends KernelTestBase {
     'twig_events',
     'daedalus_tempstore',
     'daedalus_blueprint_api',
+    'file',
     'daedalus_ui',
     'daedalus_stylish',
     'daedalus_stylish_guide_test',
@@ -330,8 +331,11 @@ class DaedalusStylishVariantTest extends KernelTestBase {
     $this->assertSame('kind:field', (string) $validator->captureScope("field:{$this->uuid}:field_body"));
     // A field of an inline block styles — and scopes — like any field.
     $this->assertSame('kind:field', (string) $validator->captureScope("block:{$this->uuid}:field_quote"));
-    // Sub-element keys capture the parent's scope.
-    $this->assertSame('kind:container', (string) $validator->captureScope("container:{$this->uuid}::.inner"));
+    // A rule key captures its LANDING, the element its last compound
+    // names, and a part lands on no element scope (nothing wears there);
+    // keyAddress() still answers the full address.
+    $this->assertNull($validator->captureScope("container:{$this->uuid}::.inner"));
+    $this->assertSame('kind:container::.inner', (string) $validator->keyAddress("container:{$this->uuid}::.inner"));
     $this->assertNull($validator->captureScope('bogus:123'));
 
     // A block without a resolvable bundle degrades to the universal block
@@ -348,7 +352,8 @@ class DaedalusStylishVariantTest extends KernelTestBase {
     // them), the block family's other refinement.
     $plugin_uuid = $this->addPluginBlock($host, 'system_menu_block:account');
     $this->assertSame('block_plugin:system_menu_block', (string) $validator->captureScope("block:$plugin_uuid", ['entity' => $host]));
-    $this->assertSame('block_plugin:system_menu_block', (string) $validator->captureScope("block:$plugin_uuid::.menu-item", ['entity' => $host]));
+    $this->assertSame('block_plugin:system_menu_block::.menu-item', (string) $validator->keyAddress("block:$plugin_uuid::.menu-item", ['entity' => $host]));
+    $this->assertNull($validator->captureScope("block:$plugin_uuid::.menu-item", ['entity' => $host]));
 
     // Matching: exact, plus the degraded block-family looseness — a
     // "kind:block" side matches any block scope, but two resolved block

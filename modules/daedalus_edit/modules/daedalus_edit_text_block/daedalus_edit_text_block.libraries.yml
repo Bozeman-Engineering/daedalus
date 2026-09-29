@@ -6,3 +6,7 @@ text_composite_editor:
   css:
     component:
       css/text-composite-editor.css: {}
+  dependencies:
+    # The tag picker is the kit's segmented control on a token surface.
+    - daedalus_ui/variables
+    - daedalus_ui/panel_controls

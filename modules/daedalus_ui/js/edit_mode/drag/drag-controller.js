@@ -92,6 +92,12 @@ import * as builders from './ops-builders';
  *   unset.
  * - onComplete(response, target, data): optional hook after the mutation
  *   response has been applied to the page.
+ * - edit: optional; true makes a GAP drop a landing that starts typing:
+ *   the op-queue request carries the edit intent beside its select, and
+ *   the one editor door opens the placed element's editor once it lands
+ *   (op-queue.js). For sources placing NEW content whose next act is
+ *   always typing (the palette's block, a media file); a move lands a
+ *   plain selection.
  */
 
 const sources = new Map();
@@ -184,7 +190,7 @@ export const makeDraggable = (element, type, getData = null) => {
  * block form is a drag source by construction.
  *
  * The delegate's `draggable` attribute stays the CALLER's to toggle:
- * arming policy (which tool, which hover) is the consumer's domain, and a
+ * arming policy (which mode, which hover) is the consumer's domain, and a
  * draggable ancestor eats text-selection gestures, so it must be on only
  * while a drag could mean something (see selector-drag.js).
  *
@@ -311,9 +317,9 @@ export const getCurrentDrop = () =>
 
 /**
  * Publishes the current drop's panel-row and container keys when the
- * drop's IDENTITY changes — the tree unfolds the path to the row (the
- * drop's twin of the selection's auto-unfold), which is what lets the
- * caret's panel face draw inside folded containers, and the selection
+ * drop's IDENTITY changes — the tree reveals the path to the row (the
+ * drop's twin of the selection's reveal rule), which is what lets the
+ * caret's panel face draw inside collapsed containers, and the selection
  * indicator shows the container's trail (the depth indicator). Called
  * wherever currentDrop is assigned; identity only, the per-frame geometry
  * stays module state.
@@ -589,11 +595,15 @@ const commitDrop = async () => {
     // promise is in hand the node has visibly moved. Gap drops select what
     // they landed; element drops change an element in place and leave the
     // selection alone.
+    // A gap drop of a source that declares `edit` (the palette's new
+    // block, a media file) lands you typing: the landing says so on the
+    // request and the op queue opens the editor once the selection lands.
     const request = enqueueOperations({
       ...context,
       operations,
       optimistic,
       select: isElement ? null : landedUuid(operations),
+      edit: !isElement && spec.edit === true,
     });
     if (optimistic) {
       releaseCaret(drop);

@@ -21,6 +21,11 @@ inspector:
     # Palette swatch chips label themselves through the chrome tooltip
     # spine (data-daedalus-ui-tooltip); the engine must be attached to this document.
     - daedalus_ui/tooltip
+    # The outline pair (daedalus_ui's collapse controls, seated in the
+    # code view's showing row and at the Advanced sections' list head)
+    # registers with the reveal engine; the bundle must not rely on
+    # Edit.php attaching reveal for it.
+    - daedalus_ui/reveal
     # js/src/log.js grabs Drupal.Daedalus.logger at bundle load; the
     # dependency is what guarantees logging.js is there by then.
     - daedalus_ui/logging
@@ -42,6 +47,9 @@ inspector:
     # Every gesture outcome rides the notification spine
     # (Drupal.Daedalus.messenger) through js/src/notify.js.
     - daedalus_ui/messenger
+    # The code view's row and the canvas on a row click reveal the
+    # selection by the one reveal rule (Drupal.Daedalus.scrollReveal).
+    - daedalus_ui/scroll_reveal
     # The canvas is a live page: triggered entrances hold (or play natively)
     # there exactly as on the live site, and the inspector's Replay
     # affordance calls Drupal.Daedalus.Stylish.motionTriggers.replay(el).
@@ -55,9 +63,10 @@ satellite:
       # Editor chrome must never lose to page CSS: exempt from the
       # daedalus_stylish_layers wrapper layer so it competes unlayered.
       css/inspector.css: { daedalus_stylish_layers_exempt: true }
-      # The satellite window's own chrome (body-level :has() rules): split
-      # out of inspector.css so the leader page never pays their style
-      # invalidation cost; only this library attaches them.
+      # The satellite window's own layout (its column and banner): split out
+      # of inspector.css so the leader page never carries it; only this
+      # library attaches it. The window's chrome is daedalus_ui/popout's,
+      # attached by daedalus_ui on every pop-out route.
       css/satellite.css: { daedalus_stylish_layers_exempt: true }
   dependencies:
     - core/drupal
@@ -71,6 +80,10 @@ satellite:
     # The tooltip engine attaches per document; the satellite's swatch
     # chips need their own copy of tooltip.js watching THIS window.
     - daedalus_ui/tooltip
+    # Same bundle code, same chrome: the outline pair registers with
+    # THIS window's reveal engine (Drupal.Daedalus.reveal), and nothing
+    # else attaches it to the pop-out document.
+    - daedalus_ui/reveal
     # Same bundle code, same logger grab (js/src/log.js). The enabled-module
     # list is localStorage, so switching daedalus_stylish on in either window covers
     # both.
@@ -98,6 +111,10 @@ satellite:
     # own [data-drupal-messages] wrapper, and land in the one shared
     # history. The messenger attaches per document; this is its copy.
     - daedalus_ui/messenger
+    # Same bundle code, same row reveal: the code view's selected row
+    # reveals in THIS window's scrollport through this window's facade
+    # (Drupal.Daedalus.scrollReveal), so the satellite needs its own copy.
+    - daedalus_ui/scroll_reveal
 
 # The motion-triggers runtime (js/motion-triggers.js): the Animation
 # Triggers draft (`timeline-trigger` / `animation-trigger`) where the

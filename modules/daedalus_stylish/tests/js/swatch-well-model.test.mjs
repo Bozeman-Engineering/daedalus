@@ -56,38 +56,27 @@ test('wellFace: a lone inline color wears the painted literal face', () => {
   assert.deepEqual(wellFace(stops, { selected: 'var(--color-accent)', custom: true, literal: '#ff8800' }), { kind: 'literal', stop: null, literal: '#ff8800' });
 });
 
-test('wellFace: a ghost matching a stop wears that stop, muted', () => {
-  // The resting value beneath an unset row (choice-row-model.js
-  // restingValue, raw) lights the stop the way a committed value would:
-  // by its commit spelling, its id, or a normalized equivalent in the
-  // stop's matches. The kind says ghost, never stop, so the well renders
-  // it muted and the grid keeps nothing lit.
-  assert.deepEqual(wellFace(stops, { selected: null, custom: false }, 'var(--color-accent)'), { kind: 'ghost', stop: stops[0] });
-  assert.deepEqual(wellFace(stops, { selected: undefined, custom: false }, 'var(--swatch-brand_red)'), { kind: 'ghost', stop: stops[2] });
-  const matched = [{ ...stops[1], matches: ['var(--color-surface)', '#ffffff', '#fff'] }];
-  assert.deepEqual(wellFace(matched, { selected: null, custom: false }, '#FFF'), { kind: 'ghost', stop: matched[0] });
+test('wellFace: a lower layer\'s value lights its stop like an own value; nothing delivering is unset', () => {
+  // The state is read over the row's LIT value (the stack's winner at
+  // the pose, a skin's reference included), so the well has no resting
+  // face of its own: the skin's var() lights the stop that commits it,
+  // and only a null winner reads as the empty face.
+  assert.deepEqual(wellFace(stops, { selected: 'var(--color-accent)', custom: false }), { kind: 'stop', stop: stops[0] });
+  assert.deepEqual(wellFace(stops, { selected: null, custom: false }), { kind: 'unset', stop: null });
+  // A third argument is not part of the contract any more: ignored.
+  assert.deepEqual(wellFace(stops, { selected: null, custom: false }, 'var(--color-accent)'), { kind: 'unset', stop: null });
 });
 
-test('wellFace: a literal ghost no stop represents carries its raw value', () => {
-  // The well paints it through the one face-paint rule (facePair), so a
-  // skin's reference the stop table lacks still paints from roster data.
-  assert.deepEqual(wellFace(stops, { selected: null, custom: false }, '#ff8800'), { kind: 'ghost', stop: null, literal: '#ff8800' });
-  assert.deepEqual(wellFace(stops, { selected: null, custom: false }, 'var(--color-unknown)'), { kind: 'ghost', stop: null, literal: 'var(--color-unknown)' });
-});
-
-test('wellFace: nothing resting is the unset face', () => {
-  assert.deepEqual(wellFace(stops, { selected: null, custom: false }, null), { kind: 'unset', stop: null });
-  assert.deepEqual(wellFace(stops, { selected: null, custom: false }, undefined), { kind: 'unset', stop: null });
-  assert.deepEqual(wellFace(stops, { selected: null, custom: false }, ''), { kind: 'unset', stop: null });
-  assert.deepEqual(wellFace(stops, { selected: null, custom: false }, '   '), { kind: 'unset', stop: null });
-});
-
-test('wellFace: the ghost is ignored while a stop is selected or custom is set', () => {
-  // The state reads never learn about ghosts: a set value is the face,
-  // and "set" and "resting" stay distinct for every gesture and gate.
-  assert.deepEqual(wellFace(stops, { selected: 'var(--color-surface)', custom: false }, 'var(--color-accent)'), { kind: 'stop', stop: stops[1] });
-  assert.deepEqual(wellFace(stops, { selected: null, custom: true }, 'var(--color-accent)'), { kind: 'custom', stop: null });
-  assert.deepEqual(wellFace(stops, { selected: null, custom: true, literal: '#ff8800' }, 'var(--color-accent)'), { kind: 'literal', stop: null, literal: '#ff8800' });
-  const media = { id: 'media:abc', value: "url('media:abc')", label: 'Media image', paint: 'url("/files/hero.png") center / cover', paintDark: null, group: 'Image', media: true, thumbnail: '/files/hero.png' };
-  assert.deepEqual(wellFace([...stops, media], { selected: 'media:abc', custom: false }, 'var(--color-accent)'), { kind: 'media', stop: media });
+test('wellFace: the synthetic gradient stop wears the painted gradient face', () => {
+  // widget-gradients.js gradientImageStop flags itself: a lone gradient
+  // literal no offered stop claims is lit in the grid (its toggle the
+  // unpick) and the well paints it under the custom marker instead of
+  // falling through to the empty face. A gradient swatch's stop stays the
+  // plain stop face; custom still outranks.
+  const literal = 'linear-gradient(to right, #1b9ae4, #116392)';
+  const synthetic = { id: 'gradient:literal', value: literal, matches: [literal], label: 'Custom gradient', paint: literal, paintDark: null, group: 'Gradient', gradient: true };
+  assert.deepEqual(wellFace([...stops, synthetic], { selected: 'gradient:literal', custom: false }), { kind: 'gradient', stop: synthetic, gradient: literal });
+  assert.deepEqual(wellFace([...stops, synthetic], { selected: 'var(--swatch-hero_fade)', custom: false }), { kind: 'stop', stop: stops[3] });
+  assert.deepEqual(wellFace([...stops, synthetic], { selected: null, custom: true }), { kind: 'custom', stop: null });
+  assert.deepEqual(wellFace([...stops, synthetic], { selected: null, custom: false }), { kind: 'unset', stop: null });
 });

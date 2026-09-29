@@ -9,6 +9,8 @@ use Drupal\daedalus_ai\RouteEntityResolver;
 use Drupal\block_content\Entity\BlockContent;
 use Drupal\block_content\Entity\BlockContentType;
 use Drupal\daedalus_blueprint\LayoutBuilder\LayoutSerializer;
+use Drupal\daedalus_blueprint\Materials\ElementMaterials;
+use Drupal\daedalus_stylish\Entity\DaedalusStylishVariant;
 use Drupal\field\Entity\FieldConfig;
 use Drupal\field\Entity\FieldStorageConfig;
 use Drupal\KernelTests\KernelTestBase;
@@ -43,10 +45,13 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  *   client-supplied identifiers — a key that names anything but the root
  *   entity's own elements resolves to a generic description carrying no
  *   entity metadata at all, and anatomy sub-element keys are rejected.
- * - What an element WEARS rides its entry: the root entity's style-map
- *   entry for the key names variants by machine name, and the materials
- *   roster renders them by label and spelling (the per-turn fact that
- *   lets "the wide one" resolve); an unrostered reference is not worn.
+ * - What an element WEARS rides its style stack: the reference layers of
+ *   the root entity's stack for the key (a part key answers with its
+ *   root's), each wearing rendered by label with its origin (applied here
+ *   with its spelling, via a composition, or a fragment of one), so "the
+ *   wide one" resolves and a distributed wearing is never read as applied
+ *   here; an unrostered reference is not worn, and no value ever prints
+ *   (the values are explain_element_styles' answer).
  * - Where a placement was PLACED FROM rides its entry too: the staged
  *   node's stencil stamp resolves to the roster's record by id and label
  *   (so "update the stencil this came from" needs no print read); a stamp
@@ -94,6 +99,7 @@ class ContextResolverTest extends KernelTestBase {
     'navigation',
     'twig_events',
     'daedalus_tempstore',
+    'file',
     'daedalus_ui',
     // block_content: the standalone editing surface case the spine resolves
     // and the canonical regex never could.
@@ -170,9 +176,14 @@ class ContextResolverTest extends KernelTestBase {
       // A field key whose entity qualifier is NOT the root entity: nothing
       // may be loaded for it — the description stays generic.
       ['key' => "field:$foreign_uuid:secret_field", 'label' => 'X', 'number' => 4],
-      // An anatomy sub-element key is stylable, never selectable: it is
-      // rejected outright.
+      // An address: the styling target under the block spelled as a `::`
+      // key resolves to the block plus the rule as its target.
       ['key' => "block:$block_uuid::.hero-image", 'label' => 'X', 'number' => 5],
+      // The chips' wire for the same address: the owner key plus a
+      // selector field, canonicalized through the grammar.
+      ['key' => "container:$container_uuid", 'selector' => '>   pb-text', 'number' => 11],
+      // A selector outside the grammar is dropped: the owner alone.
+      ['key' => "container:$container_uuid", 'selector' => '[href]', 'number' => 12],
       // The block placement's displayed label.
       ['key' => "block:$block_uuid:label", 'label' => 'Heading', 'number' => 6],
       // A container (a Layout Builder section, the container-model
@@ -194,9 +205,20 @@ class ContextResolverTest extends KernelTestBase {
     $resolved = $this->selectionResolver()->resolve($selections, $root);
 
     // The ksort put the kept selections in ascending number order despite the
-    // input listing 2 first; the malformed, sub-element, and unknown-prefix
-    // entries produced nothing.
-    $this->assertSame([1, 2, 4, 6, 8], array_keys($resolved), 'Results are ksorted by selection number; malformed, sub-element, and retired-prefix keys are dropped.');
+    // input listing 2 first; the malformed and unknown-prefix entries
+    // produced nothing.
+    $this->assertSame([1, 2, 4, 5, 6, 8, 11, 12], array_keys($resolved), 'Results are ksorted by selection number; malformed and retired-prefix keys are dropped.');
+
+    // An address describes its owner and carries the rule as the styling
+    // target, naming the style-map key styling acts at; the two spellings
+    // (a `::` key, a key plus selector) read the same, the selector
+    // canonical; a selector outside the grammar leaves the owner alone.
+    $this->assertStringContainsString('Block (UUID: ' . $block_uuid . ')', $resolved[5]['description']);
+    $this->assertSame('the rule ".hero-image" under it (style-map key block:' . $block_uuid . '::.hero-image): styling acts on every element the rule matches, not on this element alone', $resolved[5]['target']);
+    $this->assertStringContainsString('Container (UUID: ' . $container_uuid . ')', $resolved[11]['description']);
+    $this->assertSame('the rule "> pb-text" under it (style-map key container:' . $container_uuid . '::> pb-text): styling acts on every element the rule matches, not on this element alone', $resolved[11]['target']);
+    $this->assertArrayNotHasKey('target', $resolved[12], 'A selector outside the grammar is dropped.');
+    $this->assertArrayNotHasKey('target', $resolved[8], 'A bare key carries no target.');
 
     // The block falls back to the key-vocabulary description (no
     // element_resolver wired), including the root entity context.
@@ -223,21 +245,228 @@ class ContextResolverTest extends KernelTestBase {
   }
 
   /**
-   * ElementSelectionResolver: the worn materials ride each element's entry.
+   * ElementSelectionResolver: the worn materials ride each element's stack.
    *
-   * The real roster (the materials test provider's reference records) and
-   * a real style map on the root entity: a container wearing the
-   * root-only width variant and a block wearing the button variant plus a
-   * stale reference the roster no longer serves.
+   * Real variant entities (the stack resolves references through the
+   * roster's entities, so a roster-only record is never worn) and a real
+   * style map on the root entity, the card scenario after a composition's
+   * apply: a container wearing "card_left" at its root, a block wearing
+   * "row" via that composition (the map's stamped provenance), a block
+   * wearing a fragment of the "duo" composition, and a block wearing
+   * "button" at its root beside a stale reference the roster no longer
+   * serves. A part key of the button block answers with its root's
+   * wearing through ElementMaterials::worn() (the resolver rejects part
+   * keys in selection state; the read still answers for one).
    */
   public function testElementSelectionNamesWornMaterials(): void {
-    $this->enableModules(['daedalus_stylish', 'daedalus_blueprint_materials_test']);
+    $this->installStylishStyles();
+
+    $button = DaedalusStylishVariant::create(['label' => 'Button', 'machine_name' => 'button', 'scope' => 'kind:block']);
+    $button->setStyles(['' => ['default' => ['font-weight' => 'bold']]]);
+    $button->save();
+    $row = DaedalusStylishVariant::create(['label' => 'Row', 'machine_name' => 'row', 'scope' => 'kind:block']);
+    $row->setStyles(['' => ['default' => ['display' => 'flex']]]);
+    $row->save();
+    $card = DaedalusStylishVariant::create([
+      'label' => 'Card Left',
+      'machine_name' => 'card_left',
+      'scope' => 'kind:container',
+    ]);
+    $card->setStyles([
+      '' => ['default' => ['display' => 'grid']],
+      'block(text,1)' => ['variants' => [['variant' => 'row', 'fragment' => '']]],
+    ]);
+    $card->save();
+    $duo = DaedalusStylishVariant::create(['label' => 'Duo', 'machine_name' => 'duo', 'scope' => 'kind:container']);
+    $duo->setStyles([
+      '' => ['default' => ['display' => 'grid']],
+      'block(text,1)' => ['default' => ['color' => 'red']],
+    ]);
+    $duo->save();
+
+    $container_uuid = '33333333-3333-3333-3333-333333333333';
+    $block_uuid = '11111111-1111-1111-1111-111111111111';
+    $via_uuid = '55555555-5555-5555-5555-555555555555';
+    $fragment_uuid = '66666666-6666-6666-6666-666666666666';
+    $root = $this->container->get('entity_type.manager')
+      ->getStorage('entity_test')
+      ->create([
+        'name' => 'Styled Root',
+        'daedalus_stylish_styles' => json_encode([
+          "container:$container_uuid" => ['variants' => [['variant' => 'card_left', 'fragment' => '']]],
+          "block:$via_uuid" => ['variants' => [['variant' => 'row', 'fragment' => '', 'via' => 'card_left']]],
+          "block:$fragment_uuid" => ['variants' => [['variant' => 'duo', 'fragment' => 'block(text,1)']]],
+          "block:$block_uuid" => [
+            'variants' => [['variant' => 'button', 'fragment' => ''], ['variant' => 'gone', 'fragment' => '']],
+            'default' => ['padding' => '1rem'],
+          ],
+          "block:$block_uuid::.text-block-link" => ['default' => ['color' => 'blue']],
+        ]),
+      ]);
+    $root->save();
+
+    $materials = $this->container->get('daedalus_blueprint.element_materials');
+    $resolver = new ElementSelectionResolver(
+      NULL,
+      $materials,
+      $this->container->get('daedalus_blueprint.storage_handler'),
+    );
+    $selection = [
+      ['key' => "container:$container_uuid", 'number' => 1],
+      ['key' => "block:$block_uuid", 'number' => 2],
+      ['key' => "block:$via_uuid", 'number' => 3],
+      ['key' => "block:$fragment_uuid", 'number' => 4],
+      ['key' => "field:{$root->uuid()}:name", 'number' => 5],
+      // A styling target under the button block (its link part): the
+      // materials are read AT the address, the part answering with its
+      // root's wearing (ElementMaterials::worn()).
+      ['key' => "block:$block_uuid", 'selector' => '.text-block-link', 'number' => 6],
+    ];
+    $resolved = $resolver->resolve($selection, $root);
+    $this->assertSame('button "Button" (class="button")', $resolved[6]['materials'], 'A target reads the wear at its address.');
+    $this->assertSame('the rule ".text-block-link" under it (style-map key block:' . $block_uuid . '::.text-block-link): styling acts on every element the rule matches, not on this element alone', $resolved[6]['target']);
+
+    // Identity and origin only: a wearing applied here shows the spelling
+    // the page language writes and the label a person says, never the
+    // description or a value (the per-turn budget); a distributed wearing
+    // names the composition that put it there instead of a spelling (it is
+    // not this element's own to write); a fragment names its slot.
+    $this->assertSame('card_left "Card Left" (class="card_left")', $resolved[1]['materials']);
+    $this->assertSame('button "Button" (class="button")', $resolved[2]['materials'], 'A stale reference the roster no longer serves is not worn.');
+    $this->assertSame('row "Row" via card_left "Card Left"', $resolved[3]['materials'], 'A wearing a composition distributed names its origin, no spelling.');
+    $this->assertSame('fragment block(text,1) of duo "Duo"', $resolved[4]['materials'], 'A fragment wearing names its slot of the composition, no spelling.');
+    $this->assertArrayNotHasKey('materials', $resolved[5], 'An element wearing nothing carries no materials entry.');
+    foreach ($resolved as $number => $element) {
+      $this->assertStringNotContainsString('bold', $element['materials'] ?? '', "Element $number prints no value.");
+      $this->assertStringNotContainsString('padding', $element['materials'] ?? '', "Element $number prints no value.");
+    }
+
+    // A part key answers with its root's wearings: the references live on
+    // the root entry and the root's variants style the part.
+    $staged = $this->container->get('daedalus_blueprint.storage_handler')->load('entity_test', (string) $root->id());
+    $part = $materials->worn($staged, "block:$block_uuid::.text-block-link");
+    $this->assertCount(1, $part);
+    $this->assertSame('button', $part[0]->record->id);
+    $this->assertSame('', $part[0]->fragment);
+    $this->assertNull($part[0]->via);
+
+    // A stale origin prints by machine name: the fact stays visible; the
+    // container's own wearing of the deleted composition is gone with it.
+    $card->delete();
+    $resolved = $resolver->resolve($selection, $root);
+    $this->assertSame('row "Row" via card_left', $resolved[3]['materials']);
+    $this->assertArrayNotHasKey('materials', $resolved[1]);
+  }
+
+  /**
+   * ElementSelectionResolver: a rule's wear reaches a member, never dresses it.
+   *
+   * A container's `> pb-text` rule wears "button": the rule's matches
+   * render the look, and the style stack lists it in a member's ancestor
+   * tier with the variant's identity (so the inspector can name it) but
+   * never in its variant tier. ElementMaterials::worn() reads the variant
+   * tier alone, so the member reports no wearing while the rule, as a
+   * styling target, reports the look; a stack that carried the variant on
+   * an ancestor layer beside a real wearing (the stack stubbed, the exact
+   * shape the ancestor tier produces) yields the wearing alone. A member
+   * reporting its section's wear would tell the AI the element wears what
+   * it cannot detach.
+   */
+  public function testMemberUnderWearingRuleWearsNothing(): void {
+    $this->installStylishStyles();
+    $button = DaedalusStylishVariant::create(['label' => 'Button', 'machine_name' => 'button', 'scope' => 'kind:block']);
+    $button->setStyles(['' => ['default' => ['font-weight' => 'bold']]]);
+    $button->save();
+    $row = DaedalusStylishVariant::create(['label' => 'Row', 'machine_name' => 'row', 'scope' => 'kind:block']);
+    $row->setStyles(['' => ['default' => ['display' => 'flex']]]);
+    $row->save();
+
+    $container_uuid = '33333333-3333-3333-3333-333333333333';
+    $member_uuid = '11111111-1111-1111-1111-111111111111';
+    $root = $this->container->get('entity_type.manager')
+      ->getStorage('entity_test')
+      ->create([
+        'name' => 'Styled Root',
+        'daedalus_stylish_styles' => json_encode([
+          "container:$container_uuid::> pb-text" => ['variants' => [['variant' => 'button', 'fragment' => '']]],
+          "block:$member_uuid" => ['default' => ['padding' => '1rem']],
+        ]),
+      ]);
+    $root->save();
+
+    $materials = $this->container->get('daedalus_blueprint.element_materials');
+    $resolver = new ElementSelectionResolver(
+      NULL,
+      $materials,
+      $this->container->get('daedalus_blueprint.storage_handler'),
+    );
+    $resolved = $resolver->resolve([
+      ['key' => "block:$member_uuid", 'number' => 1],
+      ['key' => "container:$container_uuid", 'selector' => '> pb-text', 'number' => 2],
+    ], $root);
+    $this->assertArrayNotHasKey('materials', $resolved[1], 'A member under a wearing rule wears nothing of its own.');
+    $this->assertSame('button "Button" (class="button")', $resolved[2]['materials'], 'The rule, as a target, wears the look.');
+
+    // The predicate itself: a stack carrying the rule's variant as an
+    // ancestor layer (its identity intact, resolved) beside the element's
+    // own wearing answers the wearing alone.
+    $stack = new class() {
+
+      /**
+       * A member's stack: the rule's worn layer, an own wearing, the own entry.
+       */
+      public function stack(array $map, string $key, array $context = []): array {
+        $layer = static fn (string $id, string $tier, ?string $variant): array => [
+          'id' => $id,
+          'tier' => $tier,
+          'scope' => NULL,
+          'variant' => $variant,
+          'fragment' => $variant === NULL ? NULL : '',
+          'via' => NULL,
+          'viaLabel' => NULL,
+          'label' => NULL,
+          'description' => NULL,
+          'axis' => NULL,
+          'resolved' => TRUE,
+          'editable' => $tier === 'element',
+          'carrier' => NULL,
+          'styles' => [],
+        ];
+        return [
+          'layers' => [
+            $layer('ancestor:container:x::> pb-text|button', 'ancestor', 'button'),
+            $layer('variant:row', 'variant', 'row'),
+            $layer('element', 'element', NULL),
+          ],
+        ];
+      }
+
+    };
+    $stubbed = new ElementMaterials(
+      $this->container->get('daedalus_blueprint.node_tree_builder'),
+      $this->container->get('daedalus_blueprint.materials_roster_builder'),
+      $stack,
+    );
+    $staged = $this->container->get('daedalus_blueprint.storage_handler')->load('entity_test', (string) $root->id());
+    $worn = $stubbed->worn($staged, "block:$member_uuid");
+    $this->assertSame(['row'], array_map(static fn ($wearing) => $wearing->record->id, $worn), 'Only the variant tier is a wearing; an ancestor layer carrying a variant is the rule\'s.');
+  }
+
+  /**
+   * Installs daedalus_stylish and its style map field on entity_test.
+   */
+  protected function installStylishStyles(): void {
+    $this->enableModules(['daedalus_stylish']);
     $this->installEntitySchema('daedalus_variant');
     $this->installEntitySchema('daedalus_swatch');
     $this->installEntitySchema('daedalus_animation');
     $this->installEntitySchema('daedalus_skin');
-    // Saving a styled entity records variant and swatch usage.
-    $this->installSchema('daedalus_stylish', ['daedalus_variant_usage', 'daedalus_swatch_usage']);
+    // Saving a styled entity records variant, swatch and animation usage.
+    $this->installSchema('daedalus_stylish', [
+      'daedalus_variant_usage',
+      'daedalus_swatch_usage',
+      'daedalus_animation_usage',
+    ]);
     $this->installConfig(['daedalus_stylish']);
     FieldStorageConfig::create([
       'field_name' => 'daedalus_stylish_styles',
@@ -251,39 +480,6 @@ class ContextResolverTest extends KernelTestBase {
       'label' => 'Styles',
     ])->save();
     $this->setUpCurrentUser([], [], TRUE);
-
-    $container_uuid = '33333333-3333-3333-3333-333333333333';
-    $block_uuid = '11111111-1111-1111-1111-111111111111';
-    $root = $this->container->get('entity_type.manager')
-      ->getStorage('entity_test')
-      ->create([
-        'name' => 'Styled Root',
-        'daedalus_stylish_styles' => json_encode([
-          "container:$container_uuid" => ['variants' => [['variant' => 'container_full', 'fragment' => '']]],
-          "block:$block_uuid" => [
-            'variants' => [['variant' => 'button', 'fragment' => ''], ['variant' => 'gone', 'fragment' => '']],
-            'default' => ['padding' => '1rem'],
-          ],
-        ]),
-      ]);
-    $root->save();
-
-    $resolver = new ElementSelectionResolver(
-      NULL,
-      $this->container->get('daedalus_blueprint.element_materials'),
-      $this->container->get('daedalus_blueprint.storage_handler'),
-    );
-    $resolved = $resolver->resolve([
-      ['key' => "container:$container_uuid", 'number' => 1],
-      ['key' => "block:$block_uuid", 'number' => 2],
-      ['key' => "field:{$root->uuid()}:name", 'number' => 3],
-    ], $root);
-
-    // Identity only: the spelling the page language writes, the label a
-    // person says, never the description (the per-turn budget).
-    $this->assertSame('container_full "Full width" (width="full")', $resolved[1]['materials']);
-    $this->assertSame('button "Button" (class="button")', $resolved[2]['materials'], 'A stale reference the roster no longer serves is not worn.');
-    $this->assertArrayNotHasKey('materials', $resolved[3], 'An element wearing nothing carries no materials entry.');
   }
 
   /**
@@ -296,7 +492,7 @@ class ContextResolverTest extends KernelTestBase {
    * and a plain block. daedalus_layout gives the section its selectable uuid.
    */
   public function testElementSelectionNamesPlacementProvenance(): void {
-    $this->enableModules(['daedalus_blueprint_materials_test', 'daedalus_layout']);
+    $this->enableModules(['daedalus_blueprint_materials_test', 'daedalus_blueprint_api', 'daedalus_layout']);
     LayoutBuilderEntityViewDisplay::create([
       'targetEntityType' => 'entity_test',
       'bundle' => 'entity_test',

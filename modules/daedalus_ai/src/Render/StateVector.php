@@ -121,4 +121,20 @@ final class StateVector {
     );
   }
 
+  /**
+   * The pose as a filename fragment, omitting axes at their default.
+   *
+   * The same omission as toQuery(): a shot at the default state is named
+   * by its page alone, a posed one carries its axes in order
+   * (`375-dark-reduce`). The vocabularies never collide, so a lone word
+   * is unambiguous (`full` can only be the motion axis: a full width is
+   * the omitted default).
+   *
+   * @return string
+   *   The joined axis values, or '' at the default state.
+   */
+  public function slug(): string {
+    return implode('-', array_values($this->toQuery()));
+  }
+
 }
