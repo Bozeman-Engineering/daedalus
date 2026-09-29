@@ -30,7 +30,8 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  * engine (registered through the app's edit-session facade), while the
  * gestures that open, walk and end an edit are daedalus_ui's: Enter on the
  * selection, a double-click at a leaf, Escape's one ladder, Cmd+Enter's
- * commit, the tree row's Enter, the landing intent of a placement. A key
+ * commit, the tree row's Enter (a landing, a placement included, never
+ * opens an editor; only these gestures do). A key
  * pressed in daedalus_ui's dispatcher reaching daedalus_edit's editor is
  * exactly what daedalus_ui exists to provide.
  *
@@ -441,8 +442,8 @@ class EditModeBehaviorTest extends WebDriverTestBase {
     // after the canvas) the next stop would be the foreign leaf; the gated
     // traversal has no next stop. The origin is selected through the
     // facade, which lands a PLAIN selection (no edit opens from a
-    // selection write: a landing opens an editor only when its request
-    // says so), and Enter, the editor door, opens the leaf's edit, waited
+    // selection write: a landing never opens an editor), and Enter, the
+    // editor door, opens the leaf's edit, waited
     // for until its editor is live (the door's editItem is asynchronous).
     // The Tab walk starts from an OPEN edit only (with no edit open Tab is
     // the browser's), and Tab at the edit's edge commits it: the fixture
@@ -1833,8 +1834,8 @@ class EditModeBehaviorTest extends WebDriverTestBase {
       'A container selection is a plain selection: no dash, verbs on the face.',
     );
     // An editable primary landed by a selection write (the facade, the
-    // popped-out inspector's road) is a plain selection too: no edit opens
-    // from a landing unless its request says so, so the block sits
+    // popped-out inspector's road) is a plain selection too: a landing
+    // never opens an editor, so the block sits
     // selected with the selection verbs (the Edit verb among them) on its
     // face and no dash.
     $this->getSession()->executeScript("Drupal.Daedalus.Selection.select('block:$component_uuid');");
@@ -2061,7 +2062,7 @@ class EditModeBehaviorTest extends WebDriverTestBase {
 
     // --- The element picker: the DevTools "select an element" toggle. ---
     // The page elements tree's picker button (page-elements/
-    // picker-toggle.js, first of the tools at the end of the pinned root
+    // picker-toggle.js, last of the tools at the end of the pinned root
     // row) arms the selection slice's pickerArmed, the
     // SECOND source of the one depth policy (selection/depth-policy.js):
     // armed, canvas hover and click resolve the deepest presented element

@@ -19,10 +19,10 @@ import { register as registerHotkey } from '../hotkeys/hotkeys';
  * mode but a fact of the selection, the store's editingKey, entered by a
  * gesture that means "edit this" and left by a gesture that ends it. There
  * is no armed state, no store door and no session to leave: with no edit
- * open the selection grammar is the only grammar, and a selection that
- * lands never opens an editor by itself; a landing that should start
- * typing says so on its op-queue request (`edit: true` beside `select`,
- * op-queue.js) and reaches the same door every other gesture does.
+ * open the selection grammar is the only grammar, and a landing never
+ * opens an editor: a placement (the palette's block, the Add panel's
+ * click-to-place, a dropped media file) lands a plain selection, and the
+ * editor opens only when the user asks through the door below.
  *
  * THE DOOR. openEditor(key[, target]) is the one way in, and every gesture
  * that means "edit this" calls it: Enter on the selection (the `edit.enter`
@@ -31,8 +31,8 @@ import { register as registerHotkey } from '../hotkeys/hotkeys';
  * (selector-events.js, chain index 0, passing the pointer's target so the
  * leaf it hit is the one that edits), a page-tree row's Enter (the same
  * binding: the tree is a tree widget, so its rows' Enter reaches the
- * dispatcher), the entity-form panel's toggle presenting the root, the op
- * queue's `edit` intent, and the engine's validation-failure re-open. A
+ * dispatcher), the entity-form panel's toggle presenting the root, and the
+ * engine's validation-failure re-open. A
  * key that owns a canvas leaf opens that leaf's editor (editItem); a key
  * with no leaf but a SUBJECT the engine can present (the root entity, a
  * block placement whose fields all live in the panel) is presented in the

@@ -24,6 +24,7 @@ import {
 } from './element-targets';
 import { projectionIndex } from '../components/page-elements/projection-index';
 import { representedChainKeys } from '../selection/resolver';
+import { isTypingTarget } from '../hotkeys/typing';
 import * as builders from './ops-builders';
 
 /**
@@ -92,12 +93,13 @@ import * as builders from './ops-builders';
  *   unset.
  * - onComplete(response, target, data): optional hook after the mutation
  *   response has been applied to the page.
- * - edit: optional; true makes a GAP drop a landing that starts typing:
- *   the op-queue request carries the edit intent beside its select, and
- *   the one editor door opens the placed element's editor once it lands
- *   (op-queue.js). For sources placing NEW content whose next act is
- *   always typing (the palette's block, a media file); a move lands a
- *   plain selection.
+ * A gap drop lands a plain selection of what it placed, whatever the
+ * source; no landing opens an editor (editing is the user's next, explicit
+ * gesture through the one editor door, edit-session.js). A pointer drop
+ * also hands keyboard focus from the chrome control the drag started on
+ * to the document (releaseChromeFocus), so that next gesture's Enter
+ * reaches the dispatcher; the keyboard lift's drop keeps focus on its
+ * panel item.
  */
 
 const sources = new Map();
@@ -366,7 +368,10 @@ export const setCurrentDrop = (drop) => {
  * Commits the current drop and ends an externally-armed drag — the
  * keyboard lift's drop key. Mirrors the document drop handler's external
  * sequence: commitDrop() runs (the committing flag keeps the caret alive
- * through the in-flight mutation), then the gesture ends.
+ * through the in-flight mutation), then the gesture ends. Unlike the
+ * pointer door, this one leaves keyboard focus where it is: the panel
+ * item that lifted keeps it, so "type, then place another" stays on the
+ * item.
  *
  * @return {boolean}
  *   Whether a drop was committed.
@@ -375,9 +380,9 @@ export const commitCurrentDrop = () => {
   if (!activeSource?.external || !currentDrop) {
     return false;
   }
-  commitDrop();
+  const committed = commitDrop();
   endDrag();
-  return true;
+  return committed;
 };
 
 /**
@@ -522,7 +527,9 @@ const optimisticMove = (drop, data) => {
  * with the op that names the placed element), else the moved element.
  * Selection follows it once the response settles (the op queue's select
  * option), for every gap source uniformly: a drop means "put this here",
- * and focus belongs on what was just put there.
+ * and the selection belongs on what was just put there. After a pointer
+ * drop keyboard focus follows too (releaseChromeFocus), so the keys act
+ * on the placed element rather than on the control that dragged it.
  */
 const landedUuid = (operations) => {
   const landed = [...operations]
@@ -549,21 +556,68 @@ const releaseCaret = (drop) => {
   }
 };
 
+// Edit Mode chrome whose controls a pointer drag can start on: the
+// sidebars hold every tray draggable (the Add panel's items, the tree's
+// rows).
+const CHROME = '.daedalus-ui-sidebar-wrapper';
+
+/**
+ * Hands keyboard focus from Edit Mode chrome to the document after a
+ * pointer drop.
+ *
+ * A native drag leaves DOM focus on the control the mouse pressed (the
+ * palette item, a tree row), and that control's Enter means the control's
+ * own thing (the Add panel lifts the item again, the tree opens its row)
+ * while the selection now sits on what was placed. Blurring it lets the
+ * next keystroke reach the dispatcher, where Enter opens the placed
+ * block's editor. Only chrome is released: focus inside the canvas, or in
+ * an open editor's field (a typing target, the panel's widgets included),
+ * is not the drop's to move. Same door as the panel's own release
+ * (panel-focus.js), wider scope: any sidebar control, not only a tree row.
+ */
+const releaseChromeFocus = () => {
+  const active = document.activeElement;
+  if (
+    typeof active?.closest !== 'function' ||
+    active.closest(CHROME) === null ||
+    isTypingTarget(active)
+  ) {
+    return false;
+  }
+  active.blur();
+  return true;
+};
+
 /**
  * Commits the current drop: source ops → placeholder → op queue.
+ *
+ * The gate is synchronous so a door can act on the verdict at drop time;
+ * the commit itself runs on from runCommit.
+ *
+ * @return {boolean}
+ *   Whether the drop is being committed (false: no target, or a gap drop
+ *   on a page with no blueprint root).
  */
-const commitDrop = async () => {
+const commitDrop = () => {
   const drop = currentDrop;
-  const { spec, data } = activeSource;
   const context = Drupal.Daedalus.Blueprint.rootContext();
   // Element drops need no blueprint context up front: a face whose
   // operations run their own pipeline (upload/replace) works on pages
   // with no blueprint root. Returned blueprint ops still require it at
   // enqueue, where its absence fails loudly.
   if (!drop || (!context && drop.kind !== 'element')) {
-    return;
+    return false;
   }
+  runCommit(drop, context);
+  return true;
+};
 
+/**
+ * The commit pipeline for a gated drop: source ops → placeholder → op
+ * queue, failure display on the way out.
+ */
+const runCommit = async (drop, context) => {
+  const { spec, data } = activeSource;
   const isElement = drop.kind === 'element';
   committingDrop = drop;
   store.dispatch(commitStarted());
@@ -595,15 +649,11 @@ const commitDrop = async () => {
     // promise is in hand the node has visibly moved. Gap drops select what
     // they landed; element drops change an element in place and leave the
     // selection alone.
-    // A gap drop of a source that declares `edit` (the palette's new
-    // block, a media file) lands you typing: the landing says so on the
-    // request and the op queue opens the editor once the selection lands.
     const request = enqueueOperations({
       ...context,
       operations,
       optimistic,
       select: isElement ? null : landedUuid(operations),
-      edit: !isElement && spec.edit === true,
     });
     if (optimistic) {
       releaseCaret(drop);
@@ -661,7 +711,13 @@ const onDrop = (event) => {
     // readable from dragenter/dragover.
     activeSource.data.files = Array.from(event.dataTransfer?.files ?? []);
   }
-  commitDrop();
+  // The pointer door releases focus; the keyboard lift's door
+  // (commitCurrentDrop) keeps it on the panel item. Only a drop the
+  // controller takes moves focus: a release with nothing placed would
+  // strand the keyboard for no selection.
+  if (commitDrop()) {
+    releaseChromeFocus();
+  }
   if (wasExternal) {
     // No dragend follows an external drag; the drop is the end. The
     // committing flag keeps the caret alive through the in-flight commit,

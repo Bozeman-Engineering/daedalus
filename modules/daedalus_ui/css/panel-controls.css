@@ -519,9 +519,12 @@ button.daedalus-ui-chip:focus-visible {
   background: var(--daedalus-selection-background);
 }
 
+/* Disabled must read as unavailable, not as a slightly dimmer glyph: the
+   muted variant already sits below the text color, so the step down
+   from it has to be a large one. */
 .daedalus-ui-icon-button:disabled {
   cursor: default;
-  opacity: 0.6;
+  opacity: 0.35;
 }
 
 /* Same lingering-ring treatment as the pill button. */

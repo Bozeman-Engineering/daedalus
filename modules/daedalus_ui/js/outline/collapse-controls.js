@@ -7,7 +7,7 @@ import { describeBinding } from '../edit_mode/hotkeys/binding';
 
 /**
  * @file
- * The collapse controls: collapse all and expand all over one outline.
+ * The collapse controls: expand all and collapse all over one outline.
  *
  * Two kit icon buttons (panel-controls.css `.daedalus-ui-icon-button`,
  * the muted variant, like the picker toggle beside them on the page
@@ -88,7 +88,7 @@ const ControlButton = ({ className, label, tooltip, icon, disabled, onClick }) =
 };
 
 /**
- * The pair.
+ * The pair, expand all first.
  *
  * @param {object} props
  *   - id: the outline's id, the registrar's; omitted when the outline
@@ -111,20 +111,20 @@ export const CollapseControls = ({ id, folds, outline, apply }) => {
   return (
     <Fragment>
       <ControlButton
-        className="daedalus-ui-collapse-all"
-        label={collapseLabel}
-        tooltip={id ? tooltipFor(collapseLabel, ids.collapseAll) : collapseLabel}
-        icon={collapseAllIcon}
-        disabled={allCollapsed(folds, outline)}
-        onClick={() => apply(collapseAll(folds, outline), 'collapse_all')}
-      />
-      <ControlButton
         className="daedalus-ui-expand-all"
         label={expandLabel}
         tooltip={id ? tooltipFor(expandLabel, ids.expandAll) : expandLabel}
         icon={expandAllIcon}
         disabled={allExpanded(folds, outline)}
         onClick={() => apply(expandAll(folds, outline), 'expand_all')}
+      />
+      <ControlButton
+        className="daedalus-ui-collapse-all"
+        label={collapseLabel}
+        tooltip={id ? tooltipFor(collapseLabel, ids.collapseAll) : collapseLabel}
+        icon={collapseAllIcon}
+        disabled={allCollapsed(folds, outline)}
+        onClick={() => apply(collapseAll(folds, outline), 'collapse_all')}
       />
     </Fragment>
   );

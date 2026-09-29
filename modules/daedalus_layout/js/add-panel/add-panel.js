@@ -95,10 +95,6 @@ window.DaedalusUiQueue.push((app) => {
   // add_element op server-side.
   app.drag.registerSource('new_block', {
     targets: 'block',
-    // A fresh block with sample content is the one landing whose next act
-    // is always typing: the drop opens the placed block's editor (the op
-    // queue's edit intent beside its select).
-    edit: true,
     // A plain block lands anywhere a block gap is; a block-rooted stencil
     // item answers the stencil predicate.
     acceptsTarget: (target, data) =>
@@ -445,15 +441,13 @@ window.DaedalusUiQueue.push((app) => {
     try {
       // select lands focus on the placed element; the expectation keeps the
       // session's disarm-on-selection-change from reading it as a new
-      // intent. A placed BLOCK is new content whose next act is typing, so
-      // the request opens its editor too (the op queue's edit intent); a
-      // section has no editor.
+      // intent. The placement lands a plain selection: editing is the
+      // user's next, explicit gesture (Enter, double-click, the Edit chip).
       expectPlacement(placedKey);
       await Drupal.Daedalus.Blueprint.mutate({
         ...context,
         operations,
         select: placedKey,
-        edit: !placingSection,
       });
       setPendingAnchor(placedKey);
     } catch (error) {
@@ -488,7 +482,10 @@ window.DaedalusUiQueue.push((app) => {
   // dispatcher and exist only while armed (armSession/endSession),
   // so an unarmed selection keeps every key's normal meaning; each action
   // still self-checks the armed state and returns false as a belt-and-
-  // braces guard.
+  // braces guard. Enter is the one key the session shares with a live
+  // selection binding (edit.enter): with nothing highlighted the place
+  // action PASSES the stroke on instead, so Enter right after a
+  // click-to-place opens the placed block's editor.
 
   // The clickable items of the visible tab, in DOM order. The highlight is
   // re-resolved against this list on every keypress, so a panel refresh
@@ -549,7 +546,12 @@ window.DaedalusUiQueue.push((app) => {
       label: Drupal.t('Insert: place the highlighted block'),
       action: () => {
         if (!pendingAnchor || !highlighted) {
-          return false;
+          // Not the session's stroke: with no item highlighted, Enter
+          // belongs to the next live binding on the key, the selection's
+          // edit.enter, which opens the selected (just placed) block's
+          // editor. A pass, not a false: false would stop the key here and
+          // shadow edit.enter for as long as the session is armed.
+          return app.Hotkeys.PASS;
         }
         // Enter LIFTS the highlighted item: panel placement is the keyboard
         // move entered from the other end. The insertion caret starts at

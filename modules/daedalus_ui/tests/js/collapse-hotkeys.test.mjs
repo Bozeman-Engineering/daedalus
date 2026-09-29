@@ -13,6 +13,14 @@
  * nothing here), and the stroke is handled. The returned unregister
  * removes both bindings, after which the key propagates.
  *
+ * The dispatcher's pass rule is locked here too, over the same facade
+ * (PASS is a facade entry, the road a binding registered outside the
+ * bundle returns it by): the winner runs first; only an action returning
+ * PASS hands the stroke to the next live candidate in winning order;
+ * false or a handled verdict stops there; when every candidate passes
+ * the app did not handle the key; and a hold-kind binding that passes is
+ * never held, so its release never fires.
+ *
  * The registrar reaches the dispatcher through the facade initHotkeys
  * publishes (Drupal.Daedalus.Hotkeys; js/outline/ never imports the
  * app's stateful modules, since other bundles compile it in), and the
@@ -71,7 +79,7 @@ globalThis.Drupal = {
 
 const { default: store } = await import('../../js/edit_mode/store/store.js');
 const { setHotKey } = await import('../../js/edit_mode/store/slices/hot-key-slice.js');
-const { initHotkeys, getBindings } = await import('../../js/edit_mode/hotkeys/hotkeys.js');
+const { initHotkeys, getBindings, PASS } = await import('../../js/edit_mode/hotkeys/hotkeys.js');
 const { parseBinding } = await import('../../js/edit_mode/hotkeys/binding.js');
 const { registerCollapseHotkeys, collapseHotkeyIds } = await import(
   '../../js/outline/collapse-hotkeys.js'
@@ -103,6 +111,29 @@ const keydown = (binding) => {
   };
   (listeners.get('keydown') ?? []).forEach((listener) => listener(event));
   return event;
+};
+
+/**
+ * Feeds the matching keyup, the release a held binding waits for.
+ */
+const keyup = (binding) => {
+  const { key } = parseBinding(binding);
+  const event = { key, code: key, metaKey: false, ctrlKey: false, altKey: false, shiftKey: false, target: {}, preventDefault() {}, stopPropagation() {} };
+  (listeners.get('keyup') ?? []).forEach((listener) => listener(event));
+};
+
+/**
+ * Registers bindings through the facade in the given order (the later
+ * one wins a full tie) and runs the case, unregistering afterwards.
+ */
+const withBindings = (specs, run) => {
+  const registry = Drupal.Daedalus.Hotkeys;
+  specs.forEach((spec) => registry.register(spec));
+  try {
+    run();
+  } finally {
+    specs.forEach((spec) => registry.unregister(spec.id));
+  }
 };
 
 /**
@@ -264,6 +295,96 @@ test('the returned unregister removes both bindings and the keys propagate again
   assert.equal(keydown('3').handled, false);
   assert.equal(keydown('4').handled, false);
   assert.equal(outline.reads, 0);
+});
+
+test('the facade publishes the dispatcher\'s PASS value', () => {
+  assert.equal(typeof PASS, 'symbol');
+  assert.equal(Drupal.Daedalus.Hotkeys.PASS, PASS, 'a binding outside the bundle returns the same value');
+});
+
+test('PASS hands the stroke to the next candidate in winning order, whose verdict is the app\'s', () => {
+  const ran = [];
+  withBindings([
+    { id: 'under', key: '7', action: () => { ran.push('under'); } },
+    { id: 'over', key: '7', action: () => { ran.push('over'); return PASS; } },
+  ], () => {
+    const event = keydown('7');
+    assert.deepEqual(ran, ['over', 'under'], 'the later registration wins the tie and passes; the earlier one takes it');
+    assert.equal(event.handled, true, 'the taker handled the stroke');
+  });
+});
+
+test('false is declined AND stop: the next candidate never runs and the key propagates', () => {
+  const ran = [];
+  withBindings([
+    { id: 'under', key: '7', action: () => { ran.push('under'); } },
+    { id: 'over', key: '7', action: () => { ran.push('over'); return false; } },
+  ], () => {
+    const event = keydown('7');
+    assert.deepEqual(ran, ['over']);
+    assert.equal(event.handled, false);
+  });
+});
+
+test('a winner that handles the stroke is the end of it', () => {
+  const ran = [];
+  withBindings([
+    { id: 'under', key: '7', action: () => { ran.push('under'); } },
+    { id: 'over', key: '7', action: () => { ran.push('over'); } },
+  ], () => {
+    const event = keydown('7');
+    assert.deepEqual(ran, ['over']);
+    assert.equal(event.handled, true);
+  });
+});
+
+test('when every candidate passes the app did not handle the key', () => {
+  const ran = [];
+  withBindings([
+    { id: 'under', key: '7', action: () => { ran.push('under'); return PASS; } },
+    { id: 'over', key: '7', action: () => { ran.push('over'); return PASS; } },
+  ], () => {
+    const event = keydown('7');
+    assert.deepEqual(ran, ['over', 'under'], 'every candidate was asked');
+    assert.equal(event.handled, false, 'the browser default goes through');
+  });
+});
+
+test('a hold-kind binding that passes is not held: its release never fires, the taker\'s does', () => {
+  const ran = [];
+  const releases = [];
+  withBindings([
+    {
+      id: 'under',
+      key: '8',
+      kind: 'hold',
+      action: (stroke, pressed) => {
+        if (pressed) {
+          ran.push('under');
+        } else {
+          releases.push('under');
+        }
+      },
+    },
+    {
+      id: 'over',
+      key: '8',
+      kind: 'hold',
+      action: (stroke, pressed) => {
+        if (pressed) {
+          ran.push('over');
+          return PASS;
+        }
+        releases.push('over');
+      },
+    },
+  ], () => {
+    const event = keydown('8');
+    assert.deepEqual(ran, ['over', 'under']);
+    assert.equal(event.handled, true);
+    keyup('8');
+    assert.deepEqual(releases, ['under'], 'only the binding that took the press was held');
+  });
 });
 
 test('a per-user remap saved for the id wins over the default key', () => {

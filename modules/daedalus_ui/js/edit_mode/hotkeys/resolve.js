@@ -1,10 +1,10 @@
 import { matches, specificity } from './binding';
 
 /**
- * Resolution: bindings x live contexts -> the winning binding. Pure, so
- * the leader's dispatcher and the claim set it publishes to pop-outs
- * derive from one loop; the store reads live in the dispatcher's
- * `isActive` callback, never here.
+ * Resolution: bindings x live contexts -> the live candidates in winning
+ * order. Pure, so the leader's dispatcher and the claim set it publishes
+ * to pop-outs derive from one loop; the store reads live in the
+ * dispatcher's `isActive` callback, never here.
  *
  * Contexts, highest first:
  * - typing: the user is entering text. Primarily a guard: while typing,
@@ -43,15 +43,18 @@ const liveContexts = (binding, typing, isActive) =>
   );
 
 /**
- * The binding a keystroke resolves to, or null.
+ * The live candidates for a keystroke, in winning order.
  *
- * A multi-context binding fires at the highest priority among its live
- * contexts. Between candidates the higher priority wins, then the more
- * specific combo, and on a full tie (same context, same specificity) the
- * LATER registration: a binding registered dynamically when a session
- * arms (the palette's insert keys) must beat a boot-time static binding
- * on the same key; dynamic registration is the coexistence mechanism,
- * and registration order is the only signal of intent.
+ * A candidate is a bound binding matching the combo with a live context;
+ * a multi-context binding ranks at the highest priority among its live
+ * contexts. The order is one rule: the higher priority first, then the
+ * more specific combo, and on a full tie (same context, same
+ * specificity) the LATER registration: a binding registered dynamically
+ * when a session arms (the palette's insert keys) must beat a boot-time
+ * static binding on the same key; dynamic registration is the
+ * coexistence mechanism, and registration order is the only signal of
+ * intent. The dispatcher runs the first and, only while an action passes
+ * (hotkeys.js PASS), the next.
  *
  * @param {Iterable<object>} bindings
  *   Registered bindings in registration order, each with `parsed`, `when`.
@@ -62,12 +65,13 @@ const liveContexts = (binding, typing, isActive) =>
  * @param {Function} isActive
  *   (context, binding) => boolean for every context but 'typing'.
  *
- * @return {object|null}
+ * @return {object[]}
  */
-export const resolve = (bindings, desc, typing, isActive) => {
-  let best = null;
-  let bestPriority = 0;
+export const candidates = (bindings, desc, typing, isActive) => {
+  const ranked = [];
+  let index = 0;
   for (const binding of bindings) {
+    index += 1;
     if (!matches(binding.parsed, desc)) {
       continue;
     }
@@ -75,21 +79,37 @@ export const resolve = (bindings, desc, typing, isActive) => {
     if (!active.length) {
       continue;
     }
-    const priority = Math.max(
-      ...active.map((context) => CONTEXT_PRIORITY[context]),
-    );
-    if (
-      best === null ||
-      priority > bestPriority ||
-      (priority === bestPriority &&
-        specificity(binding.parsed) >= specificity(best.parsed))
-    ) {
-      best = binding;
-      bestPriority = priority;
-    }
+    ranked.push({
+      binding,
+      priority: Math.max(
+        ...active.map((context) => CONTEXT_PRIORITY[context]),
+      ),
+      specificity: specificity(binding.parsed),
+      index,
+    });
   }
-  return best;
+  return ranked
+    .sort(
+      (a, b) =>
+        b.priority - a.priority ||
+        b.specificity - a.specificity ||
+        b.index - a.index,
+    )
+    .map(({ binding }) => binding);
 };
+
+/**
+ * The binding a keystroke resolves to (the first candidate), or null.
+ *
+ * @param {Iterable<object>} bindings
+ * @param {{key: string, modifiers: object}} desc
+ * @param {boolean} typing
+ * @param {Function} isActive
+ *
+ * @return {object|null}
+ */
+export const resolve = (bindings, desc, typing, isActive) =>
+  candidates(bindings, desc, typing, isActive)[0] ?? null;
 
 /**
  * The combos the app claims right now, partitioned by typing state: the

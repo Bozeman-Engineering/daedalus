@@ -9,7 +9,7 @@ import { describeBinding } from '../../hotkeys/binding';
  * The element picker toggle: the DevTools "select an element" button on
  * the page elements tree's root row.
  *
- * A kit icon button the tree renders first among the outline's tools
+ * A kit icon button the tree renders last among the outline's tools
  * (page-elements-tree.js OutlineTools). Pressed, it arms the
  * picker (selection/picker.js, the one toggle the `selector.picker`
  * hotkey shares): canvas hover and click then resolve the deepest

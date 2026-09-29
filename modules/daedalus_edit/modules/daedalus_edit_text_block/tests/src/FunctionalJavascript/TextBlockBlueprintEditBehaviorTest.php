@@ -92,14 +92,6 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  *   (remote != base) wins, the surface shows the server text, the
  *   snapshot re-baselines to it, and nothing commits. A swap that removes
  *   the component drops the edit without committing.
- * - The landing intent (a drop lands you typing): a placement that carries
- *   the drop's `select: <uuid>, edit: true` opens the landed leaf's editor
- *   once the selection lands (the op queue's select-after-apply, then the
- *   one editor door, then the engine's beginEdit), while a bare
- *   Selection.select(key) (the popped-out inspector's road) lands a PLAIN
- *   selection with no edit open: a landing opens an editor only when its
- *   request says so. Escape leaves the drop's edit with the selection
- *   standing and nothing sent.
  * - The widget popovers ride the chrome's one floating surface: with the
  *   edited block scrolled past the top edge, the tag picker mounts at body
  *   level outside the chip anchor's stacking context, paints ABOVE the
@@ -830,153 +822,6 @@ class TextBlockBlueprintEditBehaviorTest extends WebDriverTestBase {
       'Removing the edited component dropped the edit without a commit.',
     );
 
-    // The landing intent: a drop lands you typing because the drop asks
-    // for it. The drag controller's gap drop of a palette source requests
-    // `select: <bare uuid>, edit: true` on the op it enqueues
-    // (drag-controller.js, the source spec's `edit`); the op queue commits
-    // that selection only after the response has applied (applySelect
-    // probes block: then container: against the swapped-in canvas) and
-    // then, for a request carrying the intent, calls the one editor door
-    // on the landed key (applyEdit), which asks the engine to edit the
-    // leaf. A landing never opens an editor by itself (the inspector's
-    // road below lands a plain selection); the request says so. The seam
-    // is the intent riding the queue across three modules (op queue,
-    // editor door, engine.beginEdit) after a real response; nothing below
-    // a browser sees it. This one mutate call with the drop's request
-    // shape stands for every writer that asks (the palette drop, the Add
-    // panel's placement, a media file drop: all reach applyEdit). The
-    // production bundle exposes no store, so the store's editingKey is
-    // read through its derived truths: the facade's isEditing()
-    // (editingKey !== null), the engine's current edit sitting on this
-    // leaf, and the frame's --editing, which the frame model grants only
-    // when editingKey === the primary key.
-    $component3_uuid = $uuid_service->generate();
-    $wrapper3 = "[data-selectable='block:$component3_uuid']";
-    $leaf3 = "{$wrapper3}[data-daedalus-edit-editor='text_composite']";
-    $session->executeScript(<<<JS
-      (() => {
-        const Blueprint = Drupal.Daedalus.Blueprint;
-        Blueprint.mutate(Object.assign({}, Blueprint.rootContext(), {
-          operations: [{
-            op: 'add_element',
-            uuid: '$component3_uuid',
-            block_type: 'text',
-            properties: {
-              field_text_text: 'Dropped to type',
-              field_text_tag: 'h3',
-              field_text_url: { uri: 'https://example.com/' },
-            },
-            location: { anchor: '$section_uuid', placement: 'inside' },
-          }],
-          select: '$component3_uuid',
-          edit: true,
-        })).catch((error) => {
-          window.__dropSelectError = error.message;
-        });
-      })();
-      JS);
-    // Loud: the leaf rendered AND an edit is open is the "door fired"
-    // signal; a failed placement surfaces as the recorded error rather
-    // than a blind timeout.
-    $this->assertJsCondition(
-      "window.__dropSelectError !== undefined"
-      . " || (!!document.querySelector(\"h3{$leaf3} > a[data-daedalus-edit-text]\")"
-      . " && Drupal.Daedalus.EditSession.isEditing() === true)",
-      20000,
-      'The drop-shaped placement (select and edit on the request) resolved and an edit opened behind it.',
-    );
-    $drop_select_error = $session->evaluateScript('window.__dropSelectError ?? null');
-    $this->assertNull($drop_select_error, 'The drop-shaped placement failed: ' . ($drop_select_error ?? ''));
-    // The store's editingKey is the placed block: the selection the queue
-    // committed is block:<uuid>, the facade reports an edit open, and the
-    // engine's current edit sits on exactly this leaf (the intent opened
-    // the landed element, not some other item).
-    $this->assertJsCondition(
-      <<<JS
-      (() => {
-        const leaf = document.querySelector("$leaf3");
-        const editing = Drupal.Daedalus.Edit.CurrentlyEditingElement;
-        return !!leaf
-          && Drupal.Daedalus.Selection.getSelected() === 'block:$component3_uuid'
-          && Drupal.Daedalus.EditSession.isEditing() === true
-          && !!editing && editing.getPageElement() === leaf;
-      })()
-      JS,
-      20000,
-      "The landing intent opened the landed block's editor: the selection is block:<uuid>, an edit is open, and the current edit sits on that leaf (editingKey is block:<uuid>).",
-    );
-    // The selection frame wears its editing state: --editing is granted
-    // only when editingKey === the primary key, and the face swapped to
-    // the edit's widget verbs (the Tag entry) instead of the inert Edit
-    // button the bug showed.
-    $this->assertJsCondition(
-      <<<JS
-      (() => {
-        const frame = document.querySelector('.daedalus-ui-frame');
-        return !!frame && frame.classList.contains('daedalus-ui-frame--editing')
-          && !!frame.querySelector(".daedalus-ui-frame__chip--primary .daedalus-ui-frame__widget [data-daedalus-edit-toggle='tags']");
-      })()
-      JS,
-      20000,
-      "The selection frame wears --editing for the dropped block (editingKey is its primary key) and its face carries the edit's widget verbs.",
-    );
-    // The active element sits inside the leaf: the editor focused the
-    // typing surface (the nested anchor, linked), so the drop leaves the
-    // user typing with no further click.
-    $this->assertJsCondition(
-      <<<JS
-      (() => {
-        const leaf = document.querySelector("$leaf3");
-        const active = document.activeElement;
-        return !!leaf && !!active && leaf !== active && leaf.contains(active)
-          && active.matches('a[data-daedalus-edit-text]') && active.isContentEditable;
-      })()
-      JS,
-      20000,
-      "The drop landed the user typing: the active element is the dropped block's contenteditable surface inside the leaf.",
-    );
-    // Leave the edit so the legs below start where they did before this
-    // step: Escape cancels the open edit (one press cancels, the next
-    // would clear the selection), the selection stands, the frame is
-    // plain again, and nothing was sent (the counter holds the placement
-    // alone: the door's opening posts no op and the cancel posts none).
-    $this->pressHotkey('Escape');
-    $this->assertJsCondition(
-      <<<JS
-      (() => {
-        const frame = document.querySelector('.daedalus-ui-frame');
-        return Drupal.Daedalus.Edit.CurrentlyEditingElement === null
-          && Drupal.Daedalus.EditSession.isEditing() === false
-          && Drupal.Daedalus.Selection.getSelected() === 'block:$component3_uuid'
-          && !!frame && !frame.classList.contains('daedalus-ui-frame--editing')
-          && window.__blueprintPosts === 8;
-      })()
-      JS,
-      20000,
-      'Escape left the door-opened edit with the dropped block still selected, the frame plain, and only the placement posted.',
-    );
-    // Remove the dropped block: the fixture below is one section with one
-    // fresh block, so the tree and geometry legs read what they were
-    // written against.
-    $session->executeScript(<<<JS
-      (() => {
-        const Blueprint = Drupal.Daedalus.Blueprint;
-        Blueprint.mutate(Object.assign({}, Blueprint.rootContext(), {
-          operations: [{ op: 'remove_element', element: '$component3_uuid' }],
-        })).catch((error) => {
-          window.__dropRemoveError = error.message;
-        });
-      })();
-      JS);
-    $this->assertJsCondition(
-      "window.__dropRemoveError !== undefined"
-      . " || (document.querySelector(\"$wrapper3\") === null && window.__blueprintPosts === 9)",
-      20000,
-      'The dropped block was removed again before the part-gating legs.',
-    );
-    $drop_remove_error = $session->evaluateScript('window.__dropRemoveError ?? null');
-    $this->assertNull($drop_remove_error, 'Removing the dropped block failed: ' . ($drop_remove_error ?? ''));
-
     // ——— Phase 2: part gating across the three surfaces. ———
     // Element projections project the PAGE, each by its own question: the
     // `.` completion offer gates on the anchor's DOM presence, the
@@ -1056,10 +901,10 @@ class TextBlockBlueprintEditBehaviorTest extends WebDriverTestBase {
     // activating one closes the menu before flipping the axis.
     //
     // The select is the popped-out inspector's road (app.Selection.select,
-    // the daedalus_stylish leader's write): a landing that carries no
-    // intent, so it lands a PLAIN selection and opens nothing, the
-    // counterpart of the drop's `edit: true` above (the two writers, one
-    // door, only the one that asks gets an editor). No edit is open when
+    // the daedalus_stylish leader's write): a landing, and a landing never
+    // opens an editor, so it lands a PLAIN selection and opens nothing
+    // (the editor door opens only by gesture: Enter, a double-click, the
+    // Edit verb). No edit is open when
     // the chrome below is clicked, so the Show menu press (the
     // page-elements panel declares no data-keeps-edit; the open edit's
     // press decision would commit an edit on such a press) is inert.

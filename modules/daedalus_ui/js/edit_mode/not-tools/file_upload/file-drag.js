@@ -427,9 +427,6 @@ import { createUploadProgress } from './upload-progress.js';
     // data.fileExtensions for the element face's compatibility filter.
     app.drag.registerSource('media_file', {
       targets: 'block',
-      // A dropped file is new content: the landing opens the placed
-      // block's editor (the op queue's edit intent).
-      edit: true,
       // Gap face: place the file as a NEW media block. The drop resolves
       // the file to a block type + media entity (server upload, then a
       // stored association or the chooser dialog) and places it as an

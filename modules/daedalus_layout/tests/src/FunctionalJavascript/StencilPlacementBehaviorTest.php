@@ -487,6 +487,76 @@ class StencilPlacementBehaviorTest extends WebDriverTestBase {
     $this->assertCount(1, $placed, 'Exactly one container was placed by the Band click.');
     $this->assertNull($this->parentContainerKey($placed[0]), 'The clicked band sits at top level.');
     $this->assertSame($placed[0], end($after), 'The clicked band landed after B, the last band on the page.');
+    $band_anchor = $placed[0];
+
+    // ——— CLICK, THEN ENTER: the placed block's editor opens by request. ———
+    //
+    // The session's anchor advanced to the clicked band; a block item now
+    // places inside it. The placement lands a plain selection (no landing
+    // opens an editor) and the session stays armed, so its Enter binding
+    // (daedalus_layout.insert.place, registered while armed, ahead of the
+    // static edit.enter on the same key and context) is the stroke's
+    // winner; with no panel item highlighted it PASSES the stroke on
+    // through daedalus_ui's dispatcher, and edit.enter opens the placed
+    // block's editor through daedalus_edit's engine. Three modules, one
+    // keystroke: only a browser sees the path whole.
+    $this->assertJsCondition(
+      "document.documentElement.classList.contains('daedalus-layout-insert-pending')"
+      . " && Drupal.Daedalus.Selection.getSelected() === '$band_anchor'",
+      10000,
+      'The band click advanced the armed anchor to the placed band.',
+    );
+    $session->executeScript("document.getElementById('inline_block:text').click();");
+    $this->assertJsCondition('window.__blueprintPosts === 5', 20000, 'The Text block click was one blueprint POST.');
+    $this->assertNotNull(
+      $assert_session->waitForElement('css', "[data-main-entity] [data-selectable='$band_anchor'] [data-selectable^='block:']", 20000),
+      'The Text block rendered inside the band, the anchor.',
+    );
+    $block_key = $session->evaluateScript("document.querySelector(\"[data-main-entity] [data-selectable='$band_anchor'] [data-selectable^='block:']\").getAttribute('data-selectable')");
+    $this->assertJsCondition(
+      "(() => { const frame = document.querySelector('.daedalus-ui-frame');"
+      . " return Drupal.Daedalus.Selection.getSelected() === '$block_key'"
+      . " && Drupal.Daedalus.EditSession.isEditing() === false"
+      . " && frame && !frame.classList.contains('daedalus-ui-frame--editing')"
+      . " && document.documentElement.classList.contains('daedalus-layout-insert-pending'); })()",
+      20000,
+      'The placed block landed a plain selection (no edit, no dash) and the insert session is still armed on it.',
+    );
+    $this->pressHotkey('Enter');
+    $this->assertJsCondition(
+      "(() => { const frame = document.querySelector('.daedalus-ui-frame');"
+      . " const editing = Drupal.Daedalus.Edit.CurrentlyEditingElement;"
+      . " return Drupal.Daedalus.EditSession.isEditing() === true"
+      . " && frame && frame.classList.contains('daedalus-ui-frame--editing')"
+      . " && !!editing && !!document.querySelector(\"[data-selectable='$block_key']\")?.contains(editing.getPageElement()); })()",
+      20000,
+      'Enter with the session armed and nothing highlighted passed through insert.place to edit.enter: the placed block\'s editor opened.',
+    );
+    $this->assertJsCondition(
+      "document.documentElement.classList.contains('daedalus-layout-insert-pending')",
+      10000,
+      'Opening the editor left the insert session armed.',
+    );
+    // Escape with the edit open and the session armed cancels the edit and
+    // only that: the open edit's cancel outranks the session's done
+    // binding and does not pass the stroke on, so the panel stays open,
+    // the session stays armed and the selection stands.
+    $this->pressHotkey('Escape');
+    $this->assertJsCondition(
+      "(() => { const frame = document.querySelector('.daedalus-ui-frame');"
+      . " return Drupal.Daedalus.EditSession.isEditing() === false"
+      . " && Drupal.Daedalus.Edit.CurrentlyEditingElement === null"
+      . " && Drupal.Daedalus.Selection.getSelected() === '$block_key'"
+      . " && frame && !frame.classList.contains('daedalus-ui-frame--editing'); })()",
+      20000,
+      'Escape cancelled the open edit only: the placed block stays selected as a plain selection.',
+    );
+    $this->assertJsCondition(
+      "document.documentElement.classList.contains('daedalus-layout-insert-pending')"
+      . " && !document.getElementById('place_block').classList.contains('daedalus-ui-hidden')",
+      10000,
+      'The consumed Escape never reached the session: it is still armed and the Add panel is still open.',
+    );
   }
 
 }

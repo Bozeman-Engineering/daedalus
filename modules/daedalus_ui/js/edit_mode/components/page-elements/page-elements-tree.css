@@ -233,8 +233,8 @@
 }
 
 /* The outline's tools (OutlineTools in page-elements-tree.js): the
-   element picker (picker-toggle.js), then the collapse controls
-   (outline/collapse-controls.js), at the end of the root row, the label
+   collapse controls (outline/collapse-controls.js), then the element
+   picker (picker-toggle.js), at the end of the root row, the label
    truncating before they give way. Each rides the kit icon button, so
    the muted variant, the hover wash, the disabled state and the kit's
    pressed rule (.daedalus-ui-icon-button[aria-pressed="true"],

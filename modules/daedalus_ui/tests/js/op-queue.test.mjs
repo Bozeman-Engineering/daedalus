@@ -429,3 +429,68 @@ test('a markup swap revalidates the styling target: a target whose key has no el
     Selection.clear();
   }
 });
+
+test("a request's select lands the selection and opens no editor", async () => {
+  const Selection = Drupal.Daedalus.Selection;
+  const opened = [];
+  const ajax = Drupal.ajax;
+  Drupal.ajax = () => ({ success: () => {} });
+  Drupal.url = (path) => `/${path}`;
+  Drupal.Daedalus.getCookieValue = () => 'edit';
+  drupalSettings.ajaxPageState = {};
+  const fetch = globalThis.fetch;
+  globalThis.fetch = async (url) => {
+    if (String(url).includes('session/token')) {
+      return { text: async () => 'token' };
+    }
+    return {
+      json: async () => ({
+        success: true,
+        entity_uuid: 'root-uuid',
+        blueprint: { _tree: { kind: 'root' } },
+        markup: {},
+        targets: [],
+        attachments: [],
+        drupal_commands: [],
+        materials: { upsert: [], remove: [] },
+      }),
+    };
+  };
+  // The placed block is on the (stub) page once the response has applied,
+  // so the select resolves to its key.
+  const elements = { 'block:placed': { tagName: 'DIV' } };
+  const querySelector = document.querySelector;
+  document.querySelector = (selector) => {
+    const match = /^\[data-selectable="(.+)"\]$/.exec(selector);
+    return match ? (elements[match[1]] ?? null) : null;
+  };
+  // The editor door is spied, not stubbed away: a landing that reached it
+  // would show up here.
+  Drupal.Daedalus.EditSession = {
+    mutationApplied: () => {},
+    openEditor: (key) => { opened.push(key); },
+  };
+  const { enqueueOperations, drained } = await import('../../js/edit_mode/ops/op-queue.js');
+  try {
+    Selection.clear();
+    await enqueueOperations({
+      entityType: 'node',
+      entityId: '1',
+      operations: [{ op: 'add_element', uuid: 'placed' }],
+      viewMode: 'full',
+      select: 'block:placed',
+    });
+    await drained();
+    // Seam: op queue to editor door. The selection landed on the placed
+    // key and the door was never called; editing is the user's next,
+    // explicit gesture.
+    assert.equal(Selection.getSelected(), 'block:placed');
+    assert.deepEqual(opened, []);
+  } finally {
+    Drupal.ajax = ajax;
+    globalThis.fetch = fetch;
+    document.querySelector = querySelector;
+    delete Drupal.Daedalus.EditSession;
+    Selection.clear();
+  }
+});

@@ -177,10 +177,9 @@ const swapMarkup = (markup) => {
  * focus follows what the user just placed. Each value resolves against the
  * swapped-in canvas (a bare uuid probes the placeable kinds, block then
  * container); values whose element never landed drop out, so a structural
- * blind spot skips selection instead of pointing at nothing.
- *
- * @return {string[]}
- *   The keys that landed and were selected.
+ * blind spot skips selection instead of pointing at nothing. A landing is
+ * a plain selection: no request opens an editor (editing is the user's
+ * next, explicit gesture through edit-session.js openEditor).
  */
 const applySelect = (select) => {
   const keys = (Array.isArray(select) ? select : [select])
@@ -195,21 +194,6 @@ const applySelect = (select) => {
     store.dispatch(setSelected(keys[0]));
   } else if (keys.length > 1) {
     store.dispatch(setSelectedSet({ keys }));
-  }
-  return keys;
-};
-
-/**
- * Opens the editor of a landed selection when the request asked for it
- * (the edit option): a landing that should start typing says so itself,
- * and the one editor door (edit-session.js openEditor) decides what that
- * means for the key. Only a single landed key has an editor; a set or a
- * landing that never materialized opens nothing. Runs after applySelect,
- * on the fully applied response, so the editor opens over settled markup.
- */
-const applyEdit = (keys) => {
-  if (keys.length === 1) {
-    Drupal.Daedalus?.EditSession?.openEditor(keys[0]);
   }
 };
 
@@ -329,13 +313,9 @@ const process = async () => {
       // eslint-disable-next-line no-await-in-loop
       const payload = await op.execute();
       // Select after the swap (the element must be on the page) and before
-      // resolve, so a caller's completion hook observes the selection; the
-      // edit intent rides the landed selection.
+      // resolve, so a caller's completion hook observes the selection.
       if (op.select) {
-        const landed = applySelect(op.select);
-        if (op.edit) {
-          applyEdit(landed);
-        }
+        applySelect(op.select);
       }
       op.resolve(payload);
     } catch (error) {
@@ -366,12 +346,7 @@ const process = async () => {
 /**
  * Queues an entry: its optimistic apply runs now, its execute() in turn.
  */
-const enqueue = ({
-  execute,
-  optimistic = null,
-  select = null,
-  edit = false,
-}) =>
+const enqueue = ({ execute, optimistic = null, select = null }) =>
   new Promise((resolve, reject) => {
     optimistic?.apply?.();
     queue.push({
@@ -379,7 +354,6 @@ const enqueue = ({
       execute,
       optimistic,
       select,
-      edit,
       resolve,
       reject,
     });
@@ -402,12 +376,7 @@ const enqueue = ({
  *     each a selectable key or a bare uuid (kind probed from the landed
  *     markup). Placement gestures pass what they placed so focus follows
  *     it; nothing is selected on failure or when the element never landed.
- *   - edit: optional; true opens the landed selection's editor through the
- *     one editor door once it is selected (a single landed key only). The
- *     landing intent of a placement whose next act is typing: a fresh
- *     block from the palette or the Add panel, a dropped media file. A
- *     move, an element drop, Duplicate and the tree land a plain
- *     selection.
+ *     The landing is a plain selection: no request opens an editor.
  *
  * @return {Promise<Object>}
  *   Resolves with the full response payload after it has been applied to
@@ -422,7 +391,6 @@ export const enqueueOperations = ({
   viewMode = 'full',
   optimistic = null,
   select = null,
-  edit = false,
 }) =>
   enqueue({
     execute: () =>
@@ -431,7 +399,6 @@ export const enqueueOperations = ({
       ),
     optimistic,
     select,
-    edit,
   });
 
 /**

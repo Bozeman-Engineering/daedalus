@@ -418,8 +418,8 @@ const selectRowRange = (clickedKey) => {
 };
 
 /**
- * The outline's tools, at the end of the root row: the element picker,
- * then the collapse-all and expand-all pair over the Outline's posture.
+ * The outline's tools, at the end of the root row: the expand-all and
+ * collapse-all pair over the Outline's posture, then the element picker.
  *
  * The root row is the outline's head: always rendered, never collapsed,
  * pinned to the top of the panel's scrollport (page-elements-tree.css),
@@ -436,13 +436,13 @@ const OutlineTools = () => {
       onClick={(event) => event.stopPropagation()}
       onContextMenu={(event) => event.stopPropagation()}
     >
-      <PickerToggle />
       <CollapseControls
         id={OUTLINE_ID}
         folds={folds}
         outline={outline}
         apply={set}
       />
+      <PickerToggle />
     </span>
   );
 };

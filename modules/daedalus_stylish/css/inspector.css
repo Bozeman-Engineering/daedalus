@@ -3744,8 +3744,8 @@ html[data-daedalus-ui-canvas-view] .daedalus-stylish-paint {
    row's own caption height so the row keeps its line, the glyph at the
    kit's small icon size. The kit owns the disabled state (opacity, no
    hover wash). */
-.daedalus-stylish-page-tree__showing .daedalus-ui-collapse-all,
-.daedalus-stylish-inspector__sections-head .daedalus-ui-collapse-all {
+.daedalus-stylish-page-tree__showing .daedalus-ui-expand-all,
+.daedalus-stylish-inspector__sections-head .daedalus-ui-expand-all {
   margin-inline-start: auto;
 }
 

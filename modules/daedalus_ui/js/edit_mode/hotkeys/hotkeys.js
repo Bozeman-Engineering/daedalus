@@ -1,6 +1,10 @@
 import store from '../store/store';
 import { parseBinding, releasedBy, eventToBindingString } from './binding';
-import { CONTEXT_PRIORITY, resolve, claimSet as deriveClaimSet } from './resolve';
+import {
+  CONTEXT_PRIORITY,
+  candidates,
+  claimSet as deriveClaimSet,
+} from './resolve';
 import { createKeyboardSensor } from './keyboard-sensor';
 import {
   initCkeditorTracking,
@@ -21,19 +25,20 @@ import { isLifted } from '../drag/keyboard-lift';
  *   the app, the leader page and each pop-out window, and turns a key
  *   event into a stroke: pure data (the descriptor, the typing fact, the
  *   phase, the sensed facts about the focused control).
- * - RESOLUTION (resolve.js, pure) picks the winning binding from the
- *   registry, the live contexts and the stroke; when several bindings
- *   match the same combo, the most specific context wins. Precedence is
- *   the context ladder, not listener registration order. A binding may
- *   declare several contexts (`when` as an array); it fires in whichever
- *   of them is live, at that context's priority.
+ * - RESOLUTION (resolve.js, pure) ranks the live candidates for a stroke
+ *   from the registry, the live contexts and the stroke; when several
+ *   bindings match the same combo, the most specific context wins.
+ *   Precedence is the context ladder, not listener registration order. A
+ *   binding may declare several contexts (`when` as an array); it fires
+ *   in whichever of them is live, at that context's priority.
  * - This module owns the registry, the context readers over the store,
  *   the per-user remaps, the master gate and the ACTION: dispatch(stroke)
- *   is fed by the leader's own sensor and by strokes forwarded from
- *   pop-outs alike (popout-relay.js, the wire's leader half), and
- *   claimSet() tells a pop-out which combos the app would act on right
- *   now, so its synchronous swallow decision matches the leader's
- *   asynchronous verdict.
+ *   runs the winner and, only while an action returns PASS ("not mine"),
+ *   the next candidate. It is fed by the leader's own sensor and by
+ *   strokes forwarded from pop-outs alike (popout-relay.js, the wire's
+ *   leader half), and claimSet() tells a pop-out which combos the app
+ *   would act on right now, so its synchronous swallow decision matches
+ *   the leader's asynchronous verdict.
  *
  * The whole dispatcher is gated on the hotKey store slice, the master
  * switch Edit Mode toggles on entry/exit (window.setHotKey). Nothing else
@@ -57,6 +62,17 @@ const CONTEXTS = {
 };
 
 const isActive = (context, binding) => CONTEXTS[context](binding);
+
+/**
+ * The pass verdict: an action returns it to hand the keystroke to the
+ * next live candidate ("not mine"). Opt-in and explicit, because `false`
+ * means something else: declined AND stop (the browser default goes
+ * through, no other binding runs), which a binding yielding to a widget
+ * that already consumed the stroke relies on. Published on the facade as
+ * Drupal.Daedalus.Hotkeys.PASS for bindings registered outside the
+ * bundle.
+ */
+export const PASS = Symbol('Drupal.Daedalus.Hotkeys.PASS');
 
 /** @type {Map<string, object>} */
 const bindings = new Map();
@@ -105,7 +121,12 @@ const onChange = (listener) => {
  *     keystroke as pure data (keyboard-sensor.js: descriptor, typing,
  *     phase, consumed, control), never the event: it may have been
  *     pressed in another window. Return false to signal "did not handle";
- *     the browser default then propagates normally.
+ *     the browser default then propagates normally and no other binding
+ *     runs. Return PASS to signal "not mine": the keystroke goes to the
+ *     next live binding in winning order (a session binding on a key a
+ *     static binding also claims passes when the session has nothing to
+ *     do with it). A hold-kind binding that passes is not recorded as
+ *     held.
  *   - label: settings-tray label. Bindings without one are not listed,
  *     the escape hatch for true internals; anything a user could press
  *     deliberately should carry a label so the tray documents it.
@@ -193,19 +214,46 @@ const releaseAll = () => {
 };
 
 /**
- * Dispatches a stroke: resolves it against the registry and the live
- * contexts and runs the winning action. Fed by the leader's own sensor
- * and by strokes a pop-out forwarded, judged identically: a keystroke
- * pressed in a pop-out acts on the app exactly as if pressed here, the
- * pop-out contributing only its local sensed facts.
+ * Runs one candidate's action for a 'down' stroke.
+ *
+ * @return {boolean|symbol}
+ *   The verdict: PASS when the action passed, else whether it handled the
+ *   stroke.
+ */
+const run = (binding, stroke) => {
+  if (binding.kind !== 'hold') {
+    const verdict = binding.action(stroke);
+    return verdict === PASS ? PASS : verdict !== false;
+  }
+  if (activeHolds.has(binding.id)) {
+    // Key repeat on a held binding.
+    return true;
+  }
+  const verdict = binding.action(stroke, true);
+  if (verdict === PASS) {
+    // A pass is a decline: nothing is held, so nothing releases.
+    return PASS;
+  }
+  activeHolds.set(binding.id, binding);
+  return verdict !== false;
+};
+
+/**
+ * Dispatches a stroke: ranks the live candidates against the registry
+ * and the live contexts, runs the winner and, only while an action
+ * returns PASS, the next; when every candidate passes the app did not
+ * handle the key. Fed by the leader's own sensor and by strokes a pop-out
+ * forwarded, judged identically: a keystroke pressed in a pop-out acts on
+ * the app exactly as if pressed here, the pop-out contributing only its
+ * local sensed facts.
  *
  * @param {object} stroke
  *   A keyboard-sensor.js stroke.
  *
  * @return {boolean}
  *   Whether the app handled it: false when the gate is off, nothing
- *   matched, or the action declined, so the sensing document lets the
- *   browser default through.
+ *   matched, every candidate passed, or the action that took it declined,
+ *   so the sensing document lets the browser default through.
  */
 export const dispatch = (stroke) => {
   if (stroke.phase === 'blur') {
@@ -225,24 +273,18 @@ export const dispatch = (stroke) => {
     return false;
   }
   ensureServerBindings();
-  const best = resolve(
+  for (const binding of candidates(
     bindings.values(),
     stroke.descriptor,
     stroke.typing,
     isActive,
-  );
-  if (!best) {
-    return false;
-  }
-  if (best.kind === 'hold') {
-    if (activeHolds.has(best.id)) {
-      // Key repeat on a held binding.
-      return true;
+  )) {
+    const verdict = run(binding, stroke);
+    if (verdict !== PASS) {
+      return verdict;
     }
-    activeHolds.set(best.id, best);
-    return best.action(stroke, true) !== false;
   }
-  return best.action(stroke) !== false;
+  return false;
 };
 
 /**
@@ -357,6 +399,7 @@ export const initHotkeys = () => {
     getBindings,
     onChange,
     eventToBindingString,
+    PASS,
   };
 };
 

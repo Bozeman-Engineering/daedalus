@@ -17,11 +17,32 @@
  * Drupal, window, and the rAF pair before requiring it, and drive frames
  * through a manual scheduler.
  *
+ * The last case crosses to the drag controller (drag-controller.js, the
+ * drop pipeline every placement gesture shares) for the one seam the
+ * pointer primitive's frames never see: which drop door releases keyboard
+ * focus. The controller imports the app store (webpack-style
+ * extensionless imports; document, drupalSettings and BroadcastChannel
+ * globals), so that case registers an extension-adding resolve hook and
+ * stubs the globals before dynamically importing it.
+ *
  * Run with `node --test tests/js/*.test.mjs` from the module root.
  */
 import { strict as assert } from 'node:assert';
 import { test } from 'node:test';
-import { createRequire } from 'node:module';
+import { createRequire, registerHooks } from 'node:module';
+
+registerHooks({
+  resolve(specifier, context, nextResolve) {
+    try {
+      return nextResolve(specifier, context);
+    } catch (error) {
+      if (specifier.startsWith('.') || specifier.startsWith('/')) {
+        return nextResolve(`${specifier}.js`, context);
+      }
+      throw error;
+    }
+  },
+});
 
 /**
  * A manual frame scheduler: frames run only when tick() is called.
@@ -249,4 +270,109 @@ test('moves from another pointer are ignored by the pacing', () => {
   assert.deepEqual(log, ['mark-on', 'move:120']);
   handle.dispatch('pointerup', {});
   scheduler.tick();
+});
+
+test('a pointer drop releases chrome focus; the keyboard door, the canvas and an open editor keep theirs', async () => {
+  const saved = {
+    document: globalThis.document,
+    drupalSettings: globalThis.drupalSettings,
+    BroadcastChannel: globalThis.BroadcastChannel,
+    Blueprint: Drupal.Daedalus.Blueprint,
+  };
+  const documentListeners = new Map();
+  globalThis.document = {
+    addEventListener: (type, fn) => documentListeners.set(type, fn),
+    removeEventListener() {},
+    querySelector: () => null,
+    querySelectorAll: () => [],
+    getElementById: () => null,
+    documentElement: { addEventListener() {}, getAttribute: () => null },
+    body: {},
+    activeElement: null,
+  };
+  globalThis.drupalSettings = { daedalusUi: {} };
+  globalThis.BroadcastChannel = class {
+    postMessage() {}
+    close() {}
+  };
+  globalThis.scrollY = 0;
+  globalThis.scrollTo = () => {};
+  Drupal.t = (string) => string;
+  Drupal.behaviors = {};
+  try {
+    const controller = await import('../../js/edit_mode/drag/drag-controller.js');
+    controller.initDrag();
+    // The page has a blueprint root, so a gap drop is one the controller
+    // takes; the source's operations abort the commit (no ops, nothing to
+    // enqueue), which keeps the case on the focus seam alone.
+    Drupal.Daedalus.Blueprint = { rootContext: () => ({ entityType: 'node', entityId: '1', uuid: 'root' }) };
+    controller.registerDragSource('probe', { operations: () => [] });
+
+    // Focus holders: a sidebar control (a palette item), a sidebar input
+    // (a panel widget's field, an open editor), a canvas element.
+    const wrapper = {};
+    const holder = ({ chrome, tagName }) => ({
+      blurred: 0,
+      tagName,
+      isContentEditable: false,
+      closest: (selector) => (chrome && selector === '.daedalus-ui-sidebar-wrapper' ? wrapper : null),
+      blur() {
+        this.blurred += 1;
+      },
+    });
+    const gap = {
+      kind: 'gap',
+      gapId: 'gap',
+      location: { anchor: 'anchor', placement: 'after' },
+      insert: { parent: null, before: null },
+      items: [],
+    };
+    const settled = () => new Promise((resolve) => setImmediate(resolve));
+
+    // The pointer door: dragstart on a tray item, a target under the
+    // cursor, the document's drop.
+    const item = { setAttribute() {} };
+    controller.makeDraggable(item, 'probe');
+    const pointerDrop = async (focused, target = gap) => {
+      item.ondragstart({ stopPropagation() {}, dataTransfer: { setData() {} } });
+      if (target) {
+        controller.setCurrentDrop(target);
+      }
+      document.activeElement = focused;
+      documentListeners.get('drop')({ preventDefault() {}, dataTransfer: null });
+      item.ondragend({ stopPropagation() {} });
+      await settled();
+    };
+
+    const control = holder({ chrome: true, tagName: 'DIV' });
+    await pointerDrop(control);
+    assert.equal(control.blurred, 1, 'a pointer drop blurs the chrome control that held focus');
+
+    const field = holder({ chrome: true, tagName: 'INPUT' });
+    await pointerDrop(field);
+    assert.equal(field.blurred, 0, 'an open editor field in the sidebar keeps focus');
+
+    const canvas = holder({ chrome: false, tagName: 'DIV' });
+    await pointerDrop(canvas);
+    assert.equal(canvas.blurred, 0, 'focus inside the canvas is not the drop\'s to move');
+
+    const untaken = holder({ chrome: true, tagName: 'DIV' });
+    await pointerDrop(untaken, null);
+    assert.equal(untaken.blurred, 0, 'a drop with no target commits nothing and releases nothing');
+
+    // The keyboard door: an externally armed drag (the keyboard lift's
+    // arming) dropped through commitCurrentDrop.
+    const lifted = holder({ chrome: true, tagName: 'DIV' });
+    assert.equal(controller.beginExternalDrag('probe', {}), true);
+    controller.setCurrentDrop(gap);
+    document.activeElement = lifted;
+    assert.equal(controller.commitCurrentDrop(), true, 'the keyboard door commits the drop');
+    await settled();
+    assert.equal(lifted.blurred, 0, 'a keyboard placement keeps focus on the panel item');
+  } finally {
+    globalThis.document = saved.document;
+    globalThis.drupalSettings = saved.drupalSettings;
+    globalThis.BroadcastChannel = saved.BroadcastChannel;
+    Drupal.Daedalus.Blueprint = saved.Blueprint;
+  }
 });

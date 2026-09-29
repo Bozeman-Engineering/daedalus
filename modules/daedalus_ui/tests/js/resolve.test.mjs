@@ -5,7 +5,9 @@
  * pop-outs, locked to the dispatcher's pre-split rules: the typing
  * partition (while typing only 'typing' contexts fire, and never
  * otherwise), the context ladder's priority, specificity, and later-wins
- * on a full tie.
+ * on a full tie. The same loop ranks every live candidate in that order
+ * (the dispatcher's pass rule walks the list), and the winner is its
+ * first.
  *
  * Bindings are built the way hotkeys.js register() stores them (`when`
  * normalized to an array, `parsed` from binding.js), and the store reads
@@ -38,7 +40,7 @@ registerHooks({
 });
 
 const { parseBinding } = await import('../../js/edit_mode/hotkeys/binding.js');
-const { resolve, claimSet, CONTEXT_PRIORITY } = await import(
+const { candidates, resolve, claimSet, CONTEXT_PRIORITY } = await import(
   '../../js/edit_mode/hotkeys/resolve.js'
 );
 
@@ -125,6 +127,40 @@ test('on a full tie the later registration wins', () => {
   const second = binding('second', 'enter', 'selection');
   assert.equal(resolve([first, second], desc('enter'), false, active(['selection'])), second);
   assert.equal(resolve([second, first], desc('enter'), false, active(['selection'])), first);
+});
+
+test('the candidates are every live match in winning order, and the winner is the first', () => {
+  // The Enter roster: the open edit's static binding, the insert
+  // session's dynamic one registered later on the same key and context,
+  // the lift's, and a global one. Matching is strict on modifiers, so two
+  // matches never differ in specificity; the order that shows is the
+  // ladder's priority, then the later registration.
+  const enter = binding('edit.enter', 'enter', 'selection');
+  const place = binding('daedalus_layout.insert.place', 'enter', 'selection');
+  const drop = binding('lift.drop_2', 'enter', 'lift');
+  const global = binding('anything', 'enter');
+  const other = binding('edit.commit', 'mod+enter', ['editing', 'typing']);
+  const bindings = [enter, other, drop, place, global];
+
+  assert.deepEqual(
+    candidates(bindings, desc('enter'), false, active(['selection'])),
+    [place, enter, global],
+    'a live selection: the later session binding, the static one, then the global one; the lift and the combo are absent',
+  );
+  assert.equal(resolve(bindings, desc('enter'), false, active(['selection'])), place);
+  assert.deepEqual(
+    candidates(bindings, desc('enter'), false, active(['selection', 'lift'])),
+    [drop, place, enter, global],
+    'a lift outranks them all',
+  );
+  assert.deepEqual(
+    candidates(bindings, desc('enter'), false, active([])),
+    [global],
+    'nothing selected: only the global binding is live',
+  );
+  assert.deepEqual(candidates(bindings, desc('enter'), true, active(['selection'])), [], 'typing: Enter is the widget\'s');
+  assert.equal(resolve(bindings, desc('enter'), true, active(['selection'])), null);
+  assert.deepEqual(candidates(bindings, desc('x'), false, active(['selection'])), [], 'an unbound key has no candidates');
 });
 
 test('a multi-context binding fires at the highest of its live contexts', () => {
