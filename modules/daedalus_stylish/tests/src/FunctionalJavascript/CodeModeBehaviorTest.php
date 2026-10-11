@@ -2962,15 +2962,15 @@ class CodeModeBehaviorTest extends WebDriverTestBase {
     // potentially trustworthy (drupal.org's runner), and no script can
     // take a secure context away, so there the leg is skipped and the
     // stub below is the cluster's first sight of a clipboard either way.
+    $no_clipboard = 'Copying and pasting CSS needs a secure (https) page. Open this site over https, or use the Copy styles and Paste styles shortcuts within the page.';
+    $cluster_js = "(() => { const actions = document.querySelector('.daedalus-stylish-inspector__actions');"
+      . " const read = (label) => { const button = actions?.querySelector('button[aria-label=\"' + label + '\"]'); if (!button) { return null; }"
+      . "   return { disabled: button.disabled, tooltip: button.closest('.daedalus-ui-tooltip-host')?.querySelector('.daedalus-ui-tooltip')?.textContent.trim() ?? null }; };"
+      . " return { copy: read('Copy CSS'), paste: read('Paste CSS'), save: read('Save as variant') }; })()";
+    $sentence_errors_js = "Drupal.Daedalus.messenger.history().filter((entry) => entry.type === 'error' && entry.message === " . json_encode($no_clipboard) . ").length";
+    $copied_key_js = "Drupal.Daedalus.messenger.history().filter((entry) => entry.type === 'status' && entry.message === 'Copied key').length";
     $secure_origin = (bool) $session->evaluateScript('window.isSecureContext');
     if (!$secure_origin) {
-      $no_clipboard = 'Copying and pasting CSS needs a secure (https) page. Open this site over https, or use the Copy styles and Paste styles shortcuts within the page.';
-      $cluster_js = "(() => { const actions = document.querySelector('.daedalus-stylish-inspector__actions');"
-        . " const read = (label) => { const button = actions?.querySelector('button[aria-label=\"' + label + '\"]'); if (!button) { return null; }"
-        . "   return { disabled: button.disabled, tooltip: button.closest('.daedalus-ui-tooltip-host')?.querySelector('.daedalus-ui-tooltip')?.textContent.trim() ?? null }; };"
-        . " return { copy: read('Copy CSS'), paste: read('Paste CSS'), save: read('Save as variant') }; })()";
-      $sentence_errors_js = "Drupal.Daedalus.messenger.history().filter((entry) => entry.type === 'error' && entry.message === " . json_encode($no_clipboard) . ").length";
-      $copied_key_js = "Drupal.Daedalus.messenger.history().filter((entry) => entry.type === 'status' && entry.message === 'Copied key').length";
       $this->assertJsCondition(
         "(() => { const cluster = $cluster_js; return !!cluster.copy && !!cluster.paste && cluster.copy.disabled && cluster.paste.disabled; })()",
         20000,

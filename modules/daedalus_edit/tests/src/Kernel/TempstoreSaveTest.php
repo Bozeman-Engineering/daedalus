@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Drupal\Tests\daedalus_edit\Kernel;
 
 use Drupal\Core\Entity\Entity\EntityFormDisplay;
+use Drupal\Core\Routing\RedirectDestination;
 use Drupal\daedalus_edit\Controller\Tempstore;
 use Drupal\daedalus_edit\FormCommit;
 use Drupal\daedalus_edit\FormCommitOutcome;
@@ -167,6 +168,55 @@ class TempstoreSaveTest extends FormCommitTestBase {
     $this->assertSame('navigationMode', $cookies[0]->getName());
     $this->assertSame('none', $cookies[0]->getValue());
     $this->assertSame('/new-alias', $cookies[0]->getPath(), 'The cookie is scoped to the saved host\'s editing path: a node\'s canonical URL under its fresh alias.');
+  }
+
+  /**
+   * A site served under a sub-path honors a routed destination.
+   *
+   * The top bar sends the browser's pathname as the destination, which
+   * carries the base path when the site is served under one (drupal.org's
+   * runner serves it under /web/). The controller's "is this the canonical
+   * page?" question routes that path; read with the base path still on it,
+   * every destination looks unrouted and the save redirects to the saved
+   * entity's own page, which strands a header's or footer's editor on the
+   * blueprint instead of the page they left from (SiteFrameBehaviorTest's
+   * portal leg, red on drupal.org and green at the web root).
+   */
+  public function testSaveUnderASubPathHonorsTheDestination(): void {
+    $node = Node::create([
+      'type' => 'plain',
+      'title' => 'Framed',
+      'langcode' => 'en',
+      'status' => NodeInterface::PUBLISHED,
+    ]);
+    $node->save();
+
+    // The node's own edit form: routed, and not its canonical page, so the
+    // controller must honor it as given.
+    $destination = '/web/node/' . $node->id() . '/edit';
+    $request = Request::create(
+      'http://localhost/web/daedalus-edit/tempstore/save/node/' . $node->id(),
+      'GET',
+      ['destination' => $destination],
+      [],
+      [],
+      ['SCRIPT_NAME' => '/web/index.php', 'SCRIPT_FILENAME' => '/var/www/web/index.php'],
+    );
+    $this->assertSame('/web', $request->getBasePath(), 'The request is served under the /web sub-path.');
+    $request_stack = $this->container->get('request_stack');
+    $request_stack->push($request);
+    // The destination service memoizes its first read; a real request gets
+    // a fresh instance, so the controller reads this request's query.
+    $this->container->set('redirect.destination', new RedirectDestination($request_stack, $this->container->get('url_generator')));
+    try {
+      $response = Tempstore::create($this->container)->save($request, 'node', $node);
+    }
+    finally {
+      $request_stack->pop();
+    }
+
+    $this->assertInstanceOf(RedirectResponse::class, $response);
+    $this->assertSame($destination, $response->getTargetUrl(), 'The redirect honored the routed destination beneath the base path instead of recomputing the canonical page.');
   }
 
   /**
