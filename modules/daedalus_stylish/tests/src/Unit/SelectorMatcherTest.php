@@ -52,7 +52,7 @@ class SelectorMatcherTest extends UnitTestCase {
         'layout_id' => 'daedalus_stylish_container',
         'label' => 'Hero',
         // The annotator's minted words ride the node beside its markup.
-        '_element' => ['name' => 'Hero', 'type' => 'Section'] + $markup('section'),
+        '_element' => ['name' => 'Hero', 'type' => 'Section', 'icon' => '/icons/section.svg'] + $markup('section'),
         'children' => [
           ['kind' => 'block', 'uuid' => 't1', 'block_type' => 'text', 'label' => 'Intro', '_element' => $markup('p', ['a', 'strong'])],
           ['kind' => 'block', 'uuid' => 't2', 'block_type' => 'text', '_element' => $markup('h2')],
@@ -196,6 +196,7 @@ class SelectorMatcherTest extends UnitTestCase {
       'parts' => [],
       'name' => NULL,
       'type' => NULL,
+      'icon' => NULL,
       'index' => 0,
       'count' => 3,
       'childCount' => 0,
@@ -210,6 +211,7 @@ class SelectorMatcherTest extends UnitTestCase {
       'parts' => [],
       'name' => 'Hero',
       'type' => 'Section',
+      'icon' => '/icons/section.svg',
       'index' => 0,
       'count' => 4,
       'childCount' => 5,
@@ -228,6 +230,7 @@ class SelectorMatcherTest extends UnitTestCase {
       'parts' => ['.text-block-link' => 'a', '.text-block-link__icon' => 'svg', '.text-block-note' => NULL, '.text-block' => 'h6'],
       'name' => NULL,
       'type' => NULL,
+      'icon' => NULL,
       'index' => 0,
       'count' => 2,
       'childCount' => 0,

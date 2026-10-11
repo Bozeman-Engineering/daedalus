@@ -358,6 +358,10 @@ class AnthropicContextSubscriberTest extends KernelTestBase {
       // The block's link part targeted (the chips' wire: the owner key
       // plus the target's selector): the AI sees the address.
       ['key' => 'block:' . $block_uuid, 'selector' => '.text-block-link', 'label' => 'Block › every link', 'number' => 3],
+      // The two styling facts on one block: the same part as the subject
+      // facet, written at the block's own rule (a same-key address): the
+      // AI sees the subject line reading at the address line.
+      ['key' => 'block:' . $block_uuid, 'selector' => '.text-block-link', 'address' => ['key' => 'block:' . $block_uuid, 'selector' => '.text-block-link'], 'label' => 'Block › every link', 'number' => 4],
     ];
     $subscriber->onPassContext($this->contextEvent(
       $this->agent($message),
@@ -369,7 +373,15 @@ class AnthropicContextSubscriberTest extends KernelTestBase {
     $this->assertStringContainsString('Routed Page', $text, 'The viewable root entity contextualizes the block fallback.');
     $this->assertStringContainsString('- Element 2: Field "name" on this page', $text);
     $this->assertStringContainsString("- Element 3: Block (UUID: $block_uuid)", $text);
-    $this->assertStringContainsString("\n  Styling target: the rule \".text-block-link\" under it (style-map key block:$block_uuid::.text-block-link): styling acts on every element the rule matches, not on this element alone.\n", $text, 'A targeted part shows the AI the address styling acts at.');
+    $this->assertStringContainsString("- Element 4: Block (UUID: $block_uuid)", $text);
+    $this->assertStringContainsString("\n  Styling subject: the rule \".text-block-link\" under it (style-map key block:$block_uuid::.text-block-link): styling acts on every element the rule matches, not on this element alone.\n", $text, 'A subject facet with no address shows the AI the rule styling acts at.');
+    $this->assertStringContainsString(
+      "\n  Styling subject: the rule \".text-block-link\" under it (style-map key block:$block_uuid::.text-block-link): the elements whose styles the user is reading; styling acts at the address below, not here.\n"
+      . "  Styling address: styling acts at the rule \".text-block-link\" on this element (style-map key block:$block_uuid::.text-block-link): every element it matches, this one included.\n",
+      $text,
+      'A subject facet with an address prints both facts: the subject reads, the address writes.',
+    );
+    $this->assertSame(1, substr_count($text, 'Styling address:'), 'Only the element carrying an address prints an address line.');
     $this->assertStringEndsWith('Make this about dogs.', $text);
 
     // Double-injection guard.
@@ -469,12 +481,13 @@ class AnthropicContextSubscriberTest extends KernelTestBase {
       . "  Placed from: hero \"Hero\"\n"
       . "- Element 2: Block (UUID: b1)\n"
       . "- Element 3: Section (UUID: s2)\n"
-      . "  Styling target: the rule \"a\" under it (style-map key container:s2::a): styling acts on every element the rule matches, not on this element alone.\n"
+      . "  Styling subject: the rule \"a\" under it (style-map key container:s2::a): styling acts on every element the rule matches, not on this element alone.\n"
       . "  Wears: link \"Link\" (class=\"link\")\n",
       $message->getText(),
     );
     $this->assertSame(2, substr_count($message->getText(), 'Wears:'), 'An element without materials renders no Wears line.');
-    $this->assertSame(1, substr_count($message->getText(), 'Styling target:'), 'An element without a target renders no Styling target line.');
+    $this->assertSame(1, substr_count($message->getText(), 'Styling subject:'), 'An element without a subject facet renders no Styling subject line.');
+    $this->assertSame(0, substr_count($message->getText(), 'Styling address:'), 'An element without an address renders no Styling address line.');
     $this->assertSame(1, substr_count($message->getText(), 'Placed from:'), 'An element without provenance renders no Placed from line.');
     $this->assertStringNotContainsString('Guidance:', $message->getText(), 'The selection block carries no Guidance line: the brief and the schema teach elements.');
   }

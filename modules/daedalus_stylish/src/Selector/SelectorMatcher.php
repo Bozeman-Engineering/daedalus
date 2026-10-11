@@ -103,7 +103,7 @@ final class SelectorMatcher {
    *
    * Each: ['key' => ?string, 'kind' => string, 'address' => ?string,
    * 'tag' => ?string, 'tags' => string[], 'parts' => array<string,
-   * ?string>, 'name' => ?string, 'type' => ?string,
+   * ?string>, 'name' => ?string, 'type' => ?string, 'icon' => ?string,
    * 'index' => int, 'count' => int,
    * 'childCount' => int, 'parent' => ?int, 'children' => int[]].
    *
@@ -267,6 +267,7 @@ final class SelectorMatcher {
       // words, riding the tree): what the element is called, what it is.
       'name' => $word($node['_element']['name'] ?? NULL),
       'type' => $word($node['_element']['type'] ?? NULL),
+      'icon' => $word($node['_element']['icon'] ?? NULL),
     ];
   }
 
@@ -285,9 +286,10 @@ final class SelectorMatcher {
    *   address or NULL), 'tag' (the resolved root tag or NULL), 'tags'
    *   (the tag names inside it: its rich text's and its parts'), 'parts'
    *   (its present declared parts and the minted instances inside,
-   *   `selector => tag`, NULL for a part declaring no tag), 'name' and
-   *   'type' (the annotator's minted
-   *   element words, `_element.name` / `_element.type`, or NULL), 'index'
+   *   `selector => tag`, NULL for a part declaring no tag), 'name',
+   *   'type' and 'icon' (the annotator's minted element words and the
+   *   glyph it wears, `_element.name` / `_element.type` /
+   *   `_element.icon`, or NULL), 'index'
    *   (0-based place among its siblings, region wrappers being real
    *   siblings), 'count' (the sibling count), 'childCount' (its own
    *   child nodes), 'parent' (the nearest addressable ancestor's key or
@@ -308,6 +310,7 @@ final class SelectorMatcher {
       'parts' => $node['parts'],
       'name' => $node['name'],
       'type' => $node['type'],
+      'icon' => $node['icon'],
       'index' => $node['index'],
       'count' => $node['count'],
       'childCount' => $node['childCount'],

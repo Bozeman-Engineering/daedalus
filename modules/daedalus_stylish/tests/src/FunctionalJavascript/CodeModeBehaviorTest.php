@@ -2944,9 +2944,9 @@ class CodeModeBehaviorTest extends WebDriverTestBase {
     );
 
     // ----- The clipboard withheld on plain http. -----
-    // Seam: the test origin is plain http (no secure context), where the
-    // browser exposes neither navigator.clipboard nor ClipboardItem (both
-    // [SecureContext]), the origin Lily edits on in Safari -> the
+    // Seam: an origin with no secure context (ddev over http, the origin
+    // Lily edits on in Safari), where the browser exposes neither
+    // navigator.clipboard nor ClipboardItem (both [SecureContext]) -> the
     // clipboard door's presence probe (clipboard.js clipboardAvailable,
     // read at every render of the cluster and at every call) -> the
     // header's Copy CSS and Paste CSS rendered disabled wearing the
@@ -2956,70 +2956,72 @@ class CodeModeBehaviorTest extends WebDriverTestBase {
     // withheld (the menu is the only road to the key and nothing on the
     // line can wear the reason), whose click the door rejects with the
     // same sentence, toasted through the messenger as one error entry
-    // and never thrown to the console. The stub below is what the
-    // secure-origin shape looks like to the cluster; nothing is mounted
-    // yet, so this is the real http browser check.
-    $no_clipboard = 'Copying and pasting CSS needs a secure (https) page. Open this site over https, or use the Copy styles and Paste styles shortcuts within the page.';
-    $cluster_js = "(() => { const actions = document.querySelector('.daedalus-stylish-inspector__actions');"
-      . " const read = (label) => { const button = actions?.querySelector('button[aria-label=\"' + label + '\"]'); if (!button) { return null; }"
-      . "   return { disabled: button.disabled, tooltip: button.closest('.daedalus-ui-tooltip-host')?.querySelector('.daedalus-ui-tooltip')?.textContent.trim() ?? null }; };"
-      . " return { copy: read('Copy CSS'), paste: read('Paste CSS'), save: read('Save as variant') }; })()";
-    $sentence_errors_js = "Drupal.Daedalus.messenger.history().filter((entry) => entry.type === 'error' && entry.message === " . json_encode($no_clipboard) . ").length";
-    $copied_key_js = "Drupal.Daedalus.messenger.history().filter((entry) => entry.type === 'status' && entry.message === 'Copied key').length";
-    $this->assertTrue(
-      (bool) $session->evaluateScript("!window.isSecureContext && !navigator.clipboard && typeof ClipboardItem === 'undefined'"),
-      'The test origin is plain http: no secure context, no navigator.clipboard, no ClipboardItem. The leg below is the real http browser check of the withheld cluster.',
-    );
-    $this->assertJsCondition(
-      "(() => { const cluster = $cluster_js; return !!cluster.copy && !!cluster.paste && cluster.copy.disabled && cluster.paste.disabled; })()",
-      20000,
-      'With no clipboard API the header\'s Copy CSS and Paste CSS render disabled (the door\'s presence probe, read at render).',
-    );
-    $cluster = json_decode((string) $session->evaluateScript("JSON.stringify($cluster_js)"), TRUE);
-    $this->assertSame(
-      ['disabled' => TRUE, 'tooltip' => $no_clipboard],
-      $cluster['copy'],
-      'Copy CSS is withheld wearing the door\'s sentence as its pill tooltip, in the DOM without a hover (the reason shows before the click, never a toast after it).',
-    );
-    $this->assertSame(
-      ['disabled' => TRUE, 'tooltip' => $no_clipboard],
-      $cluster['paste'],
-      'Paste CSS is withheld wearing the same sentence: a click is impossible, so no read can strand the cluster\'s busy flag (the stuck state on the http origin).',
-    );
-    if ($cluster['save'] !== NULL) {
+    // and never thrown to the console. Nothing is mounted yet, so this is
+    // the real browser check of the withheld cluster; it runs only where
+    // the origin is insecure. Chrome treats http://localhost as
+    // potentially trustworthy (drupal.org's runner), and no script can
+    // take a secure context away, so there the leg is skipped and the
+    // stub below is the cluster's first sight of a clipboard either way.
+    $secure_origin = (bool) $session->evaluateScript('window.isSecureContext');
+    if (!$secure_origin) {
+      $no_clipboard = 'Copying and pasting CSS needs a secure (https) page. Open this site over https, or use the Copy styles and Paste styles shortcuts within the page.';
+      $cluster_js = "(() => { const actions = document.querySelector('.daedalus-stylish-inspector__actions');"
+        . " const read = (label) => { const button = actions?.querySelector('button[aria-label=\"' + label + '\"]'); if (!button) { return null; }"
+        . "   return { disabled: button.disabled, tooltip: button.closest('.daedalus-ui-tooltip-host')?.querySelector('.daedalus-ui-tooltip')?.textContent.trim() ?? null }; };"
+        . " return { copy: read('Copy CSS'), paste: read('Paste CSS'), save: read('Save as variant') }; })()";
+      $sentence_errors_js = "Drupal.Daedalus.messenger.history().filter((entry) => entry.type === 'error' && entry.message === " . json_encode($no_clipboard) . ").length";
+      $copied_key_js = "Drupal.Daedalus.messenger.history().filter((entry) => entry.type === 'status' && entry.message === 'Copied key').length";
+      $this->assertJsCondition(
+        "(() => { const cluster = $cluster_js; return !!cluster.copy && !!cluster.paste && cluster.copy.disabled && cluster.paste.disabled; })()",
+        20000,
+        'With no clipboard API the header\'s Copy CSS and Paste CSS render disabled (the door\'s presence probe, read at render).',
+      );
+      $cluster = json_decode((string) $session->evaluateScript("JSON.stringify($cluster_js)"), TRUE);
       $this->assertSame(
-        ['disabled' => FALSE, 'tooltip' => 'Save as variant'],
-        $cluster['save'],
-        'Save as variant stays enabled with its own label as the pill: it needs no clipboard, so the withheld state is the two clipboard buttons\' alone.',
+        ['disabled' => TRUE, 'tooltip' => $no_clipboard],
+        $cluster['copy'],
+        'Copy CSS is withheld wearing the door\'s sentence as its pill tooltip, in the DOM without a hover (the reason shows before the click, never a toast after it).',
+      );
+      $this->assertSame(
+        ['disabled' => TRUE, 'tooltip' => $no_clipboard],
+        $cluster['paste'],
+        'Paste CSS is withheld wearing the same sentence: a click is impossible, so no read can strand the cluster\'s busy flag (the stuck state on the http origin).',
+      );
+      if ($cluster['save'] !== NULL) {
+        $this->assertSame(
+          ['disabled' => FALSE, 'tooltip' => 'Save as variant'],
+          $cluster['save'],
+          'Save as variant stays enabled with its own label as the pill: it needs no clipboard, so the withheld state is the two clipboard buttons\' alone.',
+        );
+      }
+      $sentence_errors = (int) $session->evaluateScript($sentence_errors_js);
+      $copied_keys = (int) $session->evaluateScript($copied_key_js);
+      $this->clickPanelXpath('//button[contains(@class, "daedalus-stylish-inspector__address")]');
+      $this->assertJsCondition(
+        "!!document.querySelector('.daedalus-ui-menu') && document.querySelector('.daedalus-ui-menu .daedalus-ui-menu__header')?.textContent.trim() === 'Style this at'",
+        20000,
+        'No clipboard: the chip opened the shared menu headed "Style this at".',
+      );
+      $this->assertSame(
+        ['Copy key', NULL, NULL],
+        json_decode((string) $session->evaluateScript("JSON.stringify(($menu_items_js).at(-1))"), TRUE),
+        'No clipboard: "Copy key" still closes the menu, never withheld (the toast after the click is the refusal, there is no face before it to wear one).',
+      );
+      $session->executeScript(
+        "Array.from(document.querySelectorAll('.daedalus-ui-menu .daedalus-ui-menu__item'))"
+        . ".find((item) => item.querySelector('.daedalus-ui-menu__label')?.textContent.trim() === 'Copy key').click();"
+      );
+      $this->assertJsCondition(
+        "!document.querySelector('.daedalus-ui-menu') && $sentence_errors_js === " . ($sentence_errors + 1),
+        20000,
+        'No clipboard: the "Copy key" click closed the menu and the door\'s rejection reached the messenger as exactly one error entry carrying the sentence (the editor\'s words, never the browser\'s TypeError, and never the console).',
+      );
+      $this->assertSame(
+        $copied_keys,
+        (int) $session->evaluateScript($copied_key_js),
+        'No clipboard: no "Copied key" status joined the history: the door rejected before any write.',
       );
     }
-    $sentence_errors = (int) $session->evaluateScript($sentence_errors_js);
-    $copied_keys = (int) $session->evaluateScript($copied_key_js);
-    $this->clickPanelXpath('//button[contains(@class, "daedalus-stylish-inspector__address")]');
-    $this->assertJsCondition(
-      "!!document.querySelector('.daedalus-ui-menu') && document.querySelector('.daedalus-ui-menu .daedalus-ui-menu__header')?.textContent.trim() === 'Style this at'",
-      20000,
-      'No clipboard: the chip opened the shared menu headed "Style this at".',
-    );
-    $this->assertSame(
-      ['Copy key', NULL, NULL],
-      json_decode((string) $session->evaluateScript("JSON.stringify(($menu_items_js).at(-1))"), TRUE),
-      'No clipboard: "Copy key" still closes the menu, never withheld (the toast after the click is the refusal, there is no face before it to wear one).',
-    );
-    $session->executeScript(
-      "Array.from(document.querySelectorAll('.daedalus-ui-menu .daedalus-ui-menu__item'))"
-      . ".find((item) => item.querySelector('.daedalus-ui-menu__label')?.textContent.trim() === 'Copy key').click();"
-    );
-    $this->assertJsCondition(
-      "!document.querySelector('.daedalus-ui-menu') && $sentence_errors_js === " . ($sentence_errors + 1),
-      20000,
-      'No clipboard: the "Copy key" click closed the menu and the door\'s rejection reached the messenger as exactly one error entry carrying the sentence (the editor\'s words, never the browser\'s TypeError, and never the console).',
-    );
-    $this->assertSame(
-      $copied_keys,
-      (int) $session->evaluateScript($copied_key_js),
-      'No clipboard: no "Copied key" status joined the history: the door rejected before any write.',
-    );
 
     // ----- Copy CSS: the route's print reaches the clipboard in the gesture. -----
     // Seam: the header's Copy CSS -> the source's readCss GET of the read
@@ -3029,7 +3031,7 @@ class CodeModeBehaviorTest extends WebDriverTestBase {
     // grants no clipboard permission, so the write is stubbed by
     // injected script; the fetch and the print are real. The stub mounts
     // the clipboard the http origin lacks (the leg above pinned its
-    // absence) with both roads: writeText, the fallback the gesture
+    // absence there; a secure origin has one, and the stub shadows it) with both roads: writeText, the fallback the gesture
     // takes without ClipboardItem (the road this run drives), and write,
     // resolving the item's text as the platform would (the secure-origin
     // road, a hand pass). The cluster re-probes the door on every render

@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace Drupal\Tests\daedalus_edit\FunctionalJavascript;
 
+use Drupal\daedalus_blueprint\Entity\Frame;
 use Drupal\FunctionalJavascriptTests\WebDriverTestBase;
+use Drupal\layout_builder\SectionComponent;
 use Drupal\Tests\daedalus\Traits\ImageMediaCreationTrait;
 use Drupal\Tests\daedalus\Traits\EditModeTrait;
 use Drupal\Tests\daedalus\Traits\DaedalusFixtureTrait;
@@ -71,6 +73,11 @@ class InlineEditBehaviorTest extends WebDriverTestBase {
   }
 
   /**
+   * The page title block this scenario places into the frame's Content section.
+   */
+  private const TITLE_BLOCK_UUID = '4195bf9c-72d6-4c83-b21e-e423cc368b09';
+
+  /**
    * {@inheritdoc}
    */
   protected function setUp(): void {
@@ -95,14 +102,23 @@ class InlineEditBehaviorTest extends WebDriverTestBase {
     $editor_role->save();
 
     // The page-title leg edits the theme's H1 (the outside-rendered label).
-    // The recipe places no page title block in its theme (page nodes carry
-    // their title in the layout), so place one unless theme initialization
-    // already copied one over.
-    $existing = \Drupal::entityTypeManager()->getStorage('block')
-      ->loadByProperties(['theme' => $this->defaultTheme, 'plugin' => 'page_title_block']);
-    if (!$existing) {
-      $this->drupalPlaceBlock('page_title_block');
+    // The frame is the theme's page (block layout is not consulted, so a
+    // block placed through drupalPlaceBlock never prints) and the shipped
+    // frame carries no page title block (the product prints no H1 of its
+    // own since the recipe's 2fde090), so this scenario places one into the
+    // frame's Content section, where a theme places a page block now.
+    $frame = Frame::load($this->defaultTheme);
+    foreach ($frame->getSections() as $section) {
+      if (($section->getLayoutSettings()['label'] ?? NULL) === 'Content') {
+        $section->appendComponent(new SectionComponent(self::TITLE_BLOCK_UUID, 'content', [
+          'id' => 'page_title_block',
+          'label' => 'Page title',
+          'label_display' => '0',
+          'provider' => 'core',
+        ]));
+      }
     }
+    $frame->save();
 
     // The dissolved-accordion leg edits the URL alias pane in the page
     // form's advanced group. The alias widget is access-gated

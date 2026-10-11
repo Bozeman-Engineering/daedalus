@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Drupal\Tests\daedalus_layout\FunctionalJavascript;
 
+use Drupal\Core\Url;
 use Drupal\daedalus_blueprint\NodeTree\DocumentInstantiator;
 use Drupal\FunctionalJavascriptTests\WebDriverTestBase;
 use Drupal\layout_builder\Entity\LayoutBuilderEntityViewDisplay;
@@ -488,7 +489,9 @@ class TemplateEditBehaviorTest extends WebDriverTestBase {
     $landing = json_decode((string) $session->evaluateScript(
       "JSON.stringify({ path: window.location.pathname, mode: document.documentElement.getAttribute('data-daedalus-ui-mode') })"
     ), TRUE);
-    $this->assertSame(self::TEMPLATE_PATH, $landing['path'], 'Save landed back on the template route. ' . print_r($landing, TRUE));
+    // The expectation carries the base path the site is served under
+    // (drupal.org's runner serves it under /web/).
+    $this->assertSame(Url::fromUserInput(self::TEMPLATE_PATH)->toString(), $landing['path'], 'Save landed back on the template route. ' . print_r($landing, TRUE));
     $this->assertNotSame('edit', $landing['mode'], 'Save dropped Edit Mode on the template route. ' . print_r($landing, TRUE));
 
     $saved = $this->display();

@@ -38,9 +38,8 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  * The seams only a browser sees:
  * - THE PORTAL FROM A FRAME HOST: the header door, held by the frame and
  *   showing its default, wears the BLUEPRINT's portal (the door showing a
- *   default reads as the linked placement it is), the frame's own title
- *   block wears the FRAME's, and the frame's nodes are outside the page's
- *   projection (never selectable). Hovering inside the door paints the
+ *   default reads as the linked placement it is), and the frame's nodes
+ *   are outside the page's projection (never selectable). Hovering inside the door paints the
  *   chip with the header's label, an Edit link to its canvas and the
  *   claim; the double-click leaves through Portal.leave() for the
  *   blueprint canvas carrying the page as `destination`, the canvas's
@@ -103,11 +102,6 @@ class SiteFrameBehaviorTest extends WebDriverTestBase {
    * The frame's header slot door (daedalus_blueprint.frame.daedalus_theme).
    */
   private const HEADER_DOOR_UUID = 'c59a4674-73c1-4279-87c0-9c9bda293640';
-
-  /**
-   * The frame's page title block, a node of the frame's own.
-   */
-  private const TITLE_BLOCK_UUID = '4195bf9c-72d6-4c83-b21e-e423cc368b09';
 
   /**
    * The header blueprint's one section (daedalus_site_chrome content).
@@ -256,7 +250,6 @@ class SiteFrameBehaviorTest extends WebDriverTestBase {
     $door = "[data-selectable='$door_key']";
     $branding = "[data-selectable='block:" . self::BRANDING_UUID . "']";
     $default_section = "[data-selectable='container:" . self::HEADER_SECTION_UUID . "']";
-    $title_block = "[data-selectable='block:" . self::TITLE_BLOCK_UUID . "']";
     $portal_chip = '#daedalus-root .daedalus-ui-frame__chip--portal';
     $claim_button = "$portal_chip [data-portal-action='daedalus_layout.claim_slot']";
     $door_attribute = SlotBlock::DOOR_ATTRIBUTE;
@@ -270,9 +263,8 @@ class SiteFrameBehaviorTest extends WebDriverTestBase {
     // page's main entity. The door reads as the linked placement it is
     // (the blueprint's portal, for an actor who may update the header) and
     // offers the claim (the door is open for this page, the default is a
-    // published blueprint, nothing beneath fills it). The frame's own
-    // title block is a portal to the frame canvas. None of it is in the
-    // page's projection.
+    // published blueprint, nothing beneath fills it). None of it is in
+    // the page's projection.
     $this->drupalGet($page->toUrl());
     $session->resizeWindow(1600, 1400);
     $this->enterEditModeOnPath($page->toUrl());
@@ -290,15 +282,8 @@ class SiteFrameBehaviorTest extends WebDriverTestBase {
       'The header door is outside the main entity, names its slot, offers the claim of its default, and is the blueprint\'s portal; the default is absent from the page\'s document.',
     );
     $this->assertJsCondition(
-      "document.querySelector(\"$title_block\")?.getAttribute('data-daedalus-ui-portal-url') === " . json_encode($frame_url)
-      . " && document.querySelector(\"$title_block\").getAttribute('data-daedalus-ui-portal-label') === " . json_encode($frame_label),
-      20000,
-      'The frame\'s own title block is a portal to the frame canvas, labelled by the theme.',
-    );
-    $this->assertJsCondition(
       "(() => { const S = Drupal.Daedalus.Selection;"
-      . " return S.selectable('$door_key') === false && S.selectable('block:" . self::BRANDING_UUID . "') === false"
-      . " && S.selectable('block:" . self::TITLE_BLOCK_UUID . "') === false; })()",
+      . " return S.selectable('$door_key') === false && S.selectable('block:" . self::BRANDING_UUID . "') === false; })()",
       20000,
       'The frame\'s nodes and the default\'s are outside the page\'s projection: nothing in the frame is selectable.',
     );
