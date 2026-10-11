@@ -8,6 +8,7 @@ use Drupal\Core\Database\Statement\FetchAs;
 use Drupal\entity_test\Entity\EntityTest;
 use Drupal\entity_test\Entity\EntityTestRev;
 use Drupal\KernelTests\KernelTestBase;
+use Drupal\layout_builder\Entity\LayoutBuilderEntityViewDisplay;
 use Drupal\daedalus_stylish\Entity\DaedalusStylishVariant;
 use Drupal\daedalus_stylish\DaedalusStylishFieldManager;
 use Drupal\daedalus_stylish\DaedalusStylishVariantInterface;
@@ -70,6 +71,7 @@ class VariantUsageTest extends KernelTestBase {
     // every build, and every compile and validation builds it.
     $this->installEntitySchema('daedalus_swatch');
     $this->installEntitySchema('daedalus_animation');
+    $this->installEntitySchema('daedalus_font');
     $this->installEntitySchema('daedalus_skin');
     $this->installSchema('daedalus_stylish', ['daedalus_variant_usage']);
     $this->installConfig(['daedalus_stylish']);
@@ -260,6 +262,64 @@ class VariantUsageTest extends KernelTestBase {
     $this->assertSame($maintained, $this->allRows());
     $this->assertSame(2, $this->usage->countWearers($variant));
     $this->assertSame(2, $this->usage->countWearers($other));
+  }
+
+  /**
+   * A template display is a host: its map is tracked, untracked and rebuilt.
+   *
+   * The display's map is its third-party setting; the same chokepoint
+   * (the entity save hooks) and the same rebuild enumerate it beside the
+   * content hosts, keyed by the config id.
+   */
+  public function testDisplayHostTracking(): void {
+    $variant = $this->createVariant('Card', 'card');
+    $display = LayoutBuilderEntityViewDisplay::create([
+      'targetEntityType' => 'entity_test',
+      'bundle' => 'entity_test',
+      'mode' => 'default',
+      'status' => TRUE,
+    ]);
+    $display->enableLayoutBuilder()->save();
+    $this->assertSame(0, $this->usage->countWearers($variant));
+
+    $section_uuid = $this->container->get('uuid')->generate();
+    $host = $this->container->get('daedalus_blueprint.host_resolver')->fromEntity($display);
+    $host->setStyleMap(["container:$section_uuid" => $this->wearing('card')]);
+    $display->save();
+    $this->assertSame(1, $this->usage->countWearers($variant));
+    $this->assertSame([
+      ['entity_type' => 'entity_view_display', 'entity_id' => $display->id()],
+    ], $this->usage->wearers($variant));
+
+    // A content host beside it: two wearers, two stores.
+    $entity = EntityTest::create([
+      'name' => 'page',
+      DaedalusStylishFieldManager::FIELD_NAME => json_encode(['block:' . $this->container->get('uuid')->generate() => $this->wearing('card')]),
+    ]);
+    $entity->save();
+    $this->assertSame(2, $this->usage->countWearers($variant));
+
+    // Rebuild parity over both stores.
+    $maintained = $this->allRows();
+    $this->container->get('database')->delete(VariantUsage::TABLE)->condition('entity_type', 'entity_view_display')->execute();
+    $this->assertSame(1, $this->usage->countWearers($variant));
+    $this->assertSame(2, $this->usage->rebuild());
+    $this->assertSame($maintained, $this->allRows());
+
+    // Dropping the template's reference on save untracks it.
+    $host->setStyleMap([]);
+    $display->save();
+    $this->assertSame(1, $this->usage->countWearers($variant));
+
+    // Deleting a wearing display drops its rows.
+    $host->setStyleMap(["container:$section_uuid" => $this->wearing('card')]);
+    $display->save();
+    $this->assertSame(2, $this->usage->countWearers($variant));
+    $display->delete();
+    $this->assertSame(1, $this->usage->countWearers($variant));
+    $this->assertSame([
+      ['entity_type' => 'entity_test', 'entity_id' => (string) $entity->id()],
+    ], $this->usage->wearers($variant));
   }
 
 }

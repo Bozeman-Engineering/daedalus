@@ -33,15 +33,19 @@
  * Editor chrome that lives INSIDE canvas elements and must not count as
  * content: contextual-links wrappers (core), daedalus_edit validation
  * messages, daedalus_ui drag placeholders, the layout-builder content
- * preview placeholder label, and CKEditor 5 in-content UI. Text or boxes
- * under these are the editor talking, not the page — hasText and
- * childCount skip them so gates reflect what a visitor would see.
+ * preview placeholder label, daedalus_ui's stand-in for a block that
+ * built nothing (its label and reason, printed in the editing posture in
+ * place of core's placeholder sentence), and CKEditor 5 in-content UI.
+ * Text or boxes under these are the editor talking, not the page —
+ * hasText and childCount skip them so gates reflect what a visitor would
+ * see.
  */
 export const CHROME_SELECTOR = [
   '[data-contextual-id]',
   '.daedalus-edit-validation-message',
   '.daedalus-ui-drop-placeholder',
   '.layout-builder-block__content-preview-placeholder-label',
+  '.daedalus-ui-block-stand-in',
   '.ck-reset_all',
   '.ck-widget__type-around',
   '.ck-fake-selection-container',

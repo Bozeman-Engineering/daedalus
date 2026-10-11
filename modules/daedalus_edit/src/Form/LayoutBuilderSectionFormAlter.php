@@ -14,6 +14,7 @@ use Drupal\Core\Plugin\PluginWithFormsInterface;
 use Drupal\daedalus_blueprint\LayoutBuilder\DaedalusLayoutAdapter;
 use Drupal\daedalus_blueprint\LayoutBuilder\OpaqueDataMerger;
 use Drupal\daedalus_blueprint_api\Render\SelectableKey;
+use Drupal\daedalus_blueprint\Host\HostResolver;
 use Drupal\daedalus_edit\FormCommit;
 use Drupal\daedalus_layout\NestedSectionStorageInterface;
 use Drupal\daedalus_layout\SectionStorage\NestedAwareSectionStorage;
@@ -34,18 +35,20 @@ use Symfony\Component\HttpFoundation\RequestStack;
  * just closes.
  *
  * Only an existing section's dialog: the same form adds a section on the
- * stock admin UI's route (a plugin id in the build arguments), which is not
- * this dialog and keeps core's path.
+ * stock admin UI's route (a plugin id in the build arguments), which is
+ * closed for a hosted storage (daedalus_layout's route subscriber) and
+ * keeps core's path for a storage no host owns.
  */
 final class LayoutBuilderSectionFormAlter extends ConfigureDialogFormAlterBase {
 
   public function __construct(
     FormCommit $formCommit,
     RequestStack $requestStack,
+    HostResolver $hostResolver,
     protected PluginFormFactoryInterface $pluginFormFactory,
     protected DaedalusLayoutAdapter $layoutAdapter,
   ) {
-    parent::__construct($formCommit, $requestStack);
+    parent::__construct($formCommit, $requestStack, $hostResolver);
   }
 
   /**
@@ -59,16 +62,21 @@ final class LayoutBuilderSectionFormAlter extends ConfigureDialogFormAlterBase {
     if (!$form_object instanceof ConfigureSectionForm) {
       return;
     }
-    if (($form_state->getBuildInfo()['args'][2] ?? NULL) !== NULL) {
-      return;
-    }
     $storage = NestedAwareSectionStorage::wrap($form_object->getSectionStorage());
     if (!$storage instanceof NestedSectionStorageInterface || $this->rootOf($storage) === NULL) {
       return;
     }
+    // A hosted storage always commits through the spine: the add-section
+    // variant of core's form (a plugin id in the build arguments, the
+    // stock admin UI's route) and a section without a uuid have no
+    // element to commit on, and must not fall back onto core's
+    // whole-storage submit.
+    if (($form_state->getBuildInfo()['args'][2] ?? NULL) !== NULL) {
+      throw new \LogicException('Daedalus Edit: core\'s add-section form was built on a hosted storage; a section is added through the blueprint operations.');
+    }
     $section_uuid = $this->layoutAdapter->getSectionUuid($form_object->getCurrentSection());
     if ($section_uuid === NULL) {
-      return;
+      throw new \LogicException('Daedalus Edit: the section Configure dialog was built for a section without a uuid on a hosted storage.');
     }
 
     $this->takeOver($form, SelectableKey::container($section_uuid));
@@ -135,7 +143,7 @@ final class LayoutBuilderSectionFormAlter extends ConfigureDialogFormAlterBase {
       $root,
       $section_uuid,
       $properties,
-      $root->language()->getId(),
+      $root->entity()->language()->getId(),
       $this->t('Configured @label', ['@label' => $title]),
       $properties !== [],
     );

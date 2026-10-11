@@ -138,7 +138,7 @@ guide_card:
   scope: 'kind:container'
   axis: 'style'
   weight: 10
-  description: 'A paper card: page-background fill and text color, padding on four sides, the large radius, the small shadow, its children stacked with the site gap. Reach for it on each column of a Columns container inside an Elevated or Tint band (one card per column, never a Card in a Card) or on one featured grouping; the Card stencil wears it, and Raise on hover makes a linked card pressable.'
+  description: 'A paper card: page-background fill and text color, padding on four sides, the large radius, the small shadow, its children stacked with the site gap. Reach for it on each column of a Columns container inside an Elevated or Tint band (one card per column, never a Card in a Card) or on one featured grouping; the Card blueprint wears it, and Raise on hover makes a linked card pressable.'
   styles:
     '':
       default:

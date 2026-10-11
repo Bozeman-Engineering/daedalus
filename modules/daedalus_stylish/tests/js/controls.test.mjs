@@ -268,7 +268,7 @@ test('offered: presence outranks the gate, and gates still see element-bound mod
 // The projection with a layout context and a drilled part: the trailing
 // arguments, named.
 const project = (guide, key, styleMap, { blockTypes: types = blockTypes, variants = [], condition = 'default', context = null, targetSelector = null, tree = null } = {}) =>
-  controlModels(guide, key, types, styleMap, {}, variants, [], condition, context, targetSelector, tree);
+  controlModels(guide, key, types, styleMap, {}, variants, condition, context, targetSelector, tree);
 
 test('offered: the element-bound Image width model from controlModels gates on presence', () => {
   // End-to-end over the real projection: the guide fixture's width
@@ -473,14 +473,14 @@ test('the posed compound threads through: reads taken at it, condition echoed', 
       narrow: { width: '100%' },
     },
   };
-  const [alignment, width] = controlModels(guide, BLOCK, blockTypes, styleMap, {}, [], [], 'narrow');
+  const [alignment, width] = controlModels(guide, BLOCK, blockTypes, styleMap, {}, [], 'narrow');
   assert.equal(width.condition, 'narrow');
   assert.deepEqual(litValues(width.reads), { width: '100%' });
   assert.equal(width.reads.width.winner.condition, 'narrow');
   // Posed at narrow with only a Base block, the Base value cascades in
   // as the lit value (inherited from Base, not unsettable here).
   const baseOnly = { [`${BLOCK}::.mock-image`]: { default: { width: '50%' } } };
-  const [, cascaded] = controlModels(guide, BLOCK, blockTypes, baseOnly, {}, [], [], 'narrow');
+  const [, cascaded] = controlModels(guide, BLOCK, blockTypes, baseOnly, {}, [], 'narrow');
   assert.deepEqual(litValues(cascaded.reads), { width: '50%' });
   assert.equal(cascaded.reads.width.winner.condition, 'default');
   assert.equal(ownAtPose(cascaded.reads.width, 'narrow'), false);
@@ -498,11 +498,11 @@ test('styledElsewhere is pose-relative: styling elsewhere flags, the posed compo
   };
   // Posed at narrow, the default block is "more elsewhere" — default is
   // just another compound (of zero parts) once the pose is the target.
-  const [, width] = controlModels(guide, BLOCK, blockTypes, styleMap, {}, [], [], 'narrow');
+  const [, width] = controlModels(guide, BLOCK, blockTypes, styleMap, {}, [], 'narrow');
   assert.equal(width.styledElsewhere, true);
   // Styled ONLY at the posed compound: everything shows, no hint.
   const narrowOnly = { [`${BLOCK}::.mock-image`]: { narrow: { width: '100%' } } };
-  const [, posedOnly] = controlModels(guide, BLOCK, blockTypes, narrowOnly, {}, [], [], 'narrow');
+  const [, posedOnly] = controlModels(guide, BLOCK, blockTypes, narrowOnly, {}, [], 'narrow');
   assert.equal(posedOnly.styledElsewhere, false);
   assert.deepEqual(litValues(posedOnly.reads), { width: '100%' });
 });
@@ -998,12 +998,11 @@ test('the choice row\'s origin at a pose: the defaults tier delivers from Base, 
   const posed = {
     ...rootGuide,
     conditions: { medium: { label: 'Medium', axis: 'width' } },
-    skinEditUrl: '/admin/appearance/skins/1',
     skinDefaults: { 'block_type:image': { '': { default: { 'max-width': '90%' } } } },
     declaredDefaults: { 'block_type:image': { '': { default: { display: 'block' } } } },
   };
   const styleMap = { [BLOCK]: { default: { width: '50%' } } };
-  const [, width] = controlModels(posed, BLOCK, blockTypes, styleMap, {}, [], [], 'medium');
+  const [, width] = controlModels(posed, BLOCK, blockTypes, styleMap, {}, [], 'medium');
   // A row over an owned property hands its read; a row over another
   // property of the same target reads the stack itself.
   const rowAt = (model, condition, property) => originFor({
@@ -1014,12 +1013,12 @@ test('the choice row\'s origin at a pose: the defaults tier delivers from Base, 
   assert.equal(skin.delivers, true);
   assert.equal(skin.layer, 'skin:block_type:image');
   assert.equal(skin.title, '90% from the active skin at Base');
-  assert.deepEqual(skin.doorways.map((doorway) => doorway.id), ['skin'], 'the skin form, never a drive');
+  assert.deepEqual(skin.doorways.map((doorway) => doorway.id), ['skin'], 'the skin session, never a drive');
   const declared = rowAt(width, 'medium', 'display');
   assert.equal(declared.delivers, true);
   assert.equal(declared.layer, 'declared:block_type:image');
   assert.equal(declared.title, 'block from the image block type declaration at Base');
-  assert.deepEqual(declared.doorways.map((doorway) => [doorway.id, doorway.disabled]), [['declared', true]], 'a declaration is code: the one doorway is inert');
+  assert.deepEqual(declared.doorways.map((doorway) => [doorway.id, doorway.scope, doorway.property]), [['declared', 'block_type:image', 'display']], 'a declaration is code: the one doorway opens the Law tab at it');
   // The map's own Base value still beats the tier at Medium: lit,
   // inherited from Base, not unsettable at Medium.
   assert.equal(rowAt(width, 'medium', 'width').title, '50% from Base');
@@ -1029,7 +1028,7 @@ test('the choice row\'s origin at a pose: the defaults tier delivers from Base, 
   assert.equal(rowAt(width, 'medium', 'color').delivers, false);
   assert.equal(rowAt(width, 'medium', 'color').title, 'Not set');
   // Posed at Base the tail drops: the delivering condition is the pose.
-  const [, atBase] = controlModels(posed, BLOCK, blockTypes, styleMap, {}, [], [], 'default');
+  const [, atBase] = controlModels(posed, BLOCK, blockTypes, styleMap, {}, [], 'default');
   assert.equal(rowAt(atBase, 'default', 'display').title, 'block from the image block type declaration');
   assert.equal(rowAt(atBase, 'default', 'max-width').title, '90% from the active skin');
   // A value set at the pose is the row's own, unsettable.
@@ -1038,7 +1037,7 @@ test('the choice row\'s origin at a pose: the defaults tier delivers from Base, 
   // An own value over the skin's at the pose: overriding, with the
   // unset doorway naming what returns.
   const overGuide = { ...posed, skinDefaults: { 'block_type:image': { '': { default: { width: '60%' } } } } };
-  const [, over] = controlModels(overGuide, BLOCK, blockTypes, styleMap, {}, [], [], 'default');
+  const [, over] = controlModels(overGuide, BLOCK, blockTypes, styleMap, {}, [], 'default');
   const overriding = rowAt(over, 'default', 'width');
   assert.equal(overriding.atPose, true);
   assert.equal(overriding.title, "Your 50% overrides the active skin's 60%");
@@ -1279,7 +1278,7 @@ test('the posed compound threads through instance parts, styledElsewhere include
       narrow: { 'font-size': '0.875rem' },
     },
   };
-  const posed = controlModels(instanceGuide, INSTANCE, textBlockTypes, {}, {}, [], [], 'narrow');
+  const posed = controlModels(instanceGuide, INSTANCE, textBlockTypes, {}, {}, [], 'narrow');
   assert.equal(posed[0].condition, 'narrow');
   const [typography] = controlModels(instanceGuide, INSTANCE, textBlockTypes, styleMap);
   assert.deepEqual(litValues(typography.reads), { 'font-size': '1rem' });
@@ -1391,8 +1390,8 @@ test('a container\'s granted subset is the same at every placement depth', () =>
       spacing_scale: { label: 'Spacing', properties: ['padding', 'padding-top', 'padding-bottom', 'padding-left', 'gap'] },
     },
   });
-  const layout = [{ uuid: ROOT, layout_id: 'layout_onecol', children: [{ uuid: NESTED, layout_id: 'layout_onecol', children: [] }] }];
-  const granted = (guide, uuid, tree) => controlModels(guide, `container:${uuid}`, {}, {}, {}, [], tree)
+  const layout = [{ kind: 'container', uuid: ROOT, layout_id: 'layout_onecol', children: [{ kind: 'container', uuid: NESTED, layout_id: 'layout_onecol', children: [] }] }];
+  const granted = (guide, uuid, tree) => controlModels(guide, `container:${uuid}`, {}, {}, {}, [], 'default', null, null, tree)
     .find((model) => model.id === 'spacing').granted;
 
   const narrowed = guideFor({ ...container, grants: { spacing: ['padding-top', 'padding-bottom', 'padding-inline', 'gap'] } });
@@ -1960,7 +1959,7 @@ const childrenTree = (linked) => [
 // it, so every projection here passes one that would mislead.
 const containerContext = { self: { parts: { '.text-block-link': true } } };
 const projectRule = (styleMap, tree) =>
-  controlModels(childrenGuide, TARGET, childTypes, styleMap, {}, [], [], 'default', containerContext, null, tree);
+  controlModels(childrenGuide, TARGET, childTypes, styleMap, {}, [], 'default', containerContext, null, tree);
 
 test('a rule key models the landing type\'s controls over the container\'s rule, a part present where a matched child carries it', () => {
   const [model, ...rest] = projectRule({}, childrenTree(true));
@@ -2006,7 +2005,7 @@ test('a rule key\'s absent part drops out and the rows address the rule itself',
   // The matched set is the RULE's, not the container's children as a
   // whole: a rule matching nothing that renders the anchor reads absent
   // even when a sibling outside the match does.
-  const [outside] = controlModels(childrenGuide, TARGET, childTypes, {}, {}, [], [], 'default', null, null, [
+  const [outside] = controlModels(childrenGuide, TARGET, childTypes, {}, {}, [], 'default', null, null, [
     {
       ...childrenTree(false)[0],
       children: [
@@ -2019,7 +2018,7 @@ test('a rule key\'s absent part drops out and the rows address the rule itself',
 });
 
 test('a bare children rule and a tag land on declarations without controls', () => {
-  assert.deepEqual(controlModels(childrenGuide, `${CONTAINER}::> *`, childTypes, {}, {}, [], [], 'default', null, null, childrenTree(false)), []);
+  assert.deepEqual(controlModels(childrenGuide, `${CONTAINER}::> *`, childTypes, {}, {}, [], 'default', null, null, childrenTree(false)), []);
   assert.deepEqual(controlModels(childrenGuide, `${CONTAINER}::> p`, childTypes, {}), []);
   // A shell part still models nothing of its own (the owner's lift).
   assert.deepEqual(controlModels(childrenGuide, `${CHILD}::.text-block-link`, childTypes, {}), []);
@@ -2030,7 +2029,7 @@ test('a child\'s own rows read the container\'s rule as the inherited origin', (
   const context = { self: { parts: { '.text-block-link': false } } };
   const rule = { [TARGET]: { default: { color: 'red' } } };
   const project = (styleMap) =>
-    controlModels(childrenGuide, CHILD, childTypes, styleMap, {}, [], [], 'default', context, null, tree)[0];
+    controlModels(childrenGuide, CHILD, childTypes, styleMap, {}, [], 'default', context, null, tree)[0];
   const inherited = project(rule);
   assert.equal(inherited.keys.color, CHILD, 'the row still writes the child itself');
   assert.equal(inherited.reads.color.winner.tier, 'ancestor');
@@ -2053,7 +2052,7 @@ test('a child\'s own rows read the container\'s rule as the inherited origin', (
   assert.equal(overriding.title, "Your blue overrides Hero's red (> pb-text)");
   // Without the tree the ancestor tier is out of reach: the row reads
   // unset (a satellite before its broadcast).
-  const treeless = controlModels(childrenGuide, CHILD, childTypes, rule, {}, [], [], 'default', context)[0];
+  const treeless = controlModels(childrenGuide, CHILD, childTypes, rule, {}, [], 'default', context)[0];
   assert.equal(treeless.reads.color.winner, null);
 });
 
@@ -2069,7 +2068,7 @@ test('a variant the container\'s rule wears reaches a child as an ancestor layer
     value: { '': { default: { color: 'red' }, narrow: { color: 'blue' } } },
   }];
   const styleMap = { [TARGET]: { variants: [{ variant: 'accent', fragment: '' }] } };
-  const [child] = controlModels(childrenGuide, CHILD, childTypes, styleMap, {}, accent, [], 'default', context, null, tree);
+  const [child] = controlModels(childrenGuide, CHILD, childTypes, styleMap, {}, accent, 'default', context, null, tree);
   // The child's row lights the rule's worn value, the winner naming the
   // variant through the ancestor tier (the mark can wear its hue)...
   assert.equal(litValues(child.reads).color, 'red');
@@ -2084,7 +2083,7 @@ test('a variant the container\'s rule wears reaches a child as an ancestor layer
   assert.equal(child.styledElsewhere, false);
   // At the rule itself the same reference IS a wearing: set, and its
   // Narrow block flags the hint.
-  const [rule] = controlModels(childrenGuide, TARGET, childTypes, styleMap, {}, accent, [], 'default', containerContext, null, tree);
+  const [rule] = controlModels(childrenGuide, TARGET, childTypes, styleMap, {}, accent, 'default', containerContext, null, tree);
   assert.equal(rule.reads.color.winner.tier, 'variant');
   assert.equal(styledAt(rule.reads), true);
   assert.equal(rule.styledElsewhere, true);
@@ -2124,7 +2123,7 @@ const LINKED_LINK = `${LINKED_CHILD}::.text-block-link`;
 const TEXT_RULE = `${CONTAINER}::> pb-text`;
 const linkedContext = { self: { parts: { '.text-block-link': true } } };
 const projectAt = (writeAddress, { styleMap = {}, targetSelector = null, tree = childrenTree(true), key = LINKED_CHILD, context = linkedContext } = {}) =>
-  controlModels(ADDRESS_GUIDE, key, childTypes, styleMap, {}, [], [], 'default', context, targetSelector, tree, writeAddress);
+  controlModels(ADDRESS_GUIDE, key, childTypes, styleMap, {}, [], 'default', context, targetSelector, tree, writeAddress);
 const byId = (models) => Object.fromEntries(models.map((model) => [model.id, model]));
 
 // Two projections are the same model when their data agree and their
@@ -2148,9 +2147,60 @@ test('writeAddress: null, a malformed address and the facet\'s own key all give 
   sameModels(projectAt('nonsense'), plain);
   const drilled = projectAt(null, { targetSelector: '.text-block-link' });
   sameModels(projectAt({ key: LINKED_CHILD, selector: '.text-block-link' }, { targetSelector: '.text-block-link' }), drilled);
-  // A rule key has no address set: the address is ignored there.
-  const rule = controlModels(ADDRESS_GUIDE, TEXT_RULE, childTypes, {}, {}, [], [], 'default', null, null, childrenTree(true));
-  sameModels(controlModels(ADDRESS_GUIDE, TEXT_RULE, childTypes, {}, {}, [], [], 'default', null, null, childrenTree(true), { key: CONTAINER, selector: '> *' }), rule);
+  // A rule key takes an address like any facet (the pins below); one
+  // naming its own key is the own key.
+  const rule = controlModels(ADDRESS_GUIDE, TEXT_RULE, childTypes, {}, {}, [], 'default', null, null, childrenTree(true));
+  sameModels(controlModels(ADDRESS_GUIDE, TEXT_RULE, childTypes, {}, {}, [], 'default', null, null, childrenTree(true), { key: CONTAINER, selector: '> pb-text' }), rule);
+});
+
+test('writeAddress: a tag-tier subject rebases its root candidate to the address, as the root facet does; without one it writes at its own rule key', () => {
+  // A base tag declaring basic controls (the authored surface a tier
+  // needs to have rows at all): the link tier `block::a` under the
+  // section's "every link in Section" address.
+  const tierGuide = {
+    ...ADDRESS_GUIDE,
+    base: {
+      a: {
+        ...ADDRESS_GUIDE.base.a,
+        controls: { link_weight: { label: 'Link weight', widget: 'link_weight', element: [''] } },
+      },
+    },
+  };
+  const TIER = `${LINKED_CHILD}::a`;
+  const tierAt = (writeAddress) =>
+    byId(controlModels(tierGuide, TIER, childTypes, {}, {}, [], 'default', null, null, childrenTree(true), writeAddress));
+  const own = tierAt(null);
+  assert.equal(own.link_weight.keys['font-weight'], TIER, 'without an address the tier writes at its own rule key');
+  assert.deepEqual(own.link_weight.candidates.map((candidate) => candidate.write), [TIER]);
+  const rebased = tierAt({ key: CONTAINER, selector: 'a' });
+  assert.equal(rebased.link_weight.keys['font-weight'], `${CONTAINER}::a`, 'the root candidate (the rule itself) rebases to the address');
+  assert.equal(rebased.link_weight.landing(['font-weight']), `${CONTAINER}::a`);
+  assert.deepEqual(rebased.link_weight.candidates.map((candidate) => [candidate.key, candidate.write]), [[TIER, `${CONTAINER}::a`]], 'the reads stay the tier\'s, the write moves');
+  assert.equal(rebased.link_weight.candidates[0].stack.layers.find((layer) => layer.editable)?.id, `ancestor:${CONTAINER}::a`, 'the address\'s layer is the editable one in the tier\'s stack');
+  assert.deepEqual(rebased.link_weight.withheld, {}, 'base `a` grants weight, so nothing is withheld at the address');
+  // An address naming the tier's own key is the own key: today's model.
+  sameModels(Object.values(tierAt({ key: LINKED_CHILD, selector: 'a' })), Object.values(own));
+});
+
+test('writeAddress: a chain subject takes an address the same way (no mode decides whether one may stand)', () => {
+  // The container's `> pb-text` rule under its own `> *`: the text
+  // type's root-bound rows rebase to the children rule, the part-bound
+  // ones continue it by descent where the matcher confirms the reach.
+  const rule = byId(controlModels(ADDRESS_GUIDE, TEXT_RULE, childTypes, {}, {}, [], 'default', null, null, childrenTree(true)));
+  assert.equal(rule.typography.keys['font-size'], TEXT_RULE);
+  const under = byId(controlModels(ADDRESS_GUIDE, TEXT_RULE, childTypes, {}, {}, [], 'default', null, null, childrenTree(true), { key: CONTAINER, selector: '> *' }));
+  assert.equal(under.typography.keys['font-size'], `${CONTAINER}::> *`, 'the root candidate rebases to the address');
+  assert.equal(under.typography.candidates.find((candidate) => candidate.element === '').write, `${CONTAINER}::> *`);
+  // A rule's root is its owner, not one matched element, so the matcher
+  // cannot confirm a part chain under the address for it: the part-bound
+  // row is honestly beyond reach (no write key, withheld with the reach
+  // reason), never guessed.
+  assert.equal(under.link_weight.candidates[0].write, null);
+  assert.equal(typeof under.link_weight.withheld['font-weight'], 'string');
+  // The children rule grants gap alone: the typography rows are
+  // withheld there with the grant reason, the reads unchanged.
+  assert.equal(typeof under.typography.withheld['font-size'], 'string');
+  assert.deepEqual(under.typography.reads['font-size'].winner, rule.typography.reads['font-size'].winner);
 });
 
 test('writeAddress: a root facet rebases every candidate to the address, the facet\'s own to the address itself, a part by descent', () => {

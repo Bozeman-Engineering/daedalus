@@ -177,7 +177,8 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  *   `content: ""` at default in the same op; the printed `:scope::after`
  *   inside the element's @scope landing on a generated box, and the
  *   selection paint's own `:scope::after` outline computing on the
- *   pseudo-element itself): the menu ends with "+ Before" / "+ After",
+ *   pseudo-element itself): the address set ends with "+ Before" /
+ *   "+ After" (then "Copy key" closes the menu after the separator),
  *   the pick faces the chip "After" at block::&::after unlit with no map
  *   entry, the paint slot holds the dashed `:scope::after` rule and the
  *   pseudo computes it while no box exists (content none), a typed
@@ -532,7 +533,7 @@ class AdvancedSectionsBehaviorTest extends WebDriverTestBase {
    * commit assertion reads.
    */
   private function mapJs(string $key): string {
-    return '(Drupal.Daedalus.Blueprint.getBlueprint()?.fields?.daedalus_stylish_styles ?? {})[' . json_encode($key) . ']';
+    return $this->styleMapJs() . '[' . json_encode($key) . ']';
   }
 
   /**
@@ -633,7 +634,7 @@ class AdvancedSectionsBehaviorTest extends WebDriverTestBase {
    *   values and selected; Border recomputes closed (A's mark is stale
    *   under B's anchor), Spacing arrives open by the skin signal and
    *   Typography closed (B's own arrival state, nothing carried over).
-   * - The origin at the delivering condition: a variant "Grip origin"
+   * - The origin at the delivering condition: a variant "Grip & Tim's origin"
    *   (border-radius var(--radius-md) at Base: a minted radius token,
    *   the only legal spelling on the bound property under strict law)
    *   is minted from B and worn by B through the op spine; Border opens
@@ -996,11 +997,11 @@ class AdvancedSectionsBehaviorTest extends WebDriverTestBase {
           operations: [{
             op: 'save_material',
             kind: 'variant',
-            label: 'Grip origin',
+            label: "Grip & Tim's origin",
             key: '$block_b_key',
             styles: { '': { default: { 'border-radius': 'var(--radius-md)' } } },
           }],
-          label: 'Saved variant Grip origin',
+          label: "Saved variant Grip & Tim's origin",
         }))
           .then((payload) => {
             const minted = (payload.materials?.upsert ?? []).find((record) => record.kind === 'variant');
@@ -1027,7 +1028,7 @@ class AdvancedSectionsBehaviorTest extends WebDriverTestBase {
     $variant_error = $session->evaluateScript('window.__gripVariantError ?? null');
     $this->assertNull($variant_error, 'Minting or wearing the variant failed: ' . ($variant_error ?? ''));
     $variant_id = (string) $session->evaluateScript('window.__gripVariant');
-    $this->assertSame('grip_origin', $variant_id, 'The variant minted under its derived machine name.');
+    $this->assertSame('grip_tim_s_origin', $variant_id, 'The variant minted under its derived machine name (the label\'s & and \' collapse to underscores).');
 
     // The worn value reaches the section model through the stack's
     // delivered entry: Border (closed on B a moment ago, no mark under
@@ -1069,7 +1070,7 @@ class AdvancedSectionsBehaviorTest extends WebDriverTestBase {
     $this->assertJsCondition(
       "($radius_row)?.style.getPropertyValue('--daedalus-stylish-origin').trim() === " . json_encode(self::layerColor($variant_id)),
       20000,
-      'Origin read at the delivering condition: posed at Medium, the Border radius row supplied by the variant at Base carries --daedalus-stylish-origin in the variant layer\'s hue (layerColor(variantLayerId(grip_origin))).',
+      'Origin read at the delivering condition: posed at Medium, the Border radius row supplied by the variant at Base carries --daedalus-stylish-origin in the variant layer\'s hue (layerColor(variantLayerId(grip_tim_s_origin))).',
     );
     $this->assertSame(
       0,
@@ -1091,7 +1092,7 @@ class AdvancedSectionsBehaviorTest extends WebDriverTestBase {
       'Row menu header: the right-click on the Border radius row opened the row menu with a header on the shared primitive.',
     );
     $header = (string) $session->evaluateScript("document.querySelector('.daedalus-ui-menu .daedalus-ui-menu__header').textContent");
-    $this->assertStringContainsString('Grip origin', $header, 'Row menu header: the header names the supplying variant. Header: ' . $header);
+    $this->assertStringContainsString("Grip & Tim's origin", $header, 'Row menu header: the header names the supplying variant, its & and \' as text (an @ sigil would read &amp; / &#039;). Header: ' . $header);
     $this->assertStringContainsString('Base', $header, 'Row menu header: the header names the delivering condition (Base), not the posed one. Header: ' . $header);
 
     // Seam: drive doorway. "Go to Base" is the origin's drive doorway;
@@ -1336,7 +1337,7 @@ class AdvancedSectionsBehaviorTest extends WebDriverTestBase {
     $section_c_rule_key = "container:$section_c_uuid::> pb-text";
     $padding_row = 'document.querySelector(' . json_encode($padding_input) . ").closest('.daedalus-stylish-inspector__property')";
     $address_chip = '#daedalus_stylish_inspector .daedalus-stylish-inspector__address';
-    $session->executeScript("Drupal.Daedalus.Selection.target('container:$section_c_uuid', '> pb-text');");
+    $session->executeScript("Drupal.Daedalus.Selection.address('container:$section_c_uuid', '> pb-text');");
     $this->assertJsCondition(
       "(() => { const chip = document.querySelector('$address_chip'); const input = document.querySelector(" . json_encode($padding_input) . "); const row = $padding_row;"
       . ' if (!chip || !input || !row || chip.dataset.daedalusStylishAddress !== ' . json_encode($section_c_rule_key) . ') { return false; }'
@@ -1344,7 +1345,7 @@ class AdvancedSectionsBehaviorTest extends WebDriverTestBase {
       . " && input.value === '1'"
       . " && row.querySelector('.daedalus-stylish-inspector__mark')?.title === '1rem from this element'; })()",
       20000,
-      'Element doorway: with the section\'s `> pb-text` rule seated as the styling target (the chip lit at its address) the Padding row keeps the element\'s own 1rem (olivero\'s open law renders the free field: the number in the input, rem on its select), its mark titled "1rem from this element": the own block sits above the address\'s editable layer and the origin is the element\'s.',
+      'Element doorway: with the section\'s `> pb-text` rule seated as the write address (the chip lit at its address, the selection and its bare-element subject unchanged) the Padding row keeps the element\'s own 1rem (olivero\'s open law renders the free field: the number in the input, rem on its select), its mark titled "1rem from this element": the own block sits above the address\'s editable layer and the origin is the element\'s.',
     );
     $session->executeScript(
       "(() => { const row = $padding_row; const rect = row.getBoundingClientRect();"
@@ -1354,10 +1355,10 @@ class AdvancedSectionsBehaviorTest extends WebDriverTestBase {
       . ".map((item) => [item.querySelector('.daedalus-ui-menu__label')?.textContent.trim(), item.querySelector('.daedalus-ui-menu__hint')?.textContent.trim() ?? null])";
     $this->assertJsCondition(
       "(() => { const items = $menu_items_js; if (!document.querySelector('.daedalus-ui-menu') || items.length === 0) { return false; }"
-      . " return items.some(([label, hint]) => label === 'Edit on the element' && hint === 'drops the target; writes land on the element')"
+      . " return items.some(([label, hint]) => label === 'Edit on the element' && hint === 'drops the address; writes land on the element')"
       . " && !items.some(([label]) => label === 'Go to element'); })()",
       20000,
-      'Element doorway: a right-click on the Padding row offers "Edit on the element" (hinted that it drops the target) and never the session\'s "Go to element".',
+      'Element doorway: a right-click on the Padding row offers "Edit on the element" (hinted that it drops the address) and never the session\'s "Go to element".',
     );
     $errors_js = "JSON.parse(sessionStorage.getItem('js_testing_log_test.errors') || '[]').length";
     $errors_before = (int) $session->evaluateScript($errors_js);
@@ -1370,12 +1371,13 @@ class AdvancedSectionsBehaviorTest extends WebDriverTestBase {
       . " return !document.querySelector('.daedalus-ui-menu')"
       . ' && Drupal.Daedalus.Selection.getSelected() === ' . json_encode($block_c_key)
       . ' && Drupal.Daedalus.Selection.getTarget() === null'
+      . ' && Drupal.Daedalus.Selection.getAddress() === null'
       . ' && !!chip && chip.dataset.daedalusStylishAddress === ' . json_encode($block_c_key)
       . " && !chip.classList.contains('daedalus-stylish-chip--lit')"
       . " && !!row && (() => { const mark = row.querySelector('.daedalus-stylish-inspector__mark');"
       . " return !!mark && mark.title === '1rem set here' && mark.classList.contains('daedalus-stylish-inspector__mark--here'); })(); })()",
       20000,
-      'Element doorway: the pick dropped the target through the source (the block still selected, no target, the chip unlit on the own address) and the Padding row\'s mark reads "1rem set here", filled: its 1rem is the editable layer\'s own at the pose.',
+      'Element doorway: the pick dropped the address through the source (address(null): the block still selected, no facet, no address, the chip unlit on the own address) and the Padding row\'s mark reads "1rem set here", filled: its 1rem is the editable layer\'s own at the pose.',
     );
     $this->assertSame(
       $errors_before,
@@ -1424,9 +1426,9 @@ class AdvancedSectionsBehaviorTest extends WebDriverTestBase {
     $box_menu = json_decode((string) $session->evaluateScript("JSON.stringify($box_menu_js)"), TRUE);
     $this->assertSame(['This element', NULL, 'true'], $box_menu[0], 'Generated box: the menu leads with the own key, checked.');
     $this->assertSame(
-      [['+ Before', NULL, 'false'], ['+ After', NULL, 'false']],
-      array_slice($box_menu, -2),
-      'Generated box: the menu ends with the element\'s two box doorways, unhinted and unchecked (seat only). Items: ' . json_encode($box_menu),
+      [['+ Before', NULL, 'false'], ['+ After', NULL, 'false'], ['Copy key', NULL, NULL]],
+      array_slice($box_menu, -3),
+      'Generated box: the address set ends with the element\'s two box doorways, unhinted and unchecked (seat only), and the menu closes with "Copy key" after the separator (the subject word\'s copy gesture lives here now, unchecked: not an address). Items: ' . json_encode($box_menu),
     );
     $session->executeScript(
       "Array.from(document.querySelectorAll('.daedalus-ui-menu .daedalus-ui-menu__item'))"

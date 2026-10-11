@@ -56,6 +56,13 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  *   instead of leaving the page (the pointer grammar's capture-phase click
  *   handler preventDefaults anything resolving to a selectable, and the
  *   dblclick at the leaf is the editor door).
+ * - No canvas drag while the edit is open: with the pointer on the edited
+ *   block the main entity wrapper (the canvas's one delegated drag handle)
+ *   carries no `draggable`; once the edit commits and the block is
+ *   hovered again it is armed. WebKit lets a draggable ancestor win the
+ *   mousedown over an editable descendant, so without the rule a Safari
+ *   text selection inside the typing surface dragged the block; the
+ *   driven browser is Chromium, so only the attribute state is pinned.
  * - The commit grammar: type into the contenteditable surface, blur, and
  *   exactly ONE update_element op rides the queue; the response replaces
  *   the mirror and swaps the canvas markup; the change is staged in
@@ -321,6 +328,38 @@ class TextBlockBlueprintEditBehaviorTest extends WebDriverTestBase {
       'Double-clicking the rendered link did not navigate; it opened the in-place edit with its widget verbs.',
     );
 
+    // No canvas drag while the edit is open. The pointer rests on the
+    // edited block (the double-click left it there; the mousemove through
+    // the pointer grammar makes the hover explicit), and hover on the
+    // selection resolves to the selection, so hover-only arming would
+    // keep the main entity wrapper (the canvas's ONE delegated drag
+    // handle) draggable for the whole edit. WebKit lets a draggable
+    // ancestor win the mousedown over an editable descendant (Chrome
+    // lets the descendant win it as a text selection), so in Safari a
+    // selection drag inside the typing surface dragged the block. The
+    // seam a browser can see: the real edit's editChanged report reaching
+    // the store's editingKey and the delegate dropping the attribute
+    // (absent, never "false"). The driven browser is Chromium, so the
+    // Safari race itself is not reproducible here; the attribute state is.
+    $session->executeScript(<<<JS
+      (() => {
+        const target = document.querySelector("$leaf [data-daedalus-edit-text]");
+        const rect = target.getBoundingClientRect();
+        target.dispatchEvent(new MouseEvent('mousemove', { bubbles: true, clientX: rect.left + 4, clientY: rect.top + 4 }));
+      })();
+      JS);
+    $this->assertJsCondition(
+      <<<JS
+      (() => {
+        return Drupal.Daedalus.Selection.getHovered() === 'block:$component_uuid'
+          && Drupal.Daedalus.Edit.CurrentlyEditingElement !== null
+          && !document.querySelector('[data-main-entity]').hasAttribute('draggable');
+      })()
+      JS,
+      20000,
+      'With the edit open and the pointer on the edited block, the main entity wrapper is not armed as a drag handle.',
+    );
+
     // The edit's controls ride the chip's verb face as widget verbs: while
     // the frame wears --editing, the primary chip renders the Tag and
     // Link entries in widget slots, and at FULL density (the default) the
@@ -357,6 +396,31 @@ class TextBlockBlueprintEditBehaviorTest extends WebDriverTestBase {
       . " && document.querySelector(\"$leaf [data-daedalus-edit-text]\")?.textContent === 'Edited on the canvas'",
       20000,
       'The edit gesture sent exactly one mutation and the swap re-rendered the leaf.',
+    );
+
+    // Editing and moving are sequential: the edit committed, so hovering
+    // the block again arms the delegate (the swap cleared the hover, the
+    // way every response swap does; the pointer grammar's mousemove on
+    // the fresh leaf re-hovers it). The other half of the pin: the rule
+    // is the open edit, and arming resumes from the hover key the moment
+    // it closes.
+    $session->executeScript(<<<JS
+      (() => {
+        const target = document.querySelector("$leaf [data-daedalus-edit-text]");
+        const rect = target.getBoundingClientRect();
+        target.dispatchEvent(new MouseEvent('mousemove', { bubbles: true, clientX: rect.left + 4, clientY: rect.top + 4 }));
+      })();
+      JS);
+    $this->assertJsCondition(
+      <<<JS
+      (() => {
+        return Drupal.Daedalus.Selection.getHovered() === 'block:$component_uuid'
+          && Drupal.Daedalus.Edit.CurrentlyEditingElement === null
+          && document.querySelector('[data-main-entity]').getAttribute('draggable') === 'true';
+      })()
+      JS,
+      20000,
+      'With the edit committed and the pointer back on the block, the main entity wrapper is armed as its drag handle again.',
     );
 
     // Staged, not committed: the whole layout (placement and edit alike)
@@ -930,15 +994,7 @@ class TextBlockBlueprintEditBehaviorTest extends WebDriverTestBase {
       20000,
       'The page-elements tree mounted with its Show menu.',
     );
-    $session->executeScript("document.querySelector('.daedalus-ui-show-menu__button').click();");
-    $markup_entry = "Array.from(document.querySelectorAll('.daedalus-ui-menu .daedalus-ui-menu__item'))"
-      . ".find((item) => item.querySelector('.daedalus-ui-menu__label')?.textContent === 'Markup')";
-    $this->assertJsCondition(
-      "!!$markup_entry",
-      20000,
-      'The Show menu opened with the Markup view toggle.',
-    );
-    $session->executeScript("$markup_entry.click();");
+    $this->setMarkupView(TRUE);
 
     // Linked: the markup view mounts the Link shell row (placement-gated
     // by compose through its live canvas channel: the anchor resolved as
@@ -946,7 +1002,7 @@ class TextBlockBlueprintEditBehaviorTest extends WebDriverTestBase {
     // page elements root row's control over the tree's one outline) on
     // the way, the keyboard-free twin of a user expanding the tree.
     $expand_all = "document.querySelector('.daedalus-ui-tree__tools .daedalus-ui-expand-all')?.click()";
-    $link_row = "[...document.querySelectorAll('.daedalus-ui-tree__row--part .daedalus-ui-tree__label')].some((el) => el.textContent === 'Link')";
+    $link_row = "[...document.querySelectorAll('.daedalus-ui-tree__row--part .daedalus-ui-outline__name')].some((el) => el.textContent === 'Link')";
     $this->assertJsCondition(
       "(() => {"
       . " $expand_all;"

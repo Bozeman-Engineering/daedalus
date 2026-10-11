@@ -19,8 +19,8 @@ use Drupal\daedalus_stylish\Exception\ShippedVariantException;
  * variant facts: definition() in VariantImporter's grammar, the styles as
  * the hashed slice, DaedalusStylishVariant's hash, and ShippedVariantException.
  *
- * Callers add what this module cannot know: the `stencil:` key belongs to
- * whoever owns stencils (daedalus_blueprint_stencil), not here.
+ * Callers add what this module cannot know: the `blueprint:` key belongs to
+ * whoever owns blueprints (daedalus_blueprint_library), not here.
  */
 class VariantShipper extends ShippedDefinitionsShipper {
 
@@ -34,7 +34,7 @@ class VariantShipper extends ShippedDefinitionsShipper {
    *   design_system (always: an omitted key would mean the target
    *   module's own system on the next sync, and the variant's membership
    *   is a fact to carry, ~ for global), then styles. Callers append the
-   *   keys this module cannot know (stencil:).
+   *   keys this module cannot know (blueprint:).
    */
   public function definition(DaedalusStylishVariantInterface $variant): array {
     $definition = [
@@ -72,7 +72,7 @@ class VariantShipper extends ShippedDefinitionsShipper {
    *
    * The styles alone: what VariantImporter stamps on sync.
    */
-  protected function shippedData(array $definition): array {
+  protected function shippedData(array $definition, string $module, string $name): array {
     return $definition['styles'];
   }
 
@@ -88,6 +88,23 @@ class VariantShipper extends ShippedDefinitionsShipper {
    */
   protected function shippedException(string $module, string $name, array $errors): ShippedVariantException {
     return new ShippedVariantException($module, $name, $errors);
+  }
+
+  /**
+   * {@inheritdoc}
+   *
+   * A variant a CONTENT blueprint owns (the `blueprint` reference
+   * daedalus_blueprint_library adds to variants) rides its blueprint's
+   * ship, which writes it with its `blueprint:` key: the package ship
+   * runs the blueprint lane first, so by the time this lane reads the
+   * system's members, the variants of the system's own blueprints are
+   * shipped and the ones left are owned by blueprints outside the system,
+   * whose files this package is not writing. Adopting one here would
+   * strand its ownership (a shipped variant's ownership is its file's
+   * fact). A file-owned variant (`blueprint_file`) is already shipped.
+   */
+  protected function shipsWithPackage(ShippedSourceInterface $entity): bool {
+    return !($entity instanceof DaedalusStylishVariantInterface && $entity->hasField('blueprint') && !$entity->get('blueprint')->isEmpty());
   }
 
 }

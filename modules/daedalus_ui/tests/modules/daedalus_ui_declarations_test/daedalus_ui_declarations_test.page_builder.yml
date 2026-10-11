@@ -29,6 +29,12 @@ site:
     logo: 'module.svg'
   analytics:
     vendor: acme
+  # A foreign section another module owns (daedalus_layout's site group
+  # vocabulary): the lane carries it whole and layers it like any map.
+  groups:
+    heroes:
+      label: Heroes
+      description: 'Full-width openers.'
 
 # The instance-namespace lane: content-borne identity vocabularies, merged
 # across layers exactly like kind declarations.

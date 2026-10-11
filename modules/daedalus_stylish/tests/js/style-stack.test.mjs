@@ -18,7 +18,7 @@
 import { strict as assert } from 'node:assert';
 import { test } from 'node:test';
 import {
-  TIER_ANCESTOR, TIER_DECLARED, TIER_ELEMENT, TIER_SKIN, TIER_VARIANT, buildStack, conditionValues, deliveredEntry, editableLayer, layerAt, layersAt, offerTag, selectorSuffixes, stackAt, subjectTag,
+  TIER_ANCESTOR, TIER_DECLARED, TIER_ELEMENT, TIER_SKIN, TIER_VARIANT, buildStack, conditionValues, deliveredEntry, editableLayer, layerAt, layersAt, offerTag, selectorSuffixes, skinScopesAt, stackAt, subjectTag,
 } from '../../js/src/style-stack.js';
 import { variantRecord } from './materials-fixture.mjs';
 
@@ -426,6 +426,63 @@ test('an open session makes the edited reference the editable layer carrying the
   const stored = build({ map, floor: false, session: { reference: 'sleek', pending: null } });
   assert.deepEqual(stored.layers[0].styles, { default: { padding: '1rem', color: '#111' }, hover: { color: '#333' } });
   assert.equal(stored.layers[0].editable, true);
+});
+
+test('an open skin session makes its scope\'s skin layer the editable document, the own layer yielding, the staged document at the slot; a scope this key does not read leaves the own layer editable', () => {
+  const pending = {
+    kind: 'skin',
+    scope: 'base:h2',
+    lines: [
+      { id: 'p1', relative: '', condition: 'default', property: 'font-size', value: '3rem' },
+      { id: 'p2', relative: '', condition: 'narrow', property: 'font-size', value: '2.5rem' },
+    ],
+  };
+  const map = { [KEY]: { default: { padding: '3rem' } } };
+  const stack = build({ map, tree: rooted('h2'), session: { reference: 'skin:base:h2', pending } });
+  assert.deepEqual(ids(stack), ['declared:kind:block', 'declared:block_type:testimonial', 'skin:base:h2', 'skin:kind:block', 'skin:block_type:testimonial', 'element']);
+  assert.deepEqual(stack.layers.map((layer) => layer.editable), [false, false, true, false, false, false]);
+  assert.equal(editableLayer(stack), 2);
+  assert.deepEqual(stack.layers[2].styles, { default: { 'font-size': '3rem' }, narrow: { 'font-size': '2.5rem' } }, 'the staged set replaces the stored value, a staged condition joins');
+  // The wearer's own entry sits above the document: the read says so.
+  assert.equal(stackAt(stack, 'padding', 'default', CONDITIONS).winner.layer, 5);
+  assert.equal(stackAt(stack, 'font-size', 'default', CONDITIONS).own.value, '3rem');
+
+  // An element scope's document reads at the key's relative: the part
+  // key reads its own slot, empty here, and the layer still stands as
+  // the editable one (a worn reference's layer does too).
+  const kind = { reference: 'skin:kind:block', pending: { kind: 'skin', scope: 'kind:block', lines: [] } };
+  const part = build({ map, key: QUOTE, session: kind });
+  const kindLayer = part.layers.find((layer) => layer.id === 'skin:kind:block');
+  assert.deepEqual(kindLayer.styles, {});
+  assert.equal(kindLayer.editable, true);
+  assert.equal(part.layers[part.layers.length - 1].editable, false);
+  const root = build({ map, session: kind });
+  assert.deepEqual(root.layers.find((layer) => layer.id === 'skin:kind:block').styles, { default: { padding: '0.75rem' }, narrow: { padding: '0.25rem' } });
+
+  // No stored value for a staged property: the staged line joins the
+  // stored ones as the document.
+  const minted = build({ map, tree: rooted('p'), session: { reference: 'skin:base:p', pending: { kind: 'skin', scope: 'base:p', lines: [{ id: 'x', relative: '', condition: 'default', property: 'color', value: 'red' }] } } });
+  assert.deepEqual(minted.layers.find((layer) => layer.id === 'skin:base:p').styles, { default: { 'line-height': '1.6', color: 'red' } });
+
+  // A scope this key does not read (the tree says the tag is a div, the
+  // scope is a paragraph's): no document layer, the own layer editable.
+  const elsewhere = build({ map, tree: rooted('div'), session: { reference: 'skin:base:p', pending: null } });
+  assert.equal(elsewhere.layers.some((layer) => layer.id === 'skin:base:p'), false);
+  assert.equal(elsewhere.layers[elsewhere.layers.length - 1].editable, true);
+  // A floorless build carries no skin document.
+  assert.deepEqual(ids(build({ map, floor: false, session: { reference: 'skin:base:h2', pending } })), ['element']);
+});
+
+test('skinScopesAt answers the scopes a key\'s stack reads skin blocks for: the subject\'s tag, the family kind, the refinement', () => {
+  assert.deepEqual(skinScopesAt({ key: KEY, blockTypes: BLOCK_TYPES, tree: rooted('h2') }), ['base:h2', 'kind:block', 'block_type:testimonial']);
+  assert.deepEqual(skinScopesAt({ key: KEY, blockTypes: BLOCK_TYPES }), ['kind:block', 'block_type:testimonial']);
+  // The tag's scope answers whatever the tag (the skin may mint a block
+  // for it later; the doorway itself only ever offers a scope the skin
+  // delivers), the stack's base layer keying on the skin's block.
+  assert.deepEqual(skinScopesAt({ key: KEY, blockTypes: BLOCK_TYPES, tree: rooted('div') }), ['base:div', 'kind:block', 'block_type:testimonial']);
+  // A part facet reads the part's tag.
+  assert.deepEqual(skinScopesAt({ key: QUOTE, blockTypes: BLOCK_TYPES, tree: rooted('h2', { '.testimonial__quote': { tag: 'p' } }) }), ['base:p', 'kind:block', 'block_type:testimonial']);
+  assert.deepEqual(skinScopesAt({ key: 'bogus' }), []);
 });
 
 // --- layersAt ------------------------------------------------------------------

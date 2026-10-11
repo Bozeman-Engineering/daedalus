@@ -17,7 +17,9 @@ use Drupal\daedalus_blueprint\Result\BlueprintWarning;
  * Ensures format is always included for round-trip fidelity.
  * Validates text formats during deserialization: falls back to a valid
  * format when the provided one does not exist, and rejects formats the
- * current user is not permitted to use.
+ * current user is not permitted to use. Under the `system` option nothing
+ * is judged for an actor (a load of stored values, the seed, an importer),
+ * so the format is not asked for.
  */
 class TextFieldHandler extends FieldHandlerBase {
 
@@ -98,7 +100,7 @@ class TextFieldHandler extends FieldHandlerBase {
 
     $errors = [];
     $warnings = [];
-    $value = $this->validateFormats($value, $definition, $errors, $warnings);
+    $value = $this->validateFormats($value, $definition, $errors, $warnings, !empty($options['system']));
 
     return new FieldHandlerResult($value, $errors, $warnings);
   }
@@ -114,24 +116,26 @@ class TextFieldHandler extends FieldHandlerBase {
    *   Errors collection to append to.
    * @param \Drupal\daedalus_blueprint\Result\BlueprintWarning[] &$warnings
    *   Warnings collection to append to.
+   * @param bool $system
+   *   TRUE under the system posture: the format's use is not judged.
    *
    * @return mixed
    *   The value with invalid formats replaced.
    */
-  protected function validateFormats(mixed $value, FieldDefinitionInterface $definition, array &$errors, array &$warnings): mixed {
+  protected function validateFormats(mixed $value, FieldDefinitionInterface $definition, array &$errors, array &$warnings, bool $system = FALSE): mixed {
     if (!is_array($value)) {
       return $value;
     }
 
     // Single item (has 'value' key).
     if (isset($value['value'])) {
-      return $this->validateItemFormat($value, $definition, $errors, $warnings);
+      return $this->validateItemFormat($value, $definition, $errors, $warnings, $system);
     }
 
     // Array of items.
     foreach ($value as $delta => $item) {
       if (is_array($item) && isset($item['format'])) {
-        $value[$delta] = $this->validateItemFormat($item, $definition, $errors, $warnings);
+        $value[$delta] = $this->validateItemFormat($item, $definition, $errors, $warnings, $system);
       }
     }
 
@@ -149,11 +153,13 @@ class TextFieldHandler extends FieldHandlerBase {
    *   Errors collection to append to.
    * @param \Drupal\daedalus_blueprint\Result\BlueprintWarning[] &$warnings
    *   Warnings collection to append to.
+   * @param bool $system
+   *   TRUE under the system posture: the format's use is not judged.
    *
    * @return array
    *   The item with a valid format.
    */
-  protected function validateItemFormat(array $item, FieldDefinitionInterface $definition, array &$errors, array &$warnings): array {
+  protected function validateItemFormat(array $item, FieldDefinitionInterface $definition, array &$errors, array &$warnings, bool $system = FALSE): array {
     if (empty($item['format'])) {
       return $item;
     }
@@ -184,8 +190,9 @@ class TextFieldHandler extends FieldHandlerBase {
     // entity-level constraint, so programmatic writes like blueprint mutations
     // must check it themselves. If core ever moves format access to the entity
     // level (closest active issue: https://www.drupal.org/i/2874596), this
-    // check becomes redundant and should defer to core.
-    if (!$format->access('use')) {
+    // check becomes redundant and should defer to core. The system posture
+    // names no actor to judge.
+    if (!$system && !$format->access('use')) {
       $field_name = $definition->getName();
       $errors[] = new BlueprintError(
         path: "fields.{$field_name}",

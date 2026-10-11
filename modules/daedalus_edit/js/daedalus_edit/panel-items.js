@@ -292,8 +292,14 @@ export const presentSubject = async (key) => {
   const plugin = SidebarManager.getPlugin('daedalus_edit_form');
   const [kind, uuid] = key.split(':');
   const root = Blueprint.getRoot();
+  // A root whose blueprint carries no `fields` (a template host: the
+  // display's canvas) has no entity form; its door is inert.
+  const rootHasForm = Blueprint.getBlueprint()?.fields !== undefined;
   try {
     if (root && (kind === 'entity' || kind === 'field') && uuid === root.uuid) {
+      if (!rootHasForm) {
+        return false;
+      }
       await plugin.ensureTopLevelSubject();
       await plugin.openOn(plugin.subjectForm());
       return true;

@@ -6,6 +6,7 @@ namespace Drupal\daedalus_blueprint\Drush\Commands;
 
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\daedalus_blueprint\BlueprintSerializerInterface;
+use Drupal\daedalus_blueprint\Host\HostResolver;
 use Drush\Commands\AutowireTrait;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\Console\Attribute\AsCommand;
@@ -18,6 +19,10 @@ use Symfony\Component\DependencyInjection\Attribute\Autowire;
 
 /**
  * Serializes an entity to blueprint JSON.
+ *
+ * The read as every surface answers it: the full blueprint (its `layout`
+ * the lean node tree, styles on the node), the summary (the same nodes
+ * pared), or one element's node.
  */
 #[AsCommand(
   name: 'daedalus-blueprint:serialize',
@@ -33,6 +38,8 @@ final class SerializeCommand extends Command {
    *
    * @param \Drupal\daedalus_blueprint\BlueprintSerializerInterface $serializer
    *   The blueprint serializer.
+   * @param \Drupal\daedalus_blueprint\Host\HostResolver $hostResolver
+   *   The host resolver: a read is of a host.
    * @param \Drupal\Core\Entity\EntityTypeManagerInterface $entityTypeManager
    *   The entity type manager.
    * @param \Psr\Log\LoggerInterface $logger
@@ -41,6 +48,8 @@ final class SerializeCommand extends Command {
   public function __construct(
     #[Autowire(service: 'daedalus_blueprint.serializer')]
     protected BlueprintSerializerInterface $serializer,
+    #[Autowire(service: 'daedalus_blueprint.host_resolver')]
+    protected HostResolver $hostResolver,
     protected EntityTypeManagerInterface $entityTypeManager,
     protected LoggerInterface $logger,
   ) {
@@ -77,18 +86,19 @@ final class SerializeCommand extends Command {
       return self::FAILURE;
     }
 
+    $host = $this->hostResolver->fromEntity($entity);
     if ($input->getOption('summary')) {
-      $result = $this->serializer->serializeSummary($entity);
+      $result = $this->serializer->serializeSummary($host);
     }
     elseif ($element !== '') {
-      $result = $this->serializer->serializeElement($entity, $element);
+      $result = $this->serializer->serializeElement($host, $element);
       if ($result === NULL) {
         $this->logger->error("Element {$element} not found on entity.");
         return self::FAILURE;
       }
     }
     else {
-      $result = $this->serializer->serialize($entity);
+      $result = $this->serializer->serialize($host);
     }
 
     $output->writeln(json_encode($result, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));

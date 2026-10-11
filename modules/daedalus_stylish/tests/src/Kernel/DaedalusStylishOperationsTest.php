@@ -12,6 +12,7 @@ use Drupal\layout_builder\Entity\LayoutBuilderEntityViewDisplay;
 use Drupal\layout_builder\Section;
 use Drupal\layout_builder\SectionComponent;
 use Drupal\media\Entity\Media;
+use Drupal\daedalus_stylish\Entity\DaedalusStylishSkin;
 use Drupal\daedalus_stylish\Entity\DaedalusStylishVariant;
 use Drupal\daedalus_stylish\DaedalusStylishFieldManager;
 use Drupal\daedalus_stylish\MediaToken;
@@ -20,9 +21,10 @@ use Drupal\Tests\media\Traits\MediaTypeCreationTrait;
 use Drupal\Tests\user\Traits\UserCreationTrait;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
+use Drupal\Tests\daedalus_stylish\Traits\HostTrait;
 
 /**
- * Tests the update_style, apply_variant, and detach_variant operations.
+ * Tests the update_style, apply_variant, detach_variant and update_default ops.
  *
  * The operations register with daedalus_blueprint's operation handler registry
  * and ride its batchOperations() grammar. The style guide in play comes from
@@ -34,6 +36,7 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 #[RunTestsInSeparateProcesses]
 class DaedalusStylishOperationsTest extends KernelTestBase {
 
+  use HostTrait;
   use UserCreationTrait;
   use DesignSystemActivationTrait;
   use MediaTypeCreationTrait;
@@ -87,8 +90,15 @@ class DaedalusStylishOperationsTest extends KernelTestBase {
     // daedalus_stylish provider reads all four storages on every build.
     $this->installEntitySchema('daedalus_swatch');
     $this->installEntitySchema('daedalus_animation');
+    $this->installEntitySchema('daedalus_font');
     $this->installEntitySchema('daedalus_skin');
-    $this->installSchema('daedalus_stylish', ['daedalus_variant_usage', 'daedalus_swatch_usage', 'daedalus_animation_usage']);
+    $this->installSchema('daedalus_stylish', [
+      'daedalus_variant_usage',
+      'daedalus_swatch_usage',
+      'daedalus_animation_usage',
+      'daedalus_token_usage',
+      'daedalus_font_usage',
+    ]);
     $this->installConfig(['daedalus_stylish']);
     // Access-transparent like the daedalus_blueprint operations suite: these
     // tests verify operation behavior, not access.
@@ -147,7 +157,7 @@ class DaedalusStylishOperationsTest extends KernelTestBase {
     $key = "container:{$this->uuid}";
 
     // Create: condition defaults to "default".
-    $result = $this->operations->batchOperations($entity, [
+    $result = $this->operations->batchOperations($this->host($entity), [
       ['op' => 'update_style', 'key' => $key, 'properties' => ['padding' => '2rem', 'margin' => '1rem']],
       ['op' => 'update_style', 'key' => $key, 'condition' => 'narrow', 'properties' => ['padding' => '1rem']],
     ]);
@@ -165,7 +175,7 @@ class DaedalusStylishOperationsTest extends KernelTestBase {
     ], $this->styleMap($entity));
 
     // Patch: merge a value, null unsets another key's value.
-    $result = $this->operations->batchOperations($entity, [
+    $result = $this->operations->batchOperations($this->host($entity), [
       ['op' => 'update_style', 'key' => $key, 'properties' => ['padding' => '3rem', 'margin' => NULL]],
     ]);
     $this->assertTrue($result->isSuccess());
@@ -173,7 +183,7 @@ class DaedalusStylishOperationsTest extends KernelTestBase {
 
     // Unsetting the last property removes the condition; removing the last
     // condition removes the entry; an empty map empties the field.
-    $result = $this->operations->batchOperations($entity, [
+    $result = $this->operations->batchOperations($this->host($entity), [
       ['op' => 'update_style', 'key' => $key, 'properties' => ['padding' => NULL]],
       ['op' => 'update_style', 'key' => $key, 'condition' => 'narrow', 'properties' => ['padding' => NULL]],
     ]);
@@ -195,7 +205,7 @@ class DaedalusStylishOperationsTest extends KernelTestBase {
     $entity = $this->createStyledEntity();
     $key = "container:{$this->uuid}";
 
-    $result = $this->operations->batchOperations($entity, [
+    $result = $this->operations->batchOperations($this->host($entity), [
       ['op' => 'update_style', 'key' => $key, 'condition' => 'dark+narrow', 'properties' => ['padding' => '1rem']],
       [
         'op' => 'update_style',
@@ -214,7 +224,7 @@ class DaedalusStylishOperationsTest extends KernelTestBase {
 
     // Another spelling of the same compound merges into the one block, and
     // a null value unsets from it.
-    $result = $this->operations->batchOperations($entity, [
+    $result = $this->operations->batchOperations($this->host($entity), [
       [
         'op' => 'update_style',
         'key' => $key,
@@ -226,7 +236,7 @@ class DaedalusStylishOperationsTest extends KernelTestBase {
     $this->assertSame(['gap' => '2rem'], $this->styleMap($entity)[$key]['narrow+dark']);
 
     // Two conditions on one axis reject with the validator's corrective.
-    $result = $this->operations->batchOperations($entity, [
+    $result = $this->operations->batchOperations($this->host($entity), [
       ['op' => 'update_style', 'key' => $key, 'condition' => 'narrow+medium', 'properties' => ['padding' => '1rem']],
     ]);
     $this->assertFalse($result->isSuccess());
@@ -242,7 +252,7 @@ class DaedalusStylishOperationsTest extends KernelTestBase {
 
     // A freeform-only op changes nothing: without properties it is an
     // empty patch, and the sibling parameter no longer exists.
-    $result = $this->operations->batchOperations($entity, [
+    $result = $this->operations->batchOperations($this->host($entity), [
       ['op' => 'update_style', 'key' => $key, 'freeform' => 'backdrop-filter: blur(4px);'],
     ]);
     $this->assertFalse($result->isSuccess());
@@ -257,7 +267,7 @@ class DaedalusStylishOperationsTest extends KernelTestBase {
     $entity = $this->createStyledEntity();
     $key = "container:{$this->uuid}";
 
-    $result = $this->operations->batchOperations($entity, [
+    $result = $this->operations->batchOperations($this->host($entity), [
       ['op' => 'update_style', 'key' => $key, 'properties' => ['margin' => '1rem']],
       // The guide's section declaration caps padding at 4rem.
       ['op' => 'update_style', 'key' => $key, 'properties' => ['padding' => '6rem']],
@@ -285,7 +295,7 @@ class DaedalusStylishOperationsTest extends KernelTestBase {
     ]);
     $this->enforce('strict');
 
-    $result = $this->operations->batchOperations($entity, [
+    $result = $this->operations->batchOperations($this->host($entity), [
       ['op' => 'update_style', 'key' => $key, 'properties' => ['font-size' => NULL]],
     ]);
 
@@ -299,7 +309,7 @@ class DaedalusStylishOperationsTest extends KernelTestBase {
   public function testUpdateStyleStructuralFailures(): void {
     $entity = $this->createStyledEntity();
 
-    $result = $this->operations->batchOperations($entity, [
+    $result = $this->operations->batchOperations($this->host($entity), [
       ['op' => 'update_style', 'key' => 'bogus:123', 'properties' => ['padding' => '1rem']],
     ]);
     $this->assertFalse($result->isSuccess());
@@ -307,12 +317,12 @@ class DaedalusStylishOperationsTest extends KernelTestBase {
     $this->assertSame(['INVALID_STYLE_KEY'], $this->errorCodes($result)['key']);
 
     // An op that changes nothing is a mistake worth reporting.
-    $result = $this->operations->batchOperations($entity, [
+    $result = $this->operations->batchOperations($this->host($entity), [
       ['op' => 'update_style', 'key' => "container:{$this->uuid}"],
     ]);
     $this->assertSame(['MISSING_PARAMETER'], $this->errorCodes($result)['properties']);
 
-    $result = $this->operations->batchOperations($entity, [
+    $result = $this->operations->batchOperations($this->host($entity), [
       [
         'op' => 'update_style',
         'key' => "container:{$this->uuid}",
@@ -333,7 +343,7 @@ class DaedalusStylishOperationsTest extends KernelTestBase {
       ->create(['name' => 'unstyled']);
     $entity->save();
 
-    $result = $this->operations->batchOperations($entity, [
+    $result = $this->operations->batchOperations($this->host($entity), [
       ['op' => 'update_style', 'key' => "container:{$this->uuid}", 'properties' => ['padding' => '1rem']],
     ]);
 
@@ -357,7 +367,7 @@ class DaedalusStylishOperationsTest extends KernelTestBase {
 
     // Applying a variant adds the reference; the element's own properties
     // stay as overrides.
-    $result = $this->operations->batchOperations($entity, [
+    $result = $this->operations->batchOperations($this->host($entity), [
       ['op' => 'apply_variant', 'key' => $key, 'variant' => 'cta_bold'],
     ]);
     $this->assertTrue($result->isSuccess());
@@ -366,12 +376,12 @@ class DaedalusStylishOperationsTest extends KernelTestBase {
     // Target-side validation: the variant must exist and its scope
     // must match the element; failures are semantic, so the batch rolls
     // back and the entry stays as it was.
-    $result = $this->operations->batchOperations($entity, [
+    $result = $this->operations->batchOperations($this->host($entity), [
       ['op' => 'apply_variant', 'key' => $key, 'variant' => 'no_such_variant'],
     ]);
     $this->assertFalse($result->isSuccess());
     $this->assertSame(['STYLE_VARIANT_NOT_FOUND'], $this->errorCodes($result)['variant']);
-    $result = $this->operations->batchOperations($entity, [
+    $result = $this->operations->batchOperations($this->host($entity), [
       ['op' => 'apply_variant', 'key' => "container:{$this->uuid}", 'variant' => 'cta_bold'],
     ]);
     $this->assertFalse($result->isSuccess());
@@ -380,7 +390,7 @@ class DaedalusStylishOperationsTest extends KernelTestBase {
 
     // A property write lands as an override ON TOP of the reference — no
     // detach, the element keeps following the variant.
-    $result = $this->operations->batchOperations($entity, [
+    $result = $this->operations->batchOperations($this->host($entity), [
       ['op' => 'update_style', 'key' => $key, 'properties' => ['margin' => '1rem']],
     ]);
     $this->assertTrue($result->isSuccess());
@@ -390,7 +400,7 @@ class DaedalusStylishOperationsTest extends KernelTestBase {
 
     // Re-applying the referenced variant is a no-op replace within its
     // axis.
-    $result = $this->operations->batchOperations($entity, [
+    $result = $this->operations->batchOperations($this->host($entity), [
       ['op' => 'apply_variant', 'key' => $key, 'variant' => 'cta_bold'],
     ]);
     $this->assertTrue($result->isSuccess());
@@ -398,7 +408,7 @@ class DaedalusStylishOperationsTest extends KernelTestBase {
 
     // The variant parameter is required, on every variant operation.
     foreach (['apply_variant', 'remove_variant', 'detach_variant'] as $op) {
-      $result = $this->operations->batchOperations($entity, [
+      $result = $this->operations->batchOperations($this->host($entity), [
         ['op' => $op, 'key' => $key],
       ]);
       $this->assertFalse($result->isSuccess());
@@ -421,7 +431,7 @@ class DaedalusStylishOperationsTest extends KernelTestBase {
     // A write to the referencing element: the reference stays and nothing
     // materializes — the override coexists with the variant.
     $entity = $this->createStyledEntity([$key => ['variants' => [['variant' => 'card', 'fragment' => '']]]]);
-    $result = $this->operations->batchOperations($entity, [
+    $result = $this->operations->batchOperations($this->host($entity), [
       ['op' => 'update_style', 'key' => $key, 'properties' => ['padding' => '3rem']],
     ]);
     $this->assertTrue($result->isSuccess());
@@ -433,7 +443,7 @@ class DaedalusStylishOperationsTest extends KernelTestBase {
     // the sub-element entry overrides the variant's part styles, entry by
     // entry.
     $entity2 = $this->createStyledEntity([$key => ['variants' => [['variant' => 'card', 'fragment' => '']]]]);
-    $result = $this->operations->batchOperations($entity2, [
+    $result = $this->operations->batchOperations($this->host($entity2), [
       ['op' => 'update_style', 'key' => "$key::.quote", 'properties' => ['margin' => '4px']],
     ]);
     $this->assertTrue($result->isSuccess());
@@ -472,7 +482,7 @@ class DaedalusStylishOperationsTest extends KernelTestBase {
     ]);
 
     // Different axes compose, in application order.
-    $result = $this->operations->batchOperations($entity, [
+    $result = $this->operations->batchOperations($this->host($entity), [
       ['op' => 'apply_variant', 'key' => $key, 'variant' => 'base'],
       ['op' => 'apply_variant', 'key' => $key, 'variant' => 'loud'],
     ]);
@@ -481,14 +491,14 @@ class DaedalusStylishOperationsTest extends KernelTestBase {
 
     // Same axis replaces IN PLACE, keeping that axis's precedence slot;
     // the other axis's reference and the overrides survive.
-    $result = $this->operations->batchOperations($entity, [
+    $result = $this->operations->batchOperations($this->host($entity), [
       ['op' => 'apply_variant', 'key' => $key, 'variant' => 'quiet'],
     ]);
     $this->assertTrue($result->isSuccess());
     $this->assertSame([
       $key => ['default' => ['padding' => '2rem'], 'variants' => [self::ref('base'), self::ref('quiet')]],
     ], $this->styleMap($entity));
-    $result = $this->operations->batchOperations($entity, [
+    $result = $this->operations->batchOperations($this->host($entity), [
       ['op' => 'apply_variant', 'key' => $key, 'variant' => 'sleek'],
     ]);
     $this->assertTrue($result->isSuccess());
@@ -523,7 +533,7 @@ class DaedalusStylishOperationsTest extends KernelTestBase {
       ],
       "$key::.quote" => ['default' => ['color' => '#333']],
     ]);
-    $result = $this->operations->batchOperations($entity, [
+    $result = $this->operations->batchOperations($this->host($entity), [
       ['op' => 'detach_variant', 'key' => $key, 'variant' => 'card'],
     ]);
     $this->assertTrue($result->isSuccess());
@@ -538,7 +548,7 @@ class DaedalusStylishOperationsTest extends KernelTestBase {
 
     // Detaching a reference the entry does not carry is a semantic error
     // naming what it does carry.
-    $result = $this->operations->batchOperations($entity, [
+    $result = $this->operations->batchOperations($this->host($entity), [
       ['op' => 'detach_variant', 'key' => $key, 'variant' => 'card'],
     ]);
     $this->assertFalse($result->isSuccess());
@@ -549,7 +559,7 @@ class DaedalusStylishOperationsTest extends KernelTestBase {
     // A stale reference (variant deleted) has nothing to materialize: the
     // reference simply drops — and an entry left empty disappears.
     $entity2 = $this->createStyledEntity([$key => ['variants' => [['variant' => 'ghost', 'fragment' => '']]]]);
-    $result = $this->operations->batchOperations($entity2, [
+    $result = $this->operations->batchOperations($this->host($entity2), [
       ['op' => 'detach_variant', 'key' => $key, 'variant' => 'ghost'],
     ]);
     $this->assertTrue($result->isSuccess());
@@ -594,7 +604,7 @@ class DaedalusStylishOperationsTest extends KernelTestBase {
     $entity = $this->createStyledEntity([
       $key => ['variants' => [['variant' => 'card', 'fragment' => ''], ['variant' => 'loud', 'fragment' => '']]],
     ]);
-    $result = $this->operations->batchOperations($entity, [
+    $result = $this->operations->batchOperations($this->host($entity), [
       ['op' => 'detach_variant', 'key' => $key, 'variant' => 'card'],
     ]);
     $this->assertTrue($result->isSuccess());
@@ -611,7 +621,7 @@ class DaedalusStylishOperationsTest extends KernelTestBase {
     $entity2 = $this->createStyledEntity([
       $key => ['variants' => [['variant' => 'card', 'fragment' => ''], ['variant' => 'loud', 'fragment' => '']]],
     ]);
-    $result = $this->operations->batchOperations($entity2, [
+    $result = $this->operations->batchOperations($this->host($entity2), [
       ['op' => 'detach_variant', 'key' => $key, 'variant' => 'loud'],
     ]);
     $this->assertTrue($result->isSuccess());
@@ -638,7 +648,7 @@ class DaedalusStylishOperationsTest extends KernelTestBase {
       $other => ['default' => ['padding' => '1rem']],
     ]);
 
-    $result = $this->operations->batchOperations($entity, [
+    $result = $this->operations->batchOperations($this->host($entity), [
       ['op' => 'apply_variant', 'key' => $key, 'variant' => 'card'],
     ]);
     $this->assertTrue($result->isSuccess());
@@ -662,7 +672,7 @@ class DaedalusStylishOperationsTest extends KernelTestBase {
   public function testRegistryExposure(): void {
     $entity = $this->createStyledEntity();
 
-    $result = $this->operations->batchOperations($entity, [
+    $result = $this->operations->batchOperations($this->host($entity), [
       ['op' => 'no_such_op'],
     ]);
     $valid = $result->getErrors()[0]->getContext()['valid_operations'];
@@ -683,12 +693,11 @@ class DaedalusStylishOperationsTest extends KernelTestBase {
       $this->assertLessThan(220, strlen($line), "$op guidance is a router line, not doctrine ($op is " . strlen($line) . ' chars).');
       // Doctrine sentinels stay out of the always-on channel: phrases and
       // vocabulary only the retired long-form guidance used, including the
-      // stencil-ownership doctrine (now the cached stencil sentence's).
+      // blueprint-ownership doctrine (now the cached blueprint sentence's).
       $this->assertStringNotContainsString('anatomy', $line);
       $this->assertStringNotContainsString('style_guide.strict', $line);
       $this->assertStringNotContainsString('slot path', $line);
       $this->assertStringNotContainsString('default_variants', $line);
-      $this->assertStringNotContainsString('stencil', $line);
     }
     // The load-bearing gesture distinctions survive the diet: undress (the
     // look changes) vs unlink (the look stays).
@@ -699,10 +708,11 @@ class DaedalusStylishOperationsTest extends KernelTestBase {
   /**
    * Surgical writes resolve block keys against the host entity.
    *
-   * The update_style passes the entity into the validator itself, and the
-   * whole-field paths (updateFields) get it via the operation options — so
-   * a block:{uuid} key validates against its per-block-type declaration
-   * (testimonial: font-size max 2rem) instead of the kind fallback.
+   * The update_style passes the host into the validator itself, and the
+   * whole-map door (the blueprint's `styles` key) resolves it from the
+   * entity being written, so a block:{uuid} key validates against its
+   * per-block-type declaration (testimonial: font-size max 2rem) instead
+   * of the kind fallback on both roads.
    */
   public function testBlockKeysValidatePerBlockType(): void {
     $this->enableModules(['layout_builder', 'layout_discovery', 'block', 'block_content']);
@@ -742,22 +752,27 @@ class DaedalusStylishOperationsTest extends KernelTestBase {
     $this->operations = $this->container->get('daedalus_blueprint.operations');
 
     // Through update_style.
-    $result = $this->operations->batchOperations($entity, [
+    $result = $this->operations->batchOperations($this->host($entity), [
       ['op' => 'update_style', 'key' => "block:$component_uuid", 'properties' => ['font-size' => '3rem']],
     ]);
     $this->assertFalse($result->isSuccess());
     $this->assertSame(['STYLE_VALUE_ABOVE_MAX'], $this->errorCodes($result)['properties.font-size']);
 
-    // Through updateFields — the surgical whole-field path now carries the
-    // entity into the field handler's validation context.
-    $result = $this->operations->updateFields($entity, [
-      DaedalusStylishFieldManager::FIELD_NAME => ["block:$component_uuid" => ['default' => ['font-size' => '3rem']]],
+    // Through the whole-map door: the blueprint's `styles` key, written
+    // through the host's style store handler, which resolves the block's
+    // bundle through the host the same way; the handler's field paths are
+    // re-rooted at `styles`.
+    $result = $this->container->get('daedalus_blueprint.deserializer')->deserialize([
+      'entity_type' => 'entity_test',
+      'bundle' => 'entity_test',
+      '_root_entity' => ['field' => 'id', 'value' => (int) $entity->id()],
+      'styles' => ["block:$component_uuid" => ['default' => ['font-size' => '3rem']]],
     ]);
     $this->assertFalse($result->isSuccess());
     $codes = $this->errorCodes($result);
     $this->assertSame(
       ['STYLE_VALUE_ABOVE_MAX'],
-      $codes['fields.' . DaedalusStylishFieldManager::FIELD_NAME . ".block:$component_uuid.default.font-size"],
+      $codes["styles.block:$component_uuid.default.font-size"],
     );
   }
 
@@ -793,7 +808,7 @@ class DaedalusStylishOperationsTest extends KernelTestBase {
     ]);
 
     // Apply: one reference at the rule, nothing else in the map moves.
-    $result = $this->operations->batchOperations($entity, [
+    $result = $this->operations->batchOperations($this->host($entity), [
       ['op' => 'apply_variant', 'key' => $rule, 'variant' => 'quote_card'],
     ]);
     $this->assertTrue($result->isSuccess(), print_r($result->toArray()['errors'] ?? [], TRUE));
@@ -804,7 +819,7 @@ class DaedalusStylishOperationsTest extends KernelTestBase {
 
     // The landing decides the scope: a container variant is refused at
     // the testimonial rule.
-    $result = $this->operations->batchOperations($entity, [
+    $result = $this->operations->batchOperations($this->host($entity), [
       ['op' => 'apply_variant', 'key' => $rule, 'variant' => 'band'],
     ]);
     $this->assertFalse($result->isSuccess());
@@ -812,7 +827,7 @@ class DaedalusStylishOperationsTest extends KernelTestBase {
 
     // Detach: the root styles at the rule, the part under the rule by
     // descent, and the map stays canonical.
-    $result = $this->operations->batchOperations($entity, [
+    $result = $this->operations->batchOperations($this->host($entity), [
       ['op' => 'detach_variant', 'key' => $rule, 'variant' => 'quote_card'],
     ]);
     $this->assertTrue($result->isSuccess());
@@ -822,23 +837,23 @@ class DaedalusStylishOperationsTest extends KernelTestBase {
       $rule => ['default' => ['padding' => '2rem'], 'hover' => ['color' => 'purple']],
       "$rule .testimonial__quote" => ['default' => ['font-weight' => '700']],
     ], $map);
-    $this->assertSame([], $this->container->get('daedalus_stylish.style_map_validator')->validate($map, ['entity' => $entity]));
+    $this->assertSame([], $this->container->get('daedalus_stylish.style_map_validator')->validate($map, ['host' => $this->host($entity)]));
     foreach (array_keys($map) as $key) {
       $this->assertLessThanOrEqual(1, substr_count($key, '::'), "$key carries :: at most once.");
     }
 
     // Remove at the rule drops the reference and leaves the entry's own
     // styles; naming a variant the rule does not carry is refused.
-    $this->assertTrue($this->operations->batchOperations($entity, [
+    $this->assertTrue($this->operations->batchOperations($this->host($entity), [
       ['op' => 'apply_variant', 'key' => $rule, 'variant' => 'quote_card'],
     ])->isSuccess());
     $this->assertSame([self::ref('quote_card')], $this->styleMap($entity)[$rule]['variants']);
-    $result = $this->operations->batchOperations($entity, [
+    $result = $this->operations->batchOperations($this->host($entity), [
       ['op' => 'remove_variant', 'key' => $rule, 'variant' => 'quote_card'],
     ]);
     $this->assertTrue($result->isSuccess());
     $this->assertSame(['default' => ['padding' => '2rem'], 'hover' => ['color' => 'purple']], $this->styleMap($entity)[$rule]);
-    $result = $this->operations->batchOperations($entity, [
+    $result = $this->operations->batchOperations($this->host($entity), [
       ['op' => 'remove_variant', 'key' => $rule, 'variant' => 'quote_card'],
     ]);
     $this->assertSame('STYLE_VARIANT_NOT_REFERENCED', $result->getErrors()[0]->getCode());
@@ -847,7 +862,7 @@ class DaedalusStylishOperationsTest extends KernelTestBase {
     // delivered, so detach materializes only what reached the page.
     $tag_rule = "container:{$this->uuid}::a";
     $entity2 = $this->createStyledEntity([$tag_rule => ['variants' => [self::ref('link_style')]]]);
-    $result = $this->operations->batchOperations($entity2, [
+    $result = $this->operations->batchOperations($this->host($entity2), [
       ['op' => 'detach_variant', 'key' => $tag_rule, 'variant' => 'link_style'],
     ]);
     $this->assertTrue($result->isSuccess());
@@ -880,7 +895,7 @@ class DaedalusStylishOperationsTest extends KernelTestBase {
 
     // Born with content: the seed lands at default beneath the write, and
     // beneath a write on another condition alike.
-    $result = $this->operations->batchOperations($entity, [
+    $result = $this->operations->batchOperations($this->host($entity), [
       ['op' => 'update_style', 'key' => $box, 'properties' => ['padding' => '1rem']],
       ['op' => 'update_style', 'key' => $rule_box, 'condition' => 'hover', 'properties' => ['padding' => '2rem']],
     ]);
@@ -892,7 +907,7 @@ class DaedalusStylishOperationsTest extends KernelTestBase {
 
     // The author's own content at default is the word: no seed over it.
     $after = "$key::&::after";
-    $result = $this->operations->batchOperations($entity, [
+    $result = $this->operations->batchOperations($this->host($entity), [
       ['op' => 'update_style', 'key' => $after, 'properties' => ['content' => 'none', 'padding' => '1rem']],
     ]);
     $this->assertTrue($result->isSuccess());
@@ -900,7 +915,7 @@ class DaedalusStylishOperationsTest extends KernelTestBase {
 
     // Never re-seeded: unsetting the content line is deliberate, and a
     // later write on the existing entry does not bring it back.
-    $result = $this->operations->batchOperations($entity, [
+    $result = $this->operations->batchOperations($this->host($entity), [
       ['op' => 'update_style', 'key' => $box, 'properties' => ['content' => NULL]],
       ['op' => 'update_style', 'key' => $box, 'properties' => ['margin' => '1rem']],
       ['op' => 'update_style', 'key' => $rule_box, 'condition' => 'hover', 'properties' => ['margin' => '1rem']],
@@ -911,7 +926,7 @@ class DaedalusStylishOperationsTest extends KernelTestBase {
     $this->assertSame(['default' => ['content' => '""'], 'hover' => ['padding' => '2rem', 'margin' => '1rem']], $map[$rule_box]);
 
     // An unset-only patch at a box that never existed mints nothing.
-    $result = $this->operations->batchOperations($entity, [
+    $result = $this->operations->batchOperations($this->host($entity), [
       ['op' => 'update_style', 'key' => "$key::.band-content::before", 'properties' => ['padding' => NULL]],
     ]);
     $this->assertTrue($result->isSuccess());
@@ -927,17 +942,17 @@ class DaedalusStylishOperationsTest extends KernelTestBase {
     ]);
     $variant->save();
     $wearer = $this->createStyledEntity();
-    $result = $this->operations->batchOperations($wearer, [
+    $result = $this->operations->batchOperations($this->host($wearer), [
       ['op' => 'apply_variant', 'key' => $key, 'variant' => 'band'],
     ]);
     $this->assertTrue($result->isSuccess(), print_r($result->toArray()['errors'] ?? [], TRUE));
     $this->assertSame([$key => ['variants' => [self::ref('band')]]], $this->styleMap($wearer));
-    $result = $this->operations->batchOperations($wearer, [
+    $result = $this->operations->batchOperations($this->host($wearer), [
       ['op' => 'apply_variant', 'key' => $box, 'variant' => 'band'],
     ]);
     $this->assertFalse($result->isSuccess());
     $this->assertSame(['STYLE_VARIANT_SCOPE_MISMATCH'], $this->errorCodes($result)['variant']);
-    $result = $this->operations->batchOperations($wearer, [
+    $result = $this->operations->batchOperations($this->host($wearer), [
       ['op' => 'detach_variant', 'key' => $key, 'variant' => 'band'],
     ]);
     $this->assertTrue($result->isSuccess());
@@ -981,7 +996,7 @@ class DaedalusStylishOperationsTest extends KernelTestBase {
 
     // The first write is the content: the seed never lands beneath a
     // write that carries content, at the anchor and at a rule's box alike.
-    $result = $this->operations->batchOperations($entity, [
+    $result = $this->operations->batchOperations($this->host($entity), [
       ['op' => 'update_style', 'key' => $box, 'properties' => ['content' => $token]],
       ['op' => 'update_style', 'key' => $rule_box, 'properties' => ['content' => $token, 'padding' => '1rem']],
     ]);
@@ -994,12 +1009,280 @@ class DaedalusStylishOperationsTest extends KernelTestBase {
     // A token naming no media is refused by the media gates at the op's
     // path, and a refused first write mints no box.
     $missing = "$key::&::after";
-    $result = $this->operations->batchOperations($entity, [
+    $result = $this->operations->batchOperations($this->host($entity), [
       ['op' => 'update_style', 'key' => $missing, 'properties' => ['content' => MediaToken::build('123e4567-e89b-12d3-a456-426614174000')]],
     ]);
     $this->assertFalse($result->isSuccess());
     $this->assertSame(['MEDIA_NOT_FOUND'], $this->errorCodes($result)['properties.content']);
     $this->assertArrayNotHasKey($missing, $this->styleMap($entity));
+  }
+
+  /**
+   * Creates the active skin: a package's (shipped) or the site's own.
+   *
+   * The package layer mints space/gutter and sets the container kind's
+   * padding and gap; a shipped skin carries a provider stamp, which is
+   * what SkinManager::writesSiteLayer() reads with the distro lock.
+   */
+  protected function activateDefaultsSkin(bool $shipped): void {
+    $skin = DaedalusStylishSkin::create(['label' => 'Aurora', 'machine_name' => 'aurora', 'status' => TRUE]);
+    $skin->setPackageTokens(['space' => ['gutter' => '2rem']]);
+    $skin->setPackageDefaults(self::PACKAGE_DEFAULTS);
+    if ($shipped) {
+      $skin->setShippedSource('daedalus_stylish_guide_test', ['tokens' => $skin->packageTokens(), 'defaults' => $skin->packageDefaults()]);
+    }
+    $skin->save();
+    $this->activateSkin($skin);
+  }
+
+  /**
+   * The package layer activateDefaultsSkin() ships.
+   */
+  protected const PACKAGE_DEFAULTS = [
+    'kind:container' => ['' => ['default' => ['padding' => '2rem', 'gap' => '1rem']]],
+  ];
+
+  /**
+   * Loads the aurora skin fresh from storage.
+   */
+  protected function loadSkin(): DaedalusStylishSkin {
+    $storage = $this->container->get('entity_type.manager')->getStorage('daedalus_skin');
+    $storage->resetCache();
+    $skins = $storage->loadByProperties(['machine_name' => 'aurora']);
+    $skin = reset($skins);
+    assert($skin instanceof DaedalusStylishSkin);
+    return $skin;
+  }
+
+  /**
+   * Runs one update_default through the batch door, riding a page.
+   */
+  protected function updateDefault(array $operation): BlueprintResultInterface {
+    return $this->operations->batchOperations($this->host($this->createStyledEntity()), [['op' => 'update_default'] + $operation]);
+  }
+
+  /**
+   * On a consuming site update_default patches the shipped skin's site layer.
+   *
+   * The package layer and its hash stay what the disk shipped (the skin
+   * never reads as modified), the site layer holds exactly the properties
+   * set, the merge reads the site's value over the package's, each write
+   * is a revision naming the gesture, a null unsets the site value so the
+   * package's shows through again, an emptied entry leaves the layer, and
+   * an unset of nothing saves nothing.
+   */
+  public function testUpdateDefaultLandsInTheSiteLayerOfShippedSkin(): void {
+    $this->activateDefaultsSkin(TRUE);
+    $before = $this->loadSkin();
+    $hash = $before->getSourceHash();
+    $revision = (int) $before->getRevisionId();
+
+    $result = $this->updateDefault([
+      'scope' => 'kind:container',
+      'properties' => ['padding' => '3rem', 'margin-block' => '1rem'],
+    ]);
+    $this->assertTrue($result->isSuccess(), json_encode($result->toArray()));
+    $skin = $this->loadSkin();
+    $this->assertSame(self::PACKAGE_DEFAULTS, $skin->packageDefaults(), 'the package layer is untouched');
+    $this->assertSame($hash, $skin->getSourceHash());
+    $this->assertFalse($skin->isModified(), 'a site write is not a modification of what the package shipped');
+    $this->assertSame([
+      'kind:container' => ['' => ['default' => ['padding' => '3rem', 'margin-block' => '1rem']]],
+    ], $skin->siteDefaults());
+    $this->assertSame(['padding' => '3rem', 'gap' => '1rem', 'margin-block' => '1rem'], $skin->defaults()['kind:container']['']['default'], 'the merge reads the site value over the package value, property by property');
+    $this->assertGreaterThan($revision, (int) $skin->getRevisionId(), 'the write is a new revision');
+    $this->assertSame('kind:container: updated the default defaults.', $skin->getRevisionLogMessage());
+
+    // A condition and a part key land beside, under the canonical spelling.
+    $result = $this->updateDefault([
+      'scope' => 'kind:container',
+      'condition' => 'hover',
+      'properties' => ['padding' => '2.5rem'],
+    ]);
+    $this->assertTrue($result->isSuccess(), json_encode($result->toArray()));
+    $result = $this->updateDefault([
+      'scope' => 'kind:container',
+      'key' => '::> *',
+      'properties' => ['min-width' => '0'],
+    ]);
+    $this->assertTrue($result->isSuccess(), json_encode($result->toArray()));
+    $skin = $this->loadSkin();
+    $this->assertSame([
+      'kind:container' => [
+        '' => ['default' => ['padding' => '3rem', 'margin-block' => '1rem'], 'hover' => ['padding' => '2.5rem']],
+        '::> *' => ['default' => ['min-width' => '0']],
+      ],
+    ], $skin->siteDefaults());
+    $this->assertSame('kind:container::> *: updated the default defaults.', $skin->getRevisionLogMessage());
+
+    // Null unsets the SITE value: the package's padding shows through.
+    $result = $this->updateDefault(['scope' => 'kind:container', 'properties' => ['padding' => NULL]]);
+    $this->assertTrue($result->isSuccess(), json_encode($result->toArray()));
+    $skin = $this->loadSkin();
+    $this->assertSame(['margin-block' => '1rem'], $skin->siteDefaults()['kind:container']['']['default']);
+    $this->assertSame('2rem', $skin->defaults()['kind:container']['']['default']['padding'], 'the package value is revealed');
+    $this->assertSame(self::PACKAGE_DEFAULTS, $skin->packageDefaults());
+
+    // Emptied entries, keys and scopes leave the layer.
+    $this->updateDefault(['scope' => 'kind:container', 'properties' => ['margin-block' => NULL]]);
+    $this->updateDefault(['scope' => 'kind:container', 'condition' => 'hover', 'properties' => ['padding' => NULL]]);
+    $this->updateDefault(['scope' => 'kind:container', 'key' => '::> *', 'properties' => ['min-width' => NULL]]);
+    $skin = $this->loadSkin();
+    $this->assertSame([], $skin->siteDefaults());
+    $this->assertSame(self::PACKAGE_DEFAULTS, $skin->defaults());
+
+    // An unset of what the layer never held changes nothing: no revision.
+    $revision = (int) $skin->getRevisionId();
+    $result = $this->updateDefault(['scope' => 'kind:container', 'properties' => ['gap' => NULL]]);
+    $this->assertTrue($result->isSuccess(), json_encode($result->toArray()));
+    $this->assertSame($revision, (int) $this->loadSkin()->getRevisionId(), 'nothing to save, nothing saved');
+  }
+
+  /**
+   * The site's own skin and the developer gate write the package layer.
+   *
+   * A skin with no provider has one layer, and a shipped skin on the site
+   * authoring its package (the distro lock lifted) is edited in place and
+   * reads as modified, the state the ship lane carries back to disk.
+   */
+  public function testUpdateDefaultWritesThePackageLayerWhenTheSiteMayEditIt(): void {
+    $this->activateDefaultsSkin(FALSE);
+    $this->assertNull($this->loadSkin()->getProvider());
+    $result = $this->updateDefault(['scope' => 'kind:container', 'properties' => ['padding' => '3rem']]);
+    $this->assertTrue($result->isSuccess(), json_encode($result->toArray()));
+    $skin = $this->loadSkin();
+    $this->assertSame([], $skin->siteDefaults(), 'the site\'s own skin has one layer');
+    $this->assertSame(['padding' => '3rem', 'gap' => '1rem'], $skin->packageDefaults()['kind:container']['']['default']);
+
+    // Null deletes the property from the one layer: nothing to reveal.
+    $this->updateDefault(['scope' => 'kind:container', 'properties' => ['padding' => NULL]]);
+    $this->assertSame(['gap' => '1rem'], $this->loadSkin()->packageDefaults()['kind:container']['']['default']);
+
+    // A base scope the site never declared is legal off strict: the
+    // write mints the scope on the package layer.
+    $result = $this->updateDefault(['scope' => 'base:h2', 'properties' => ['font-size' => '2rem']]);
+    $this->assertTrue($result->isSuccess(), json_encode($result->toArray()));
+    $this->assertSame(['' => ['default' => ['font-size' => '2rem']]], $this->loadSkin()->packageDefaults()['base:h2']);
+
+    // The developer gate on a shipped skin.
+    $this->loadSkin()->delete();
+    $this->activateDefaultsSkin(TRUE);
+    $this->setSetting('daedalus_blueprint_developer', TRUE);
+    $result = $this->updateDefault(['scope' => 'kind:container', 'properties' => ['padding' => '3rem']]);
+    $this->assertTrue($result->isSuccess(), json_encode($result->toArray()));
+    $skin = $this->loadSkin();
+    $this->assertSame([], $skin->siteDefaults());
+    $this->assertSame('3rem', $skin->packageDefaults()['kind:container']['']['default']['padding']);
+    $this->assertTrue($skin->isModified(), 'the package layer diverged from the disk');
+    $this->assertSame('daedalus_stylish_guide_test', $skin->getProvider(), 'still shipped: the ship lane keeps its subject');
+  }
+
+  /**
+   * Every value set validates through the defaults seam against the merge.
+   *
+   * A var() reference resolves against the skin's tokens AS WORN (the
+   * closed universe of a strict site, the rule element styles follow), so
+   * a site-minted token counts and an unminted name refuses; the guide's
+   * law on the scope applies (the container's padding max 4rem); errors
+   * re-root from the seam's map paths onto the op's parameters; and a
+   * refused patch lands nothing.
+   */
+  public function testUpdateDefaultValidation(): void {
+    $this->activateDefaultsSkin(TRUE);
+    $this->enforce('strict');
+    $skin = $this->loadSkin();
+    $skin->setSiteTokens(['space' => ['hero' => '5rem']]);
+    $skin->save();
+    $site = $this->loadSkin()->siteDefaults();
+
+    $result = $this->updateDefault(['scope' => 'kind:container', 'properties' => ['padding' => 'var(--space-hero)']]);
+    $this->assertTrue($result->isSuccess(), json_encode($result->toArray()));
+    $this->assertSame('var(--space-hero)', $this->loadSkin()->siteDefaults()['kind:container']['']['default']['padding'], 'a site-minted token is in the universe');
+    $this->updateDefault(['scope' => 'kind:container', 'properties' => ['padding' => NULL]]);
+
+    $result = $this->updateDefault(['scope' => 'kind:container', 'properties' => ['padding' => 'var(--space-nope)']]);
+    $this->assertFalse($result->isSuccess());
+    $this->assertSame(['properties.padding' => ['STYLE_TOKEN_NOT_MINTED']], $this->errorCodes($result));
+
+    $result = $this->updateDefault(['scope' => 'kind:container', 'properties' => ['padding' => '5rem']]);
+    $this->assertFalse($result->isSuccess(), 'the guide\'s max 4rem applies to a default');
+    $this->assertSame(['properties.padding'], array_keys($this->errorCodes($result)));
+
+    $result = $this->updateDefault(['scope' => 'kind:region', 'properties' => ['padding' => '1rem']]);
+    $this->assertSame(['scope' => ['SKIN_DEFAULT_SCOPE_INVALID']], $this->errorCodes($result));
+
+    $result = $this->updateDefault(['scope' => 'kind:container', 'condition' => 'bogus-condition', 'properties' => ['padding' => '1rem']]);
+    $this->assertSame(['condition' => ['INVALID_STYLE_CONDITION']], $this->errorCodes($result));
+
+    $this->assertSame($site, $this->loadSkin()->siteDefaults(), 'a refused patch lands nothing');
+  }
+
+  /**
+   * The op's structural grammar: scope, key, condition and properties.
+   */
+  public function testUpdateDefaultStructuralFailures(): void {
+    $this->activateDefaultsSkin(TRUE);
+    $codes = $this->errorCodes($this->updateDefault(['properties' => ['padding' => '1rem']]));
+    $this->assertSame(['scope' => ['MISSING_PARAMETER']], $codes);
+
+    $codes = $this->errorCodes($this->updateDefault(['scope' => 'kind:container', 'key' => 'container(1)', 'properties' => ['padding' => '1rem']]));
+    $this->assertSame(['key' => ['INVALID_STYLE_KEY']], $codes);
+
+    $codes = $this->errorCodes($this->updateDefault(['scope' => 'kind:container', 'condition' => '', 'properties' => ['padding' => '1rem']]));
+    $this->assertSame(['condition' => ['INVALID_STYLE_CONDITION']], $codes);
+
+    $codes = $this->errorCodes($this->updateDefault(['scope' => 'kind:container', 'properties' => ['1rem']]));
+    $this->assertSame(['properties' => ['INVALID_STYLE_ENTRY']], $codes);
+
+    $codes = $this->errorCodes($this->updateDefault(['scope' => 'kind:container']));
+    $this->assertSame(['properties' => ['MISSING_PARAMETER']], $codes);
+    $this->assertSame([], $this->loadSkin()->siteDefaults());
+  }
+
+  /**
+   * The op's governance: the grade, the active skin, the op sets.
+   *
+   * "edit skin defaults" gates the gesture with "administer skins" as the
+   * administer grade; no active skin refuses; and the op is in the page
+   * language's set (page_edit admits it) and so page-only, beside the
+   * four element ops the page language supersedes.
+   */
+  public function testUpdateDefaultGovernance(): void {
+    $this->activateDefaultsSkin(TRUE);
+    $handler = $this->container->get('daedalus_blueprint.operation_handler_registry')->getHandler('update_default');
+    $host = $this->createStyledEntity();
+    $operation = ['op' => 'update_default', 'scope' => 'kind:container', 'properties' => ['padding' => '3rem']];
+
+    $this->setUpCurrentUser([], []);
+    $result = $handler->apply($this->host($host), $operation);
+    $this->assertSame(['' => ['PERMISSION_DENIED']], $this->errorCodes($result));
+    $this->assertSame('edit skin defaults', $result->getErrors()[0]->getContext()['permission']);
+    $this->assertSame([], $this->loadSkin()->siteDefaults());
+
+    $this->setUpCurrentUser([], ['edit skin defaults']);
+    $this->assertTrue($handler->apply($this->host($host), $operation)->isSuccess());
+    $this->assertSame('3rem', $this->loadSkin()->siteDefaults()['kind:container']['']['default']['padding']);
+
+    $this->setUpCurrentUser([], ['administer skins']);
+    $this->assertTrue($handler->apply($this->host($host), ['properties' => ['padding' => '3.5rem']] + $operation)->isSuccess());
+    $this->assertSame('3.5rem', $this->loadSkin()->siteDefaults()['kind:container']['']['default']['padding']);
+
+    $this->setUpCurrentUser([], [], TRUE);
+    $this->deactivateDesignSystem();
+    $result = $handler->apply($this->host($host), $operation);
+    $this->assertSame(['scope' => ['STYLE_SKIN_NONE_ACTIVE']], $this->errorCodes($result));
+
+    $registry = $this->container->get('daedalus_blueprint.operation_handler_registry');
+    $this->assertContains('update_default', $registry->getPageLanguageOperations(), 'page_edit admits the op');
+    $this->assertContains('update_default', $registry->getPageOnlyOperations());
+    foreach (['update_style', 'apply_variant', 'remove_variant', 'detach_variant'] as $op) {
+      $this->assertNotContains($op, $registry->getPageLanguageOperations(), "$op is spelled by the page language itself");
+      $this->assertContains($op, $registry->getPageOnlyOperations());
+    }
+    $line = $registry->getGuidance()['update_default'];
+    $this->assertStringContainsString('"scope"', $line);
+    $this->assertStringContainsString('null unsets', $line);
+    $this->assertLessThan(300, strlen($line), 'a router line, not doctrine');
   }
 
 }

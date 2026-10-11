@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Drupal\Tests\daedalus_stylish\Kernel;
 
-use Drupal\daedalus_blueprint_stencil\Entity\Stencil;
 use Drupal\daedalus_stylish\DaedalusStylishFieldManager;
 use Drupal\daedalus_stylish\Entity\DaedalusStylishSkin;
 use Drupal\daedalus_stylish\Entity\DaedalusStylishVariant;
@@ -24,8 +23,8 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  * "::p > *") everywhere it was stored: host style maps (the
  * RelativeSelectorSweep, riding daedalus_layout's transform spine after
  * the container sweeps), daedalus_variant styles across revisions
- * (fragment references included), daedalus_skin defaults, stored
- * stencils, and stale tempstore sessions converging at load time.
+ * (fragment references included), daedalus_skin defaults, and stale
+ * tempstore sessions converging at load time.
  * Shipped-unmodified entities are left to the sync lane; a second pass
  * changes nothing.
  */
@@ -42,7 +41,6 @@ class RelativeSelectorSweepTest extends NestedStorageKernelTestBase {
     'file',
     'image',
     'media',
-    'daedalus_blueprint_stencil',
   ];
 
   /**
@@ -54,7 +52,7 @@ class RelativeSelectorSweepTest extends NestedStorageKernelTestBase {
     $this->installEntitySchema('daedalus_skin');
     $this->installEntitySchema('daedalus_swatch');
     $this->installEntitySchema('daedalus_animation');
-    $this->installEntitySchema('stencil');
+    $this->installEntitySchema('daedalus_font');
     $this->installSchema('daedalus_stylish', ['daedalus_variant_usage']);
     $this->installConfig(['daedalus_stylish']);
     $this->container->get('daedalus_stylish.field_manager')->enable('entity_test', 'entity_test');
@@ -236,7 +234,7 @@ class RelativeSelectorSweepTest extends NestedStorageKernelTestBase {
    */
   public function testSkinsConverge(): void {
     $skin = DaedalusStylishSkin::create(['label' => 'Aurora', 'machine_name' => 'aurora', 'status' => TRUE]);
-    $skin->setDefaults([
+    $skin->setPackageDefaults([
       'kind:container' => [
         '' => ['default' => ['background-color' => 'white']],
         '::>' => ['default' => ['min-width' => '0']],
@@ -251,7 +249,7 @@ class RelativeSelectorSweepTest extends NestedStorageKernelTestBase {
       'defaults' => ['kind:container' => ['::>' => ['default' => ['max-width' => '90rem']]]],
     ];
     $shipped = DaedalusStylishSkin::create(['label' => 'Shipped', 'machine_name' => 'shipped_skin', 'status' => TRUE]);
-    $shipped->setDefaults($shipped_data['defaults']);
+    $shipped->setPackageDefaults($shipped_data['defaults']);
     $shipped->setShippedSource('daedalus_stylish_test', $shipped_data);
     $shipped->save();
 
@@ -267,61 +265,14 @@ class RelativeSelectorSweepTest extends NestedStorageKernelTestBase {
         '::.band > *' => ['default' => ['flex' => '1']],
       ],
       'base:h2' => ['' => ['default' => ['font-size' => '2rem']]],
-    ], $storage->loadUnchanged($skin->id())->getDefaults());
+    ], $storage->loadUnchanged($skin->id())->packageDefaults());
 
     $shipped = $storage->loadUnchanged($shipped->id());
-    $this->assertSame($shipped_data['defaults'], $shipped->getDefaults(), 'A shipped unmodified skin is left to the sync lane.');
+    $this->assertSame($shipped_data['defaults'], $shipped->packageDefaults(), 'A shipped unmodified skin is left to the sync lane.');
     $this->assertFalse($shipped->isModified());
     $this->assertSame([], $this->container->get('daedalus_stylish.relative_selector_convergence')->convergeSkins());
   }
 
-  /**
-   * Stored stencils converge at every node depth, idempotently.
-   */
-  public function testStencilsConverge(): void {
-    $stencil = Stencil::create([
-      'label' => 'Legacy band',
-      'machine_name' => 'legacy_band',
-      'description' => 'Captured before the relative selector grammar.',
-      'status' => TRUE,
-    ]);
-    $stencil->setElement([
-      'layout_id' => 'daedalus_stylish_container',
-      'label' => 'Band',
-      'styles' => [
-        '' => ['variants' => ['container_lg']],
-        '::>' => ['default' => ['min-width' => '0']],
-      ],
-      'regions' => [
-        'content' => [
-          [
-            'layout_id' => 'daedalus_stylish_container',
-            'styles' => ['::.band::>' => ['default' => ['gap' => '2rem']]],
-          ],
-          ['block_type' => 'text', 'styles' => ['::p' => ['default' => ['color' => 'red']]]],
-        ],
-      ],
-    ]);
-    $stencil->save();
-
-    $convergence = $this->container->get('daedalus_stylish.relative_selector_convergence');
-    $lines = $convergence->convergeStencils();
-    $this->assertNotEmpty($lines);
-    $storage = $this->entityTypeManager->getStorage('stencil');
-    $storage->resetCache();
-    $element = $storage->loadUnchanged($stencil->id())->getElement();
-
-    $this->assertSame([
-      '' => ['variants' => ['container_lg']],
-      '::> *' => ['default' => ['min-width' => '0']],
-    ], $element['styles']);
-    $this->assertSame(['::.band > *' => ['default' => ['gap' => '2rem']]], $element['regions']['content'][0]['styles']);
-    $this->assertSame(['::p' => ['default' => ['color' => 'red']]], $element['regions']['content'][1]['styles']);
-
-    $this->assertSame([], $convergence->convergeStencils());
-    $storage->resetCache();
-    $this->assertSame($element, $storage->loadUnchanged($stencil->id())->getElement());
-  }
 
   /**
    * A stale tempstore session's keys converge at LOAD time.

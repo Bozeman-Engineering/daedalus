@@ -52,8 +52,11 @@ test('notify rides this window\'s messenger, never the wire, and is never load-b
   globalThis.Drupal = { Daedalus: {} };
   source.notify('status', 'Added the Rain gradient to the color palette.');
   // The messenger present in THIS window: text and type land in ITS
-  // argument order, message(text, type).
+  // argument order, message(text, type), through Drupal.checkPlain (the
+  // escape itself is pinned in notify.test.mjs; this text carries nothing
+  // to escape).
   const heard = [];
+  globalThis.Drupal.checkPlain = (text) => text.toString();
   globalThis.Drupal.Daedalus.messenger = { message: (text, type) => heard.push({ text, type }) };
   source.notify('error', 'That label is taken.');
   assert.deepEqual(heard, [{ text: 'That label is taken.', type: 'error' }]);
@@ -112,7 +115,7 @@ test('materials: the satellite boots from its own envelope, follows the wire, re
   // The popout page attaches the same MaterialsDelivery envelope the
   // editing page boots from; the satellite seats its own record set
   // from it and indexes it as a roster.
-  const brand = { kind: 'swatch', id: 'brand_red', label: 'Brand red', description: '', value: '#b91c1c', group: 'color', spellings: { style: 'var(--swatch-brand_red)' }, scope: null, applies: {}, owned_by: null, published: true, weight: 0, icon: null, root_kind: null, origin: 'user', updatable: true };
+  const brand = { kind: 'swatch', id: 'brand_red', label: 'Brand red', description: '', value: '#b91c1c', group: 'color', spellings: { style: 'var(--swatch-brand_red)' }, scope: null, applies: {}, owned_by: null, published: true, weight: 0, icon: null, origin: 'user', updatable: true };
   const dawn = { ...brand, id: 'dawn', label: 'Dawn', value: '#ffd166', spellings: { style: 'var(--swatch-dawn)' } };
   globalThis.drupalSettings = { daedalusUi: { materials: JSON.stringify({ records: [brand] }) } };
   const source = createSatelliteSource(SCOPE);
@@ -142,16 +145,16 @@ test('materials: the satellite boots from its own envelope, follows the wire, re
   await settle();
   assert.deepEqual(seen, [['brand_red', 'dawn'], ['dawn']]);
   assert.deepEqual(heard, [{ type: 'delta', upsert: [], remove: [{ kind: 'swatch', id: 'brand_red' }] }]);
-  // A live swatch preview travels to the leader by record id; null
-  // releases; no record, no intent.
+  // A live material preview (a swatch's, a token's) travels to the
+  // leader by kind and id; null releases; no record, no intent.
   const wire = listen();
-  source.previewSwatch(dawn, '#000000');
-  source.previewSwatch(dawn, null);
-  source.previewSwatch(null, '#000000');
+  source.previewMaterial(dawn, '#000000');
+  source.previewMaterial(dawn, null);
+  source.previewMaterial(null, '#000000');
   await settle();
-  assert.deepEqual(wire.frames.filter((frame) => frame.intent === 'swatch-preview'), [
-    { type: 'intent', intent: 'swatch-preview', id: 'dawn', value: '#000000' },
-    { type: 'intent', intent: 'swatch-preview', id: 'dawn', value: null },
+  assert.deepEqual(wire.frames.filter((frame) => frame.intent === 'material-preview'), [
+    { type: 'intent', intent: 'material-preview', kind: 'swatch', id: 'dawn', value: '#000000' },
+    { type: 'intent', intent: 'material-preview', kind: 'swatch', id: 'dawn', value: null },
   ]);
   // A keyframes session's draft travels the same way: by record id, the
   // steps map whole; null releases; no record, no intent.
@@ -175,17 +178,20 @@ test('the snapshot carries the selection, its target and the tree, and no canvas
   // targeted. The satellite renders the same selection and target the
   // leader holds and reads every tag from the relayed tree (the read
   // subject's, style-stack.js subjectTag), never from a canvas.
-  const selection = { key: 'block:aaaaaaaa-1111-2222-3333-444444444444', selector: '.eyebrow' };
+  const wire = listen();
+  const addressed = [];
+  const selection = { key: 'block:aaaaaaaa-1111-2222-3333-444444444444', selector: '.eyebrow', address: { key: 'container:bbbbbbbb-1111-2222-3333-444444444444', selector: 'span' } };
   const tree = [{ kind: 'block', uuid: 'aaaaaaaa-1111-2222-3333-444444444444', block_type: 'heading', _element: { markup: { tag: 'h2', parts: { '.eyebrow': { tag: 'span' } } } } }];
   const targetListeners = new Set();
   const leaderSource = {
     getSelected: () => selection.key,
     getTarget: () => (selection.selector ? { key: selection.key, selector: selection.selector } : null),
+    getAddress: () => selection.address,
+    address: (key, selector) => addressed.push([key, selector]),
     getStyleMap: () => ({}),
     getRootUuid: () => 'root',
     getBlockTypes: () => ({}),
     getSectionLayouts: () => ({}),
-    getLayout: () => [],
     getTree: () => tree,
     getLayoutContext: () => null,
     getMediaUrls: () => ({}),
@@ -205,15 +211,104 @@ test('the snapshot carries the selection, its target and the tree, and no canvas
   await settle();
   assert.equal(satellite.getSelected(), selection.key);
   assert.deepEqual(satellite.getTarget(), { key: selection.key, selector: '.eyebrow' });
+  // The write address rides the same snapshot beside the facet: spine
+  // state on the leader, never a satellite-local pick.
+  assert.deepEqual(satellite.getAddress(), { key: 'container:bbbbbbbb-1111-2222-3333-444444444444', selector: 'span' });
   assert.deepEqual(satellite.getTree(), tree);
   assert.equal('readCanvasTag' in satellite, false);
+  // The satellite's target-aware subscription fires the facade's
+  // three-fact shape, and an address move alone fires it.
+  const heard = [];
+  satellite.onTargetChange((current, previous) => heard.push([current, previous]));
+  selection.address = null;
+  targetListeners.forEach((callback) => callback({ selected: selection.key, target: { key: selection.key, selector: '.eyebrow' }, address: null }, { selected: selection.key, target: { key: selection.key, selector: '.eyebrow' }, address: { key: 'container:bbbbbbbb-1111-2222-3333-444444444444', selector: 'span' } }));
+  await settle();
+  assert.equal(satellite.getAddress(), null);
+  assert.deepEqual(heard, [[
+    { selected: selection.key, target: { key: selection.key, selector: '.eyebrow' }, address: null },
+    { selected: selection.key, target: { key: selection.key, selector: '.eyebrow' }, address: { key: 'container:bbbbbbbb-1111-2222-3333-444444444444', selector: 'span' } },
+  ]]);
+  // The satellite's address pick crosses the wire as an intent of its
+  // own, beside the facet's; a null key is the drop.
+  satellite.address('container:bbbbbbbb-1111-2222-3333-444444444444', 'span');
+  satellite.address(null);
+  await settle();
+  assert.deepEqual(wire.frames.filter((frame) => frame.intent === 'address'), [
+    { type: 'intent', intent: 'address', key: 'container:bbbbbbbb-1111-2222-3333-444444444444', selector: 'span' },
+    { type: 'intent', intent: 'address', key: null, selector: null },
+  ]);
+  // The popout leader lands each on the leader source's address(), the
+  // drop as address(null, null).
+  assert.deepEqual(addressed, [['container:bbbbbbbb-1111-2222-3333-444444444444', 'span'], [null, null]]);
   // Deselecting relays the empty selection.
   selection.key = null;
   selection.selector = null;
-  targetListeners.forEach((callback) => callback({ selected: null, target: null }, { selected: 'x', target: { key: 'x', selector: '.eyebrow' } }));
+  targetListeners.forEach((callback) => callback({ selected: null, target: null, address: null }, { selected: 'x', target: { key: 'x', selector: '.eyebrow' }, address: null }));
   await settle();
   assert.equal(satellite.getSelected(), null);
   assert.equal(satellite.getTarget(), null);
+  assert.equal(satellite.getAddress(), null);
+  wire.close();
+});
+
+test('the skin defaults delivered on the leader ride the snapshot, announced on content; a satellite refresh relays as an intent and settles with the leader\'s map', async () => {
+  // A leader source stub holding the delivered skin defaults (null until
+  // a push refreshed them) and answering a refresh with the map.
+  let skinDefaults = null;
+  const skinListeners = new Set();
+  const targetListeners = new Set();
+  let refreshes = 0;
+  const leaderSource = {
+    getSelected: () => null,
+    getTarget: () => null,
+    getAddress: () => null,
+    getStyleMap: () => ({}),
+    getRootUuid: () => 'root',
+    getBlockTypes: () => ({}),
+    getSectionLayouts: () => ({}),
+    getLayoutContext: () => null,
+    getMediaUrls: () => ({}),
+    canPickMedia: () => false,
+    getCanvasVector: () => null,
+    getForceState: () => null,
+    getPlace: () => ({ place: 'styles', editing: null }),
+    getSkinDefaults: () => skinDefaults,
+    onSkinDefaultsChange: (callback) => skinListeners.add(callback),
+    refreshDefaults: () => {
+      refreshes += 1;
+      skinDefaults = { 'base:h2': { '': { default: { 'font-size': '3rem' } } } };
+      skinListeners.forEach((callback) => callback(skinDefaults));
+      return Promise.resolve(skinDefaults);
+    },
+    onTargetChange: (callback) => targetListeners.add(callback),
+    onStyleMapChange: () => {},
+    onForceStateChange: () => {},
+    onPlaceChange: () => {},
+    onCanvasVectorChange: () => () => {},
+  };
+  const scope = `${SCOPE}-skin`;
+  const satellite = createSatelliteSource(scope);
+  const announced = [];
+  satellite.onSkinDefaultsChange((next) => announced.push(next));
+  createPopoutLeader({ scope, url: 'about:blank', source: leaderSource });
+  await settle();
+  // Nothing delivered yet: the popout page's own guide payload stands.
+  assert.equal(satellite.getSkinDefaults(), null);
+  assert.deepEqual(announced, []);
+  // The satellite's push lands through the leader (the canvas lives
+  // there): the intent settles with the leader's map, and the map
+  // broadcasts back on its change.
+  const delivered = await satellite.refreshDefaults();
+  assert.equal(refreshes, 1);
+  assert.deepEqual(delivered, { 'base:h2': { '': { default: { 'font-size': '3rem' } } } });
+  await settle();
+  assert.deepEqual(satellite.getSkinDefaults(), { 'base:h2': { '': { default: { 'font-size': '3rem' } } } });
+  assert.deepEqual(announced, [{ 'base:h2': { '': { default: { 'font-size': '3rem' } } } }]);
+  // A later broadcast carrying the same map (a selection move) announces
+  // nothing: the panel's guide is keyed on content, never on the clone.
+  targetListeners.forEach((callback) => callback({ selected: null, target: null }, { selected: 'x', target: null }));
+  await settle();
+  assert.equal(announced.length, 1);
 });
 
 test('a satellite commitBatch settles with the leader\'s op-queue result, success and failure alike', async () => {
@@ -225,11 +320,11 @@ test('a satellite commitBatch settles with the leader\'s op-queue result, succes
   const leaderSource = {
     getSelected: () => null,
     getTarget: () => null,
+    getAddress: () => null,
     getStyleMap: () => ({}),
     getRootUuid: () => 'root',
     getBlockTypes: () => ({}),
     getSectionLayouts: () => ({}),
-    getLayout: () => [],
     getLayoutContext: () => null,
     getMediaUrls: () => ({}),
     canPickMedia: () => false,
@@ -280,11 +375,11 @@ test('a satellite parseCss relays the fragment to the leader\'s door and settles
   const leaderSource = {
     getSelected: () => null,
     getTarget: () => null,
+    getAddress: () => null,
     getStyleMap: () => ({}),
     getRootUuid: () => 'root',
     getBlockTypes: () => ({}),
     getSectionLayouts: () => ({}),
-    getLayout: () => [],
     getLayoutContext: () => null,
     getMediaUrls: () => ({}),
     canPickMedia: () => false,
@@ -338,11 +433,11 @@ test('every op intent carries a request id and settles from the leader\'s answer
   const leaderSource = {
     getSelected: () => null,
     getTarget: () => null,
+    getAddress: () => null,
     getStyleMap: () => ({}),
     getRootUuid: () => 'root',
     getBlockTypes: () => ({}),
     getSectionLayouts: () => ({}),
-    getLayout: () => [],
     getLayoutContext: () => null,
     getMediaUrls: () => ({}),
     canPickMedia: () => false,
@@ -370,7 +465,10 @@ test('every op intent carries a request id and settles from the leader\'s answer
     }
   };
   const heard = [];
-  globalThis.Drupal = { Daedalus: { messenger: { message: (text, type) => heard.push({ text, type }) } } };
+  globalThis.Drupal = {
+    checkPlain: (text) => text.toString(),
+    Daedalus: { messenger: { message: (text, type) => heard.push({ text, type }) } },
+  };
   const satellite = createSatelliteSource(scope);
   createPopoutLeader({ scope, url: 'about:blank', source: leaderSource });
   await settle();
@@ -425,6 +523,7 @@ test('an address pick crosses the wire as a target intent and echoes back in the
   const leaderSource = {
     getSelected: () => selected,
     getTarget: () => held,
+    getAddress: () => null,
     target: (key, selector) => {
       const previous = held;
       held = { key, selector };
@@ -443,7 +542,6 @@ test('an address pick crosses the wire as a target intent and echoes back in the
     getRootUuid: () => 'root',
     getBlockTypes: () => ({}),
     getSectionLayouts: () => ({}),
-    getLayout: () => [],
     getTree: () => [],
     getLayoutContext: () => null,
     getMediaUrls: () => ({}),

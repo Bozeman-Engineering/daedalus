@@ -142,6 +142,9 @@ services:
       # and the history timeline its tempstore writes extended ride every
       # payload; history is optional the way the blueprint endpoint's is.
       - '@daedalus_blueprint.materials_change_set'
+      # The canvas the delta is for: the page the chat sits on, resolved
+      # from the request's current_route context.
+      - '@daedalus_ai.route_entity_resolver'
       - '@?daedalus_tempstore.history_recorder'
       - '@?daedalus_tempstore.history_manager'
   Drupal\daedalus_ai\MutatedTurn: '@daedalus_ai.mutated_turn'

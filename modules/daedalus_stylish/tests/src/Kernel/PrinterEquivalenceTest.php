@@ -7,6 +7,7 @@ namespace Drupal\Tests\daedalus_stylish\Kernel;
 // cspell:ignore scopep
 use Drupal\KernelTests\KernelTestBase;
 use Drupal\daedalus_blueprint\Materials\RelativeSelector;
+use Drupal\daedalus_blueprint\NodeTree\NodeTreeBuilder;
 use Drupal\Tests\daedalus\Traits\NodeSuitesTrait;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
@@ -527,6 +528,107 @@ class PrinterEquivalenceTest extends KernelTestBase {
       ],
     ];
 
+    // Document cases print a whole document's map through the ordering
+    // pair (NodeTreeBuilder::styleMapOf / styleMapOf in style-guide.js):
+    // the client builds its flat index from the mirror's tree plus the
+    // node-less keys of the top-level map, the server orders the stored
+    // map by the same tree, and the two must print the same bytes for a
+    // map written in a different order than its document. Each case is
+    // a lean tree (styles on the nodes, by local remainder) and the
+    // top-level `styles` map as the mirror delivers it.
+    $uuid_c = 'cccccccc-1111-2222-3333-444444444444';
+    $uuid_d = 'dddddddd-1111-2222-3333-444444444444';
+    $uuid_e = 'eeeeeeee-1111-2222-3333-444444444444';
+    $entries = [
+      "entity:$uuid_a" => ['default' => ['padding' => '2rem']],
+      "field:$uuid_a:field_body" => ['hover' => ['color' => 'teal']],
+      "container:$uuid_a" => ['default' => ['padding' => '4rem']],
+      "container:$uuid_a::.band" => ['narrow' => ['gap' => '1rem']],
+      "block:$uuid_b" => ['default' => ['color' => 'red']],
+      "block:$uuid_b:field_title" => ['default' => ['font-weight' => '700']],
+      "container:$uuid_c::> *" => ['default' => ['min-width' => '0']],
+      "block:$uuid_d" => ['hover' => ['color' => 'purple']],
+      "container:$uuid_e" => ['default' => ['margin' => '0']],
+    ];
+    $document_tree = [
+      [
+        'kind' => 'container',
+        'uuid' => $uuid_a,
+        'layout_id' => 'layout_twocol_section',
+        // The node's own keys in the node's stored order: the part before
+        // the root entry here, kept verbatim.
+        'styles' => ['::.band' => $entries["container:$uuid_a::.band"], '' => $entries["container:$uuid_a"]],
+        'children' => [
+          [
+            'kind' => 'region',
+            'region' => 'first',
+            'children' => [
+              [
+                'kind' => 'block',
+                'uuid' => $uuid_b,
+                'block_type' => 'text',
+                'styles' => ['' => $entries["block:$uuid_b"], ':field_title' => $entries["block:$uuid_b:field_title"]],
+              ],
+            ],
+          ],
+          [
+            'kind' => 'region',
+            'region' => 'second',
+            'children' => [
+              [
+                'kind' => 'container',
+                'uuid' => $uuid_c,
+                'layout_id' => 'daedalus_stylish_container',
+                'styles' => ['::> *' => $entries["container:$uuid_c::> *"]],
+                'children' => [
+                  [
+                    'kind' => 'block',
+                    'uuid' => $uuid_d,
+                    'block_type' => 'text',
+                    'styles' => ['' => $entries["block:$uuid_d"]],
+                  ],
+                ],
+              ],
+            ],
+          ],
+        ],
+      ],
+      [
+        'kind' => 'container',
+        'uuid' => $uuid_e,
+        'layout_id' => 'daedalus_stylish_container',
+        'styles' => ['' => $entries["container:$uuid_e"]],
+        'children' => [],
+      ],
+    ];
+    // The stored map, written in no document order at all.
+    $scrambled = [
+      "block:$uuid_d" => $entries["block:$uuid_d"],
+      "container:$uuid_e" => $entries["container:$uuid_e"],
+      "field:$uuid_a:field_body" => $entries["field:$uuid_a:field_body"],
+      "block:$uuid_b:field_title" => $entries["block:$uuid_b:field_title"],
+      "container:$uuid_a::.band" => $entries["container:$uuid_a::.band"],
+      "container:$uuid_c::> *" => $entries["container:$uuid_c::> *"],
+      "entity:$uuid_a" => $entries["entity:$uuid_a"],
+      "block:$uuid_b" => $entries["block:$uuid_b"],
+      "container:$uuid_a" => $entries["container:$uuid_a"],
+    ];
+    $document_cases = [
+      // The whole stored map beside the tree (the mirror today).
+      ['tree' => $document_tree, 'styles' => $scrambled],
+      // The node-less remainder alone beside the tree (the mirror once
+      // the serializer emits the tree).
+      [
+        'tree' => $document_tree,
+        'styles' => array_intersect_key($scrambled, ["field:$uuid_a:field_body" => 1, "entity:$uuid_a" => 1]),
+      ],
+      // No tree at all: the stored order stands.
+      ['tree' => [], 'styles' => $scrambled],
+      // A key addressing no node of the document is node-less and prints
+      // first, in its stored place among the node-less keys.
+      ['tree' => [$document_tree[1]], 'styles' => $scrambled],
+    ];
+
     // The same conditions payload ClientStyleGuide ships to the browser.
     $conditions = [];
     foreach ($this->container->get('plugin.manager.daedalus_stylish_condition_type')->getConditions() as $name => $definition) {
@@ -550,6 +652,10 @@ class PrinterEquivalenceTest extends KernelTestBase {
       static fn (array $case) => $printer->printKeyframes($case['name'], $case['steps']),
       $keyframes_cases,
     );
+    $php_document_output = array_map(
+      static fn (array $case) => $printer->printMap(NodeTreeBuilder::styleMapOf($case['tree'], $case['styles'])),
+      $document_cases,
+    );
 
     $input = json_encode([
       'conditions' => $conditions,
@@ -558,6 +664,7 @@ class PrinterEquivalenceTest extends KernelTestBase {
       'cases' => $cases,
       'variantCases' => $variant_cases,
       'keyframesCases' => $keyframes_cases,
+      'documentCases' => $document_cases,
     ], JSON_INVALID_UTF8_SUBSTITUTE);
     $js_output = json_decode($this->runNodeScript('tests/js/print-cases.mjs', $input), TRUE);
 
@@ -568,6 +675,50 @@ class PrinterEquivalenceTest extends KernelTestBase {
     foreach ($php_output as $index => $expected) {
       $this->assertSame($expected, $js_output['cases'][$index], "Case $index diverged between the PHP and JS printers.");
     }
+    $this->assertIsArray($js_output['documentCases'] ?? NULL);
+    $this->assertSameSize($php_document_output, $js_output['documentCases']);
+    foreach ($php_document_output as $index => $expected) {
+      $this->assertSame($expected, $js_output['documentCases'][$index], "Document case $index diverged between the PHP and JS printers.");
+    }
+    // The document cases are in the battery (silently-empty guard): the
+    // scrambled map prints in document order, node-less keys first, a
+    // node's own keys in their stored order, region nodes transparent, a
+    // nested container before its children, and the same bytes whether
+    // the top-level map holds every key or the node-less remainder alone.
+    $document_order = [
+      "field:$uuid_a:field_body",
+      "entity:$uuid_a",
+      "container:$uuid_a::.band",
+      "container:$uuid_a",
+      "block:$uuid_b",
+      "block:$uuid_b:field_title",
+      "container:$uuid_c::> *",
+      "block:$uuid_d",
+      "container:$uuid_e",
+    ];
+    $this->assertSame($document_order, array_keys(NodeTreeBuilder::styleMapOf($document_tree, $scrambled)));
+    $this->assertSame($document_order, array_keys(NodeTreeBuilder::styleMapOf($document_tree, $document_cases[1]['styles'])));
+    $this->assertSame(array_keys($scrambled), array_keys(NodeTreeBuilder::styleMapOf([], $scrambled)));
+    $this->assertSame(
+      [
+        "block:$uuid_d",
+        "field:$uuid_a:field_body",
+        "block:$uuid_b:field_title",
+        "container:$uuid_a::.band",
+        "container:$uuid_c::> *",
+        "entity:$uuid_a",
+        "block:$uuid_b",
+        "container:$uuid_a",
+        "container:$uuid_e",
+      ],
+      array_keys(NodeTreeBuilder::styleMapOf([$document_tree[1]], $scrambled)),
+    );
+    $this->assertSame($php_document_output[0], $php_document_output[1]);
+    $this->assertNotSame($php_document_output[0], $php_document_output[2]);
+    $this->assertSame(9, substr_count($php_document_output[0], '@scope ('));
+    $scope_roots = [];
+    preg_match_all('/@scope \(\[data-selectable="([^"]+)"\]\)/', $php_document_output[0], $scope_roots);
+    $this->assertSame(array_map(static fn (string $key): string => ($pos = strpos($key, '::')) === FALSE ? $key : substr($key, 0, $pos), $document_order), $scope_roots[1]);
     $this->assertSameSize($php_variant_output, $js_output['variantCases']);
     foreach ($php_variant_output as $index => $expected) {
       $this->assertSame($expected, $js_output['variantCases'][$index], "Variant case $index diverged between the PHP and JS printers.");

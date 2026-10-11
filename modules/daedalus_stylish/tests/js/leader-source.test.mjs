@@ -22,7 +22,7 @@
 import { strict as assert } from 'node:assert';
 import { createLeaderSource } from '../../js/src/sources/leader-source.js';
 import { compoundOperations, createControlWidgetRegistry } from '../../js/src/controls.js';
-import { EMPTY_MATERIALS, animationRecord, roster, swatchRecord } from './materials-fixture.mjs';
+import { EMPTY_MATERIALS, animationRecord, fontRecord, roster, swatchRecord } from './materials-fixture.mjs';
 import { printKeyframes } from '../../js/src/printer.js';
 
 const UUID_A = 'aaaaaaaa-1111-2222-3333-444444444444';
@@ -35,6 +35,9 @@ const PARENT = `container:${UUID_B}`;
 // told apart by the attribute it stamps and kept aside.
 let tag = null;
 let animationTag = null;
+// The font delivery tag (the leader's re-read of the @font-face print),
+// told apart the same way.
+let fontsTag = null;
 // The canvas scope root's stand-in: every [data-selectable] lookup answers
 // this one element (CHILD and PARENT alike; their slot names differ), its
 // inline custom properties kept as a plain object. Recreated per app.
@@ -50,7 +53,8 @@ const createRoot = () => {
   return element;
 };
 // The token scope element's stand-in (DefaultsStylesheet::SCOPE_CLASS): the
-// swatch delivery extension stamps custom properties inline on it.
+// preview's token scope lane writes its slots inline on it (the
+// materials delivery and the live drafts).
 let tokenScope = null;
 globalThis.document = {
   createElement: () => {
@@ -58,6 +62,9 @@ globalThis.document = {
     created.setAttribute = (name) => {
       if (name === 'data-daedalus-stylish-animation-preview') {
         animationTag = created;
+      }
+      if (name === 'data-daedalus-stylish-font-delivery') {
+        fontsTag = created;
       }
     };
     tag = created;
@@ -73,6 +80,7 @@ globalThis.document = {
 };
 const previewCss = () => tag?.textContent ?? '';
 const animationCss = () => animationTag?.textContent ?? '';
+const fontsCss = () => fontsTag?.textContent ?? '';
 // The literal values currently inline on the root, by slot name.
 const liveValues = () => ({ ...(root?.props ?? {}) });
 const liveValueList = () => Object.values(liveValues());
@@ -83,7 +91,7 @@ const liveValueList = () => Object.values(liveValues());
  */
 const createApp = () => {
   root = createRoot();
-  const blueprint = { fields: { daedalus_stylish_styles: {} } };
+  const blueprint = { styles: {} };
   const app = {
     mutations: [],
     failures: [],
@@ -120,14 +128,18 @@ const createApp = () => {
       getSelected: () => CHILD,
       getElement: (key) => ({ key }),
       getTarget: () => app.target,
+      getAddress: () => app.address,
       select: (key) => app.selections.push(key),
       target: (key, selector) => app.targets.push({ key, selector }),
+      address: (key, selector = null) => app.addresses.push({ key, selector }),
       getHoveredSelector: () => app.hoveredSelector,
       hoverSelector: (key, selector = null) => app.selectorHovers.push(key && selector ? { key, selector } : null),
     },
     target: null,
+    address: null,
     selections: [],
     targets: [],
+    addresses: [],
     hoveredSelector: null,
     selectorHovers: [],
     onHoverSelectorChange: (callback) => app.hoverSelectorListeners.push(callback),
@@ -138,8 +150,10 @@ const createApp = () => {
     fireSelectionChange: (key) => app.selectionListeners.forEach((callback) => callback(key)),
     onTargetChange: (callback) => app.targetListeners.push(callback),
     targetListeners: [],
-    fireTargetChange: (selected, target) =>
-      app.targetListeners.forEach((callback) => callback({ selected, target }, { selected: null, target: null })),
+    fireTargetChange: (selected, target, address = null) =>
+      app.targetListeners.forEach((callback) =>
+        callback({ selected, target, address }, { selected: null, target: null, address: null }),
+      ),
   };
   return app;
 };
@@ -147,35 +161,53 @@ const createApp = () => {
 const tests = [];
 const test = (name, run) => tests.push([name, run]);
 
-test('the swatch delivery extension follows the materials store and previews drafts', () => {
+test('the materials delivery follows the materials store through the token scope lane and previews drafts', () => {
   const app = createApp();
   tokenScope = createRoot();
-  const source = createLeaderSource(app);
+  // The lane prints a condition under the guide's wrapper, as the compiled
+  // swatch file does.
+  const source = createLeaderSource(app, {
+    conditions: { dark: { label: 'Dark', wrapper: '@media (prefers-color-scheme: dark)', axis: 'scheme' } },
+  });
   // The roster reads and the change subscription ride the app's facade.
   assert.equal(source.getMaterials(), EMPTY_MATERIALS);
   const seen = [];
   source.onMaterialsChange((next) => seen.push(next));
-  // A store change (a mint, an edit, a relayed delta) re-stamps every
-  // swatch's custom property inline on the token scope element, the
-  // compiled file's element; condition-keyed values stamp their default.
+  // A store change (a mint, an edit, a relayed delta) delivers what the
+  // compiled files (the boot roster: nothing here) do not print: each
+  // record's custom property as an @scope block on the token scope
+  // element in the preview sheet, its literals inline there as slots,
+  // every condition under its wrapper.
   const brand = swatchRecord('brand_red', 'color', '#b91c1c', 'Brand red');
   const paper = swatchRecord('paper', 'color', { default: '#fdfdf6', dark: '#15151a' }, 'Paper');
   const minted = roster(brand, paper);
   app.fireMaterialsChange(minted);
-  assert.deepEqual(tokenScope.props, { '--swatch-brand_red': '#b91c1c', '--swatch-paper': '#fdfdf6' });
+  assert.ok(previewCss().includes('@scope (.daedalus-stylish-token-scope)'));
+  assert.ok(previewCss().includes('--swatch-brand_red: var(--daedalus-stylish-live-1);'));
+  assert.ok(previewCss().includes('--swatch-paper: var(--daedalus-stylish-live-2);'));
+  assert.ok(previewCss().includes('@media (prefers-color-scheme: dark)'), 'the paired value keeps its dark entry under its wrapper');
+  assert.ok(previewCss().includes('--swatch-paper: var(--daedalus-stylish-live-3);'));
+  assert.deepEqual(tokenScope.props, {
+    '--daedalus-stylish-live-1': '#b91c1c',
+    '--daedalus-stylish-live-2': '#fdfdf6',
+    '--daedalus-stylish-live-3': '#15151a',
+  });
   assert.deepEqual(seen, [minted]);
-  // A removed swatch keeps its stamped property (the delete rewrote every
-  // reference to the literal value; the look must not change).
+  // A removed swatch leaves the lane (the delete rewrote every reference
+  // to the literal value, so the compiled file's stale property, where
+  // one exists, changes no look); the other record keeps its delivery.
   app.fireMaterialsChange(roster(brand));
-  assert.deepEqual(tokenScope.props, { '--swatch-brand_red': '#b91c1c', '--swatch-paper': '#fdfdf6' });
+  assert.ok(!previewCss().includes('--swatch-paper'));
+  assert.deepEqual(tokenScope.props, { '--daedalus-stylish-live-1': '#b91c1c' });
   // A preview lands a draft on the same property; null releases it back
-  // to the record's own value; a record the store lost previews nothing.
-  source.previewSwatch(brand, '#ff0000');
-  assert.equal(tokenScope.props['--swatch-brand_red'], '#ff0000');
-  source.previewSwatch(brand, null);
-  assert.equal(tokenScope.props['--swatch-brand_red'], '#b91c1c');
-  source.previewSwatch(null, '#00ff00');
-  assert.deepEqual(tokenScope.props, { '--swatch-brand_red': '#b91c1c', '--swatch-paper': '#fdfdf6' });
+  // to the record's own delivery; a record the store lost previews
+  // nothing.
+  source.previewMaterial(brand, '#ff0000');
+  assert.deepEqual(tokenScope.props, { '--daedalus-stylish-live-1': '#ff0000' });
+  source.previewMaterial(brand, null);
+  assert.deepEqual(tokenScope.props, { '--daedalus-stylish-live-1': '#b91c1c' });
+  source.previewMaterial(null, '#00ff00');
+  assert.deepEqual(tokenScope.props, { '--daedalus-stylish-live-1': '#b91c1c' });
   // A gesture route's response lands through the op queue's response path.
   const response = { swatch: { machine_name: 'brand_red' }, materials: { upsert: [brand], remove: [] } };
   source.applyResponse(response);
@@ -199,11 +231,12 @@ test('the animation delivery extension prints the roster and substitutes session
   const spin = animationRecord('spin', 'Spin', { '0%': { transform: 'rotate(0deg)' }, '100%': { transform: 'rotate(360deg)' } }, { origin: 'shipped' });
   app.fireMaterialsChange(roster(fade, spin));
   assert.equal(animationCss(), `${printKeyframes('motion-fade_in', fade.value)}\n${printKeyframes('motion-spin', spin.value)}`);
-  // The swatch extension and the animation extension share the change
-  // subscription; a swatch-only change leaves the sheet's text alone.
+  // The materials delivery and the animation extension share the change
+  // subscription; a swatch-only change delivers the swatch through the
+  // token scope lane and leaves the keyframes sheet's text alone.
   const brand = swatchRecord('brand_red', 'color', '#b91c1c', 'Brand red');
   app.fireMaterialsChange(roster(fade, spin, brand));
-  assert.equal(tokenScope.props['--swatch-brand_red'], '#b91c1c');
+  assert.deepEqual(Object.values(tokenScope.props), ['#b91c1c']);
   assert.ok(animationCss().includes('@keyframes motion-spin'));
   // A session's draft substitutes for the animation it edits; the other
   // animations keep their stored steps.
@@ -226,6 +259,61 @@ test('the animation delivery extension prints the roster and substitutes session
   assert.equal(animationCss(), '');
   tokenScope = null;
   animationTag = null;
+});
+
+test('the font delivery re-reads the @font-face print exactly when the roster\'s fonts change', async () => {
+  const app = createApp();
+  tokenScope = createRoot();
+  fontsTag = null;
+  // The delivery read rides the gesture transport: a fetch of the
+  // stylesheet route answering the compiled file's current text.
+  const reads = [];
+  let answer = () => ({ ok: true, json: async () => ({ css: '@font-face { font-family: "Inter"; }' }) });
+  globalThis.Drupal = { url: (path) => `/${path}` };
+  globalThis.fetch = (url) => {
+    reads.push(url);
+    return Promise.resolve(answer());
+  };
+  const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
+  try {
+    createLeaderSource(app);
+    // The boot roster is the compiled file's content: nothing to deliver,
+    // and an unrelated store change (a swatch) reads nothing either.
+    app.fireMaterialsChange(EMPTY_MATERIALS);
+    app.fireMaterialsChange(roster(swatchRecord('brand_red', 'color', '#b91c1c', 'Brand red')));
+    await settle();
+    assert.deepEqual(reads, []);
+    assert.equal(fontsTag, null);
+    // A font joining the roster (a mint, this window's or the paired
+    // one's) re-reads the print and stamps it whole on the page.
+    const inter = fontRecord('inter', 'Inter', 'Inter', [{ weight: '400', style: 'normal', source: { file: 'f1' } }]);
+    app.fireMaterialsChange(roster(inter));
+    await settle();
+    assert.deepEqual(reads, ['/daedalus_stylish/fonts/stylesheet']);
+    assert.equal(fontsCss(), '\n@font-face { font-family: "Inter"; }\n');
+    // A label or description edit changes no at-rule: no read.
+    app.fireMaterialsChange(roster(fontRecord('inter', 'Renamed', 'Inter', inter.value.faces, { description: 'x' })));
+    await settle();
+    assert.equal(reads.length, 1);
+    // A faces edit and a delete each re-read; the last answer stands.
+    answer = () => ({ ok: true, json: async () => ({ css: '' }) });
+    app.fireMaterialsChange(roster(fontRecord('inter', 'Inter', 'Inter', [])));
+    await settle();
+    assert.equal(reads.length, 2);
+    assert.equal(fontsCss(), '');
+    // A refused read (a window without the font grades) delivers nothing
+    // and throws nothing: the reload shows the file.
+    answer = () => ({ ok: false, status: 403, json: async () => ({ errors: [{ message: 'no' }] }) });
+    app.fireMaterialsChange(EMPTY_MATERIALS);
+    await settle();
+    assert.equal(reads.length, 3);
+    assert.equal(fontsCss(), '');
+  } finally {
+    delete globalThis.fetch;
+    delete globalThis.Drupal;
+    tokenScope = null;
+    fontsTag = null;
+  }
 });
 
 test('a settled multi-key batch releases every key\'s staged preview', async () => {
@@ -376,33 +464,43 @@ test('force state is selection-scoped and the vector degrades without its facade
   assert.deepEqual(heard, ['hover', null, 'focus', null]);
 });
 
-test('the source holds no write address: an ancestor rule is the spine\'s target, seated through target() and read back through getTarget()', () => {
+test('the source holds no write address of its own: a rule is the spine\'s address, seated through address() and read back through getAddress()', () => {
   const app = createApp();
   const source = createLeaderSource(app);
-  // The switcher's and "Edit at"'s road: one call, the spine's own.
-  source.target(PARENT, 'a');
-  assert.deepEqual(app.targets, [{ key: PARENT, selector: 'a' }]);
-  app.target = { key: PARENT, selector: 'a' };
-  assert.deepEqual(source.getTarget(), { key: PARENT, selector: 'a' });
+  // The switcher's and "Edit at"'s road: one call, the spine's own, and
+  // never target() (a rule on an ancestor is an address, not a facet).
+  source.address(PARENT, 'a');
+  assert.deepEqual(app.addresses, [{ key: PARENT, selector: 'a' }]);
+  assert.deepEqual(app.targets, []);
+  app.address = { key: PARENT, selector: 'a' };
+  assert.deepEqual(source.getAddress(), { key: PARENT, selector: 'a' });
+  // The own entry's drop: address(null) verbatim.
+  source.address(null);
+  assert.deepEqual(app.addresses.at(-1), { key: null, selector: null });
   // Nothing of the old state survives on the source.
   assert.equal(source.getWriteAddress, undefined);
   assert.equal(source.setWriteAddress, undefined);
   assert.equal(source.onWriteAddressChange, undefined);
-  // A target move arrives on the one target-aware subscription, the
-  // shape the facade fires.
+  assert.equal(source.onAddressChange, undefined);
+  // An address move arrives on the one target-aware subscription, the
+  // three-fact shape the facade fires.
   const heard = [];
-  source.onTargetChange(({ selected, target }) => heard.push([selected, target]));
-  app.fireTargetChange(CHILD, { key: PARENT, selector: 'a' });
-  app.fireTargetChange(CHILD, null);
-  assert.deepEqual(heard, [[CHILD, { key: PARENT, selector: 'a' }], [CHILD, null]]);
+  source.onTargetChange(({ selected, target, address }) => heard.push([selected, target, address]));
+  app.fireTargetChange(CHILD, { key: CHILD, selector: '.quote' }, { key: PARENT, selector: 'a' });
+  app.fireTargetChange(CHILD, { key: CHILD, selector: '.quote' }, null);
+  assert.deepEqual(heard, [
+    [CHILD, { key: CHILD, selector: '.quote' }, { key: PARENT, selector: 'a' }],
+    [CHILD, { key: CHILD, selector: '.quote' }, null],
+  ]);
 });
 
-test('the selection channel carries the selection and the target through to the spine', () => {
+test('the selection channel carries the selection, the facet and the address through to the spine', () => {
   const app = createApp();
   const source = createLeaderSource(app);
-  // select() is bare (the target-dropping gesture, never rewritten) and,
-  // a panel gesture, reveals the canvas element by the one reveal rule;
-  // target() seats the target through the spine facade verbatim.
+  // select() is bare (the gesture that drops facet and address, never
+  // rewritten) and, a panel gesture, reveals the canvas element by the
+  // one reveal rule; target() seats the facet through the spine facade
+  // verbatim.
   const reveals = [];
   globalThis.Drupal = { Daedalus: { scrollReveal: (element, options) => reveals.push([element, options]) } };
   source.select(CHILD);
@@ -412,13 +510,17 @@ test('the selection channel carries the selection and the target through to the 
   assert.deepEqual(reveals, [[{ key: CHILD }, { behavior: 'smooth' }]]);
   assert.deepEqual(app.targets, [{ key: CHILD, selector: '.quote' }]);
   // Reads and the target-aware subscription delegate to the spine: no
-  // source-local target state exists.
+  // source-local facet or address state exists.
   app.target = { key: CHILD, selector: '.quote' };
   assert.deepEqual(source.getTarget(), { key: CHILD, selector: '.quote' });
+  assert.equal(source.getAddress(), null);
   const heard = [];
   source.onTargetChange((current, previous) => heard.push([current, previous]));
   app.fireTargetChange(CHILD, { key: CHILD, selector: '.quote' });
-  assert.deepEqual(heard, [[{ selected: CHILD, target: { key: CHILD, selector: '.quote' } }, { selected: null, target: null }]]);
+  assert.deepEqual(heard, [[
+    { selected: CHILD, target: { key: CHILD, selector: '.quote' }, address: null },
+    { selected: null, target: null, address: null },
+  ]]);
 });
 
 test('the hover-selector channel delegates to the spine facade', () => {
@@ -485,8 +587,10 @@ test('notify rides this window\'s messenger and is never load-bearing', () => {
   globalThis.Drupal = { Daedalus: {} };
   source.notify('status', 'Added the Rain gradient to the color palette.');
   // The messenger present: text and type land in ITS argument order,
-  // message(text, type).
+  // message(text, type), through Drupal.checkPlain (the escape itself is
+  // pinned in notify.test.mjs; this text carries nothing to escape).
   const heard = [];
+  globalThis.Drupal.checkPlain = (text) => text.toString();
   globalThis.Drupal.Daedalus.messenger = { message: (text, type) => heard.push({ text, type }) };
   source.notify('error', 'That label is taken.');
   assert.deepEqual(heard, [{ text: 'That label is taken.', type: 'error' }]);

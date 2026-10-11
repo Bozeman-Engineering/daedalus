@@ -225,7 +225,7 @@ class EndToEndTest extends BlueprintKernelTestBase {
     $entity->save();
 
     // Serialize the saved entity.
-    $serialized = $this->serializer->serialize($entity);
+    $serialized = $this->serializer->serialize($this->host($entity));
 
     $this->assertSame('entity_test', $serialized['entity_type']);
     $this->assertSame('entity_test', $serialized['bundle']);
@@ -284,7 +284,7 @@ class EndToEndTest extends BlueprintKernelTestBase {
     // Save and serialize to get the correct label.
     $entity = $result->getEntity();
     $entity->save();
-    $serialized = $this->serializer->serialize($entity);
+    $serialized = $this->serializer->serialize($this->host($entity));
 
     // AI sees the correct _label in serialized output.
     $this->assertSame('News', $serialized['fields']['field_category']['_label']);
@@ -405,7 +405,7 @@ class EndToEndTest extends BlueprintKernelTestBase {
     $entity->save();
 
     // Step 3: AI serializes to see what was created.
-    $serialized = $this->serializer->serialize($entity);
+    $serialized = $this->serializer->serialize($this->host($entity));
     $this->assertSame('Schema-guided entity', $serialized['fields']['name']);
     $this->assertSame('Created from schema', $serialized['fields']['field_subtitle']);
 
@@ -443,7 +443,7 @@ class EndToEndTest extends BlueprintKernelTestBase {
     $entity->save();
 
     // Round 2: Serialize, then update with stale _label.
-    $serialized = $this->serializer->serialize($entity);
+    $serialized = $this->serializer->serialize($this->host($entity));
     $this->assertSame('Brand New Tag', $serialized['fields']['field_tags'][0]['_label']);
 
     // Simulate AI providing stale label.

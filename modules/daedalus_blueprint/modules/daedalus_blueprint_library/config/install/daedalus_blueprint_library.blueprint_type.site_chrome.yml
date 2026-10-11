@@ -1,0 +1,7 @@
+langcode: en
+status: true
+dependencies: {  }
+id: site_chrome
+label: 'Site chrome'
+description: 'What the site frame shows on every page by reference: headers and footers. The site builder''s material, placed linked in the frame.'
+frame_only: true

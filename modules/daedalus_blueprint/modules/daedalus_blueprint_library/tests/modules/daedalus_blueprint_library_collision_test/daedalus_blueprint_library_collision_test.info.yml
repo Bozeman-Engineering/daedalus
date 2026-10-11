@@ -1,0 +1,8 @@
+name: Daedalus Blueprint Library Collision Test
+type: module
+description: Ships a blueprint ID that collides with daedalus_blueprint_library_test for kernel tests.
+package: Testing
+core_version_requirement: ^10.3 || ^11
+hidden: true
+dependencies:
+  - daedalus:daedalus_blueprint_library

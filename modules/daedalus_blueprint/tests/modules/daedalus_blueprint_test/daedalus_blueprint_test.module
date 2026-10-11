@@ -5,6 +5,8 @@
  * Test module for daedalus_blueprint hooks.
  */
 
+use Drupal\daedalus_blueprint\Host\HostInterface;
+
 /**
  * Implements hook_daedalus_blueprint_managed_keys_alter().
  */
@@ -49,11 +51,11 @@ function daedalus_blueprint_test_daedalus_blueprint_skills_alter(array &$skills)
  * assert the storage handler's persist-hook fan-out without holding the entity
  * object across the hook boundary.
  */
-function daedalus_blueprint_test_daedalus_blueprint_entity_persisted($entity, bool $saved, array $element_uuids): void {
+function daedalus_blueprint_test_daedalus_blueprint_entity_persisted(HostInterface $host, bool $saved, array $element_uuids): void {
   $log = \Drupal::state()->get('daedalus_blueprint_test.persisted', []);
   $log[] = [
-    'entity_type' => $entity->getEntityTypeId(),
-    'entity_id' => $entity->id(),
+    'entity_type' => $host->entityTypeId(),
+    'entity_id' => $host->id(),
     'saved' => $saved,
     'element_uuids' => $element_uuids,
   ];

@@ -7,7 +7,7 @@
  * (src/Selector/SelectorMatcher.php, authoritative), locked by
  * SelectorMatcherTest's shared battery through
  * tests/js/selector-matcher-cases.mjs. Both read the same input: the
- * delivered blueprint's lean node tree (`_tree`: kind-discriminated
+ * delivered blueprint's lean node tree (`layout`: kind-discriminated
  * container, region and block nodes carrying daedalus_ui's `_element`
  * annotations; the leader reads it off the mirror, the satellite
  * receives it by broadcast).
@@ -100,6 +100,7 @@ import {
   typeName,
 } from '../../../daedalus_ui/js/edit_mode/materials/relative-selector.js';
 import { INSTANCE_PART } from './parts.js';
+import { blockPluginBase } from './style-guide.js';
 
 const isPlainObject = (value) =>
   value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -188,12 +189,13 @@ const nodeFacts = (node) => {
   } else if (kind === 'block') {
     key = uuid === null ? null : `block:${uuid}`;
     const blockType = nonEmptyString(node.block_type);
-    const pluginId = nonEmptyString(node.plugin_id);
+    const pluginBase = blockPluginBase(node);
     if (blockType !== null) {
       address = `block_type:${blockType}`;
-    } else if (pluginId !== null) {
-      // The derivative suffix strips, as ElementAddress::blockPlugin strips it.
-      address = `block_plugin:${pluginId.split(':')[0]}`;
+    } else if (pluginBase !== null) {
+      // The base plugin (a field node's is field_block), as
+      // NodeTreeBuilder::pluginBase derives it for ElementAddress::blockPlugin.
+      address = `block_plugin:${pluginBase}`;
     }
   }
   const markup = isPlainObject(node._element?.markup) ? node._element.markup : {};
@@ -266,9 +268,12 @@ const nodeFacts = (node) => {
     tags,
     parts,
     // The element-naming spine, minted by daedalus_ui's annotator and
-    // riding the tree: what the element is called and what it is.
+    // riding the tree: what the element is called, what it is, and the
+    // glyph it wears (a URL, or null when nothing answered the icon
+    // collector), one spine for the word and the face.
     name: nonEmptyString(node._element?.name),
     type: nonEmptyString(node._element?.type),
+    icon: nonEmptyString(node._element?.icon),
   };
 };
 
@@ -338,18 +343,18 @@ export const presentRoster = (facts, { inner = false } = {}) => {
  * Builds a matcher over a lean node tree.
  *
  * @param {?Array} tree
- *   The ordered top-level container nodes (the blueprint's `_tree`).
+ *   The ordered top-level container nodes (the blueprint's `layout`).
  *
  * @return {{has: Function, facts: Function, ancestors: Function,
  *   matches: Function, matching: Function, reaches: Function,
  *   satisfies: Function}}
  *   The matcher: has(key), facts(key) → {key, kind, address, tag, tags,
- *   parts, name, type, index, count, childCount, parent} or null
+ *   parts, name, type, icon, index, count, childCount, parent} or null
  *   (`parts` the present declared parts and the minted instances inside,
- *   selector → tag, null for a part declaring no tag; `name` and `type`
- *   the words the annotator minted on the node, `_element.name` and
- *   `_element.type`, the one element-naming vocabulary every surface
- *   reads), ancestors(key) →
+ *   selector → tag, null for a part declaring no tag; `name`, `type` and
+ *   `icon` the words and the glyph the annotator minted on the node,
+ *   `_element.name`, `_element.type` and `_element.icon`, the one
+ *   element-naming vocabulary every surface reads), ancestors(key) →
  *   addressable ancestor keys FARTHEST first,
  *   matches(owner, selector, candidate), matching(owner, selector) →
  *   keys in document order (the hosts for a rule ending in a pseudo),
@@ -606,6 +611,7 @@ export const createMatcher = (tree) => {
         parts: node.parts,
         name: node.name,
         type: node.type,
+        icon: node.icon,
         index: node.index,
         count: node.count,
         childCount: node.childCount,

@@ -19,6 +19,7 @@ use Drupal\daedalus_stylish\DaedalusStylishFieldManager;
 use Drupal\Tests\user\Traits\UserCreationTrait;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
+use Drupal\Tests\daedalus_stylish\Traits\HostTrait;
 
 /**
  * Tests style carry through placement and duplication.
@@ -27,7 +28,7 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  * palette's drop, a flat AI or programmatic add) of a block type whose
  * style guide names default_variants (axis => variant machine name) writes
  * one variant reference per resolvable axis into the host map; a DRESSED
- * batch (a stencil expansion, a document dialect) is a total statement
+ * batch (a blueprint expansion, a document dialect) is a total statement
  * and gets none. populate: 'sample' means field sampling only. Duplicate
  * carry: duplicate_element's fresh identities get their style entries
  * copied to the rewritten keys — custom styles, sub-element keys, field
@@ -45,6 +46,7 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 #[RunTestsInSeparateProcesses]
 class ElementStylesTest extends KernelTestBase {
 
+  use HostTrait;
   use UserCreationTrait;
 
   /**
@@ -99,6 +101,7 @@ class ElementStylesTest extends KernelTestBase {
     // daedalus_stylish provider reads all four storages on every build.
     $this->installEntitySchema('daedalus_swatch');
     $this->installEntitySchema('daedalus_animation');
+    $this->installEntitySchema('daedalus_font');
     $this->installEntitySchema('daedalus_skin');
     $this->installSchema('daedalus_stylish', ['daedalus_variant_usage']);
     $this->installConfig(['daedalus_stylish']);
@@ -186,7 +189,7 @@ class ElementStylesTest extends KernelTestBase {
    * Places a block through the batch grammar.
    */
   protected function place(EntityTest $entity, array $data): BlueprintResult {
-    $result = $this->operations->batchOperations($entity, [
+    $result = $this->operations->batchOperations($this->host($entity), [
       $data + ['op' => 'add_element', 'location' => ['anchor' => self::HOST_SECTION_UUID, 'placement' => 'inside']],
     ]);
     $this->assertTrue($result->isSuccess(), print_r($result->toArray()['errors'] ?? [], TRUE));
@@ -246,7 +249,7 @@ class ElementStylesTest extends KernelTestBase {
 
     // A dressed batch is a total statement: the same add, sampled or not,
     // wears exactly what the batch applies (here nothing).
-    $result = $this->operations->batchOperations($entity, [
+    $result = $this->operations->batchOperations($this->host($entity), [
       [
         'op' => 'add_element',
         'block_type' => 'testimonial',
@@ -447,7 +450,7 @@ class ElementStylesTest extends KernelTestBase {
     $entity = $this->createHostEntity($map, [$section]);
 
     // Custom styles, sub-element, and field keys all follow the clone.
-    $result = $this->operations->batchOperations($entity, [
+    $result = $this->operations->batchOperations($this->host($entity), [
       [
         'op' => 'duplicate_element',
         'element' => '0c000001-0000-4000-8000-000000000001',
@@ -466,7 +469,7 @@ class ElementStylesTest extends KernelTestBase {
     // and that markup carries the entity-level style tag with the clone's
     // rules. The ADDED target alone would extract the owning container,
     // which sits beside the tag and never delivers it.
-    $rendered = $this->container->get('daedalus_blueprint_api.subtree_renderer')->render($entity, $result->getTargets());
+    $rendered = $this->container->get('daedalus_blueprint_api.subtree_renderer')->render($this->host($entity), $result->getTargets());
     $entity_key = 'entity:' . $entity->uuid();
     $this->assertSame([$entity_key], array_keys($rendered['markup']), 'A duplicate carrying styles re-renders as one whole-entity swap.');
     // Read the tag's own text: the clone's markup carries its key in a
@@ -477,7 +480,7 @@ class ElementStylesTest extends KernelTestBase {
     $this->assertStringContainsString('@scope ([data-selectable="block:0c000003-0000-4000-8000-000000000003"])', $tag[1], "The style tag holds a rule scoped to the clone's key.");
 
     // Variant references copy verbatim; both placements share the variant.
-    $result = $this->operations->batchOperations($entity, [
+    $result = $this->operations->batchOperations($this->host($entity), [
       [
         'op' => 'duplicate_element',
         'element' => '0c000002-0000-4000-8000-000000000002',
@@ -515,33 +518,33 @@ class ElementStylesTest extends KernelTestBase {
     $validator = $this->container->get('daedalus_stylish.style_map_validator');
 
     // Scope capture: per-layout with the host in context, kind without.
-    $this->assertSame('layout:layout_twocol_section', (string) $validator->captureScope("container:$section_uuid", ['entity' => $entity]));
+    $this->assertSame('layout:layout_twocol_section', (string) $validator->captureScope("container:$section_uuid", ['host' => $this->host($entity)]));
     $this->assertSame('kind:container', (string) $validator->captureScope("container:$section_uuid"));
     // A rule key captures its LANDING, the element its last compound
     // names, and a part lands on no element scope (nothing wears there);
     // keyAddress() still answers the full address under the layout.
-    $this->assertNull($validator->captureScope("container:$section_uuid::.band-content", ['entity' => $entity]));
-    $this->assertSame('layout:layout_twocol_section::.band-content', (string) $validator->keyAddress("container:$section_uuid::.band-content", ['entity' => $entity]));
+    $this->assertNull($validator->captureScope("container:$section_uuid::.band-content", ['host' => $this->host($entity)]));
+    $this->assertSame('layout:layout_twocol_section::.band-content', (string) $validator->keyAddress("container:$section_uuid::.band-content", ['host' => $this->host($entity)]));
 
     // Per-layout declaration enforcement on the declared part.
     $errors = $validator->validate([
       "container:$section_uuid::.band-content" => ['default' => ['max-width' => '85rem']],
-    ], ['entity' => $entity]);
+    ], ['host' => $this->host($entity)]);
     $this->assertCount(1, $errors);
     $this->assertSame('STYLE_VALUE_ABOVE_MAX', $errors[0]->getCode());
     $this->assertSame([], $validator->validate([
       "container:$section_uuid::.band-content" => ['default' => ['max-width' => '60rem']],
-    ], ['entity' => $entity]));
+    ], ['host' => $this->host($entity)]));
 
     // The section family follows the one family rule: the kind is the
     // wildcard ("kind:container" applies to any section; a degraded capture
     // without host context pairs with any section scope), layouts must
     // match exactly — a twocol treatment is layout-exact, never offered on
     // a onecol section — and families never mix.
-    $this->assertTrue($validator->scopeMatches('layout:layout_twocol_section', "container:$section_uuid", ['entity' => $entity]));
-    $this->assertTrue($validator->scopeMatches('kind:container', "container:$section_uuid", ['entity' => $entity]));
+    $this->assertTrue($validator->scopeMatches('layout:layout_twocol_section', "container:$section_uuid", ['host' => $this->host($entity)]));
+    $this->assertTrue($validator->scopeMatches('kind:container', "container:$section_uuid", ['host' => $this->host($entity)]));
     $this->assertTrue($validator->scopeMatches('layout:layout_twocol_section', "container:$section_uuid"));
-    $this->assertFalse($validator->scopeMatches('layout:layout_onecol', "container:$section_uuid", ['entity' => $entity]));
+    $this->assertFalse($validator->scopeMatches('layout:layout_onecol', "container:$section_uuid", ['host' => $this->host($entity)]));
     // Families never mix: a block key — degraded or resolved — never pairs
     // with layout scopes (blocks never hold layouts).
     $this->assertFalse($validator->scopeMatches('layout:layout_twocol_section', "block:$section_uuid"));
@@ -554,17 +557,17 @@ class ElementStylesTest extends KernelTestBase {
     $this->createVariant('section_airy', 'kind:container');
     $this->assertSame([], $validator->validate([
       "container:$section_uuid" => ['variants' => [['variant' => 'twocol_hero', 'fragment' => '']]],
-    ], ['entity' => $entity]));
+    ], ['host' => $this->host($entity)]));
     $this->assertSame([], $validator->validate([
       "container:$section_uuid" => ['variants' => [['variant' => 'section_airy', 'fragment' => '']]],
-    ], ['entity' => $entity]));
+    ], ['host' => $this->host($entity)]));
     $errors = $validator->validate([
       "container:$section_uuid" => ['variants' => [['variant' => 'onecol_hero', 'fragment' => '']]],
-    ], ['entity' => $entity]);
+    ], ['host' => $this->host($entity)]);
     $this->assertSame('STYLE_VARIANT_SCOPE_MISMATCH', $errors[0]->getCode());
     $errors = $validator->validate([
       "container:$section_uuid" => ['variants' => [['variant' => 'no_such_variant', 'fragment' => '']]],
-    ], ['entity' => $entity]);
+    ], ['host' => $this->host($entity)]);
     $this->assertSame('STYLE_VARIANT_NOT_FOUND', $errors[0]->getCode());
     $this->assertSame(['section_airy', 'twocol_hero'], array_column($errors[0]->getContext()['candidates'], 'id'));
 
@@ -574,7 +577,7 @@ class ElementStylesTest extends KernelTestBase {
     // op's own targets.
     $this->createVariant('twocol_default', 'layout:layout_twocol_section');
     $added_uuid = 'bbbbbbbb-1111-2222-3333-444444444444';
-    $result = $this->operations->batchOperations($entity, [
+    $result = $this->operations->batchOperations($this->host($entity), [
       [
         'op' => 'add_section',
         'uuid' => $added_uuid,
@@ -613,7 +616,7 @@ class ElementStylesTest extends KernelTestBase {
 
     // Sections are duplicated by their SECTION uuid (component uuid ==
     // section uuid); the clone mints its own identity.
-    $result = $this->operations->batchOperations($entity, [
+    $result = $this->operations->batchOperations($this->host($entity), [
       [
         'op' => 'duplicate_element',
         'element' => '0d000002-0000-4000-8000-000000000002',
@@ -642,6 +645,79 @@ class ElementStylesTest extends KernelTestBase {
     foreach ($map as $key => $entry) {
       $this->assertSame($entry, $carried[$key] ?? NULL);
     }
+  }
+
+  /**
+   * Birth defaults, duplicate carry and the target follow a display host.
+   *
+   * A template is a host like any other: the same lifecycle events fire
+   * for its placements, and the subscriber reads and writes the display's
+   * map (its third-party setting) through the host, declaring the write
+   * as the host's style store (named `styles` on a display, where a
+   * content host names its field).
+   */
+  public function testDisplayHostFollowsTheSameLifecycle(): void {
+    $this->createVariant('testimonial_default', 'block_type:testimonial');
+    $this->createVariant('twocol_default', 'layout:layout_twocol_section');
+    $host = $this->container->get('daedalus_blueprint.storage_handler')->load('entity_view_display', 'entity_test.entity_test.default');
+    $this->assertNotNull($host);
+    $this->assertSame('entity_view_display', $host->entityTypeId());
+    $styles_target = ['uuid' => $host->uuid(), 'field_name' => 'styles'];
+
+    // A section born on the template wears its layout's default.
+    $section_uuid = 'dd000001-0000-4000-8000-000000000001';
+    $result = $this->operations->batchOperations($host, [
+      [
+        'op' => 'add_section',
+        'uuid' => $section_uuid,
+        'layout' => 'layout_twocol_section',
+        'location' => ['anchor' => $host->uuid(), 'placement' => 'inside'],
+      ],
+    ]);
+    $this->assertTrue($result->isSuccess(), print_r($result->toArray()['errors'] ?? [], TRUE));
+    $this->assertSame(['variants' => [['variant' => 'twocol_default', 'fragment' => '']]], $host->styleMap()["container:$section_uuid"] ?? NULL);
+    $targets = $result->getTargets();
+    $this->assertSame($styles_target, end($targets), 'The add_section result declares the display host\'s style store last.');
+
+    // A block placed on the template wears its type's default (as a value
+    // block: the template holds what the field grammar spells).
+    $block_uuid = 'dd000002-0000-4000-8000-000000000002';
+    $result = $this->operations->batchOperations($host, [
+      [
+        'op' => 'add_element',
+        'uuid' => $block_uuid,
+        'block_type' => 'testimonial',
+        'properties' => ['field_quote' => 'Template quote'],
+        'location' => ['anchor' => $section_uuid, 'placement' => 'inside'],
+      ],
+    ]);
+    $this->assertTrue($result->isSuccess(), print_r($result->toArray()['errors'] ?? [], TRUE));
+    $this->assertSame(['variants' => [['variant' => 'testimonial_default', 'fragment' => '']]], $host->styleMap()["block:$block_uuid"] ?? NULL);
+    $targets = $result->getTargets();
+    $this->assertSame($styles_target, end($targets));
+
+    // A styled block duplicated on the template carries its entry.
+    $result = $this->operations->batchOperations($host, [
+      [
+        'op' => 'update_style',
+        'element' => $block_uuid,
+        'key' => "block:$block_uuid",
+        'condition' => 'default',
+        'properties' => ['padding' => '2rem'],
+      ],
+      [
+        'op' => 'duplicate_element',
+        'element' => $block_uuid,
+        'uuid' => 'dd000003-0000-4000-8000-000000000003',
+      ],
+    ]);
+    $this->assertTrue($result->isSuccess(), print_r($result->toArray()['errors'] ?? [], TRUE));
+    $map = $host->styleMap();
+    $this->assertSame($map["block:$block_uuid"], $map['block:dd000003-0000-4000-8000-000000000003'] ?? NULL);
+    $this->assertSame(['padding' => '2rem'], $map['block:dd000003-0000-4000-8000-000000000003']['default'] ?? NULL);
+
+    // The map lives on the display, as config: rows of key and entry.
+    $this->assertSame($map, array_column($host->entity()->getThirdPartySetting('daedalus_stylish', 'styles'), 'entry', 'key'));
   }
 
 }

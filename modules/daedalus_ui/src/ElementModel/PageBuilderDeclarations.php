@@ -191,6 +191,20 @@ use Drupal\daedalus_ui\Presentation\Presentation;
  * The built set depends on the activation and on the set of packaged
  * systems, and its cache says so.
  *
+ * Origins: beside the merged set the build records, for every merged
+ * value, the last layer to write it (getOrigins()): a tree mirroring the
+ * set with a DeclarationOrigin (provider and file basename, or the alter
+ * origin) at every leaf, a leaf being a scalar, a list, or an empty map.
+ * A layer restating a value identically still becomes its origin (it
+ * wrote it); an empty map in a higher layer writes nothing, so the lower
+ * origins stand; a NULL drops the origin with the key. The alter hook is
+ * one layer the module handler runs whole, so its origin is attributed by
+ * difference: every leaf the alter added or changed. The origin tree
+ * composes through merge() exactly as declarations do, so the effective
+ * origins of a block type, plugin, or layout are merge() of the universal
+ * kind's tree under the specific one's, the same call the effective
+ * getters make. The origins are built and cached with the set.
+ *
  * Validation runs after the alter, on the final layered result (that is
  * what must be sound), and the first build with problems throws once,
  * listing all of them: an owned section in a context that cannot honor it,
@@ -226,7 +240,7 @@ class PageBuilderDeclarations {
    * The reserved universal-file key declaring the site's instance namespaces.
    *
    * The spine-level home of content-borne identity-class vocabularies:
-   * {pattern selector: {label, tags, ...foreign sections}}, merged across
+   * {pattern selector: {label, tags, ...sections other modules contribute}}, merged across
    * layers exactly like the kind declarations (a higher layer refines an
    * entry; NULL withdraws it).
    */
@@ -362,9 +376,11 @@ class PageBuilderDeclarations {
   protected const FIELD_PRESENTATIONS = [Presentation::OPEN, Presentation::UNIT];
 
   /**
-   * Built declaration sets, keyed by theme name.
+   * Built results keyed by theme name: the set and its origins.
+   *
+   * @var array<string, array{declarations: array, origins: array}>
    */
-  protected array $declarations = [];
+  protected array $built = [];
 
   public function __construct(
     protected ModuleHandlerInterface $moduleHandler,
@@ -526,6 +542,27 @@ class PageBuilderDeclarations {
   }
 
   /**
+   * Gets the origins of the whole layered declaration set.
+   *
+   * A tree keyed exactly as getDefinitions() ('kinds', 'block_types',
+   * 'block_plugins', 'layouts', 'site', 'instances'), mirroring the set
+   * down to its leaves, where a DeclarationOrigin names the last layer to
+   * write the value there (the provider and file, or the alter hook). The
+   * set says which nodes are leaves: a scalar, a list, or an empty map has
+   * an origin; a populated map has children. Origins here are as-authored,
+   * like the set: the effective origins of a block type, block plugin, or
+   * layout are merge() of the universal kind's tree under the specific
+   * one's, the call getBlockType()/getBlockPlugin()/getLayout() make on
+   * the declarations.
+   *
+   * @return array
+   *   The origin tree, built and cached with the declarations.
+   */
+  public function getOrigins(?string $theme = NULL): array {
+    return $this->built($theme)['origins'];
+  }
+
+  /**
    * The theme whose declarations speak for the site: the default theme.
    *
    * Off-page consumers — the AI bundle schema and its style guide field
@@ -557,35 +594,52 @@ class PageBuilderDeclarations {
    * leaves, and when the site switches its active design system.
    */
   public function resetCache(): void {
-    $this->declarations = [];
+    $this->built = [];
     Cache::invalidateTags([self::CACHE_TAG]);
   }
 
   /**
    * Returns the layered declarations for a theme, building if needed.
+   */
+  protected function getDeclarations(?string $theme): array {
+    return $this->built($theme)['declarations'];
+  }
+
+  /**
+   * Returns the built result for a theme, the set and its origins.
    *
    * The entry depends on the activation (which package layers) and on the
    * set of packaged systems (which modules are packages at all), so it
    * carries both tags beside the family tag: a switch or a landing that
    * happens outside this request still finds the entry gone.
+   *
+   * @return array{declarations: array, origins: array}
+   *   The layered set and the origin tree mirroring it.
    */
-  protected function getDeclarations(?string $theme): array {
+  protected function built(?string $theme): array {
     $theme ??= $this->themeManager->getActiveTheme()->getName();
-    if (isset($this->declarations[$theme])) {
-      return $this->declarations[$theme];
+    if (isset($this->built[$theme])) {
+      return $this->built[$theme];
     }
     $cid = self::CACHE_TAG . ':' . $theme;
     if ($cached = $this->cache->get($cid)) {
-      return $this->declarations[$theme] = $cached->data;
+      return $this->built[$theme] = $cached->data;
     }
-    $declarations = $this->build($theme);
+    $built = $this->build($theme);
     $tags = Cache::mergeTags([self::CACHE_TAG, 'config:' . ActiveDesignSystem::CONFIG_NAME], $this->activeDesignSystem->packagesCacheTags());
-    $this->cache->set($cid, $declarations, Cache::PERMANENT, $tags);
-    return $this->declarations[$theme] = $declarations;
+    $this->cache->set($cid, $built, Cache::PERMANENT, $tags);
+    return $this->built[$theme] = $built;
   }
 
   /**
    * Builds the declaration set by layering every provider's files.
+   *
+   * Each file layers through layer() under its own origin, so the origin
+   * tree grows beside the set; the alter hook, one layer the module
+   * handler runs whole, is attributed afterwards by difference.
+   *
+   * @return array{declarations: array, origins: array}
+   *   The layered set and the origin tree mirroring it.
    */
   protected function build(string $theme): array {
     $declarations = [
@@ -596,22 +650,32 @@ class PageBuilderDeclarations {
       self::SITE => [],
       self::INSTANCES => [],
     ];
+    $origins = $declarations;
     foreach ($this->getProviderDirectories($theme) as $provider => $directory) {
       $universal = "$directory/$provider.page_builder.yml";
       if (is_file($universal)) {
+        $origin = new DeclarationOrigin($provider, basename($universal));
         foreach (Yaml::decode(file_get_contents($universal)) ?? [] as $kind => $declaration) {
           if ($kind === self::SITE || $kind === self::INSTANCES) {
             // The reserved lanes: the site's own declaration and the
             // instance namespaces, merged across layers like a kind's;
             // NULL withdraws everything lower layers declared (a single
             // namespace withdraws with a NULL entry inside the map).
-            $declarations[$kind] = $declaration === NULL ? [] : static::merge($declarations[$kind], $declaration);
+            if ($declaration === NULL) {
+              $declarations[$kind] = [];
+              $origins[$kind] = [];
+            }
+            else {
+              static::layer($declarations[$kind], $origins[$kind], $declaration, $origin);
+            }
           }
           elseif ($declaration === NULL) {
-            unset($declarations['kinds'][$kind]);
+            unset($declarations['kinds'][$kind], $origins['kinds'][$kind]);
           }
           else {
-            $declarations['kinds'][$kind] = static::merge($declarations['kinds'][$kind] ?? [], $declaration);
+            $declarations['kinds'][$kind] ??= [];
+            $origins['kinds'][$kind] ??= [];
+            static::layer($declarations['kinds'][$kind], $origins['kinds'][$kind], $declaration, $origin);
           }
         }
       }
@@ -619,22 +683,30 @@ class PageBuilderDeclarations {
         // PROVIDER.page_builder.block_type.BUNDLE.yml: the bundle is the
         // segment between the fixed prefix and the extension.
         $bundle = substr(basename($file, '.yml'), strlen("$provider.page_builder.block_type."));
-        $declarations['block_types'][$bundle] = static::merge($declarations['block_types'][$bundle] ?? [], Yaml::decode(file_get_contents($file)) ?? []);
+        $declarations['block_types'][$bundle] ??= [];
+        $origins['block_types'][$bundle] ??= [];
+        static::layer($declarations['block_types'][$bundle], $origins['block_types'][$bundle], Yaml::decode(file_get_contents($file)) ?? [], new DeclarationOrigin($provider, basename($file)));
       }
       foreach (glob("$directory/$provider.page_builder.block_plugin.*.yml") ?: [] as $file) {
         // PROVIDER.page_builder.block_plugin.PLUGIN_ID.yml: the base plugin
         // id is the segment between the fixed prefix and the extension.
         $plugin_id = substr(basename($file, '.yml'), strlen("$provider.page_builder.block_plugin."));
-        $declarations['block_plugins'][$plugin_id] = static::merge($declarations['block_plugins'][$plugin_id] ?? [], Yaml::decode(file_get_contents($file)) ?? []);
+        $declarations['block_plugins'][$plugin_id] ??= [];
+        $origins['block_plugins'][$plugin_id] ??= [];
+        static::layer($declarations['block_plugins'][$plugin_id], $origins['block_plugins'][$plugin_id], Yaml::decode(file_get_contents($file)) ?? [], new DeclarationOrigin($provider, basename($file)));
       }
       foreach (glob("$directory/$provider.page_builder.layout.*.yml") ?: [] as $file) {
         // PROVIDER.page_builder.layout.LAYOUT_ID.yml: the layout plugin id
         // is the segment between the fixed prefix and the extension.
         $layout_id = substr(basename($file, '.yml'), strlen("$provider.page_builder.layout."));
-        $declarations['layouts'][$layout_id] = static::merge($declarations['layouts'][$layout_id] ?? [], Yaml::decode(file_get_contents($file)) ?? []);
+        $declarations['layouts'][$layout_id] ??= [];
+        $origins['layouts'][$layout_id] ??= [];
+        static::layer($declarations['layouts'][$layout_id], $origins['layouts'][$layout_id], Yaml::decode(file_get_contents($file)) ?? [], new DeclarationOrigin($provider, basename($file)));
       }
     }
+    $authored = $declarations;
     $this->moduleHandler->alter('page_builder_declarations', $declarations, $theme);
+    $origins = static::attribute($authored, $declarations, $origins, DeclarationOrigin::alter());
     // Validation runs after the alter (the final layered result is what
     // must be sound) and the first build with problems throws once,
     // listing all of them.
@@ -643,7 +715,7 @@ class PageBuilderDeclarations {
     if ($errors !== []) {
       throw new DeclarationException(implode("\n", $errors));
     }
-    return $declarations;
+    return ['declarations' => $declarations, 'origins' => $origins];
   }
 
   /**
@@ -1404,20 +1476,109 @@ class PageBuilderDeclarations {
    * a slot list outright, or withdraw a declaration entirely.
    */
   public static function merge(array $low, array $high): array {
+    $origins = [];
+    static::layer($low, $origins, $high, NULL);
+    return $low;
+  }
+
+  /**
+   * Layers a higher declaration over a lower one in place, recording origins.
+   *
+   * The one merge grammar (maps merge recursively, lists and scalars
+   * replace, NULL removes), writing every value it lands into $declaration
+   * and, when $origin is given, the origin of every leaf it writes into
+   * $origins, a tree mirroring $declaration. A leaf written whole (a
+   * scalar, a list, an empty map, or a populated map landing where no map
+   * was) takes this origin at every leaf it carries; a map merged into a
+   * populated map keeps the lower leaves' origins where it writes nothing;
+   * a NULL drops the origin with the key. With no origin the tree is left
+   * alone, which is merge().
+   *
+   * @param array $declaration
+   *   The lower declaration, layered over in place.
+   * @param array $origins
+   *   Its origin tree, kept in step in place.
+   * @param array $high
+   *   The higher declaration.
+   * @param \Drupal\daedalus_ui\ElementModel\DeclarationOrigin|null $origin
+   *   The higher declaration's origin, or NULL to record none.
+   */
+  protected static function layer(array &$declaration, array &$origins, array $high, ?DeclarationOrigin $origin): void {
     foreach ($high as $key => $value) {
       $mergeable = is_array($value) && (!array_is_list($value) || $value === [])
-        && is_array($low[$key] ?? NULL) && (!array_is_list($low[$key]) || $low[$key] === []);
+        && is_array($declaration[$key] ?? NULL) && (!array_is_list($declaration[$key]) || $declaration[$key] === []);
       if ($value === NULL) {
-        unset($low[$key]);
+        unset($declaration[$key], $origins[$key]);
       }
       elseif ($mergeable) {
-        $low[$key] = static::merge($low[$key], $value);
+        if ($value === []) {
+          // An empty map in a higher layer writes nothing: the lower map
+          // stands, its origins with it.
+          continue;
+        }
+        if ($origin !== NULL && ($declaration[$key] === [] || !is_array($origins[$key] ?? NULL))) {
+          // An empty lower map was a leaf carrying one origin; it becomes
+          // a node whose children carry theirs.
+          $origins[$key] = [];
+        }
+        $origins[$key] ??= [];
+        static::layer($declaration[$key], $origins[$key], $value, $origin);
       }
       else {
-        $low[$key] = $value;
+        $declaration[$key] = $value;
+        if ($origin !== NULL) {
+          $origins[$key] = static::stamp($value, $origin);
+        }
       }
     }
-    return $low;
+  }
+
+  /**
+   * The origin tree of a value written whole by one layer.
+   *
+   * @return \Drupal\daedalus_ui\ElementModel\DeclarationOrigin|array
+   *   The origin at a leaf (a scalar, a list, or an empty map), or the
+   *   tree of a populated map's leaves.
+   */
+  protected static function stamp(mixed $value, DeclarationOrigin $origin): DeclarationOrigin|array {
+    if (!is_array($value) || $value === [] || array_is_list($value)) {
+      return $origin;
+    }
+    return array_map(static fn (mixed $child) => static::stamp($child, $origin), $value);
+  }
+
+  /**
+   * Attributes what one whole layer changed to it, by difference.
+   *
+   * Rebuilds the origin tree of $after from $origins (the tree of
+   * $before): a leaf $before holds with the same value keeps its origin,
+   * every other leaf (added, changed, or a map turned leaf or leaf turned
+   * map) takes $origin, and keys $after no longer holds leave the tree.
+   * Used for the alter hook, which the module handler runs as one layer
+   * over the finished set: a value it restates identically is invisible
+   * here, so it keeps its file origin.
+   *
+   * @return array
+   *   The origin tree of $after.
+   */
+  protected static function attribute(array $before, array $after, array $origins, DeclarationOrigin $origin): array {
+    $attributed = [];
+    foreach ($after as $key => $value) {
+      $node = is_array($value) && $value !== [] && !array_is_list($value);
+      $had = array_key_exists($key, $before);
+      if ($node && $had && is_array($before[$key]) && $before[$key] !== [] && !array_is_list($before[$key])) {
+        $attributed[$key] = static::attribute($before[$key], $value, is_array($origins[$key] ?? NULL) ? $origins[$key] : [], $origin);
+      }
+      elseif (!$node && $had && $before[$key] === $value && array_key_exists($key, $origins)) {
+        // A leaf the alter left alone keeps its origin; so does an empty
+        // lane no layer wrote (its entry is [] and stays so).
+        $attributed[$key] = $origins[$key];
+      }
+      else {
+        $attributed[$key] = static::stamp($value, $origin);
+      }
+    }
+    return $attributed;
   }
 
 }

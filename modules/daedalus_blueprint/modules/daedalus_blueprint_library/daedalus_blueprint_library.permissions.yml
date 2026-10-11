@@ -1,0 +1,9 @@
+# Every permission over a blueprint is per blueprint TYPE (the entity's
+# bundle, a blueprint_type config entity): create, edit any, delete any,
+# derived for every type the site has (BlueprintPermissions, the one
+# spelling). The library ships `section` and `site_chrome`; a site that
+# adds a type gets its three permissions at once. There is no umbrella
+# permission: the administrator role is admin, and a site builder is
+# granted the types they curate.
+permission_callbacks:
+  - Drupal\daedalus_blueprint_library\BlueprintPermissions::permissions

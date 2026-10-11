@@ -2,21 +2,25 @@
 
 namespace Drupal\daedalus_edit\Form;
 
-use Drupal\Core\Url;
 use Drupal\Core\Cache\Cache;
-use Drupal\Core\Entity\EntityTypeManagerInterface;
+use Drupal\Core\Entity\EntityInterface;
 use Drupal\Core\Form\ConfirmFormBase;
 use Drupal\Core\Form\FormStateInterface;
+use Drupal\Core\Url;
 use Drupal\daedalus_tempstore\EntityTempstoreRepository;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 
 /**
- * Confirms discarding the tempstore changes of the listed entities.
+ * Confirms discarding the tempstore changes of the route's host.
+ *
+ * The host is a content entity or a Layout Builder display (its staged
+ * template); the tempstore repository routes either to the strategy that
+ * stages it, so one delete drops the stage the top bar's Save would have
+ * committed.
  */
 class ConfirmDiscardChangesForm extends ConfirmFormBase {
 
   public function __construct(
-    protected EntityTypeManagerInterface $entityTypeManager,
     protected EntityTempstoreRepository $tempstoreRepository,
   ) {}
 
@@ -25,7 +29,6 @@ class ConfirmDiscardChangesForm extends ConfirmFormBase {
    */
   public static function create(ContainerInterface $container) {
     return new static(
-      $container->get('entity_type.manager'),
       $container->get('daedalus_tempstore.entity_tempstore_repository'),
     );
   }
@@ -33,8 +36,12 @@ class ConfirmDiscardChangesForm extends ConfirmFormBase {
   /**
    * {@inheritdoc}
    */
-  public function buildForm(array $form, FormStateInterface $form_state) {
+  public function buildForm(array $form, FormStateInterface $form_state, ?string $entity_type = NULL, ?EntityInterface $entity = NULL) {
+    if ($entity === NULL) {
+      throw new \InvalidArgumentException('No host to discard the changes of.');
+    }
     $form_state->set('workspace_safe', TRUE);
+    $form_state->set('daedalus_edit_host', $entity);
     return parent::buildForm($form, $form_state);
   }
 
@@ -70,16 +77,12 @@ class ConfirmDiscardChangesForm extends ConfirmFormBase {
    * {@inheritdoc}
    */
   public function submitForm(array &$form, FormStateInterface $form_state) {
-    $parameter = $this->getRequest()->attributes->get('entities');
-    if (empty($parameter)) {
-      throw new \InvalidArgumentException('No entities to save.');
+    $entity = $form_state->get('daedalus_edit_host');
+    if (!$entity instanceof EntityInterface) {
+      throw new \InvalidArgumentException('No host to discard the changes of.');
     }
-    foreach (explode('::', $parameter) as $entity) {
-      [$entity_type_id, $entity_id] = explode('.', $entity);
-      $entity = $this->entityTypeManager->getStorage($entity_type_id)->load($entity_id);
-      Cache::invalidateTags([daedalus_edit_cache_tag($entity)]);
-      $this->tempstoreRepository->delete($entity);
-    }
+    Cache::invalidateTags([daedalus_edit_cache_tag($entity)]);
+    $this->tempstoreRepository->delete($entity);
   }
 
 }

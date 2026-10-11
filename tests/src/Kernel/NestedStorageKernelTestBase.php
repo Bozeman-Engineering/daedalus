@@ -4,14 +4,14 @@ declare(strict_types=1);
 
 namespace Drupal\Tests\daedalus\Kernel;
 
+use Drupal\Core\Entity\FieldableEntityInterface;
 use Drupal\Core\Plugin\Context\ContextDefinition;
+use Drupal\daedalus_blueprint\Host\HostInterface;
 use Drupal\Core\Plugin\Context\Context;
 use Drupal\Core\Plugin\Context\EntityContext;
 use Drupal\layout_builder\Section;
-use Drupal\field\Entity\FieldConfig;
 use Drupal\KernelTests\KernelTestBase;
 use Drupal\entity_test\Entity\EntityTest;
-use Drupal\field\Entity\FieldStorageConfig;
 use Drupal\layout_builder\SectionComponent;
 use Drupal\block_content\Entity\BlockContent;
 use Drupal\Tests\user\Traits\UserCreationTrait;
@@ -27,7 +27,7 @@ use Drupal\layout_builder\Plugin\SectionStorage\OverridesSectionStorage;
  * Base class for kernel tests involving nested section storage.
  *
  * Provides common setup for testing Layout Builder operations with
- * nested layouts (layout blocks).
+ * nested sections (the Container block's embedded sections).
  *
  * @group daedalus
  */
@@ -98,7 +98,6 @@ abstract class NestedStorageKernelTestBase extends KernelTestBase {
 
     // Create block content types.
     $this->createBlockContentType('basic', 'Basic Block');
-    $this->createLayoutBlockType();
 
     // Enable Layout Builder for entity_test.
     $this->enableLayoutBuilder();
@@ -154,58 +153,6 @@ abstract class NestedStorageKernelTestBase extends KernelTestBase {
       'mode' => 'default',
       'status' => TRUE,
     ])->save();
-  }
-
-  /**
-   * Creates the LEGACY layout_block bundle with a layout_builder__layout field.
-   *
-   * Pre-migration fixture: the layout_block bundle is retired (nesting is
-   * embedded sections now), but the layout-block migration
-   * (LayoutBlockToSectionTransform, LayoutBlockMigrationTest) needs the old
-   * data shape to convert, and the display doubles as a second Layout
-   * Builder enabled display for EntityViewDisplayWalkerTest.
-   */
-  protected function createLayoutBlockType(): void {
-    // Create the block type.
-    $type = BlockContentType::create([
-      'id' => 'layout_block',
-      'label' => 'Block Layout',
-      'revision' => FALSE,
-    ]);
-    $type->save();
-
-    // Create the field storage for layout_builder__layout.
-    FieldStorageConfig::create([
-      'field_name' => 'layout_builder__layout',
-      'entity_type' => 'block_content',
-      'type' => 'layout_section',
-    ])->save();
-
-    // Create the field instance.
-    FieldConfig::create([
-      'field_name' => 'layout_builder__layout',
-      'entity_type' => 'block_content',
-      'bundle' => 'layout_block',
-      'label' => 'Layout',
-    ])->save();
-
-    // Create entity_view_display with layout_builder enabled. Overridable
-    // matches the recipe's real layout_block bundle (allow_custom): without
-    // it, findByContext resolves no overrides storage for a block_content
-    // and its nested sections render empty.
-    LayoutBuilderEntityViewDisplay::create([
-      'targetEntityType' => 'block_content',
-      'bundle' => 'layout_block',
-      'mode' => 'default',
-      'status' => TRUE,
-    ])
-      ->enableLayoutBuilder()
-      ->setOverridable()
-      ->setThirdPartySetting('daedalus_layout', 'default_section', [
-        'layout_plugin' => 'layout_onecol',
-        'label' => '',
-      ])
-      ->save();
   }
 
   /**
@@ -324,40 +271,16 @@ abstract class NestedStorageKernelTestBase extends KernelTestBase {
   }
 
   /**
-   * Creates a legacy layout block component (pre-migration shape).
+   * The host of an entity, as the spine's doors resolve it.
    *
-   * The storage spine no longer traverses these; they exist only so
-   * pre-migration fixtures (collapse stamping, migration walkers) can be
-   * built. New-shape nesting uses createNestedSectionComponent().
+   * @param \Drupal\Core\Entity\FieldableEntityInterface $entity
+   *   The entity.
    *
-   * @param array $nested_sections
-   *   The sections to include in the nested layout.
-   * @param string|null $uuid
-   *   Optional component UUID.
-   * @param string $region
-   *   The region name.
-   * @param string $label
-   *   The component's admin label ('Layout Block' was the shipped default).
-   *
-   * @return \Drupal\layout_builder\SectionComponent
-   *   The created layout block component.
+   * @return \Drupal\daedalus_blueprint\Host\HostInterface
+   *   Its host.
    */
-  protected function createLayoutBlockComponent(array $nested_sections = [], ?string $uuid = NULL, string $region = 'content', string $label = 'Layout Block'): SectionComponent {
-    // Create a block_content entity with nested sections.
-    $block_content = BlockContent::create([
-      'type' => 'layout_block',
-      'info' => 'Test layout block',
-      'reusable' => FALSE,
-      'layout_builder__layout' => $nested_sections,
-    ]);
-
-    $component_uuid = $uuid ?? $this->uuid->generate();
-    return new SectionComponent($component_uuid, $region, [
-      'id' => 'inline_block:layout_block',
-      'label' => $label,
-      'label_display' => FALSE,
-      'block_serialized' => serialize($block_content),
-    ]);
+  protected function host(FieldableEntityInterface $entity): HostInterface {
+    return $this->container->get('daedalus_blueprint.host_resolver')->fromEntity($entity);
   }
 
   /**

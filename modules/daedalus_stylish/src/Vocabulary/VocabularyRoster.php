@@ -49,7 +49,9 @@ use Drupal\daedalus_ui\ElementModel\PageBuilderDeclarations;
  *   first, then the site's authored constraint_defaults; a
  *   scale-constrained property's closed value list (the scale's minted
  *   tokens as var() references, plus the allowed entries) is
- *   scaleValues(), read from the materials roster.
+ *   scaleValues(), read from the materials roster, and the stops a basic
+ *   row leads with (the element's curated stops, else the scale's
+ *   offered tokens) is scaleStops(), the client's stopsFor twin.
  * - axes: the element's variant axis vocabulary (the built-in "style"
  *   axis first, then the declared axes in declaration order), each with
  *   its authored label, its root_only depth stamp (the same fact the
@@ -320,6 +322,72 @@ final class VocabularyRoster implements VocabularyRosterInterface {
   }
 
   /**
+   * The stops a basic row bound to a scale offers, in row order.
+   *
+   * The offer half of scaleValues() (legality is the whole scale; this
+   * is which of it a chip row leads with), the server twin of the
+   * client's stopsFor (style-guide.js scaleRow) so the payload and the
+   * roster can never disagree about a row:
+   * - The element's curated stops where its block declares them, in list
+   *   order, the names the worn skin does not mint dropped (a curated
+   *   name is a promise on the skin, SkinConformance's fact; a row never
+   *   offers a token that does not exist). A curated row is exact: a
+   *   package token the list leaves out is never offered there.
+   * - Else the scale's OFFERED tokens in stored order (the skin's
+   *   `offered` flag per token: the site-wide everyday steps are a fact
+   *   about the tokens, never a guide list), which is also what a
+   *   curated row falls back to when none of its names are minted.
+   * - On a curated row, SITE-MINTED tokens (a record whose origin is not
+   *   shipped: minted on the site, in its skin's site layer) follow the
+   *   curated ones while offered, on open and guarded systems, so a
+   *   token minted in the UI reaches the rows without a guide edit; on a
+   *   strict system they are withheld from basic rows, the curated list
+   *   being the law's own offer there (advanced mode and the code view
+   *   still offer the whole scale, legality unchanged).
+   * - The constraint's allowed entries append after the tokens, as in
+   *   scaleValues().
+   *
+   * @return string[]
+   *   The var() spellings the row offers, then the allowed literals; []
+   *   when the property is not scale-constrained.
+   */
+  public function scaleStops(string $property): array {
+    $constraints = $this->valueSpace($property);
+    if (!isset($constraints['scale'])) {
+      return [];
+    }
+    $scale = (string) $constraints['scale'];
+    $minted = [];
+    foreach ($this->materialsRoster()->tokens() as $record) {
+      if ($record->group === $scale && ($spelling = $record->spelling(MaterialRecord::SLOT_STYLE)) !== NULL) {
+        $minted[$record->label] = $record;
+      }
+    }
+    $curated = is_array($constraints['stops'] ?? NULL) ? array_map('strval', $constraints['stops']) : [];
+    $row = [];
+    foreach ($curated as $name) {
+      if (isset($minted[$name])) {
+        $row[$name] = $minted[$name];
+      }
+    }
+    if ($row === []) {
+      $row = array_filter($minted, static fn (MaterialRecord $record): bool => $record->offered);
+    }
+    elseif (!$this->propertiesClosed()) {
+      foreach ($minted as $name => $record) {
+        if (!isset($row[$name]) && $record->offered && $record->origin !== MaterialRecord::ORIGIN_SHIPPED) {
+          $row[$name] = $record;
+        }
+      }
+    }
+    $values = array_values(array_map(static fn (MaterialRecord $record): string => $record->spelling(MaterialRecord::SLOT_STYLE), $row));
+    foreach (is_array($constraints['allowed'] ?? NULL) ? $constraints['allowed'] : [] as $extra) {
+      $values[] = (string) $extra;
+    }
+    return $values;
+  }
+
+  /**
    * The variant axis vocabulary with its labels, stamps and facts.
    *
    * @return array<string, array{label: ?string, root_only: bool, description: ?string, owns: string[]}>
@@ -492,7 +560,7 @@ final class VocabularyRoster implements VocabularyRosterInterface {
    *
    * Variants whose scope pairs with the address's landing (the family
    * rule at landingScope(); none pairs where the landing is no element
-   * scope), and every token, swatch, animation and stencil; each record
+   * scope), and every token, swatch, animation and blueprint; each record
    * carries its own depth and ownership stamps for the placement-aware
    * consumers.
    *

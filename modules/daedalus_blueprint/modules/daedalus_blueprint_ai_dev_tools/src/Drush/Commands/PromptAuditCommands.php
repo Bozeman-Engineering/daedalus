@@ -17,6 +17,7 @@ use Drupal\Core\TempStore\PrivateTempStoreFactory;
 use Drupal\daedalus_blueprint\DesignSystem\ActiveDesignSystem;
 use Drupal\daedalus_blueprint\DesignSystem\DesignSystemInterface;
 use Drupal\daedalus_blueprint\FieldHandler\FieldHandlerManager;
+use Drupal\daedalus_blueprint\Host\HostResolver;
 use Drupal\daedalus_blueprint_ai_dev_tools\Plugin\AiProvider\PromptCaptureProvider;
 use Drupal\daedalus_blueprint_ai_dev_tools\PromptCapture;
 use Drupal\workspaces\WorkspaceManagerInterface;
@@ -137,6 +138,7 @@ final class PromptAuditCommands extends Command {
     protected FunctionCallPluginManager $functionCallManager,
     #[Autowire(service: 'daedalus_blueprint.active_design_system')]
     protected ActiveDesignSystem $activeDesignSystem,
+    protected HostResolver $hostResolver,
     #[Autowire(service: 'workspaces.manager')]
     protected ?WorkspaceManagerInterface $workspaceManager = NULL,
   ) {
@@ -427,18 +429,16 @@ final class PromptAuditCommands extends Command {
       ];
     }
 
-    // Layout Builder entity: first component of the first non-empty section of
-    // the entity's own (override) layout.
-    if ($entity->hasField('layout_builder__layout') && !$entity->get('layout_builder__layout')->isEmpty()) {
-      foreach ($entity->get('layout_builder__layout')->getSections() as $section) {
-        $components = $section->getComponents();
-        if ($components !== []) {
-          $uuid = array_key_first($components);
-          return [
-            [['key' => 'block:' . $uuid, 'number' => 1]],
-            sprintf('auto-selected block %s', $uuid),
-          ];
-        }
+    // A document host: first component of the first non-empty section of
+    // the host's own layout.
+    foreach ($this->hostResolver->fromEntity($entity)->ownSections() as $section) {
+      $components = $section->getComponents();
+      if ($components !== []) {
+        $uuid = array_key_first($components);
+        return [
+          [['key' => 'block:' . $uuid, 'number' => 1]],
+          sprintf('auto-selected block %s', $uuid),
+        ];
       }
     }
 

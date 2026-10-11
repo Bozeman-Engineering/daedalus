@@ -145,14 +145,14 @@ class StyleStack {
    *   A full style-map key (root, '::selector' relative, or block-field
    *   form).
    * @param array $context
-   *   The validate() context; "entity" enables bundle and layout resolution
+   *   The validate() context; "host" (a HostInterface) enables bundle and layout resolution
    *   for the key's captured scope (the floor's block addresses).
    * @param string|null $theme
    *   The theme whose declarations order delivery and answer the declared
    *   tier; NULL = the site's default theme, resolved once for both.
    * @param array|null $tree
-   *   The blueprint's lean node tree (the delivered `_tree`, or
-   *   NodeTreeBuilder over the annotated sections), when the caller holds
+   *   The blueprint's lean node tree (the delivered `layout`, or
+   *   NodeTreeBuilder::build()), when the caller holds
    *   it: keys the ancestor tier and the skin's base:{tag} layer (the
    *   read subject's tag, subjectTag()). NULL leaves both out.
    *
@@ -212,7 +212,7 @@ class StyleStack {
     $scopes[] = (string) $root;
 
     $skin = $this->skinManager->loadActiveSkin();
-    $skin_defaults = $skin !== NULL && $skin->isPublished() ? array_filter($skin->getDefaults(), 'is_array') : NULL;
+    $skin_defaults = $skin !== NULL && $skin->isPublished() ? array_filter($skin->defaults(), 'is_array') : NULL;
 
     $layers = [];
     $declared = $this->styleGuide->declaredDefaults($theme);

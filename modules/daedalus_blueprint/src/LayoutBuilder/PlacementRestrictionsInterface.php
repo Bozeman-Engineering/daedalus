@@ -47,7 +47,12 @@ interface PlacementRestrictionsInterface {
    *   The destination region within the section, or NULL.
    *
    * @return array
-   *   The filtered block plugin definitions, keyed by plugin ID.
+   *   The filtered block plugin definitions, keyed by plugin ID. Core's
+   *   fallback plugin 'broken' is never among them: the roster hides it as
+   *   core's own block UI does. A slot block (daedalus_slot:*) is among
+   *   them only when the storage is a template's (a defaults storage): a
+   *   slot is declared by the document a page is rendered inside and
+   *   filled by the page, never declared on a page.
    */
   public function allowedBlockDefinitions(?SectionStorageInterface $storage, ?Section $section = NULL, ?string $region = NULL): array;
 

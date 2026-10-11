@@ -64,9 +64,15 @@ class SwatchManagerTest extends KernelTestBase {
     $this->installEntitySchema('entity_test');
     $this->installEntitySchema('daedalus_swatch');
     $this->installEntitySchema('daedalus_animation');
+    $this->installEntitySchema('daedalus_font');
     $this->installEntitySchema('daedalus_variant');
     $this->installEntitySchema('daedalus_skin');
-    $this->installSchema('daedalus_stylish', ['daedalus_variant_usage', 'daedalus_swatch_usage']);
+    $this->installSchema('daedalus_stylish', [
+      'daedalus_variant_usage',
+      'daedalus_swatch_usage',
+      'daedalus_token_usage',
+      'daedalus_font_usage',
+    ]);
     $this->installConfig(['daedalus_stylish']);
     $this->container->get('daedalus_stylish.field_manager')->enable('entity_test', 'entity_test');
     // The importer (the shipped-lock tests) switches to an administrative
@@ -278,8 +284,8 @@ class SwatchManagerTest extends KernelTestBase {
     $variant->setStyles(['' => ['default' => ['border-color' => 'var(--swatch-brand_red)']]]);
     $variant->save();
     $skin = DaedalusStylishSkin::create(['label' => 'Site skin', 'machine_name' => 'site_skin']);
-    $skin->setTokens(['color' => ['accent' => ['default' => 'var(--swatch-brand_red)', 'dark' => '#000']]]);
-    $skin->setDefaults(['kind:container' => ['' => ['default' => ['color' => 'var(--swatch-brand_red)']]]]);
+    $skin->setPackageTokens(['color' => ['accent' => ['default' => 'var(--swatch-brand_red)', 'dark' => '#000']]]);
+    $skin->setPackageDefaults(['kind:container' => ['' => ['default' => ['color' => 'var(--swatch-brand_red)']]]]);
     $skin->save();
 
     // The gesture stages the Batch API job — one rewrite per referencing
@@ -318,8 +324,12 @@ class SwatchManagerTest extends KernelTestBase {
     $skin_storage = $this->container->get('entity_type.manager')->getStorage('daedalus_skin');
     $skin_storage->resetCache([$skin->id()]);
     $fresh_skin = $skin_storage->load($skin->id());
-    $this->assertSame(['color' => ['accent' => ['default' => '#e94560', 'dark' => '#000']]], $fresh_skin->getTokens());
-    $this->assertSame(['kind:container' => ['' => ['default' => ['color' => '#e94560']]]], $fresh_skin->getDefaults());
+    $this->assertSame([
+      'color' => [
+        'accent' => ['value' => ['default' => '#e94560', 'dark' => '#000'], 'description' => '', 'offered' => TRUE],
+      ],
+    ], $fresh_skin->packageTokens());
+    $this->assertSame(['kind:container' => ['' => ['default' => ['color' => '#e94560']]]], $fresh_skin->packageDefaults());
     $this->assertNull($this->manager()->loadSwatch('brand_red'));
     $this->assertSame(3, $context['results']['rewritten']);
     $this->assertSame('Brand red', $context['results']['deleted']);

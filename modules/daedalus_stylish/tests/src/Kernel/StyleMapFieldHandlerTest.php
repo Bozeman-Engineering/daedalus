@@ -79,13 +79,20 @@ class StyleMapFieldHandlerTest extends KernelTestBase {
     // queries the swatch and skin storages too.
     $this->installEntitySchema('daedalus_swatch');
     $this->installEntitySchema('daedalus_animation');
+    $this->installEntitySchema('daedalus_font');
     $this->installEntitySchema('daedalus_skin');
     $this->installConfig(['daedalus_stylish']);
     // Activating a design system syncs every enabled module's shipped
     // definitions (ShippedSync::onDesignSystemActivated()): the importers
     // mirror motion-* and --swatch-* references into the usage tables and
     // switch to an administrative account, so the fixture carries both.
-    $this->installSchema('daedalus_stylish', ['daedalus_variant_usage', 'daedalus_swatch_usage', 'daedalus_animation_usage']);
+    $this->installSchema('daedalus_stylish', [
+      'daedalus_variant_usage',
+      'daedalus_swatch_usage',
+      'daedalus_animation_usage',
+      'daedalus_token_usage',
+      'daedalus_font_usage',
+    ]);
     $this->setUpCurrentUser([], [], TRUE);
     $this->container->get('daedalus_stylish.field_manager')->enable('entity_test', 'entity_test');
     $this->uuid = $this->container->get('uuid')->generate();
@@ -123,7 +130,7 @@ class StyleMapFieldHandlerTest extends KernelTestBase {
     // is guarded, so the field's sizes are the active skin's tokens (the
     // container's padding answers to the fixture's own node cap instead).
     $skin = DaedalusStylishSkin::create(['label' => 'Aurora']);
-    $skin->setTokens(['text' => ['lead' => '1.25rem', 'body' => '1rem']])->save();
+    $skin->setPackageTokens(['text' => ['lead' => '1.25rem', 'body' => '1rem']])->save();
     $this->activateSkin($skin);
     $map = [
       "container:{$this->uuid}" => ['default' => ['padding' => '2rem 1rem']],
@@ -426,18 +433,18 @@ class StyleMapFieldHandlerTest extends KernelTestBase {
     // site base declaration grants background on pre/code site-wide, so
     // background-image is always in the granted vocabulary, and content
     // is granted at every generated box, so the two are named together),
-    // and the open-world polarity sentence. Stencils join the materials
+    // and the open-world polarity sentence. Blueprints join the materials
     // only where the roster has them; this test runs without that module.
     $this->assertStringContainsString(MaterialsProse::preferenceSentence(), $guide['guidance']);
     $this->assertStringContainsString('never mint a material unless the user asks', $guide['guidance']);
     $this->assertStringContainsString('media:<uuid>', $guide['guidance']);
     $this->assertStringContainsString('background-image, content also accept an image media reference', $guide['guidance']);
     $this->assertStringContainsString('Any recognized CSS property', $guide['guidance']);
-    $this->assertStringNotContainsString('stencils', $guide['guidance']);
+    $this->assertStringNotContainsString('blueprints', $guide['guidance']);
 
     // The schema is bundle-level and cached, so current values are a pointer
-    // at the entity's own field value, not an embedded copy.
-    $this->assertStringContainsString('daedalus_stylish_styles field value', $guide['current_values']);
+    // at the blueprint's own styles key, not an embedded copy.
+    $this->assertStringContainsString('top-level "styles" key', $guide['current_values']);
 
     // The guide is styling-only: the markup shells live in the schema's
     // anatomy fragment, and the guide points there instead of repeating it.

@@ -77,13 +77,20 @@ class CorrectiveErrorsTest extends KernelTestBase {
     // daedalus_stylish provider reads all four storages on every build.
     $this->installEntitySchema('daedalus_swatch');
     $this->installEntitySchema('daedalus_animation');
+    $this->installEntitySchema('daedalus_font');
     $this->installEntitySchema('daedalus_skin');
     $this->installConfig(['daedalus_stylish']);
     // Activating a design system syncs every enabled module's shipped
     // definitions (ShippedSync::onDesignSystemActivated()): the importers
     // mirror motion-* and --swatch-* references into the usage tables and
     // switch to an administrative account, so the fixture carries both.
-    $this->installSchema('daedalus_stylish', ['daedalus_variant_usage', 'daedalus_swatch_usage', 'daedalus_animation_usage']);
+    $this->installSchema('daedalus_stylish', [
+      'daedalus_variant_usage',
+      'daedalus_swatch_usage',
+      'daedalus_animation_usage',
+      'daedalus_token_usage',
+      'daedalus_font_usage',
+    ]);
     $this->setUpCurrentUser([], [], TRUE);
     $this->validator = $this->container->get('daedalus_stylish.style_map_validator');
     $this->uuid = $this->container->get('uuid')->generate();

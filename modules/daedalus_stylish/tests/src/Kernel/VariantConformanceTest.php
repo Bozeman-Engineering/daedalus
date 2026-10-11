@@ -80,8 +80,15 @@ class VariantConformanceTest extends KernelTestBase {
     $this->installEntitySchema('daedalus_skin');
     $this->installEntitySchema('daedalus_swatch');
     $this->installEntitySchema('daedalus_animation');
+    $this->installEntitySchema('daedalus_font');
     $this->installEntitySchema('daedalus_variant');
-    $this->installSchema('daedalus_stylish', ['daedalus_variant_usage', 'daedalus_swatch_usage', 'daedalus_animation_usage']);
+    $this->installSchema('daedalus_stylish', [
+      'daedalus_variant_usage',
+      'daedalus_swatch_usage',
+      'daedalus_animation_usage',
+      'daedalus_token_usage',
+      'daedalus_font_usage',
+    ]);
     $this->installConfig(['daedalus_blueprint', 'daedalus_stylish']);
     // Activating a design system syncs every enabled module's shipped
     // definitions (ShippedSync::onDesignSystemActivated()): the importers
@@ -109,7 +116,7 @@ class VariantConformanceTest extends KernelTestBase {
     foreach (['aurora', 'nocturne'] as $id) {
       DesignSystem::create(['id' => $id, 'label' => ucfirst($id), 'default_skin' => $id])->save();
       $skin = DaedalusStylishSkin::create(['label' => ucfirst($id), 'machine_name' => $id, 'design_system' => $id]);
-      $skin->setTokens(['space' => ['4' => '1rem']])->save();
+      $skin->setPackageTokens(['space' => ['4' => '1rem']])->save();
     }
     $this->activateSkin('aurora');
 

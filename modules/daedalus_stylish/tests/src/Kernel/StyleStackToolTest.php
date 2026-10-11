@@ -18,6 +18,7 @@ use Drupal\Tests\daedalus\Traits\DesignSystemActivationTrait;
 use Drupal\Tests\user\Traits\UserCreationTrait;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
+use Drupal\Tests\daedalus_stylish\Traits\HostTrait;
 
 /**
  * Tests the stack projection and its AI read tool.
@@ -44,6 +45,7 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 #[RunTestsInSeparateProcesses]
 class StyleStackToolTest extends KernelTestBase {
 
+  use HostTrait;
   use DesignSystemActivationTrait;
   use UserCreationTrait;
 
@@ -109,10 +111,17 @@ class StyleStackToolTest extends KernelTestBase {
     // daedalus_stylish provider reads all four storages on every build.
     $this->installEntitySchema('daedalus_swatch');
     $this->installEntitySchema('daedalus_animation');
+    $this->installEntitySchema('daedalus_font');
     $this->installEntitySchema('daedalus_skin');
     // Activating a design system (the floor's skin) syncs every enabled
     // module's shipped definitions, and the importers read all three.
-    $this->installSchema('daedalus_stylish', ['daedalus_variant_usage', 'daedalus_swatch_usage', 'daedalus_animation_usage']);
+    $this->installSchema('daedalus_stylish', [
+      'daedalus_variant_usage',
+      'daedalus_swatch_usage',
+      'daedalus_animation_usage',
+      'daedalus_token_usage',
+      'daedalus_font_usage',
+    ]);
     $this->installConfig(['daedalus_stylish']);
     // Access-transparent like the operations suite: these tests verify the
     // projection and its formatting, not access.
@@ -214,7 +223,7 @@ class StyleStackToolTest extends KernelTestBase {
   public function testStackProjection(): void {
     [$entity, $key] = $this->layeredFixture();
     $map = $this->mapOf($entity);
-    $stack = $this->styleStack()->stack($map, $key, ['entity' => $entity]);
+    $stack = $this->styleStack()->stack($map, $key, ['host' => $this->host($entity)]);
 
     $this->assertSame($key, $stack['key']);
     $this->assertSame($key, $stack['rootKey']);
@@ -257,7 +266,7 @@ class StyleStackToolTest extends KernelTestBase {
 
     // The part key resolves through the ROOT's references at its relative
     // position, own part entry on top; both suffix sources are found.
-    $part = $this->styleStack()->stack($map, "$key::.testimonial__quote", ['entity' => $entity]);
+    $part = $this->styleStack()->stack($map, "$key::.testimonial__quote", ['host' => $this->host($entity)]);
     $this->assertSame($key, $part['rootKey']);
     $this->assertSame('::.testimonial__quote', $part['relative']);
     $this->assertSame(['sleek', 'loud', NULL], array_column($part['layers'], 'variant'));
@@ -361,7 +370,7 @@ class StyleStackToolTest extends KernelTestBase {
         ],
       ],
     ]);
-    $layers = $this->styleStack()->stack($this->mapOf($entity), $key, ['entity' => $entity])['layers'];
+    $layers = $this->styleStack()->stack($this->mapOf($entity), $key, ['host' => $this->host($entity)])['layers'];
 
     // Delivery order (style axis first, emphasis over it, own on top);
     // only the distributed wearing carries an origin, resolved to its
@@ -411,7 +420,7 @@ class StyleStackToolTest extends KernelTestBase {
     // OWN fragment, so the child sees color, never the root's gap. A
     // stale reference is still a layer: it reports honestly and delivers
     // nothing.
-    $layers = $this->styleStack()->stack($this->mapOf($entity), "block:$child", ['entity' => $entity])['layers'];
+    $layers = $this->styleStack()->stack($this->mapOf($entity), "block:$child", ['host' => $this->host($entity)])['layers'];
     $this->assertSame(['variant:duo', 'variant:ghost', 'element'], array_column($layers, 'id'));
     $this->assertSame([TRUE, FALSE, TRUE], array_column($layers, 'resolved'));
     $this->assertSame(['default' => ['color' => 'red']], $layers[0]['styles']);
@@ -460,7 +469,7 @@ class StyleStackToolTest extends KernelTestBase {
   public function testDefaultsFloor(): void {
     $this->declareContainerDefault();
     $skin = DaedalusStylishSkin::create(['label' => 'Aurora', 'machine_name' => 'aurora', 'status' => TRUE]);
-    $skin->setDefaults([
+    $skin->setPackageDefaults([
       'base:h2' => ['' => ['default' => ['font-size' => '2rem']]],
       'kind:container' => [
         '' => [
@@ -475,7 +484,7 @@ class StyleStackToolTest extends KernelTestBase {
     $key = "container:{$this->uuid}";
     $entity = $this->createStyledEntity([$key => ['default' => ['gap' => '2rem']]]);
     $map = $this->mapOf($entity);
-    $stack = $this->styleStack()->stack($map, $key, ['entity' => $entity]);
+    $stack = $this->styleStack()->stack($map, $key, ['host' => $this->host($entity)]);
 
     $this->assertSame('kind:container', $stack['scope']);
     $this->assertTrue($stack['skin']);
@@ -514,16 +523,16 @@ class StyleStackToolTest extends KernelTestBase {
         'children' => [],
       ],
     ];
-    $tagged = $this->styleStack()->stack($map, $key, ['entity' => $entity], NULL, $tree_rooted_at('h2'));
+    $tagged = $this->styleStack()->stack($map, $key, ['host' => $this->host($entity)], NULL, $tree_rooted_at('h2'));
     $this->assertSame(['declared:kind:container', 'skin:base:h2', 'skin:kind:container', 'element'], array_column($tagged['layers'], 'id'));
     $this->assertSame('skin', $tagged['layers'][1]['tier']);
     $this->assertSame('base:h2', $tagged['layers'][1]['scope']);
     $this->assertSame(['default' => ['font-size' => '2rem']], $tagged['layers'][1]['styles']);
-    $untagged = $this->styleStack()->stack($map, $key, ['entity' => $entity], NULL, $tree_rooted_at('div'));
+    $untagged = $this->styleStack()->stack($map, $key, ['host' => $this->host($entity)], NULL, $tree_rooted_at('div'));
     $this->assertSame(['declared:kind:container', 'skin:kind:container', 'element'], array_column($untagged['layers'], 'id'));
     // A rule of the container's own reads no base layer: its matches are
     // many, so no one tag stands for them.
-    $rule = $this->styleStack()->stack($map, "$key::> *", ['entity' => $entity], NULL, $tree_rooted_at('h2'));
+    $rule = $this->styleStack()->stack($map, "$key::> *", ['host' => $this->host($entity)], NULL, $tree_rooted_at('h2'));
     $this->assertSame(['element'], array_column($rule['layers'], 'id'));
 
     // The tool prints the one list: the declared layer, the skin's layer,
@@ -612,7 +621,7 @@ class StyleStackToolTest extends KernelTestBase {
     ]);
     $map = $this->mapOf($entity);
     $stack = $this->styleStack();
-    $context = ['entity' => $entity];
+    $context = ['host' => $this->host($entity)];
 
     // Defaulted once to the site theme: tone before emphasis, gap declared.
     $this->assertSame(['sleek', 'toned', 'loud', NULL], array_column($stack->stack($map, $block_key, $context)['layers'], 'variant'));
@@ -696,9 +705,9 @@ class StyleStackToolTest extends KernelTestBase {
     $entity->save();
     $map = $this->mapOf($entity);
     $backend = $this->container->get('daedalus_blueprint.backend_resolver')->resolve('entity_test');
-    $tree = $this->container->get('daedalus_ui.element_annotator')->annotate($backend->serialize($entity), $entity, 'full')['_tree'];
+    $tree = $this->container->get('daedalus_ui.element_annotator')->annotate($backend->serialize($entity), $this->host($entity), 'full')['layout'];
 
-    $stack = $this->styleStack()->stack($map, $block_key, ['entity' => $entity], NULL, $tree);
+    $stack = $this->styleStack()->stack($map, $block_key, ['host' => $this->host($entity)], NULL, $tree);
     $this->assertSame([
       "ancestor:$container_key::> pb-testimonial",
       "ancestor:$container_key::> *",
@@ -716,8 +725,8 @@ class StyleStackToolTest extends KernelTestBase {
       ['layer' => 2, 'property' => 'padding', 'value' => '1rem', 'lost' => FALSE, 'winner' => NULL],
     ], $this->styleStack()->linesAt($stack, 'default'));
     // Without the tree, no ancestor tier; the container is a root.
-    $this->assertSame(['element'], array_column($this->styleStack()->stack($map, $block_key, ['entity' => $entity])['layers'], 'id'));
-    $this->assertSame(['element'], array_column($this->styleStack()->stack($map, $container_key, ['entity' => $entity], NULL, $tree)['layers'], 'id'));
+    $this->assertSame(['element'], array_column($this->styleStack()->stack($map, $block_key, ['host' => $this->host($entity)])['layers'], 'id'));
+    $this->assertSame(['element'], array_column($this->styleStack()->stack($map, $container_key, ['host' => $this->host($entity)], NULL, $tree)['layers'], 'id'));
 
     // The tool: the container's rules as the layers beneath the block's
     // own styles, each named by its rule, its owner's minted name (the
@@ -821,11 +830,11 @@ class StyleStackToolTest extends KernelTestBase {
     $entity->save();
     $map = $this->mapOf($entity);
     $backend = $this->container->get('daedalus_blueprint.backend_resolver')->resolve('entity_test');
-    $tree = $this->container->get('daedalus_ui.element_annotator')->annotate($backend->serialize($entity), $entity, 'full')['_tree'];
+    $tree = $this->container->get('daedalus_ui.element_annotator')->annotate($backend->serialize($entity), $this->host($entity), 'full')['layout'];
     $stack = $this->styleStack();
 
     // The rule's own stack: the worn root entry beneath the rule's entry.
-    $own = $stack->stack($map, $rule, ['entity' => $entity], NULL, $tree);
+    $own = $stack->stack($map, $rule, ['host' => $this->host($entity)], NULL, $tree);
     $this->assertSame(['variant:sleek', 'element'], array_column($own['layers'], 'id'));
     $this->assertSame(['default' => ['padding' => '1rem', 'background-color' => '#ffffff'], 'hover' => ['background-color' => '#eeeeee']], $own['layers'][0]['styles']);
     $this->assertSame('block_type:testimonial', $own['layers'][0]['scope']);
@@ -837,7 +846,7 @@ class StyleStackToolTest extends KernelTestBase {
       ['layer' => 1, 'property' => 'padding', 'value' => '2rem', 'lost' => FALSE, 'winner' => NULL],
     ], $stack->linesAt($own, 'default'));
     // The continued key: the variant's part entry, read under the rule.
-    $continued = $stack->stack($map, "$rule .testimonial__quote", ['entity' => $entity], NULL, $tree);
+    $continued = $stack->stack($map, "$rule .testimonial__quote", ['host' => $this->host($entity)], NULL, $tree);
     $this->assertSame(['variant:sleek', 'element'], array_column($continued['layers'], 'id'));
     $this->assertSame(['default' => ['font-size' => '1.5rem']], $continued['layers'][0]['styles']);
     $this->assertSame(['default' => ['color' => 'plum']], $continued['layers'][1]['styles']);
@@ -848,7 +857,7 @@ class StyleStackToolTest extends KernelTestBase {
     // (its identity kept, the rule its carrier, never a wearing of the
     // block) beneath the rule's own layer, the block's own entry on top;
     // own beats worn by order (the rule's padding over sleek's).
-    $member = $stack->stack($map, $block_key, ['entity' => $entity], NULL, $tree);
+    $member = $stack->stack($map, $block_key, ['host' => $this->host($entity)], NULL, $tree);
     $this->assertSame(["ancestor:$rule|sleek", "ancestor:$rule", 'element'], array_column($member['layers'], 'id'));
     $this->assertSame(['ancestor', 'ancestor', 'element'], array_column($member['layers'], 'tier'));
     $this->assertSame(['sleek', NULL, NULL], array_column($member['layers'], 'variant'));
@@ -866,7 +875,7 @@ class StyleStackToolTest extends KernelTestBase {
       ['layer' => 1, 'property' => 'padding', 'value' => '2rem', 'lost' => TRUE, 'winner' => 2],
       ['layer' => 2, 'property' => 'padding', 'value' => '3rem', 'lost' => FALSE, 'winner' => NULL],
     ], $stack->linesAt($member, 'default'));
-    $wornless = $stack->stack($map + [$block_key => []], $block_key, ['entity' => $entity], NULL, $tree);
+    $wornless = $stack->stack($map + [$block_key => []], $block_key, ['host' => $this->host($entity)], NULL, $tree);
     $this->assertSame(['default' => ['padding' => '3rem']], $wornless['layers'][2]['styles']);
     // The id grammar reads the position from either spelling, and the
     // variant from the worn one.
@@ -878,7 +887,7 @@ class StyleStackToolTest extends KernelTestBase {
     // Its quote part: the continued position is a group too, sleek's
     // part entry carried by the RULE (not the continued position, which
     // can wear nothing) beneath the continued key's own color.
-    $part = $stack->stack($map, "$block_key::.testimonial__quote", ['entity' => $entity], NULL, $tree);
+    $part = $stack->stack($map, "$block_key::.testimonial__quote", ['host' => $this->host($entity)], NULL, $tree);
     $this->assertSame(["ancestor:$rule .testimonial__quote|sleek", "ancestor:$rule .testimonial__quote", 'element'], array_column($part['layers'], 'id'));
     $this->assertSame(['default' => ['font-size' => '1.5rem']], $part['layers'][0]['styles']);
     $this->assertSame(['key' => $container_key, 'selector' => '> pb-testimonial'], $part['layers'][0]['carrier']);
@@ -976,12 +985,12 @@ class StyleStackToolTest extends KernelTestBase {
     $entity->save();
     $map = $this->mapOf($entity);
     $backend = $this->container->get('daedalus_blueprint.backend_resolver')->resolve('entity_test');
-    $tree = $this->container->get('daedalus_ui.element_annotator')->annotate($backend->serialize($entity), $entity, 'full')['_tree'];
+    $tree = $this->container->get('daedalus_ui.element_annotator')->annotate($backend->serialize($entity), $this->host($entity), 'full')['layout'];
 
     // The group at the block: the rule's own wear, then the section's
     // root wear at the position, then the rule's entry; carriers as
     // the stack names them.
-    $member = $this->styleStack()->stack($map, $block_key, ['entity' => $entity], NULL, $tree);
+    $member = $this->styleStack()->stack($map, $block_key, ['host' => $this->host($entity)], NULL, $tree);
     $this->assertSame(["ancestor:$rule|sleek", "ancestor:$rule|duo", "ancestor:$rule", 'element'], array_column($member['layers'], 'id'));
     $this->assertSame(['key' => $container_key, 'selector' => '> pb-testimonial'], $member['layers'][0]['carrier']);
     $this->assertSame(['key' => $container_key, 'selector' => NULL], $member['layers'][1]['carrier']);
@@ -1013,7 +1022,7 @@ class StyleStackToolTest extends KernelTestBase {
     // under the rule, the rule carrying it; the map holds nothing at the
     // continued position, so the rule's own line says why it is listed.
     $part_key = "$block_key::.testimonial__quote";
-    $part = $this->styleStack()->stack($map, $part_key, ['entity' => $entity], NULL, $tree);
+    $part = $this->styleStack()->stack($map, $part_key, ['host' => $this->host($entity)], NULL, $tree);
     $this->assertSame(["ancestor:$rule .testimonial__quote|sleek", "ancestor:$rule .testimonial__quote", 'element'], array_column($part['layers'], 'id'));
     $this->assertSame([], $part['layers'][1]['styles']);
     $output = $this->explain($entity, $part_key);

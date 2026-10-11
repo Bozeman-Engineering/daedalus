@@ -719,10 +719,6 @@ export const compoundOperations = (changes) =>
  * @param {?Array<object>} variants
  *   The variant records (materials.ofKind('variant')) the stack reads
  *   references through.
- * @param {Array} layout
- *   The structural layout tree (source.getLayout()), the depth fact the
- *   axis vocabulary reads: nested sections drop root-only axes. Empty
- *   degrades to the ungated root posture.
  * @param {string} condition
  *   The editing compound the canvas pose derives (vectorCondition);
  *   'default' when unposed. The reads are taken here, and the
@@ -744,10 +740,12 @@ export const compoundOperations = (changes) =>
  *   rule reaching this element, and their skin base:{tag} layer (each
  *   candidate's tag from the tree). Null leaves both out.
  * @param {?{key: string, selector: string}} [writeAddress]
- *   The panel's write address: the styling target when it sits above
- *   the selection (an ancestor rule from the element's address set,
- *   the inspector's `address`), the writes landing at it; null, or the
- *   facet's own key, for the own key (see above).
+ *   The panel's write address: the spine's `address` fact (a rule on an
+ *   ancestor, or on the selected key itself: an instance part's own tag
+ *   tier), the writes landing at it while the rows stay the subject's;
+ *   null, or the facet's own key, for the own key (see above). A
+ *   tag-tier or chain subject takes one too: its root candidate (the
+ *   rule itself) rebases to the address, as the root facet's does.
  *
  * @return {Array<{id: string, label: string, widget: string,
  *   candidates: Array<{element: string, key: string, write: ?string,
@@ -768,7 +766,6 @@ export const controlModels = (
   styleMap = {},
   sectionLayouts = {},
   variants = [],
-  layout = [],
   condition = 'default',
   context = null,
   targetSelector = null,
@@ -803,8 +800,16 @@ export const controlModels = (
   // The scope's axis vocabulary: passed into the effective-styles resolver
   // so cross-axis property overlaps resolve in DELIVERY order (axis
   // declaration order), matching the inspector and code-view lanes. Part
-  // bindings share the root's vocabulary (axes are a scope fact).
-  const axes = axisVocabulary(guide, key, blockTypes, sectionLayouts, layout);
+  // bindings share the root's vocabulary (axes are a scope fact). The
+  // tree is also the depth fact the vocabulary reads (nested sections
+  // drop root-only axes); null degrades to the ungated root posture.
+  const axes = axisVocabulary(
+    guide,
+    key,
+    blockTypes,
+    sectionLayouts,
+    tree ?? [],
+  );
   const conditions = isPlainObject(guide?.conditions) ? guide.conditions : {};
   // The shell drill: only an owner's panel (never an instance drill, whose
   // key already IS the part) filters and reorders by the drilled part.
@@ -834,17 +839,15 @@ export const controlModels = (
   const validCandidate = (element) =>
     element === '' ? true : !instance && PART_SELECTOR.test(element);
 
-  // The write address, when it is not the facet's own key: a rule key
-  // has no address set (it IS a rule), and an address naming the panel's
-  // own facet is the default. The facet's own candidate is the drilled
-  // part on an owner's panel, the root otherwise (an instance drill's
-  // key is the part, so its root candidate is the facet).
+  // The write address, when it is not the facet's own key (an address
+  // naming the panel's own facet is the default). The facet's own
+  // candidate is the drilled part on an owner's panel, the root
+  // otherwise (an instance drill's key is the part, a rule key's is the
+  // rule, so their root candidate is the facet).
   const facetElement = drilled ?? '';
   const facetKey = drilled === null ? key : `${key}::${drilled}`;
   const address =
-    isAddress(writeAddress) &&
-    !(parsed.selector !== null && !instance) &&
-    addressKey(writeAddress) !== facetKey
+    isAddress(writeAddress) && addressKey(writeAddress) !== facetKey
       ? writeAddress
       : null;
   const rootKey = splitKey(key)?.root ?? key;

@@ -3,16 +3,21 @@ import {
   styleMapOf,
   componentBlockTypes,
   sectionLayouts,
-  layoutTree,
-  tokenDisplayValue,
 } from '../style-guide.js';
 import { notify } from '../notify.js';
 import { failureText, getText, post } from '../gesture-transport.js';
+import { fetchDefaults } from '../skins-api.js';
+import { fetchFontStylesheet } from '../fonts-api.js';
+import { fontsSignature } from '../fonts-model.js';
 import { customProperty } from '../materials.js';
 import { animationPreviewCss } from '../animations-model.js';
 import { PLACES } from '../surface-state.js';
 import { addressKey } from '../write-address.js';
-import { createPreview } from '../preview.js';
+import {
+  TOKEN_SCOPE_CLASS,
+  createMaterialDelivery,
+  createPreview,
+} from '../preview.js';
 import { readLayoutContext } from '../layout-context.js';
 import { partsForKey } from '../parts.js';
 import {
@@ -50,8 +55,9 @@ import {
  * app globals from component code.
  *
  * Style values are a projection of the blueprint mirror: the map is
- * the daedalus_stylish_styles field of the root entity's blueprint, and block-type
- * resolution walks the blueprint's layout. Both re-derive when the mirror
+ * derived from the root entity's blueprint (styleMapOf: the node styles
+ * of its `layout` plus the node-less top-level `styles`), and block-type
+ * resolution walks the same `layout`. Both re-derive when the mirror
  * is replaced (every mutation response replaces it), so the panel's values
  * settle with the same authority the canvas markup does.
  *
@@ -75,14 +81,12 @@ export const createLeaderSource = (app, guide = {}, mediaUrls = {}) => {
   let typesFor = null;
   let types = {};
   let layouts = {};
-  let tree = [];
   const deriveTables = () => {
     const blueprint = app.Blueprint.getBlueprint();
     if (blueprint !== typesFor) {
       typesFor = blueprint;
       types = componentBlockTypes(blueprint);
       layouts = sectionLayouts(blueprint);
-      tree = layoutTree(blueprint);
     }
   };
   const blockTypes = () => {
@@ -92,10 +96,6 @@ export const createLeaderSource = (app, guide = {}, mediaUrls = {}) => {
   const sectionLayoutTable = () => {
     deriveTables();
     return layouts;
-  };
-  const layout = () => {
-    deriveTables();
-    return tree;
   };
   const preview = createPreview({
     guide,
@@ -108,41 +108,63 @@ export const createLeaderSource = (app, guide = {}, mediaUrls = {}) => {
     // same [data-selectable] resolution resolveTargets rides, so a staged
     // value lands on exactly the element the compiled @scope rule opens at.
     resolveRoot,
+    // The token scope element (DefaultsStylesheet::SCOPE_CLASS), the one
+    // element the compiled skin and swatch files deliver custom
+    // properties on: the scope lane writes its slots there.
+    resolveScope: () => document.querySelector(`.${TOKEN_SCOPE_CLASS}`),
   });
   // Every mutation response replaces the mirror; staged-but-unsettled
   // preview must re-project over the new authoritative base.
   app.onBlueprintChange(() => preview.baseChanged());
 
-  // The swatch delivery extension: the compiled swatch stylesheet this
-  // page loaded predates any swatch minted or edited this session, so a
-  // committed var(--swatch-{name}) would resolve to nothing until a full
-  // reload. Every store change re-stamps every swatch's custom property
-  // inline on the token scope element (DefaultsStylesheet::SCOPE_CLASS, the
-  // same element the compiled file targets; the values are identical, so
-  // the reload hand-off is seamless). Idempotent and cheap (one property
-  // per swatch), so it needs no diff; a deleted swatch's property
-  // deliberately stays (the delete rewrote every reference to the
-  // swatch's literal value server-side, so anything this page still paints
-  // through the old var() keeps exactly the look the rewrite gave it).
-  // Condition-keyed values stamp their default entry.
-  const tokenScope = () => document.querySelector('.daedalus-stylish-token-scope');
-  const stampSwatch = (scope, record, value) => {
-    const property = customProperty(record);
-    if (property !== null && typeof value === 'string' && value !== '') {
-      scope.style.setProperty(property, value);
-    }
-  };
+  // The materials delivery extension: the compiled skin and swatch
+  // stylesheets this page loaded predate any token or swatch minted or
+  // edited this session, so a committed var(--color-accent) or
+  // var(--swatch-{name}) would resolve to its old value (or nothing) until
+  // a full reload. Every store change delivers the roster through the
+  // preview's token scope lane (preview.js createMaterialDelivery: the
+  // values that differ from what the files print, each condition under
+  // its own wrapper), so the reload hand-off is seamless and the other
+  // scheme never wears the wrong entry.
+  const delivery = createMaterialDelivery(preview, app.Materials.getRoster());
   app.Materials.onChange((roster) => {
-    const scope = tokenScope();
-    if (scope) {
-      roster
-        .ofKind('swatch')
-        .forEach((record) =>
-          stampSwatch(scope, record, tokenDisplayValue(record.value)),
-        );
-    }
+    delivery.apply(roster);
     printAnimations(roster);
+    deliverFonts(roster);
   });
+
+  // The font delivery extension, the animation extension's twin for the
+  // at-rule the client cannot print: the compiled fonts file this page
+  // loaded predates any font minted, edited or deleted this session, and
+  // a face's url() is the managed file's, the server's to derive. So when
+  // the roster's fonts change (a mint, a faces edit, a delete, this
+  // window's or the paired one's: fonts-model.js fontsSignature, never an
+  // unrelated store change) the leader re-reads the whole current print
+  // (fonts-api.js fetchFontStylesheet) and stamps it on the page
+  // (preview.js deliverFonts), so a minted family loads before any
+  // reload. The boot roster is the compiled file's content and delivers
+  // nothing; a later answer never overwrites a newer one; a refused read
+  // (a window without the font grades) delivers nothing and the reload
+  // shows the file.
+  let deliveredFonts = fontsSignature(app.Materials.getRoster());
+  let fontsRead = 0;
+  const deliverFonts = (roster) => {
+    const signature = fontsSignature(roster);
+    if (signature === deliveredFonts) {
+      return;
+    }
+    deliveredFonts = signature;
+    const read = ++fontsRead;
+    fetchFontStylesheet().then(
+      ({ css }) => {
+        if (read === fontsRead) {
+          preview.deliverFonts(typeof css === 'string' ? css : '');
+          log('fonts', 'font-face delivered', css);
+        }
+      },
+      (error) => log('fonts', 'font-face delivery refused', error?.message),
+    );
+  };
 
   // The animation delivery extension, the swatch extension's twin at
   // at-rule scope: the compiled keyframes file this page loaded predates
@@ -214,12 +236,14 @@ export const createLeaderSource = (app, guide = {}, mediaUrls = {}) => {
     }
   });
 
-  // The ledger's account of where writes land: the styling target is
-  // spine state (daedalus_ui's selection facade; the switcher and
-  // provenance's "Edit at" seat an ancestor rule there through
-  // target()), so its every move is logged here, never held here.
-  app.onTargetChange(({ selected, target }) => {
-    log('address', target === null ? (selected ?? 'none') : addressKey(target));
+  // The ledger's account of where writes land: the write address when
+  // one stands (spine state, daedalus_ui's selection facade; the
+  // switcher and provenance's "Edit at" seat a rule there through
+  // address()), else the subject facet's own key, else the element. Its
+  // every move is logged here, never held here.
+  app.onTargetChange(({ selected, target, address }) => {
+    const at = address ?? target ?? null;
+    log('address', at === null ? (selected ?? 'none') : addressKey(at));
   });
 
   // The inspector's place state (four controls, one loud mode):
@@ -237,6 +261,16 @@ export const createLeaderSource = (app, guide = {}, mediaUrls = {}) => {
   const placeListeners = new Set();
   const announcePlace = () =>
     placeListeners.forEach((callback) => callback({ ...place }));
+  // The active skin's defaults as delivered SINCE boot: null until a
+  // skin session's push refreshed them (the guide payload's skinDefaults
+  // is the boot truth the panel reads meanwhile), then the route's
+  // answer verbatim (skins-api.js fetchDefaults), the same shape. Panel
+  // state on neither window: the leader holds it and the satellite
+  // reads it off the broadcast, so both panels' stacks read one skin.
+  let skinDefaults = null;
+  const skinDefaultsListeners = new Set();
+  const announceSkinDefaults = () =>
+    skinDefaultsListeners.forEach((callback) => callback(skinDefaults));
 
   // The canvas state vector facade (daedalus_ui's top-bar chrome),
   // resolved per call: the facade attaches in its own behavior, so binding
@@ -677,7 +711,7 @@ export const createLeaderSource = (app, guide = {}, mediaUrls = {}) => {
 
     /**
      * The materials roster: the store's current index (tokens, swatches,
-     * variants, stencils in the delivery shape), read through the app's
+     * variants, blueprints in the delivery shape), read through the app's
      * Materials facade. Its identity changes exactly when the records do.
      */
     getMaterials: () => app.Materials.getRoster(),
@@ -706,26 +740,34 @@ export const createLeaderSource = (app, guide = {}, mediaUrls = {}) => {
     applyResponse: (payload) => app.Blueprint.applyResponse(payload),
 
     /**
-     * Previews a swatch value on the canvas without committing it.
+     * Previews a material's value on the canvas without committing it.
      *
-     * The gradient swatch session's live drag: the draft lands on the
-     * token scope element's inline custom property (the same delivery
-     * extension a committed change re-stamps), so every use on the canvas
-     * answers per input event while the store keeps the committed value.
-     * A null value releases the preview: the property returns to the
-     * record's own value. A satellite's preview arrives as a
-     * swatch-preview intent (the canvas lives here); a record the store no
-     * longer holds previews nothing.
+     * The palette token card's and the gradient swatch session's live
+     * drag: the draft lands on the token scope lane (the same delivery a
+     * committed change rides), so every use on the canvas answers per
+     * input event while the store keeps the committed value. A null value
+     * releases the preview: the property returns to the record's own
+     * value. A satellite's preview arrives as a material-preview intent
+     * (the canvas lives here); a record the store no longer holds
+     * previews nothing.
      *
      * @param {?object} record
-     *   The swatch record (delivery shape), or null.
-     * @param {?string} value
-     *   The draft value, or null to release.
+     *   The token or swatch record (delivery shape), or null.
+     * @param {?(string|object)} value
+     *   The draft value in the record's shape (a string or a
+     *   condition-keyed map), or null to release.
      */
-    previewSwatch: (record, value) => {
-      const scope = tokenScope();
-      if (scope && record) {
-        stampSwatch(scope, record, value ?? tokenDisplayValue(record.value));
+    previewMaterial: (record, value) => {
+      if (!record) {
+        return;
+      }
+      if (value === null || value === undefined) {
+        delivery.restore(record);
+        return;
+      }
+      const property = customProperty(record);
+      if (property !== null) {
+        preview.stageScoped(property, value);
       }
     },
 
@@ -863,18 +905,25 @@ export const createLeaderSource = (app, guide = {}, mediaUrls = {}) => {
     getSelected: () => app.Selection.getSelected(),
 
     /**
-     * The styling target ({key, selector}: a part, tag tier or chain
-     * under the selected element, or an ancestor rule reaching it), or
-     * null for the whole element. Spine state: its key is always
-     * getSelected() or an ancestor of it, and any selection gesture
-     * clears it.
+     * The styling SUBJECT facet ({key, selector}: a part, tag tier or
+     * chain under the selected element), or null for the whole element.
+     * Spine state: its key is always getSelected(), and any selection
+     * gesture clears it. Where a write lands is getAddress().
      */
     getTarget: () => app.Selection.getTarget(),
 
     /**
+     * The styling WRITE ADDRESS ({key, selector}: a rule on the selected
+     * element or one of its ancestors the rows write at while they keep
+     * reading the subject), or null for the subject's own key. Spine
+     * state: any selection gesture and any facet write clears it.
+     */
+    getAddress: () => app.Selection.getAddress(),
+
+    /**
      * Selects a selectable key on the canvas (the page tree's row click,
-     * the subject chip's way back): a bare element, which drops any styling
-     * target, the spine's own invariant.
+     * the subject chip's way back): a bare element, which drops any
+     * subject facet and write address, the spine's own invariant.
      *
      * Routed through the source so the satellite's tree drives the same
      * spine by intent; the change comes back through onSelectionChange /
@@ -895,14 +944,24 @@ export const createLeaderSource = (app, guide = {}, mediaUrls = {}) => {
     },
 
     /**
-     * Sets the styling target on the current selection (a code-mode row
-     * header seating a chain, a tree part row, the inspector's address
-     * switcher and provenance's "Edit at" seating an ancestor rule): the
-     * spine canonicalizes the selector and refuses a key that is neither
-     * the selection nor an ancestor of it. The change comes back through
-     * onTargetChange.
+     * Sets the styling SUBJECT facet on the current selection (a
+     * code-mode row header seating a chain, a tree part row, the chip's
+     * box doorway): the spine canonicalizes the selector and refuses a
+     * key other than the selection (a rule on an ancestor is an address,
+     * never a facet). A facet write drops any standing address. The
+     * change comes back through onTargetChange.
      */
     target: (key, selector) => app.Selection.target(key, selector),
+
+    /**
+     * Sets the styling WRITE ADDRESS under the current subject (the
+     * inspector's address switcher, provenance's "Edit at", a code-mode
+     * rule header): the spine canonicalizes the selector and refuses a
+     * key that is neither the selection nor an ancestor of it;
+     * address(null) drops it. The change comes back through
+     * onTargetChange.
+     */
+    address: (key, selector = null) => app.Selection.address(key, selector),
 
     /**
      * Subscribes to selection KEY changes; returns unsubscribe. Fires when
@@ -913,10 +972,10 @@ export const createLeaderSource = (app, guide = {}, mediaUrls = {}) => {
     onSelectionChange: (callback) => app.onSelectionChange(callback),
 
     /**
-     * Subscribes to the selection and its styling target — the
-     * target-aware counterpart of onSelectionChange: fires on a selection
-     * OR target change, with ({selected, target}, previous). Returns
-     * unsubscribe.
+     * Subscribes to the selection and its two styling facts — the
+     * target-aware counterpart of onSelectionChange: fires on a
+     * selection, facet OR address change, with ({selected, target,
+     * address}, previous). Returns unsubscribe.
      */
     onTargetChange: (callback) => app.onTargetChange(callback),
 
@@ -983,35 +1042,63 @@ export const createLeaderSource = (app, guide = {}, mediaUrls = {}) => {
     getRootUuid: () => app.Blueprint.getRoot()?.uuid ?? null,
 
     /**
+     * THE capability gate (daedalus_ui selection/capable.js): whether the
+     * spine's published verdict on a key allows a capability. The
+     * inspector asks style of the selection before mounting any write
+     * control, in every mode; paste asks it at the target.
+     */
+    capable: (key, capability) => app.Selection.capable(key, capability),
+
+    /**
+     * The root's verdict (`_element.can` on the blueprint's root), or
+     * null before the mirror boots: broadcast to the satellite, which
+     * holds the lean tree but no root node, so it can answer the gate for
+     * the root and the host's own fields.
+     */
+    getRootCan: () => app.Blueprint.getBlueprint()?._element?.can ?? null,
+
+    /**
+     * The root's three minted words (`_element.type`, `name` and `icon`
+     * on the blueprint's root: the annotator's spine, what the page row
+     * reads like every element row reads its node's), or null before the
+     * mirror boots. Broadcast to the satellite with the lean tree, which
+     * holds the layout elements alone and no root node.
+     */
+    getRootElement: () => {
+      const element = app.Blueprint.getBlueprint()?._element ?? null;
+      return element
+        ? {
+            type: element.type ?? null,
+            name: element.name ?? null,
+            icon: element.icon ?? null,
+          }
+        : null;
+    },
+
+    /**
      * Component uuid → inline block type (null for plugin blocks), from the
-     * blueprint's layout — nested layouts included.
+     * blueprint's tree — nested containers included.
      */
     getBlockTypes: () => blockTypes(),
 
     /**
-     * Section uuid → layout plugin id, from the blueprint's layout — nested
-     * layouts included. The section counterpart of getBlockTypes(): what
-     * per-layout guide declarations (guide.layouts) resolve by.
+     * Section uuid → layout plugin id, from the blueprint's tree — nested
+     * containers included. The section counterpart of getBlockTypes():
+     * what per-layout guide declarations (guide.layouts) resolve by.
      */
     getSectionLayouts: () => sectionLayoutTable(),
 
     /**
-     * The staged layout's structural tree (style-guide.js layoutTree()),
-     * from the blueprint's layout: what composition capture walks to
-     * translate a section's child map entries into slot keys, at any
-     * nesting depth. Broadcast to the satellite with the rest of the
-     * session state.
-     */
-    getLayout: () => layout(),
-
-    /**
-     * The blueprint's lean node tree (`_tree`, kind-discriminated
+     * The blueprint's lean node tree (`layout`, kind-discriminated
      * container, region and block nodes carrying the `_element`
-     * annotations): what the selector matcher reads (ancestor layers in
-     * the stack, structural facts, a rule's actual targets). Broadcast
-     * to the satellite with the rest of the session state.
+     * annotations): the ONE structure every stylish reader walks — the
+     * selector matcher (ancestor layers in the stack, structural facts,
+     * a rule's actual targets), composition capture (a section's
+     * children into slot keys, at any nesting depth), the depth and
+     * provenance reads, the code view's page tree. Broadcast to the
+     * satellite with the rest of the session state.
      */
-    getTree: () => app.Blueprint.getBlueprint()?._tree ?? [],
+    getTree: () => app.Blueprint.getBlueprint()?.layout ?? [],
 
     /**
      * The selection facts: {self, parent} with self = the element's own
@@ -1259,6 +1346,44 @@ export const createLeaderSource = (app, guide = {}, mediaUrls = {}) => {
       placeListeners.add(callback);
       return () => placeListeners.delete(callback);
     },
+
+    /**
+     * The active skin's defaults as delivered since boot, or null while
+     * the boot payload (guide.skinDefaults) still tells the truth.
+     */
+    getSkinDefaults: () => skinDefaults,
+
+    /**
+     * Subscribes to skin defaults deliveries; returns unsubscribe.
+     */
+    onSkinDefaultsChange: (callback) => {
+      skinDefaultsListeners.add(callback);
+      return () => skinDefaultsListeners.delete(callback);
+    },
+
+    /**
+     * Refreshes the skin's delivery after a push of its defaults.
+     *
+     * The skin session's landing (push-bar.js commitSession): the
+     * server's current answer for the active skin (skins-api.js
+     * fetchDefaults) lands twice here, the defaults map on this source
+     * (announced to both windows' panels, whose stacks then read the
+     * pushed document as the skin's) and the CSS on the canvas through
+     * the preview's defaults delivery tag, so every element of the
+     * pushed scope restyles before any reload. A satellite's push
+     * arrives as a refresh-defaults intent (the canvas lives here).
+     *
+     * @return {Promise<object>}
+     *   The delivered defaults map.
+     */
+    refreshDefaults: () =>
+      fetchDefaults().then(({ defaults, css }) => {
+        skinDefaults = defaults ?? null;
+        preview.deliverDefaults(typeof css === 'string' ? css : '');
+        log('skin', 'defaults delivered', skinDefaults);
+        announceSkinDefaults();
+        return skinDefaults;
+      }),
 
     /**
      * The current canvas highlight: null, or {key, selector, properties}.

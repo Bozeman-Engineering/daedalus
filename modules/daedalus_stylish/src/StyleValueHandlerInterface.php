@@ -42,8 +42,9 @@ namespace Drupal\daedalus_stylish;
  *   ("{key}.{condition}.{property}", condition-rooted when key is '').
  * - layer: (int|null) the value's index within a layers list, NULL for a
  *   bare object value.
- * - entity: (\Drupal\Core\Entity\FieldableEntityInterface|null) the entity
- *   being written, when the lane has one.
+ * - host: (\Drupal\daedalus_blueprint\Host\HostInterface|null) the host
+ *   whose map is being written (a page's or a template's), NULL on the
+ *   variant lane.
  * - conversation: (string) the conversation the write belongs to (the op
  *   spine's 'conversation' option, the chat thread id the page tools and
  *   the HTTP op endpoint pass), '' when the caller has none. A handler

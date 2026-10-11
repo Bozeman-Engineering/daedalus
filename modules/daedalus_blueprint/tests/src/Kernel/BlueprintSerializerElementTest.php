@@ -15,6 +15,13 @@ use Drupal\Tests\daedalus\Kernel\BlueprintKernelTestBase;
 
 /**
  * Tests BlueprintSerializer::serializeElement().
+ *
+ * A layout element answers its lean node, the same object it is inside
+ * the full read's `layout`: a block node with its fields and plain
+ * configuration values, a container node with its whole subtree; a
+ * paragraph answers its fields with nested content summarized. No
+ * position (region, weight), no rich description of managed keys (those
+ * are the schema's), no storage residue.
  */
 #[RunTestsInSeparateProcesses]
 #[CoversClass(BlueprintSerializer::class)]
@@ -50,7 +57,7 @@ class BlueprintSerializerElementTest extends BlueprintKernelTestBase {
   public function testSerializeComponentNonexistentUuid(): void {
     $entity = $this->createTestEntity(['name' => 'Test']);
 
-    $result = $this->serializer->serializeElement($entity, 'c68c9561-d36d-b4fc-77ac-50039f354800');
+    $result = $this->serializer->serializeElement($this->host($entity), 'c68c9561-d36d-b4fc-77ac-50039f354800');
 
     $this->assertNull($result);
   }
@@ -87,16 +94,18 @@ class BlueprintSerializerElementTest extends BlueprintKernelTestBase {
     ]);
     $entity->save();
 
-    $result = $this->serializer->serializeElement($entity, '152d9378-ad8f-1c16-1c35-cd161a184ec5');
+    $result = $this->serializer->serializeElement($this->host($entity), '152d9378-ad8f-1c16-1c35-cd161a184ec5');
 
     $this->assertNotNull($result);
+    $this->assertSame('block', $result['kind']);
     $this->assertEquals('152d9378-ad8f-1c16-1c35-cd161a184ec5', $result['uuid']);
-    $this->assertEquals('content', $result['region']);
-    $this->assertEquals(0, $result['weight']);
     $this->assertEquals('text_section', $result['block_type']);
     $this->assertEquals('Hero Text', $result['label']);
-    $this->assertEquals('visible', $result['label_display']);
-    $this->assertEquals('full', $result['view_mode']);
+    $this->assertTrue($result['label_rendered']);
+    foreach (['region', 'weight', 'label_display', 'view_mode', 'block_revision_id'] as $residue) {
+      $this->assertArrayNotHasKey($residue, $result);
+    }
+    $this->assertArrayHasKey('_verdict', $result);
 
     // block_fields should be fully populated.
     $this->assertArrayHasKey('block_fields', $result);
@@ -109,11 +118,12 @@ class BlueprintSerializerElementTest extends BlueprintKernelTestBase {
   }
 
   /**
-   * Tests label_display serializes as 'visible' when absent from config.
+   * Tests a label renders when label_display is absent from config.
    *
    * Core's block plugin default (baseConfigurationDefaults) is 'visible',
    * and entity save materializes it into the stored component configuration
-   * — either way, a config without the key renders the label.
+   * — either way, a config without the key renders the label, and the
+   * node says so as label_rendered.
    */
   public function testSerializeComponentLabelDisplayDefaultsToVisible(): void {
     $this->enableLayoutBuilder();
@@ -142,9 +152,10 @@ class BlueprintSerializerElementTest extends BlueprintKernelTestBase {
     ]);
     $entity->save();
 
-    $result = $this->serializer->serializeElement($entity, '152d9378-ad8f-1c16-1c35-cd161a184ec5');
+    $result = $this->serializer->serializeElement($this->host($entity), '152d9378-ad8f-1c16-1c35-cd161a184ec5');
 
-    $this->assertEquals('visible', $result['label_display']);
+    $this->assertTrue($result['label_rendered']);
+    $this->assertArrayNotHasKey('label_display', $result);
   }
 
   /**
@@ -194,33 +205,40 @@ class BlueprintSerializerElementTest extends BlueprintKernelTestBase {
     ]);
     $entity->save();
 
-    // A nested section resolves by its section uuid and serializes as a
-    // section node (summarized components), never as a block.
-    $result = $this->serializer->serializeElement($entity, '98ecbc05-28b3-48c5-895e-86dfa276af6c');
+    // A nested section resolves by its section uuid and answers its
+    // container node with its whole subtree, the same object the full
+    // read's layout holds, never a block.
+    $result = $this->serializer->serializeElement($this->host($entity), '98ecbc05-28b3-48c5-895e-86dfa276af6c');
 
     $this->assertNotNull($result);
+    $this->assertSame('container', $result['kind']);
     $this->assertEquals('layout_onecol', $result['layout_id']);
     $this->assertEquals('98ecbc05-28b3-48c5-895e-86dfa276af6c', $result['uuid']);
     $this->assertEquals('Band', $result['label']);
     $this->assertArrayNotHasKey('block_type', $result);
     $this->assertArrayNotHasKey('plugin_id', $result);
+    $this->assertArrayNotHasKey('regions', $result);
 
-    $nested_comp = $result['regions']['content'][0];
+    $nested_comp = $result['children'][0]['children'][0];
     $this->assertEquals('acab1f60-1b5a-4186-a39b-c2215857849e', $nested_comp['uuid']);
     $this->assertEquals('text_section', $nested_comp['block_type']);
     $this->assertEquals('Nested Block', $nested_comp['label']);
-    // Summary: no block_fields, no view_mode, no block_revision_id.
-    $this->assertArrayNotHasKey('block_fields', $nested_comp);
-    $this->assertArrayNotHasKey('view_mode', $nested_comp);
-    $this->assertArrayNotHasKey('block_revision_id', $nested_comp);
+    $this->assertEquals('Nested body', $nested_comp['block_fields']['field_body']['value']);
+    $this->assertArrayHasKey('_verdict', $nested_comp, 'The subtree is stamped too.');
 
-    // The leaf inline block serializes as a plain block component and never
+    // The same node, read from the full blueprint.
+    $full = $this->serializer->serialize($this->host($entity));
+    $this->assertSame($full['layout'][0]['children'][0]['children'][0], $result);
+
+    // The leaf inline block serializes as a plain block node and never
     // carries a nested layout key.
-    $leaf = $this->serializer->serializeElement($entity, 'acab1f60-1b5a-4186-a39b-c2215857849e');
+    $leaf = $this->serializer->serializeElement($this->host($entity), 'acab1f60-1b5a-4186-a39b-c2215857849e');
     $this->assertNotNull($leaf);
     $this->assertEquals('text_section', $leaf['block_type']);
-    $this->assertArrayNotHasKey('layout_builder__layout', $leaf);
+    $this->assertArrayNotHasKey('layout', $leaf);
+    $this->assertArrayNotHasKey('children', $leaf);
     $this->assertEquals('Nested body', $leaf['block_fields']['field_body']['value']);
+    $this->assertSame($nested_comp, $leaf);
   }
 
   /**
@@ -276,11 +294,11 @@ class BlueprintSerializerElementTest extends BlueprintKernelTestBase {
     $entity->save();
 
     // Without daedalus_layout, nested layout components are not reachable.
-    $result = $this->serializer->serializeElement($entity, 'bc0da432-05ef-6c60-d084-2e736c3d56ae');
+    $result = $this->serializer->serializeElement($this->host($entity), 'bc0da432-05ef-6c60-d084-2e736c3d56ae');
     $this->assertNull($result);
 
     // Root-level component should still be found.
-    $result = $this->serializer->serializeElement($entity, 'd91a843b-6f7c-b796-09c3-a5eac185a188');
+    $result = $this->serializer->serializeElement($this->host($entity), 'd91a843b-6f7c-b796-09c3-a5eac185a188');
     $this->assertNotNull($result);
     $this->assertEquals('d91a843b-6f7c-b796-09c3-a5eac185a188', $result['uuid']);
     $this->assertEquals('Root Block', $result['label']);
@@ -317,7 +335,7 @@ class BlueprintSerializerElementTest extends BlueprintKernelTestBase {
     $para_entity = $entity->get('field_paragraphs')->first()->entity;
     $para_uuid = $para_entity->uuid();
 
-    $result = $this->serializer->serializeElement($entity, $para_uuid);
+    $result = $this->serializer->serializeElement($this->host($entity), $para_uuid);
 
     $this->assertNotNull($result);
     $this->assertEquals($para_uuid, $result['uuid']);
@@ -379,7 +397,7 @@ class BlueprintSerializerElementTest extends BlueprintKernelTestBase {
     $parent_entity = $entity->get('field_paragraphs')->first()->entity;
     $parent_uuid = $parent_entity->uuid();
 
-    $result = $this->serializer->serializeElement($entity, $parent_uuid);
+    $result = $this->serializer->serializeElement($this->host($entity), $parent_uuid);
 
     $this->assertNotNull($result);
     $this->assertEquals($parent_uuid, $result['uuid']);
@@ -449,7 +467,7 @@ class BlueprintSerializerElementTest extends BlueprintKernelTestBase {
     $child_uuid = $child_entity->uuid();
 
     // Drill into the nested child paragraph.
-    $result = $this->serializer->serializeElement($entity, $child_uuid);
+    $result = $this->serializer->serializeElement($this->host($entity), $child_uuid);
 
     $this->assertNotNull($result);
     $this->assertEquals($child_uuid, $result['uuid']);
@@ -488,19 +506,27 @@ class BlueprintSerializerElementTest extends BlueprintKernelTestBase {
     ]);
     $entity->save();
 
-    $result = $this->serializer->serializeElement($entity, 'c578c767-7dac-a205-0c91-3fb82af82d46');
+    $result = $this->serializer->serializeElement($this->host($entity), 'c578c767-7dac-a205-0c91-3fb82af82d46');
 
     $this->assertNotNull($result);
+    $this->assertSame('block', $result['kind']);
     $this->assertEquals('c578c767-7dac-a205-0c91-3fb82af82d46', $result['uuid']);
-    $this->assertEquals('content', $result['region']);
-    $this->assertEquals(0, $result['weight']);
+    $this->assertArrayNotHasKey('region', $result);
+    $this->assertArrayNotHasKey('weight', $result);
     $this->assertEquals('system_branding_block', $result['plugin_id']);
 
-    // Non-inline blocks should not have block_type, block_fields, etc.
+    // A plugin block has no block type or fields; its bag is its config
+    // schema: the placement label (rendered) and its own keys under
+    // configuration, plain, exactly as placed. None of the branding
+    // block's keys were placed, so the plugin defaults rule and the read
+    // spells none; the keys and their descriptions are the schema's.
     $this->assertArrayNotHasKey('block_type', $result);
     $this->assertArrayNotHasKey('block_fields', $result);
-    $this->assertArrayNotHasKey('label', $result);
     $this->assertArrayNotHasKey('view_mode', $result);
+    $this->assertArrayNotHasKey('label_display', $result);
+    $this->assertSame('Site branding', $result['label']);
+    $this->assertTrue($result['label_rendered']);
+    $this->assertArrayNotHasKey('configuration', $result);
   }
 
   /**
@@ -562,7 +588,7 @@ class BlueprintSerializerElementTest extends BlueprintKernelTestBase {
     ]);
     $entity->save();
 
-    $result = $this->serializer->serializeElement($entity, '5bf56270-dc3d-7dbe-4f57-34ec5eaf60b6');
+    $result = $this->serializer->serializeElement($this->host($entity), '5bf56270-dc3d-7dbe-4f57-34ec5eaf60b6');
 
     $this->assertNotNull($result);
     $this->assertEquals('Rich Block', $result['label']);
@@ -594,7 +620,7 @@ class BlueprintSerializerElementTest extends BlueprintKernelTestBase {
     ]);
 
     // Simple entity has no components to locate.
-    $result = $this->serializer->serializeElement($entity, 'any-uuid');
+    $result = $this->serializer->serializeElement($this->host($entity), 'any-uuid');
     $this->assertNull($result);
   }
 

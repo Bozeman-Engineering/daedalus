@@ -1,6 +1,4 @@
 use daedalus ui edit mode:
   title: 'Use edit mode'
-configure daedalus ui modes:
-  title: 'Configure Daedalus UI modes'
 'administer Daedalus UI configuration':
   title: 'Administer Daedalus configuration'

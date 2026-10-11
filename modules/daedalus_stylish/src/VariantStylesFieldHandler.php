@@ -7,6 +7,7 @@ namespace Drupal\daedalus_stylish;
 use Drupal\Core\Entity\FieldableEntityInterface;
 use Drupal\Core\Field\FieldDefinitionInterface;
 use Drupal\daedalus_blueprint\FieldHandler\FieldHandlerResult;
+use Drupal\daedalus_blueprint\Host\HostResolver;
 use Drupal\daedalus_blueprint\Materials\RelativeSelector;
 use Drupal\daedalus_blueprint\Materials\DistroLock;
 use Drupal\daedalus_blueprint\Materials\MaterialsRosterBuilder;
@@ -60,6 +61,8 @@ class VariantStylesFieldHandler extends StyleMapFieldHandler {
    *   The materials roster builder.
    * @param \Drupal\daedalus_stylish\Vocabulary\VocabularyRosterBuilder $vocabulary
    *   The vocabulary roster builder.
+   * @param \Drupal\daedalus_blueprint\Host\HostResolver $hostResolver
+   *   The host resolver: the style map field's owner is the map's host.
    * @param \Closure $importer
    *   Service closure resolving the variant importer, the distro lock's
    *   disk read (does the provider ship this entry right now?). Lazy
@@ -78,10 +81,11 @@ class VariantStylesFieldHandler extends StyleMapFieldHandler {
     StyleValueResolver $valueResolver,
     MaterialsRosterBuilder $rosterBuilder,
     VocabularyRosterBuilder $vocabulary,
+    HostResolver $hostResolver,
     protected \Closure $importer,
     protected DistroLock $distroLock,
   ) {
-    parent::__construct($validator, $styleGuide, $declarations, $conditionTypes, $valueResolver, $rosterBuilder, $vocabulary);
+    parent::__construct($validator, $styleGuide, $declarations, $conditionTypes, $valueResolver, $rosterBuilder, $vocabulary, $hostResolver);
   }
 
   /**
@@ -151,7 +155,8 @@ class VariantStylesFieldHandler extends StyleMapFieldHandler {
     // and the commit below only runs after validation succeeded, so
     // a failed write mints nothing. A variant authored with a handled
     // layer stores the resolved canonical string like any other value.
-    $resolution = $this->valueResolver->check($value, $entity instanceof FieldableEntityInterface ? $entity : NULL, (string) ($options['conversation'] ?? ''));
+    // The variant lane has no page behind it: a variant is no host.
+    $resolution = $this->valueResolver->check($value, NULL, (string) ($options['conversation'] ?? ''));
     if ($resolution->getErrors()) {
       return new FieldHandlerResult(NULL, array_map(
         static fn (BlueprintError $error) => $error->withPath(

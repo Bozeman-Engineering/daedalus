@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Drupal\Tests\daedalus_stylish\Kernel;
 
 use Drupal\daedalus_blueprint\Result\BlueprintError;
+use Drupal\daedalus_stylish\Plugin\Field\FieldType\SkinTokensItem;
 use Drupal\KernelTests\KernelTestBase;
 use Drupal\daedalus_stylish\Entity\DaedalusStylishSkin;
 use PHPUnit\Framework\Attributes\Group;
@@ -13,11 +14,14 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 /**
  * Tests the skin content entity and the token validation seam.
  *
- * Skins host token VALUES as data ({scale: {name: value}}) against the
- * scales the site declares in code; every write path (the daedalus_blueprint
- * field handler, the admin form, the disk lane) converges on
- * StyleMapValidator::validateTokens(). Which skin the site wears is the
- * active design system's call (SkinManagerTest).
+ * Skins host TOKENS as data ({scale: {name: {value, description,
+ * offered}}}) against the scales the site declares in code; every write
+ * path (the daedalus_blueprint field handler, the admin form, the disk
+ * lane) converges on StyleMapValidator::validateTokens() over the
+ * canonical record shape, and every authored door accepts a bare value as
+ * shorthand for its record (SkinTokensItem::canonicalizeTokens()). Which
+ * skin the site wears is the active design system's call
+ * (SkinManagerTest).
  */
 #[Group('daedalus_stylish')]
 #[RunTestsInSeparateProcesses]
@@ -60,6 +64,10 @@ class DaedalusStylishSkinTest extends KernelTestBase {
     $this->installEntitySchema('daedalus_variant');
     $this->installEntitySchema('daedalus_swatch');
     $this->installEntitySchema('daedalus_animation');
+    $this->installEntitySchema('daedalus_font');
+    // The skin save's token usage chokepoint (a token may reference
+    // another token: accent-hover below).
+    $this->installSchema('daedalus_stylish', ['daedalus_token_usage', 'daedalus_font_usage']);
     $this->installConfig(['daedalus_stylish']);
     // The scales tokens validate against: one per shape.
     $this->container->get('state')->set('daedalus_stylish_control_test.site', [
@@ -75,13 +83,16 @@ class DaedalusStylishSkinTest extends KernelTestBase {
   }
 
   /**
-   * Validates tokens against the declared scales.
+   * Validates tokens against the declared scales, through the door.
+   *
+   * The seam validates the canonical shape; like every authored door this
+   * canonicalizes first, so the fixtures may spell bare values.
    *
    * @return \Drupal\daedalus_blueprint\Result\BlueprintError[]
    *   The validation errors; empty when valid.
    */
   protected function validateTokens(array $tokens): array {
-    return $this->container->get('daedalus_stylish.style_map_validator')->validateTokens($tokens, ['theme' => self::THEME]);
+    return $this->container->get('daedalus_stylish.style_map_validator')->validateTokens(SkinTokensItem::canonicalizeTokens($tokens), ['theme' => self::THEME]);
   }
 
   /**
@@ -95,18 +106,34 @@ class DaedalusStylishSkinTest extends KernelTestBase {
 
   /**
    * A skin is revisionable, publishable content with a stable machine name.
+   *
+   * Tokens store as records: the setter is an authored door, so a bare
+   * value lands as {value, description, offered} with the defaults filled
+   * and a record lands as written.
    */
   public function testSkinEntity(): void {
     $skin = DaedalusStylishSkin::create(['label' => 'Aurora Dark']);
+    $accent = ['default' => '#1a1a2e', 'dark' => '#e8e8f0'];
     $tokens = [
-      'space' => ['4' => '1rem'],
-      'color' => ['accent' => ['default' => '#1a1a2e', 'dark' => '#e8e8f0']],
+      'space' => ['4' => ['value' => '1rem', 'description' => '', 'offered' => TRUE]],
+      'color' => [
+        'accent' => ['value' => $accent, 'description' => 'The one hue.', 'offered' => FALSE],
+      ],
     ];
-    $skin->setTokens($tokens)->save();
+    $skin->setPackageTokens([
+      'space' => ['4' => '1rem'],
+      'color' => [
+        'accent' => ['value' => $accent, 'description' => 'The one hue.', 'offered' => FALSE],
+      ],
+    ])->save();
 
     $loaded = DaedalusStylishSkin::load($skin->id());
     $this->assertSame('aurora_dark', $loaded->getMachineName());
-    $this->assertSame($tokens, $loaded->getTokens());
+    $this->assertSame($tokens, $loaded->packageTokens());
+    $this->assertSame([
+      'space' => ['4' => '1rem'],
+      'color' => ['accent' => ['default' => '#1a1a2e', 'dark' => '#e8e8f0']],
+    ], SkinTokensItem::values($tokens));
     $this->assertTrue($loaded->isPublished());
     $this->assertNull($loaded->getProvider());
     $this->assertFalse($loaded->isShipped());
@@ -125,16 +152,27 @@ class DaedalusStylishSkinTest extends KernelTestBase {
     $reordered = [
       'defaults' => [],
       'tokens' => [
-        'color' => ['accent' => ['dark' => '#e8e8f0', 'default' => '#1a1a2e']],
-        'space' => ['4' => '1rem'],
+        'color' => [
+          'accent' => [
+            'offered' => FALSE,
+            'description' => 'The one hue.',
+            'value' => ['dark' => '#e8e8f0', 'default' => '#1a1a2e'],
+          ],
+        ],
+        'space' => ['4' => ['offered' => TRUE, 'value' => '1rem', 'description' => '']],
       ],
     ];
     $this->assertFalse($loaded->hasNewDefaults($reordered));
-    $loaded->setTokens(['space' => ['4' => '2rem']]);
+    $loaded->setPackageTokens(['space' => ['4' => '2rem']]);
     $this->assertTrue($loaded->isModified());
-    $loaded->setTokens($tokens);
+    $loaded->setPackageTokens($tokens);
     $this->assertFalse($loaded->isModified());
-    $loaded->setDefaults(['kind:container' => ['' => ['default' => ['padding' => '2rem']]]]);
+    // A record fact is content too: the same value with a description is
+    // a modification.
+    $loaded->setPackageTokens(['space' => ['4' => ['value' => '1rem', 'description' => 'The base step.']]] + $tokens);
+    $this->assertTrue($loaded->isModified());
+    $loaded->setPackageTokens($tokens);
+    $loaded->setPackageDefaults(['kind:container' => ['' => ['default' => ['padding' => '2rem']]]]);
     $this->assertTrue($loaded->isModified());
   }
 
@@ -182,21 +220,50 @@ class DaedalusStylishSkinTest extends KernelTestBase {
    * Values validate against their scale's shape via the scalar paths.
    */
   public function testShapeViolations(): void {
-    $this->assertSingleError($this->validateTokens(['space' => ['4' => 'red']]), 'INVALID_STYLE_VALUE', 'space.4');
-    $this->assertSingleError($this->validateTokens(['weight' => ['bold' => 'bold']]), 'INVALID_STYLE_VALUE', 'weight.bold');
-    $this->assertSingleError($this->validateTokens(['color' => ['accent' => '12']]), 'INVALID_STYLE_VALUE', 'color.accent');
-    $this->assertSingleError($this->validateTokens(['align' => ['main' => 'left']]), 'INVALID_STYLE_VALUE', 'align.main');
+    $this->assertSingleError($this->validateTokens(['space' => ['4' => 'red']]), 'INVALID_STYLE_VALUE', 'space.4.value');
+    $this->assertSingleError($this->validateTokens(['weight' => ['bold' => 'bold']]), 'INVALID_STYLE_VALUE', 'weight.bold.value');
+    $this->assertSingleError($this->validateTokens(['color' => ['accent' => '12']]), 'INVALID_STYLE_VALUE', 'color.accent.value');
+    $this->assertSingleError($this->validateTokens(['align' => ['main' => 'left']]), 'INVALID_STYLE_VALUE', 'align.main.value');
     // Value hygiene: braces and semicolons never pass, no matter the shape.
-    $this->assertSingleError($this->validateTokens(['transition' => ['fast' => 'fast; }']]), 'INVALID_STYLE_VALUE', 'transition.fast');
+    $this->assertSingleError($this->validateTokens(['transition' => ['fast' => 'fast; }']]), 'INVALID_STYLE_VALUE', 'transition.fast.value');
     // Media references are property machinery, not token values.
-    $this->assertSingleError($this->validateTokens(['transition' => ['fast' => "url('media:abc')"]]), 'INVALID_STYLE_VALUE', 'transition.fast');
+    $this->assertSingleError($this->validateTokens(['transition' => ['fast' => "url('media:abc')"]]), 'INVALID_STYLE_VALUE', 'transition.fast.value');
   }
 
   /**
    * A condition-keyed value requires its default entry.
    */
   public function testConditionedValueRequiresDefault(): void {
-    $this->assertSingleError($this->validateTokens(['color' => ['accent' => ['dark' => '#fff']]]), 'TOKEN_DEFAULT_REQUIRED', 'color.accent');
+    $this->assertSingleError($this->validateTokens(['color' => ['accent' => ['dark' => '#fff']]]), 'TOKEN_DEFAULT_REQUIRED', 'color.accent.value');
+  }
+
+  /**
+   * A token record carries value, description and offered, nothing else.
+   *
+   * The seam validates the canonical shape: a record's facts are typed,
+   * an unknown key is refused (the store never grows a fourth fact by
+   * accident), and an entry that is no record at all is refused with the
+   * shorthand named in the corrective.
+   */
+  public function testRecordValidation(): void {
+    $validator = $this->container->get('daedalus_stylish.style_map_validator');
+    $this->assertSame([], $this->validateTokens([
+      'space' => ['4' => ['value' => '1rem', 'description' => 'The base step.', 'offered' => FALSE]],
+    ]));
+    $this->assertSingleError($this->validateTokens([
+      'space' => ['4' => ['value' => '1rem', 'stops' => TRUE]],
+    ]), 'INVALID_TOKEN_RECORD', 'space.4');
+    $this->assertSingleError($this->validateTokens([
+      'space' => ['4' => ['value' => '1rem', 'description' => ['no']]],
+    ]), 'INVALID_TOKEN_RECORD', 'space.4.description');
+    $this->assertSingleError($this->validateTokens([
+      'space' => ['4' => ['value' => '1rem', 'offered' => 'yes']],
+    ]), 'INVALID_TOKEN_RECORD', 'space.4.offered');
+    // The seam itself admits records only: a bare value reaching it
+    // un-canonicalized is a door that skipped its move.
+    $errors = $validator->validateTokens(['space' => ['4' => '1rem']], ['theme' => self::THEME]);
+    $this->assertSingleError($errors, 'INVALID_TOKEN_RECORD', 'space.4');
+    $this->assertStringContainsString('shorthand', $errors[0]->getHint());
   }
 
   /**
@@ -210,30 +277,30 @@ class DaedalusStylishSkinTest extends KernelTestBase {
     ]));
     $this->assertSingleError($this->validateTokens([
       'color' => ['accent' => ['default' => '#111', 'sideways' => '#222']],
-    ]), 'INVALID_STYLE_CONDITION', 'color.accent.sideways');
+    ]), 'INVALID_STYLE_CONDITION', 'color.accent.value.sideways');
     $this->assertSingleError($this->validateTokens([
       'color' => ['accent' => ['default' => '#111', 'narrow+medium' => '#222']],
-    ]), 'STYLE_CONDITION_AXIS_CONFLICT', 'color.accent.narrow+medium');
+    ]), 'STYLE_CONDITION_AXIS_CONFLICT', 'color.accent.value.narrow+medium');
     // Interaction states are per-element facts; they cannot condition a
     // token definition.
     $this->assertSingleError($this->validateTokens([
       'color' => ['accent' => ['default' => '#111', 'hover' => '#222']],
-    ]), 'TOKEN_CONDITION_AXIS_INVALID', 'color.accent.hover');
+    ]), 'TOKEN_CONDITION_AXIS_INVALID', 'color.accent.value.hover');
     // Two spellings of one compound would merge on canonicalization.
     $this->assertSingleError($this->validateTokens([
       'color' => ['accent' => ['default' => '#111', 'narrow+dark' => '#222', 'dark+narrow' => '#333']],
-    ]), 'DUPLICATE_STYLE_CONDITION', 'color.accent.dark+narrow');
+    ]), 'DUPLICATE_STYLE_CONDITION', 'color.accent.value.dark+narrow');
     // Conditions do not nest.
     $this->assertSingleError($this->validateTokens([
       'color' => ['accent' => ['default' => '#111', 'dark' => ['default' => '#222']]],
-    ]), 'INVALID_TOKEN_VALUE', 'color.accent.dark');
+    ]), 'INVALID_TOKEN_VALUE', 'color.accent.value.dark');
   }
 
   /**
    * A value that is neither scalar nor a condition map is rejected.
    */
   public function testInvalidValueShapeFails(): void {
-    $this->assertSingleError($this->validateTokens(['space' => ['4' => ['1rem', '2rem']]]), 'INVALID_TOKEN_VALUE', 'space.4');
+    $this->assertSingleError($this->validateTokens(['space' => ['4' => ['1rem', '2rem']]]), 'INVALID_TOKEN_VALUE', 'space.4.value');
   }
 
   /**
@@ -246,10 +313,26 @@ class DaedalusStylishSkinTest extends KernelTestBase {
     $this->assertTrue($handler->applies($definition));
 
     // Compound conditions store canonically (axis-declaration order), the
-    // same normalization the style map write paths apply.
+    // same normalization the style map write paths apply, inside the
+    // record a bare value canonicalizes to.
     $result = $handler->deserialize(['color' => ['accent' => ['default' => '#111', 'dark+narrow' => '#222']]], $definition);
     $this->assertFalse($result->hasErrors());
-    $this->assertSame(['color' => ['accent' => ['default' => '#111', 'narrow+dark' => '#222']]], json_decode($result->getValue(), TRUE));
+    $this->assertSame([
+      'color' => [
+        'accent' => ['value' => ['default' => '#111', 'narrow+dark' => '#222'], 'description' => '', 'offered' => TRUE],
+      ],
+    ], json_decode($result->getValue(), TRUE));
+
+    // A record lands as written, its keys in stored order.
+    $result = $handler->deserialize([
+      'space' => ['4' => ['offered' => FALSE, 'value' => '1rem', 'description' => 'The base step.']],
+    ], $definition);
+    $this->assertFalse($result->hasErrors());
+    $this->assertSame([
+      'space' => ['4' => ['value' => '1rem', 'description' => 'The base step.', 'offered' => FALSE]],
+    ], json_decode($result->getValue(), TRUE));
+    $result = $handler->deserialize(['space' => ['4' => ['value' => '1rem', 'stops' => TRUE]]], $definition);
+    $this->assertSame('fields.tokens.space.4', $result->getErrors()[0]->getPath());
 
     // An empty map short-circuits at the base handler (empty in, empty
     // out), like every other handler; the item's setStyleMap() empties it.

@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Drupal\daedalus_stylish;
 
-use Drupal\Core\Entity\ContentEntityInterface;
+use Drupal\daedalus_blueprint\Host\HostInterface;
 
 /**
  * Sweeps a host's style map onto the relative selector grammar.
@@ -27,7 +27,7 @@ class RelativeSelectorSweep extends StyleMapSweepBase {
   /**
    * {@inheritdoc}
    */
-  protected function sweep(array $map, ContentEntityInterface $host, string $context, array &$lines): ?array {
+  protected function sweep(array $map, HostInterface $host, string $context, array &$lines): ?array {
     return $this->convergence->convergeStyleMap($map, $context, $lines);
   }
 

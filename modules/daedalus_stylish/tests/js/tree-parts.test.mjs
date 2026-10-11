@@ -204,12 +204,14 @@ const presented = () => true;
 const placedOnly = (...addresses) => (key, id) => addresses.includes(`${key}::${id}`);
 
 // A minimal spine stub: captured subscriptions the tests fire by hand,
-// and facade getters reading the stub's committed selection and target.
-const spine = { selected: null, target: null, hoverListener: null, targetListener: null };
+// and facade getters reading the stub's committed selection, subject
+// facet and write address.
+const spine = { selected: null, target: null, address: null, hoverListener: null, targetListener: null };
 const app = {
   Selection: {
     getSelected: () => spine.selected,
     getTarget: () => spine.target,
+    getAddress: () => spine.address,
   },
   onHoverSelectorChange: (callback) => {
     spine.hoverListener = callback;
@@ -220,16 +222,21 @@ const app = {
 };
 createCanvasSelectorPaint({ app, behavior });
 const hoverTo = (hoverSelector) => spine.hoverListener(hoverSelector);
+const fire = () =>
+  spine.targetListener({ selected: spine.selected, target: spine.target, address: spine.address });
+// A selection write, or a facet seat on the selected key: either drops
+// the address (the slice's rule), the facet write keeps the selection.
 const selectTo = (key, selector) => {
   spine.selected = key;
   spine.target = selector ? { key, selector } : null;
-  spine.targetListener({ selected: spine.selected, target: spine.target });
+  spine.address = null;
+  fire();
 };
-// A target on an ancestor of the standing selection (the switcher's
-// pick), fired the way the facade fires it: the selection unchanged.
-const targetTo = (key, selector) => {
-  spine.target = { key, selector };
-  spine.targetListener({ selected: spine.selected, target: spine.target });
+// A write address under the standing selection (the switcher's pick),
+// fired the way the facade fires it: selection and facet unchanged.
+const addressTo = (key, selector) => {
+  spine.address = key === null ? null : { key, selector };
+  fire();
 };
 
 const tests = [];
@@ -284,7 +291,6 @@ const generatedWith = ({ map = {}, variants = [], tree = [] } = {}) =>
       getStyleMap: () => map,
       getMaterials: () => roster(variants),
       getTree: () => tree,
-      getLayout: () => [],
     },
     guide: { kinds: {}, blockTypes: { image: { elements: {} } } },
   }).generated;
@@ -507,38 +513,41 @@ test('a type target on a container paints every matching child', () => {
   assert.ok(tag.removed);
 });
 
-test('a target above the selection paints its every match in the write slot, dotted, and empties the dashed slot', () => {
+test('a write address paints its every match in the write slot, dotted, beside the facet\'s dashed box', () => {
   // The done-when's shape: a link selected, "Every link in Welcome"
-  // chosen; the container's `a` rule outlines every anchor in it. One
-  // target: the part's dashed box goes with it (the element's solid
-  // outline stays, from the element spine).
+  // chosen; the container's `a` rule outlines every anchor in it. Two
+  // facts: the part's dashed box stays inside the rule's dotted reach
+  // (the element's solid outline stays too, from the element spine).
   selectTo(BLOCK, '.quote');
   const selected = appended.at(-1);
-  targetTo(CONTAINER, 'a');
+  addressTo(CONTAINER, 'a');
   const tag = appended.at(-1);
   assert.equal(tag.attributes['data-daedalus-stylish-selector-paint'], 'write');
   assert.equal(tag.textContent, `@scope ([data-selectable="${CONTAINER}"]) {\n  a {\n    outline: 2px dotted var(--daedalus-selection, #0071e3) !important;\n    outline-offset: 5px !important;\n  }\n}`);
-  assert.ok(selected.removed);
-  // A new address replaces the slot's tag.
-  targetTo(CONTAINER, '> pb-text .quote');
+  assert.ok(!selected.removed);
+  // A new address replaces the slot's tag; the dashed box is untouched.
+  addressTo(CONTAINER, '> pb-text .quote');
   assert.ok(tag.removed);
+  assert.ok(!selected.removed);
   const next = appended.at(-1);
   assert.equal(next.attributes['data-daedalus-stylish-selector-paint'], 'write');
   assert.ok(next.textContent.includes(':where(:scope) > :where([data-element="block_type:text"]) .quote'));
-  // Seating the facet back on the element (the switcher's own key)
-  // empties the write slot and paints the dashed box again.
-  targetTo(BLOCK, '.quote');
+  // Dropping the address (the switcher's own entry, address(null))
+  // empties the write slot alone; the dashed box stands as it was.
+  addressTo(null);
   assert.ok(next.removed);
-  const back = appended.at(-1);
-  assert.equal(back.attributes['data-daedalus-stylish-selector-paint'], 'selected');
-  // A selection move (the spine drops the target) empties both.
-  targetTo(CONTAINER, 'a');
-  const again = appended.at(-1);
-  assert.equal(again.attributes['data-daedalus-stylish-selector-paint'], 'write');
-  assert.ok(back.removed);
+  assert.ok(!selected.removed);
+  // An address on the selected key itself (an instance part's own tag
+  // tier) is a dotted box like any other.
+  addressTo(BLOCK, 'p');
+  const own = appended.at(-1);
+  assert.equal(own.attributes['data-daedalus-stylish-selector-paint'], 'write');
+  assert.ok(own.textContent.startsWith(`@scope ([data-selectable="${BLOCK}"])`));
+  // A selection move (the spine drops facet and address) empties both.
   selectTo(BLOCK, null);
-  assert.ok(again.removed);
-  assert.ok(appended.every((tag) => tag.removed));
+  assert.ok(own.removed);
+  assert.ok(selected.removed);
+  assert.ok(appended.every((entry) => entry.removed));
 });
 
 test('a hover facet outside the grammar injects no tag', () => {

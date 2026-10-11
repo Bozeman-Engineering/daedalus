@@ -1,0 +1,6 @@
+name: 'Daedalus UI Icon Test'
+type: module
+description: 'Two element icon providers at two priorities for the collector tests.'
+package: Testing
+dependencies:
+  - daedalus:daedalus_ui

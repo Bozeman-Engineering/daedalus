@@ -3,25 +3,28 @@
  * The address set: the addresses one selected element can be styled
  * at, and the grant judgement at one of them.
  *
- * The panel shows ONE selected element and reads its whole stack; a
- * write lands at the STYLING TARGET (the spine's `{key, selector}`,
- * daedalus_ui's selection facade), by default the element's own key
- * (its selector facet included). An element has more names than its
- * own: every ancestor rule reaching it (`container:Y::a` styles the
- * link part's anchor as surely as `block:X::.text-block-link` does),
- * and the rules its ancestors COULD carry for it that nobody has
- * written yet. addressSet() lists them, in the order the switcher shows
- * them: the own key, then the existing ancestor rules nearest ancestor
- * first (the element's stack's ancestor layers, style-stack.js), then
- * the mintable ones nearest ancestor first, each one the matcher
- * confirms reaches the selected facet on the tree and the roster walk
- * declares (on a strict site every compound must land; on an open site
- * only a tag must, since the validator refuses an undeclared tag in
- * every enforcement mode, STYLE_TAG_NOT_DECLARED, and takes the rest
- * grammar-only). Choosing an address seats it as the target
- * (`Selection.target(ancestor, selector)`); a mintable one changes
- * nothing until the first write, which mints `{key}::{selector}`
- * exactly as code mode's `a {` does.
+ * The panel shows ONE selected element and reads its whole stack: the
+ * SUBJECT, the spine's `target` facet (daedalus_ui's selection facade;
+ * its key is always the selected key). A write lands at the WRITE
+ * ADDRESS, the spine's separate `address` fact (`Selection.address`),
+ * by default the subject's own key (its selector facet included). An
+ * element has more names than its own: every ancestor rule reaching it
+ * (`container:Y::a` styles the link part's anchor as surely as
+ * `block:X::.text-block-link` does), and the rules its ancestors COULD
+ * carry for it that nobody has written yet. addressSet() lists them, in
+ * the order the switcher shows them: the own key, then the existing
+ * ancestor rules nearest ancestor first (the element's stack's ancestor
+ * layers, style-stack.js), then the mintable ones nearest ancestor
+ * first, each one the matcher confirms reaches the selected facet on
+ * the tree and the roster walk declares (on a strict site every
+ * compound must land; on an open site only a tag must, since the
+ * validator refuses an undeclared tag in every enforcement mode,
+ * STYLE_TAG_NOT_DECLARED, and takes the rest grammar-only). Choosing an
+ * address seats it as the write address (`Selection.address(key,
+ * selector)`); the subject stays what it was, so the rows keep reading
+ * the facet the address was chosen from. A mintable one changes nothing
+ * until the first write, which mints `{key}::{selector}` exactly as
+ * code mode's `a {` does.
  *
  * The switcher is for ELEMENT facets only: the root, a declared or
  * instance part (`.cls`), a tag tier (`a`), and the generated box of
@@ -43,25 +46,26 @@
  * the tag in the class's place (`p`, `> pb-formatted-text p`,
  * `pb-formatted-text p`), and, before any ancestor's, the element's own
  * tag tier (`block:X::p`, "Every paragraph here"), the nearest owner
- * that styles every such instance at once. A chain facet (`> pb-text`,
- * seated from a code-mode row header) is a rule of its own, edited one
- * thing at a time, and has no address set. A target ABOVE the
- * selection (an ancestor rule) names its facet by reach: facetOf()
- * answers which element facet the rule lands on, so the rows stay that
- * facet's and the set is the one the rule was chosen from.
+ * that styles every such instance at once (an address on the selected
+ * key itself: the spine admits the selection beside its ancestors). A
+ * chain facet (`> pb-text`, seated from a code-mode row header) is a
+ * rule of its own, edited one thing at a time, and has no address set.
+ * Nothing derives the subject from the address: the spine carries both
+ * facts, so no inverse is needed, and an address the set does not carry
+ * (a programmatic seat) stands lit with its rows withheld by reach.
  *
  * No click can seat a box (a pointer lands on the host), so the target
  * chip's menu is its doorway: boxAddresses() lists the two boxes of a
  * root or part facet, offered as "+ Before" / "+ After", and picking
- * one SEATS it as the target and nothing more; the entry is born by the
- * first property write there (the op spine seeds its `content`).
+ * one SEATS it as the subject facet and nothing more; the entry is born
+ * by the first property write there (the op spine seeds its `content`).
  *
- * withheldAt() is the other half: under an ancestor target the rows
- * stay the selected element's, and a property the own key grants that
- * the target's landing declaration does not is DISABLED with the
- * roster's reason as its title (controls.js reports it per model as
- * `withheld`; the Advanced rows judge the same way per property). No
- * prose lives inside a widget: a reason is a title.
+ * withheldAt() is the other half: under a write address the rows stay
+ * the subject's, and a property the own key grants that the address's
+ * landing declaration does not is DISABLED with the roster's reason as
+ * its title (controls.js reports it per model as `withheld`; the
+ * Advanced rows judge the same way per property). No prose lives inside
+ * a widget: a reason is a title.
  *
  * Pure and preact-free (tests/js/write-address.test.mjs); the sentences
  * go through Drupal.t at call time, like provenance-model.js's.
@@ -172,7 +176,7 @@ const typeNoun = (guide, type) => {
   }
   const label = typeLabels(guide)[type];
   return typeof label === 'string' && label !== type
-    ? Drupal.t('@label block', { '@label': label })
+    ? Drupal.t('!label block', { '!label': label })
     : type;
 };
 
@@ -188,7 +192,7 @@ const typeNouns = (guide, type) => {
   }
   const label = typeLabels(guide)[type];
   return typeof label === 'string' && label !== type
-    ? Drupal.t('@label blocks', { '@label': label })
+    ? Drupal.t('!label blocks', { '!label': label })
     : type;
 };
 
@@ -237,15 +241,15 @@ export const addressLabel = (
 ) => {
   const parsed = parseSelector(address.selector);
   if (parsed?.pseudo) {
-    return Drupal.t('@host › @box', {
-      '@host': addressLabel(
+    return Drupal.t('!host › !box', {
+      '!host': addressLabel(
         guide,
         { key: address.key, selector: printSelector({ ...parsed, pseudo: null }) },
         owner,
         blockTypes,
         sectionLayouts,
       ),
-      '@box': boxWord(parsed.pseudo),
+      '!box': boxWord(parsed.pseudo),
     });
   }
   const groups =
@@ -255,23 +259,23 @@ export const addressLabel = (
   // The ready-made phrases word the single unrelated shapes.
   if (groups.length === 1 && !first.phrases.length) {
     if (first.compound.kind === UNIVERSAL) {
-      return Drupal.t('All children of @owner', { '@owner': owner });
+      return Drupal.t('All children of !owner', { '!owner': owner });
     }
     if (first.compound.kind === TAG) {
-      return Drupal.t('Every @tag in @owner', {
-        '@tag': first.noun,
-        '@owner': owner,
+      return Drupal.t('Every !tag in !owner', {
+        '!tag': first.noun,
+        '!owner': owner,
       });
     }
     if (first.compound.kind === TYPE) {
       return first.combinator === CHILD
-        ? Drupal.t('@types directly in @owner', {
-            '@types': typeNouns(guide, first.compound.name),
-            '@owner': owner,
+        ? Drupal.t('!types directly in !owner', {
+            '!types': typeNouns(guide, first.compound.name),
+            '!owner': owner,
           })
-        : Drupal.t('@types in @owner', {
-            '@types': typeNouns(guide, first.compound.name),
-            '@owner': owner,
+        : Drupal.t('!types in !owner', {
+            '!types': typeNouns(guide, first.compound.name),
+            '!owner': owner,
           });
     }
   }
@@ -287,23 +291,23 @@ export const addressLabel = (
     [TAG, CLASS_PART].includes(second.compound.kind)
   ) {
     const args = {
-      '@type': typeNoun(guide, first.compound.name),
-      '@owner': owner,
-      '@things': things(second),
+      '!type': typeNoun(guide, first.compound.name),
+      '!owner': owner,
+      '!things': things(second),
     };
     return first.combinator === CHILD
-      ? Drupal.t('@type @things directly in @owner', args)
-      : Drupal.t('@type @things in @owner', args);
+      ? Drupal.t('!type !things directly in !owner', args)
+      : Drupal.t('!type !things in !owner', args);
   }
   // One related group: its plural subject and phrases.
   if (groups.length === 1) {
-    return Drupal.t('@things in @owner', {
-      '@things': upper(things(first)),
-      '@owner': owner,
+    return Drupal.t('!things in !owner', {
+      '!things': upper(things(first)),
+      '!owner': owner,
     });
   }
-  return Drupal.t('@selector in @owner', {
-    '@selector': selectorLabel(
+  return Drupal.t('!selector in !owner', {
+    '!selector': selectorLabel(
       guide,
       address.key,
       address.selector,
@@ -311,7 +315,7 @@ export const addressLabel = (
       sectionLayouts,
       null,
     ),
-    '@owner': owner,
+    '!owner': owner,
   });
 };
 
@@ -403,63 +407,6 @@ export const boxAddresses = ({
 };
 
 /**
- * The element facet a styling target names on the selected element,
- * as the facet's own address `{key, selector}`: the target's own
- * selector when it sits on the element (a part, a tag tier, a chain),
- * the root (`selector` null) with no target, and for a target ABOVE
- * the element (an ancestor rule) the facet the rule reaches on it,
- * judged by the matcher: the root first, then the element's declared
- * parts in annotation order, then its tag tiers, then its instance
- * parts (`container:Y::a` lands on the link part whose tag is `a`,
- * `container:Y::> pb-text` on the root; on a formatted text block
- * `container:Y::p` lands on the `p` TAG TIER, never on the first minted
- * paragraph, since "every paragraph" is the tier and an instance is one
- * member of it, while `container:Y::> pb-formatted-text .s-2kxs` still
- * lands on that instance, the one facet a class rule reaches), each
- * host followed by its two boxes (`container:Y::> pb-text::before`
- * lands on the root's `&::before`, `container:Y::a::after` on the link
- * part's `.text-block-link::after`; a rule ending in a box reaches
- * boxes alone, and by name, so the host order is the only order).
- * Null when an ancestor rule reaches no facet of the element, or when
- * the tree cannot say (no tree, an unknown key): the panel drops such
- * a target to the bare element.
- *
- * @param {object} args
- * @param {?Array} args.tree
- *   The blueprint's lean node tree, or null.
- * @param {string} args.key
- *   The selected element's selectable key.
- * @param {?{key: string, selector: string}} args.target
- *   The styling target, or null.
- *
- * @return {?{key: string, selector: ?string}}
- */
-export const facetOf = ({ tree, key, target }) => {
-  if (!isAddress(target)) {
-    return { key, selector: null };
-  }
-  if (target.key === key) {
-    return { key, selector: target.selector };
-  }
-  const matcher = Array.isArray(tree) ? createMatcher(tree) : null;
-  const facts = matcher?.facts(key) ?? null;
-  if (facts === null || !matcher.has(target.key)) {
-    return null;
-  }
-  const parts = Object.keys(facts.parts ?? {});
-  const facets = [
-    null,
-    ...parts.filter((part) => !INSTANCE_PART.test(part)),
-    ...(Array.isArray(facts.tags) ? facts.tags : []),
-    ...parts.filter((part) => INSTANCE_PART.test(part)),
-  ].flatMap((host) => [host, ...PSEUDOS.map((pseudo) => boxOf(host, pseudo))]);
-  const reached = facets.find((facet) =>
-    matcher.reaches(target.key, target.selector, key, facet),
-  );
-  return reached === undefined ? null : { key, selector: reached };
-};
-
-/**
  * The own key's words, the face of the subject line's address chip:
  * "This element" for the root (the element's own name is the subject
  * line's word beside the chip, never repeated here), "This link" for a
@@ -500,8 +447,8 @@ export const facetLabel = (
     const box = boxWord(shape.pseudo);
     return shape.kind === 'root'
       ? box
-      : Drupal.t('@host › @box', {
-          '@host': facetLabel(
+      : Drupal.t('!host › !box', {
+          '!host': facetLabel(
             guide,
             matcher,
             { key, selector: shape.host },
@@ -509,7 +456,7 @@ export const facetLabel = (
             sectionLayouts,
             markup,
           ),
-          '@box': box,
+          '!box': box,
         });
   }
   const kind = shape?.kind ?? null;
@@ -517,11 +464,11 @@ export const facetLabel = (
     return Drupal.t('This element');
   }
   if (kind === 'tag') {
-    return Drupal.t('Every @tag here', { '@tag': tagNoun(guide, selector) });
+    return Drupal.t('Every !tag here', { '!tag': tagNoun(guide, selector) });
   }
   if (kind === 'part') {
-    return Drupal.t('This @part', {
-      '@part': lower(
+    return Drupal.t('This !part', {
+      '!part': lower(
         selectorLabel(guide, key, selector, blockTypes, sectionLayouts, markup),
       ),
     });
@@ -809,16 +756,16 @@ export const addressDeclaration = (
 export const withheldReason = (kind, { property, address, owner, part = null }) =>
   kind === 'reach'
     ? Drupal.t(
-        '"@selector" on @owner does not reach the @part this row styles; choose an address that does, or this element alone.',
+        '"!selector" on !owner does not reach the !part this row styles; choose an address that does, or this element alone.',
         {
-          '@selector': address.selector,
-          '@owner': owner,
-          '@part': part ?? Drupal.t('element'),
+          '!selector': address.selector,
+          '!owner': owner,
+          '!part': part ?? Drupal.t('element'),
         },
       )
     : Drupal.t(
-        '@property is not allowed at "@selector" on @owner: the style guide does not grant it there. Choose this element alone to set it here.',
-        { '@property': property, '@selector': address.selector, '@owner': owner },
+        '!property is not allowed at "!selector" on !owner: the style guide does not grant it there. Choose this element alone to set it here.',
+        { '!property': property, '!selector': address.selector, '!owner': owner },
       );
 
 /**

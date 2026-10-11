@@ -11,18 +11,17 @@
 /* The pinned rows under the title (inspector.js): the panel's sentence
    before its editor. The subject line and the pose group are the
    element's facts and render in every mode; the mode row is the
-   editor's control (code mode's scope is the showing row inside the
-   body, the page tree's first row). Pinned with the
-   header (flex-shrink: 0 in the rail's height chain); the body scrolls
-   beneath the box's bottom edge, and nothing draws that edge: the
-   bottom padding is the whole gap to the wear bar, in every mode (the
-   hairline that sat here was struck 2026-09-27). */
+   editor's control; the head, last, is the listing's own line (the
+   rules below), the controls that act on what scrolls beneath. Pinned
+   with the header (flex-shrink: 0 in the rail's height chain); the
+   body scrolls beneath the head's bottom edge, and nothing draws that
+   edge: the bottom padding is the whole gap to the wear bar, in every
+   mode (the hairline that sat here was struck 2026-09-27). */
 .daedalus-stylish-inspector__top {
   display: flex;
   flex-direction: column;
   flex-shrink: 0;
   min-width: 0;
-  padding-block-end: 0.625rem;
   gap: 0.5rem;
 }
 
@@ -31,6 +30,77 @@
    header's actions. */
 .daedalus-ui-sidebar .daedalus-stylish-inspector__top {
   padding-inline-end: 1rem;
+}
+
+/* The head: daedalus_ui's panel slot (panel-controls.css: empty, it
+   takes no room and no gap, so basic mode, which fills nothing, draws
+   no line), lent to the mode view as the root its head row renders
+   into through a Portal (popover.js). The row is the view's; the seat
+   is the box's. */
+.daedalus-stylish-inspector__head {
+  min-width: 0;
+}
+
+/* The head's two rows, one look: the showing row (page-view.js, code
+   mode: the lens, "Showing Chronicle only ▾", the scope words a button
+   opening the shared menu, and the outline's collapse-all / expand-all
+   pair at the row's end) and the sections head (inspector.js Sections,
+   advanced: the word "Sections" and the pair). A muted caption line,
+   no padding of its own: the box's bottom padding is the gap to the
+   wear bar, the body's first row. */
+.daedalus-stylish-page-tree__showing,
+.daedalus-stylish-inspector__sections-head {
+  display: flex;
+  align-items: baseline;
+  color: var(--daedalus-text-muted);
+  font-size: var(--daedalus-font-size-caption);
+  gap: 0.375rem;
+}
+
+.daedalus-stylish-page-tree__scope {
+  padding: 0;
+  cursor: pointer;
+  color: var(--daedalus-text, inherit);
+  border: 0;
+  background: none;
+  font: inherit;
+  font-weight: 500;
+}
+
+/* The menu's chevron rides the words as a glyph, outside the button's
+   text (the FJS reads the words alone). */
+.daedalus-stylish-page-tree__scope::after {
+  content: " \25BE";
+  color: var(--daedalus-text-muted);
+}
+
+/* The pair (daedalus_ui's collapse controls, kit icon buttons) seats at
+   the end of either head row, the first of the two pushed there, the
+   second at the row's gap; each at the row's own caption height so the
+   row keeps its line, the glyph at the kit's small icon size. The kit
+   owns the disabled state (opacity, no hover wash). */
+.daedalus-stylish-page-tree__showing .daedalus-ui-expand-all,
+.daedalus-stylish-inspector__sections-head .daedalus-ui-expand-all {
+  margin-inline-start: auto;
+}
+
+.daedalus-stylish-page-tree__showing .daedalus-ui-collapse-all,
+.daedalus-stylish-page-tree__showing .daedalus-ui-expand-all,
+.daedalus-stylish-inspector__sections-head .daedalus-ui-collapse-all,
+.daedalus-stylish-inspector__sections-head .daedalus-ui-expand-all {
+  align-self: center;
+  padding: 0;
+  line-height: 1;
+  inline-size: 1.25rem;
+  block-size: 1.25rem;
+}
+
+.daedalus-stylish-page-tree__showing .daedalus-ui-collapse-all svg,
+.daedalus-stylish-page-tree__showing .daedalus-ui-expand-all svg,
+.daedalus-stylish-inspector__sections-head .daedalus-ui-collapse-all svg,
+.daedalus-stylish-inspector__sections-head .daedalus-ui-expand-all svg {
+  inline-size: 1rem;
+  block-size: 1rem;
 }
 
 /* The pose group: the chip row, and the Styled at line beneath it. */
@@ -162,8 +232,9 @@
   color: inherit;
 }
 
-/* The subject line (subject-line.js): the element word and the address
-   chip, WHAT is styled and AT which address. */
+/* The subject line (subject-line.js): the selection pill, "at", the
+   address chip; WHAT is styled and AT which address, read as a clause
+   ("Chronicle at This element", "Chronicle at Every link here"). */
 .daedalus-stylish-inspector__subject {
   display: flex;
   align-items: center;
@@ -171,43 +242,45 @@
   gap: 0.5rem;
 }
 
-/* The element word: a plain-looking button whose click copies the full
-   compound key (its tooltip). The word gives way to the chip. */
-.daedalus-stylish-inspector__subject-word {
-  overflow: hidden;
+/* The selection pill: the selected element in the outline row grammar's
+   selected-row dress (panel-controls.css .daedalus-ui-outline__row
+   --selected: the wash, the kind icon masked in the selection color, the
+   name in it), the same grammar the page tree and the canvas chips use
+   to say "selected", so the subject is read as the selection and not as
+   a heading. A readout, not a control: no cursor, no click. Local
+   geometry at two-class specificity over the grammar's row rule: the
+   pill sits inline in the line instead of spanning the panel, and its
+   padding is a pill's, not a row's depth-stepped inset. Half a size
+   above the body: the subject outranks the section headers (muted at
+   body size), so title, subject and sections read as three levels. The
+   pill gives way before the chip does. */
+.daedalus-stylish-inspector__subject .daedalus-stylish-inspector__subject-word {
+  display: inline-flex;
   flex: 0 1 auto;
   min-width: 0;
-  padding: 0;
-  cursor: copy;
-  /* text, not auto: auto resolves through the rail's user-select: none. */
-  user-select: text;
-  transition: color 0.15s;
-  text-align: left;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-  color: inherit;
-  border: 0;
-  background: none;
-  font-family: inherit;
-  /* Half a size above the body: the subject outranks the section
-     headers (muted at body size), so title, subject and sections read
-     as three levels. */
+  padding: 0.125rem 0.5rem 0.125rem 0.375rem;
+  cursor: default;
+  border-radius: 0.375rem;
   font-size: calc(0.9375rem * var(--daedalus-font-scale));
   font-weight: 600;
 }
 
-/* The just-copied flash. */
-.daedalus-stylish-inspector__subject-word--copied {
-  color: var(--daedalus-selection);
+/* The muted "at" between the pill and the chip: the word that makes the
+   chip a clause. Never shrinks, never wraps. */
+.daedalus-stylish-inspector__subject-at {
+  flex-shrink: 0;
+  color: var(--daedalus-text-muted);
+  font-size: var(--daedalus-font-size-small);
 }
 
 /* The write-address chip at the end of the subject line: plain muted
    text with a caret at rest like a resting pose chip, lit (the shared
    --lit modifier) while a write lands on an ancestor's rule instead of
    the element's own key. Lit, it is selection-colored text and caret,
-   no pill: the pill is the pose row's shape for a set part, and the
-   address is a readout, not a filter. Its label gives way before the
-   word does. */
+   no pill: the pill is the subject's shape for the selection, and the
+   address is a readout, not a filter. Its menu always opens (the address
+   set, then "Copy key"), so the chip is never still. Its label gives way
+   before the word does. */
 .daedalus-stylish-inspector__address {
   flex-shrink: 1;
   min-width: 0;
@@ -221,13 +294,6 @@
   border-color: transparent;
   background: none;
   font-weight: 400;
-}
-
-/* The chip with one address only: a still readout, no menu, no lift. */
-.daedalus-stylish-inspector__address--still,
-.daedalus-stylish-inspector__address.daedalus-stylish-inspector__address--still:hover {
-  cursor: default;
-  color: var(--daedalus-text-muted);
 }
 
 .daedalus-stylish-inspector__address-label {
@@ -247,17 +313,6 @@
   flex-direction: column;
   gap: 0.5rem;
   min-width: 0;
-}
-
-/* The sections' list head (inspector.js Sections): one row above the
-   first section carrying the outline's collapse-all / expand-all pair
-   (daedalus_ui's shared control over the sections' posture) at its end.
-   The pair's seat and size are the showing row's rules (the page tree
-   block below), shared by selector. */
-.daedalus-stylish-inspector__sections-head {
-  display: flex;
-  align-items: center;
-  gap: 0.375rem;
 }
 
 /* The section header: the label takes the line, a header action (the
@@ -927,7 +982,7 @@ button.daedalus-stylish-gradient__stop-face {
   gap: 0.375rem 0.5rem;
 }
 
-/* Muted at body size: a section header ranks below the subject word
+/* Muted at body size: a section header ranks below the subject pill
    and above its rows' labels. */
 .daedalus-stylish-inspector__control-section-title {
   margin: 0;
@@ -1754,13 +1809,13 @@ button.daedalus-stylish-inspector__segment:disabled {
   font-weight: 500;
 }
 
-/* Part and rule islands indent under their header, one outline step
-   (the same .5rem as the page tree's children; see
-   .daedalus-stylish-page-tree__children for why). */
+/* Part and rule islands indent under their header by one outline step,
+   the grammar's token (daedalus_ui variables.css, the same step the
+   page tree's rows and the islands' rail step by). */
 .daedalus-stylish-islands__part-body {
   display: flex;
   flex-direction: column;
-  margin-inline-start: 0.5rem;
+  margin-inline-start: var(--daedalus-outline-step);
 }
 
 /* The island: no box. Its editor container always wears the lift's
@@ -1805,16 +1860,22 @@ button.daedalus-stylish-inspector__segment:disabled {
    DOM builder for the run label, the winner chip and the pending mark
    (island-surface.js). CodeMirror's base theme merely agrees on the
    .cm-* side; parity cannot rest on its generated theme classes, which
-   exist only after the first editor mounts. */
+   exist only after the first editor mounts.
+
+   Neither posture caps its height or scrolls within itself: an island
+   is the content of the listing, not a preview of it, and the panel
+   body is the one scroller (Tim, stylish-inspector-scrolling). The
+   editor sizes to its document because CodeMirror's base theme gives
+   .cm-editor no height and .cm-scroller height: 100%, and its viewport
+   measures against the nearest scrolling ancestor, the body, so a long
+   island paints every line as the body scrolls. */
 .daedalus-stylish-island__editor .cm-editor,
 .daedalus-stylish-island__print {
-  max-height: 40vh;
   font-size: var(--daedalus-font-size-caption);
 }
 
 .daedalus-stylish-island__editor .cm-editor .cm-scroller,
 .daedalus-stylish-island__print {
-  overflow: auto;
   font-family: var(--daedalus-font-mono);
   line-height: 1.55;
 }
@@ -2050,8 +2111,8 @@ button.daedalus-stylish-inspector__segment:disabled {
   background: var(--daedalus-warning-background);
 }
 
-/* The ownership line (stencil-owned variants): owner notice; an orphaned
-   owner (stencil deleted) flags loudly. */
+/* The ownership line (blueprint-owned variants): owner notice; an orphaned
+   owner (blueprint deleted) flags loudly. */
 .daedalus-stylish-inspector__variant-owned {
   padding: 0.375rem 0.5rem;
   border-radius: var(--daedalus-border-radius);
@@ -2561,7 +2622,7 @@ span.daedalus-stylish-library-card__label {
   font-size: var(--daedalus-font-size-small);
 }
 
-/* The owned-by badge (stencil ownership): one of the owner's switchable
+/* The owned-by badge (blueprint ownership): one of the owner's switchable
    looks, offered only inside its placements. An orphaned owner flags in
    the warning wash, like the variant area's ownership line. */
 .daedalus-stylish-library-card__owner {
@@ -2626,12 +2687,16 @@ span.daedalus-stylish-library-card__label {
   color: var(--daedalus-danger);
 }
 
-/* The markup view's value rows in the Page Elements tree (tree-parts.js:
+/* The markup view's value rows in the Page Elements tree (markup-view.js:
    kind 'value' — the editable content of a single-value field). A content
    excerpt, not an element name: quoted and italic so it reads apart from
-   the wrapper rows around it. Unselectable muting comes from the tree's
-   own --unselectable rule. */
-.daedalus-ui-tree__row--value > .daedalus-ui-tree__label {
+   the wrapper rows around it. The row's name zone is the outline row
+   grammar's (daedalus_ui panel-controls.css); this module's reason for a
+   rule of its own is that a VALUE row is daedalus_stylish's reading of
+   the tree (a styling target's content, not an element), so the tree's
+   content voice is not enough to tell it from a field row. Unselectable
+   muting comes from the tree's own --unselectable rule. */
+.daedalus-ui-tree__row--value > .daedalus-ui-outline__name {
   font-style: italic;
 }
 
@@ -2641,11 +2706,11 @@ span.daedalus-stylish-library-card__label {
    served in carries no @charset (core's optimizer strips one), so a raw
    glyph would be decoded in whatever encoding the loading document
    happens to have; an escape reads the same in every encoding. */
-.daedalus-ui-tree__row--value > .daedalus-ui-tree__label::before {
+.daedalus-ui-tree__row--value > .daedalus-ui-outline__name::before {
   content: "\201C" / "";
 }
 
-.daedalus-ui-tree__row--value > .daedalus-ui-tree__label::after {
+.daedalus-ui-tree__row--value > .daedalus-ui-outline__name::after {
   content: "\201D" / "";
 }
 
@@ -3419,7 +3484,7 @@ html[data-daedalus-ui-canvas-view] .daedalus-stylish-paint {
 }
 
 /* The mint-time consent chip (creating posture): a draft anchored inside
-   a stencil placement is born as that stencil's own switchable look; the
+   a blueprint placement is born as that blueprint's own switchable look; the
    line says so out loud and Unlink is the opt-out: the push bar sends
    ownership only while the session stays linked. */
 .daedalus-stylish-session__owner {
@@ -3586,94 +3651,9 @@ html[data-daedalus-ui-canvas-view] .daedalus-stylish-paint {
   cursor: help;
 }
 
-/* The page tree: an outline of chrome rows in layout order, islands (or
-   nothing) beneath each. A hairline between sibling rows is the tree's
-   whole structure beside the rail; nesting indents through the children
-   wrapper by one outline step, so depth is structural, not per-row
-   arithmetic. The step is .5rem, half the chevron column: a row three
-   deep starts 1rem in and a child's chevron clears its parent's. The
-   mockup's .875rem is superseded (Tim, 2026-09-27, off the landed
-   view: "just a tiny bit of nesting"). The islands under a row start
-   under its chevron, not under its words (__islands), so the outline
-   step is the only indent the view has. */
-.daedalus-stylish-page-tree {
-  display: flex;
-  flex-direction: column;
-}
-
-.daedalus-stylish-page-tree__children {
-  display: flex;
-  flex-direction: column;
-  margin-inline-start: 0.5rem;
-}
-
-.daedalus-stylish-page-tree__node {
-  display: flex;
-  flex-direction: column;
-}
-
-.daedalus-stylish-page-tree__node + .daedalus-stylish-page-tree__node {
-  border-block-start: 1px solid color-mix(in sRGB, var(--daedalus-lines) 50%, transparent);
-}
-
-/* The chrome row: the element IS the row; clicking selects on the canvas
-   (both hosts; the satellite posts a select intent). The wash of the
-   hovered and selected states bleeds half a step past the words on both
-   sides (the margin/padding pair), while the chevron and the words stay
-   where the unwashed row put them. One line, never wrapping: the words
-   take what the chevron and the summary leave and the name truncates
-   there (a wrapping row dropped a long name under the chevron). */
-.daedalus-stylish-page-tree__header {
-  display: flex;
-  align-items: baseline;
-  margin-inline: -0.5rem;
-  padding: 0.375rem 0.5rem;
-  user-select: none;
-  border-radius: calc(var(--daedalus-border-radius) / 2);
-  gap: 0.375rem;
-}
-
-/* The shared selector hover (canvas outline, page-elements row, this row:
-   one hover, every surface): the page-elements tree's treatment, painted
-   imperatively at pointer speed by page-view.js. */
-.daedalus-stylish-page-tree__header--hovered {
-  background: var(--daedalus-selection-background, rgb(0, 116, 189, 0.08));
-}
-
-.daedalus-stylish-page-tree__header--selected {
-  background: var(--daedalus-selection-background, rgb(0, 116, 189, 0.08));
-}
-
-.daedalus-stylish-page-tree__header--selected .daedalus-ui-tree__disclosure-marker {
-  background: var(--daedalus-selection, #0074bd);
-}
-
-/* A zero flex basis: the button's width is the line's leftover, never
-   its content's, so a long name shrinks and truncates instead of sizing
-   the button past the row. */
-.daedalus-stylish-page-tree__select {
-  display: inline-flex;
-  flex: 1 1 0;
-  align-items: baseline;
-  min-width: 0;
-  padding: 0;
-  cursor: pointer;
-  text-align: start;
-  border: 0;
-  background: none;
-  gap: 0.375rem;
-}
-
-.daedalus-stylish-page-tree__kind {
-  color: var(--daedalus-text, inherit);
-  font-size: var(--daedalus-font-size-small);
-  font-weight: 600;
-}
-
-/* The element's minted name beside its type word ("Section Welcome"):
-   the second word of the row, muted, truncating before it can wrap the
-   row (a block's name is its content excerpt). */
-.daedalus-stylish-page-tree__name,
+/* The variant document's slot header speaks the type word and, after
+   it, the minted name: the name muted and truncating before it can wrap
+   the row (a block's name is its content excerpt). */
 .daedalus-stylish-document__name {
   overflow: hidden;
   white-space: nowrap;
@@ -3682,12 +3662,77 @@ html[data-daedalus-ui-canvas-view] .daedalus-stylish-paint {
   font-size: var(--daedalus-font-size-small);
 }
 
-/* A bare row (an unstyled element: every element is a row, and an
-   unstyled one is a header alone with nothing beneath) stays quiet: its
-   words muted, its type word a weight lighter. */
-.daedalus-stylish-page-tree__node--bare > .daedalus-stylish-page-tree__header .daedalus-stylish-page-tree__kind {
+/* The page tree: an outline of chrome rows in layout order, islands (or
+   nothing) beneath each. Its rows wear daedalus_ui's outline row grammar
+   (panel-controls.css .daedalus-ui-outline__row: the chevron column, the
+   icon, the name, the facts, the depth step, the voice and the hover and
+   selection washes), the page elements tree's and the Add panel's
+   headings' grammar, so the three outlines in the rail read as one. The
+   grammar owns the row's geometry and words; what is here is what only
+   THIS outline has, each rule saying why it is not the grammar's. Depth
+   is the grammar's --daedalus-outline-depth, set inline on each node by
+   page-view.js (the rendered depth: the scope's anchor at 0), so the row
+   pads itself and the washes span the panel. */
+.daedalus-stylish-page-tree {
+  display: flex;
+  flex-direction: column;
+}
+
+/* Not the grammar's: the children wrapper is structure alone (a collapse
+   unmounts it with the islands); it carries no indent, the row's own
+   depth padding does. */
+.daedalus-stylish-page-tree__children {
+  display: flex;
+  flex-direction: column;
+}
+
+.daedalus-stylish-page-tree__node {
+  display: flex;
+  flex-direction: column;
+}
+
+/* Not the grammar's: a hairline between sibling nodes is this outline's
+   whole structure beside the rail, because a node here is a row WITH its
+   islands beneath; the other two outlines are rows alone. */
+.daedalus-stylish-page-tree__node + .daedalus-stylish-page-tree__node {
+  border-block-start: 1px solid color-mix(in sRGB, var(--daedalus-lines) 50%, transparent);
+}
+
+/* Not the grammar's: the chrome row is mouse chrome over an editing
+   surface (the islands beneath hold the text), so a drag or a double
+   click across it must never select its words. */
+.daedalus-stylish-page-tree__header {
+  user-select: none;
+}
+
+/* Not the grammar's: the select gesture is a BUTTON holding the icon and
+   the name (the element IS the row; clicking selects on the canvas, both
+   hosts; aria-pressed says so), so the grammar's two zones nest in it.
+   A zero flex basis: the button's width is the line's leftover, never
+   its content's, so a long name shrinks and truncates inside it instead
+   of sizing the button past the row; the gap is the grammar's. */
+.daedalus-stylish-page-tree__select {
+  display: inline-flex;
+  flex: 1 1 0;
+  align-items: center;
+  min-width: 0;
+  padding: 0;
+  cursor: pointer;
+  text-align: start;
+  color: inherit;
+  border: 0;
+  background: none;
+  font: inherit;
+  gap: 0.25rem;
+}
+
+/* Not the grammar's: a BARE row (an unstyled element: every element is a
+   row, and an unstyled one is a header alone with nothing beneath) is
+   this outline's state; its name recedes so the styled rows read as the
+   working surface. A selected row is never bare (selection mounts its
+   islands), so the selection color is never overruled. */
+.daedalus-stylish-page-tree__node--bare > .daedalus-stylish-page-tree__header .daedalus-ui-outline__name {
   color: var(--daedalus-text-muted);
-  font-weight: 500;
 }
 
 /* The islands and chrome rows under a row hang from its chevron: the
@@ -3695,117 +3740,14 @@ html[data-daedalus-ui-canvas-view] .daedalus-stylish-paint {
    arrow glyph, mid-column of the 1rem chevron button, so a deep row's
    lines sit one outline step past its parent's and never a second
    indent past its own words (Tim, 2026-09-27, off the landed view: two
-   indents read as twice the depth). The 1.375rem start under the words
-   is superseded. */
+   indents read as twice the depth). The depth is the row's (the
+   grammar's token on the node), added here because the islands sit
+   beside the row, not inside it. */
 .daedalus-stylish-page-tree__islands {
   display: flex;
   flex-direction: column;
-  margin-inline-start: calc(0.5rem - 1.5px);
+  margin-inline-start: calc(var(--daedalus-outline-depth) * var(--daedalus-outline-step) + 0.5rem - 1.5px);
   padding-block-end: 0.25rem;
-}
-
-/* The showing row (page-view.js): the code scope as a sentence,
-   "Showing this element ▾", the scope words a button opening the shared
-   menu, and the outline's collapse-all / expand-all pair at the row's
-   end. The tree's first row, after the wear bar; no second segmented
-   track. */
-.daedalus-stylish-page-tree__showing {
-  display: flex;
-  align-items: baseline;
-  padding: 0.125rem 0 0.375rem;
-  color: var(--daedalus-text-muted);
-  font-size: var(--daedalus-font-size-caption);
-  gap: 0.375rem;
-}
-
-.daedalus-stylish-page-tree__scope {
-  padding: 0;
-  cursor: pointer;
-  color: var(--daedalus-text, inherit);
-  border: 0;
-  background: none;
-  font: inherit;
-}
-
-.daedalus-stylish-page-tree__scope {
-  font-weight: 500;
-}
-
-/* The menu's chevron rides the words as a glyph, outside the button's
-   text (the FJS reads the words alone). */
-.daedalus-stylish-page-tree__scope::after {
-  content: " \25BE";
-  color: var(--daedalus-text-muted);
-}
-
-/* The pair (daedalus_ui's collapse controls, kit icon buttons) seats at
-   the showing row's end and at the Advanced sections' list head alike,
-   the first pushed there, the second at the row's gap; each at the
-   row's own caption height so the row keeps its line, the glyph at the
-   kit's small icon size. The kit owns the disabled state (opacity, no
-   hover wash). */
-.daedalus-stylish-page-tree__showing .daedalus-ui-expand-all,
-.daedalus-stylish-inspector__sections-head .daedalus-ui-expand-all {
-  margin-inline-start: auto;
-}
-
-.daedalus-stylish-page-tree__showing .daedalus-ui-collapse-all,
-.daedalus-stylish-page-tree__showing .daedalus-ui-expand-all,
-.daedalus-stylish-inspector__sections-head .daedalus-ui-collapse-all,
-.daedalus-stylish-inspector__sections-head .daedalus-ui-expand-all {
-  align-self: center;
-  padding: 0;
-  line-height: 1;
-  inline-size: 1.25rem;
-  block-size: 1.25rem;
-}
-
-.daedalus-stylish-page-tree__showing .daedalus-ui-collapse-all svg,
-.daedalus-stylish-page-tree__showing .daedalus-ui-expand-all svg,
-.daedalus-stylish-inspector__sections-head .daedalus-ui-collapse-all svg,
-.daedalus-stylish-inspector__sections-head .daedalus-ui-expand-all svg {
-  inline-size: 1rem;
-  block-size: 1rem;
-}
-
-/* The row's chevron: the shared disclosure marker (daedalus_ui
-   panel-controls.css owns the triangle and its open rotation) in this
-   tree's own hit target, the outline's first column. */
-.daedalus-stylish-page-tree__chevron {
-  display: flex;
-  flex: 0 0 auto;
-  align-items: center;
-  justify-content: center;
-  width: 1rem;
-  padding: 0;
-  cursor: pointer;
-  border: 0;
-  background: none;
-}
-
-/* A bare leaf has nothing to collapse and no chevron; the chevron's
-   footprint stays as an inert spacer so its words start in the column
-   every other row's words do. */
-.daedalus-stylish-page-tree__chevron-spacer {
-  display: inline-block;
-  flex: 0 0 auto;
-  width: 1rem;
-}
-
-/* A collapsed row's summary: the element's own declaration count and
-   one identity dot per worn variant, in the layer's hue, at the row's
-   end. */
-.daedalus-stylish-page-tree__summary {
-  display: inline-flex;
-  align-items: center;
-  margin-inline-start: auto;
-  color: var(--daedalus-text-muted);
-  font-size: var(--daedalus-font-size-tiny);
-  gap: 0.25rem;
-}
-
-.daedalus-stylish-page-tree__worn {
-  flex: none;
 }
 
 /* The Push/Discard bar: the pending engine's one commit surface, pinned
@@ -4131,8 +4073,8 @@ html[data-daedalus-ui-canvas-view] .daedalus-stylish-paint {
   min-width: 0;
 }
 
-/* The read-only skin section: the curated half of the palette, with the
-   "edit the skin" honesty line. */
+/* The skin section: the curated half of the palette, the active skin's
+   tokens per scale, each row a button opening its card. */
 .daedalus-stylish-palette__skin {
   display: flex;
   flex-direction: column;
@@ -4170,6 +4112,146 @@ html[data-daedalus-ui-canvas-view] .daedalus-stylish-paint {
   align-items: center;
   gap: 0.375rem;
   padding: 0.125rem 0.25rem;
+  width: 100%;
+  cursor: pointer;
+  text-align: start;
+  color: inherit;
+  border: 0;
+  border-radius: var(--daedalus-border-radius);
+  background: none;
+  font: inherit;
+}
+
+.daedalus-stylish-palette__token:hover {
+  background: var(--daedalus-hover-background, rgb(128, 128, 128, 0.12));
+}
+
+.daedalus-stylish-palette__token--open {
+  outline: 1px solid var(--daedalus-focus);
+  outline-offset: -1px;
+  background: var(--daedalus-focus-background);
+}
+
+/* The skin header's mint button sits under the honesty line. */
+.daedalus-stylish-palette__mint-token-open {
+  align-self: flex-start;
+  margin-block-start: 0.25rem;
+}
+
+/* The skin card over the skin section: a row naming the skin worn that
+   opens the lifecycle card (the other member skins with their standing,
+   the revisions, copy as my skin, the site layer's revert). */
+.daedalus-stylish-palette-skin {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin-block-start: 0.25rem;
+}
+
+.daedalus-stylish-palette-skin__open {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.125rem 0.25rem;
+  width: 100%;
+  cursor: pointer;
+  text-align: start;
+  color: inherit;
+  border: 0;
+  border-radius: var(--daedalus-border-radius);
+  background: none;
+  font: inherit;
+}
+
+.daedalus-stylish-palette-skin__open:hover {
+  background: var(--daedalus-hover-background, rgb(128, 128, 128, 0.12));
+}
+
+.daedalus-stylish-palette-skin__open--open {
+  outline: 1px solid var(--daedalus-focus);
+  outline-offset: -1px;
+  background: var(--daedalus-focus-background);
+}
+
+.daedalus-stylish-palette-skin__wearing {
+  color: var(--daedalus-text-muted);
+  font-size: var(--daedalus-font-size-small);
+}
+
+.daedalus-stylish-palette-skin__name {
+  overflow: hidden;
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-weight: 600;
+}
+
+.daedalus-stylish-palette-skin-card__reason,
+.daedalus-stylish-palette-skin-card__member-reason {
+  color: var(--daedalus-text-muted);
+  font-size: var(--daedalus-font-size-small);
+}
+
+.daedalus-stylish-palette-skin-card__members {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+}
+
+.daedalus-stylish-palette-skin-card__member {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.125rem 0.25rem;
+}
+
+.daedalus-stylish-palette-skin-card__member--worn {
+  font-weight: 600;
+}
+
+.daedalus-stylish-palette-skin-card__member-name {
+  overflow: hidden;
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.daedalus-stylish-palette-skin-card__copy {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+
+/* The copy's source select beside its label input, the mint's identity
+   row for the skin card. */
+.daedalus-stylish-palette-skin-card__copy-identity {
+  display: flex;
+  gap: 0.375rem;
+}
+
+.daedalus-stylish-palette-skin-card__copy-identity .daedalus-stylish-library-card__label {
+  flex: 1;
+  min-width: 0;
+}
+
+/* The token card: why it withholds what it withholds, the description
+   editor, the text value editor. */
+.daedalus-stylish-palette-token-card__reason,
+.daedalus-stylish-palette-token-card__description-text,
+.daedalus-stylish-palette-token-mint__error {
+  color: var(--daedalus-text-muted);
+  font-size: var(--daedalus-font-size-small);
+}
+
+.daedalus-stylish-palette-token-card__description {
+  width: 100%;
+  resize: vertical;
+}
+
+.daedalus-stylish-palette-token__input {
+  width: 100%;
 }
 
 .daedalus-stylish-palette__token-name {
@@ -4213,6 +4295,117 @@ html[data-daedalus-ui-canvas-view] .daedalus-stylish-paint {
 
 .daedalus-stylish-animations-mint__description {
   width: 100%;
+}
+
+/* The Materials › Fonts face: the animations face's sibling for the type
+   material. The row's name wears the family; the card lists the faces
+   with a specimen each; the mint card builds faces from uploaded files. */
+.daedalus-stylish-fonts__faces,
+.daedalus-stylish-fonts-mint__drafts {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  gap: 0.25rem;
+}
+
+.daedalus-stylish-fonts__face {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+}
+
+.daedalus-stylish-fonts__face-label {
+  flex: none;
+  min-width: 3.5rem;
+  color: var(--daedalus-text-muted);
+  font-size: var(--daedalus-font-size-small);
+  font-variant-numeric: tabular-nums;
+}
+
+.daedalus-stylish-fonts__specimen {
+  overflow: hidden;
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 1rem;
+  line-height: 1.4;
+}
+
+.daedalus-stylish-fonts-card__spelling {
+  flex: none;
+}
+
+.daedalus-stylish-fonts-mint {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+
+.daedalus-stylish-fonts-mint__files {
+  display: flex;
+  flex-direction: column;
+  color: var(--daedalus-text-muted);
+  font-size: var(--daedalus-font-size-small);
+  gap: 0.25rem;
+}
+
+.daedalus-stylish-fonts-mint__input {
+  font: inherit;
+}
+
+.daedalus-stylish-fonts-mint__draft {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+}
+
+.daedalus-stylish-fonts-mint__draft--duplicate {
+  border-radius: var(--daedalus-border-radius);
+  background: var(--daedalus-warning-background);
+}
+
+.daedalus-stylish-fonts-mint__file {
+  overflow: hidden;
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: var(--daedalus-font-size-small);
+}
+
+.daedalus-stylish-fonts-mint__weight {
+  flex: none;
+  width: 4.5rem;
+}
+
+.daedalus-stylish-fonts-mint__style {
+  flex: none;
+}
+
+.daedalus-stylish-fonts-mint__family,
+.daedalus-stylish-fonts-mint__description {
+  width: 100%;
+}
+
+/* The Palette's stack editor (a token on the font-family scale): the
+   text field over the minted families as chips, each in its own face. */
+.daedalus-stylish-palette-token__stack {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.daedalus-stylish-palette-token__families {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+
+.daedalus-stylish-palette-token__family {
+  cursor: pointer;
 }
 
 /* The keyframes editor: the offset track (the gradient track's metrics,
@@ -4414,4 +4607,152 @@ html[data-daedalus-ui-canvas-view] .daedalus-stylish-paint {
    description's place. */
 .daedalus-stylish-library-card__offer-off {
   align-self: flex-start;
+}
+
+/* The Law tab (law.js): the Materials place's read-only view of the
+   design system's law, a declaration tree of sections and rows, each
+   row's origin in muted small type, the doorway's focus row outlined. */
+.daedalus-stylish-law {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.daedalus-stylish-law__reading {
+  margin: 0;
+  font-weight: 600;
+}
+
+.daedalus-stylish-law__honesty,
+.daedalus-stylish-law__following,
+.daedalus-stylish-law__note,
+.daedalus-stylish-law__origin,
+.daedalus-stylish-law__origins,
+.daedalus-stylish-law__empty {
+  color: var(--daedalus-text-muted);
+  font-size: var(--daedalus-font-size-small);
+}
+
+.daedalus-stylish-law__honesty,
+.daedalus-stylish-law__empty {
+  margin: 0;
+}
+
+.daedalus-stylish-law__origin {
+  overflow-wrap: anywhere;
+}
+
+.daedalus-stylish-law__type {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.375rem;
+}
+
+.daedalus-stylish-law__type .daedalus-ui-input--select {
+  flex: 1;
+  min-width: 0;
+}
+
+.daedalus-stylish-law__scales {
+  padding-block: 0.25rem;
+  border-block: 1px solid var(--daedalus-lines);
+}
+
+.daedalus-stylish-law__scales > summary {
+  cursor: pointer;
+}
+
+.daedalus-stylish-law__node {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  padding-inline-start: calc(var(--daedalus-stylish-law-depth, 0) * 0.75rem);
+}
+
+.daedalus-stylish-law__node--root {
+  margin-block-start: 0.25rem;
+  padding-block-start: 0.5rem;
+  border-block-start: 1px solid var(--daedalus-lines);
+}
+
+.daedalus-stylish-law__node-label {
+  margin: 0;
+  font-size: inherit;
+  font-weight: 600;
+}
+
+.daedalus-stylish-law__section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+}
+
+.daedalus-stylish-law__heading {
+  margin: 0;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--daedalus-text-muted);
+  font-size: var(--daedalus-font-size-small);
+  font-weight: 600;
+}
+
+.daedalus-stylish-law__rows,
+.daedalus-stylish-law__facts {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.daedalus-stylish-law__row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  padding: 0.125rem 0.25rem;
+  border-radius: var(--daedalus-border-radius);
+}
+
+.daedalus-stylish-law__row--focus {
+  outline: 1px solid var(--daedalus-focus);
+  outline-offset: -1px;
+  background: var(--daedalus-focus-background);
+}
+
+.daedalus-stylish-law__label {
+  font-weight: 600;
+}
+
+.daedalus-stylish-law__value {
+  overflow-wrap: anywhere;
+}
+
+.daedalus-stylish-law__facts {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  padding-inline-start: 0.5rem;
+}
+
+.daedalus-stylish-law__fact {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.375rem;
+  align-items: baseline;
+}
+
+.daedalus-stylish-law__fact-name {
+  color: var(--daedalus-text-muted);
+  font-size: var(--daedalus-font-size-small);
+}
+
+.daedalus-stylish-law__fact--curated .daedalus-stylish-law__fact-name {
+  color: inherit;
+}
+
+.daedalus-stylish-law__code {
+  font-size: var(--daedalus-font-size-small);
+}
+
+.daedalus-stylish-law__contract {
+  font-size: var(--daedalus-font-size-small);
 }

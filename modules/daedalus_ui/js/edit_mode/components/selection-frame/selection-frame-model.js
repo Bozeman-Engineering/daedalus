@@ -5,6 +5,7 @@
  * answer, so the reasoning here is node-testable on its own
  * (tests/js/selection-frame.test.mjs).
  */
+import { groupVerbs } from '../../verbs/verb-groups.js';
 
 /**
  * Where a member's chip sits.
@@ -89,7 +90,16 @@ export const frameEditing = ({ editingKey = null, primary = null }) =>
  * MINIMAL is the same face with the labels dropped (icons only);
  * CLEAN is the partition by each verb's own `tab` flag (verbs.js):
  * flagged verbs are the face, everything else waits behind the
- * chevron's context menu, and nothing appears in both. The number and
+ * chevron's context menu, and nothing appears in both. Whatever stays
+ * on the face is then folded by the registry's `group` key
+ * (verb-groups.js groupVerbs): `faceVerbs` is a list of entries, a
+ * plain `{verb}` or a `{group, primary, rest}` the host draws as one
+ * control, the group sitting where its lightest member sits and a
+ * group of one being the plain entry it would be alone. The fold runs
+ * AFTER the tab partition, so at clean density a group's untabbed
+ * members go behind the chevron as flat items (the menu never groups)
+ * and a lone tabbed member stays a plain button; `overflow` is always
+ * the flat verbs. The number and
  * name render at every tier: identity must stay readable or a
  * multi-select set turns unreadable again. Only the primary's chip
  * carries verbs, and the face never hides for an open edit: WHICH
@@ -109,7 +119,7 @@ export const frameEditing = ({ editingKey = null, primary = null }) =>
  *   - density: the chrome-density tier (full | minimal | clean;
  *     absent reads as full, like the html attribute).
  *
- * @return {{number: ?number, primary: boolean, labels: boolean, faceVerbs: object[], overflow: object[]}}
+ * @return {{number: ?number, primary: boolean, labels: boolean, faceVerbs: Array<{verb: object}|{group: string, primary: object, rest: object[]}>, overflow: object[]}}
  */
 export const chipFace = ({
   key,
@@ -125,7 +135,7 @@ export const chipFace = ({
     primary: isPrimary,
     labels: density !== 'minimal' && density !== 'clean',
     faceVerbs: isPrimary
-      ? verbs.filter((verb) => !partitioned || verb.tab)
+      ? groupVerbs(verbs.filter((verb) => !partitioned || verb.tab))
       : [],
     overflow: isPrimary && partitioned ? verbs.filter((verb) => !verb.tab) : [],
   };

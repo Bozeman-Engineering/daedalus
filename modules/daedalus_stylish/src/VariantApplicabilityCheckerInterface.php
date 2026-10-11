@@ -4,16 +4,16 @@ declare(strict_types=1);
 
 namespace Drupal\daedalus_stylish;
 
-use Drupal\Core\Entity\FieldableEntityInterface;
+use Drupal\daedalus_blueprint\Host\HostInterface;
 
 /**
  * A cross-module veto on applying a variant to a target element.
  *
  * The applicability seam: daedalus_stylish's own applicability rule is scope (the
  * validator's family pairing), but other modules can hold facts that make a
- * scope-valid apply wrong — daedalus_blueprint_stencil's variant OWNERSHIP is
- * the founding case (a stencil's owned variants are its curated switchable
- * looks and apply only inside that stencil's placements). Daedalus Stylish stays
+ * scope-valid apply wrong — daedalus_blueprint_library's variant OWNERSHIP is
+ * the founding case (a blueprint's owned variants are its curated switchable
+ * looks and apply only inside that blueprint's placements). Daedalus Stylish stays
  * ignorant of what those facts are: it asks "may this variant apply to this
  * target?" through every service tagged daedalus_stylish.variant_applicability_checker
  * and refuses the gesture on any non-empty answer, exactly mirroring how the
@@ -34,14 +34,14 @@ interface VariantApplicabilityCheckerInterface {
    *
    * @param \Drupal\daedalus_stylish\DaedalusStylishVariantInterface $variant
    *   The variant the gesture would apply.
-   * @param \Drupal\Core\Entity\FieldableEntityInterface $entity
-   *   The host entity carrying the style map.
+   * @param \Drupal\daedalus_blueprint\Host\HostInterface $host
+   *   The host carrying the style map.
    * @param string $key
    *   The gesture target's selectable key.
    *
    * @return \Drupal\daedalus_blueprint\Result\BlueprintError[]
    *   Errors refusing the apply; empty when this checker allows it.
    */
-  public function check(DaedalusStylishVariantInterface $variant, FieldableEntityInterface $entity, string $key): array;
+  public function check(DaedalusStylishVariantInterface $variant, HostInterface $host, string $key): array;
 
 }

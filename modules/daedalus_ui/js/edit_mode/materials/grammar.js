@@ -26,7 +26,7 @@
  * - id: the record id for a material; a media uuid; a generate prompt; a
  *   file name;
  *   for 'unknown' the reference as written (the custom property, the
- *   class token, the attribute value, the stencil name, the animation
+ *   class token, the attribute value, the blueprint name, the animation
  *   name); null for a literal.
  * - spelling: the reference as written in its slot, canonical; a
  *   literal's is the trimmed value.
@@ -40,8 +40,9 @@ export const KIND = Object.freeze({
   TOKEN: 'token',
   SWATCH: 'swatch',
   VARIANT: 'variant',
-  STENCIL: 'stencil',
+  BLUEPRINT: 'blueprint',
   ANIMATION: 'animation',
+  FONT: 'font',
   MEDIA: 'media',
   GENERATE: 'generate',
   FILE: 'file',
@@ -55,8 +56,9 @@ export const KIND = Object.freeze({
 export const SLOT = Object.freeze({
   STYLE: 'style',
   CLASS: 'class',
-  STENCIL: 'stencil',
+  BLUEPRINT: 'blueprint',
   ANIMATION: 'animation',
+  FONT: 'font',
   ATTR_PREFIX: 'attr:',
 });
 
@@ -110,8 +112,9 @@ export const slotScope = (slot) => attrSlotParts(slot)?.[0] ?? null;
 export const isSlot = (slot) =>
   slot === SLOT.STYLE ||
   slot === SLOT.CLASS ||
-  slot === SLOT.STENCIL ||
+  slot === SLOT.BLUEPRINT ||
   slot === SLOT.ANIMATION ||
+  slot === SLOT.FONT ||
   slotAttribute(slot) !== null;
 
 /**
@@ -121,8 +124,9 @@ export const isMaterialKind = (kind) =>
   kind === KIND.TOKEN ||
   kind === KIND.SWATCH ||
   kind === KIND.VARIANT ||
-  kind === KIND.STENCIL ||
-  kind === KIND.ANIMATION;
+  kind === KIND.BLUEPRINT ||
+  kind === KIND.ANIMATION ||
+  kind === KIND.FONT;
 
 /**
  * Whether a value kind is an inline value (spelled without a mint).
@@ -144,7 +148,7 @@ const FILE_PREFIX = 'file:';
 const assertSlot = (slot) => {
   if (!isSlot(slot)) {
     throw new Error(
-      `Unknown value slot "${slot}"; one of ${SLOT.STYLE}, ${SLOT.CLASS}, ${SLOT.STENCIL}, ${SLOT.ANIMATION} or ${SLOT.ATTR_PREFIX}{scope}:{name}.`,
+      `Unknown value slot "${slot}"; one of ${SLOT.STYLE}, ${SLOT.CLASS}, ${SLOT.BLUEPRINT}, ${SLOT.ANIMATION} or ${SLOT.ATTR_PREFIX}{scope}:{name}.`,
     );
   }
 };
@@ -226,7 +230,7 @@ const urlReference = (argument) => {
  * inline kind; any
  * other style value is a literal, even when references sit inside it
  * (references() lists those). A class token, an axis attribute value, a
- * stencil name and an animation name resolve to the variant, stencil or
+ * blueprint name and an animation name resolve to the variant, blueprint or
  * animation spelled so, or unknown. An empty value is the empty literal
  * in every slot.
  *
@@ -262,7 +266,7 @@ export const resolveValue = (value, slot, roster) => {
  * A style value yields each var() reference (with or without a fallback)
  * and each media, generate or file url() inside it; a plain url() (a
  * path, an external URL) is no reference. A class list yields one reference per token. An
- * attribute value, a stencil name or an animation name yields its one
+ * attribute value, a blueprint name or an animation name yields its one
  * reference. Literals
  * never appear: the list is what must resolve for the value to be legal.
  *
@@ -303,7 +307,7 @@ export const references = (value, slot, roster) => {
  * fallback left untouched) and each media, generate or file url() is
  * respelled single-quoted with a lowercased uuid, a trimmed prompt or a
  * trimmed name; everything else stays byte-identical. A class list canonicalizes to its tokens
- * joined by one space; an attribute value, a stencil name or an
+ * joined by one space; an attribute value, a blueprint name or an
  * animation name to its trimmed self. Unknown references keep their
  * spelling.
  *

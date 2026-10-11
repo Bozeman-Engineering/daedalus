@@ -6,7 +6,8 @@
  * indexes them with daedalus_ui's createRoster, the same index the
  * store hands the inspector. Tests describe materials tersely (a token
  * by scale/name/value, a swatch by name/kind/value, a variant by id and
- * its facts, a stencil by id, an animation by name/label/steps) and read them through
+ * its facts, a blueprint by id, an animation by name/label/steps, a font
+ * by name/label/family/faces) and read them through
  * the roster like production code does; nothing here is a production
  * shape of its own.
  */
@@ -20,8 +21,9 @@ const base = {
   published: true,
   weight: 0,
   icon: null,
-  root_kind: null,
   updatable: true,
+  groups: [],
+  favorite: false,
 };
 
 /**
@@ -113,21 +115,44 @@ export const animationRecord = (name, label, steps, { description = '', origin =
 });
 
 /**
- * A stencil record: id, label, updatable (a content stencil unless told
- * otherwise; file-shipped stencils are read-only and never transfer
- * targets), root kind.
+ * A font record: id the machine name, value {family, faces} (the
+ * canonical faces [{weight, style, source: {file: uuid}}]), spelled as
+ * the quoted family in the font slot (the provider's
+ * StyleGuide::fontFamily derivation).
  */
-export const stencilRecord = (id, { label = id, updatable = true, root_kind = 'section', origin = null } = {}) => ({
+export const fontRecord = (name, label, family, faces, { description = '', origin = 'user', updatable = null, offered = true } = {}) => ({
   ...base,
-  kind: 'stencil',
+  kind: 'font',
+  id: name,
+  label,
+  description,
+  value: { family, faces },
+  group: null,
+  spellings: { font: `"${family.replace(/(["\\])/g, '\\$1')}"` },
+  origin,
+  updatable: updatableFor(origin, updatable),
+  offered,
+});
+
+/**
+ * A blueprint record: id, label, updatable (a content blueprint unless told
+ * otherwise; file-shipped blueprints are read-only and never transfer
+ * targets), block scope, its groups (filter categories, none unless
+ * given) and whether it is a site favorite (not unless given).
+ */
+export const blueprintRecord = (id, { label = id, updatable = true, origin = null, groups = [], favorite = false } = {}) => ({
+  ...base,
+  kind: 'blueprint',
   id,
   label,
   value: null,
   group: null,
-  spellings: { stencil: id },
-  root_kind,
+  spellings: { blueprint: id },
+  blueprint_scope: 'block',
   updatable,
   origin: origin ?? (updatable ? 'user' : 'shipped'),
+  groups,
+  favorite,
 });
 
 /**

@@ -112,6 +112,7 @@ class VariantShipperTest extends KernelTestBase {
     $this->installEntitySchema('daedalus_variant');
     $this->installEntitySchema('daedalus_swatch');
     $this->installEntitySchema('daedalus_animation');
+    $this->installEntitySchema('daedalus_font');
     $this->installEntitySchema('daedalus_skin');
     $this->installSchema('daedalus_stylish', ['daedalus_animation_usage']);
     $this->installConfig(['daedalus_stylish']);

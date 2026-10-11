@@ -103,8 +103,15 @@ class DomStyleOperationsTest extends BlueprintKernelTestBase {
     // every build, and every compile and validation builds it.
     $this->installEntitySchema('daedalus_swatch');
     $this->installEntitySchema('daedalus_animation');
+    $this->installEntitySchema('daedalus_font');
     $this->installEntitySchema('daedalus_skin');
-    $this->installSchema('daedalus_stylish', ['daedalus_variant_usage', 'daedalus_swatch_usage', 'daedalus_animation_usage']);
+    $this->installSchema('daedalus_stylish', [
+      'daedalus_variant_usage',
+      'daedalus_swatch_usage',
+      'daedalus_animation_usage',
+      'daedalus_token_usage',
+      'daedalus_font_usage',
+    ]);
     $this->installConfig(['daedalus_stylish']);
     $this->container->get('daedalus_stylish.field_manager')->enable('entity_test', 'entity_test');
     $this->entityTypeManager = $this->container->get('entity_type.manager');
@@ -222,7 +229,7 @@ class DomStyleOperationsTest extends BlueprintKernelTestBase {
    */
   public function testCreateAndStyleRichTextInOneBatch(): void {
     $options = $this->setUpRichTextLane();
-    $result = $this->operations->batchOperations($this->entity, [
+    $result = $this->operations->batchOperations($this->host($this->entity), [
       [
         'op' => 'insert',
         'at' => ['ref' => $this->rootUuid, 'position' => 'beforeend'],
@@ -252,7 +259,7 @@ class DomStyleOperationsTest extends BlueprintKernelTestBase {
    */
   public function testStyleOpWritesChildSelectors(): void {
     $options = $this->setUpRichTextLane();
-    $result = $this->operations->batchOperations($this->entity, [
+    $result = $this->operations->batchOperations($this->host($this->entity), [
       [
         'op' => 'insert',
         'at' => ['ref' => $this->rootUuid, 'position' => 'beforeend'],
@@ -274,26 +281,15 @@ class DomStyleOperationsTest extends BlueprintKernelTestBase {
     $this->assertSame(['margin-top' => '1rem'], $map["container:{$this->rootUuid}::> pb-formatted-text + pb-formatted-text"]['default']);
     $this->assertSame(['color' => 'green'], $map["container:{$this->rootUuid}::> pb-formatted-text:has(a)"]['hover']);
     $this->assertSame(['margin-bottom' => '0'], $map["container:{$this->rootUuid}::> *:not(pb-formatted-text)"]['default']);
-    // The print reads the flat rules back (the corpus round-trips in
-    // DialectSpecTest lock the whole document; this entity's layout is
-    // multi-region, which the printer refuses, so the rule printer is
-    // exercised on a lean container node here).
-    $print = $this->container->get('daedalus_blueprint.dialect_printer')->print([
-      [
-        'kind' => 'container',
-        'uuid' => $this->rootUuid,
-        'layout_id' => 'daedalus_stylish_container',
-        'children' => [],
-        'styles' => [
-          '::> pb-formatted-text' => $map["container:{$this->rootUuid}::> pb-formatted-text"],
-          '::> *' => $map["container:{$this->rootUuid}::> *"],
-          '::p' => $map["container:{$this->rootUuid}::p"],
-          '::> pb-formatted-text + pb-formatted-text' => $map["container:{$this->rootUuid}::> pb-formatted-text + pb-formatted-text"],
-          '::> pb-formatted-text:has(a)' => $map["container:{$this->rootUuid}::> pb-formatted-text:has(a)"],
-          '::> *:not(pb-formatted-text)' => $map["container:{$this->rootUuid}::> *:not(pb-formatted-text)"],
-        ],
-      ],
-    ], $options['dialect_catalog']);
+    // The print reads the flat rules back from the staged host itself
+    // (the corpus round-trips in DialectSpecTest lock the whole document):
+    // the host's section is core's layout_onecol, which prints as a
+    // section with a layout fact rather than refusing the page.
+    $print = $this->container->get('daedalus_blueprint.dialect_printer')->print(
+      $this->container->get('daedalus_blueprint.node_tree_builder')->build($this->host($this->entity)),
+      $options['dialect_catalog'],
+    )->text;
+    $this->assertStringContainsString("<pb-container id=\"{$this->rootUuid}\" data-layout=\"layout_onecol\"", $print);
     $this->assertStringContainsString("#{$this->rootUuid} > pb-formatted-text { color: red; }", $print);
     $this->assertStringContainsString("#{$this->rootUuid} > pb-formatted-text:hover { color: blue; }", $print);
     $this->assertStringContainsString("#{$this->rootUuid} > * { margin: 0; }", $print);
@@ -312,7 +308,7 @@ class DomStyleOperationsTest extends BlueprintKernelTestBase {
    */
   public function testInstanceExistenceCheckedAgainstStagedContent(): void {
     $options = $this->setUpRichTextLane();
-    $result = $this->operations->batchOperations($this->entity, [
+    $result = $this->operations->batchOperations($this->host($this->entity), [
       [
         'op' => 'insert',
         'at' => ['ref' => $this->rootUuid, 'position' => 'beforeend'],
@@ -344,7 +340,7 @@ class DomStyleOperationsTest extends BlueprintKernelTestBase {
   public function testAuthoredIdentityCollisionIsRefused(): void {
     $options = $this->setUpRichTextLane();
 
-    $insert = $this->operations->batchOperations($this->entity, [
+    $insert = $this->operations->batchOperations($this->host($this->entity), [
       [
         'op' => 'insert',
         'at' => ['ref' => $this->rootUuid, 'position' => 'beforeend'],
@@ -354,7 +350,7 @@ class DomStyleOperationsTest extends BlueprintKernelTestBase {
     $this->assertFalse($insert->isSuccess());
     $this->assertContains('IDENTITY_COLLISION', array_map(static fn ($error) => $error->getCode(), $insert->getErrors()));
 
-    $seeded = $this->operations->batchOperations($this->entity, [
+    $seeded = $this->operations->batchOperations($this->host($this->entity), [
       [
         'op' => 'insert',
         'at' => ['ref' => $this->rootUuid, 'position' => 'beforeend'],
@@ -363,7 +359,7 @@ class DomStyleOperationsTest extends BlueprintKernelTestBase {
     ], $options);
     $this->assertTrue($seeded->isSuccess(), print_r($seeded->toArray()['errors'] ?? [], TRUE));
 
-    $set = $this->operations->batchOperations($this->entity, [
+    $set = $this->operations->batchOperations($this->host($this->entity), [
       ['op' => 'set', 'ref' => 'copy', 'attrs' => ['body' => '<p class="s-dup">A</p><p class="s-dup">B</p>']],
     ], $options);
     $this->assertFalse($set->isSuccess());
@@ -372,7 +368,7 @@ class DomStyleOperationsTest extends BlueprintKernelTestBase {
     // Minting is universal, so the same law holds inside list items: a
     // duplicated class on two item paragraphs is the collision the minter
     // would silently re-mint, and the dialect refuses it loudly.
-    $inside = $this->operations->batchOperations($this->entity, [
+    $inside = $this->operations->batchOperations($this->host($this->entity), [
       [
         'op' => 'set',
         'ref' => 'copy',
@@ -383,7 +379,7 @@ class DomStyleOperationsTest extends BlueprintKernelTestBase {
     $this->assertContains('IDENTITY_COLLISION', array_map(static fn ($error) => $error->getCode(), $inside->getErrors()));
 
     // Unique identities inside list items pass.
-    $legal = $this->operations->batchOperations($this->entity, [
+    $legal = $this->operations->batchOperations($this->host($this->entity), [
       [
         'op' => 'set',
         'ref' => 'copy',
@@ -419,7 +415,7 @@ class DomStyleOperationsTest extends BlueprintKernelTestBase {
   public function testContainerWearsClassVariantAndDetaches(): void {
     $this->mintBandVariant();
 
-    $worn = $this->operations->batchOperations($this->entity, [
+    $worn = $this->operations->batchOperations($this->host($this->entity), [
       ['op' => 'set', 'ref' => $this->rootUuid, 'attrs' => ['class' => 'band', 'style' => 'gap: 1rem']],
     ], $this->options);
     $this->assertTrue($worn->isSuccess(), print_r($worn->toArray()['errors'] ?? [], TRUE));
@@ -427,9 +423,14 @@ class DomStyleOperationsTest extends BlueprintKernelTestBase {
     $this->assertSame([['variant' => 'band', 'fragment' => '']], $entry['variants']);
     $this->assertSame(['gap' => '1rem'], $entry['default']);
 
-    // (The class print-back is pinned by DialectSpecTest's v0.3 document
-    // round-trip; this fixture's layout_onecol host has no dialect print.)
-    $detached = $this->operations->batchOperations($this->entity, [
+    // The wear prints back on the host's own section (a layout_onecol
+    // section prints with its layout fact).
+    $print = $this->container->get('daedalus_blueprint.dialect_printer')->print(
+      $this->container->get('daedalus_blueprint.node_tree_builder')->build($this->host($this->entity)),
+      $this->options['dialect_catalog'],
+    )->text;
+    $this->assertStringContainsString("<pb-container id=\"{$this->rootUuid}\" data-layout=\"layout_onecol\" class=\"band\" style=\"gap: 1rem\">", $print);
+    $detached = $this->operations->batchOperations($this->host($this->entity), [
       ['op' => 'set', 'ref' => $this->rootUuid, 'detach' => ['band']],
     ], $this->options);
     $this->assertTrue($detached->isSuccess(), print_r($detached->toArray()['errors'] ?? [], TRUE));
@@ -443,7 +444,7 @@ class DomStyleOperationsTest extends BlueprintKernelTestBase {
     // An unpublished spelling is refused with the roster: the structured
     // corrective the document parser gives (did-you-mean in the hint, the
     // element's declared roster and the ranked candidates in context).
-    $unknown = $this->operations->batchOperations($this->entity, [
+    $unknown = $this->operations->batchOperations($this->host($this->entity), [
       ['op' => 'set', 'ref' => $this->rootUuid, 'attrs' => ['class' => 'hero-band']],
     ], $this->options);
     $this->assertFalse($unknown->isSuccess());
@@ -484,7 +485,7 @@ class DomStyleOperationsTest extends BlueprintKernelTestBase {
   public function testBlockWearsAxisVariantAndDetaches(): void {
     $this->mintEmphaticVariant();
 
-    $inserted = $this->operations->batchOperations($this->entity, [
+    $inserted = $this->operations->batchOperations($this->host($this->entity), [
       [
         'op' => 'insert',
         'html' => '<pb-block id="quote" type="testimonial" emphasis="emphatic" />',
@@ -495,7 +496,7 @@ class DomStyleOperationsTest extends BlueprintKernelTestBase {
     $uuid = $inserted->getAliases()['quote'];
     $this->assertSame([['variant' => 'testimonial_emphatic', 'fragment' => '']], $this->styleMap()["block:$uuid"]['variants']);
 
-    $bad = $this->operations->batchOperations($this->entity, [
+    $bad = $this->operations->batchOperations($this->host($this->entity), [
       ['op' => 'set', 'ref' => $uuid, 'attrs' => ['emphasis' => 'loud']],
     ], $this->options);
     $this->assertFalse($bad->isSuccess());
@@ -505,7 +506,7 @@ class DomStyleOperationsTest extends BlueprintKernelTestBase {
     $this->assertStringContainsString('emphasis="loud" on <pb-block>', $error->getMessage());
     $this->assertSame(['emphatic'], $error->getContext()['allowed']);
 
-    $detached = $this->operations->batchOperations($this->entity, [
+    $detached = $this->operations->batchOperations($this->host($this->entity), [
       ['op' => 'set', 'ref' => $uuid, 'detach' => ['emphasis'], 'attrs' => ['style' => 'color: blue']],
     ], $this->options);
     $this->assertTrue($detached->isSuccess(), print_r($detached->toArray()['errors'] ?? [], TRUE));
@@ -515,19 +516,19 @@ class DomStyleOperationsTest extends BlueprintKernelTestBase {
     $this->assertSame('blue', $entry['default']['color']);
 
     // The axis patch wears it again; null on the axis takes it off.
-    $worn = $this->operations->batchOperations($this->entity, [
+    $worn = $this->operations->batchOperations($this->host($this->entity), [
       ['op' => 'set', 'ref' => $uuid, 'attrs' => ['emphasis' => 'emphatic']],
     ], $this->options);
     $this->assertTrue($worn->isSuccess(), print_r($worn->toArray()['errors'] ?? [], TRUE));
     $this->assertSame([['variant' => 'testimonial_emphatic', 'fragment' => '']], $this->styleMap()["block:$uuid"]['variants']);
-    $cleared = $this->operations->batchOperations($this->entity, [
+    $cleared = $this->operations->batchOperations($this->host($this->entity), [
       ['op' => 'set', 'ref' => $uuid, 'attrs' => ['emphasis' => NULL]],
     ], $this->options);
     $this->assertTrue($cleared->isSuccess(), print_r($cleared->toArray()['errors'] ?? [], TRUE));
     $this->assertArrayNotHasKey('variants', $this->styleMap()["block:$uuid"]);
 
     // A detach naming no worn axis or class says which axes the tag has.
-    $nothing = $this->operations->batchOperations($this->entity, [
+    $nothing = $this->operations->batchOperations($this->host($this->entity), [
       ['op' => 'set', 'ref' => $uuid, 'detach' => ['emphasis']],
     ], $this->options);
     $this->assertFalse($nothing->isSuccess());
@@ -550,7 +551,7 @@ class DomStyleOperationsTest extends BlueprintKernelTestBase {
     $this->mintBandVariant();
     $rule = "container:{$this->rootUuid}::> pb-container";
 
-    $worn = $this->operations->batchOperations($this->entity, [
+    $worn = $this->operations->batchOperations($this->host($this->entity), [
       ['op' => 'style', 'css' => "#{$this->rootUuid} > pb-container { class: band; gap: 1rem; }"],
     ], $this->options);
     $this->assertTrue($worn->isSuccess(), print_r($worn->toArray()['errors'] ?? [], TRUE));
@@ -567,17 +568,17 @@ class DomStyleOperationsTest extends BlueprintKernelTestBase {
         'children' => [],
         'styles' => ['::> pb-container' => $entry],
       ],
-    ], $this->options['dialect_catalog']);
+    ], $this->options['dialect_catalog'])->text;
     $this->assertStringContainsString("#{$this->rootUuid} > pb-container { class: band; gap: 1rem; }", $print);
 
-    $element = $this->operations->batchOperations($this->entity, [
+    $element = $this->operations->batchOperations($this->host($this->entity), [
       ['op' => 'style', 'css' => "#{$this->rootUuid} { class: band; }"],
     ], $this->options);
     $this->assertFalse($element->isSuccess());
     $this->assertSame('WEAR_ON_ELEMENT', $element->getErrors()[0]->getCode());
     $this->assertSame('css', $element->getErrors()[0]->getPath());
 
-    $off = $this->operations->batchOperations($this->entity, [
+    $off = $this->operations->batchOperations($this->host($this->entity), [
       ['op' => 'style', 'remove' => [['selector' => "#{$this->rootUuid} > pb-container", 'properties' => ['class']]]],
     ], $this->options);
     $this->assertTrue($off->isSuccess(), print_r($off->toArray()['errors'] ?? [], TRUE));
@@ -585,7 +586,7 @@ class DomStyleOperationsTest extends BlueprintKernelTestBase {
     $this->assertArrayNotHasKey('variants', $entry);
     $this->assertSame(['gap' => '1rem'], $entry['default']);
 
-    $nothing = $this->operations->batchOperations($this->entity, [
+    $nothing = $this->operations->batchOperations($this->host($this->entity), [
       ['op' => 'style', 'remove' => [['selector' => "#{$this->rootUuid} > pb-container", 'properties' => ['class']]]],
     ], $this->options);
     $this->assertFalse($nothing->isSuccess());
@@ -611,7 +612,7 @@ class DomStyleOperationsTest extends BlueprintKernelTestBase {
 @container (max-width: 767px) { #{$this->rootUuid} { padding: 1rem; } }
 #{$this->rootUuid}:hover { margin: 1rem; }
 CSS;
-    $result = $this->operations->batchOperations($this->entity, [
+    $result = $this->operations->batchOperations($this->host($this->entity), [
       ['op' => 'style', 'css' => $css],
     ], $this->options);
 
@@ -634,7 +635,7 @@ CSS;
    */
   public function testStyleOpComposesGradientOverGenerate(): void {
     $gradient = 'linear-gradient(rgb(0 0 0 / 0.5), rgb(0 0 0 / 0.5))';
-    $result = $this->operations->batchOperations($this->entity, [
+    $result = $this->operations->batchOperations($this->host($this->entity), [
       [
         'op' => 'style',
         'css' => "#{$this->rootUuid} { background-image: $gradient, url('generate:sunrise over the bay'); }",
@@ -659,7 +660,7 @@ CSS;
    * production handler resolves the name for that conversation).
    */
   public function testStyleOpPlacesFileHandle(): void {
-    $result = $this->operations->batchOperations($this->entity, [
+    $result = $this->operations->batchOperations($this->host($this->entity), [
       [
         'op' => 'style',
         'css' => "#{$this->rootUuid} { background-image: url('file:hero.svg'); }",
@@ -674,7 +675,7 @@ CSS;
     $this->assertSame('thread-style', TestFileStyleValueHandler::$conversation, 'The batch conversation reaches the style value seam.');
 
     $gradient = 'linear-gradient(rgb(0 0 0 / 0.5), rgb(0 0 0 / 0.5))';
-    $result = $this->operations->batchOperations($this->entity, [
+    $result = $this->operations->batchOperations($this->host($this->entity), [
       [
         'op' => 'style',
         'css' => "#{$this->rootUuid} { background-image: $gradient, url('file:hero.svg'); }",
@@ -692,7 +693,7 @@ CSS;
    * Style: the remove list is the deletion syntax, per selector states.
    */
   public function testStyleRemoveListDeletesProperties(): void {
-    $seed = $this->operations->batchOperations($this->entity, [
+    $seed = $this->operations->batchOperations($this->host($this->entity), [
       [
         'op' => 'style',
         'css' => "#{$this->rootUuid} { padding: 2rem; margin: 1rem; }\n#{$this->rootUuid}:hover { gap: 1rem; }",
@@ -700,7 +701,7 @@ CSS;
     ], $this->options);
     $this->assertTrue($seed->isSuccess(), print_r($seed->toArray()['errors'] ?? [], TRUE));
 
-    $result = $this->operations->batchOperations($this->entity, [
+    $result = $this->operations->batchOperations($this->host($this->entity), [
       [
         'op' => 'style',
         'remove' => [
@@ -720,10 +721,10 @@ CSS;
    * Style: aliases address elements in css exactly like uuids.
    */
   public function testStyleOpResolvesAliases(): void {
-    $this->container->get('daedalus_blueprint.dialect_alias_map')->record($this->entity, 'conv-1', 'hero', $this->rootUuid);
+    $this->container->get('daedalus_blueprint.dialect_alias_map')->record($this->host($this->entity), 'conv-1', 'hero', $this->rootUuid);
     $this->container->get('daedalus_blueprint.dialect_alias_map')->persist();
 
-    $result = $this->operations->batchOperations($this->entity, [
+    $result = $this->operations->batchOperations($this->host($this->entity), [
       ['op' => 'style', 'css' => '#hero { padding: 3rem; }'],
     ], $this->options);
 
@@ -751,7 +752,7 @@ CSS;
       'selector list' => ["#{$this->rootUuid}, #other { padding: 1rem; }", 'SELECTOR_LIST'],
     ];
     foreach ($cases as $label => [$css, $code]) {
-      $result = $this->operations->batchOperations($this->entity, [
+      $result = $this->operations->batchOperations($this->host($this->entity), [
         ['op' => 'style', 'css' => $css],
       ], $this->options);
       $this->assertFalse($result->isSuccess(), $label);
@@ -759,11 +760,11 @@ CSS;
       $this->assertContains($code, $codes, $label . ': got ' . implode(', ', $codes));
     }
     // The fluency-spill correctives name the dialect gesture.
-    $descendant = $this->operations->batchOperations($this->entity, [
+    $descendant = $this->operations->batchOperations($this->host($this->entity), [
       ['op' => 'style', 'css' => "#{$this->rootUuid} h2 { font-size: 2rem; }"],
     ], $this->options);
     $this->assertStringContainsString('descendant elements are not addressable', $descendant->getErrors()[0]->getMessage());
-    $compound = $this->operations->batchOperations($this->entity, [
+    $compound = $this->operations->batchOperations($this->host($this->entity), [
       ['op' => 'style', 'css' => "#{$this->rootUuid}.button { padding: 1rem; }"],
     ], $this->options);
     $this->assertStringContainsString('class=""', $compound->getErrors()[0]->getMessage());
@@ -775,7 +776,7 @@ CSS;
    * Set style="": whole-list replacement of the own default styles.
    */
   public function testSetStyleReplacesOwnDefaults(): void {
-    $first = $this->operations->batchOperations($this->entity, [
+    $first = $this->operations->batchOperations($this->host($this->entity), [
       ['op' => 'set', 'ref' => $this->rootUuid, 'attrs' => ['style' => 'padding: 2rem; margin: 1rem']],
     ], $this->options);
     $this->assertTrue($first->isSuccess(), print_r($first->toArray()['errors'] ?? [], TRUE));
@@ -783,14 +784,14 @@ CSS;
 
     // Writing the attribute again replaces the list: padding is gone, not
     // merged (the HTML semantics of style="").
-    $second = $this->operations->batchOperations($this->entity, [
+    $second = $this->operations->batchOperations($this->host($this->entity), [
       ['op' => 'set', 'ref' => $this->rootUuid, 'attrs' => ['style' => 'margin: 3rem']],
     ], $this->options);
     $this->assertTrue($second->isSuccess(), print_r($second->toArray()['errors'] ?? [], TRUE));
     $this->assertSame(['margin' => '3rem'], $this->styleMap()["container:{$this->rootUuid}"]['default']);
 
     // Null clears the element's own default styles entirely.
-    $cleared = $this->operations->batchOperations($this->entity, [
+    $cleared = $this->operations->batchOperations($this->host($this->entity), [
       ['op' => 'set', 'ref' => $this->rootUuid, 'attrs' => ['style' => NULL]],
     ], $this->options);
     $this->assertTrue($cleared->isSuccess(), print_r($cleared->toArray()['errors'] ?? [], TRUE));
@@ -813,7 +814,7 @@ CSS;
     // guarded, the default, only makes authored constraints law.
     $this->enforce('strict');
 
-    $result = $this->operations->batchOperations($this->entity, [
+    $result = $this->operations->batchOperations($this->host($this->entity), [
       [
         'op' => 'insert',
         'at' => ['ref' => 'root', 'position' => 'beforeend'],
@@ -863,7 +864,7 @@ CSS;
   public function testDocumentErrorsAddressElements(): void {
     $this->enforce('strict');
 
-    $result = $this->container->get('daedalus_blueprint.dom_operation_handler')->applyDocument($this->entity, <<<'HTML'
+    $result = $this->container->get('daedalus_blueprint.dom_operation_handler')->applyDocument($this->host($this->entity), <<<'HTML'
       <pb-container id="band" style="margin: 1rem">
         <pb-container id="card" style="text-decoration: none"></pb-container>
         <pb-container style="transition: opacity 1s"></pb-container>
@@ -895,7 +896,7 @@ CSS;
    * The style op needs css or remove; empty gestures are refused.
    */
   public function testStyleOpNeedsPayload(): void {
-    $result = $this->operations->batchOperations($this->entity, [
+    $result = $this->operations->batchOperations($this->host($this->entity), [
       ['op' => 'style'],
     ], $this->options);
     $this->assertFalse($result->isSuccess());
@@ -920,7 +921,7 @@ CSS;
     // guarded, the default, only makes authored constraints law.
     $this->enforce('strict');
 
-    $result = $this->operations->batchOperations($this->entity, [
+    $result = $this->operations->batchOperations($this->host($this->entity), [
       [
         'op' => 'insert',
         'at' => ['ref' => 'root', 'position' => 'beforeend'],

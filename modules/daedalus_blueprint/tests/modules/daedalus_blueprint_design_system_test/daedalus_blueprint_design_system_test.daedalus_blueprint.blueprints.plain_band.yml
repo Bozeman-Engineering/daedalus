@@ -1,0 +1,18 @@
+label: 'Plain band'
+description: 'A full-width band offered under every design system.'
+design_system: ~
+scope: block
+subject: 'entity_test:entity_test'
+layout:
+  -
+    kind: container
+    layout_id: layout_onecol
+    label: 'Plain band'
+    children:
+      -
+        kind: region
+        region: content
+        children:
+          -
+            kind: block
+            block_type: text

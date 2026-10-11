@@ -8,7 +8,7 @@
  * failure.
  */
 import { strict as assert } from 'node:assert';
-import { EMPTY_MATERIALS, animationRecord, materialsFrom, roster } from './materials-fixture.mjs';
+import { EMPTY_MATERIALS, animationRecord, materialsFrom, roster, tokenRecord } from './materials-fixture.mjs';
 import {
   CHIP_BUDGET,
   FACE_BUDGET,
@@ -306,6 +306,40 @@ test('a scale minting nothing is the honest empty closed space', () => {
   // is the same empty closed space (the advanced hiddenFor rule).
   assert.equal(valueSpaceFor(makeGuide('guarded'), MATERIALS, 'color', { type: 'color' }, { scale: 'ghost' }).kind, 'closed');
   assert.deepEqual(valueSpaceFor(makeGuide('guarded'), MATERIALS, 'display', { type: 'keyword', keywords: ['flex'] }, { scale: 'ghost' }).stops, []);
+});
+
+test('a scale row is the offered tokens, or the curated stops with site-minted tokens after them outside strict', () => {
+  // The olivero shape: four shipped steps offered, the gutter shipped
+  // but opted out of the rows, a token the site minted (origin user)
+  // and offered, and one the site minted and opted out.
+  const materials = roster(
+    tokenRecord('spacing', 'sm', '0.5rem', 'space'),
+    tokenRecord('spacing', 'md', '1rem', 'space'),
+    tokenRecord('spacing', 'lg', '2rem', 'space'),
+    tokenRecord('spacing', 'xl', '4rem', 'space'),
+    tokenRecord('spacing', 'gutter', '3rem', 'space', { offered: false }),
+    tokenRecord('spacing', 'hero', '6rem', 'space', { origin: 'user' }),
+    tokenRecord('spacing', 'quiet', '7rem', 'space', { origin: 'user', offered: false }),
+  );
+  const refs = (space) => space.stops.map((stop) => stop.ref);
+  // Uncurated: the offered flag alone, in stored order, in every mode
+  // (a site-minted token is offered by its own flag).
+  for (const enforcement of ['open', 'guarded', 'strict']) {
+    const space = valueSpaceFor(makeGuide(enforcement), materials, BARE, DIMENSION, { scale: 'spacing', allowed: ['0'] });
+    assert.deepEqual(refs(space), ['var(--space-sm)', 'var(--space-md)', 'var(--space-lg)', 'var(--space-xl)', 'var(--space-hero)', '0'], enforcement);
+    assert.deepEqual(space.stops.map((stop) => stop.value), ['0.5rem', '1rem', '2rem', '4rem', '6rem', '0'], 'faces are the display values');
+  }
+  // Curated (an element's stops): the list, in its order, exact for the
+  // shipped tokens; the site-minted offered token follows on open and
+  // guarded systems and is withheld on strict.
+  const curated = { scale: 'spacing', stops: ['lg', 'sm', 'gutter'] };
+  assert.deepEqual(refs(valueSpaceFor(makeGuide('open'), materials, BARE, DIMENSION, curated)), ['var(--space-lg)', 'var(--space-sm)', 'var(--space-gutter)', 'var(--space-hero)']);
+  assert.deepEqual(refs(valueSpaceFor(makeGuide('guarded'), materials, BARE, DIMENSION, curated)), ['var(--space-lg)', 'var(--space-sm)', 'var(--space-gutter)', 'var(--space-hero)']);
+  assert.deepEqual(refs(valueSpaceFor(makeGuide('strict'), materials, BARE, DIMENSION, curated)), ['var(--space-lg)', 'var(--space-sm)', 'var(--space-gutter)']);
+  // The kind is the constraint's, not the row's: closed under law,
+  // detented on open, whichever tokens the row leads with.
+  assert.equal(valueSpaceFor(makeGuide('strict'), materials, BARE, DIMENSION, curated).kind, 'closed');
+  assert.equal(valueSpaceFor(makeGuide('open'), materials, BARE, DIMENSION, curated).kind, 'detented');
 });
 
 test('the space passes definition and constraints through', () => {

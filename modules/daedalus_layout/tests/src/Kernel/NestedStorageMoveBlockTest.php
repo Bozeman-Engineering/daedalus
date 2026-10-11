@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Drupal\Tests\daedalus_layout\Kernel;
 
+use Drupal\daedalus_blueprint\Result\TargetType;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
@@ -568,6 +569,34 @@ class NestedStorageMoveBlockTest extends NestedStorageKernelTestBase {
       [1, $nested_section_uuid, 0, $deeply_nested_block_uuid],
       $reloaded_tree_index->getPath($deeply_nested_block_uuid),
     );
+  }
+
+  /**
+   * A block move between containers names both ends by their own identity.
+   *
+   * History replays a move's recorded targets against the RESTORED
+   * document, where the block's own target resolves to the container it
+   * came from. The container it was moved into must therefore be named
+   * itself, or an undo leaves its stale copy of the block on the canvas.
+   */
+  public function testMoveBetweenContainersTargetsBothEnds(): void {
+    $block_uuid = $this->uuid->generate();
+    $nested_uuid = $this->uuid->generate();
+    $parent_uuid = $this->uuid->generate();
+    $nested = $this->createSection('layout_onecol', [$this->createBasicBlockComponent($block_uuid)], $nested_uuid);
+    $parent = $this->createSection('layout_onecol', [$this->createNestedSectionComponent($nested)], $parent_uuid);
+    $entity = $this->createTestEntity([$parent]);
+
+    $result = $this->container->get('daedalus_blueprint.operations')->moveElement($this->host($entity), $block_uuid, [
+      'anchor' => $parent_uuid,
+      'placement' => 'inside',
+    ]);
+    $this->assertTrue($result->isSuccess(), print_r($result->toArray()['errors'] ?? [], TRUE));
+    $this->assertSame($parent_uuid, $this->getNestedStorage($entity)->getSectionFor($block_uuid)->getThirdPartySetting('daedalus_layout', 'uuid'));
+
+    $targets = $result->getTargets();
+    $this->assertContains(['uuid' => $nested_uuid, 'field_name' => TargetType::RESTRUCTURED], $targets, 'The container the block left is named.');
+    $this->assertContains(['uuid' => $parent_uuid, 'field_name' => TargetType::RESTRUCTURED], $targets, 'The container the block entered is named.');
   }
 
 }

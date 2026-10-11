@@ -79,7 +79,7 @@ class WorkspaceSwitcher extends WorkspaceSwitcherController {
   public function switcherResponse(Request $request, EntityInterface $entity) {
     $content = parent::switcher($request);
     // Let's derive the entity as this could be a Block config entity.
-    $derived_entity = $this->daedalusUi->deriveEntityFromRoute();
+    $derived_entity = $this->daedalusUi->deriveHostFromRoute()?->entity();
     $this->mainEntityWrapper($derived_entity, 'full', $content);
     return $content;
   }

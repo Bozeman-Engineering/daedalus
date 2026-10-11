@@ -7,14 +7,12 @@
 
 use Drupal\Core\Breadcrumb\Breadcrumb;
 use Drupal\Core\Entity\EntityInterface;
-use Drupal\Component\Serialization\Json;
 use Drupal\Core\Form\FormStateInterface;
 use Drupal\daedalus_layout\Form\OverridesEntityForm;
 use Drupal\Core\Routing\RouteMatchInterface;
 use Drupal\daedalus_layout\Form\EntityViewDisplayForm;
 use Drupal\daedalus_layout\InlineBlockEntityOperations;
 use Drupal\daedalus_layout\Plugin\Block\SectionBlock;
-use Drupal\Core\Hook\Attribute\LegacyModuleImplementsAlter;
 
 /**
  * Implements hook_element_plugin_alter().
@@ -65,78 +63,8 @@ function daedalus_layout_system_breadcrumb_alter(Breadcrumb &$breadcrumb, RouteM
  */
 function daedalus_layout_form_alter(&$form, FormStateInterface $form_state, $form_id) {
   \Drupal::classResolver(OverridesEntityForm::class)->formAlter($form, $form_state, $form_id);
-}
-
-/**
- * Implements hook_contextual_links_alter().
- */
-function daedalus_layout_contextual_links_alter(array &$links, $group, array $route_parameters) {
-  // Remove layout builders contextual links in favor of our own that are aware
-  // of nested section storages. Instead of doing this we could loaded our own
-  // namespaced contextual links here, but then other modules wouldn't be able
-  // to add their own contextual links.
-  foreach ([
-    'layout_builder_block_update',
-    'layout_builder_block_move',
-    'layout_builder_block_remove',
-    'layout_builder_block_visibility',
-  ] as $layout_builder_contextual_link) {
-    if (!empty($links[$layout_builder_contextual_link])) {
-      unset($links[$layout_builder_contextual_link]);
-    }
-  }
-
-  if (isset($links['daedalus_layout.block_update'])) {
-    $links['daedalus_layout.block_update']['localized_options']['attributes']['data-dialog-type'] = 'dialog';
-    $links['daedalus_layout.block_update']['localized_options']['attributes']['data-dialog-options'] = Json::encode([
-      'width' => 1024,
-      'height' => 'auto',
-      'target' => 'layout-builder-modal',
-      'autoResize' => TRUE,
-      'modal' => TRUE,
-    ]);
-  }
-
-  // This contextual menu is inside a nested layout. Exclude any menu items
-  // that don't support nested layouts. Modules need to opt into this by adding
-  // supports_nested_layouts: 'true' to their module.links.contextual.yml file.
-  // @see daedalus_layout.links.contextual.yml
-  $is_nested = !empty($route_parameters['is_nested']);
-  if ($is_nested) {
-    foreach ($links as $key => $link) {
-      if (empty($link['localized_options']['supports_nested_layouts'])) {
-        unset($links[$key]);
-      }
-    }
-  }
-
-}
-
-/**
- * Implements hook_module_implements_alter().
- */
-#[LegacyModuleImplementsAlter]
-function daedalus_layout_module_implements_alter(&$implementations, $hook) {
-  if ($hook === 'entity_presave') {
-    // Replace layout_builder_entity_presave with daedalus_layout_entity_presave. It
-    // does the same thing, but let's have all the inline_block_usage things
-    // here or clarity's sake.
-    unset($implementations['layout_builder']);
-  }
-}
-
-/**
- * Implements hook_entity_presave().
- */
-function daedalus_layout_entity_presave(EntityInterface $entity) {
-  // The deprecation-window safety net must run before the inline block
-  // machinery below so a block_serialized replacement written by a component
-  // transform is saved and usage-tracked within this same save.
-  // @see \Drupal\daedalus_layout\ComponentTransform\PresaveSafetyNet
-  \Drupal::service('daedalus_layout.presave_safety_net')->apply($entity);
-  if (\Drupal::moduleHandler()->moduleExists('block_content')) {
-    \Drupal::classResolver(InlineBlockEntityOperations::class)->handlePreSave($entity);
-  }
+  \Drupal::service('daedalus_layout.form_alter.bundle_edit')->formAlter($form, $form_state);
+  \Drupal::service('daedalus_layout.start_chooser')->formAlter($form, $form_state);
 }
 
 /**

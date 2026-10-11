@@ -66,7 +66,6 @@ final class MappingTest extends UnitTestCase {
         '/modules/contrib/daedalus/modules/daedalus_edit/modules/daedalus_edit_image_block/assets/image.svg',
       ],
       'lb_plus permission' => ['administer layout builder + configuration', 'administer daedalus layout configuration'],
-      'lb_plus promote permission' => ['promote layout builder + blocks', 'promote daedalus layout blocks'],
       'navigation_plus 2.3 permission unchanged' => ['use toolbar plus edit mode', 'use toolbar plus edit mode'],
       'navigation_plus 2.3 configure permission unchanged' => [
         'configure toolbar plus modes',
@@ -82,8 +81,8 @@ final class MappingTest extends UnitTestCase {
         '_core: {default_config_hash: 4Z2AmsHc5Dmg-npXqDfz9bkBg0Yd7uAmPoXtEXdCtWk}',
       ],
       'a 43-character machine name is not a hash' => [
-        'entity_blueprint_stencil_owned_variant_test',
-        'daedalus_blueprint_stencil_owned_variant_test',
+        'entity_blueprint_config_owned_variants_test',
+        'daedalus_blueprint_config_owned_variants_test',
       ],
       'a css prefix after a hyphen' => ['data-np-tooltip', 'data-daedalus-ui-tooltip'],
       'already renamed config' => ['daedalus_ui.settings', 'daedalus_ui.settings'],

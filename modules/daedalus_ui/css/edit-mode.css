@@ -68,3 +68,46 @@ html[data-daedalus-ui-mode] .dialog-off-canvas-main-canvas {
   scroll-margin-top: calc(var(--drupal-displace-offset-top, 0px) + 2rem);
   scroll-margin-bottom: calc(var(--drupal-displace-offset-bottom, 0px) + 10rem);
 }
+
+/* The stand-in a block that built nothing wears on the editing canvas
+   (daedalus_ui's BlockStandIn: the block's label and its reason, in place
+   of core's placeholder sentence, which core's stylesheet would style but
+   that sheet never loads under Daedalus). The same language as the
+   empty-container hint (daedalus_stylish_layouts' edit-affordances.css)
+   and the blank-page affordance: a dashed edge and dimmed words in the
+   page's own color, the page's font, no tint, so it sits on PAGE content
+   and wears the theme's scheme. Editor chrome by construction: the
+   editing posture alone prints it, and daedalus_stylish's CHROME_SELECTOR
+   names the class so it is never offered as stylable content. The root
+   keeps the inherited color and the children dim from it, so the edge and
+   the words mix from the page's color once each, never compounding.
+   Carries the edit stage's id to outrank any map rule reaching the
+   block's children. */
+#daedalus-ui-stage .daedalus-ui-block-stand-in {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25em;
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 4em;
+  padding: 1em 1.5em;
+  text-align: center;
+  color: inherit;
+  outline: 2px dashed color-mix(in sRGB, currentColor 40%, transparent);
+  outline-offset: -2px;
+  background: none;
+  font: inherit;
+}
+
+#daedalus-ui-stage .daedalus-ui-block-stand-in__label {
+  color: color-mix(in sRGB, currentColor 70%, transparent);
+  font-weight: 600;
+}
+
+#daedalus-ui-stage .daedalus-ui-block-stand-in__reason {
+  color: color-mix(in sRGB, currentColor 60%, transparent);
+  font-size: 0.9em;
+  font-style: italic;
+}

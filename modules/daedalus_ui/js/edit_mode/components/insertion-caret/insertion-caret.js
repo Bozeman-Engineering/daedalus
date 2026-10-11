@@ -27,18 +27,20 @@ import { projectionIndex } from '../page-elements/projection-index';
  * here; sources never draw their own.
  *
  * The drop's LOCATION is the one carrier, rendered on both surfaces:
- * the canvas face from the gap's live item geometry, and a panel face
- * derived per frame from the location alone (treeCaretForLocation), a
- * line between the page-elements rows the placement would land between.
- * Pointer and keyboard drops alike get both faces; a drop resolved FROM a
- * tree row already draws on the row, so it skips the derived panel face.
+ * the canvas face from the gap's live item geometry (liveCaret, for the
+ * drops that carry items), and a panel face derived per frame from the
+ * location alone (treeCaretForLocation), a line between the page-elements
+ * rows the placement would land between, indented to the depth the drop
+ * lands at. Every gap drop gets the panel face, whichever surface
+ * resolved it: a drop resolved from a tree row (tree-gaps.js) carries no
+ * canvas geometry, so the panel line is its only line.
  *
  * The caret also carries the depth indicator's at-a-glance face: a chip
  * naming the container the drop would land in (containerKeyForLocation —
  * the same derivation the breadcrumb's drop trail reads through the
- * store), anchored to the line's start, so a line between rows five levels
- * deep no longer looks like a line at the root. The full trail is the
- * breadcrumb's job.
+ * store), anchored to the canvas line's start when there is one, else the
+ * panel line's, so a line between rows five levels deep no longer looks
+ * like a line at the root. The full trail is the breadcrumb's job.
  *
  * Geometry is read imperatively each animation frame from the controller's
  * module state and the live elements — the outline's pattern. The store
@@ -140,11 +142,8 @@ const InsertionCaret = () => {
       elementRef.current.hidden = true;
       place(containerRef.current, drop.container.getBoundingClientRect());
       // The panel face: derived from the location, whatever surface
-      // resolved the drop — except tree-row drops, whose canvas-face line
-      // already sits on the row.
-      const treeLine = drop.gapId?.startsWith('tree|')
-        ? null
-        : treeCaretForLocation(drop.location);
+      // resolved the drop.
+      const treeLine = treeCaretForLocation(drop.location);
       if (treeLine) {
         place(treeLineRef.current, treeLine);
       } else {
@@ -158,23 +157,29 @@ const InsertionCaret = () => {
         return;
       }
       emptyRef.current.hidden = true;
+      // The canvas face: the gap's live line, for the drops that carry
+      // items (a tree drop carries none and draws its panel line alone).
       const line = liveCaret(drop);
-      if (!line) {
+      if (line) {
+        place(lineRef.current, {
+          left: line.left,
+          top: line.top,
+          width: line.width,
+          height: line.height,
+        });
+        lineRef.current.classList.toggle(
+          'daedalus-ui-caret__line--vertical',
+          line.orientation === 'horizontal',
+        );
+      } else {
         lineRef.current.hidden = true;
-        chipRef.current.hidden = true;
-        return;
       }
-      placeChip(drop, line);
-      place(lineRef.current, {
-        left: line.left,
-        top: line.top,
-        width: line.width,
-        height: line.height,
-      });
-      lineRef.current.classList.toggle(
-        'daedalus-ui-caret__line--vertical',
-        line.orientation === 'horizontal',
-      );
+      const chipAnchor = line ?? treeLine;
+      if (chipAnchor) {
+        placeChip(drop, chipAnchor);
+      } else {
+        chipRef.current.hidden = true;
+      }
     };
     loop();
 

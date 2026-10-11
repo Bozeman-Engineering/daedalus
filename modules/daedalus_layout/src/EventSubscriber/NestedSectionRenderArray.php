@@ -5,7 +5,8 @@ declare(strict_types=1);
 namespace Drupal\daedalus_layout\EventSubscriber;
 
 use Drupal\Core\Cache\CacheableMetadata;
-use Drupal\Core\Entity\FieldableEntityInterface;
+use Drupal\Core\Entity\EntityInterface;
+use Drupal\daedalus_layout\NestedSectionStorageInterface;
 use Drupal\layout_builder\Event\SectionComponentBuildRenderArrayEvent;
 use Drupal\layout_builder\LayoutBuilderEvents;
 use Drupal\daedalus_layout\Entity\LayoutBuilderEntityViewDisplay;
@@ -81,16 +82,18 @@ final class NestedSectionRenderArray implements EventSubscriberInterface {
     // (core's block builder does the same for block components).
     $build['#weight'] = $event->getComponent()->getWeight();
 
-    // The root entity rides the container's forwarded contexts at every
-    // depth; it is the live-attribution demand host (the style map lives on
-    // it) for the section and region keys stamped below.
-    $entity = $plugin->getContext('entity')->getContextValue();
+    // The root entity rides the container's contexts at every depth (the
+    // subject when the render names no other root); it is the
+    // live-attribution demand host (the style map lives on it) for the
+    // section and region keys stamped below.
+    $root = $plugin->getContext(NestedSectionStorageInterface::ROOT_ENTITY_CONTEXT_ID);
+    $entity = $root->hasContextValue() ? $root->getContextValue() : $plugin->getContext('entity')->getContextValue();
     LayoutBuilderEntityViewDisplay::getSectionAttributes(
       0,
       $build,
       NULL,
       $section,
-      $entity instanceof FieldableEntityInterface ? $entity : NULL,
+      $entity instanceof EntityInterface ? $entity : NULL,
     );
 
     $cacheability = CacheableMetadata::createFromRenderArray($build);

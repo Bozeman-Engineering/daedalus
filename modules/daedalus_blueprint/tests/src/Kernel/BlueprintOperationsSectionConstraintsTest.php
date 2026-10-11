@@ -158,7 +158,7 @@ class BlueprintOperationsSectionConstraintsTest extends BlueprintKernelTestBase 
   public function testAddSectionInsideBlockRefused(): void {
     $entity = $this->createEntityWithNestedSection();
 
-    $result = $this->operations->addSection($entity, [
+    $result = $this->operations->addSection($this->host($entity), [
       'anchor' => $this->childBlockUuid,
       'placement' => 'inside',
     ]);
@@ -184,7 +184,7 @@ class BlueprintOperationsSectionConstraintsTest extends BlueprintKernelTestBase 
     $entity = $this->createEntityWithNestedSection();
 
     $sibling_uuid = (new PhpUuid())->generate();
-    $result = $this->operations->addSection($entity, [
+    $result = $this->operations->addSection($this->host($entity), [
       'anchor' => $this->childBlockUuid,
       'placement' => 'after',
     ], $sibling_uuid);
@@ -210,7 +210,7 @@ class BlueprintOperationsSectionConstraintsTest extends BlueprintKernelTestBase 
     $entity = $this->createEntityWithNestedSection();
 
     $block_uuid = (new PhpUuid())->generate();
-    $result = $this->operations->addElement($entity, [
+    $result = $this->operations->addElement($this->host($entity), [
       'anchor' => $this->nestedSectionUuid,
       'placement' => 'before',
     ], [
@@ -232,7 +232,7 @@ class BlueprintOperationsSectionConstraintsTest extends BlueprintKernelTestBase 
   public function testAddBlockBesideRootSectionRefused(): void {
     $entity = $this->createEntityWithNestedSection();
 
-    $result = $this->operations->addElement($entity, [
+    $result = $this->operations->addElement($this->host($entity), [
       'anchor' => $this->rootSectionUuid,
       'placement' => 'before',
     ], [
@@ -251,7 +251,7 @@ class BlueprintOperationsSectionConstraintsTest extends BlueprintKernelTestBase 
   public function testMoveBlockBesideNestedContainer(): void {
     $entity = $this->createEntityWithNestedSection();
 
-    $result = $this->operations->moveElement($entity, $this->childBlockUuid, [
+    $result = $this->operations->moveElement($this->host($entity), $this->childBlockUuid, [
       'anchor' => $this->nestedSectionUuid,
       'placement' => 'before',
     ]);
@@ -273,7 +273,7 @@ class BlueprintOperationsSectionConstraintsTest extends BlueprintKernelTestBase 
     // A sibling block beside the container in the root section's flow, so
     // the container can move relative to a block anchor in the same flow.
     $block_uuid = (new PhpUuid())->generate();
-    $add = $this->operations->addElement($entity, [
+    $add = $this->operations->addElement($this->host($entity), [
       'anchor' => $this->nestedSectionUuid,
       'placement' => 'after',
     ], [
@@ -282,7 +282,7 @@ class BlueprintOperationsSectionConstraintsTest extends BlueprintKernelTestBase 
     ]);
     $this->assertTrue($add->isSuccess(), print_r($add->toArray()['errors'] ?? [], TRUE));
 
-    $result = $this->operations->moveElement($entity, $this->nestedSectionUuid, [
+    $result = $this->operations->moveElement($this->host($entity), $this->nestedSectionUuid, [
       'anchor' => $block_uuid,
       'placement' => 'after',
     ]);
@@ -303,7 +303,7 @@ class BlueprintOperationsSectionConstraintsTest extends BlueprintKernelTestBase 
     $entity = $this->createEntityWithNestedSection();
 
     $sibling_uuid = (new PhpUuid())->generate();
-    $result = $this->operations->addSection($entity, [
+    $result = $this->operations->addSection($this->host($entity), [
       'anchor' => $this->nestedSectionUuid,
       'placement' => 'after',
     ], $sibling_uuid);
@@ -332,7 +332,7 @@ class BlueprintOperationsSectionConstraintsTest extends BlueprintKernelTestBase 
 
     // Nest at depth 2: inside the already-nested section.
     $grandchild_uuid = (new PhpUuid())->generate();
-    $result = $this->operations->addSection($entity, [
+    $result = $this->operations->addSection($this->host($entity), [
       'anchor' => $this->nestedSectionUuid,
       'placement' => 'inside',
       'region' => 'content',
@@ -356,7 +356,7 @@ class BlueprintOperationsSectionConstraintsTest extends BlueprintKernelTestBase 
   public function testAddSectionInsideUnknownRegionRefused(): void {
     $entity = $this->createEntityWithNestedSection();
 
-    $result = $this->operations->addSection($entity, [
+    $result = $this->operations->addSection($this->host($entity), [
       'anchor' => $this->rootSectionUuid,
       'placement' => 'inside',
       'region' => 'sidebar',
@@ -372,7 +372,7 @@ class BlueprintOperationsSectionConstraintsTest extends BlueprintKernelTestBase 
   public function testRemoveNestedSectionRemovesContainer(): void {
     $entity = $this->createEntityWithNestedSection();
 
-    $result = $this->operations->removeElement($entity, $this->nestedSectionUuid);
+    $result = $this->operations->removeElement($this->host($entity), $this->nestedSectionUuid);
 
     $this->assertTrue($result->isSuccess(), print_r($result->toArray()['errors'] ?? [], TRUE));
     $section = $entity->get('layout_builder__layout')->first()->section;
@@ -389,7 +389,7 @@ class BlueprintOperationsSectionConstraintsTest extends BlueprintKernelTestBase 
   public function testMoveNestedSectionOutUnwraps(): void {
     $entity = $this->createEntityWithNestedSection();
 
-    $result = $this->operations->moveElement($entity, $this->nestedSectionUuid, [
+    $result = $this->operations->moveElement($this->host($entity), $this->nestedSectionUuid, [
       'anchor' => $this->rootSectionUuid,
       'placement' => 'after',
     ]);
@@ -415,14 +415,14 @@ class BlueprintOperationsSectionConstraintsTest extends BlueprintKernelTestBase 
     $entity = $this->createEntityWithNestedSection();
 
     $extra_uuid = (new PhpUuid())->generate();
-    $result = $this->operations->addSection($entity, [
+    $result = $this->operations->addSection($this->host($entity), [
       'anchor' => $entity->uuid(),
       'placement' => 'inside',
     ], $extra_uuid);
     $this->assertTrue($result->isSuccess());
     $this->assertCount(2, $entity->get('layout_builder__layout'));
 
-    $result = $this->operations->moveElement($entity, $extra_uuid, [
+    $result = $this->operations->moveElement($this->host($entity), $extra_uuid, [
       'anchor' => $this->rootSectionUuid,
       'placement' => 'inside',
       'region' => 'content',
@@ -445,14 +445,14 @@ class BlueprintOperationsSectionConstraintsTest extends BlueprintKernelTestBase 
     $entity = $this->createEntityWithNestedSection();
 
     $extra_uuid = (new PhpUuid())->generate();
-    $result = $this->operations->addSection($entity, [
+    $result = $this->operations->addSection($this->host($entity), [
       'anchor' => $entity->uuid(),
       'placement' => 'inside',
     ], $extra_uuid);
     $this->assertTrue($result->isSuccess());
     $this->assertCount(2, $entity->get('layout_builder__layout'));
 
-    $result = $this->operations->removeElement($entity, $extra_uuid);
+    $result = $this->operations->removeElement($this->host($entity), $extra_uuid);
     $this->assertTrue($result->isSuccess());
     $this->assertCount(1, $entity->get('layout_builder__layout'));
   }
@@ -468,7 +468,7 @@ class BlueprintOperationsSectionConstraintsTest extends BlueprintKernelTestBase 
     $entity = $this->createEntityWithNestedSection();
     $before = $entity->get('layout_builder__layout')->getValue();
 
-    $result = $this->operations->batchOperations($entity, [
+    $result = $this->operations->batchOperations($this->host($entity), [
       [
         'op' => 'add_section',
         'location' => ['anchor' => $entity->uuid(), 'placement' => 'inside'],

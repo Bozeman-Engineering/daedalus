@@ -15,7 +15,7 @@ use Psr\Log\LoggerInterface;
  * Handler for entity_reference field types.
  *
  * Serializes with target_id + _label. Deserializes with resolution priority:
- * target_id (direct load) then _label (label query).
+ * target_id (direct load), uuid (property load) then _label (label query).
  */
 class EntityReferenceFieldHandler extends FieldHandlerBase {
 
@@ -48,7 +48,7 @@ class EntityReferenceFieldHandler extends FieldHandlerBase {
    * {@inheritdoc}
    */
   public function getGuidance(): ?string {
-    return 'Accepts {target_id: N}, {_label: "Title"}, a bare string (label lookup), or a bare integer (target_id). An unmatched label returns an error; reference an existing entity by target_id, or create the entity first and then reference it.';
+    return 'Accepts {target_id: N}, {uuid: "..."}, {_label: "Title"}, a bare string (label lookup), or a bare integer (target_id). An unmatched label returns an error; reference an existing entity by target_id or uuid, or create the entity first and then reference it.';
   }
 
   /**
@@ -165,8 +165,8 @@ class EntityReferenceFieldHandler extends FieldHandlerBase {
       return new BlueprintError(
         path: $path,
         code: 'INVALID_REFERENCE_FORMAT',
-        message: 'Expected object with target_id or _label, or a scalar value.',
-        hint: 'Provide {target_id: N} or {_label: "Name"} or a plain string/int.',
+        message: 'Expected object with target_id, uuid or _label, or a scalar value.',
+        hint: 'Provide {target_id: N}, {uuid: "..."} or {_label: "Name"} or a plain string/int.',
       );
     }
 
@@ -178,6 +178,10 @@ class EntityReferenceFieldHandler extends FieldHandlerBase {
       );
     }
 
+    if (isset($item['uuid'])) {
+      return $this->resolveByUuid((string) $item['uuid'], $target_type, $target_bundles, $path);
+    }
+
     if (isset($item['_label'])) {
       return $this->resolveByLabel(
         (string) $item['_label'], $target_type, $target_bundles, $path,
@@ -187,8 +191,8 @@ class EntityReferenceFieldHandler extends FieldHandlerBase {
     return new BlueprintError(
       path: $path,
       code: 'INVALID_REFERENCE_FORMAT',
-      message: 'Reference must include target_id or _label.',
-      hint: 'Provide {target_id: N} or {_label: "Name"}.',
+      message: 'Reference must include target_id, uuid or _label.',
+      hint: 'Provide {target_id: N}, {uuid: "..."} or {_label: "Name"}.',
     );
   }
 

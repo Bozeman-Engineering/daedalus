@@ -1,6 +1,6 @@
 name: Daedalus Blueprint Design System Test
 type: module
-description: Packages the aurora design system as install config for design system tests, with an absent-key member, an explicit-key member and a global skill and stencil file (the stencils served only where daedalus_blueprint_stencil is enabled).
+description: Packages the aurora design system as install config for design system tests, with an absent-key member, an explicit-key member and a global skill and blueprint file (the blueprints served only where daedalus_blueprint_library is enabled).
 package: Testing
 core_version_requirement: ^11
 hidden: true

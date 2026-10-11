@@ -23,12 +23,20 @@
   --daedalus-border: #777;
   --daedalus-scrollbar-thumb: #afafaf;
 
-  /* The disclosure grammar's child-step: the page-elements tree indents
-     each row one step per level (rowIndent in page-elements-tree.js) and
-     drop-down bodies (.daedalus-ui-details__body) indent one step per nesting
-     level, so both carriers deepen at the same rate. */
+  /* The disclosure grammar's child-step: drop-down bodies
+     (.daedalus-ui-details__body) indent one step per nesting level. No
+     outline uses it: an outline row's depth is the pair below. */
   --daedalus-indent: 0.875rem;
   --daedalus-indent-block-padding: 0.1rem;
+
+  /* The outline row grammar's depth (panel-controls.css, the three
+     outlines in the rail: the page elements tree, code mode's rows, the
+     Add panel's headings). One step per level, half the chevron column,
+     so a child's chevron clears its parent's; the adapter sets the depth
+     inline on each row and the row pads itself, so hover and selection
+     washes span the panel and no adapter keeps a nesting-wrapper margin. */
+  --daedalus-outline-step: 0.5rem;
+  --daedalus-outline-depth: 0;
 
   /* Raised by selection-indicator.css while the indicator is mounted.
      Unit required: this feeds calc() in sidebar.css, where a unitless 0

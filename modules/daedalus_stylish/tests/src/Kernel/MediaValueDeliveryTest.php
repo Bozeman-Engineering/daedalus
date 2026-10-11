@@ -15,6 +15,7 @@ use Drupal\daedalus_stylish\VariantStylesheet;
 use Drupal\Tests\media\Traits\MediaTypeCreationTrait;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
+use Drupal\Tests\daedalus_stylish\Traits\HostTrait;
 
 /**
  * Tests server delivery of media-valued styles.
@@ -31,6 +32,7 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 #[RunTestsInSeparateProcesses]
 class MediaValueDeliveryTest extends KernelTestBase {
 
+  use HostTrait;
   use MediaTypeCreationTrait;
 
   /**
@@ -82,6 +84,7 @@ class MediaValueDeliveryTest extends KernelTestBase {
     // daedalus_stylish provider reads all four storages on every build.
     $this->installEntitySchema('daedalus_swatch');
     $this->installEntitySchema('daedalus_animation');
+    $this->installEntitySchema('daedalus_font');
     $this->installEntitySchema('daedalus_skin');
     $this->installConfig(['field', 'system', 'image', 'file', 'media', 'daedalus_stylish']);
 
@@ -110,7 +113,7 @@ class MediaValueDeliveryTest extends KernelTestBase {
    * Builds the entity's style element and returns [css, cache tags].
    */
   protected function buildCss(EntityTest $entity, array $map): array {
-    $element = $this->container->get('daedalus_stylish.style_backend')->build($entity, $map);
+    $element = $this->container->get('daedalus_stylish.style_backend')->build($this->host($entity), $map);
     return [(string) ($element['#value'] ?? ''), $element['#cache']['tags'] ?? []];
   }
 
@@ -345,7 +348,7 @@ class MediaValueDeliveryTest extends KernelTestBase {
         // The variants list holds no CSS and never seeds the table.
         'variants' => [['variant' => 'hero_bg', 'fragment' => '']],
       ],
-    ], $tags, $entity);
+    ], $tags, $this->host($entity));
 
     $this->assertSame([strtolower($uuid)], array_keys($table));
     $this->assertStringContainsString('/styles/large/', $table[strtolower($uuid)]);

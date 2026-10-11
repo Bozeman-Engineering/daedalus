@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Drupal\daedalus_blueprint\Event;
 
-use Drupal\Core\Entity\FieldableEntityInterface;
+use Drupal\daedalus_blueprint\Host\HostInterface;
 
 /**
  * Fired after move_element relocates an element (block or section).
@@ -31,8 +31,8 @@ class ElementMovedEvent extends LifecycleEventBase {
   /**
    * Constructs an ElementMovedEvent.
    *
-   * @param \Drupal\Core\Entity\FieldableEntityInterface $entity
-   *   The root entity the move happened on.
+   * @param \Drupal\daedalus_blueprint\Host\HostInterface $host
+   *   The host the move happened on.
    * @param string $uuid
    *   The UUID of the moved element: a component UUID, or a section's
    *   daedalus_layout UUID (which is also its container component's UUID when
@@ -45,13 +45,13 @@ class ElementMovedEvent extends LifecycleEventBase {
    *   Whether the element sits at nested depth after the move.
    */
   public function __construct(
-    FieldableEntityInterface $entity,
+    HostInterface $host,
     protected string $uuid,
     protected bool $isSection,
     protected bool $wasNested,
     protected bool $isNested,
   ) {
-    parent::__construct($entity);
+    parent::__construct($host);
   }
 
   /**

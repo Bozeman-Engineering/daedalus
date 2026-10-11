@@ -5,32 +5,30 @@ declare(strict_types=1);
 namespace Drupal\daedalus_stylish;
 
 use Drupal\Core\Entity\EntityInterface;
-use Drupal\Core\Entity\FieldableEntityInterface;
-use Drupal\daedalus_layout\RootEntityRegistry;
 use Drupal\daedalus_ui\Render\LiveAttributionProviderInterface;
 
 /**
- * Answers live-attribution demand from the style map.
+ * Answers live-attribution demand from the style maps a render shows.
  *
  * A styled element's CSS uses its selectable key as the @scope root,
- * so on live renders the key must be stamped for exactly the keys the map
- * holds. Demand is answered against the map HOST: the rendered entity when
- * it carries the style-map field, otherwise — for nested Layout Builder
- * content, whose block_content entities are what the render seams see — the
- * page's root entity via daedalus_layout's root-entity registry (optional; without
- * daedalus_layout there is no nesting to resolve).
+ * so on live renders the key must be stamped for exactly the keys the
+ * delivered maps hold. Demand is answered against the render's hosts
+ * (RenderStyles): the rendered entity's own map and the map of the
+ * document it renders (its display's template when it has no override),
+ * resolved for nested Layout Builder content through the page's root
+ * entity.
  */
 final class DaedalusStylishLiveAttribution implements LiveAttributionProviderInterface {
 
   public function __construct(
-    private readonly ?RootEntityRegistry $rootEntityRegistry,
+    private readonly RenderStyles $renderStyles,
   ) {}
 
   /**
    * {@inheritdoc}
    */
   public function demandsKey(string $key, EntityInterface $entity): bool {
-    $map_keys = $this->mapKeys($entity);
+    $map_keys = $this->renderStyles->keys($entity);
     foreach ($map_keys as $map_key) {
       if ($map_key === $key || str_starts_with($map_key, $key . '::')) {
         return TRUE;
@@ -77,7 +75,7 @@ final class DaedalusStylishLiveAttribution implements LiveAttributionProviderInt
    * {@inheritdoc}
    */
   public function demandsKeyPrefix(string $prefix, EntityInterface $entity): bool {
-    $map_keys = $this->mapKeys($entity);
+    $map_keys = $this->renderStyles->keys($entity);
     foreach ($map_keys as $map_key) {
       if (str_starts_with($map_key, $prefix)) {
         return TRUE;
@@ -94,45 +92,6 @@ final class DaedalusStylishLiveAttribution implements LiveAttributionProviderInt
       }
     }
     return FALSE;
-  }
-
-  /**
-   * The style-map keys governing a rendered entity's attribution.
-   *
-   * @return string[]
-   *   The map keys, [] when no host with a non-empty map resolves.
-   */
-  private function mapKeys(EntityInterface $entity): array {
-    return array_keys($this->map($entity));
-  }
-
-  /**
-   * The style map governing a rendered entity's attribution.
-   *
-   * @return array
-   *   The host's style map, [] when no host with a non-empty map resolves.
-   */
-  private function map(EntityInterface $entity): array {
-    $host = $this->resolveHost($entity);
-    if ($host === NULL) {
-      return [];
-    }
-    $item = $host->get(DaedalusStylishFieldManager::FIELD_NAME)->first();
-    return $item?->getStyleMap() ?? [];
-  }
-
-  /**
-   * The entity whose style map answers for a rendered entity.
-   */
-  private function resolveHost(EntityInterface $entity): ?FieldableEntityInterface {
-    if ($entity instanceof FieldableEntityInterface && $entity->hasField(DaedalusStylishFieldManager::FIELD_NAME)) {
-      return $entity;
-    }
-    $root = $this->rootEntityRegistry?->getRoot($entity);
-    if ($root instanceof FieldableEntityInterface && $root->hasField(DaedalusStylishFieldManager::FIELD_NAME)) {
-      return $root;
-    }
-    return NULL;
   }
 
 }

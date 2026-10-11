@@ -1,15 +1,21 @@
 import { h, Fragment } from 'preact';
 import { useState } from 'preact/hooks';
 import { saveMaterial, updateMaterial } from './material-gestures.js';
-import { layerColor, variantLayerId } from './code/layers.js';
-import { sessionCount, sessionStyles } from './pending.js';
+import { documentLayerId, layerColor } from './code/layers.js';
+import {
+  sessionCount,
+  sessionStyles,
+  skinPushOperations,
+  stagesLines,
+} from './pending.js';
+import { skinScopeLabel } from './provenance-model.js';
 import { mintConsent } from './session-frame-model.js';
 import {
   axisVocabulary,
   findVariant,
   saveStyles,
   shadowClearingOps,
-  stencilProvenance,
+  blueprintProvenance,
 } from './variant-scope.js';
 
 /**
@@ -36,9 +42,21 @@ import {
  *   impact honestly (a new variant has no wearers; this element will
  *   follow it), and Save variant commits the capture then re-attaches
  *   through the op spine.
+ * - A SKIN session (the active skin's document at one scope, pending.js
+ *   skinSession) shows the scope in the skin hue, the pending count and
+ *   the site-wide impact in words (a default restyles every element of
+ *   its scope). Push update commits the staged lines as update_default
+ *   patches, one per (key, condition), in one batch (pending.js
+ *   skinPushOperations): one new revision of the skin, every element of
+ *   the scope restyles, workspaces stage it. Then the source refreshes
+ *   the skin's delivery (leader-source.js refreshDefaults: the skin's
+ *   defaults as the panel reads them and the recompiled CSS on the
+ *   canvas), so the pushed look lands without a reload.
  *
- * Both commits are material gesture ops (save_material / update_material,
- * kind variant: the ops the AI submits) through the source's batch commit,
+ * The variant commits are material gesture ops (save_material /
+ * update_material, kind variant: the ops the AI submits) and the skin
+ * commit is the style op the AI submits (update_default), all through
+ * the source's batch commit,
  * carrying the client's own capture as `key` + `styles` (the walk that
  * drives the live preview, so the shadow-clearing ops read the same
  * walk); the satellite runs them through the leader, so the leader stays
@@ -66,9 +84,15 @@ import {
  * failed re-attach leaves the element detached-but-identical and retry
  * self-heals (the op queue's source reports the failure).
  *
+ * A skin session is one batch of update_default ops (pending.js
+ * skinPushOperations) followed by the source's defaults refresh, so the
+ * panel and the canvas read the pushed defaults before the promise
+ * resolves; it resolves with the batch's response payload.
+ *
  * @return {Promise<object>}
- *   The written variant's record; rejects with the op queue's Error after
- *   its source reported it, so the caller settles only its own state.
+ *   The written variant's record (a skin session: the batch payload);
+ *   rejects with the op queue's Error after its source reported it, so
+ *   the caller settles only its own state.
  */
 export const commitSession = ({
   source,
@@ -78,7 +102,24 @@ export const commitSession = ({
   styleMap,
 }) => {
   const library = variants ?? [];
-  const layout = source.getLayout?.() ?? [];
+  const tree = source.getTree?.() ?? [];
+  if (session.kind === 'skin') {
+    return source
+      .commitBatch({
+        operations: skinPushOperations(session),
+        label: Drupal.t('Pushed skin defaults for !scope', {
+          '!scope': skinScopeLabel(session.scope, guide),
+        }),
+      })
+      .then((payload) =>
+        // The delivery refresh is the landing, not the commit: a refresh
+        // that fails leaves the push committed and reports through the
+        // transport's own notice, so the session still closes.
+        Promise.resolve(source.refreshDefaults?.())
+          .catch(() => null)
+          .then(() => payload),
+      );
+  }
   if (session.kind === 'update') {
     const variant = findVariant(library, session.reference);
     return updateMaterial(
@@ -86,10 +127,10 @@ export const commitSession = ({
       {
         kind: 'variant',
         id: session.reference,
-        styles: sessionStyles(session, { variantStyles: variant?.value ?? {} }),
+        styles: sessionStyles(session, { documentStyles: variant?.value ?? {} }),
       },
-      Drupal.t('Pushed changes into @label', {
-        '@label': variant?.label ?? session.reference,
+      Drupal.t('Pushed changes into !label', {
+        '!label': variant?.label ?? session.reference,
       }),
     ).then((updated) => {
       // The anchor follows what it just pushed: own overrides now equal
@@ -104,7 +145,7 @@ export const commitSession = ({
       const clearing = shadowClearingOps(
         styleMap ?? {},
         session.anchor,
-        layout,
+        tree,
         updated,
         library,
       );
@@ -114,8 +155,8 @@ export const commitSession = ({
       return source
         .commitBatch({
           operations: clearing,
-          label: Drupal.t('Pushed changes into @label', {
-            '@label': updated.label,
+          label: Drupal.t('Pushed changes into !label', {
+            '!label': updated.label,
           }),
         })
         .catch(() => {
@@ -131,24 +172,24 @@ export const commitSession = ({
     anchor,
     source.getBlockTypes(),
     source.getSectionLayouts(),
-    layout,
+    tree,
   );
   const capture = saveStyles(
     styleMap ?? {},
     anchor,
-    layout,
+    tree,
     library,
     session.axis,
   );
   // Mint-time ownership consent: the session header's "belongs to
-  // <stencil>" chip and this send read the ONE fact
+  // <blueprint>" chip and this send read the ONE fact
   // (session-frame-model.js mintConsent), so what the chip says is what
   // Save commits. The anchor's placement provenance rides the save only
   // while the session is linked; unlinked (or no provenance) sends
   // nothing and the variant is born general-purpose.
   const consent = mintConsent(
     session,
-    stencilProvenance(anchor, layout),
+    blueprintProvenance(anchor, tree),
     source.getMaterials(),
   );
   return saveMaterial(
@@ -169,17 +210,17 @@ export const commitSession = ({
       // defaults to the built-in "style" axis, mirroring the payload's own
       // fold default. `group` is the record's group: the axis.
       group: vocabulary.length > 1 ? session.axis : undefined,
-      owned_by: consent?.stencil ?? undefined,
+      owned_by: consent?.blueprint ?? undefined,
     },
-    Drupal.t('Saved variant @label', { '@label': session.label.trim() }),
+    Drupal.t('Saved variant !label', { '!label': session.label.trim() }),
   ).then((minted) =>
     source
       .commitBatch({
         operations: [
           { op: 'apply_variant', key: anchor, variant: minted.id },
-          ...shadowClearingOps(styleMap ?? {}, anchor, layout, minted, library),
+          ...shadowClearingOps(styleMap ?? {}, anchor, tree, minted, library),
         ],
-        label: Drupal.t('Applied variant @label', { '@label': minted.label }),
+        label: Drupal.t('Applied variant !label', { '!label': minted.label }),
       })
       .catch(() => {
         // The op queue's source reports the failure; the element is left
@@ -212,14 +253,18 @@ export const PushBar = ({
 }) => {
   const [busy, setBusy] = useState(false);
   const library = variants ?? [];
-  const layout = source.getLayout?.() ?? [];
-  const update = session.kind === 'update';
-  const worn = update ? findVariant(library, session.reference) : null;
+  const tree = source.getTree?.() ?? [];
+  // The two line-staging kinds share the bar's posture (a pushed
+  // document); the draft alone needs a name before it can commit.
+  const update = stagesLines(session);
+  const skin = session.kind === 'skin';
+  const worn =
+    session.kind === 'update' ? findVariant(library, session.reference) : null;
   // A save session's pending set derives LIVE: the capture is what Push
   // would commit right now, mid-session element edits included.
   const capture = update
     ? null
-    : saveStyles(styleMap ?? {}, session.anchor, layout, library, session.axis);
+    : saveStyles(styleMap ?? {}, session.anchor, tree, library, session.axis);
   const count = sessionCount(session, capture);
 
   const commit = () => {
@@ -237,6 +282,13 @@ export const PushBar = ({
   };
 
   const impactText = () => {
+    if (skin) {
+      // A default's blast radius is its scope: every element of it, on
+      // every page, with no usage table to count (the scope IS the count).
+      return Drupal.t('skin default · restyles every !scope site-wide', {
+        '!scope': skinScopeLabel(session.scope, guide),
+      });
+    }
     if (!update) {
       return Drupal.t('new variant · this element will follow it');
     }
@@ -260,11 +312,13 @@ export const PushBar = ({
             <span
               className="daedalus-stylish-push-bar__dot daedalus-ui-dot"
               style={{
-                background: layerColor(variantLayerId(session.reference)),
+                background: layerColor(documentLayerId(session.reference)),
               }}
             />
             <span className="daedalus-stylish-push-bar__name">
-              {worn?.label ?? session.reference}
+              {skin
+                ? skinScopeLabel(session.scope, guide)
+                : (worn?.label ?? session.reference)}
             </span>
           </Fragment>
         ) : (

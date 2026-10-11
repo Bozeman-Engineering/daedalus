@@ -7,7 +7,7 @@
  * deviates from equal under Columns — no track string exists anywhere.
  * This module is everything the widget computes and every batch it
  * fires, kept Drupal-free so tests/js/layout-widget.test.mjs can lock it
- * under plain node: the layout tree reads (a container's children, an
+ * under plain node: the node tree reads (a container's children, an
  * element's row parent), the arrangement state (stack / row / columns /
  * custom honesty), the proportion strip math (snap scale, pair-preserving
  * drag), the count-aware preset recipes (generated here, never entities),
@@ -37,8 +37,9 @@
  */
 
 import {
-  isSectionNode,
-  sectionChildNodes,
+  isContainerNode,
+  isFlowNode,
+  nodeChildren,
   parseKey,
   bundleForKey,
   declarationForKey,
@@ -84,17 +85,17 @@ export const SNAP_STOPS = [0.2, 0.25, 1 / 3, 0.4, 0.5, 0.6, 2 / 3, 0.75, 0.8];
 const round2 = (value) => Math.round(value * 100) / 100;
 
 /**
- * Finds a container section node by uuid, at any depth.
+ * Finds a container node by uuid, at any depth.
  */
 const findSection = (nodes, uuid) => {
   for (const node of Array.isArray(nodes) ? nodes : []) {
-    if (!isSectionNode(node)) {
+    if (!isContainerNode(node)) {
       continue;
     }
     if (node.uuid === uuid) {
       return node;
     }
-    const found = findSection(sectionChildNodes(node), uuid);
+    const found = findSection(nodeChildren(node), uuid);
     if (found) {
       return found;
     }
@@ -108,11 +109,12 @@ const findSection = (nodes, uuid) => {
  * Blocks as direct row children just work (the `> *` rule styles them), so
  * both node flavors are first-class columns: {key, uuid, kind, empty} —
  * empty only ever true for a childless container (the silent-remove case).
- * Only the container FLOW qualifies (an ordered `children` list); a
- * multi-region section is not positionally addressable and gets no widget.
+ * Only a container FLOW qualifies (isFlowNode: element children directly,
+ * no region nodes); a multi-region container is not positionally
+ * addressable and gets no widget.
  *
- * @param {Array} layout
- *   The pared layout tree (source.getLayout()).
+ * @param {Array} tree
+ *   The lean node tree (source.getTree()).
  * @param {string} uuid
  *   The container's section uuid.
  *
@@ -120,18 +122,18 @@ const findSection = (nodes, uuid) => {
  *   The children in order, or null when the container is not a flow this
  *   widget can arrange.
  */
-export const containerChildren = (layout, uuid) => {
-  const section = findSection(layout, uuid);
-  if (!section || !Array.isArray(section.children)) {
+export const containerChildren = (tree, uuid) => {
+  const section = findSection(tree, uuid);
+  if (!isFlowNode(section)) {
     return null;
   }
   return section.children.map((node) =>
-    isSectionNode(node)
+    isContainerNode(node)
       ? {
           key: `container:${node.uuid}`,
           uuid: node.uuid,
           kind: 'container',
-          empty: sectionChildNodes(node).length === 0,
+          empty: nodeChildren(node).length === 0,
         }
       : {
           key: `block:${node.uuid}`,
@@ -149,15 +151,15 @@ export const containerChildren = (layout, uuid) => {
  * (the ones the widget can arrange), and only direct children (a page
  * band's parent is the entity, which never answers).
  *
- * @param {Array} layout
- *   The pared layout tree.
+ * @param {Array} tree
+ *   The lean node tree.
  * @param {string} key
  *   The element's selectable key (container:{uuid} or block:{uuid}).
  *
  * @return {?{key: string, uuid: string, index: number, count: number}}
  *   The parent container and this element's position, or null.
  */
-export const parentContainerOf = (layout, key) => {
+export const parentContainerOf = (tree, key) => {
   const parsed = parseKey(key);
   if (!parsed || (parsed.kind !== 'container' && parsed.kind !== 'block')) {
     return null;
@@ -165,10 +167,10 @@ export const parentContainerOf = (layout, key) => {
   let found = null;
   const walk = (nodes) => {
     for (const node of Array.isArray(nodes) ? nodes : []) {
-      if (!isSectionNode(node)) {
+      if (!isContainerNode(node)) {
         continue;
       }
-      if (Array.isArray(node.children)) {
+      if (isFlowNode(node)) {
         const index = node.children.findIndex(
           (child) => child?.uuid === parsed.uuid,
         );
@@ -182,13 +184,13 @@ export const parentContainerOf = (layout, key) => {
           return;
         }
       }
-      walk(sectionChildNodes(node));
+      walk(nodeChildren(node));
       if (found) {
         return;
       }
     }
   };
-  walk(layout);
+  walk(tree);
   return found;
 };
 
@@ -859,22 +861,22 @@ export const modeOps = (key, state, mode) => {
  * selections (one gap surface per container, the layout widget's), and
  * keeps serving
  * everything else the standard gapGate opens: blocks laying out multiple
- * fields, and any container the layout tree cannot arrange.
+ * fields, and any container the node tree cannot arrange.
  *
- * @param {Array} layout
- *   The pared layout tree (source.getLayout()).
+ * @param {Array} tree
+ *   The lean node tree (source.getTree()).
  * @param {string} key
  *   The selection's key.
  *
  * @return {boolean}
  */
-export const layoutOwnsGap = (layout, key) => {
+export const layoutOwnsGap = (tree, key) => {
   const parsed = parseKey(key);
   return (
     parsed !== null &&
     parsed.kind === 'container' &&
     !parsed.selector &&
-    containerChildren(layout, parsed.uuid) !== null
+    containerChildren(tree, parsed.uuid) !== null
   );
 };
 

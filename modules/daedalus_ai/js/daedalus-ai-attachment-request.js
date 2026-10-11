@@ -86,8 +86,9 @@
      *   message is appended so the turn is still the user's and the
      *   server's ATTACHMENTS block has a message to join.
      * @param {Object} turn.bodyProps
-     *   The connect's additionalBodyProps (assistant_id, thread_id, stream,
-     *   the current_route context, ...), taken from the element rather
+     *   The connect's additionalBodyProps (chat_processor_plugin,
+     *   plugin_configuration, stream, the current_route context, the
+     *   thread_id ai_chatbot writes in, ...), taken from the element rather
      *   than the multipart body, which stringified them.
      * @param {Object} turn.contexts
      *   The context providers' collected values.

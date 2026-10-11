@@ -17,26 +17,36 @@ verbs:
   js:
     js/verbs/daedalus-layout-verbs.js: { attributes: { type: 'module' }}
 
-# The Add panel (blocks, sections, stencils): drag sources, tabs, the
-# Insert verb's click-to-place. A plain sidebar panel, not a tool, attached
-# by the PlaceBlock Sidebar plugin's build(), so it loads wherever the panel
-# renders (present-but-hidden included).
+# The Add panel: one list of folding sets (Favorites, each group, All)
+# over everything the canvas can place, with its search, its star, its
+# row menu, its drag sources and the Insert verb's click-to-place. A
+# bundled Preact surface (js/src/, built by webpack.config.js into
+# js/dist/add-panel.bundle.js; `npm run build:prod` from the daedalus
+# root). A plain sidebar panel, not a tool, attached by the PlaceBlock
+# Sidebar plugin's build(), so it loads wherever the panel renders
+# (present-but-hidden included).
 add_panel:
   js:
-    js/add-panel/behaviors/add-panel-tabs.js: {}
-    js/add-panel/behaviors/draggable-new-blocks.js: {}
-    js/add-panel/behaviors/draggable-new-sections.js: {}
-    js/add-panel/add-panel.js: { attributes: { type: 'module' }}
-    js/add-panel/stencil-items.js: { attributes: { type: 'module' }}
+    js/dist/add-panel.bundle.js: { minified: true, attributes: { type: 'module' } }
   css:
     theme:
-      js/add-panel/add-panel.css: {}
+      css/add-panel.css: {}
   dependencies:
+    - core/drupal
+    - core/drupalSettings
     - daedalus_layout/editing_ui
-    # The Promoted/Other tabs wear the shared segmented-control recipe.
+    # The rows wear the shared panel item recipe, the headings the
+    # outline row grammar (the page elements tree's and code mode's), the
+    # search box the recessed input, the collapse pair the icon button.
     - daedalus_ui/panel_controls
-    # The stencil items' context menu is the shared menu primitive.
+    # The row menu is the shared menu primitive.
     - daedalus_ui/menu
+    # The collapse pair (daedalus_ui's outline controls, seated in the
+    # header's slot) registers with the reveal engine for its lifetime.
+    - daedalus_ui/reveal
+    # The star and the collapse pair name themselves through the shared
+    # tooltip.
+    - daedalus_ui/tooltip
 
 # Canvas display preferences (container outlines) plus edit-mode
 # interaction suppression. Contributed to the Edit Mode settings panel by
@@ -51,6 +61,14 @@ layout_settings:
       js/settings/container-outlines.css: {}
   dependencies:
     - daedalus_layout/editing_ui
+
+# The start chooser on a content entity add form (StartChooser): the cards,
+# the group filters and the "Starting from" line. Styles only; a card is a
+# link and a filter is a link, so nothing here needs a script.
+start_chooser:
+  css:
+    theme:
+      css/start-chooser.css: {}
 
 # The icon picker form element (daedalus_layout_icon_picker): preview refresh on a
 # media library pick, the Remove button. Attached by the element itself.

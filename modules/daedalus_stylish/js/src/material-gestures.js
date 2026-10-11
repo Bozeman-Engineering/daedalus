@@ -2,11 +2,12 @@
  * The material gesture family on the client: save_material and
  * update_material over the state source's batch commit.
  *
- * Every UI verb that writes a swatch or a variant (the palette's mint card
- * and value editor, the gradient builder's and the color field's "Save as
- * swatch", the push bar's save and update sessions) submits the SAME
- * page-language op the AI submits (daedalus_blueprint's
- * MaterialGestureOperationHandler), through `source.commitBatch()`: the
+ * Every UI verb that writes a token, a swatch, an animation or a variant
+ * (the palette's mint cards and value editors, the gradient builder's and
+ * the color field's "Save as swatch", the push bar's save and update
+ * sessions) submits the SAME page-language op the AI submits
+ * (daedalus_blueprint's MaterialGestureOperationHandler), through
+ * `source.commitBatch()`: the
  * leader runs it on the op queue, the satellite runs it through the leader
  * (popout-leader.js relays the batch and settles the promise with the
  * leader's result). The op queue applies the response's `materials` delta
@@ -16,8 +17,9 @@
  *
  * The record comes back in the response's `materials.upsert`; there is no
  * per-gesture echo payload. A mint's machine name is derived server-side
- * from its label, so a save resolves the record by kind (the one record of
- * that kind the batch wrote) and an update by id.
+ * from its label (a token's label IS its name, its id "{scale}/{name}"),
+ * so a save resolves the record by kind (the one record of that kind the
+ * batch wrote) and an update by id.
  */
 
 /**
@@ -26,7 +28,8 @@
  * @param {?object} payload
  *   A mutation response (or a gesture route's response body).
  * @param {string} kind
- *   The material kind ('swatch' | 'variant' | 'stencil').
+ *   The material kind ('token' | 'swatch' | 'variant' | 'animation' |
+ *   'blueprint').
  * @param {?string} [id]
  *   The record id when the gesture named one (an update, a route on a
  *   known material); null for a mint, whose id the server derived.
@@ -62,7 +65,8 @@ const submit = (source, operation, label) =>
  * @param {object} source
  *   The state source (leader or satellite).
  * @param {object} gesture
- *   {kind, label} plus the kind's own keys (a swatch's value and group; a
+ *   {kind, label} plus the kind's own keys (a token's group, the scale,
+ *   with its value, description and offered; a swatch's value and group; a
  *   variant's key, styles, group and owned_by). Keys whose value is
  *   undefined are dropped.
  * @param {string} label

@@ -4,16 +4,15 @@ declare(strict_types=1);
 
 namespace Drupal\daedalus_blueprint\Result;
 
-use Drupal\Core\Entity\EntityInterface;
-
 /**
  * Shared machinery of the blueprint result objects.
  *
- * Carries the phase reached, the errors and warnings collected, and the
- * entity an operation produced; mints each outcome through the factories;
- * serializes the common shape. A concrete result narrows getEntity() to the
- * entity family it serves (fieldable content, config) and describes that
- * entity for toArray() through entitySummary().
+ * Carries the phase reached and the errors and warnings collected; mints
+ * the outcomes that produce nothing (validated, the two failures) through
+ * the factories; serializes the common shape. A concrete result carries
+ * the subject its family produces (the page host for content operations,
+ * the config entity for config operations), answers getEntity() from it,
+ * and describes it for toArray() through subjectSummary().
  */
 abstract class BlueprintResultBase implements BlueprintResultInterface {
 
@@ -26,30 +25,12 @@ abstract class BlueprintResultBase implements BlueprintResultInterface {
    *   The errors collected during the operation.
    * @param \Drupal\daedalus_blueprint\Result\BlueprintWarning[] $warnings
    *   The warnings collected during the operation.
-   * @param \Drupal\Core\Entity\EntityInterface|null $entity
-   *   The entity if the operation succeeded.
    */
   public function __construct(
     protected readonly string $phase,
     protected readonly array $errors = [],
     protected readonly array $warnings = [],
-    protected readonly ?EntityInterface $entity = NULL,
   ) {}
-
-  /**
-   * Creates a successful result with a hydrated entity.
-   *
-   * @param \Drupal\Core\Entity\EntityInterface $entity
-   *   The hydrated entity.
-   * @param \Drupal\daedalus_blueprint\Result\BlueprintWarning[] $warnings
-   *   Any warnings collected.
-   *
-   * @return static
-   *   A new successful result.
-   */
-  public static function success(EntityInterface $entity, array $warnings = []): static {
-    return new static('hydrated', [], $warnings, $entity);
-  }
 
   /**
    * Creates a successful validate-only result.
@@ -121,15 +102,13 @@ abstract class BlueprintResultBase implements BlueprintResultInterface {
   }
 
   /**
-   * Describes the produced entity for toArray().
-   *
-   * @param \Drupal\Core\Entity\EntityInterface $entity
-   *   The entity the operation produced.
+   * Describes the produced subject for toArray().
    *
    * @return array
-   *   The identity keys appended to the serialized result.
+   *   The identity keys appended to the serialized result; empty when the
+   *   operation produced nothing (a failure, a validate-only run).
    */
-  abstract protected function entitySummary(EntityInterface $entity): array;
+  abstract protected function subjectSummary(): array;
 
   /**
    * {@inheritdoc}
@@ -151,10 +130,7 @@ abstract class BlueprintResultBase implements BlueprintResultInterface {
         $this->warnings,
       );
     }
-    if ($this->entity !== NULL) {
-      $result += $this->entitySummary($this->entity);
-    }
-    return $result;
+    return $result + $this->subjectSummary();
   }
 
 }

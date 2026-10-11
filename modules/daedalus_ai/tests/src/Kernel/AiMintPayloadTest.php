@@ -81,9 +81,15 @@ class AiMintPayloadTest extends KernelTestBase {
     // roster; the daedalus_stylish provider reads all four storages.
     $this->installEntitySchema('daedalus_swatch');
     $this->installEntitySchema('daedalus_animation');
+    $this->installEntitySchema('daedalus_font');
     $this->installEntitySchema('daedalus_variant');
     $this->installEntitySchema('daedalus_skin');
-    $this->installSchema('daedalus_stylish', ['daedalus_variant_usage', 'daedalus_swatch_usage']);
+    $this->installSchema('daedalus_stylish', [
+      'daedalus_variant_usage',
+      'daedalus_swatch_usage',
+      'daedalus_token_usage',
+      'daedalus_font_usage',
+    ]);
     $this->installConfig(['filter', 'text', 'daedalus_stylish']);
     $this->setUpCurrentUser([], [], TRUE);
   }
@@ -102,10 +108,14 @@ class AiMintPayloadTest extends KernelTestBase {
    * Fires the persisted event the tools dispatch, through the real bus.
    */
   protected function persisted(object $entity, bool $is_new, array $targets = []): void {
+    // A page result carries its host; a config result (the swatch) its
+    // entity, as the tool base dispatches them.
+    $resolver = $this->container->get('daedalus_blueprint.host_resolver');
+    $subject = $resolver->hosts($entity) ? ['host' => $resolver->fromEntity($entity)] : ['entity' => $entity];
     $this->container->get('event_dispatcher')->dispatch(new AiToolActionEvent(
       'entity_persisted',
       'tool:eb_create_entity',
-      ['entity' => $entity, 'is_new' => $is_new, 'targets' => $targets],
+      $subject + ['is_new' => $is_new, 'targets' => $targets],
     ));
   }
 

@@ -6,6 +6,28 @@
  */
 
 /**
+ * The current page is a host.
+ *
+ * @section current_host Pages, templates and saved blueprints, one resolver
+ *
+ * Everything this module tells the assistant about the page on screen is
+ * read through the page document's host
+ * (\Drupal\daedalus_blueprint\Host\HostInterface), resolved once from the
+ * route by \Drupal\daedalus_ai\RouteEntityResolver and worded by its
+ * describe(): the host CLASS decides the wording (a DisplayHost is "the
+ * default template for page nodes", a BlueprintHost is 'the block
+ * blueprint "Card" for page nodes', read from the host's scope, label
+ * and display target; a page is neither), never which fields the host
+ * answers, since a saved blueprint answers its entity's fields like a page
+ * and is still not one. The current-page context line, the selected
+ * element context and the Context Tags protocol carry that sentence, and
+ * the page tools in daedalus_blueprint_ai address the same host as
+ * `entity_type: blueprint` by id. This module depends on neither
+ * daedalus_blueprint_library nor its classes: the scope, subject and label
+ * it needs are the spine's BlueprintHost answers.
+ */
+
+/**
  * @addtogroup hooks
  * @{
  */

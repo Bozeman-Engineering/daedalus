@@ -48,7 +48,7 @@ class BlueprintOperationsBatchTest extends BlueprintKernelTestBase {
   public function testBatchEmptyOperations(): void {
     $entity = $this->createTestEntity(['name' => 'Test']);
 
-    $result = $this->operations->batchOperations($entity, []);
+    $result = $this->operations->batchOperations($this->host($entity), []);
 
     $this->assertTrue($result->isSuccess());
     $this->assertSame($entity, $result->getEntity());
@@ -85,7 +85,7 @@ class BlueprintOperationsBatchTest extends BlueprintKernelTestBase {
     ]);
     $entity->save();
 
-    $result = $this->operations->batchOperations($entity, [
+    $result = $this->operations->batchOperations($this->host($entity), [
       [
         'op' => 'update_element',
         'element' => 'faf95c53-35e7-74e1-184e-041152031df4',
@@ -147,7 +147,7 @@ class BlueprintOperationsBatchTest extends BlueprintKernelTestBase {
     ]);
     $entity->save();
 
-    $result = $this->operations->batchOperations($entity, [
+    $result = $this->operations->batchOperations($this->host($entity), [
       [
         'op' => 'update_element',
         'element' => 'faf95c53-35e7-74e1-184e-041152031df4',
@@ -212,7 +212,7 @@ class BlueprintOperationsBatchTest extends BlueprintKernelTestBase {
     // Operation 0: typo in field name.
     // Operation 1: valid (succeeds).
     // Operation 2: non-existent component UUID.
-    $result = $this->operations->batchOperations($entity, [
+    $result = $this->operations->batchOperations($this->host($entity), [
       [
         'op' => 'update_element',
         'element' => 'faf95c53-35e7-74e1-184e-041152031df4',
@@ -303,7 +303,7 @@ class BlueprintOperationsBatchTest extends BlueprintKernelTestBase {
 
     // Operation 0: valid update (succeeds).
     // Operation 1: field_heading exceeds max_length (semantic failure).
-    $result = $this->operations->batchOperations($entity, [
+    $result = $this->operations->batchOperations($this->host($entity), [
       [
         'op' => 'update_element',
         'element' => 'faf95c53-35e7-74e1-184e-041152031df4',
@@ -333,10 +333,10 @@ class BlueprintOperationsBatchTest extends BlueprintKernelTestBase {
   }
 
   /**
-   * Tests inter-operation dependency with add + restructure.
+   * Tests inter-operation dependency with add + move.
    *
-   * An add_element with a client-provided UUID followed by
-   * restructure_layout referencing that UUID should both succeed.
+   * An add_element with a client-provided UUID followed by a move_element
+   * referencing that UUID should both succeed.
    */
   public function testBatchInterOperationDependency(): void {
     $this->enableLayoutBuilder();
@@ -367,8 +367,9 @@ class BlueprintOperationsBatchTest extends BlueprintKernelTestBase {
 
     // Operation 0: add_element with client UUID, placed after the existing
     // block through the anchor grammar.
-    // Operation 1: restructure_layout referencing the new UUID.
-    $result = $this->operations->batchOperations($entity, [
+    // Operation 1: move_element referencing the new UUID, before the
+    // existing block.
+    $result = $this->operations->batchOperations($this->host($entity), [
       [
         'op' => 'add_element',
         'location' => ['anchor' => 'a0bd9075-abce-9a83-7b79-d4db72ff887b', 'placement' => 'after'],
@@ -377,17 +378,9 @@ class BlueprintOperationsBatchTest extends BlueprintKernelTestBase {
         'properties' => ['field_heading' => 'New Heading', 'label' => 'New Block'],
       ],
       [
-        'op' => 'restructure_layout',
-        'structure' => [
-          'layout_builder__layout' => [
-            [
-              'layout_id' => 'layout_onecol',
-              'regions' => [
-                'content' => ['395e49a2-99ca-4616-714b-4c7026d49122', 'a0bd9075-abce-9a83-7b79-d4db72ff887b'],
-              ],
-            ],
-          ],
-        ],
+        'op' => 'move_element',
+        'element' => '395e49a2-99ca-4616-714b-4c7026d49122',
+        'location' => ['anchor' => 'a0bd9075-abce-9a83-7b79-d4db72ff887b', 'placement' => 'before'],
       ],
     ]);
 
@@ -450,7 +443,7 @@ class BlueprintOperationsBatchTest extends BlueprintKernelTestBase {
     ]);
     $entity->save();
 
-    $result = $this->operations->batchOperations($entity, [
+    $result = $this->operations->batchOperations($this->host($entity), [
       // Update block 1's heading.
       [
         'op' => 'update_element',
@@ -494,7 +487,7 @@ class BlueprintOperationsBatchTest extends BlueprintKernelTestBase {
   public function testBatchInvalidOperationType(): void {
     $entity = $this->createTestEntity(['name' => 'Test']);
 
-    $result = $this->operations->batchOperations($entity, [
+    $result = $this->operations->batchOperations($this->host($entity), [
       [
         'op' => 'delete_everything',
       ],
@@ -515,7 +508,7 @@ class BlueprintOperationsBatchTest extends BlueprintKernelTestBase {
   public function testBatchErrorOperationIndexInToArray(): void {
     $entity = $this->createTestEntity(['name' => 'Test']);
 
-    $result = $this->operations->batchOperations($entity, [
+    $result = $this->operations->batchOperations($this->host($entity), [
       ['op' => 'update_element', 'properties' => ['name' => 'Valid']],
       ['op' => 'update_element', 'properties' => ['nonexistent_field' => 'Bad']],
     ]);
@@ -539,7 +532,7 @@ class BlueprintOperationsBatchTest extends BlueprintKernelTestBase {
       'field_subtitle' => 'Sub',
     ]);
 
-    $result = $this->operations->batchOperations($entity, [
+    $result = $this->operations->batchOperations($this->host($entity), [
       [
         'op' => 'update_element',
         'element' => $entity->uuid(),
@@ -585,7 +578,7 @@ class BlueprintOperationsBatchTest extends BlueprintKernelTestBase {
     ]);
     $entity->save();
 
-    $result = $this->operations->batchOperations($entity, [
+    $result = $this->operations->batchOperations($this->host($entity), [
       [
         'op' => 'update_element',
         'element' => 'faf95c53-35e7-74e1-184e-041152031df4',
@@ -632,7 +625,7 @@ class BlueprintOperationsBatchTest extends BlueprintKernelTestBase {
     ]);
     $entity->save();
 
-    $result = $this->operations->batchOperations($entity, [
+    $result = $this->operations->batchOperations($this->host($entity), [
       [
         'op' => 'remove_element',
         'element' => '474ec695-fe40-d152-f511-3878a0d103ef',
@@ -699,7 +692,7 @@ class BlueprintOperationsBatchTest extends BlueprintKernelTestBase {
     // Operation 0: semantic failure (heading exceeds max_length).
     // Operation 1: valid update (succeeds on the doomed entity).
     // Operation 2: independent semantic failure on the other block.
-    $result = $this->operations->batchOperations($entity, [
+    $result = $this->operations->batchOperations($this->host($entity), [
       [
         'op' => 'update_element',
         'element' => 'faf95c53-35e7-74e1-184e-041152031df4',
@@ -781,7 +774,7 @@ class BlueprintOperationsBatchTest extends BlueprintKernelTestBase {
 
     // Operation 0: structural failure (unknown property).
     // Operation 1: semantic failure (heading exceeds max_length).
-    $result = $this->operations->batchOperations($entity, [
+    $result = $this->operations->batchOperations($this->host($entity), [
       [
         'op' => 'update_element',
         'element' => 'faf95c53-35e7-74e1-184e-041152031df4',
@@ -845,7 +838,7 @@ class BlueprintOperationsBatchTest extends BlueprintKernelTestBase {
     // Operation 0: add_element minting a uuid, semantic failure (heading
     // exceeds max_length) so the component is never placed.
     // Operation 1: update_element referencing the never-minted uuid.
-    $result = $this->operations->batchOperations($entity, [
+    $result = $this->operations->batchOperations($this->host($entity), [
       [
         'op' => 'add_element',
         'location' => ['anchor' => 'a0bd9075-abce-9a83-7b79-d4db72ff887b', 'placement' => 'after'],
@@ -905,7 +898,7 @@ class BlueprintOperationsBatchTest extends BlueprintKernelTestBase {
     // Operation 0: add_element with an unknown block type (structural),
     // minting a uuid that never comes to exist.
     // Operation 1: update_element referencing that uuid.
-    $result = $this->operations->batchOperations($entity, [
+    $result = $this->operations->batchOperations($this->host($entity), [
       [
         'op' => 'add_element',
         'location' => ['anchor' => 'a0bd9075-abce-9a83-7b79-d4db72ff887b', 'placement' => 'after'],
@@ -968,7 +961,7 @@ class BlueprintOperationsBatchTest extends BlueprintKernelTestBase {
     // Operation 1: duplicates the never-minted element, minting a second
     // uuid (fails, suppressed, taints its own mint).
     // Operation 2: references operation 1's mint (fails, suppressed).
-    $result = $this->operations->batchOperations($entity, [
+    $result = $this->operations->batchOperations($this->host($entity), [
       [
         'op' => 'add_element',
         'location' => ['anchor' => 'a0bd9075-abce-9a83-7b79-d4db72ff887b', 'placement' => 'after'],
@@ -1006,7 +999,7 @@ class BlueprintOperationsBatchTest extends BlueprintKernelTestBase {
       'field_subtitle' => 'Sub',
     ]);
 
-    $result = $this->operations->batchOperations($entity, [
+    $result = $this->operations->batchOperations($this->host($entity), [
       [
         'op' => 'update_element',
         'properties' => [

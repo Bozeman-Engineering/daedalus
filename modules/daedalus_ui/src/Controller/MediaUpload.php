@@ -16,12 +16,14 @@ use Drupal\daedalus_tempstore\EntityTempstoreRepository;
 use Drupal\Core\Entity\EntityTypeBundleInfoInterface;
 use Symfony\Component\HttpFoundation\File\UploadedFile;
 use Drupal\daedalus_ui\Event\LayoutBuilderNewMedia;
-use Drupal\Core\Entity\EntityDisplayRepositoryInterface;
-use Drupal\daedalus_ui\LoadEditablePageResponseTrait;
+use Drupal\daedalus_blueprint\Host\HostInterface;
+use Drupal\daedalus_blueprint\Host\HostResolver;
+use Drupal\daedalus_ui\DaedalusUi;
 use Drupal\daedalus_ui\Event\LayoutBuilderReplaceMedia;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\EventDispatcher\EventDispatcherInterface;
 use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
+use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 /**
  * Media upload.
@@ -33,8 +35,6 @@ use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
  */
 final class MediaUpload extends ControllerBase {
 
-  use LoadEditablePageResponseTrait;
-
   /**
    * Where the human upload lane keeps its files.
    */
@@ -43,9 +43,10 @@ final class MediaUpload extends ControllerBase {
   public function __construct(
     private EntityTempstoreRepository $tempstoreRepository,
     private FileLane $fileLane,
-    private EntityDisplayRepositoryInterface $entityDisplayRepository,
     private EntityTypeBundleInfoInterface $entityTypeBundleInfo,
     private EventDispatcherInterface $eventDispatcher,
+    private HostResolver $hostResolver,
+    private DaedalusUi $daedalusUi,
   ) {}
 
   /**
@@ -55,9 +56,10 @@ final class MediaUpload extends ControllerBase {
     return new static(
       $container->get('daedalus_tempstore.entity_tempstore_repository'),
       $container->get('daedalus_ui.file_lane'),
-      $container->get('entity_display.repository'),
       $container->get('entity_type.bundle.info'),
       $container->get('event_dispatcher'),
+      $container->get('daedalus_blueprint.host_resolver'),
+      $container->get('daedalus_ui.ui'),
     );
   }
 
@@ -87,12 +89,7 @@ final class MediaUpload extends ControllerBase {
    * @throws \Drupal\Core\Entity\EntityStorageException
    */
   public function newMedia(Request $request, EntityInterface $entity, string $view_mode) {
-    // Sanitize view mode.
-    $valid_view_modes = $this->entityDisplayRepository->getViewModes($entity->getEntityTypeId());
-    $valid_view_modes['default'] = TRUE;
-    if (empty($valid_view_modes[$view_mode])) {
-      throw new \InvalidArgumentException(sprintf('Invalid view mode for %s', $entity->label()));
-    }
+    $this->hostOf($entity, $view_mode);
 
     // The target media bundle is not known yet (the user picks it on the
     // later file-association form), so the lane's full accepted set applies:
@@ -119,9 +116,9 @@ final class MediaUpload extends ControllerBase {
   /**
    * Replace media.
    *
-   * A user has dragged a Media Type compatible file from their browser to a
-   * dropzone on an existing Media Block on the page. We then replace the media.
-   * This works on regular and LB pages.
+   * A user has dragged a Media Type compatible file from their browser onto
+   * a media reference rendered on the page (a placed block's field or the
+   * host's own), and the media is replaced on the entity whose field it is.
    *
    * @param \Symfony\Component\HttpFoundation\Request $request
    *   The current request.
@@ -150,6 +147,7 @@ final class MediaUpload extends ControllerBase {
     if (!$upload instanceof UploadedFile) {
       throw new BadRequestHttpException('Invalid file');
     }
+    $this->hostOf($entity, $view_mode);
 
     $entity = $this->tempstoreRepository->get($entity);
     // The target bundle is known, so the lane is narrowed to its source
@@ -179,11 +177,12 @@ final class MediaUpload extends ControllerBase {
   }
 
   /**
-   * Replace page element with new media.
+   * Commits the replacement through the spine and answers its payload.
    *
-   * Determines if the media needs to be replaced on a regular or LB page.
-   * Preserved fields on LB pages (fields rendered outside blocks) are treated
-   * as non-LB fields since they lack block context.
+   * One road for every page: the Layout Builder integration answers the
+   * event with one update_element on the entity whose field the drop
+   * landed on (a placed block named by the request's blockUuid, else the
+   * host's own field), judged at the op door like any other write.
    *
    * @param \Symfony\Component\HttpFoundation\Request $request
    *   The current request.
@@ -200,77 +199,39 @@ final class MediaUpload extends ControllerBase {
    *   A response that updates the page with the newly uploaded media.
    */
   protected function replacePageElementWithNewMedia(Request $request, Media $media, EntityInterface $entity, string $view_mode, string $media_reference) {
-    $has_block_context = $request->query->has('blockUuid') && $request->query->get('blockUuid');
-    if ($this->isLayoutBuilderPage($entity, $view_mode) && $has_block_context) {
-      $event = $this->eventDispatcher->dispatch(new LayoutBuilderReplaceMedia($media, $entity, $view_mode, $media_reference), LayoutBuilderReplaceMedia::class);
-      return $event->getResponse();
-    }
-    else {
-      return $this->updateNonLayoutBuilderPage($media, $entity, $view_mode, $media_reference);
-    }
+    $event = $this->eventDispatcher->dispatch(new LayoutBuilderReplaceMedia($media, $entity, $view_mode, $media_reference), LayoutBuilderReplaceMedia::class);
+    return $event->getResponse();
   }
 
   /**
-   * Update field.
+   * The host a media route addresses, its view mode checked.
    *
-   * Updates the page with the replaced media on non-layout builder pages.
-   *
-   * @param \Drupal\media\Entity\Media $media
-   *   The newly uploaded media.
-   * @param \Drupal\Core\Entity\EntityInterface $entity
-   *   The entity to be updated.
-   * @param string $view_mode
-   *   The view mode.
-   * @param string $media_reference
-   *   The media reference field name.
-   *
-   * @return \Drupal\Core\Ajax\AjaxResponse
-   *   A response that updates the page with the newly uploaded media.
-   */
-  private function updateNonLayoutBuilderPage(Media $media, EntityInterface $entity, string $view_mode, string $media_reference) {
-    if (!$entity->hasField($media_reference)) {
-      throw new \InvalidArgumentException(sprintf('Invalid media reference field "%s"', $media_reference));
-    }
-    $entity->get($media_reference)->setValue($media->id());
-    $this->tempstoreRepository->set($entity);
-    $build = $this->entityTypeManager()->getViewBuilder($entity->getEntityTypeId())->view($entity, $view_mode);
-
-    return $this->getAjaxReplaceResponse($entity, $view_mode, $build);
-  }
-
-  /**
-   * Is layout builder page.
+   * Any host: a content entity or a Layout Builder display (the template
+   * canvas takes file drops too). A display renders in the one view mode
+   * its display is for; a content entity in any of its type's.
    *
    * @param \Drupal\Core\Entity\EntityInterface $entity
-   *   The entity to check.
+   *   The route's entity.
    * @param string $view_mode
-   *   The view mode.
+   *   The route's view mode.
    *
-   * @return bool
-   *   Whether this particular view mode a layout builder page.
+   * @return \Drupal\daedalus_blueprint\Host\HostInterface
+   *   The host.
+   *
+   * @throws \Symfony\Component\HttpKernel\Exception\NotFoundHttpException
+   *   When nothing hosts the entity.
+   * @throws \InvalidArgumentException
+   *   When the view mode is not one the host renders in.
    */
-  private function isLayoutBuilderPage(EntityInterface $entity, string $view_mode) {
-
-    // Is this entity's display managed by layout builder?
-    $config_name = sprintf('core.entity_view_display.%s.%s.%s',
-      $entity->getEntityTypeId(),
-      $entity->bundle(),
-      $view_mode,
-    );
-
-    $config = $this->config($config_name);
-    // Check that this view mode isn't just falling back to default. If so, load
-    // the default.
-    if ($view_mode !== 'default' && empty($config->getRawData())) {
-      $view_mode = 'default';
+  private function hostOf(EntityInterface $entity, string $view_mode): HostInterface {
+    if (!$this->hostResolver->hosts($entity)) {
+      throw new NotFoundHttpException(sprintf('Nothing hosts %s %s.', $entity->getEntityTypeId(), $entity->id()));
     }
-
-    $view_display = $this->entityDisplayRepository->getViewDisplay($entity->getEntityTypeId(), $entity->bundle(), $view_mode);
-    if ($view_display) {
-      // Check if Layout Builder is enabled for this view display.
-      return !empty($view_display->getThirdPartySetting('layout_builder', 'enabled', FALSE));
+    $host = $this->hostResolver->fromEntity($entity);
+    if (!$this->daedalusUi->isValidViewMode($host, $view_mode)) {
+      throw new \InvalidArgumentException(sprintf('Invalid view mode for %s', $host->label()));
     }
-    return FALSE;
+    return $host;
   }
 
   /**

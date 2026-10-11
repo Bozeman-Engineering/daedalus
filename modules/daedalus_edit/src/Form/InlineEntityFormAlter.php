@@ -4,6 +4,7 @@ namespace Drupal\daedalus_edit\Form;
 
 use Drupal\daedalus_blueprint\ExtractedValue;
 use Drupal\daedalus_edit\DaedalusEditFormTrait;
+use Drupal\daedalus_blueprint\Host\HostResolver;
 use Drupal\daedalus_edit\FormCommit;
 use Drupal\Core\Entity\EntityInterface;
 use Drupal\Core\Form\FormStateInterface;
@@ -39,6 +40,7 @@ class InlineEntityFormAlter implements EntityFormInterface {
     protected EventDispatcherInterface $dispatcher,
     protected RequestStack $requestStack,
     protected FormCommit $formCommit,
+    protected HostResolver $hostResolver,
   ) {}
 
   /**
@@ -91,14 +93,15 @@ class InlineEntityFormAlter implements EntityFormInterface {
     // still answers, but nothing persists and no history entry is written.
     // The working copy is the staged entity; the form built on a clone.
     $langcode = $entity->language()->getId();
-    $staged = $this->formCommit->stagedRoot($entity);
+    $host = $this->hostResolver->fromEntity($entity);
+    $staged = $this->formCommit->stagedRoot($host)?->fields();
     if ($staged !== NULL && $staged->hasTranslation($langcode)) {
       $staged = $staged->getTranslation($langcode);
     }
     $changed = FormCommit::fieldChanged($items, $staged?->get($field_name));
     $outcome = $this->formCommit->commit(
-      $entity,
-      $entity->uuid(),
+      $host,
+      $host->uuid(),
       [$field_name => new ExtractedValue($items)],
       $langcode,
       $this->t('Edited @label', ['@label' => $items->getFieldDefinition()->getLabel()]),

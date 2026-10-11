@@ -96,12 +96,12 @@ final class FileLaneTest extends KernelTestBase {
   }
 
   /**
-   * The accepted set is the media source extensions plus the textual kinds.
+   * The accepted set: media source extensions, textual kinds, font kinds.
    */
   public function testAcceptedExtensions(): void {
     $accepted = $this->lane->acceptedExtensions();
     sort($accepted);
-    $expected = array_merge(FileLane::TEXTUAL_EXTENSIONS, ['png', 'gif', 'jpg', 'jpeg', 'webp']);
+    $expected = array_merge(FileLane::TEXTUAL_EXTENSIONS, FileLane::FONT_EXTENSIONS, ['png', 'gif', 'jpg', 'jpeg', 'webp']);
     sort($expected);
     $this->assertSame($expected, $accepted);
 

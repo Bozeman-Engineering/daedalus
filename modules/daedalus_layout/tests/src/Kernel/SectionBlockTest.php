@@ -125,7 +125,7 @@ class SectionBlockTest extends NestedStorageKernelTestBase {
   }
 
   /**
-   * Missing contexts throw instead of silently rendering a degraded subtree.
+   * A missing view mode throws instead of silently rendering a degraded subtree.
    */
   public function testMissingContextsThrow(): void {
     $embedded = $this->createSection('layout_onecol', [
@@ -136,6 +136,31 @@ class SectionBlockTest extends NestedStorageKernelTestBase {
     $this->expectException(ContextException::class);
     $build = $container->toRenderArray([]);
     $this->container->get('renderer')->renderInIsolation($build);
+  }
+
+  /**
+   * A render with no subject renders the subtree without what needs one.
+   *
+   * The site frame renders around a view page or a form with no entity in
+   * context: the container renders, its blocks that need no subject
+   * render, and a field block, with nothing to present, renders nothing.
+   */
+  public function testSubjectlessRenderSkipsWhatNeedsTheSubject(): void {
+    $embedded = $this->createSection('layout_onecol', [
+      $this->createNameFieldBlockComponent(),
+      new SectionComponent('5e000000-0000-4000-8000-000000000001', 'content', [
+        'id' => 'system_powered_by_block',
+        'label' => 'Subjectless sentinel',
+        'label_display' => 'visible',
+      ]),
+    ]);
+    $container = SectionBlock::createComponent($embedded, 'content');
+    $build = $container->toRenderArray([
+      'view_mode' => new Context(new ContextDefinition('string'), 'default'),
+    ]);
+    $html = (string) $this->container->get('renderer')->renderInIsolation($build);
+    $this->assertStringContainsString('Subjectless sentinel', $html);
+    $this->assertStringNotContainsString('field-block', $html, "The field block renders nothing: $html");
   }
 
   /**

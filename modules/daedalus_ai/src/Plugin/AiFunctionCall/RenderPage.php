@@ -15,11 +15,10 @@ use Drupal\daedalus_ai\Render\HeadlessRenderException;
 use Drupal\daedalus_ai\Render\StateVector;
 use Drupal\daedalus_ai\Render\ToolImagesResult;
 use Drupal\daedalus_blueprint_ai\ConversationContext;
+use Drupal\daedalus_ui\DaedalusUi;
 use Drupal\daedalus_ui\File\FileLane;
 use Drupal\daedalus_ui\File\FileLaneException;
-use Drupal\Core\Entity\EntityMalformedException;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
-use Drupal\Core\Entity\Exception\UndefinedLinkTemplateException;
 use Drupal\Core\Plugin\Context\ContextDefinition;
 use Drupal\Core\StringTranslation\TranslatableMarkup;
 use Symfony\Component\DependencyInjection\ContainerInterface;
@@ -47,7 +46,7 @@ use Symfony\Component\HttpFoundation\RequestStack;
   id: 'daedalus_ai:render_page',
   function_name: 'render_page',
   name: 'Render Page',
-  description: 'Renders an entity\'s page in a real headless browser and returns a screenshot for you to inspect. The page loads in Edit Mode as the current editor, so your staged (unsaved) changes are included. Pose the canvas state vector to verify responsive and styling work: canvas_width narrows the canvas so container-breakpoint conditions (narrow/medium) re-evaluate, canvas_scheme forces light/dark, canvas_motion forces reduced motion. The screenshot arrives as an image attached to your next turn; ALWAYS look at it before declaring visual work done. It is also kept under the name the result reports, so view_file(name) re-opens it later. Render once per state you changed styles for (e.g. once at full width for the base look, once at canvas_width=896 for medium, once at canvas_width=375 for narrow behavior).',
+  description: 'Renders an entity\'s page (or a template\'s canvas: entity_type entity_view_display with its display id) in a real headless browser and returns a screenshot for you to inspect. The page loads in Edit Mode as the current editor, so your staged (unsaved) changes are included. Pose the canvas state vector to verify responsive and styling work: canvas_width narrows the canvas so container-breakpoint conditions (narrow/medium) re-evaluate, canvas_scheme forces light/dark, canvas_motion forces reduced motion. The screenshot arrives as an image attached to your next turn; ALWAYS look at it before declaring visual work done. It is also kept under the name the result reports, so view_file(name) re-opens it later. Render once per state you changed styles for (e.g. once at full width for the base look, once at canvas_width=896 for medium, once at canvas_width=375 for narrow behavior).',
   group: 'information_tools',
   context_definitions: [
     'entity_type' => new ContextDefinition(
@@ -115,6 +114,11 @@ final class RenderPage extends FunctionCallBase implements ExecutableFunctionCal
   protected ConversationContext $conversationContext;
 
   /**
+   * The page builder UI: the editing URL of a host's canvas.
+   */
+  protected DaedalusUi $daedalusUi;
+
+  /**
    * The screenshot result, delivered via the ai_agents image contract.
    */
   protected ?ToolImagesResult $result = NULL;
@@ -136,6 +140,7 @@ final class RenderPage extends FunctionCallBase implements ExecutableFunctionCal
     $instance->fileLane = $container->get('daedalus_ui.file_lane');
     $instance->attachments = $container->get('daedalus_ai.attachments');
     $instance->conversationContext = $container->get('daedalus_blueprint_ai.conversation_context');
+    $instance->daedalusUi = $container->get('daedalus_ui.ui');
     return $instance;
   }
 
@@ -175,16 +180,18 @@ final class RenderPage extends FunctionCallBase implements ExecutableFunctionCal
       return;
     }
 
-    try {
-      $url = $entity->toUrl('canonical', [
-        'absolute' => TRUE,
-        'query' => $vector->toQuery(),
-      ])->toString();
-    }
-    catch (UndefinedLinkTemplateException | EntityMalformedException) {
+    // The host's canvas: the one editing URL the page builder knows for it
+    // (canonical for most entities, the site frame among them; core's
+    // manage-display layout route for a template), so a template renders
+    // as the editor sees it, sample content included.
+    if (!$this->daedalusUi->hasEditingUrl($entity)) {
       $this->setOutput("$entity_type:$entity_id has no page of its own. Render the entity whose page hosts it (usually the current node).");
       return;
     }
+    $url = $this->daedalusUi->getEditingUrl($entity)
+      ->setAbsolute()
+      ->setOption('query', $vector->toQuery())
+      ->toString();
 
     // The headless browser replicates the editor's browsing context: their
     // session cookie (staged tempstore edits are keyed to it) plus the

@@ -115,6 +115,20 @@ trait DaedalusFixtureTrait {
     $this->profile = '';
     $this->defaultTheme = 'daedalus_theme';
     parent::setUp();
+    $this->installFixture();
+  }
+
+  /**
+   * Installs the test-only fixture on top of the recipe's product.
+   *
+   * The default is daedalus_edit_test_fixture (see the trait docblock). A
+   * capability with a fixture module of its own overrides this to install
+   * that one instead: two fixtures shipping the same storage config (the
+   * node.body storage this one ships) cannot install on one site, and the
+   * recipe's editor role gains the overriding fixture's bundle permissions
+   * here for the same reason the default grants the plain bundle's.
+   */
+  protected function installFixture(): void {
     \Drupal::service('module_installer')->install(['daedalus_edit_test_fixture']);
     // The fixture's bundles did not exist when the recipe's editor role was
     // built, so their permissions are granted here (see the trait docblock).

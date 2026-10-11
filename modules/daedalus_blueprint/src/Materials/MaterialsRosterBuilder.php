@@ -196,8 +196,7 @@ class MaterialsRosterBuilder {
    *
    * The provider that teaches a kind's gesture line is the provider that
    * performs it (one source for the prompt and the dispatch); a kind no
-   * provider teaches has no gesture (tokens: a skin write, not a material
-   * gesture).
+   * provider on the site teaches has no gesture.
    */
   public function gestureProvider(MaterialKind $kind): ?MaterialsProviderInterface {
     foreach ($this->providers as ['provider' => $provider]) {

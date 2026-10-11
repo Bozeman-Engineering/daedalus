@@ -112,7 +112,7 @@ class GenerateStyleValueHandlerTest extends DaedalusAiKernelTestBase {
       'property' => 'background-image',
       'path' => $path,
       'layer' => $layer,
-      'entity' => NULL,
+      'host' => NULL,
     ];
   }
 
@@ -220,7 +220,7 @@ class GenerateStyleValueHandlerTest extends DaedalusAiKernelTestBase {
     $host = EntityTest::create(['name' => 'styled host']);
     $host->save();
     $entity_context = $this->styleContext($this->styleKey);
-    $entity_context['entity'] = $host;
+    $entity_context['host'] = $this->container->get('daedalus_blueprint.host_resolver')->fromEntity($host);
     $css = $this->styleHandler->resolve(['_generate' => 'a rocky coast'], $entity_context, $warnings);
     $hosted_uuid = substr($css, 11, 36);
     $pending = $this->collector->getPending();

@@ -6,6 +6,7 @@ namespace Drupal\Tests\daedalus_stylish\Kernel;
 
 use Drupal\Core\Serialization\Yaml;
 use Drupal\daedalus_blueprint\DesignSystem\ActiveDesignSystem;
+use Drupal\daedalus_blueprint\Materials\Address;
 use Drupal\daedalus_blueprint\Materials\MaterialKind;
 use Drupal\KernelTests\KernelTestBase;
 use Drupal\daedalus_stylish\Exception\StyleGuideException;
@@ -122,8 +123,15 @@ class GuideExampleSystemTest extends KernelTestBase {
     $this->installEntitySchema('daedalus_variant');
     $this->installEntitySchema('daedalus_swatch');
     $this->installEntitySchema('daedalus_animation');
+    $this->installEntitySchema('daedalus_font');
     $this->installEntitySchema('daedalus_skin');
-    $this->installSchema('daedalus_stylish', ['daedalus_variant_usage', 'daedalus_swatch_usage', 'daedalus_animation_usage']);
+    $this->installSchema('daedalus_stylish', [
+      'daedalus_variant_usage',
+      'daedalus_swatch_usage',
+      'daedalus_animation_usage',
+      'daedalus_token_usage',
+      'daedalus_font_usage',
+    ]);
     $this->installConfig(['daedalus_stylish', 'daedalus_blueprint']);
     // The importers switch to an administrative account (shipped
     // definitions are code, not user input); give the switcher one.
@@ -203,26 +211,33 @@ class GuideExampleSystemTest extends KernelTestBase {
    * The suite's seven bindings and the package's deltas are one served
    * map; each block's scale must carry at least one minted token on the
    * active skin, since a bound scale minting nothing is a closed empty
-   * row with no fallback by design. The package's stops merge over the
-   * suite's blocks and its shorthand bindings reach their families.
+   * row with no fallback by design. No served block curates stops: the
+   * site-wide ladders (the type ramp top-down, the everyday six of the
+   * nine space steps) are the skin's `offered` flags in stored order,
+   * which is what a row bound to the scale offers wherever no element
+   * curates it (VocabularyRoster::scaleStops()), and the package's
+   * shorthand bindings reach their families.
    */
   public function testBoundPropertiesResolveToMintedScales(): void {
     $skin = $this->container->get('daedalus_stylish.skin_manager')->loadActiveSkin();
     $this->assertNotNull($skin);
-    $tokens = $skin->getTokens();
+    $tokens = $skin->tokens();
     foreach ($this->styleGuide->getTokenScales(self::THEME) as $scale => $declaration) {
       $this->assertNotEmpty($tokens[$scale] ?? [], "the skin mints the declared $scale scale");
     }
+    // The package declares the contract its per-node stops curate and
+    // the ladders its skin offers, and its own skin honors it.
+    $contract = $this->styleGuide->getTokenContract(self::THEME);
+    $this->assertSame(['text', 'tracking', 'space', 'color', 'radius', 'stroke'], array_keys($contract));
+    $this->assertSame([], $this->container->get('daedalus_stylish.skin_conformance')->lacks($skin, self::THEME), 'the shipped skin mints every contract name');
 
     $served = $this->styleGuide->getConstraintDefaults(self::THEME);
     $bound = [];
     foreach ($served as $property => $block) {
+      $this->assertArrayNotHasKey('stops', $block, "$property: site-wide stops left the guide");
       if (isset($block['scale'])) {
         $bound[] = $property;
         $this->assertNotEmpty($tokens[$block['scale']] ?? [], "$property binds to the {$block['scale']} scale, which the skin mints");
-        foreach ($block['stops'] ?? [] as $stop) {
-          $this->assertArrayHasKey($stop, $tokens[$block['scale']], "the $property stop $stop is a minted {$block['scale']} token");
-        }
       }
     }
     foreach (['font-family', 'font-size', 'font-weight', 'line-height', 'padding', 'gap', 'border-radius'] as $property) {
@@ -232,11 +247,42 @@ class GuideExampleSystemTest extends KernelTestBase {
       $this->assertContains($property, $bound, "the package's $property binding is served");
     }
 
-    $stops = ['2', '4', '6', '8', '12', '16'];
-    $this->assertSame(['scale' => 'space', 'allowed' => ['0'], 'stops' => $stops], $served['padding'], 'the package\'s stops merge over the suite\'s scale and allowed literal');
-    $this->assertSame($served['padding'], $served['padding-left'], 'the merged block reaches the family\'s sides');
-    $this->assertSame(['scale' => 'text', 'stops' => ['display', 'title-1', 'title-2', 'title-3', 'body', 'caption']], $served['font-size']);
-    $this->assertSame(['scale' => 'space', 'allowed' => ['0', 'auto'], 'stops' => $stops], $served['margin-top'], 'the package\'s margin binding expands to its sides');
+    $this->assertSame(['scale' => 'space', 'allowed' => ['0']], $served['padding'], 'the suite\'s padding block is served as authored, no package delta');
+    $this->assertSame($served['padding'], $served['padding-left'], 'the block reaches the family\'s sides');
+    $this->assertSame(['scale' => 'text'], $served['font-size']);
+    $this->assertSame(['scale' => 'space', 'allowed' => ['0', 'auto']], $served['margin-top'], 'the package\'s margin binding expands to its sides');
+
+    // The everyday ladders are the skin's: the six steps are offered,
+    // the fine steps, the band-scale step, the gutter and the band
+    // tokens are not (legal and referenced, off the rows); the whole
+    // type ramp and the tracking trio are offered. The row a
+    // scale-bound property offers where no element curates it is
+    // exactly the offered tokens in stored order, then the allowed
+    // literals; the code view's closed list stays the whole scale.
+    // Numeric names are ints as PHP array keys; compare their spellings.
+    $names = static fn (array $scale): array => array_map('strval', array_keys($scale));
+    $offered = static fn (array $scale): array => $names(array_filter($scale, static fn (array $record): bool => $record['offered']));
+    $this->assertSame(['2', '4', '6', '8', '12', '16'], $offered($tokens['space']));
+    $this->assertSame(
+      ['1', '2', '3', '4', '6', '8', '12', '16', '24', 'gutter', 'band-compact', 'band', 'band-spacious'],
+      $names($tokens['space']),
+      'the skin still mints every step',
+    );
+    $this->assertSame(['display', 'title-1', 'title-2', 'title-3', 'body', 'caption'], $offered($tokens['text']));
+    $this->assertSame(['tight', 'normal', 'wide'], $offered($tokens['tracking']));
+    $roster = $this->container->get('daedalus_stylish.vocabulary_roster')->build(Address::fromString('kind:container'), self::THEME);
+    $steps = [
+      'var(--space-2)',
+      'var(--space-4)',
+      'var(--space-6)',
+      'var(--space-8)',
+      'var(--space-12)',
+      'var(--space-16)',
+    ];
+    $this->assertSame([...$steps, '0'], $roster->scaleStops('padding'), 'a container\'s padding row leads with the six offered steps and the zero literal');
+    $this->assertSame([...$steps, '0'], $roster->scaleStops('padding-left'), 'the expanded side offers the same row');
+    $this->assertSame([...$steps, '0'], $roster->scaleStops('gap'));
+    $this->assertCount(14, $roster->scaleValues('padding'), 'legality is the whole scale plus the literal: nine steps, the gutter, three band tokens and zero');
     $this->assertSame(['scale' => 'stroke', 'allowed' => ['0']], $served['border-left-width'], 'the stroke binding expands to its sides');
     $this->assertSame(['scale' => 'color', 'allowed' => ['transparent', 'currentColor']], $served['border-top-color'], 'the border-color binding expands to its sides');
     $this->assertSame(['allowed' => ['1', '2', '3', 'infinite']], $served['animation-iteration-count'], 'a bare allowed list is a closed value space');
@@ -244,7 +290,7 @@ class GuideExampleSystemTest extends KernelTestBase {
     $this->assertArrayNotHasKey('background-color', $served, 'backgrounds stay unbound so swatches stay legal');
     $this->assertArrayNotHasKey('opacity', $served, 'opacity stays unbound so the entrances\' opacity 0 steps validate');
 
-    $defaults = $this->validator->validateDefaults($skin->getDefaults(), ['theme' => self::THEME, 'skin_tokens' => $tokens]);
+    $defaults = $this->validator->validateDefaults($skin->defaults(), ['theme' => self::THEME, 'skin_tokens' => $tokens]);
     $this->assertSame([], array_map(static fn ($error): string => $error->getPath() . ' [' . $error->getCode() . ']: ' . $error->getMessage(), $defaults), 'the skin\'s own defaults validate under the site\'s strict law');
   }
 

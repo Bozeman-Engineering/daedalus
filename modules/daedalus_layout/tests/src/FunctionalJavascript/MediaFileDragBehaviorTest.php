@@ -101,13 +101,9 @@ class MediaFileDragBehaviorTest extends WebDriverTestBase {
         'settings' => ['view_mode' => 'default'],
       ])
       ->save();
-    // The file-drop chooser only offers PROMOTED block types (the Add panel's
-    // vocabulary, read from the layout's entity view display), so the new
-    // bundle joins the page's promoted list beside the recipe's.
-    $page_display = $display_repository->getViewDisplay('node', 'page');
-    $promoted = $page_display->getThirdPartySetting('daedalus_layout', 'promoted_blocks', []);
-    $promoted['inline_block:photo'] = 'inline_block:photo';
-    $page_display->setThirdPartySetting('daedalus_layout', 'promoted_blocks', $promoted)->save();
+    // The file-drop chooser offers every block type the placement
+    // restrictions admit on the page (the Add panel's own answer), so the
+    // new bundle is offered with nothing configured per display.
     // The consumer contract of the recipe's editor role: a bundle created
     // after install grants its own permissions, because per-bundle
     // permission strings do not exist until the bundle does.
@@ -176,25 +172,6 @@ class MediaFileDragBehaviorTest extends WebDriverTestBase {
         }
       })();
       JS);
-  }
-
-  /**
-   * The xpath of one Show menu item by its label.
-   *
-   * The Show kebab opens the shared menu primitive (daedalus_ui/menu),
-   * whose items are .daedalus-ui-menu__item buttons carrying an .daedalus-ui-menu__label.
-   *
-   * @param string $label
-   *   The item's visible label.
-   *
-   * @return string
-   *   An xpath locator.
-   */
-  private static function showMenuItemXpath(string $label): string {
-    return sprintf(
-      '//*[contains(concat(" ", normalize-space(@class), " "), " daedalus-ui-menu__item ")][.//*[contains(concat(" ", normalize-space(@class), " "), " daedalus-ui-menu__label ")][normalize-space()="%s"]]',
-      $label,
-    );
   }
 
   /**
@@ -603,26 +580,16 @@ class MediaFileDragBehaviorTest extends WebDriverTestBase {
 
     // The Show menu: the kebab renders because daedalus_ui's built-in
     // Markup view registers a toggle, and it opens the shared menu
-    // primitive anchored to the button. Activating an entry closes the
-    // menu (the primitive's close-then-run contract); the outside
-    // pointerdown is the menu's dismissal path.
+    // primitive anchored to the button. The view is turned on and back
+    // off through the trait's setMarkupView() (the entry activated, the
+    // menu closed by the primitive's close-then-run contract, the flip
+    // witnessed on the reopened item), off again so the later legs see
+    // the model projection; the outside pointerdown is the menu's
+    // dismissal path, asserted here.
     $kebab = $assert_session->waitForElement('css', '.daedalus-ui-show-menu__button');
     $this->assertNotNull($kebab, 'The Show menu kebab renders.');
-    $kebab->click();
-    $markup_toggle = $assert_session->waitForElementVisible('xpath', self::showMenuItemXpath('Markup'));
-    $this->assertNotNull($markup_toggle, 'The Show menu offers the Markup view entry.');
-    $markup_toggle->click();
-    $this->assertJsCondition(
-      "!document.querySelector('.daedalus-ui-menu')",
-      20000,
-      'Toggling an entry closed the Show menu.',
-    );
-    $session->getPage()->find('css', '.daedalus-ui-show-menu__button')->click();
-    $markup_toggle = $assert_session->waitForElementVisible('xpath', self::showMenuItemXpath('Markup'));
-    $this->assertNotNull($markup_toggle, 'The Show menu re-opened.');
-    // Toggle the view back off so the later legs see the model projection.
-    $markup_toggle->click();
-    $this->assertJsCondition("!document.querySelector('.daedalus-ui-menu')", 20000, 'Toggling the entry off closed the Show menu.');
+    $this->setMarkupView(TRUE);
+    $this->setMarkupView(FALSE);
     $session->getPage()->find('css', '.daedalus-ui-show-menu__button')->click();
     $this->assertNotNull($assert_session->waitForElementVisible('css', '.daedalus-ui-menu'), 'The Show menu re-opened.');
     $session->executeScript("document.body.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));");

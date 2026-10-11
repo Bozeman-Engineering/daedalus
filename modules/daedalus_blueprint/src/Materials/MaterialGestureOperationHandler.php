@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Drupal\daedalus_blueprint\Materials;
 
-use Drupal\Core\Entity\FieldableEntityInterface;
+use Drupal\daedalus_blueprint\Host\HostInterface;
 use Drupal\daedalus_blueprint\Dialect\DialectAliasMap;
 use Drupal\daedalus_blueprint\Dialect\DialectParser;
 use Drupal\daedalus_blueprint\Dialect\PageLanguageOperationsInterface;
@@ -35,8 +35,8 @@ use Drupal\daedalus_blueprint\Result\BlueprintWarning;
  * the mint (the materials delta).
  *
  * SIDE-EFFECT SEMANTICS, deliberate and documented: these operations write
- * a material ENTITY (never the batch's staged entity, which a capture only
- * reads). Batch rollback restores the staged entity but does not undo a
+ * a material ENTITY (never the batch's staged host, which a capture only
+ * reads). Batch rollback restores the staged host but does not undo a
  * material written by an earlier operation in a failed batch: a material
  * is ordinary site-wide content, one admin-listing delete or revision
  * revert away, which is its reversibility net everywhere else too. Mints
@@ -99,6 +99,18 @@ final class MaterialGestureOperationHandler implements PageLanguageOperationsInt
 
   /**
    * {@inheritdoc}
+   *
+   * A material gesture writes a material entity, never the page: a
+   * capture only reads the element it names, and the kind's provider
+   * checks the material permission itself. Nothing to judge on an
+   * element.
+   */
+  public function getRequirements(): array {
+    return array_fill_keys(self::OPS, []);
+  }
+
+  /**
+   * {@inheritdoc}
    */
   public function getGuidance(): array {
     return [
@@ -111,7 +123,7 @@ final class MaterialGestureOperationHandler implements PageLanguageOperationsInt
   /**
    * {@inheritdoc}
    */
-  public function apply(FieldableEntityInterface $entity, array $operation, array $options = []): BlueprintResult {
+  public function apply(HostInterface $host, array $operation, array $options = []): BlueprintResult {
     $op = (string) $operation['op'];
     $kinds = array_keys($this->rosterBuilder->gestureLines());
     $kind = is_string($operation['kind'] ?? NULL) ? MaterialKind::tryFrom($operation['kind']) : NULL;
@@ -121,7 +133,7 @@ final class MaterialGestureOperationHandler implements PageLanguageOperationsInt
       return BlueprintResult::structuralFailure([
         new BlueprintError('kind', $kind === NULL ? 'MISSING_PARAMETER' : 'NO_GESTURE', $kind === NULL
           ? sprintf('%s needs a material "kind".', $op)
-          : sprintf('No gesture writes a %s; %s.', $kind->noun(), $kind_prose), ['kinds' => $kinds], sprintf('Pass "kind" as one of: %s. Tokens are skin data: the skins skill edits them.', implode(', ', $kinds))),
+          : sprintf('No gesture writes a %s; %s.', $kind->noun(), $kind_prose), ['kinds' => $kinds], sprintf('Pass "kind" as one of: %s.', implode(', ', $kinds))),
       ]);
     }
 
@@ -144,7 +156,7 @@ final class MaterialGestureOperationHandler implements PageLanguageOperationsInt
         ]);
       }
       if (!DialectParser::isUuid($element)) {
-        $resolved = $this->aliasMap->resolve($entity, (string) ($options['conversation'] ?? ''), $element);
+        $resolved = $this->aliasMap->resolve($host, (string) ($options['conversation'] ?? ''), $element);
         if ($resolved === NULL) {
           return BlueprintResult::structuralFailure([
             new BlueprintError('element', 'UNKNOWN_REF', sprintf('"%s" is not a live alias or uuid.', $element), [], 'Refs are the ids in the page print (uuids or data-alias values); aliases are minted by inserting elements with ids.'),
@@ -162,8 +174,8 @@ final class MaterialGestureOperationHandler implements PageLanguageOperationsInt
 
     try {
       $result = match ($op) {
-        self::SAVE => $provider->capture($kind, $gesture, $entity, $options),
-        self::UPDATE => $provider->update($kind, $id, $gesture, $entity, $options),
+        self::SAVE => $provider->capture($kind, $gesture, $host, $options),
+        self::UPDATE => $provider->update($kind, $id, $gesture, $host, $options),
         self::REMOVE => $provider->remove($kind, $id, $options),
       };
     }
@@ -177,7 +189,7 @@ final class MaterialGestureOperationHandler implements PageLanguageOperationsInt
       static fn (string $warning) => new BlueprintWarning('element', self::CAPTURE_WARNING, $warning),
       $result->warnings,
     );
-    return BlueprintResult::success($entity, $warnings);
+    return BlueprintResult::success($host, $warnings);
   }
 
 }

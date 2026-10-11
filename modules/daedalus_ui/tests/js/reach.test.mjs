@@ -118,15 +118,19 @@ const HOISTED = selectorAddress(`block:${UNLINKED}`, '.image-block-image');
 const LIST = selectorAddress(`block:${TEXT}`, '.s-l1');
 const LIST_ITEM = selectorAddress(`block:${TEXT}`, '.s-i1');
 
+// Reach is gated on the actor too: a row whose verdict allows nothing is
+// drawn but never reachable, so every fixture node carries an open one.
+const open = { content: true, configure: true, style: true, arrange: true, insert: true };
+
 const components = [
   {
     kind: 'block',
     uuid: LINKED,
     block_type: 'image',
     label: 'Image',
-    label_display: '0',
     block_fields: { field_image: { target_id: 3, _label: 'Pic' }, field_link: { uri: 'https://example.com' } },
     _element: {
+      can: open,
       markup: {
         tag: 'a',
         classes: ['image-block'],
@@ -141,9 +145,9 @@ const components = [
     uuid: UNLINKED,
     block_type: 'image',
     label: 'Image',
-    label_display: '0',
     block_fields: { field_image: { target_id: 4, _label: 'Other pic' } },
     _element: {
+      can: open,
       markup: {
         tag: 'img',
         classes: ['image-block', 'image-block-image'],
@@ -158,9 +162,9 @@ const components = [
     uuid: TEXT,
     block_type: 'text',
     label: 'Formatted text',
-    label_display: '0',
     block_fields: { field_text_text: '<ul><li>First</li></ul>' },
     _element: {
+      can: open,
       presentation: { mode: 'merged', label: 'Formatted text', edit_target: 'field_text_text' },
       composed: true,
       markup: {
@@ -185,11 +189,12 @@ const components = [
 const blueprint = {
   bundle: 'page',
   fields: {},
-  layout_builder__layout: [{ uuid: SECTION, layout_id: 'layout_onecol', regions: { content: components } }],
-  _tree: [{
+  _element: { can: open },
+  layout: [{
     kind: 'container',
     uuid: SECTION,
     layout_id: 'layout_onecol',
+    _element: { can: open },
     children: [{ kind: 'region', region: 'content', children: components }],
   }],
 };
@@ -258,4 +263,97 @@ test('reachPredicate closes over the visibility it was taken under', () => {
   assert.equal(reachPredicate()(RASTER), false);
   assert.equal(whileOn(BLOCK), true);
   assert.equal(reachPredicate()(BLOCK), true);
+});
+
+// ---------------------------------------------------------------------------
+// The re-seat over the live store (reseat.js initSelectionReseat): the
+// selection follows the rows on a view flip, through the same view slice
+// both Markup writers (the kebab, the styling mode's mirror) land in. The
+// rule itself is pure and driven in selection.test.mjs; here the
+// subscriber's trigger is what is locked: the flip moves, nothing else.
+// ---------------------------------------------------------------------------
+
+const { initSelectionReseat } = await import('../../js/edit_mode/components/page-elements/reseat.js');
+const { setSelected, setTarget, setAddress, clearSelection } = await import('../../js/edit_mode/store/slices/selection-slice.js');
+const { setMarkedKeys } = await import('../../js/edit_mode/store/slices/view-slice.js');
+
+const selection = () => store.getState().selection;
+
+test('a shell target seated while the Markup view is on climbs to its owner when the view turns off', () => {
+  const stop = initSelectionReseat();
+  try {
+    markup(true);
+    store.dispatch(setSelected(BLOCK));
+    store.dispatch(setTarget({ key: BLOCK, selector: '.image-block-image' }));
+    store.dispatch(setAddress({ key: `container:${SECTION}`, selector: '> pb-image' }));
+    assert.deepEqual(selection().target, { key: BLOCK, selector: '.image-block-image' });
+    markup(false);
+    assert.equal(selection().selectedKey, BLOCK, 'the owner stays selected');
+    assert.equal(selection().target, null, 'the undrawn shell target is dropped: the seat is the owner row');
+    assert.equal(selection().address, null, 'the re-seat is a facet write, which drops the address with it');
+    assert.deepEqual(selection().selectedKeys, [BLOCK]);
+  } finally {
+    stop();
+    store.dispatch(clearSelection());
+    markup(false);
+  }
+});
+
+test('a seat made while the Markup view is off stands, through unrelated changes and through the view turning on', () => {
+  const stop = initSelectionReseat();
+  try {
+    markup(false);
+    store.dispatch(setSelected(BLOCK));
+    store.dispatch(setTarget({ key: BLOCK, selector: '.image-block-image' }));
+    store.dispatch(setAddress({ key: `container:${SECTION}`, selector: '> pb-image' }));
+    // Not a flip: the view map is untouched.
+    store.dispatch(setMarkedKeys([BLOCK]));
+    store.dispatch(setMarkedKeys([]));
+    markup(false);
+    assert.deepEqual(selection().target, { key: BLOCK, selector: '.image-block-image' }, 'a programmatic seat rides its element until a flip undraws it');
+    // The view turning ON draws the row the seat already names; the
+    // address seats no row, so the re-seat never reads it and it stands.
+    markup(true);
+    assert.deepEqual(selection().target, { key: BLOCK, selector: '.image-block-image' });
+    assert.deepEqual(selection().address, { key: `container:${SECTION}`, selector: '> pb-image' }, 'the re-seat ignores the address');
+    // An instance row's target is drawn in every view: both flips leave it.
+    store.dispatch(setSelected(`block:${TEXT}`));
+    store.dispatch(setTarget({ key: `block:${TEXT}`, selector: '.s-i1' }));
+    markup(false);
+    markup(true);
+    assert.deepEqual(selection().target, { key: `block:${TEXT}`, selector: '.s-i1' });
+  } finally {
+    stop();
+    store.dispatch(clearSelection());
+    markup(false);
+  }
+});
+
+test('a selected key the index places no row for falls to its subject on the flip', () => {
+  const stop = initSelectionReseat();
+  try {
+    markup(true);
+    // The merged text block's field key: the gate passes it on its
+    // subject's verdict (capable-model.js), the index places no row for it.
+    const absorbed = `block:${TEXT}:field_text_text`;
+    store.dispatch(setSelected(absorbed));
+    assert.equal(selection().selectedKey, absorbed);
+    assert.equal(projectionIndex().has(absorbed), false);
+    markup(false);
+    assert.equal(selection().selectedKey, `block:${TEXT}`);
+    assert.deepEqual(selection().selectedKeys, [`block:${TEXT}`]);
+  } finally {
+    stop();
+    store.dispatch(clearSelection());
+    markup(false);
+  }
+});
+
+test('without the subscriber a flip moves nothing (the rule lives in reseat.js, not in the slice)', () => {
+  markup(true);
+  store.dispatch(setSelected(BLOCK));
+  store.dispatch(setTarget({ key: BLOCK, selector: '.image-block-image' }));
+  markup(false);
+  assert.deepEqual(selection().target, { key: BLOCK, selector: '.image-block-image' });
+  store.dispatch(clearSelection());
 });

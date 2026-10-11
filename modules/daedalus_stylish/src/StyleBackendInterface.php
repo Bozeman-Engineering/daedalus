@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace Drupal\daedalus_stylish;
 
-use Drupal\Core\Entity\FieldableEntityInterface;
+use Drupal\daedalus_blueprint\Host\HostInterface;
 
 /**
- * Translates an entity's style map into rendered output.
+ * Translates a host's style map into rendered output.
  *
  * The style map always stores semantic CSS values; backends translate at
  * render time, so switching backends is a service swap
@@ -19,23 +19,27 @@ use Drupal\Core\Entity\FieldableEntityInterface;
 interface StyleBackendInterface {
 
   /**
-   * Builds the render addition that delivers an entity's styles.
+   * Builds the render addition that delivers a host's styles.
    *
-   * Called from hook_entity_view(), and the result is embedded in the
-   * entity's own build — so it rides the entity's render cache (invalidated
-   * by ordinary entity tags on style changes) and travels with subtree swaps,
-   * which is how every mutation path (widgets, code editor, AI) delivers
-   * updated CSS without a dedicated field in the response contract.
+   * Called from the render root's delivery (hook_entity_view() for an
+   * entity, the canvas root alter for a template host), and the result is
+   * embedded in that root's own build — so it rides the render cache
+   * (invalidated by ordinary entity tags on style changes) and travels with
+   * subtree swaps, which is how every mutation path (widgets, code editor,
+   * AI) delivers updated CSS without a dedicated field in the response
+   * contract. A template's shared element styles ride the page head once
+   * per display instead (daedalus_stylish_entity_view()).
    *
-   * @param \Drupal\Core\Entity\FieldableEntityInterface $entity
-   *   The styled entity being viewed.
+   * @param \Drupal\daedalus_blueprint\Host\HostInterface $host
+   *   The host whose styles are delivered: the map's owner, whose roster
+   *   resolves the values and whose uuid identifies the tag.
    * @param array $map
-   *   Its decoded, non-empty style map.
+   *   The decoded, non-empty style map to print.
    *
    * @return array
    *   A render array, or [] when this backend delivers styles another way
    *   (or nothing in the map is printable).
    */
-  public function build(FieldableEntityInterface $entity, array $map): array;
+  public function build(HostInterface $host, array $map): array;
 
 }

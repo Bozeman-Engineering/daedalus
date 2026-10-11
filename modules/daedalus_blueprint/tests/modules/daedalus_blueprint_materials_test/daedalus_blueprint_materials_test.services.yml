@@ -3,3 +3,7 @@ services:
     class: Drupal\daedalus_blueprint_materials_test\TestMaterialsProvider
     tags:
       - { name: daedalus_blueprint.materials_provider }
+  daedalus_blueprint_materials_test.groups:
+    class: Drupal\daedalus_blueprint_materials_test\TestGroupsContributor
+    tags:
+      - { name: event_subscriber }

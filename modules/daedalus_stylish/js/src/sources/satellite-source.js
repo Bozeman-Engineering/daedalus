@@ -1,8 +1,10 @@
 import { openChannel } from '../../../../daedalus_ui/js/broadcast/channel.js';
 import { openPicker as openVariantPicker } from '../apply-variant-hotkey.js';
 import { runCollapseGesture } from '../code/collapse-seam.js';
+import { runDoor } from '../inspector-doors.js';
 import { generateUuid } from '../../../../daedalus_ui/js/edit_mode/utilities/uuid.js';
 import { createRoster } from '../../../../daedalus_ui/js/edit_mode/materials/roster.js';
+import { capableInTree, verdictInTree } from '../../../../daedalus_ui/js/edit_mode/selection/capable-model.js';
 import {
   applyDelta,
   assertDelta,
@@ -44,13 +46,23 @@ export const createSatelliteSource = (scope) => {
   let state = {
     selected: null,
     target: null,
+    address: null,
     styleMap: {},
     rootUuid: null,
+    // The root's verdict (`_element.can`), null until the leader's first
+    // broadcast: the gate's answer for the root and the host's own
+    // fields, which the lean tree does not hold.
+    rootCan: null,
+    // The root's three minted words (`_element.type`, `name`, `icon`),
+    // null until the leader's first broadcast: the page row's words,
+    // which the lean tree does not hold.
+    rootElement: null,
     blockTypes: {},
     sectionLayouts: {},
-    layout: [],
     // Unknown until the leader's first broadcast (null, never an empty
-    // tree): the readers that gate on tree facts degrade to offering.
+    // tree): the readers that gate on tree facts degrade to offering,
+    // and the structural walks (capture, depth, provenance, the page
+    // tree) read it as empty.
     tree: null,
     layoutContext: null,
     mediaUrls: {},
@@ -58,6 +70,10 @@ export const createSatelliteSource = (scope) => {
     canvasVector: null,
     forceState: null,
     place: { place: 'styles', editing: null },
+    // The leader's delivered skin defaults (null until a push refreshed
+    // them; the popout page's own guide payload tells the truth till
+    // then), so this panel's stacks read the same skin the leader's do.
+    skinDefaults: null,
   };
   let connected = false;
   let canvasHighlight = null;
@@ -81,6 +97,7 @@ export const createSatelliteSource = (scope) => {
   const canvasVectorListeners = new Set();
   const forceStateListeners = new Set();
   const placeListeners = new Set();
+  const skinDefaultsListeners = new Set();
   const materialsListeners = new Set();
   // Op intents awaiting the leader's settlement, by request id (settle
   // below; the leader answers each with a `settled` frame).
@@ -133,20 +150,28 @@ export const createSatelliteSource = (scope) => {
     if (state.styleMap !== previous.styleMap) {
       styleMapListeners.forEach((callback) => callback(state.styleMap));
     }
-    // The selection and its styling target, the facade's onTargetChange
-    // shape: fires on a selection OR target change (the target
-    // value-compared), with ({selected, target}, previous).
+    // The selection and its two styling facts, the facade's
+    // onTargetChange shape: fires on a selection, facet OR address
+    // change (each pair value-compared), with ({selected, target,
+    // address}, previous).
     const target = state.target ?? null;
+    const address = state.address ?? null;
     const previousTarget = previous.target ?? null;
+    const previousAddress = previous.address ?? null;
+    const moved = (a, b) => a?.key !== b?.key || a?.selector !== b?.selector;
     if (
       state.selected !== previous.selected ||
-      target?.key !== previousTarget?.key ||
-      target?.selector !== previousTarget?.selector
+      moved(target, previousTarget) ||
+      moved(address, previousAddress)
     ) {
       targetListeners.forEach((callback) =>
         callback(
-          { selected: state.selected, target },
-          { selected: previous.selected, target: previousTarget },
+          { selected: state.selected, target, address },
+          {
+            selected: previous.selected,
+            target: previousTarget,
+            address: previousAddress,
+          },
         ),
       );
     }
@@ -164,6 +189,17 @@ export const createSatelliteSource = (scope) => {
       state.place?.editing !== previous.place?.editing
     ) {
       placeListeners.forEach((callback) => callback({ ...state.place }));
+    }
+    // A structured clone per broadcast: announce on content, not
+    // reference, so a selection broadcast never re-renders the panel's
+    // guide.
+    if (
+      JSON.stringify(state.skinDefaults ?? null) !==
+      JSON.stringify(previous.skinDefaults ?? null)
+    ) {
+      skinDefaultsListeners.forEach((callback) =>
+        callback(state.skinDefaults ?? null),
+      );
     }
   };
 
@@ -223,6 +259,12 @@ export const createSatelliteSource = (scope) => {
     // is a reading posture of one window; the leader's outline is
     // displaced). Nothing to do when code mode is not showing here.
     'collapse-outline': ({ gesture }) => runCollapseGesture(gesture),
+    // A page elements panel doorway ("Edit {variant}", "Outline everything
+    // wearing it") run on the leader while the panel lives here: the
+    // editing session and the Outline Variant toggle are THIS window's
+    // inspector's, so the door runs through the seam it fills
+    // (inspector-doors.js). Nothing to do when no inspector is mounted.
+    doorway: (payload) => runDoor(payload),
   });
 
   channel.post('hello');
@@ -270,31 +312,50 @@ export const createSatelliteSource = (scope) => {
     getSelected: () => state.selected,
 
     /**
-     * The styling target from the leader's last broadcast ({key,
-     * selector}), or null (the whole element). The target rides the
+     * The styling SUBJECT facet from the leader's last broadcast ({key,
+     * selector}), or null (the whole element). The facet rides the
      * selection channel: it is spine state on the leader, never a
      * satellite-local drill.
      */
     getTarget: () => state.target ?? null,
 
     /**
+     * The styling WRITE ADDRESS from the leader's last broadcast ({key,
+     * selector}), or null (the subject's own key). Spine state on the
+     * leader, relayed beside the facet.
+     */
+    getAddress: () => state.address ?? null,
+
+    /**
      * Sends a select intent (the page tree's row click, the subject
-     * chip's way back); the leader drives the canvas selection (which drops any
-     * target), and the change echoes back on the next state broadcast.
-     * The leader stays the one authority on selection.
+     * chip's way back); the leader drives the canvas selection (which
+     * drops any facet and address), and the change echoes back on the
+     * next state broadcast. The leader stays the one authority on
+     * selection.
      */
     select: (key) => {
       channel.post('intent', { intent: 'select', key });
     },
 
     /**
-     * Sends a target intent (a code-mode row header seating a chain, the
-     * address switcher or "Edit at" seating an ancestor rule); the
-     * leader's spine seats it (its canvas paints the matches) and the
-     * change echoes back on the next state broadcast.
+     * Sends a target intent (a code-mode row header seating a chain, a
+     * tree part row, the chip's box doorway: a SUBJECT facet on the
+     * selected key); the leader's spine seats it (its canvas paints the
+     * matches) and the change echoes back on the next state broadcast.
      */
     target: (key, selector) => {
       channel.post('intent', { intent: 'target', key, selector });
+    },
+
+    /**
+     * Sends an address intent (the address switcher, "Edit at", a
+     * code-mode rule header: the WRITE ADDRESS under the subject; null
+     * drops it); the leader's spine seats it (its canvas paints the
+     * rule's matches dotted) and the change echoes back on the next
+     * state broadcast.
+     */
+    address: (key, selector = null) => {
+      channel.post('intent', { intent: 'address', key, selector });
     },
 
     /**
@@ -404,6 +465,33 @@ export const createSatelliteSource = (scope) => {
     getRootUuid: () => state.rootUuid ?? null,
 
     /**
+     * The root's three minted words (type, name, icon) from the leader's
+     * last broadcast, or null before a leader has been heard from: the
+     * page row reads them as every element row reads its node's.
+     */
+    getRootElement: () => state.rootElement ?? null,
+
+    /**
+     * THE capability gate over the leader's broadcast (daedalus_ui
+     * selection/capable-model.js): a layout element answers from its
+     * tree node's `_element.can`; the root and anything the tree does
+     * not hold (the host's own fields, an inline entity under them)
+     * answer from the root's verdict, exactly as the leader's projection
+     * index lets such rows inherit their element's. Null for everything
+     * until the leader has been heard from.
+     */
+    capable: (key, capability) => {
+      const uuid = key?.split('::')[0]?.split(':')[1] ?? null;
+      if (!uuid) {
+        return false;
+      }
+      if (uuid !== state.rootUuid && verdictInTree(state.tree, uuid)) {
+        return capableInTree(state.tree, uuid, capability);
+      }
+      return state.rootCan?.[capability] === true;
+    },
+
+    /**
      * Component uuid → inline block type, from the leader's last broadcast.
      */
     getBlockTypes: () => state.blockTypes ?? {},
@@ -414,17 +502,12 @@ export const createSatelliteSource = (scope) => {
     getSectionLayouts: () => state.sectionLayouts ?? {},
 
     /**
-     * The staged layout's structural tree, from the leader's last
-     * broadcast — what composition capture walks. Empty until a broadcast
+     * The blueprint's lean node tree, from the leader's last broadcast:
+     * the one structure every reader walks (the selector matcher's
+     * ancestor layers and structural facts, composition capture, the
+     * depth and provenance reads, the page tree). Null before it
      * arrives: capture degrades to single-element entries rather than
-     * guess.
-     */
-    getLayout: () => state.layout ?? [],
-
-    /**
-     * The blueprint's lean node tree, from the leader's last broadcast
-     * (the selector matcher's input: ancestor layers, structural facts,
-     * the selector completion's children), null before it arrives.
+     * guess, and the gated readers degrade to offering.
      */
     getTree: () => state.tree ?? null,
 
@@ -533,16 +616,18 @@ export const createSatelliteSource = (scope) => {
     },
 
     /**
-     * Relays a live swatch-value preview to the leader page (the canvas
-     * lives there); null releases it. The record travels by id: the
-     * leader resolves it against its own store.
+     * Relays a live material-value preview (a token's or a swatch's) to
+     * the leader page (the canvas lives there); null releases it. The
+     * record travels by kind and id: the leader resolves it against its
+     * own store.
      */
-    previewSwatch: (record, value) => {
+    previewMaterial: (record, value) => {
       if (record) {
         channel.post('intent', {
-          intent: 'swatch-preview',
+          intent: 'material-preview',
+          kind: record.kind,
           id: record.id,
-          value,
+          value: value ?? null,
         });
       }
     },
@@ -715,6 +800,27 @@ export const createSatelliteSource = (scope) => {
       placeListeners.add(callback);
       return () => placeListeners.delete(callback);
     },
+
+    /**
+     * The leader's delivered skin defaults, or null while the popout
+     * page's own guide payload still tells the truth.
+     */
+    getSkinDefaults: () => state.skinDefaults ?? null,
+
+    /**
+     * Subscribes to skin defaults deliveries; returns unsubscribe.
+     */
+    onSkinDefaultsChange: (callback) => {
+      skinDefaultsListeners.add(callback);
+      return () => skinDefaultsListeners.delete(callback);
+    },
+
+    /**
+     * Relays a skin session's landing to the leader page (the canvas and
+     * the one delivered-defaults state live there); the delivered map
+     * echoes back on the next state broadcast.
+     */
+    refreshDefaults: () => settle('refresh-defaults', {}),
 
     /**
      * The last canvas highlight this satellite requested.

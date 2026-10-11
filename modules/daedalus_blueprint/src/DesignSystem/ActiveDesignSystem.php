@@ -47,8 +47,10 @@ class ActiveDesignSystem {
   /**
    * Memoized shippedPackages(): id => module, or NULL before the first read.
    *
-   * Per request: the set changes only with the module list, and a module
-   * list change rebuilds the container (and so this service).
+   * Per request: the set changes with the module list, and a module list
+   * change rebuilds the container (and so this service); the one other
+   * writer of a shipped unit inside a request, the package ship, calls
+   * forgetShippedPackages() after writing the file.
    */
   protected ?array $shippedPackages = NULL;
 
@@ -95,7 +97,7 @@ class ActiveDesignSystem {
    * The membership a file-shipped member of a module carries.
    *
    * The ONE disk-lane rule, shared by every lane that reads a member off
-   * a module's files (daedalus_stylish's four importers, stencil discovery, skill
+   * a module's files (daedalus_stylish's four importers, blueprint discovery, skill
    * discovery): the definition's own `design_system` key wins; `~` (NULL)
    * opts out, a global member offered under every system; an ABSENT key
    * is the module default, the system the module packages
@@ -293,6 +295,17 @@ class ActiveDesignSystem {
     }
     ksort($shipped);
     return $this->shippedPackages = $shipped;
+  }
+
+  /**
+   * Drops the shipped-packages memo: the next read scans disk again.
+   *
+   * For the package ship (DesignSystemShip), which writes a unit's
+   * install config file mid-request; nothing else changes the set
+   * without a container rebuild.
+   */
+  public function forgetShippedPackages(): void {
+    $this->shippedPackages = NULL;
   }
 
   /**

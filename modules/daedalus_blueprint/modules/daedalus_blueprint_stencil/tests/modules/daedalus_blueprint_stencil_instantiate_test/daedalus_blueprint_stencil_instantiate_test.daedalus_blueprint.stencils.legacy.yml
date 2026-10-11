@@ -1,6 +1,0 @@
-label: 'Legacy'
-description: 'The dead pre-D shape: a block node carrying a layout list.'
-element:
-  block_type: layout_block
-  layout:
-    - layout_id: layout_onecol

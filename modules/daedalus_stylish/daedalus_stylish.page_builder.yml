@@ -177,10 +177,8 @@ site:
   # the same entries.
   #
   # A design-system package (its declarations layer above the suite's
-  # while it is the active system) keeps only its deltas: `stops:`
-  # curation merged over these blocks (`padding: {stops: [sm, md, lg]}`
-  # yields the merged block, the scale and allowed literal kept), its
-  # own color and tracking bindings, extra `allowed:` literals (a site
+  # while it is the active system) keeps only its deltas: its own color
+  # and tracking bindings, extra `allowed:` literals (a site
   # that wants a literal stack beside the font scale adds it in its own
   # layer; constraint blocks merge like every map), and `null` to
   # withdraw a binding whole (`padding: null` reopens the family to the
@@ -188,7 +186,11 @@ site:
   # border-radius reach their longhands through the family expansion
   # (StyleGuide::expandConstraintFamilies()). The literal zero stays
   # legal beside the dimension scales because no scale mints a zero token
-  # and the widgets' None gesture commits '0'.
+  # and the widgets' None gesture commits '0'. No block here or in a
+  # package's site section curates `stops:` (a build error): which of a
+  # scale's tokens the basic rows lead with site-wide is each token's
+  # `offered` flag in the skin, and stops are a per-element curation in
+  # a declaration's property_groups.
   constraint_defaults:
     font-family:
       scale: font

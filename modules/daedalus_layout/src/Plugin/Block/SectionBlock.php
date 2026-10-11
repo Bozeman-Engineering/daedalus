@@ -5,12 +5,15 @@ namespace Drupal\daedalus_layout\Plugin\Block;
 use Drupal\Component\Plugin\Exception\ContextException;
 use Drupal\Core\Block\Attribute\Block;
 use Drupal\Core\Block\BlockBase;
+use Drupal\Core\Plugin\ContainerFactoryPluginInterface;
 use Drupal\Core\Plugin\Context\ContextDefinition;
 use Drupal\Core\Plugin\PluginDependencyTrait;
 use Drupal\Core\StringTranslation\TranslatableMarkup;
+use Drupal\daedalus_blueprint\Host\InnerRender;
 use Drupal\layout_builder\Section;
 use Drupal\layout_builder\SectionComponent;
 use Drupal\daedalus_layout\NestedSectionStorageInterface;
+use Symfony\Component\DependencyInjection\ContainerInterface;
 
 /**
  * The nested-section container: a component whose config embeds ONE Section.
@@ -33,12 +36,19 @@ use Drupal\daedalus_layout\NestedSectionStorageInterface;
  *   together (TreeIndex collision repair keeps them in lockstep). Use
  *   ::createComponent() so the invariant holds by construction.
  * - Context forwarding is a HARD contract, not a convenience: the plugin
- *   requires the root entity and view mode contexts and forwards them to the
- *   embedded section's render under every id consumers read
- *   (layout_builder.entity, entity, daedalus_layout.root_entity, view_mode). If the
- *   contexts are missing, rendering throws; a silent no-op here disables
- *   field blocks, live attribution, and style-map host resolution for the
- *   whole subtree.
+ *   forwards the render's contexts to the embedded section's render under
+ *   every id consumers read. The view mode is required (rendering without
+ *   it throws). The subject (the entity every block reads, under
+ *   layout_builder.entity and entity) is forwarded when the render has
+ *   one and absent when it has none: the site frame renders around every
+ *   route, and a view page or a form has no subject, so a subtree then
+ *   renders with no entity in context and a block that needs one renders
+ *   nothing (InnerRender::sectionRenderArray(), the one section render
+ *   every nested depth goes through). The root entity
+ *   (daedalus_layout.root_entity, the host whose document the subtree
+ *   belongs to and whose map its styles live on) is forwarded as received
+ *   when the render names one, else it is the subject, as it was when the
+ *   two could never differ.
  *
  * The write channel for the embedded section is always
  * $component->setConfiguration() with a fresh Section::toArray(); never write
@@ -51,15 +61,36 @@ use Drupal\daedalus_layout\NestedSectionStorageInterface;
   admin_label: new TranslatableMarkup('Container'),
   category: new TranslatableMarkup('Daedalus Layout'),
   context_definitions: [
-    // Generic 'entity' data type: any fieldable entity can be the root.
+    // Generic 'entity' data type: any fieldable entity can be the subject.
     // (EntityContextDefinition would mint the invalid type entity:entity.)
-    'entity' => new ContextDefinition('entity', new TranslatableMarkup('Root entity')),
+    'entity' => new ContextDefinition('entity', new TranslatableMarkup('Subject'), required: FALSE),
     'view_mode' => new ContextDefinition('string', new TranslatableMarkup('View mode')),
+    // The root entity, under the render id itself: never mapped (a
+    // mapping names a context every render must carry), read when the
+    // render names a root other than the subject (an inner document's
+    // host, InnerRender::ROOT_CONTEXT_ID).
+    NestedSectionStorageInterface::ROOT_ENTITY_CONTEXT_ID => new ContextDefinition('entity', new TranslatableMarkup('Root entity'), required: FALSE),
   ],
 )]
-class SectionBlock extends BlockBase {
+final class SectionBlock extends BlockBase implements ContainerFactoryPluginInterface {
 
   use PluginDependencyTrait;
+
+  public function __construct(
+    array $configuration,
+    string $plugin_id,
+    mixed $plugin_definition,
+    protected InnerRender $innerRender,
+  ) {
+    parent::__construct($configuration, $plugin_id, $plugin_definition);
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public static function create(ContainerInterface $container, array $configuration, $plugin_id, $plugin_definition): static {
+    return new static($configuration, $plugin_id, $plugin_definition, $container->get('daedalus_blueprint.inner_render'));
+  }
 
   /**
    * The block plugin id.
@@ -148,7 +179,7 @@ class SectionBlock extends BlockBase {
    *   The embedded section's render array.
    */
   public function buildSection(bool $in_preview = FALSE): array {
-    return $this->getSection()->toRenderArray($this->forwardedContexts(), $in_preview);
+    return $this->innerRender->sectionRenderArray($this->getSection(), $this->forwardedContexts(), $in_preview);
   }
 
   /**
@@ -173,30 +204,39 @@ class SectionBlock extends BlockBase {
   /**
    * Builds the contexts forwarded to the embedded section's render.
    *
-   * Under the sections-all-the-way-down model there is no entity boundary
-   * inside the tree: the entity flowing down IS the root entity at every
-   * depth, so one entity context satisfies every consumer id.
+   * Under the sections-all-the-way-down model there is no document
+   * boundary inside the tree: the subject flowing down is the subject at
+   * every depth, and the root (the document's host) is the root at every
+   * depth. Within one document the two are the same entity; inside an
+   * inner document rendered under an outer one (a linked blueprint, the
+   * site frame) the render names the inner host as the root, and the
+   * container passes it on.
    *
    * @return \Drupal\Component\Plugin\Context\ContextInterface[]
    *   The forwarded contexts.
    */
   protected function forwardedContexts(): array {
     // getContext() materializes a valueless Context from the definition when
-    // no context was applied (it does not throw), so the hard contract is
-    // enforced here: a container rendered without its contexts is a caller
-    // bug, and rendering the subtree degraded instead would silently disable
-    // field blocks, live attribution, and style-map host resolution.
-    $entity_context = $this->getContext('entity');
+    // no context was applied (it does not throw), so the view mode contract
+    // is enforced here: a container rendered without it is a caller bug.
     $view_mode_context = $this->getContext('view_mode');
-    if (!$entity_context->hasContextValue() || !$view_mode_context->hasContextValue()) {
-      throw new ContextException(sprintf('The %s component "%s" was rendered without its required entity and view_mode contexts. Forwarding them into the embedded section is a hard contract; render containers with the Layout Builder contexts (layout_builder.entity, view_mode) available.', self::PLUGIN_ID, $this->configuration['uuid'] ?? 'unknown'));
+    if (!$view_mode_context->hasContextValue()) {
+      throw new ContextException(sprintf('The %s component "%s" was rendered without its view_mode context. Forwarding it into the embedded section is a hard contract; render containers with the Layout Builder contexts (layout_builder.entity, view_mode) available.', self::PLUGIN_ID, $this->configuration['uuid'] ?? 'unknown'));
     }
-    return [
-      'entity' => $entity_context,
-      'layout_builder.entity' => $entity_context,
-      NestedSectionStorageInterface::ROOT_ENTITY_CONTEXT_ID => $entity_context,
-      'view_mode' => $view_mode_context,
-    ];
+    $contexts = ['view_mode' => $view_mode_context];
+    $entity_context = $this->getContext('entity');
+    if ($entity_context->hasContextValue()) {
+      $contexts['entity'] = $entity_context;
+      $contexts['layout_builder.entity'] = $entity_context;
+    }
+    $root_context = $this->getContext(NestedSectionStorageInterface::ROOT_ENTITY_CONTEXT_ID);
+    if ($root_context->hasContextValue()) {
+      $contexts[NestedSectionStorageInterface::ROOT_ENTITY_CONTEXT_ID] = $root_context;
+    }
+    elseif ($entity_context->hasContextValue()) {
+      $contexts[NestedSectionStorageInterface::ROOT_ENTITY_CONTEXT_ID] = $entity_context;
+    }
+    return $contexts;
   }
 
   /**
@@ -214,7 +254,7 @@ class SectionBlock extends BlockBase {
    *   The component weight.
    * @param array $additional
    *   Opaque additional data the component carries (third-party seam, e.g.
-   *   stencil provenance).
+   *   blueprint provenance).
    *
    * @return \Drupal\layout_builder\SectionComponent
    *   The container component, uuid-locked to the embedded section.

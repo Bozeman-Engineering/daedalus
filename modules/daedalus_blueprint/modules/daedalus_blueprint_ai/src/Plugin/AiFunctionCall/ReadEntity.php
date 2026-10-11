@@ -17,7 +17,7 @@ use Drupal\daedalus_blueprint_ai\DaedalusBlueprintToolBase;
   id: 'daedalus_blueprint:read_entity',
   function_name: 'eb_read_entity',
   name: 'Read Entity',
-  description: 'Reads a NON-PAGE content entity as a JSON blueprint; pages ride the current page print and page_read, never this tool. In summary mode (default), returns the structural overview — the entity\'s elements with their UUIDs but without field values. Use summary mode first to understand the entity, then eb_read_element to drill into a specific element. In full mode, returns all fields and values — can be very verbose for large entities. In markup mode, returns the entity as key-annotated HTML: data-key attributes carry the selectable element keys and inner elements wear the classes that compose sub-element keys (KEY::.class-name).',
+  description: 'Reads a NON-PAGE content entity as a JSON blueprint; pages ride the current page print and page_read, never this tool. In summary mode (default), returns the structural overview — the document as its tree of container, region and block nodes with their UUIDs, labels and styles, but without field values. Use summary mode first to understand the entity, then eb_read_element to drill into a specific element. In full mode, returns all fields and values (every node of the tree in full, its styles on the node) — can be very verbose for large entities. In markup mode, returns the entity as key-annotated HTML: data-key attributes carry the selectable element keys and inner elements wear the classes that compose sub-element keys (KEY::.class-name).',
   group: 'information_tools',
   context_definitions: [
     'entity_type' => new ContextDefinition(
@@ -54,7 +54,7 @@ class ReadEntity extends DaedalusBlueprintToolBase {
   public function execute() {
     $entity_type = $this->getContextValue('entity_type');
 
-    if (!$this->requireContentEntityType($entity_type)) {
+    if (!$this->requireDocumentHostType($entity_type)) {
       return;
     }
 
@@ -66,8 +66,18 @@ class ReadEntity extends DaedalusBlueprintToolBase {
     $mode = $this->getContextValue('mode') ?: 'summary';
     $langcode = $this->getContextValue('langcode') ?: NULL;
 
-    $entity = $this->loadEntity($entity_type, $entity_id, 'view');
-    if (!$entity) {
+    $host = $this->loadHost($entity_type, $entity_id, 'view');
+    if ($host === NULL) {
+      return;
+    }
+
+    // A page is page_read's, whole (PageHosts::isPage(): the one meaning across the
+    // AI doors), in every mode of this tool: the JSON summary, the full
+    // read and the markup projection alike. The gate sits before any read
+    // of the document, so a never-edited page's template seed is not fired
+    // by a read.
+    if ($this->pageHosts->isPage($host)) {
+      $this->output = $this->pageReadCorrective($host, $entity_type, $entity_id);
       return;
     }
 
@@ -76,7 +86,7 @@ class ReadEntity extends DaedalusBlueprintToolBase {
       // print format, supplied by the model's owner (the page builder).
       if ($mode === 'markup') {
         $this->output = $this->formatMarkupProjection(
-          $this->markupProjection->projectEntity($entity, $langcode),
+          $this->markupProjection->projectHost($host, $langcode),
         );
         return;
       }
@@ -84,8 +94,8 @@ class ReadEntity extends DaedalusBlueprintToolBase {
       // consumers (the page-elements panel); AI transport strips them — the
       // model never sees fields it cannot write through the blueprint.
       $data = $mode === 'full'
-        ? FormOnlyStub::strip($this->blueprintOperations->getBlueprint($entity, $langcode))
-        : $this->blueprintOperations->getBlueprintSummary($entity, $langcode);
+        ? FormOnlyStub::strip($this->blueprintOperations->getBlueprint($host, $langcode))
+        : $this->blueprintOperations->getBlueprintSummary($host, $langcode);
       $this->output = $this->formatArray($data);
     }
     catch (\Exception $e) {

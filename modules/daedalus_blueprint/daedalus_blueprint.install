@@ -1,0 +1,37 @@
+<?php
+
+/**
+ * @file
+ * Install, update and uninstall functions for the daedalus_blueprint module.
+ */
+
+use Drupal\Core\Extension\Requirement\RequirementSeverity;
+
+/**
+ * Implements hook_update_requirements().
+ *
+ * The blueprint library (a saved blueprint as a page of its own, module
+ * daedalus_blueprint_library) replaced the earlier saved-material module
+ * at full depth with no update path: the retired module's entity, its
+ * element blob and its update hooks are gone, and nothing reads them. A
+ * site that still carries the retired artifacts cannot be updated across
+ * the change, so the one road is a reinstall from the recipe. This hook
+ * runs only under update.php and `drush updb` (core's
+ * update_check_requirements()), where it halts the run with the reason;
+ * a site installed after the change never sees it.
+ */
+function daedalus_blueprint_update_requirements(): array {
+  $retired_module = \Drupal::config('core.extension')->get('module.daedalus_blueprint_stencil') !== NULL;
+  $retired_table = \Drupal::database()->schema()->tableExists('stencil');
+  if (!$retired_module && !$retired_table) {
+    return [];
+  }
+  return [
+    'daedalus_blueprint_library_predates' => [
+      'title' => t('Daedalus blueprint library'),
+      'value' => t('No update path'),
+      'description' => t('This site predates the blueprint library; there is no update path across it: reinstall from the recipe.'),
+      'severity' => RequirementSeverity::Error,
+    ],
+  ];
+}

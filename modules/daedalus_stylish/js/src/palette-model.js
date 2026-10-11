@@ -4,15 +4,17 @@
  * The library model's twin at value scope: the catalog's second section is
  * a flat, filterable list of the swatches the materials store carries (the
  * roster's swatch records, delivery shape) with a lifecycle card per
- * swatch, over a read-only skin section (the roster's tokens, the curated
- * half of the palette). This module owns everything the view can compute
- * without a DOM — the kind filter vocabulary, the row roster with its
- * shipped marker, the card's gesture roster as data (cardGestures'
- * posture: presence means permitted AND applicable) over the record plus
- * the card's per-gesture management read (usages, shipped state), the
- * condition-honest editor split for condition-keyed values, and the skin
- * token grouping — for node-test backpressure. The view (palette.js) only
- * renders and dispatches.
+ * swatch, over the skin section (the roster's tokens, the curated half of
+ * the palette, edited where they are listed: the active skin's tokens are
+ * materials, and the palette is their card). This module owns everything
+ * the view can compute without a DOM: the kind filter vocabulary, the row
+ * roster with its shipped marker, the two cards' gesture rosters as data
+ * (cardGestures' posture: presence means permitted AND applicable) over
+ * the record plus the card's per-gesture management read (usages, shipped
+ * state, the token's layer and lock), the condition-honest editor split
+ * for condition-keyed values, the token name grammar, and the skin token
+ * grouping, for node-test backpressure. The view (palette.js) only renders
+ * and dispatches.
  */
 
 import { isPlainObject, schemeCondition } from './style-guide.js';
@@ -244,21 +246,41 @@ export const mergedPair = (value, { draft, darkDraft, scheme }) => {
 };
 
 /**
- * The skin tokens grouped per scale: the palette's read-only curated half.
+ * A token's layer as the roster record tells it: the package's or the site's.
+ *
+ * The provider stamps origin per token (shipped when the skin's package
+ * layer holds the name, user for a site-minted token and for every token
+ * of the site's own skin), so a row knows which layer it lists before
+ * any card opens. A site override OVER a package token keeps the shipped
+ * origin: the row says "package" and the card's management read (the
+ * usage route's `layer`: package, site or both) refines it.
+ *
+ * @param {object} record
+ *   The token record (delivery shape).
+ *
+ * @return {string}
+ *   'package' or 'site'.
+ */
+export const tokenLayer = (record) => (isShipped(record) ? 'package' : 'site');
+
+/**
+ * The skin tokens grouped per scale: the palette's curated half.
  *
  * Roster order (declared scale order, then authoring order = display
  * order), each entry carrying its shape so the view paints color faces
- * only where a color face is honest. Read-only BY DESIGN: token values
- * live on the active skin, and the palette never grows a second skin
- * editor — the "edit the skin" line is the honesty chrome.
+ * only where a color face is honest, its description and offered flag
+ * (the card's editable facts), its layer (the row's package/site marker)
+ * and the record itself (the card's subject: the gestures, the live
+ * preview and the update op all take the record).
  *
  * @param {object} guide
  *   The style guide payload.
  * @param {object} materials
  *   The materials roster.
  *
- * @return {Array<[string, Array<{name: string, ref: string,
- *   value: string, valueDark: ?string, shape: ?string}>]>}
+ * @return {Array<[string, Array<{scale: string, name: string, ref: string,
+ *   value: string, valueDark: ?string, shape: ?string, description: string,
+ *   offered: boolean, layer: string, record: object}>]>}
  *   [scaleLabel, entries] pairs, [] when no skin tokens are minted.
  */
 export const skinGroups = (guide, materials) => {
@@ -268,12 +290,109 @@ export const skinGroups = (guide, materials) => {
       groups.set(token.scaleLabel, []);
     }
     groups.get(token.scaleLabel).push({
+      scale: token.scale,
       name: token.name,
       ref: token.ref,
       value: token.value,
       valueDark: token.valueDark,
       shape: token.shape,
+      description:
+        typeof token.record.description === 'string'
+          ? token.record.description
+          : '',
+      offered: token.record.offered !== false,
+      layer: tokenLayer(token.record),
+      record: token.record,
     });
   });
   return [...groups.entries()];
+};
+
+/**
+ * The token name grammar: the client twin of StyleMapValidator::TOKEN_NAME.
+ *
+ * Lowercase letters, digits and inner hyphens ("4", "2xl", "accent-hover");
+ * the name becomes the tail of the custom property. PHP is authoritative
+ * (the op refuses INVALID_TOKEN_NAME); the mint card reads this to
+ * withhold Save before the round trip.
+ */
+export const TOKEN_NAME = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/;
+
+/**
+ * Why a token name cannot be minted on a scale right now, or null.
+ *
+ * @param {string} name
+ *   The typed name, trimmed by the caller.
+ * @param {string} scale
+ *   The scale the mint targets.
+ * @param {object} materials
+ *   The materials roster (the duplicate check: a token id is
+ *   "{scale}/{name}", so the same name on another scale is fine).
+ *
+ * @return {?string}
+ *   'missing' (empty), 'invalid' (off the grammar), 'taken' (the active
+ *   skin already mints it), or null when the name can go.
+ */
+export const tokenNameError = (name, scale, materials) => {
+  if (name === '') {
+    return 'missing';
+  }
+  if (!TOKEN_NAME.test(name)) {
+    return 'invalid';
+  }
+  return materials.has('token', `${scale}/${name}`) ? 'taken' : null;
+};
+
+/**
+ * The token card's gesture roster, as data.
+ *
+ * swatchCardGestures' twin for the material that lives on the skin. A
+ * token record is always `updatable` (a consuming site's write lands in
+ * the skin's site layer over the package's record), so the update grants
+ * alone open the value, description and offered editors: `update tokens`
+ * IS the override grade, and withholding it is how a locked tenant reads
+ * its skin. What the package layer's lock refuses is the token's
+ * identity: rename and delete are the site's own on a site-minted token
+ * (the record's origin) and on every token where the lock is lifted (the
+ * management read's `locked`: false on the site's own skin and under the
+ * developer gate), never on a package token a consuming site only
+ * overrides. Revert (the route that drops the site's record and, under
+ * the gate, rewrites the package's from disk: "use the shipped value",
+ * the unset gesture) follows the shipped state exactly as a swatch's
+ * does. Delete carries the two permission grades: a referenced token
+ * needs the in-use grade (its delete runs the rewrite-then-delete batch),
+ * an unreferenced one either grade.
+ *
+ * @param {object} token
+ *   The token record (delivery shape).
+ * @param {object} config
+ *   The gesture gates (drupalSettings.daedalusStylish.tokens):
+ *   {canCreate, canUpdate, canDelete, canDeleteInUse}.
+ * @param {?{usages: number, layer: string, locked: boolean,
+ *   shipped_state: ?string}} management
+ *   The card's per-open management read (the usage route: the live
+ *   reference count, the layer(s) holding the token, whether the package
+ *   layer is locked on this site, the shipped state against the disk
+ *   copy), or null while it is in flight or not readable: then the count
+ *   reads as zero, the lock as holding, and revert waits for the state.
+ *
+ * @return {{editValue: boolean, editDescription: boolean, offer: boolean,
+ *   rename: boolean, revert: boolean, delete: boolean}}
+ */
+export const tokenCardGestures = (token, config = {}, management = null) => {
+  const update = Boolean(config.canUpdate);
+  const used = (management?.usages ?? 0) > 0;
+  const own = tokenLayer(token) === 'site' || management?.locked === false;
+  return {
+    editValue: update,
+    editDescription: update,
+    offer: update,
+    rename: update && own,
+    revert: update && management?.shipped_state === 'modified',
+    delete:
+      own &&
+      (used
+        ? Boolean(config.canDeleteInUse)
+        : Boolean(config.canDelete) || Boolean(config.canDeleteInUse)),
+  };
 };

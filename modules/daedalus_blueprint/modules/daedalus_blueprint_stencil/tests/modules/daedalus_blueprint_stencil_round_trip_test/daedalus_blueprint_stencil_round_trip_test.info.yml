@@ -1,8 +1,0 @@
-name: Daedalus Blueprint Stencil Round Trip Test
-type: module
-description: Fixtures for stencil round-trip (export/instantiate) tests.
-package: Testing
-core_version_requirement: ^10.3 || ^11
-hidden: true
-dependencies:
-  - daedalus:daedalus_blueprint_stencil

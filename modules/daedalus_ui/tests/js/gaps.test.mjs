@@ -28,6 +28,7 @@ import { test } from 'node:test';
 import { registerHooks } from 'node:module';
 import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { El } from './stub-element.mjs';
 
 registerHooks({
   resolve(specifier, context, nextResolve) {
@@ -44,109 +45,6 @@ registerHooks({
     }
   },
 });
-
-/**
- * A stub canvas element: a selectable key, a rect, and just enough DOM
- * surface for gaps.js (getAttribute, matches, closest, parentElement,
- * querySelector(All) over descendants, getBoundingClientRect).
- */
-class El {
-  constructor(selectable, rect) {
-    this.selectable = selectable;
-    this.rect = rect;
-    this.children = [];
-    this.parentElement = null;
-    this.mainEntity = false;
-    // Generic attributes (data-tree-key and friends).
-    this.attrs = {};
-  }
-
-  add(child) {
-    child.parentElement = this;
-    this.children.push(child);
-    return child;
-  }
-
-  getAttribute(name) {
-    if (name === 'data-selectable') {
-      return this.selectable ?? null;
-    }
-    return this.attrs[name] ?? null;
-  }
-
-  hasAttribute(name) {
-    if (name === 'data-selectable') {
-      return this.selectable != null;
-    }
-    if (name === 'data-main-entity') {
-      return this.mainEntity;
-    }
-    return name in this.attrs;
-  }
-
-  get childElementCount() {
-    return this.children.length;
-  }
-
-  /**
-   * Attribute selectors only, compound and comma-listed: [name],
-   * [name="v"], [name^="v"], [name~="v"] (the shapes gaps.js queries).
-   */
-  matches(selector) {
-    return selector.split(',').some((single) => {
-      const clauses = [...single.trim().matchAll(/\[([a-z-]+)(?:([\^~]?)="([^"]*)")?\]/g)];
-      if (clauses.length === 0) {
-        return false;
-      }
-      return clauses.every(([, name, operator, value]) => {
-        if (value === undefined) {
-          return this.hasAttribute(name);
-        }
-        const actual = this.getAttribute(name);
-        if (actual == null) {
-          return false;
-        }
-        if (operator === '^') {
-          return actual.startsWith(value);
-        }
-        if (operator === '~') {
-          return actual.split(' ').includes(value);
-        }
-        return actual === value;
-      });
-    });
-  }
-
-  closest(selector) {
-    for (let node = this; node; node = node.parentElement) {
-      if (node.matches(selector)) {
-        return node;
-      }
-    }
-    return null;
-  }
-
-  descendants() {
-    return this.children.flatMap((child) => [child, ...child.descendants()]);
-  }
-
-  querySelectorAll(selector) {
-    return this.descendants().filter((node) => node.matches(selector));
-  }
-
-  querySelector(selector) {
-    return this.descendants().find((node) => node.matches(selector)) ?? null;
-  }
-
-  getBoundingClientRect() {
-    const { left, top, width, height } = this.rect;
-    return { left, top, width, height, right: left + width, bottom: top + height };
-  }
-
-  get isConnected() {
-    return true;
-  }
-}
 
 // The module reads browser globals at load time (store setup) and checks
 // `target instanceof Element` per resolution — install stubs BEFORE import.
@@ -214,6 +112,38 @@ test('section drag, bottom edge band: sibling gap after the container', () => {
   const { blockA } = buildPage();
   const target = resolveDropTarget(blockA, 500, 390, 'section');
   assert.deepEqual(target.location, { anchor: 'AAA', placement: 'after' });
+});
+
+test('a container above the main entity (the site frame around the page) is no flow of the page', () => {
+  // The page renders inside the frame's Content section (a keyed
+  // container) through the frame's main slot door: neither is the page's.
+  const frameSection = new El('container:FRAME', { left: 0, top: -200, width: 1000, height: 1200 });
+  const mainDoor = frameSection.add(new El('block:MAIN-DOOR', { left: 0, top: -50, width: 1000, height: 1000 }));
+  mainDoor.attrs['data-daedalus-slot'] = 'main';
+  const { main, blockA } = buildPage();
+  mainDoor.add(main);
+  globalThis.document = { querySelector: (selector) => (selector === '[data-main-entity]' ? main : null) };
+  // A's bottom edge band: the sibling gap after A in the ROOT flow, flagged
+  // rootFlow (a band is offered it), exactly as with no frame; the frame's
+  // section is not the flow A sits in.
+  const target = resolveDropTarget(blockA, 500, 390, 'section');
+  assert.deepEqual(target.location, { anchor: 'AAA', placement: 'after' });
+  assert.equal(target.rootFlow, true, 'the root flow stays the root flow inside the frame');
+  assert.deepEqual(
+    enumerateGapTargets('section').filter((gap) => gap.rootFlow === true).map((gap) => gap.gapId),
+    ['AAA|before', 'AAA|after', 'BBB|after'],
+    'the keyboard walk flags the same root gaps',
+  );
+  // A blank page inside the frame: the root flow's one inside target on
+  // the page entity, never a drop into the frame's main slot door.
+  const blank = new El('entity:page-2', { left: 0, top: 0, width: 1000, height: 100 });
+  blank.mainEntity = true;
+  const blankDoor = new El('block:MAIN-DOOR-2', { left: 0, top: -50, width: 1000, height: 200 });
+  blankDoor.attrs['data-daedalus-slot'] = 'main';
+  blankDoor.add(blank);
+  const blankTarget = resolveDropTarget(blank, 500, 50, 'section');
+  assert.deepEqual(blankTarget.location, { anchor: 'page-2', placement: 'inside' });
+  assert.equal(blankTarget.rootFlow, true);
 });
 
 test('section drag, bottom of the page: append gap after the last container', () => {
@@ -399,19 +329,53 @@ test('keyboard enumeration: both kinds walk the same positions; the wrap is root
   }
 });
 
-// --- Tree rows: uniform zones, kind-blind -------------------------------
+test('a slot door: an empty slot block is one inside target on its own key, a filled one yields to the section inside it', () => {
+  const { main, innerA } = buildPage();
+  // The template's slot block, rendered inside container A beside the
+  // block: empty (its stand-in), so nothing keyed sits inside it.
+  const door = innerA.add(new El('block:door-1', { left: 100, top: 320, width: 800, height: 60 }));
+  door.attrs['data-daedalus-slot'] = 'hero';
+  const standIn = door.add(new El(null, { left: 100, top: 320, width: 800, height: 60 }));
+  const target = resolveDropTarget(standIn, 500, 350, 'block');
+  assert.deepEqual(target.location, { anchor: 'door-1', placement: 'inside' });
+  assert.equal(target.empty, true);
+  assert.equal(target.insert.parent, door, 'the placeholder lands inside the door');
+  assert.equal(target.newSection, undefined, 'the server mints the slot section: no client wrap');
+  assert.deepEqual(resolveDropTarget(standIn, 500, 350, 'section').location, { anchor: 'door-1', placement: 'inside' }, 'a section drop lands inside the door too');
+  // The door's inside location names the door's own block key as the
+  // container the drop asks insert of.
+  assert.equal(containerKeyForLocation({ anchor: 'door-1', placement: 'inside' }), null, 'no row for a door the mirror does not carry: refused by the gate');
+  const originalQuery = globalThis.document.querySelector;
+  globalThis.document.querySelector = (selector) => (selector === '[data-main-entity]' ? main : null);
+  try {
+    const spell = (gap) => `${gap.location.anchor}|${gap.location.placement}`;
+    assert.ok(enumerateGapTargets('block').map(spell).includes('door-1|inside'), 'the keyboard walk offers the empty door');
+  } finally {
+    globalThis.document.querySelector = originalQuery;
+  }
+  // Filled: the page's slot section renders inside the door, so the door
+  // is no target and the section's own flow is addressed instead.
+  door.children.length = 0;
+  const section = door.add(new El('container:SLOT', { left: 100, top: 320, width: 800, height: 60 }));
+  const sectionInner = section.add(new El(null, { left: 100, top: 320, width: 800, height: 60 }));
+  const filledTarget = resolveDropTarget(sectionInner, 500, 350, 'block');
+  assert.deepEqual(filledTarget.location, { anchor: 'SLOT', placement: 'inside' });
+  assert.equal(filledTarget.container, section);
+});
+
+// --- The panel face's row lookup ----------------------------------------
+//
+// Tree-row RESOLUTION (the gap-line model) is tree-gaps.test.mjs's; this
+// file keeps the location → row seam the panel caret draws by.
 
 /**
- * A tree fixture over the standard page: model rows carry data-tree-key
- * and a rect (24px tall, top 0), and the markup view's shell rows (no key)
- * carry the owner/claims pair the tree stamps on a claiming part: the
- * layout root claiming the root's sections, a content shell claiming only
- * fields, and a sections-claiming shell owned by a non-root entity. Model
- * rows and the layout shell sit in a `.daedalus-ui-tree` stub for the caret-face
- * lookups. document.querySelector routes elementForKey's exact-key lookups
- * into the page, the [data-main-entity] probe to main, and `.daedalus-ui-tree` to
- * the tree stub. Returns a run(row, y, targets) helper that installs the
- * router for one resolution, and within(fn) to run any lookup under it.
+ * A tree fixture over the standard page: model rows carry data-tree-key,
+ * and the markup view's shell row (no key) carries the owner/claims pair
+ * the tree stamps on a part claiming the root's sections. Model rows sit
+ * in a `.daedalus-ui-tree` stub for the caret-face lookups; the shell is
+ * added by the case that renders the markup view. document.querySelector
+ * routes the [data-main-entity] probe to main and `.daedalus-ui-tree` to
+ * the tree stub. Returns within(fn) to run any lookup under the router.
  */
 const buildTreeRows = () => {
   const page = buildPage();
@@ -423,28 +387,19 @@ const buildTreeRows = () => {
   const rows = {
     root: row({ 'data-tree-key': 'entity:page-1' }),
     layout: row({ 'data-tree-owner': 'entity:page-1', 'data-tree-claims': 'section' }),
-    content: row({ 'data-tree-owner': 'entity:page-1', 'data-tree-claims': 'field' }),
-    foreignLayout: row({ 'data-tree-owner': 'entity:para-1', 'data-tree-claims': 'section' }),
     containerA: row({ 'data-tree-key': 'container:AAA' }),
     containerC: row({ 'data-tree-key': 'container:CCC' }),
-    blockA: row({ 'data-tree-key': 'block:blk-a' }),
   };
   const tree = new El(null, { left: 0, top: 0, width: 200, height: 200 });
   tree.add(rows.root);
   tree.add(rows.containerA);
   tree.add(rows.containerC);
-  tree.add(rows.blockA);
   const query = (selector) => {
     if (selector === '[data-main-entity]') {
       return page.main;
     }
     if (selector === '.daedalus-ui-tree') {
       return tree;
-    }
-    const exact = selector.match(/^\[data-selectable="([^"]+)"\]$/);
-    if (exact) {
-      return [page.main, ...page.main.descendants()]
-        .find((node) => node.selectable === exact[1]) ?? null;
     }
     return null;
   };
@@ -457,105 +412,8 @@ const buildTreeRows = () => {
       globalThis.document.querySelector = original;
     }
   };
-  const run = (target, y, targets) =>
-    within(() => resolveDropTarget(target, 100, y, targets));
-  return { ...page, rows, tree, run, within };
+  return { rows, tree, within };
 };
-
-test('tree container row, middle zone: inside for BOTH drag kinds', () => {
-  const { rows, containerC, run } = buildTreeRows();
-  // y=12 is the middle zone (bands are 8px on a 24px row): the nest that
-  // section drags on tree rows never offered (Tim's symptom 2).
-  const section = run(rows.containerC, 12, 'section');
-  assert.deepEqual(section.location, { anchor: 'CCC', placement: 'inside' });
-  assert.equal(section.empty, true);
-  assert.equal(section.gapId, 'tree|container:CCC|inside');
-  assert.equal(section.canvasElement, containerC);
-  const block = run(rows.containerC, 12, 'block');
-  assert.deepEqual(block.location, { anchor: 'CCC', placement: 'inside' });
-  assert.equal(block.newSection, undefined);
-});
-
-test('tree nested-container row, edge bands: plain siblings for BOTH kinds', () => {
-  const { rows, run } = buildTreeRows();
-  // y=4 is the top band; container C is nested (its parent flow is
-  // container B's region), so a block lands as an ordinary sibling with
-  // no wrap (Tim's symptom 1) and a section as a sibling as before.
-  const block = run(rows.containerC, 4, 'block');
-  assert.deepEqual(block.location, { anchor: 'CCC', placement: 'before' });
-  assert.equal(block.newSection, undefined);
-  assert.equal(block.gapId, 'tree|container:CCC|before');
-  const section = run(rows.containerC, 20, 'section');
-  assert.deepEqual(section.location, { anchor: 'CCC', placement: 'after' });
-  assert.equal(section.newSection, undefined);
-});
-
-test('tree root-container row, edge band: block wraps, section stays plain', () => {
-  const { rows, run } = buildTreeRows();
-  // Container A is root-level: its sibling bands address ROOT-flow gaps,
-  // so a block drop wraps in a new section there (the same legality the
-  // canvas edge bands apply).
-  const block = run(rows.containerA, 20, 'block');
-  assert.deepEqual(block.location, { anchor: 'AAA', placement: 'after' });
-  assert.equal(block.newSection, true);
-  const section = run(rows.containerA, 4, 'section');
-  assert.deepEqual(section.location, { anchor: 'AAA', placement: 'before' });
-  assert.equal(section.newSection, undefined);
-});
-
-test('tree block row, midpoint split: before/after for BOTH kinds', () => {
-  const { rows, blockA, run } = buildTreeRows();
-  // Section drags on block rows are legal now (a section anchored on a
-  // block, the sentence the unified grammar added).
-  const section = run(rows.blockA, 4, 'section');
-  assert.deepEqual(section.location, { anchor: 'blk-a', placement: 'before' });
-  assert.equal(section.newSection, undefined);
-  const block = run(rows.blockA, 20, 'block');
-  assert.deepEqual(block.location, { anchor: 'blk-a', placement: 'after' });
-  assert.equal(block.newSection, undefined);
-  assert.equal(block.canvasElement, blockA);
-});
-
-test('tree root row: inside for both kinds; the block drop wraps', () => {
-  const { rows, run } = buildTreeRows();
-  const section = run(rows.root, 12, 'section');
-  assert.deepEqual(section.location, { anchor: 'page-1', placement: 'inside' });
-  assert.equal(section.newSection, undefined);
-  const block = run(rows.root, 12, 'block');
-  assert.deepEqual(block.location, { anchor: 'page-1', placement: 'inside' });
-  assert.equal(block.newSection, true, 'the root row wrap-appends a block');
-});
-
-test('tree sections shell row: the root inside target for both kinds, its own gapId', () => {
-  const { rows, main, run } = buildTreeRows();
-  // The layout root claims the root's sections, so the row holding the
-  // section rows appends to the root flow exactly as the root row does,
-  // at every y (one inside zone, no bands).
-  for (const y of [1, 12, 23]) {
-    const section = run(rows.layout, y, 'section');
-    assert.deepEqual(section.location, { anchor: 'page-1', placement: 'inside' });
-    assert.equal(section.newSection, undefined);
-    assert.equal(section.empty, true);
-    assert.equal(section.kind, 'gap');
-    assert.equal(section.container, rows.layout);
-    assert.equal(section.canvasElement, main);
-  }
-  const block = run(rows.layout, 12, 'block');
-  assert.deepEqual(block.location, { anchor: 'page-1', placement: 'inside' });
-  assert.equal(block.newSection, true, 'the sections shell wrap-appends a block');
-  // Two rows, one location: hysteresis still tells them apart.
-  const root = run(rows.root, 12, 'section');
-  assert.notEqual(run(rows.layout, 12, 'section').gapId, root.gapId);
-  assert.equal(run(rows.layout, 12, 'section').gapId, 'tree|entity:page-1|sections|inside');
-});
-
-test('tree shell rows claiming no sections, or sections of a non-root owner, are no target', () => {
-  const { rows, run } = buildTreeRows();
-  assert.equal(run(rows.content, 12, 'section'), null, 'a fields-only shell');
-  assert.equal(run(rows.content, 12, 'block'), null);
-  assert.equal(run(rows.foreignLayout, 12, 'section'), null, 'not the root entity');
-  assert.equal(run(rows.foreignLayout, 12, 'block'), null);
-});
 
 test('treeRowForLocation: the root inside face is the sections shell when rendered, else the root row', () => {
   const { rows, tree, within } = buildTreeRows();
@@ -602,15 +460,10 @@ const bootMirror = () => {
     uuid: 'page-1',
     blueprint: {
       _element: markupNode('article'),
-      // The delivered mirror carries BOTH section shapes: the classic
-      // layout_builder__layout the projection index composes rows from
-      // (the root-flow read below resolves through it) and the lean
-      // `_tree` the built-in projection reads. One page, described twice.
-      layout_builder__layout: [
-        { uuid: 'AAA', layout_id: 'test_container', children: [{ kind: 'block', uuid: 'blk-a', block_type: 'text', label: 'Text', block_fields: {} }] },
-        { uuid: 'BBB', layout_id: 'test_container', children: [{ kind: 'container', uuid: 'CCC', layout_id: 'test_container', children: [] }] },
-      ],
-      _tree: [
+      // The lean `layout` the delivered mirror carries: the projection
+      // index composes its rows from it (the root-flow read below
+      // resolves through it) and the built-in projection reads it too.
+      layout: [
         {
           kind: 'container',
           uuid: 'AAA',
@@ -702,34 +555,34 @@ test('isRootFlowLocation: the page entity is the root flow; every container is n
   assert.ok(!isRootFlowLocation({ anchor: 'nope', placement: 'after' }) && !isRootFlowLocation(null), 'an unresolvable location is not the root flow');
 });
 
-test('a band stencil source accepts exactly the gaps the resolvers flag rootFlow', () => {
+test('a band blueprint source accepts exactly the gaps the resolvers flag rootFlow', () => {
   const { main } = buildPage();
   globalThis.document = { querySelector: (selector) => (selector === '[data-main-entity]' ? main : null) };
   const roster = createRoster([
-    { kind: 'variant', id: 'container_site', label: 'Site', description: '', value: null, group: 'width', spellings: { 'attr:kind:container:width': 'site' }, scope: 'kind:container', applies: { depth: 'root' }, owned_by: null, published: true, weight: 0, icon: null, root_kind: null, origin: 'shipped', updatable: false },
-    { kind: 'stencil', id: 'band', label: 'Band', description: '', value: null, group: null, spellings: { stencil: 'band' }, scope: null, applies: { wears: ['container_site'] }, owned_by: null, published: true, weight: 0, icon: null, root_kind: 'section', origin: 'user', updatable: true },
-    { kind: 'stencil', id: 'card', label: 'Card', description: '', value: null, group: null, spellings: { stencil: 'card' }, scope: null, applies: [], owned_by: null, published: true, weight: 0, icon: null, root_kind: 'section', origin: 'user', updatable: true },
+    { kind: 'variant', id: 'container_site', label: 'Site', description: '', value: null, group: 'width', spellings: { 'attr:kind:container:width': 'site' }, scope: 'kind:container', applies: { depth: 'root' }, owned_by: null, published: true, weight: 0, icon: null, origin: 'shipped', updatable: false },
+    { kind: 'blueprint', id: 'band', label: 'Band', description: '', value: null, group: null, spellings: { blueprint: 'band' }, scope: null, applies: { wears: ['container_site'] }, owned_by: null, published: true, weight: 0, icon: null, origin: 'user', updatable: true },
+    { kind: 'blueprint', id: 'card', label: 'Card', description: '', value: null, group: null, spellings: { blueprint: 'card' }, scope: null, applies: [], owned_by: null, published: true, weight: 0, icon: null, origin: 'user', updatable: true },
   ]);
-  // The source spec the Add panel declares for a section-rooted stencil:
+  // The source spec the Add panel declares for a section-rooted blueprint:
   // the roster's predicate over the location's depth.
   const source = {
     targets: 'section',
-    acceptsTarget: (target, data) => roster.applicable(roster.get('stencil', data.stencilId), 'kind:container', isRootFlowLocation(target.location)),
+    acceptsTarget: (target, data) => roster.applicable(roster.get('blueprint', data.blueprintId), 'kind:container', isRootFlowLocation(target.location)),
   };
   const gaps = enumerateGapTargets(source.targets);
   assert.ok(gaps.length > 3, 'the fixture enumerates root and nested section gaps');
   const flagged = gaps.filter((gap) => gap.rootFlow === true).map((gap) => gap.gapId);
-  const offered = gaps.filter((gap) => source.acceptsTarget(gap, { stencilId: 'band' })).map((gap) => gap.gapId);
+  const offered = gaps.filter((gap) => source.acceptsTarget(gap, { blueprintId: 'band' })).map((gap) => gap.gapId);
   assert.deepEqual(offered, flagged, 'the location read and the DOM-derived rootFlow flag name the same gaps');
   assert.deepEqual(offered, ['AAA|before', 'AAA|after', 'BBB|after'], 'a band is offered the root flow only');
   assert.deepEqual(
-    gaps.filter((gap) => source.acceptsTarget(gap, { stencilId: 'card' })).map((gap) => gap.gapId),
+    gaps.filter((gap) => source.acceptsTarget(gap, { blueprintId: 'card' })).map((gap) => gap.gapId),
     gaps.map((gap) => gap.gapId),
-    'a stencil that is no band is offered every gap',
+    'a blueprint that is no band is offered every gap',
   );
   // The click door builds a bare {location} from its anchor: the same
   // answers, with no rootFlow flag to read.
-  assert.ok(source.acceptsTarget({ location: { anchor: 'BBB', placement: 'after' } }, { stencilId: 'band' }), 'after a top-level container: offered');
-  assert.ok(!source.acceptsTarget({ location: { anchor: 'CCC', placement: 'after' } }, { stencilId: 'band' }), 'after a nested container: refused');
-  assert.ok(source.acceptsTarget({ location: { anchor: 'CCC', placement: 'after' } }, { stencilId: 'card' }));
+  assert.ok(source.acceptsTarget({ location: { anchor: 'BBB', placement: 'after' } }, { blueprintId: 'band' }), 'after a top-level container: offered');
+  assert.ok(!source.acceptsTarget({ location: { anchor: 'CCC', placement: 'after' } }, { blueprintId: 'band' }), 'after a nested container: refused');
+  assert.ok(source.acceptsTarget({ location: { anchor: 'CCC', placement: 'after' } }, { blueprintId: 'card' }));
 });

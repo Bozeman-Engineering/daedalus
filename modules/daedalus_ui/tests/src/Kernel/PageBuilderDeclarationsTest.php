@@ -8,6 +8,7 @@ use Drupal\daedalus_blueprint\DesignSystem\ActiveDesignSystem;
 use Drupal\daedalus_blueprint\Entity\DesignSystem;
 use Drupal\KernelTests\KernelTestBase;
 use Drupal\daedalus_ui\ElementModel\DeclarationException;
+use Drupal\daedalus_ui\ElementModel\DeclarationOrigin;
 use Drupal\daedalus_ui\ElementModel\PageBuilderDeclarations;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
@@ -258,6 +259,15 @@ class PageBuilderDeclarationsTest extends KernelTestBase {
     $this->assertArrayNotHasKey('analytics', $site);
     $this->assertSame('acme', $this->declarations->getSite(self::BASE_THEME)['analytics']['vendor']);
 
+    // A foreign section whose owner lives elsewhere (daedalus_layout's
+    // groups, the site's group vocabulary) is answered as the merged map
+    // of both module layers, in layer order; the lane validates nothing
+    // inside it, its owner does.
+    $this->assertSame([
+      'heroes' => ['label' => 'Heroes', 'description' => 'Full-width openers.'],
+      'bands' => ['label' => 'Bands'],
+    ], $site['groups']);
+
     // The site bucket rides the full definition set beside the others.
     $this->assertSame($site, $this->declarations->getDefinitions(self::THEME)['site']);
 
@@ -404,6 +414,118 @@ class PageBuilderDeclarationsTest extends KernelTestBase {
   }
 
   /**
+   * Every merged value knows the last layer to write it.
+   *
+   * The origin tree mirrors the layered set leaf for leaf; a file origin
+   * names the provider and the file's basename, the alter hook's values
+   * carry the alter origin, and the tree composes through merge() as the
+   * declarations do.
+   */
+  public function testOrigins(): void {
+    $origins = $this->declarations->getOrigins(self::THEME);
+    $set = $this->declarations->getDefinitions(self::THEME);
+    $this->assertSame(array_keys($set), array_keys($origins), 'The origin tree is keyed as the set is.');
+    $this->assertMirrors($set, $origins, '');
+
+    // Kind layering: the sub theme's relabel is the last write, the base
+    // theme's when the base theme is the site theme, and a foreign key no
+    // theme touched still names the module that authored it.
+    $label = $origins['kinds']['field']['elements']['.field__label'];
+    $this->assertOrigin(self::THEME, self::THEME . '.page_builder.yml', $label['label']);
+    $this->assertOrigin('daedalus_ui_declarations_test', 'daedalus_ui_declarations_test.page_builder.yml', $label['annotations']['source']);
+    $base = $this->declarations->getOrigins(self::BASE_THEME);
+    $this->assertOrigin(self::BASE_THEME, self::BASE_THEME . '.page_builder.yml', $base['kinds']['field']['elements']['.field__label']['label']);
+    $this->assertMirrors($this->declarations->getDefinitions(self::BASE_THEME), $base, '');
+
+    // A withdrawn key leaves the tree with its value; a scalar or boolean
+    // the later module replaced names that module.
+    $this->assertArrayNotHasKey('.field__items', $origins['kinds']['field']['elements']);
+    $this->assertOrigin('daedalus_ui_declarations_test_extra', 'daedalus_ui_declarations_test_extra.page_builder.yml', $origins['kinds']['block']['presentation']);
+    $this->assertOrigin('daedalus_ui_declarations_test_extra', 'daedalus_ui_declarations_test_extra.page_builder.yml', $origins['kinds']['entity']['fields']['field_internal']['element']);
+    $this->assertOrigin('daedalus_ui_declarations_test', 'daedalus_ui_declarations_test.page_builder.yml', $origins['kinds']['entity']['fields']['field_gallery']['presentation']);
+
+    // The reserved lanes: the site lane layers module, module, base theme
+    // and loses the sub theme's withdrawal; the instances lane the same.
+    $this->assertOrigin('daedalus_ui_declarations_test_extra', 'daedalus_ui_declarations_test_extra.page_builder.yml', $origins['site']['branding']['slogan']);
+    $this->assertOrigin(self::BASE_THEME, self::BASE_THEME . '.page_builder.yml', $origins['site']['branding']['logo']);
+    $this->assertArrayNotHasKey('analytics', $origins['site']);
+    $this->assertOrigin('daedalus_ui_declarations_test', 'daedalus_ui_declarations_test.page_builder.yml', $origins['instances']['.in-*']['label']);
+    $this->assertOrigin('daedalus_ui_declarations_test_extra', 'daedalus_ui_declarations_test_extra.page_builder.yml', $origins['instances']['.in-*']['tags']['p']);
+    $this->assertOrigin('daedalus_ui_declarations_test_extra', 'daedalus_ui_declarations_test_extra.page_builder.yml', $origins['instances']['.in-*']['tags']['h2']);
+    $this->assertArrayNotHasKey('.tx-*', $origins['instances']);
+
+    // Per-type files: each of the card's three layers is the origin of
+    // what it wrote, a list is one leaf, and an empty map is a leaf with
+    // an origin of its own.
+    $card = $origins['block_types']['card'];
+    $this->assertOrigin(self::THEME, self::THEME . '.page_builder.block_type.card.yml', $card['elements']['.card']['label']);
+    $this->assertOrigin('daedalus_ui_declarations_test', 'daedalus_ui_declarations_test.page_builder.block_type.card.yml', $card['elements']['.card']['contains']);
+    $this->assertOrigin('daedalus_ui_declarations_test_extra', 'daedalus_ui_declarations_test_extra.page_builder.block_type.card.yml', $card['elements']['.card']['elements']['.card__body']['label']);
+    $this->assertOrigin('daedalus_ui_declarations_test', 'daedalus_ui_declarations_test.page_builder.block_type.card.yml', $card['elements']['.card']['elements']['.card__body']['contains']);
+    $this->assertOrigin('daedalus_ui_declarations_test_extra', 'daedalus_ui_declarations_test_extra.page_builder.block_type.card.yml', $card['composed']);
+    $this->assertOrigin('daedalus_ui_declarations_test', 'daedalus_ui_declarations_test.page_builder.block_type.card.yml', $card['property_groups']['spacing']);
+    $this->assertOrigin('daedalus_ui_declarations_test', 'daedalus_ui_declarations_test.page_builder.layout.daedalus_stylish_twocol.yml', $origins['layouts']['daedalus_stylish_twocol']['root']['forms']);
+
+    // The alter hook: what it wrote carries the alter origin, what it left
+    // alone keeps its file's.
+    $inner = $origins['kinds']['region']['elements']['.region__inner']['label'];
+    $this->assertInstanceOf(DeclarationOrigin::class, $inner);
+    $this->assertTrue($inner->isAlter());
+    $this->assertSame(['provider' => NULL, 'file' => NULL], $inner->toArray());
+    $this->assertFalse($label['label']->isAlter());
+
+    // Effective origins compose as effective declarations do: the kind's
+    // leaves under the bundle's, one merge() for both.
+    $effective = PageBuilderDeclarations::merge($origins['kinds']['block'], $card);
+    $this->assertMirrors($this->declarations->getBlockType('card', self::THEME), $effective, '');
+    $this->assertOrigin('daedalus_ui_declarations_test', 'daedalus_ui_declarations_test.page_builder.yml', $effective['elements']['.block__inner']['label']);
+    $this->assertOrigin(self::THEME, self::THEME . '.page_builder.block_type.card.yml', $effective['elements']['.card']['label']);
+    $this->assertOrigin('daedalus_ui_declarations_test', 'daedalus_ui_declarations_test.page_builder.block_type.card.yml', $effective['presentation']['mode']);
+
+    // Cached with the set: one entry carries both, and a reset drops both.
+    $cache = $this->container->get('cache.discovery');
+    $entry = $cache->get('daedalus_ui_page_builder:' . self::THEME);
+    $this->assertNotFalse($entry);
+    $this->assertSame(['declarations', 'origins'], array_keys($entry->data));
+    $this->assertEquals($origins, $entry->data['origins']);
+    $this->declarations->resetCache();
+    $this->assertFalse($cache->get('daedalus_ui_page_builder:' . self::THEME));
+    $this->assertEquals($origins, $this->declarations->getOrigins(self::THEME));
+
+    // An origin names both its provider and its file, or neither.
+    $this->expectException(\InvalidArgumentException::class);
+    new DeclarationOrigin('daedalus_ui', NULL);
+  }
+
+  /**
+   * Asserts an origin tree mirrors a declaration leaf for leaf.
+   *
+   * A populated map in the declaration is a node with exactly its keys in
+   * the tree; anything else (a scalar, a list, an empty map) is a leaf
+   * carrying one origin.
+   */
+  protected function assertMirrors(array $declaration, array $origins, string $path): void {
+    $this->assertSame(array_keys($declaration), array_keys($origins), "The origin tree at '$path' has the declaration's keys.");
+    foreach ($declaration as $key => $value) {
+      if (is_array($value) && $value !== [] && !array_is_list($value)) {
+        $this->assertIsArray($origins[$key], "'$path/$key' is a node.");
+        $this->assertMirrors($value, $origins[$key], "$path/$key");
+      }
+      else {
+        $this->assertInstanceOf(DeclarationOrigin::class, $origins[$key], "'$path/$key' is a leaf with an origin.");
+      }
+    }
+  }
+
+  /**
+   * Asserts a leaf's origin names the provider and file.
+   */
+  protected function assertOrigin(string $provider, string $file, mixed $origin): void {
+    $this->assertInstanceOf(DeclarationOrigin::class, $origin);
+    $this->assertSame(['provider' => $provider, 'file' => $file], $origin->toArray());
+  }
+
+  /**
    * A package's law layers only while its design system is active.
    *
    * The design-system stratum: modules packaging no system (list order),
@@ -448,6 +570,14 @@ class PageBuilderDeclarationsTest extends KernelTestBase {
     $this->assertSame(['label' => 'Glow', 'shape' => 'dimension'], $site['token_scales']['glow']);
     $this->assertSame('Aurora slogan', $site['branding']['slogan']);
     $this->assertSame('base.svg', $site['branding']['logo']);
+    $origins = $declarations->getOrigins(self::THEME)['site'];
+    $package = [
+      'provider' => 'daedalus_ui_design_system_test',
+      'file' => 'daedalus_ui_design_system_test.page_builder.yml',
+    ];
+    $this->assertSame($package, $origins['token_scales']['glow']['label']->toArray());
+    $this->assertSame($package, $origins['branding']['slogan']->toArray());
+    $this->assertSame(self::BASE_THEME, $origins['branding']['logo']->provider);
 
     // The provider order itself: the package is the last module provider,
     // after modules that sort later than it in list order, directly

@@ -1,0 +1,18 @@
+label: 'Aurora named band'
+description: 'A full-width band naming the aurora design system explicitly, the way the ship command writes a key.'
+design_system: aurora
+scope: block
+subject: 'entity_test:entity_test'
+layout:
+  -
+    kind: container
+    layout_id: layout_onecol
+    label: 'Aurora named band'
+    children:
+      -
+        kind: region
+        region: content
+        children:
+          -
+            kind: block
+            block_type: text

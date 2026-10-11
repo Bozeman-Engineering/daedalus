@@ -9,18 +9,17 @@ use Drupal\Core\Entity\EntityInterface;
 use Symfony\Component\HttpFoundation\Request;
 
 /**
- * Dispatched while a read mode projects the staged blueprint.
+ * Dispatched while a read mode projects the staged document's tree.
  *
  * The read endpoint's derived modes (css today) print from the lean node
- * tree built over the serialized blueprint's sections, and the print
- * reads facts the serializer does not mint: an element's words come from
+ * tree the spine builds for the host (NodeTreeBuilder::build), and the
+ * print reads facts the spine does not mint: an element's words come from
  * daedalus_ui's annotator (`_element`), the same annotation the mutation
  * response seam (BlueprintMutationResponseEvent) puts on every delivered
- * blueprint. This event is that seam's read-side twin: subscribers
- * annotate the blueprint before the tree is built over it, so the tree's
- * nodes wear what the delivered tree wears. The JSON modes (full,
- * summary, element) echo the serializer's blueprint and do not dispatch
- * it.
+ * tree. This event is that seam's read-side twin: subscribers annotate
+ * the tree before the mode prints it, so its nodes wear what the
+ * delivered tree wears. The JSON modes (full, summary, element) echo the
+ * serializer's blueprint and do not dispatch it.
  */
 final class BlueprintReadEvent extends Event {
 
@@ -32,35 +31,35 @@ final class BlueprintReadEvent extends Event {
    * @param \Drupal\Core\Entity\EntityInterface $entity
    *   The entity being read, in its staged state.
    * @param string $mode
-   *   The read mode projecting the blueprint ('css').
-   * @param array $blueprint
-   *   The serialized blueprint (the backend's serialize()).
+   *   The read mode projecting the tree ('css').
+   * @param array $tree
+   *   The host's lean node tree (the ordered top-level container nodes).
    */
   public function __construct(
     public readonly Request $request,
     public readonly EntityInterface $entity,
     public readonly string $mode,
-    protected array $blueprint,
+    protected array $tree,
   ) {}
 
   /**
-   * Returns the blueprint.
+   * Returns the tree.
    *
    * @return array
-   *   The blueprint, as annotated so far.
+   *   The tree, as annotated so far.
    */
-  public function getBlueprint(): array {
-    return $this->blueprint;
+  public function getTree(): array {
+    return $this->tree;
   }
 
   /**
-   * Replaces the blueprint.
+   * Replaces the tree.
    *
-   * @param array $blueprint
-   *   The annotated blueprint.
+   * @param array $tree
+   *   The annotated tree.
    */
-  public function setBlueprint(array $blueprint): void {
-    $this->blueprint = $blueprint;
+  public function setTree(array $tree): void {
+    $this->tree = $tree;
   }
 
 }

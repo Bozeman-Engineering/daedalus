@@ -40,7 +40,7 @@ use Symfony\Component\DependencyInjection\ContainerInterface;
  * behaviour. Only the overrides field (layout_builder__layout) is walked:
  * it is the one layout field the inline-block presave machinery persists
  * serialized replacements in; any other layout_section field (a section
- * library template's, migrated to stencils by `drush updb`) is named in the
+ * library template's, which nothing carries forward) is named in the
  * report as left alone, and the closing audit counts what it holds.
  *
  * The walk stops at the first failure with the host named; the hosts saved

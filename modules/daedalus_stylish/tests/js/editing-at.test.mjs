@@ -265,7 +265,7 @@ const WITH_FACTS = {
   'reduced-motion': CONDITIONS['reduced-motion'],
 };
 
-// The lean node tree (the blueprint's `_tree`, selector-matcher.js's
+// The lean node tree (the blueprint's `layout`, selector-matcher.js's
 // input): a container section holding three blocks and an empty nested
 // section, a multi-region section holding one block per region wrapper.
 const LAYOUT = [

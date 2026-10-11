@@ -130,8 +130,8 @@ Read every step's output. The steps, in order, and why the order:
    and the run stops, when a schema version is below the floor.
 4. **Rename.** `translate.php -- rename`. Installs the foundation modules
    the old site never had (`daedalus`, `daedalus_blueprint`,
-   `daedalus_blueprint_api`, `daedalus_blueprint_stencil`; the renamed
-   modules' services need them at the next container build), then renames
+   `daedalus_blueprint_api`; the renamed modules' services need them at the
+   next container build), then renames
    in one pass: the module and theme keys of `core.extension` (weights
    kept), the `system.schema` keys and the recorded post_update names (so
    the renamed modules are installed at their old versions and their
@@ -144,20 +144,17 @@ Read every step's output. The steps, in order, and why the order:
    Daedalus name is no module on disk (`lb_plus_section_library`, the Edit+
    example block modules) leaves the registries instead, the way a module
    deleted from disk is removed from any site; its block types and config
-   stay. Then it un-marks
-   Daedalus's section library migration so the next step runs it, and
-   flushes the caches. A failure inside the pass leaves the phase
+   stay. Then it flushes the caches. A failure inside the pass leaves the phase
    unrecorded, so a rerun repeats it after you have fixed the cause.
 5. **Updates.** `drush updatedb -y`. Daedalus's own hooks now see a site
    they recognise and do the semantic work: `daedalus_layout_post_update_0001`
    to `0005` (layout blocks become nested sections, the per-display block
    icons become per-block-type icons), `daedalus_ui_update_10401` and
-   `10402` (the permission renames), `daedalus_ui_update_10403` (the
-   retired `place_block` default tool becomes `selector`), and
-   `daedalus_blueprint_stencil_post_update_migrate_section_library` (every
-   section library template becomes a stencil, best effort). Read the
-   messages: the section library migration reports how many templates it
-   carried. The requirements check first may warn that the site's own code
+   `10402` (the permission renames) and `daedalus_ui_update_10403` (the
+   retired `place_block` default tool becomes `selector`). The section
+   library's templates are not carried: the blueprint library has no update
+   path (see "What does not carry over"). The requirements check first may
+   warn that the site's own code
    still requires an old module ("Engineering Animation requires this
    module: unresolved dependency edit_plus"); the run answers yes, and step
    3 ports that code. Expect, too, a burst of warnings reading `The
@@ -198,8 +195,8 @@ Read every step's output. The steps, in order, and why the order:
    `section_library` (the first environment did, in step 5); core refuses
    to uninstall a module while its content exists, so the run deletes the
    section library templates first (`drush entity:delete
-   section_library_template -y`; the stencils carry them since the update
-   step). Expect, on this path, two bursts of `[error]` lines from the
+   section_library_template -y`; nothing carries them, see "What does not
+   carry over"). Expect, on this path, two bursts of `[error]` lines from the
    shipped definitions sync of `daedalus_stylish` reading `... failed:
    entity_type [ACCESS_DENIED_ENTITY]: Access denied: cannot create
    daedalus_variant ...` (one per shipped variant, animation and skin, 23
@@ -300,7 +297,6 @@ one:
 - Edit mode loads (the Daedalus toolbar appears) and a block can be edited
   and saved.
 - Nested sections (the old layout blocks) show their content.
-- The stencil library carries the old section library templates.
 - `drush watchdog:show --severity=Error` is empty after a browse.
 
 ## What does not carry over
@@ -333,10 +329,11 @@ one:
   recipe refuses that import, the site has no image block type and no
   vector media type, and it can add the media type first or leave the image
   block module out.
-- **The section library's templates.** They are carried into stencils by
-  `daedalus_blueprint_stencil_post_update_migrate_section_library`, best
-  effort through the entity API; the templates themselves keep their old
-  heading components until `section_library` is uninstalled below.
+- **The section library's templates.** Nothing carries them: the blueprint
+  library (`daedalus_blueprint_library`) has no update path from any earlier
+  reuse mechanism, by decision. Rebuild the ones you still need as saved
+  blueprints on the migrated site before `section_library` is uninstalled
+  below, which deletes the templates.
 - **Site-specific keys on layout blocks.** A key the site's own code put
   on an old layout block component through the block properties event (an
   animation picker's `animation`, for one) is dropped when
@@ -368,8 +365,8 @@ module absent from disk), and past that the section library migration
 would have no templates to read.
 
 1. On this environment (the first one migrated), delete the section
-   library templates (the stencils carry them now) and uninstall the
-   module, in this order: core refuses to uninstall a module while content
+   library templates (rebuild what you need as saved blueprints first; see
+   "What does not carry over") and uninstall the module, in this order: core refuses to uninstall a module while content
    of its entity type exists.
 
    ```

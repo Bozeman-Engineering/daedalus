@@ -9,6 +9,9 @@ use Drupal\Core\Entity\EntityTypeBundleInfoInterface;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\Entity\FieldableEntityInterface;
 use Drupal\Core\Extension\ModuleHandlerInterface;
+use Drupal\daedalus_blueprint\Host\HostInterface;
+use Drupal\daedalus_blueprint\Host\HostResolver;
+use Drupal\daedalus_blueprint\Host\PageHosts;
 
 /**
  * Builds the list of AI-visible entity types and bundles.
@@ -20,6 +23,8 @@ class BundleListBuilder {
     protected EntityTypeBundleInfoInterface $bundleInfo,
     protected ModuleHandlerInterface $moduleHandler,
     protected ConfigFactoryInterface $configFactory,
+    protected PageHosts $pageHosts,
+    protected HostResolver $hostResolver,
   ) {}
 
   /**
@@ -97,7 +102,36 @@ class BundleListBuilder {
   }
 
   /**
+   * Whether AI visibility filtering hides a host.
+   *
+   * A host's visibility is its DOCUMENT's kind, not its own entity type:
+   * a content host is hidden when its type or bundle is, and a display
+   * host (a template, config of type entity_view_display, which the
+   * bundle catalog never lists) is hidden when the type or bundle it
+   * renders is. The same kind rule the page backend applies when it claims
+   * a display: hiding the page bundle from the AI hides its templates too,
+   * so a hidden type cannot be reached through its default layout.
+   *
+   * @param \Drupal\daedalus_blueprint\Host\HostInterface $host
+   *   The host.
+   *
+   * @return bool
+   *   TRUE when the document's type or bundle is hidden from the AI.
+   */
+  public function isHiddenHost(HostInterface $host): bool {
+    $display = $host->display();
+    // A host with no display (the site frame) renders no bundle's kind, so
+    // no bundle's visibility can hide it.
+    return $display !== NULL && $this->isHidden($display->getTargetEntityTypeId(), $display->getTargetBundle());
+  }
+
+  /**
    * Formats the visible bundle list as markdown.
+   *
+   * A page bundle is marked after its label, so a reader can sort pages
+   * from other entities before choosing a creation door: "[page]" when the
+   * bundle's pages own their layout, "[page, renders its template]" when
+   * they render the template's (PageHosts, the one meaning of "page").
    *
    * @return string
    *   Formatted markdown string with entity types as headings and bundles
@@ -116,6 +150,10 @@ class BundleListBuilder {
 
       foreach ($type_data['bundles'] as $bundle_id => $bundle_data) {
         $line = "- {$bundle_id}: {$bundle_data['label']}";
+        $host = $this->pageHosts->bundleHost($type_id, (string) $bundle_id);
+        if ($host !== NULL && $this->pageHosts->isPage($host)) {
+          $line .= $this->hostResolver->foreignOwner($host) === NULL ? ' [page]' : ' [page, renders its template]';
+        }
         if (!empty($bundle_data['description'])) {
           $line .= " — {$bundle_data['description']}";
         }

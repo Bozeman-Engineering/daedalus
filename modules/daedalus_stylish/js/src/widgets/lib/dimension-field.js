@@ -995,12 +995,12 @@ const OpenField = ({
   const grain = unitGrain(displayUnit);
   const stepTitle = detented
     ? Drupal.t(
-        "Step: @grain, landing on the design system's values · Shift 10 · Alt @fine · Cmd 100",
-        { '@grain': grain, '@fine': grain / 10 },
+        "Step: !grain, landing on the design system's values · Shift 10 · Alt !fine · Cmd 100",
+        { '!grain': grain, '!fine': grain / 10 },
       )
-    : Drupal.t('Step: @grain · Shift 10 · Alt @fine · Cmd 100', {
-        '@grain': grain,
-        '@fine': grain / 10,
+    : Drupal.t('Step: !grain · Shift 10 · Alt !fine · Cmd 100', {
+        '!grain': grain,
+        '!fine': grain / 10,
       });
 
   return (
@@ -1020,8 +1020,8 @@ const OpenField = ({
           title={
             live
               ? Drupal.t(
-                  'Drag sideways to change · Shift 10 · Alt @fine · Cmd 100',
-                  { '@fine': grain / 10 },
+                  'Drag sideways to change · Shift 10 · Alt !fine · Cmd 100',
+                  { '!fine': grain / 10 },
                 )
               : undefined
           }
@@ -1063,8 +1063,8 @@ const OpenField = ({
                   : degraded
                     ? undefined
                     : Drupal.t(
-                        'Type a value or math (16*2, 4/3em) · arrows step: @grain, Shift 10, Alt @fine, Cmd 100',
-                        { '@grain': grain, '@fine': grain / 10 },
+                        'Type a value or math (16*2, 4/3em) · arrows step: !grain, Shift 10, Alt !fine, Cmd 100',
+                        { '!grain': grain, '!fine': grain / 10 },
                       )
               }
               onInput={(event) => {
@@ -1091,8 +1091,8 @@ const OpenField = ({
                   ? Drupal.t(
                       "The design system's unit · type a value with another unit to use it",
                     )
-                  : Drupal.t("Outside the design system's @unit scale", {
-                      '@unit': space.unit,
+                  : Drupal.t("Outside the design system's !unit scale", {
+                      '!unit': space.unit,
                     })
               }
             >

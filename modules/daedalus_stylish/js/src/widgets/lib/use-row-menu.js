@@ -1,5 +1,7 @@
 import { rowMenu } from '../../provenance-model.js';
 import { useMenu } from '../../menu.js';
+import { previewPair } from '../../preview-pair.js';
+import { lawDocument, skinDocument } from '../../code/layers.js';
 
 /**
  * The one dispatch of a row's provenance doorways, and the menu spec
@@ -15,12 +17,22 @@ import { useMenu } from '../../menu.js';
  * names (the carrier of a variant an ancestor's rule wears, else the
  * host's wear key), `ancestor` seats the ancestor's rule as the styling
  * target on the source (the carrier for a worn value: the selection
- * stays put), `unset` is the row's own unset gesture, `skin` opens the
- * skin's edit page, `winner` is the session's jump to the layer that
- * beats the document, `element` drops the styling target by
- * re-selecting the element on the source (any selection write clears
- * the target: the element's own value, above the address's editable
- * layer, is edited on the element again). The rows differ only in what
+ * stays put) and, while it is the menu's active item, previews the
+ * rule's reach on the canvas (preview-pair.js, the hover-selector facet
+ * the address chip's entries drive the same way), `unset` is the row's
+ * own unset gesture, `skin` opens the
+ * editing session on the skin's document at the supplying scope (the
+ * same openDocument, handed the skin document's reference, code/layers.js
+ * skinDocument, at the delivering condition and the host's own anchor),
+ * `declared` opens the Materials place's Law tab at the supplying
+ * declaration with the property's rows revealed (the same openDocument,
+ * handed a law document reference, code/layers.js lawDocument: the
+ * Inspector routes it to the tab, never a session),
+ * `winner` is the session's jump to the layer that
+ * beats the document, `element` drops the write address on the source
+ * (address(null): the subject stays, and the element's own value, above
+ * the address's editable layer, is edited on the element again). The
+ * rows differ only in what
  * their unset removes and in which token items their field offers, so
  * those are the inputs; the dispatch itself lives here once, and a row
  * with no source (a satellite-safe row handed none) simply has inert
@@ -39,11 +51,13 @@ import { useMenu } from '../../menu.js';
  *   origin; a row with one always heads its menu with the origin's
  *   sentence.
  * @param {?object} [input.source]
- *   The state source whose `target(key, selector)` seats the ancestor
- *   doorway's rule and whose `select(key)` drops the target for the
- *   element doorway.
+ *   The state source whose `address(key, selector)` seats the ancestor
+ *   doorway's rule as the write address and whose `address(null)` drops
+ *   it for the element doorway; its `hoverSelector` carries the
+ *   ancestor doorway's preview.
  * @param {?Function} [input.onOpenDocument]
- *   (reference, condition, anchor).
+ *   (reference, condition, anchor): the document doorway and the skin
+ *   doorway both open through it.
  * @param {?Function} [input.onPickCondition]
  *   (condition): the drive doorway and the "Also set at" entries.
  * @param {?Function} [input.onUnset]
@@ -75,16 +89,19 @@ export const rowMenuSpec = ({
         onOpenDocument?.(doorway.reference, doorway.condition, doorway.anchor);
         break;
       case 'ancestor':
-        source?.target?.(doorway.key, doorway.selector);
+        source?.address?.(doorway.key, doorway.selector);
         break;
       case 'element':
-        source?.select?.(doorway.key);
+        source?.address?.(null);
         break;
       case 'unset':
         onUnset?.();
         break;
       case 'skin':
-        window.open(doorway.url, '_blank', 'noopener');
+        onOpenDocument?.(skinDocument(doorway.scope), doorway.condition, null);
+        break;
+      case 'declared':
+        onOpenDocument?.(lawDocument(doorway.scope, doorway.property), null, null);
         break;
       case 'winner':
         onWinner?.(doorway.winner);
@@ -98,6 +115,7 @@ export const rowMenuSpec = ({
     tokens: typeof tokens === 'function' ? tokens() : tokens,
     face: typeof face === 'function' ? face() : face,
     onDoorway,
+    onPreview: (pair, active) => previewPair(source, pair, active),
     onCondition: onPickCondition,
   });
 };

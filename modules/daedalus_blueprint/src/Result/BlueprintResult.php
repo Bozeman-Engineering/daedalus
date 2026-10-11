@@ -5,12 +5,13 @@ declare(strict_types=1);
 namespace Drupal\daedalus_blueprint\Result;
 
 use Drupal\Core\Entity\EntityInterface;
-use Drupal\Core\Entity\FieldableEntityInterface;
+use Drupal\daedalus_blueprint\Host\HostInterface;
 
 /**
- * Result of a blueprint operation on a fieldable content entity.
+ * Result of a blueprint operation on a page host.
  *
- * Narrows getEntity() to FieldableEntityInterface and carries the change
+ * Carries the host the operation ran against (the root of every content
+ * operation: a content entity today, a display later) and the change
  * targets and minted aliases that only content operations produce.
  */
 class BlueprintResult extends BlueprintResultBase {
@@ -19,7 +20,7 @@ class BlueprintResult extends BlueprintResultBase {
    * Elements that were changed by the operation.
    *
    * Each entry is ['uuid' => string, 'field_name' => string]. The UUID
-   * identifies either the root entity (when uuid === entity->uuid()) or a
+   * identifies either the host (when uuid === host->uuid()) or a
    * sub-element (a UUID resolved via ElementLocator).
    *
    * @var array<int, array{uuid: string, field_name: string}>
@@ -37,15 +38,59 @@ class BlueprintResult extends BlueprintResultBase {
   protected array $aliases = [];
 
   /**
-   * Returns the content entity if the operation succeeded.
+   * Constructs a new result.
    *
-   * Covariant override: narrows EntityInterface to FieldableEntityInterface.
-   *
-   * @return \Drupal\Core\Entity\FieldableEntityInterface|null
-   *   The entity, or NULL if the operation failed or was validate-only.
+   * @param string $phase
+   *   The phase reached ('structural', 'semantic', 'hydrated', 'validated').
+   * @param \Drupal\daedalus_blueprint\Result\BlueprintError[] $errors
+   *   The errors collected during the operation.
+   * @param \Drupal\daedalus_blueprint\Result\BlueprintWarning[] $warnings
+   *   The warnings collected during the operation.
+   * @param \Drupal\daedalus_blueprint\Host\HostInterface|null $host
+   *   The host if the operation succeeded.
    */
-  public function getEntity(): ?FieldableEntityInterface {
-    return $this->entity;
+  public function __construct(
+    string $phase,
+    array $errors = [],
+    array $warnings = [],
+    protected readonly ?HostInterface $host = NULL,
+  ) {
+    parent::__construct($phase, $errors, $warnings);
+  }
+
+  /**
+   * Creates a successful result carrying the host the operation ran against.
+   *
+   * @param \Drupal\daedalus_blueprint\Host\HostInterface $host
+   *   The host, its document and fields modified in place.
+   * @param \Drupal\daedalus_blueprint\Result\BlueprintWarning[] $warnings
+   *   Any warnings collected.
+   *
+   * @return static
+   *   A new successful result.
+   */
+  public static function success(HostInterface $host, array $warnings = []): static {
+    return new static('hydrated', [], $warnings, $host);
+  }
+
+  /**
+   * Returns the host if the operation succeeded.
+   *
+   * @return \Drupal\daedalus_blueprint\Host\HostInterface|null
+   *   The host, or NULL if the operation failed or was validate-only.
+   */
+  public function getHost(): ?HostInterface {
+    return $this->host;
+  }
+
+  /**
+   * {@inheritdoc}
+   *
+   * The host's entity, for the generic dispatch surface every backend
+   * shares; content consumers read the host.
+   */
+  public function getEntity(): ?EntityInterface {
+    return $this->host?->entity();
   }
 
   /**
@@ -116,14 +161,14 @@ class BlueprintResult extends BlueprintResultBase {
    *   A new result with the same phase and warnings.
    */
   public function withErrors(array $errors): static {
-    return new static($this->phase, $errors, $this->warnings, $this->entity);
+    return new static($this->phase, $errors, $this->warnings, $this->host);
   }
 
   /**
    * Returns a new instance with targets built from a UUID and field names.
    *
    * @param string $uuid
-   *   The element UUID (root entity or a nested element).
+   *   The element UUID (the host or a nested element).
    * @param string[] $field_names
    *   The field names that were changed.
    *
@@ -142,13 +187,16 @@ class BlueprintResult extends BlueprintResultBase {
   /**
    * {@inheritdoc}
    */
-  protected function entitySummary(EntityInterface $entity): array {
+  protected function subjectSummary(): array {
+    if ($this->host === NULL) {
+      return [];
+    }
     $summary = [
-      'entity_type' => $entity->getEntityTypeId(),
-      'bundle' => $entity->bundle(),
+      'entity_type' => $this->host->entityTypeId(),
+      'bundle' => $this->host->bundle(),
     ];
-    if ($entity->id()) {
-      $summary['entity_id'] = $entity->id();
+    if ($this->host->id()) {
+      $summary['entity_id'] = $this->host->id();
     }
     return $summary;
   }

@@ -21,9 +21,8 @@ use Symfony\Component\DependencyInjection\ContainerInterface;
  * family), then renames every store the audit reads: the extension and
  * update registries, every config object's name and data, every key_value
  * row, the user table's settings column, and every stored layout section,
- * revisions included. The stencil module's section-library migration is
- * un-marked so `drush updb` runs it, and the caches are flushed last, which
- * builds the first container with the renamed modules enabled. The site is
+ * revisions included. The caches are flushed last, which builds the first
+ * container with the renamed modules enabled. The site is
  * then ready for `drush updb`, which runs daedalus's own update hooks over
  * the translated data.
  *
@@ -55,20 +54,13 @@ final class Renamer implements PhaseInterface {
    *
    * The daedalus_layout module depends on daedalus_blueprint and
    * daedalus_blueprint_api; daedalus_ui and daedalus_edit on those and
-   * daedalus_tempstore; the stencil module carries the section-library
-   * migration.
+   * daedalus_tempstore.
    */
   public const FOUNDATION = [
     'daedalus',
     'daedalus_blueprint',
     'daedalus_blueprint_api',
-    'daedalus_blueprint_stencil',
   ];
-
-  /**
-   * The post_update the foundation install marks run and `updb` must run.
-   */
-  public const STENCIL_MIGRATION = 'daedalus_blueprint_stencil_post_update_migrate_section_library';
 
   /**
    * The key columns a row of a dedicated field table is addressed by.
@@ -114,7 +106,6 @@ final class Renamer implements PhaseInterface {
       'columns' => $this->renameColumns(...),
       'key_value' => $this->renameKeyValue(...),
       'sections' => $this->renameSections(...),
-      'stencil migration' => $this->unmarkStencilMigration(...),
       'caches' => $this->flush(...),
     ];
     foreach ($sequence as $label => $step) {
@@ -457,22 +448,6 @@ final class Renamer implements PhaseInterface {
       $entity_type->getKey('langcode'),
     ]);
     return array_values(array_intersect($entity_keys, $columns));
-  }
-
-  /**
-   * Un-marks the section-library migration the foundation install marked run.
-   */
-  private function unmarkStencilMigration(): void {
-    $store = $this->keyValue('post_update');
-    $existing = $store->get('existing_updates', []);
-    $remaining = array_values(array_diff($existing, [self::STENCIL_MIGRATION]));
-    if ($remaining !== $existing) {
-      $store->set('existing_updates', $remaining);
-      $this->step('stencil migration', 'un-marked, drush updb runs it', [self::STENCIL_MIGRATION]);
-    }
-    else {
-      $this->step('stencil migration', 'not marked, nothing to do');
-    }
   }
 
   /**

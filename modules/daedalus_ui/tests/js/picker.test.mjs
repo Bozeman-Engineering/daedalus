@@ -84,7 +84,7 @@ globalThis.Drupal = {
 const { default: store } = await import('../../js/edit_mode/store/store.js');
 const { setMode } = await import('../../js/edit_mode/store/slices/mode-slice.js');
 const { setHotKey } = await import('../../js/edit_mode/store/slices/hot-key-slice.js');
-const { setSelected, setTarget, setDrill, setPickerArmed, clearSelection } = await import(
+const { setSelected, setTarget, setAddress, setDrill, setPickerArmed, clearSelection } = await import(
   '../../js/edit_mode/store/slices/selection-slice.js'
 );
 const { blueprintBooted } = await import('../../js/edit_mode/store/slices/blueprint-slice.js');
@@ -101,11 +101,10 @@ store.dispatch(setHotKey(true));
 
 /**
  * A three-level page for the traversal-seated drill: the root entity, one
- * section, one merged text block. Like the delivered mirror it carries
- * both section shapes (the lean `_tree` the projection reads and the
- * classic layout_builder__layout the composition walks) from one
- * component list, so the index places the block under the section under
- * the root. ArrowLeft from the block then commits the section and seats
+ * section, one merged text block, as the lean `layout` the delivered
+ * mirror carries (the projection and the composition behind the index
+ * read the same tree), so the index places the block under the section
+ * under the root. ArrowLeft from the block then commits the section and seats
  * the drill context at the root: a non-null context with no double-click
  * involved, the shape the bug rode.
  */
@@ -116,6 +115,9 @@ const ROOT_KEY = `entity:${ROOT}`;
 const SECTION_KEY = `container:${SECTION}`;
 const BLOCK_KEY = `block:${BLOCK}`;
 const bootPage = () => {
+  // Every node carries an open verdict: the store's selection gate drops
+  // a key the actor can do nothing to, and reach walks past it.
+  const open = { content: true, configure: true, style: true, arrange: true, insert: true };
   const components = [
     {
       kind: 'block',
@@ -123,7 +125,7 @@ const bootPage = () => {
       block_type: 'text',
       label: 'Text',
       block_fields: { field_text_text: 'Body' },
-      _element: { presentation: { mode: 'merged', edit_target: 'field_text_text' } },
+      _element: { presentation: { mode: 'merged', edit_target: 'field_text_text' }, can: open },
     },
   ];
   store.dispatch(blueprintBooted({
@@ -136,11 +138,12 @@ const bootPage = () => {
     blueprint: {
       bundle: 'page',
       fields: {},
-      layout_builder__layout: [{ uuid: SECTION, layout_id: 'layout_onecol', regions: { content: components } }],
-      _tree: [{
+      _element: { can: open },
+      layout: [{
         kind: 'container',
         uuid: SECTION,
         layout_id: 'layout_onecol',
+        _element: { can: open },
         children: [{ kind: 'region', region: 'content', children: components }],
       }],
     },
@@ -246,9 +249,10 @@ test('the hotkey is a strict combo: a plain c or mod+c does not toggle', () => {
   assert.equal(isPickerArmed(), false);
 });
 
-test('Escape drops the armed picker first, keeping the selection and its target; the next Escape continues the ladder', () => {
+test('Escape drops the armed picker first, keeping the selection and its styling; the next Escape continues the ladder', () => {
   store.dispatch(setSelected('block:a'));
   store.dispatch(setTarget({ key: 'block:a', selector: '.icon' }));
+  store.dispatch(setAddress({ key: 'container:p', selector: 'li' }));
   togglePicker();
 
   let event = keydown('escape');
@@ -256,11 +260,58 @@ test('Escape drops the armed picker first, keeping the selection and its target;
   assert.equal(isPickerArmed(), false);
   assert.equal(store.getState().selection.selectedKey, 'block:a');
   assert.deepEqual(store.getState().selection.target, { key: 'block:a', selector: '.icon' });
+  assert.deepEqual(store.getState().selection.address, { key: 'container:p', selector: 'li' });
 
+  // The styling rung: the facet and the address drop together in ONE
+  // press (two rungs would make the chip's address a keyboard stop
+  // nobody can see), the selection kept.
   event = keydown('escape');
   assert.equal(event.handled, true);
   assert.equal(store.getState().selection.target, null);
+  assert.equal(store.getState().selection.address, null);
   assert.equal(store.getState().selection.selectedKey, 'block:a');
+});
+
+test('Escape with an address standing and no facet drops the address (the same rung), the selection kept', () => {
+  store.dispatch(setSelected('block:a'));
+  store.dispatch(setAddress({ key: 'container:p', selector: 'li' }));
+
+  let event = keydown('escape');
+  assert.equal(event.handled, true);
+  assert.equal(selection().address, null);
+  assert.equal(selection().selectedKey, 'block:a', 'the styling rung keeps the selection');
+
+  event = keydown('escape');
+  assert.equal(event.handled, true);
+  assert.equal(selection().selectedKey, null);
+});
+
+test('ArrowLeft from an unplaced facet with an address standing drops both instead of climbing', () => {
+  bootPage();
+  store.dispatch(setSelected(BLOCK_KEY));
+  store.dispatch(setTarget({ key: BLOCK_KEY, selector: 'li' }));
+  store.dispatch(setAddress({ key: SECTION_KEY, selector: 'li' }));
+
+  const event = keydown('arrowleft');
+  assert.equal(event.handled, true);
+  assert.equal(selection().selectedKey, BLOCK_KEY, 'Left drops the styling, it does not climb');
+  assert.equal(selection().target, null);
+  assert.equal(selection().address, null);
+});
+
+test('ArrowLeft with an address standing and no facet drops the address; the next Left climbs', () => {
+  bootPage();
+  store.dispatch(setSelected(BLOCK_KEY));
+  store.dispatch(setAddress({ key: SECTION_KEY, selector: 'li' }));
+
+  let event = keydown('arrowleft');
+  assert.equal(event.handled, true);
+  assert.equal(selection().selectedKey, BLOCK_KEY);
+  assert.equal(selection().address, null);
+
+  event = keydown('arrowleft');
+  assert.equal(event.handled, true);
+  assert.equal(selection().selectedKey, SECTION_KEY, 'bare, Left climbs to the parent');
 });
 
 test('Escape after ArrowLeft seated the drill context clears the selection and the context in one press', () => {
@@ -292,15 +343,19 @@ test('Escape with a context seated through the facade\'s drill() (a setDrill wri
 });
 
 test('with a target and a drill context standing, Escape drops the target first and the next press clears both selection and context', () => {
-  store.dispatch(setSelected('block:child'));
-  store.dispatch(setTarget({ key: 'block:child', selector: '.icon' }));
-  store.dispatch(setDrill('block:parent'));
+  // The page's own keys: the store's selection gate drops a key the
+  // projection does not place.
+  store.dispatch(setSelected(BLOCK_KEY));
+  store.dispatch(setTarget({ key: BLOCK_KEY, selector: '.icon' }));
+  store.dispatch(setAddress({ key: SECTION_KEY, selector: 'li' }));
+  store.dispatch(setDrill(SECTION_KEY));
 
   let event = keydown('escape');
   assert.equal(event.handled, true);
   assert.equal(selection().target, null);
-  assert.equal(selection().selectedKey, 'block:child', 'the target rung keeps the selection');
-  assert.equal(selection().drillKey, 'block:parent', 'the target rung leaves the context alone');
+  assert.equal(selection().address, null);
+  assert.equal(selection().selectedKey, BLOCK_KEY, 'the target rung keeps the selection');
+  assert.equal(selection().drillKey, SECTION_KEY, 'the target rung leaves the context alone');
 
   event = keydown('escape');
   assert.equal(event.handled, true);

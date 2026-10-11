@@ -4,13 +4,17 @@ declare(strict_types=1);
 
 namespace Drupal\Tests\daedalus_blueprint_config\Kernel;
 
+use Drupal\Core\Entity\Entity\EntityViewDisplay;
+use Drupal\Core\Entity\Entity\EntityViewMode;
 use Drupal\daedalus_blueprint\Dispatch\BlueprintBackendResolver;
+use Drupal\daedalus_blueprint\Dispatch\ContentBlueprintBackend;
 use Drupal\daedalus_blueprint_config\ConfigBlueprintBackend;
 use Drupal\daedalus_blueprint_config\ConfigOperationsInterface;
 use Drupal\daedalus_blueprint_config\ConfigSerializer;
 use Drupal\daedalus_blueprint_config\Result\ConfigBlueprintResult;
 use Drupal\image\Entity\ImageStyle;
 use Drupal\KernelTests\KernelTestBase;
+use Drupal\layout_builder\Entity\LayoutBuilderEntityViewDisplay;
 use Drupal\Tests\user\Traits\UserCreationTrait;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
@@ -83,6 +87,46 @@ class ConfigEntityOperationsTest extends KernelTestBase {
     $this->assertTrue($backend->supports('filter_format'));
     $this->assertFalse($backend->supports('node'));
     $this->assertFalse($backend->requiresWorkspace());
+
+    // The entity door: a config entity nothing hosts is this backend's.
+    $style = ImageStyle::load('large');
+    $this->assertTrue($backend->supportsEntity($style));
+    $this->assertSame($backend, $this->resolver->resolveFor($style));
+  }
+
+  /**
+   * The entity door declines what the host resolver hosts.
+   *
+   * A Layout Builder enabled display is a page document stored as config:
+   * the config backend yields it to the page backend although the type
+   * level door (resolve by type id) stays the config backend's, and a
+   * display without Layout Builder is still config.
+   */
+  public function testEntityDoorYieldsTemplate(): void {
+    $this->enableModules(['layout_discovery', 'layout_builder']);
+    LayoutBuilderEntityViewDisplay::create([
+      'targetEntityType' => 'user',
+      'bundle' => 'user',
+      'mode' => 'default',
+      'status' => TRUE,
+    ])->enableLayoutBuilder()->save();
+    EntityViewMode::create(['id' => 'user.compact', 'targetEntityType' => 'user', 'label' => 'Compact'])->save();
+    EntityViewDisplay::create([
+      'targetEntityType' => 'user',
+      'bundle' => 'user',
+      'mode' => 'compact',
+      'status' => TRUE,
+    ])->save();
+
+    $resolver = $this->container->get('daedalus_blueprint.backend_resolver');
+    $backend = $this->container->get('daedalus_blueprint_config.backend');
+    $template = EntityViewDisplay::load('user.user.default');
+    $this->assertFalse($backend->supportsEntity($template), 'The config backend declines a template.');
+    $this->assertInstanceOf(ContentBlueprintBackend::class, $resolver->resolveFor($template));
+    $plain = EntityViewDisplay::load('user.user.compact');
+    $this->assertTrue($backend->supportsEntity($plain));
+    $this->assertSame($backend, $resolver->resolveFor($plain));
+    $this->assertSame($backend, $resolver->resolve('entity_view_display'));
   }
 
   /**

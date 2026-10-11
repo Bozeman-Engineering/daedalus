@@ -7,6 +7,7 @@ dependencies:
 third_party_settings:
   daedalus_layout:
     icon: /modules/contrib/daedalus/modules/daedalus_edit/modules/daedalus_edit_text_block/assets/text.svg
+    favorite: true
   daedalus_ui:
     presentation: merged
 id: text

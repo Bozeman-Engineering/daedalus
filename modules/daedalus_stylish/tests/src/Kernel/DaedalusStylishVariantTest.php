@@ -16,6 +16,7 @@ use Drupal\daedalus_stylish\StyleMapValidator;
 use Drupal\Tests\user\Traits\UserCreationTrait;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
+use Drupal\Tests\daedalus_stylish\Traits\HostTrait;
 
 /**
  * Tests the style variant content entity.
@@ -29,6 +30,7 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 #[RunTestsInSeparateProcesses]
 class DaedalusStylishVariantTest extends KernelTestBase {
 
+  use HostTrait;
   use UserCreationTrait;
 
   /**
@@ -74,6 +76,7 @@ class DaedalusStylishVariantTest extends KernelTestBase {
     // daedalus_stylish provider reads all four storages on every build.
     $this->installEntitySchema('daedalus_swatch');
     $this->installEntitySchema('daedalus_animation');
+    $this->installEntitySchema('daedalus_font');
     $this->installEntitySchema('daedalus_skin');
     $this->installConfig(['daedalus_stylish']);
     $this->uuid = $this->container->get('uuid')->generate();
@@ -345,39 +348,39 @@ class DaedalusStylishVariantTest extends KernelTestBase {
     // With the host entity in context, blocks capture their bundle.
     $component_uuid = $this->setUpInlineBlockHost($host);
     $validator = $this->container->get('daedalus_stylish.style_map_validator');
-    $this->assertSame('block_type:testimonial', (string) $validator->captureScope("block:$component_uuid", ['entity' => $host]));
+    $this->assertSame('block_type:testimonial', (string) $validator->captureScope("block:$component_uuid", ['host' => $this->host($host)]));
 
     // A PLUGIN placement captures its BASE plugin id (the :derivative
     // suffix strips — derivatives share one template, so one scope covers
     // them), the block family's other refinement.
     $plugin_uuid = $this->addPluginBlock($host, 'system_menu_block:account');
-    $this->assertSame('block_plugin:system_menu_block', (string) $validator->captureScope("block:$plugin_uuid", ['entity' => $host]));
-    $this->assertSame('block_plugin:system_menu_block::.menu-item', (string) $validator->keyAddress("block:$plugin_uuid::.menu-item", ['entity' => $host]));
-    $this->assertNull($validator->captureScope("block:$plugin_uuid::.menu-item", ['entity' => $host]));
+    $this->assertSame('block_plugin:system_menu_block', (string) $validator->captureScope("block:$plugin_uuid", ['host' => $this->host($host)]));
+    $this->assertSame('block_plugin:system_menu_block::.menu-item', (string) $validator->keyAddress("block:$plugin_uuid::.menu-item", ['host' => $this->host($host)]));
+    $this->assertNull($validator->captureScope("block:$plugin_uuid::.menu-item", ['host' => $this->host($host)]));
 
     // Matching: exact, plus the degraded block-family looseness — a
     // "kind:block" side matches any block scope, but two resolved block
     // types never cross.
     $this->assertTrue($validator->scopeMatches('kind:container', "container:{$this->uuid}"));
-    $this->assertTrue($validator->scopeMatches('block_type:testimonial', "block:$component_uuid", ['entity' => $host]));
+    $this->assertTrue($validator->scopeMatches('block_type:testimonial', "block:$component_uuid", ['host' => $this->host($host)]));
     $this->assertTrue($validator->scopeMatches('block_type:testimonial', "block:{$this->uuid}"));
-    $this->assertTrue($validator->scopeMatches('kind:block', "block:$component_uuid", ['entity' => $host]));
-    $this->assertFalse($validator->scopeMatches('block_type:cta', "block:$component_uuid", ['entity' => $host]));
+    $this->assertTrue($validator->scopeMatches('kind:block', "block:$component_uuid", ['host' => $this->host($host)]));
+    $this->assertFalse($validator->scopeMatches('block_type:cta', "block:$component_uuid", ['host' => $this->host($host)]));
     // Families never mix, degraded or resolved: blocks never hold layouts,
     // so a block key never pairs with section-family scopes and vice versa.
     $this->assertFalse($validator->scopeMatches('kind:container', "block:{$this->uuid}"));
     $this->assertFalse($validator->scopeMatches('layout:layout_onecol', "block:{$this->uuid}"));
     $this->assertFalse($validator->scopeMatches('kind:block', "container:{$this->uuid}"));
     // A RESOLVED ordinary block stays in its family.
-    $this->assertFalse($validator->scopeMatches('kind:container', "block:$component_uuid", ['entity' => $host]));
-    $this->assertFalse($validator->scopeMatches('layout:layout_onecol', "block:$component_uuid", ['entity' => $host]));
+    $this->assertFalse($validator->scopeMatches('kind:container', "block:$component_uuid", ['host' => $this->host($host)]));
+    $this->assertFalse($validator->scopeMatches('layout:layout_onecol', "block:$component_uuid", ['host' => $this->host($host)]));
     // Plugin placements: exact refinement and the kind wildcard match; the
     // block family's two refinements never pair with each other.
-    $this->assertTrue($validator->scopeMatches('block_plugin:system_menu_block', "block:$plugin_uuid", ['entity' => $host]));
-    $this->assertTrue($validator->scopeMatches('kind:block', "block:$plugin_uuid", ['entity' => $host]));
-    $this->assertFalse($validator->scopeMatches('block_plugin:other_plugin', "block:$plugin_uuid", ['entity' => $host]));
-    $this->assertFalse($validator->scopeMatches('block_type:testimonial', "block:$plugin_uuid", ['entity' => $host]));
-    $this->assertFalse($validator->scopeMatches('block_plugin:system_menu_block', "block:$component_uuid", ['entity' => $host]));
+    $this->assertTrue($validator->scopeMatches('block_plugin:system_menu_block', "block:$plugin_uuid", ['host' => $this->host($host)]));
+    $this->assertTrue($validator->scopeMatches('kind:block', "block:$plugin_uuid", ['host' => $this->host($host)]));
+    $this->assertFalse($validator->scopeMatches('block_plugin:other_plugin', "block:$plugin_uuid", ['host' => $this->host($host)]));
+    $this->assertFalse($validator->scopeMatches('block_type:testimonial', "block:$plugin_uuid", ['host' => $this->host($host)]));
+    $this->assertFalse($validator->scopeMatches('block_plugin:system_menu_block', "block:$component_uuid", ['host' => $this->host($host)]));
   }
 
   /**

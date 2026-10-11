@@ -31,6 +31,7 @@
 import store from '../../store/store';
 import { getPartBehavior } from './view-registry';
 import { MARKUP_VIEW_ID } from './markup-view';
+import { boxGlyph } from './row-glyphs';
 
 let source = null;
 let cache = new Map();
@@ -71,13 +72,15 @@ export const generatedRows = (key) => {
 /**
  * A generated box as a seam pseudo row under its owner: id the box's
  * selector (the row id the click commits as the target), label its words,
- * source the Markup view (the origin reach.js gates on).
+ * icon the box glyph (row-glyphs.js: a box has no tag of its own), source
+ * the Markup view (the origin reach.js gates on).
  */
 const toGeneratedRow = (box, ownerKey) => ({
   pseudo: true,
   id: box.id,
   parentKey: ownerKey,
   label: box.label,
+  icon: boxGlyph(),
   source: MARKUP_VIEW_ID,
   children: [],
 });

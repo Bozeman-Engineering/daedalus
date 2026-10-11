@@ -12,7 +12,6 @@ import { buildStack, deliveredEntry, selectorSuffixes } from '../style-stack.js'
 import { parseKey } from '../style-guide.js';
 import { createMatcher, presentRoster } from '../selector-matcher.js';
 import { axisVocabulary } from '../variant-scope.js';
-import { facetOf } from '../write-address.js';
 import {
   ANCHOR,
   CLASS_PART,
@@ -154,13 +153,18 @@ const mapConditions = (map, key, variants, axes, guide) =>
  * also lists the ANCESTOR RULES reaching each island key (ancestorIslands:
  * the key's stack's ancestor tier, one rule row per position, nearest
  * ancestor first), at the root and per part row, each an island of the
- * rule's own key. Under a write address (`address`, the spine's styling
- * target when it is an ancestor rule the address set carries) the rule
- * the address names joins the facet it reaches (write-address.js
- * facetOf) whether the map holds it yet or not: a mintable rule lists
- * as a virtual empty island, the type-here surface a seat from the
- * subject line's chip opens, `existing` false until its first write
- * mints the entry.
+ * rule's own key. Under a write address on an ANCESTOR (`address`, the
+ * spine's address fact, its key not this one) the rule the address
+ * names joins the SUBJECT facet's row (`facet`, the spine's target
+ * selector: the spine carries both facts, nothing derives one from the
+ * other) whether the map holds it yet or not: a mintable rule lists as
+ * a virtual empty island, the type-here surface a seat from the subject
+ * line's chip opens, `existing` false until its first write mints the
+ * entry. An address on THIS key (the chip's own tag tier, "Every
+ * paragraph here": `{key}::p`) names one of the roster's own part rows,
+ * so it reaches no stack and places no rule row: the part row is the
+ * island, the view lights it, and the view drafts it when the map lacks
+ * it (one lit rule, one placement rule).
  *
  * @param {object} map
  *   The style map (mirror view).
@@ -180,7 +184,13 @@ const mapConditions = (map, key, variants, axes, guide) =>
  *   The blueprint's lean node tree, when the caller holds it and the
  *   roster is the selection's full body; null lists no ancestor rules.
  * @param {?{key: string, selector: string}} address
- *   The write address (an ancestor rule), or null.
+ *   The write address (a rule on an ancestor, or on this key), or null.
+ *   Only an ancestor's reaches the stack; an own-key address is a part
+ *   row of this roster already (or a draft the view mints).
+ * @param {?string} facet
+ *   The subject facet's selector the address stands under (the spine's
+ *   target selector; null for the root), so an ancestor address's rule
+ *   lists once, under that facet's row alone.
  *
  * @return {{conditions: string[],
  *   parts: Array<{selector: string, key: string, conditions: string[],
@@ -198,16 +208,19 @@ export const elementIslands = (
   sectionLayouts = {},
   tree = null,
   address = null,
+  facet = null,
 ) => {
   const conditions = mapConditions(map, key, variants, axes, guide);
-  // The facet the address reaches on the element (its island key), so
-  // the address's rule lists once, under that facet alone.
-  const facet =
-    tree !== null && address !== null
-      ? facetOf({ tree, key, target: address })
-      : null;
+  // An own-key address never reaches the stack: handed as `editable` it
+  // would place a virtual ancestor layer for a rule this roster already
+  // rows as a part (placeEditable's fallback seat), a second island for
+  // one key.
   const addressedKey =
-    facet === null ? null : facet.selector === null ? key : `${key}::${facet.selector}`;
+    tree === null || address === null || address.key === key
+      ? null
+      : facet === null
+        ? key
+        : `${key}::${facet}`;
   const ancestorsOf = (islandKey) =>
     tree === null
       ? []
@@ -602,6 +615,13 @@ const ANCHOR_LINE = /^\s*&(?:::[A-Za-z]*)?$/;
 const BOX_TAIL = /::([A-Za-z]*)$/;
 
 /**
+ * The condition sigil's line: the anchor glued to a word (`&hover`,
+ * `&first-child`), the condition completion's shape and never a
+ * selector's.
+ */
+const SIGIL_LINE = /&[A-Za-z0-9_-]/;
+
+/**
  * Whether a selector line holds a relation (a sibling combinator or a
  * qualifier): the completion offers nothing on one, a relation is typed
  * whole (the `{` mint reads it through the grammar).
@@ -776,6 +796,12 @@ const splitTyped = (typed) => {
  * strict site) are its refusal on the first commit, as they are for the
  * create entry.
  *
+ * Inside a rule island the caller hands over the line nested under the
+ * rule (nestUnder: `&::` in the `p` island arrives as `p::`, `> ` as
+ * `p > `), so the position read here is the rule's and the offer is the
+ * rule's matches' children, parts and boxes with no enumeration of its
+ * own; the options mint the composed selector (`p::before`, `p > *`).
+ *
  * @param {string} typed
  *   The line's text before the cursor, as typed ('> pb-', '.qu', 'p').
  * @param {object} context
@@ -907,6 +933,106 @@ export const selectorGestureOptions = (typed, context = {}) => {
 };
 
 /**
+ * Nests a selector line typed inside a rule island under the rule: CSS
+ * nesting's relative rule, the substitution DialectCssParser::parseRule
+ * makes before parsing a nested prelude. `&` is the rule's selector
+ * (`&::before` under `p` is `p::before`, `& > a` is `p > a`); a line
+ * without it is relative to the rule (`> a` is `p > a`, `.x` is `p .x`).
+ * On the owner's own island there is no rule and the line is as typed:
+ * the anchor stays the owner's own box, judged as today.
+ *
+ * Raw text, not a selector: the completion feeds a partial line through
+ * here (`&::`, `> pb-`) and reads the offer off the composed position,
+ * so no grammar judges at this step; composeUnder() is the judged form.
+ * One shape is refused before any substitution: the anchor glued to a
+ * word (`&hover`, `&first-child`) is the condition sigil's line, never a
+ * selector, and substituting the rule into it would spell a tag
+ * (`phover`) the grammar admits.
+ *
+ * @param {?string} rule
+ *   The island's rule selector (splitKey's `selector`), null or '' on
+ *   the owner's own island.
+ * @param {string} typed
+ *   The line's text, as typed.
+ *
+ * @return {?string}
+ *   The nested text, or null when `typed` is not a string or is the
+ *   condition sigil's shape.
+ */
+export const nestUnder = (rule, typed) => {
+  if (typeof typed !== 'string' || SIGIL_LINE.test(typed)) {
+    return null;
+  }
+  if (typeof rule !== 'string' || rule === '') {
+    return typed;
+  }
+  return typed.includes(ANCHOR)
+    ? typed.replaceAll(ANCHOR, rule)
+    : `${rule} ${typed.trimStart()}`;
+};
+
+/**
+ * Composes a selector typed inside a rule island under the rule and
+ * canonicalizes it: nestUnder() then the grammar's judgement, so the
+ * result is the selector the island's gesture mints (`&::before` under
+ * `p` mints `p::before`, `&::after` under `> pb-text .link` mints
+ * `> pb-text .link::after`). The grammar's refusals are the owner's (a
+ * partial tail, a box on a box: a rule island that is itself a box
+ * takes no continuation), and `&` alone is refused on every island: on
+ * the owner's it is outside the grammar, inside a rule island it
+ * composes to the rule itself, the row the island already is, so there
+ * is nothing to mint.
+ *
+ * @param {?string} rule
+ *   The island's rule selector, null or '' on the owner's own island.
+ * @param {string} typed
+ *   The line's text, as typed.
+ *
+ * @return {?string}
+ *   The composed canonical selector, or null when the grammar refuses it
+ *   or it names the rule itself.
+ */
+export const composeUnder = (rule, typed) => {
+  const text = nestUnder(rule, typed);
+  if (text === null) {
+    return null;
+  }
+  const composed = canonicalSelector(text.trim());
+  return composed === rule ? null : composed;
+};
+
+/**
+ * The nested spelling of a composed selector, for the completion's label
+ * inside a rule island: the typed line's reading of the option it mints
+ * (`p::before` under `p` reads `&::before` on an anchored line, `p > a`
+ * reads `> a` on a bare one), so the popup spells what the user is
+ * typing while each option mints the composed canonical selector, the
+ * labelling trick the `&` sigil's boxes use. The composed selector
+ * starts with the rule by construction (nestUnder() put it there and the
+ * canonical print of a canonical prefix is itself), so the spelling is
+ * the remainder behind it. On the owner's own island (no rule) a
+ * selector is its own spelling.
+ *
+ * @param {?string} rule
+ *   The island's rule selector, null or '' on the owner's own island.
+ * @param {string} typed
+ *   The line's text, as typed (whether it carries the anchor decides the
+ *   spelling's head).
+ * @param {string} composed
+ *   A composed canonical selector under the rule.
+ *
+ * @return {string}
+ *   The nested spelling.
+ */
+export const nestedSpelling = (rule, typed, composed) => {
+  if (typeof rule !== 'string' || rule === '') {
+    return composed;
+  }
+  const rest = composed.slice(rule.length);
+  return typed.includes(ANCHOR) ? `${ANCHOR}${rest}` : rest.trimStart();
+};
+
+/**
  * The selector a typed `{` mints, or null when the brace is ordinary text.
  *
  * Typing `p {` (or `> pb-text {`, `.quote {`, `> p + p {`,
@@ -915,22 +1041,26 @@ export const selectorGestureOptions = (typed, context = {}) => {
  * brace lands only when the line before it is a whole selector in the
  * grammar and nothing follows the cursor; the caller swallows the typed
  * selector with the brace and mints the row, canonical (the grammar's
- * spelling). A line holding a colon outside `:has(`, `:not(` or a
- * terminal `::before` / `::after` is a declaration, a partial token
- * (`> pb-`, `&::`) or a dangling combinator is not a selector, and a
- * brace there stays text for the lint to name. A minted box row is
- * empty chrome until its first write, which the op spine births with
- * `content: ""`; the row then prints that line.
+ * spelling). Inside a rule island the line composes under the rule
+ * first (composeUnder: `&::before {` in the `p` island mints
+ * `p::before`, `> a {` mints `p > a`). A line holding a colon outside
+ * `:has(`, `:not(` or a terminal `::before` / `::after` is a
+ * declaration, a partial token (`> pb-`, `&::`) or a dangling combinator
+ * is not a selector, and a brace there stays text for the lint to name.
+ * A minted box row is empty chrome until its first write, which the op
+ * spine births with `content: ""`; the row then prints that line.
  *
  * @param {string} before
  *   The line's text before the cursor.
  * @param {string} after
  *   The line's text after the cursor.
+ * @param {?string} rule
+ *   The island's rule selector, null or '' on the owner's own island.
  *
  * @return {?string}
  *   The canonical selector to mint.
  */
-export const bracedSelector = (before, after) => {
+export const bracedSelector = (before, after, rule = null) => {
   if (typeof before !== 'string' || typeof after !== 'string') {
     return null;
   }
@@ -941,7 +1071,7 @@ export const bracedSelector = (before, after) => {
   if (text === '') {
     return null;
   }
-  return canonicalSelector(text);
+  return composeUnder(rule, text);
 };
 
 /**

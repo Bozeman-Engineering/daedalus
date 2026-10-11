@@ -12,16 +12,18 @@ use Drupal\daedalus_blueprint\DesignSystem\ActiveDesignSystem;
 /**
  * The one activation lane for module-shipped daedalus_stylish definitions.
  *
- * Modules ship animations, swatches, skins, and variants as YAML beside
- * their code (see ShippedDefinitionsImporter); this orchestrator runs the
- * four importers over a module set in dependency order and answers with
- * one report per kind. The order is the reference graph: a variant may
- * name an animation (motion-*), a swatch (--swatch-*), or a token the
- * active skin mints (var(--space-4)), and a strict site refuses a
- * reference to a material that is not published yet. Animations, then
- * swatches, then skins, then variants lets one module ship a
- * self-referencing package that lands clean in a single run; in any other
- * order the variants fail on their own module's materials (one site's did).
+ * Modules ship fonts, animations, swatches, skins, and variants as YAML
+ * beside their code (see ShippedDefinitionsImporter); this orchestrator
+ * runs the five importers over a module set in dependency order and
+ * answers with one report per kind. The order is the reference graph: a
+ * skin's font token and a variant's stack name a family ("Inter"), a
+ * variant may name an animation (motion-*), a swatch (--swatch-*), or a
+ * token the active skin mints (var(--space-4)), and a strict site refuses
+ * a reference to a material that is not published yet. Fonts, then
+ * animations, then swatches, then skins, then variants lets one module
+ * ship a self-referencing package that lands clean in a single run; in
+ * any other order the variants fail on their own module's materials (one
+ * site's did).
  *
  * Four entries, all thin: hook_rebuild() (every enabled module, at the
  * end of drupal_flush_all_caches(), so `drush cr`, the UI's clear-all,
@@ -65,20 +67,25 @@ use Drupal\daedalus_blueprint\DesignSystem\ActiveDesignSystem;
  * still re-syncs what its batch refused.
  *
  * Activating on cache rebuild is a deliberate departure from core, which
- * writes content on install and in update hooks only. A module's stencil
+ * writes content on install and in update hooks only. A module's blueprint
  * file already goes live on rebuild through discovery, so a package pulled
  * to a site whose variants file waited for a command nobody runs was
- * half-active: the stencil placed, its variants did not exist. One package,
+ * half-active: the blueprint placed, its variants did not exist. One package,
  * one activation rule. The costs are accepted: a rebuild is no longer
  * side-effect free (shipped content revisions can appear under an ops
  * command), validation failures surface in the log rather than a command's
  * output, and every rebuild pays a YAML parse plus a hash compare per
  * shipping module (an unchanged definition is a no-op). Nothing is
- * clobbered: a site-edited definition is KEPT by every importer.
+ * clobbered: a site-edited variant, swatch or animation is KEPT by its
+ * importer, and a skin's site edits live in its own site layer, which the
+ * skins importer never writes (it has no KEPT: the package layer is
+ * locked on a consuming site, so new defaults always land under the
+ * site's layer).
  */
 final class ShippedSync {
 
   public function __construct(
+    protected FontImporter $fonts,
     protected AnimationImporter $animations,
     protected SwatchImporter $swatches,
     protected SkinImporter $skins,
@@ -92,12 +99,13 @@ final class ShippedSync {
    * The importers in dependency order, keyed by kind.
    *
    * @return array<string, \Drupal\daedalus_stylish\ShippedDefinitionsImporter>
-   *   Animations, swatches, skins, variants: each kind after every kind it
-   *   may reference.
+   *   Fonts, animations, swatches, skins, variants: each kind after every
+   *   kind it may reference (a skin's font token and a variant's stack
+   *   name a family, so the fonts land first).
    */
   public function importers(): array {
     $importers = [];
-    foreach ([$this->animations, $this->swatches, $this->skins, $this->variants] as $importer) {
+    foreach ([$this->fonts, $this->animations, $this->swatches, $this->skins, $this->variants] as $importer) {
       $importers[$importer->kind()] = $importer;
     }
     return $importers;
@@ -116,7 +124,7 @@ final class ShippedSync {
    *   no file of a kind are simply not providers of it.
    *
    * @return \Drupal\daedalus_stylish\ShippedSyncReport
-   *   The four kinds' reports, in sync order.
+   *   The five kinds' reports, in sync order.
    */
   public function sync(?array $modules = NULL): ShippedSyncReport {
     $reports = [];

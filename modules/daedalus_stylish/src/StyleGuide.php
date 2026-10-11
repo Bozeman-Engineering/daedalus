@@ -110,12 +110,19 @@ use Drupal\daedalus_stylish\Exception\StyleGuideException;
  *   the skin spells them (scalars accepted — a numeric name like 2
  *   arrives as an int from YAML and compares as its string form). The
  *   build validates the grammar (stops requires scale beside it, a
- *   non-empty list of non-empty scalars); MEMBERSHIP is a data question
- *   against the active skin's minted names, answered at delivery — the
- *   client drops un-minted names from the offer and the payload build
- *   logs the drift (a guide-build error here would let skin data brick
- *   the guide). The build validates the scale is declared
- *   (validateScaleConstraints()).
+ *   non-empty list of non-empty scalars) and that the scale is declared
+ *   (validateScaleConstraints()). Whether a curated name is MINTED is
+ *   never a build question (skin data must not brick the guide); instead
+ *   a guide that curates stops on a scale declares that scale's token
+ *   contract (site.token_contract, below) and every stop names a
+ *   contract name, so stops-within-contract is a code-vs-code fact
+ *   checked here, and skin-mints-the-contract is SkinConformance's
+ *   answer about one skin. Stops are PER ELEMENT: a `stops` list under
+ *   the site's constraint_defaults is a build error, because which of a
+ *   scale's tokens the rows offer site-wide is a fact about the tokens
+ *   and lives on the skin as each token's `offered` flag (a row bound to
+ *   a scale that no element curates offers the scale's offered tokens in
+ *   stored order; VocabularyRoster::scaleStops() is the row read).
  *   Constraint blocks expand over SHORTHAND FAMILIES (the groups'
  *   getShorthands() tables: padding over its four sides, gap over
  *   row-gap and column-gap, border-radius over the four corners): a
@@ -195,10 +202,25 @@ use Drupal\daedalus_stylish\Exception\StyleGuideException;
  *   references irresolvable to one scale. Scales are code (this grammar);
  *   token names and values are data on skin entities, validated against
  *   the declared scales.
+ * - token_contract: the token NAMES the design system promises, on the
+ *   SITE declaration only ({scale: [names]}, each scale a declared one,
+ *   each name a token name in StyleMapValidator::TOKEN_NAME's spelling,
+ *   listed once). The contract is what a guide may curate by name and
+ *   what a skin of the system must mint: a constraint curating `stops`
+ *   on a scale must find that scale in the contract and every stop in
+ *   its list (a build error otherwise, because both sides are guide
+ *   code), and SkinConformance answers whether one skin mints every
+ *   contract name and names what it lacks (skin data, so never a build
+ *   question). Declared, never derived, because the names a theme's own
+ *   CSS reads are visible to no derivation. Lists replace across layers
+ *   like every list, so a package restates a scale's whole contract
+ *   when it widens it.
  * - constraint_defaults: the site's authored offer vocabulary, on the SITE
  *   declaration only — site-wide constraint blocks, CSS property => the
- *   same {scale, stops, allowed, min, max, units} grammar node constraints
- *   speak (font-size: {scale: text} binds the type ramp site-wide). The
+ *   {scale, allowed, min, max, units} grammar node constraints speak,
+ *   minus `stops` (font-size: {scale: text} binds the type ramp
+ *   site-wide; which of its tokens the rows lead with is the skin's
+ *   `offered` flag per token, never a site-wide list here). The
  *   BASE layer of constraint resolution: a node authoring its own block
  *   for the property wins on that node; every other node granting the
  *   property carries the default (law while constraintsAreLaw(),
@@ -206,8 +228,9 @@ use Drupal\daedalus_stylish\Exception\StyleGuideException;
  *   border-radius) is served expanded to the longhands of its family
  *   that author no block of their own. Build-time validation is code-vs-code
  *   facts only (the property is recognized, a referenced scale is
- *   declared, the stops grammar) — stops entries are token NAMES, skin
- *   data checked at delivery, never here.
+ *   declared, no `stops` list: site-wide offer curation is the skin's
+ *   `offered` flag per token) — whether a skin mints a scale is
+ *   SkinConformance's question, never the build's.
  * - base: the bare-markup vocabulary, on the SITE declaration only — the
  *   ONE declaration of a prose tag's styleability. A map of HTML tag =>
  *   declaration ({property_groups} with constraints/defaults, optionally
@@ -985,9 +1008,9 @@ class StyleGuide {
    * the same rule the validator enforces there.
    *
    * @return array<string, array>
-   *   Constraint blocks ({allowed, min, max, units, scale, stops}) keyed
-   *   by CSS property name, in authoring order, each shorthand's block
-   *   followed by the longhands it expands to.
+   *   Constraint blocks ({allowed, min, max, units, scale}, never stops)
+   *   keyed by CSS property name, in authoring order, each shorthand's
+   *   block followed by the longhands it expands to.
    */
   public function constraintDefaults(?string $theme = NULL): array {
     return $this->getConstraintDefaults($theme);
@@ -1326,11 +1349,31 @@ class StyleGuide {
   }
 
   /**
+   * Gets the declared token contract.
+   *
+   * The token names the design system promises, from the site
+   * declaration's token_contract section, validated: the names a guide
+   * may curate as stops and the names a skin of the system must mint
+   * (SkinConformance judges one skin against it). Names are served as
+   * strings whatever YAML parsed them as (a numeric name like 2 arrives
+   * as an int), in authoring order per scale.
+   *
+   * @return array<string, list<string>>
+   *   Token names keyed by scale machine name, [] when no contract is
+   *   declared.
+   */
+  public function getTokenContract(?string $theme = NULL): array {
+    $this->ensureValidated($theme);
+    return static::authoredTokenContract($this->declarations->getSite($theme));
+  }
+
+  /**
    * Gets the authored site-wide constraint defaults.
    *
    * The site declaration's constraint_defaults section, validated: CSS
-   * property => constraint block in the same {scale, stops, allowed, min,
-   * max, units} grammar node constraints speak. The offer vocabulary's
+   * property => constraint block in the {scale, allowed, min, max,
+   * units} grammar node constraints speak, `stops` excepted (a site-wide
+   * offer is the skin's `offered` flag per token). The offer vocabulary's
    * authored half, and the BASE layer of constraint resolution: a node
    * authoring its own block for a property wins on that node; on every
    * other node granting the property this block is the effective
@@ -1546,6 +1589,22 @@ class StyleGuide {
   }
 
   /**
+   * The quoted family a font delivers as and a font-family value names.
+   *
+   * The font counterpart of animationName(), and like it the ONE
+   * derivation rule behind every font consumer (the compiled @font-face
+   * file, the roster record's spelling, the usage scan): the family is
+   * always quoted, backslashes and quotes escaped, so "Source Serif" and
+   * "Inter" spell one way everywhere and a stack may hold either.
+   *
+   * @param string $family
+   *   The font's family name as stored (bare).
+   */
+  public static function fontFamily(string $family): string {
+    return '"' . addcslashes(trim($family), "\\\"") . '"';
+  }
+
+  /**
    * Resolves a keyframes name back to its animation machine name.
    *
    * The reverse of animationName(): an ident in the reserved motion
@@ -1601,6 +1660,7 @@ class StyleGuide {
     $this->validateVariantAxes($declarations, $theme, $errors);
     $this->validateDefaultVariants($declarations, $errors);
     $this->validateTokenScales($declarations, $errors);
+    $this->validateTokenContract($declarations, $errors);
     $this->validateBaseElements($declarations, $errors);
     $this->validateScaleConstraints($declarations, $errors);
     $this->validatePropertyAllowlists($declarations, $errors);
@@ -2200,6 +2260,107 @@ class StyleGuide {
   }
 
   /**
+   * Validates the site declaration's token_contract section, appending errors.
+   *
+   * Grammar: a non-empty map of declared scale => non-empty list of
+   * token names (StyleMapValidator::TOKEN_NAME, scalars accepted for the
+   * numeric names YAML parses as ints), each name listed once. A scale
+   * the site does not declare fails loudly: the contract promises names
+   * ON a scale, and a typo'd scale would promise nothing while the stops
+   * check beside it found no contract. Like token_scales, the section is
+   * site vocabulary: declaring it inside any kind, block type, or layout
+   * declaration is a misplacement error, never silently dead grammar.
+   *
+   * The contract's other half, that a skin MINTS every name, is skin
+   * data and never checked here (SkinConformance answers it per skin),
+   * so no skin can brick the guide.
+   */
+  protected function validateTokenContract(array $declarations, array &$errors): void {
+    $dimensions = [
+      'kinds' => 'kind',
+      'block_types' => 'block type',
+      'layouts' => 'layout',
+    ];
+    foreach ($dimensions as $dimension => $noun) {
+      foreach ($declarations[$dimension] as $name => $declaration) {
+        if (is_array($declaration) && array_key_exists('token_contract', $declaration)) {
+          $errors[] = sprintf('The %s "%s" declares token_contract, but the token contract is site vocabulary; declare it under the top-level "site" key of a universal PROVIDER.page_builder.yml.', $noun, $name);
+        }
+      }
+    }
+    $site = $declarations['site'] ?? [];
+    if (!is_array($site) || !array_key_exists('token_contract', $site)) {
+      return;
+    }
+    $contract = $site['token_contract'];
+    if (!is_array($contract) || $contract === [] || array_is_list($contract)) {
+      $errors[] = 'The token_contract declaration of the site must be a non-empty map of token name lists keyed by scale machine name, or be omitted entirely.';
+      return;
+    }
+    $scales = is_array($site['token_scales'] ?? NULL)
+      ? array_map('strval', array_keys($site['token_scales']))
+      : [];
+    foreach ($contract as $scale => $names) {
+      $scale = (string) $scale;
+      $at = sprintf('The token contract on the "%s" scale', $scale);
+      if (!in_array($scale, $scales, TRUE)) {
+        $errors[] = sprintf(
+          '%s names a scale that is not declared%s; a contract promises token names on a declared scale.',
+          $at,
+          $scales === []
+            ? ' (this site declares no token scales; declare them under the site declaration\'s token_scales section)'
+            : sprintf(' (declared scales: %s)', implode(', ', $scales)),
+        );
+      }
+      if (!is_array($names) || !array_is_list($names) || $names === []) {
+        $errors[] = sprintf('%s must be a non-empty list of the token names a skin of this system must mint.', $at);
+        continue;
+      }
+      $seen = [];
+      foreach ($names as $name) {
+        if (!is_scalar($name) || !preg_match(StyleMapValidator::TOKEN_NAME, (string) $name)) {
+          $errors[] = sprintf('%s lists %s, which is not a token name (lowercase letters, numbers, and hyphens, starting and ending with a letter or number).', $at, var_export($name, TRUE));
+          continue;
+        }
+        $name = (string) $name;
+        if (isset($seen[$name])) {
+          $errors[] = sprintf('%s lists "%s" twice; a contract names each token once.', $at, $name);
+        }
+        $seen[$name] = TRUE;
+      }
+    }
+  }
+
+  /**
+   * The site's token contract as authored, normalized to string names.
+   *
+   * The read behind getTokenContract() and the stops check, tolerant of
+   * grammar faults (validateTokenContract() reports those): a scale whose
+   * list is malformed is served as the names that are well-formed, so
+   * one fault never hides a second error beside it.
+   *
+   * @param mixed $site
+   *   The site declaration.
+   *
+   * @return array<string, list<string>>
+   *   Token names keyed by scale, [] when no contract is declared.
+   */
+  protected static function authoredTokenContract(mixed $site): array {
+    $contract = is_array($site) ? ($site['token_contract'] ?? []) : [];
+    if (!is_array($contract) || array_is_list($contract)) {
+      return [];
+    }
+    $normalized = [];
+    foreach ($contract as $scale => $names) {
+      $normalized[(string) $scale] = array_values(array_unique(array_map(
+        'strval',
+        array_filter(is_array($names) ? $names : [], 'is_scalar'),
+      )));
+    }
+    return $normalized;
+  }
+
+  /**
    * Validates the site declaration's base section, appending errors.
    *
    * Grammar: a map of HTML tag => declaration, tags from the closed
@@ -2261,22 +2422,28 @@ class StyleGuide {
    * scale would otherwise reject every value with an empty allowed list and
    * no clue why. Declarations are checked as authored, like variant_axes:
    * catching the offender at its source. Parts nest, so elements trees are
-   * walked at every depth.
+   * walked at every depth. Every dimension that carries property_groups
+   * is walked (kinds, block types, block plugins, layouts, instance
+   * namespaces, base elements), so a curated stop is checked against the
+   * token contract wherever a guide can author one.
    */
   protected function validateScaleConstraints(array $declarations, array &$errors): void {
     $site = $declarations['site'] ?? [];
     $scales = is_array($site) && is_array($site['token_scales'] ?? NULL)
       ? array_map('strval', array_keys($site['token_scales']))
       : [];
+    $contract = static::authoredTokenContract($site);
     $dimensions = [
       'kinds' => 'kind',
       'block_types' => 'block type',
+      'block_plugins' => 'block plugin',
       'layouts' => 'layout',
+      'instances' => 'instance namespace',
     ];
     foreach ($dimensions as $dimension => $noun) {
-      foreach ($declarations[$dimension] as $name => $declaration) {
+      foreach ($declarations[$dimension] ?? [] as $name => $declaration) {
         if (is_array($declaration)) {
-          $this->checkScaleConstraints($declaration, sprintf('%s "%s"', $noun, $name), $scales, $errors);
+          $this->checkScaleConstraints($declaration, sprintf('%s "%s"', $noun, $name), $scales, $contract, $errors);
         }
       }
     }
@@ -2285,7 +2452,7 @@ class StyleGuide {
     $base = is_array($site) ? ($site['base'] ?? []) : [];
     foreach (is_array($base) ? $base : [] as $tag => $declaration) {
       if (is_array($declaration)) {
-        $this->checkScaleConstraints($declaration, sprintf('base element "%s"', $tag), $scales, $errors);
+        $this->checkScaleConstraints($declaration, sprintf('base element "%s"', $tag), $scales, $contract, $errors);
       }
     }
   }
@@ -2294,19 +2461,21 @@ class StyleGuide {
    * Validates the site declaration's constraint_defaults, appending errors.
    *
    * The authored offer vocabulary's grammar gate: a non-empty map of CSS
-   * property => constraint block, each block a non-empty map in the same
-   * {scale, stops, allowed, min, max, units} grammar node constraints
-   * speak, checked by the same rules (checkConstraintBlock() — one
-   * grammar, one check). Code-vs-code facts only fail the build: the
-   * property must be one some property group recognizes (a typo'd key
-   * would silently serve a dead binding site-wide), a referenced scale
-   * must be declared, stops must sit beside a scale as a non-empty list.
-   * Stops entries are token NAMES — guide code naming skin data — so
-   * membership against the minted corpus is a delivery question, never a
-   * build error (skin data must not brick the guide). Like token_scales
-   * and base, the section is site vocabulary: declaring it inside any
-   * kind, block type, or layout declaration is a misplacement error,
-   * never silently dead grammar.
+   * property => constraint block, each block a non-empty map in the
+   * {scale, allowed, min, max, units} grammar node constraints speak,
+   * checked by the same rules (checkConstraintBlock() — one grammar, one
+   * check). Code-vs-code facts only fail the build: the property must be
+   * one some property group recognizes (a typo'd key would silently
+   * serve a dead binding site-wide), a referenced scale must be
+   * declared, and the block must not curate `stops`: which of a scale's
+   * tokens the rows offer site-wide is a fact about the tokens, so it
+   * lives on the skin as each token's `offered` flag (the corrective
+   * names it), and stops stay a per-element curation in a declaration's
+   * property_groups. Whether a skin mints a bound scale is
+   * SkinConformance's question, never a build error (skin data must not
+   * brick the guide). Like token_scales and base, the section is site
+   * vocabulary: declaring it inside any kind, block type, or layout
+   * declaration is a misplacement error, never silently dead grammar.
    */
   protected function validateConstraintDefaults(array $declarations, array &$errors): void {
     $dimensions = [
@@ -2333,16 +2502,27 @@ class StyleGuide {
     $scales = is_array($site['token_scales'] ?? NULL)
       ? array_map('strval', array_keys($site['token_scales']))
       : [];
+    $contract = static::authoredTokenContract($site);
     foreach ($defaults as $property => $constraints) {
       $property = (string) $property;
       if ($this->propertyGroupManager->getGroupIdForProperty($property) === NULL) {
         $errors[] = sprintf('The constraint default on "%s" names a property no property group recognizes; a site-wide default on an unrecognized property could never bind.', $property);
       }
       if (!is_array($constraints) || $constraints === [] || array_is_list($constraints)) {
-        $errors[] = sprintf('The constraint default on property "%s" must be a non-empty constraint block ({scale, stops, allowed, min, max, units} — the same grammar as a node constraint).', $property);
+        $errors[] = sprintf('The constraint default on property "%s" must be a non-empty constraint block ({scale, allowed, min, max, units} — a node constraint\'s grammar without stops).', $property);
         continue;
       }
-      $this->checkConstraintBlock($property, $constraints, "the site's constraint_defaults", $scales, $errors);
+      if (array_key_exists('stops', $constraints)) {
+        $errors[] = sprintf(
+          'The constraint default on property "%s" curates stops, but a site-wide offer is not guide code: which of a scale\'s tokens the basic rows offer everywhere is each token\'s "offered" flag on the skin (offered: false withholds a token from the rows while it stays legal and referenceable), and a stops list belongs to one element\'s constraint in its declaration\'s property_groups. Drop the stops here and mark the tokens the rows should not lead with offered: false in the skin.',
+          $property,
+        );
+        unset($constraints['stops']);
+        if ($constraints === []) {
+          continue;
+        }
+      }
+      $this->checkConstraintBlock($property, $constraints, "the site's constraint_defaults", $scales, $contract, $errors);
     }
   }
 
@@ -2537,7 +2717,7 @@ class StyleGuide {
   /**
    * Checks one declaration's scale constraints, recursing into its parts.
    */
-  protected function checkScaleConstraints(array $declaration, string $where, array $scales, array &$errors): void {
+  protected function checkScaleConstraints(array $declaration, string $where, array $scales, array $contract, array &$errors): void {
     $groups = $declaration['property_groups'] ?? [];
     foreach (is_array($groups) ? $groups : [] as $declared) {
       if (!is_array($declared) || !is_array($declared['constraints'] ?? NULL)) {
@@ -2547,13 +2727,13 @@ class StyleGuide {
         if (!is_array($constraints)) {
           continue;
         }
-        $this->checkConstraintBlock((string) $property, $constraints, $where, $scales, $errors);
+        $this->checkConstraintBlock((string) $property, $constraints, $where, $scales, $contract, $errors);
       }
     }
     $elements = $declaration['elements'] ?? [];
     foreach (is_array($elements) ? $elements : [] as $selector => $part) {
       if (is_array($part)) {
-        $this->checkScaleConstraints($part, sprintf('part "%s" of %s', $selector, $where), $scales, $errors);
+        $this->checkScaleConstraints($part, sprintf('part "%s" of %s', $selector, $where), $scales, $contract, $errors);
       }
     }
     // The children pseudo-part carries property_groups like any element's,
@@ -2562,10 +2742,10 @@ class StyleGuide {
     // generated box likewise.
     $children = $declaration['children'] ?? [];
     if (is_array($children) && !array_is_list($children)) {
-      $this->checkScaleConstraints($children, sprintf('the children of %s', $where), $scales, $errors);
+      $this->checkScaleConstraints($children, sprintf('the children of %s', $where), $scales, $contract, $errors);
     }
     foreach (static::pseudoNodes($declaration) as $pseudo => $box) {
-      $this->checkScaleConstraints($box, sprintf('the ::%s pseudo-element of %s', $pseudo, $where), $scales, $errors);
+      $this->checkScaleConstraints($box, sprintf('the ::%s pseudo-element of %s', $pseudo, $where), $scales, $contract, $errors);
     }
   }
 
@@ -2666,14 +2846,28 @@ class StyleGuide {
    * The one constraint grammar, shared by node constraints
    * (checkScaleConstraints()) and the site's authored constraint_defaults
    * (validateConstraintDefaults()): stops is only meaningful beside a
-   * scale, a referenced scale must be declared, and stops must be a
-   * non-empty list of token names. Grammar only for stops entries: names
-   * are skin data — membership against the minted corpus is answered at
-   * delivery (the client drops un-minted names, the payload build logs
-   * the drift), never here, where an error would let skin data brick the
+   * scale, a referenced scale must be declared, stops must be a
+   * non-empty list of token names, and every stop must be a name the
+   * scale's token contract promises (the guide curating stops on a scale
+   * declares that scale's contract first). Code-vs-code facts only:
+   * whether a skin MINTS a contract name is SkinConformance's question,
+   * never checked here, where an error would let skin data brick the
    * whole guide.
+   *
+   * @param string $property
+   *   The constrained CSS property.
+   * @param array $constraints
+   *   The constraint block as authored.
+   * @param string $where
+   *   The declaration the block sits in, for the error.
+   * @param string[] $scales
+   *   The declared scale names.
+   * @param array<string, list<string>> $contract
+   *   The site's token contract (authoredTokenContract()).
+   * @param string[] $errors
+   *   The errors, appended to.
    */
-  protected function checkConstraintBlock(string $property, array $constraints, string $where, array $scales, array &$errors): void {
+  protected function checkConstraintBlock(string $property, array $constraints, string $where, array $scales, array $contract, array &$errors): void {
     if (array_key_exists('stops', $constraints) && !array_key_exists('scale', $constraints)) {
       $errors[] = sprintf(
         'The constraint on property "%s" of %s declares stops without a scale; stops curates which of a scale\'s tokens the stop rows offer, so it is only meaningful beside a scale constraint.',
@@ -2706,6 +2900,33 @@ class StyleGuide {
           $property,
           $where,
           is_string($scale) ? $scale : 'scale',
+        );
+        return;
+      }
+      if (!is_string($scale) || !in_array($scale, $scales, TRUE)) {
+        return;
+      }
+      // Stops name what the contract promises: a guide curating a scale
+      // declares that scale's contract, and every stop is in it.
+      if (!array_key_exists($scale, $contract)) {
+        $errors[] = sprintf(
+          'The constraint on property "%s" of %s curates stops on the "%s" scale, which has no token contract; a guide that curates a scale\'s stops declares the token names it promises under the site declaration\'s token_contract section (token_contract: {%s: [names]}).',
+          $property,
+          $where,
+          $scale,
+          $scale,
+        );
+        return;
+      }
+      $strays = array_values(array_diff(array_map('strval', $stops), $contract[$scale]));
+      if ($strays !== []) {
+        $errors[] = sprintf(
+          'The stops of the constraint on property "%s" of %s name %s, which the "%s" scale\'s token contract does not promise (contract names: %s); add the name to the contract or drop the stop.',
+          $property,
+          $where,
+          implode(', ', $strays),
+          $scale,
+          implode(', ', $contract[$scale]),
         );
       }
     }

@@ -6,8 +6,8 @@ namespace Drupal\daedalus_blueprint_api\Render;
 
 use Drupal\Component\Utility\Html;
 use Drupal\Core\Ajax\AjaxResponse;
-use Drupal\Core\Entity\EntityTypeManagerInterface;
-use Drupal\Core\Entity\FieldableEntityInterface;
+use Drupal\daedalus_blueprint\Host\HostInterface;
+use Drupal\daedalus_blueprint\Host\HostResolver;
 use Drupal\Core\Render\AttachmentsResponseProcessorInterface;
 use Drupal\Core\Render\BubbleableMetadata;
 use Drupal\Core\Entity\TranslatableInterface;
@@ -17,9 +17,10 @@ use Symfony\Component\HttpFoundation\RequestStack;
 /**
  * Renders the markup half of the mutation-response contract.
  *
- * Renders the mutated entity server-side (theme fidelity: the swapped markup is
- * the real render, never a client approximation) and extracts the smallest
- * subtrees that reflect the change, keyed by selectable key. The client
+ * Renders the mutated host's canvas server-side through the canvas-builder
+ * socket (theme fidelity: the swapped markup is the real render, never a
+ * client approximation) and extracts the smallest subtrees that reflect
+ * the change, keyed by selectable key. The client
  * replaces each element whose `data-selectable` attribute matches a returned
  * key.
  *
@@ -43,8 +44,8 @@ class SubtreeRenderer {
   /**
    * Constructs a SubtreeRenderer.
    *
-   * @param \Drupal\Core\Entity\EntityTypeManagerInterface $entityTypeManager
-   *   The entity type manager.
+   * @param \Drupal\daedalus_blueprint_api\Render\CanvasBuilderInterface $canvasBuilder
+   *   The canvas-builder socket: the host's canvas as a render array.
    * @param \Drupal\Core\Render\RendererInterface $renderer
    *   The renderer.
    * @param \Drupal\daedalus_blueprint_api\Render\TargetKeyMapper $targetKeyMapper
@@ -54,20 +55,24 @@ class SubtreeRenderer {
    * @param \Symfony\Component\HttpFoundation\RequestStack $requestStack
    *   The request stack, source of the request's `ajax_page_state` and the
    *   request the mutation-render flag is raised on.
+   * @param \Drupal\daedalus_blueprint\Host\HostResolver $hostResolver
+   *   The host resolver: a translation of the host's entity is rendered as
+   *   the host of that translation.
    */
   public function __construct(
-    protected EntityTypeManagerInterface $entityTypeManager,
+    protected CanvasBuilderInterface $canvasBuilder,
     protected RendererInterface $renderer,
     protected TargetKeyMapper $targetKeyMapper,
     protected AttachmentsResponseProcessorInterface $attachmentsProcessor,
     protected RequestStack $requestStack,
+    protected HostResolver $hostResolver,
   ) {}
 
   /**
    * Renders the re-render subtrees for a mutation.
    *
-   * @param \Drupal\Core\Entity\FieldableEntityInterface $entity
-   *   The mutated entity (the working copy, not a fresh load).
+   * @param \Drupal\daedalus_blueprint\Host\HostInterface $host
+   *   The mutated host (the working copy, not a fresh load).
    * @param array<int, array{uuid: string, field_name: string}|string> $targets
    *   The immediate change targets from the blueprint result; a string
    *   target is a selectable key used verbatim.
@@ -78,36 +83,75 @@ class SubtreeRenderer {
    *
    * @return array{markup: array<string, string>, attachments: array}
    *   Markup keyed by selectable key, and AJAX asset commands to play before
-   *   the swap. Both empty when the entity type has no view builder.
+   *   the swap. Both empty when no canvas builder renders the host.
    */
-  public function render(FieldableEntityInterface $entity, array $targets, string $view_mode = 'full', ?string $langcode = NULL): array {
-    $entity_type_id = $entity->getEntityTypeId();
-    if (!$this->entityTypeManager->hasHandler($entity_type_id, 'view_builder')) {
+  public function render(HostInterface $host, array $targets, string $view_mode = 'full', ?string $langcode = NULL): array {
+    if (!$this->renders($host)) {
       return ['markup' => [], 'attachments' => []];
     }
 
-    $keys = $this->targetKeyMapper->map($entity, $targets);
+    $keys = $this->targetKeyMapper->map($host, $targets);
+    $canvas = $this->canvas($host, $view_mode, $langcode);
 
+    return [
+      'markup' => $this->extractSubtrees($canvas['html'], $keys, $host->uuid()),
+      'attachments' => $this->buildAssetCommands($canvas['attachments']),
+    ];
+  }
+
+  /**
+   * Whether a canvas builder renders the host at all.
+   *
+   * A config entity's host (the config backend's) has no canvas; a door
+   * that takes any host asks this before canvas().
+   */
+  public function renders(HostInterface $host): bool {
+    return $this->canvasBuilder->applies($host);
+  }
+
+  /**
+   * Renders a host's whole canvas, as the mutation response does.
+   *
+   * The one render every door over a working copy shares: the mutation
+   * response cuts its swapped subtrees out of it, and the peek door cuts
+   * the one element it shows. The render runs under the mutation-render
+   * flag (the canvas build is lazy, its hooks fire inside
+   * renderInIsolation, so the flag spans both, and MutationRenderScope
+   * restores it however the render ends) and writes no render cache
+   * entry: the working copy may differ from the saved entity, and a live
+   * page must never serve it.
+   *
+   * @param \Drupal\daedalus_blueprint\Host\HostInterface $host
+   *   The host (the working copy, not a fresh load).
+   * @param string $view_mode
+   *   The view mode to render.
+   * @param string|null $langcode
+   *   The language to render, or NULL for the entity's default; a
+   *   translation of the host's entity is rendered as the host of that
+   *   translation.
+   *
+   * @return array{html: string, attachments: array}
+   *   The whole-canvas markup and the attachments the render bubbled.
+   *
+   * @throws \LogicException
+   *   When no canvas builder renders the host; ask
+   *   CanvasBuilderInterface::applies() first at a door that takes any
+   *   host.
+   */
+  public function canvas(HostInterface $host, string $view_mode = 'full', ?string $langcode = NULL): array {
+    $entity = $host->entity();
     if ($langcode !== NULL && $entity instanceof TranslatableInterface && $entity->hasTranslation($langcode)) {
-      $entity = $entity->getTranslation($langcode);
+      $host = $this->hostResolver->fromEntity($entity->getTranslation($langcode));
     }
 
-    // The render runs under the mutation-render flag: the view build is
-    // lazy (its hooks fire inside renderInIsolation), so the flag spans
-    // both, and MutationRenderScope restores it however the render ends.
-    [$html, $attachments] = MutationRenderScope::during($this->requestStack->getCurrentRequest(), function () use ($entity_type_id, $entity, $view_mode): array {
-      $build = $this->entityTypeManager->getViewBuilder($entity_type_id)->view($entity, $view_mode);
-      // The working copy may differ from the saved entity; rendering it must
-      // not write a render cache entry that live pages would then serve.
+    [$html, $attachments] = MutationRenderScope::during($this->requestStack->getCurrentRequest(), function () use ($host, $view_mode): array {
+      $build = $this->canvasBuilder->build($host, $view_mode);
       unset($build['#cache']['keys']);
       $html = (string) $this->renderer->renderInIsolation($build);
       return [$html, BubbleableMetadata::createFromRenderArray($build)->getAttachments()];
     });
 
-    return [
-      'markup' => $this->extractSubtrees($html, $keys, $entity->uuid()),
-      'attachments' => $this->buildAssetCommands($attachments),
-    ];
+    return ['html' => $html, 'attachments' => $attachments];
   }
 
   /**
@@ -160,7 +204,8 @@ class SubtreeRenderer {
    * markup, for a subscriber that renders a fragment of its own (a render
    * that lives outside the entity, such as the theme's page title) and
    * needs it in the contract's shape: the keyed element alone, so the
-   * client's swap replaces exactly the element that carries the key.
+   * client's swap replaces exactly the element that carries the key. The
+   * peek door cuts the element it shows out of canvas() with it.
    *
    * @param string $html
    *   The rendered fragment.

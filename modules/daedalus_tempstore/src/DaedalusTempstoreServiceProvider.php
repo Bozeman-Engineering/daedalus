@@ -36,6 +36,8 @@ class DaedalusTempstoreServiceProvider extends ServiceProviderBase {
         ->addArgument(new Reference('workspaces.manager', ContainerBuilder::IGNORE_ON_INVALID_REFERENCE))
         ->addArgument(new Reference('daedalus_tempstore.history_recorder'))
         ->addArgument(new Reference('daedalus_tempstore.section_storage_helper'))
+        // The host of a staged storage: what a get() by entity answers.
+        ->addArgument(new Reference('daedalus_blueprint.host_resolver'))
         // The load-time half of daedalus_layout's deprecation-window safety net
         // (NULL when daedalus_layout is not enabled): staged sessions holding
         // retired shapes converge on deserialization, before their first

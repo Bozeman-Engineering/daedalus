@@ -15,6 +15,7 @@ use Drupal\daedalus_stylish\Entity\DaedalusStylishVariant;
 use Drupal\daedalus_stylish\DaedalusStylishFieldManager;
 use Drupal\daedalus_stylish\VariantStylesheet;
 use Drupal\Tests\daedalus\Traits\DesignSystemActivationTrait;
+use Drupal\Tests\daedalus_stylish\Traits\HostTrait;
 use Drupal\Tests\user\Traits\UserCreationTrait;
 use Drupal\Tests\workspaces\Kernel\WorkspaceTestTrait;
 use PHPUnit\Framework\Attributes\Group;
@@ -34,6 +35,7 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 #[RunTestsInSeparateProcesses]
 class VariantStylesheetTest extends KernelTestBase {
 
+  use HostTrait;
   use UserCreationTrait;
   use WorkspaceTestTrait;
   use DesignSystemActivationTrait;
@@ -87,9 +89,16 @@ class VariantStylesheetTest extends KernelTestBase {
     // daedalus_stylish provider reads all four storages on every build.
     $this->installEntitySchema('daedalus_swatch');
     $this->installEntitySchema('daedalus_animation');
+    $this->installEntitySchema('daedalus_font');
     $this->installEntitySchema('daedalus_skin');
     // Variants are a swatch-usage source: publish resyncs their rows.
-    $this->installSchema('daedalus_stylish', ['daedalus_variant_usage', 'daedalus_swatch_usage', 'daedalus_animation_usage']);
+    $this->installSchema('daedalus_stylish', [
+      'daedalus_variant_usage',
+      'daedalus_swatch_usage',
+      'daedalus_animation_usage',
+      'daedalus_token_usage',
+      'daedalus_font_usage',
+    ]);
     $this->installConfig(['daedalus_stylish']);
     $this->setUpCurrentUser([], ['view test entity']);
     $this->container->get('daedalus_stylish.field_manager')->enable('entity_test', 'entity_test');
@@ -329,7 +338,7 @@ class VariantStylesheetTest extends KernelTestBase {
     // key, capped dual and child-shifted donut intact, and the child's
     // override block prints AFTER them (variant CSS first inside the tag).
     $this->container->get('request_stack')->getCurrentRequest()->cookies->set('navigationMode', 'edit');
-    $css = (string) $this->container->get('daedalus_stylish.style_backend')->build($entity, $map)['#value'];
+    $css = (string) $this->container->get('daedalus_stylish.style_backend')->build($this->host($entity), $map)['#value'];
     $this->assertStringContainsString("@scope ([data-selectable=\"container:$section_uuid\"]) to (:scope [data-selectable^=\"container:\"] > *, :scope [data-selectable^=\"block:\"] > *)", $css);
     $this->assertStringContainsString(':scope:where(.daedalus-stylish-layout-container) > *, .daedalus-stylish-layout-container > * {', $css);
     $this->assertStringNotContainsString(':scope.daedalus-stylish-layout-container > *', $css);
@@ -522,7 +531,7 @@ class VariantStylesheetTest extends KernelTestBase {
     // fragment styles only — the root's styles print at the SECTION key,
     // never at the child's.
     $this->container->get('request_stack')->getCurrentRequest()->cookies->set('navigationMode', 'edit');
-    $css = (string) $this->container->get('daedalus_stylish.style_backend')->build($entity, $map)['#value'];
+    $css = (string) $this->container->get('daedalus_stylish.style_backend')->build($this->host($entity), $map)['#value'];
     $this->assertStringContainsString("@scope ([data-selectable=\"container:$section_uuid\"]) to (", $css);
     $this->assertStringContainsString('gap: 3rem;', $css);
     $this->assertStringContainsString("@scope ([data-selectable=\"block:$component_uuid\"])", $css);
@@ -580,7 +589,7 @@ class VariantStylesheetTest extends KernelTestBase {
     $entity->save();
 
     $this->container->get('request_stack')->getCurrentRequest()->cookies->set('navigationMode', 'edit');
-    $element = $this->container->get('daedalus_stylish.style_backend')->build($entity, $map);
+    $element = $this->container->get('daedalus_stylish.style_backend')->build($this->host($entity), $map);
     $css = (string) $element['#value'];
 
     // Key-rooted resolution, never class-rooted, for every reference kind.
@@ -686,7 +695,7 @@ class VariantStylesheetTest extends KernelTestBase {
     $entity->save();
 
     $this->container->get('request_stack')->getCurrentRequest()->cookies->set('navigationMode', 'edit');
-    $css = (string) $this->container->get('daedalus_stylish.style_backend')->build($entity, $map)['#value'];
+    $css = (string) $this->container->get('daedalus_stylish.style_backend')->build($this->host($entity), $map)['#value'];
     $this->assertStringContainsString("@scope ([data-selectable=\"block:$block_uuid\"])", $css);
     $this->assertStringContainsString(":scope :where([data-claims-content]) {\n    color: #123456;\n  }", $css);
     $this->assertStringContainsString(":scope:is(:hover, [data-force-state~=\"hover\"]) :where([data-claims-content]) {\n    color: #654321;\n  }", $css);
@@ -825,7 +834,7 @@ class VariantStylesheetTest extends KernelTestBase {
     // order IS the cascade, so the emphasis-axis block beats the style-axis
     // block on any shared property, never the application sequence.
     $this->container->get('request_stack')->getCurrentRequest()->cookies->set('navigationMode', 'edit');
-    $css = (string) $this->container->get('daedalus_stylish.style_backend')->build($entity, $map)['#value'];
+    $css = (string) $this->container->get('daedalus_stylish.style_backend')->build($this->host($entity), $map)['#value'];
     $this->assertLessThan(strpos($css, 'font-weight: 700;'), strpos($css, 'padding: 3rem;'));
   }
 
@@ -894,7 +903,7 @@ class VariantStylesheetTest extends KernelTestBase {
     // Edit mode: the inline tier prints the offered variant's styles and
     // nothing for the withheld one.
     $this->container->get('request_stack')->getCurrentRequest()->cookies->set('navigationMode', 'edit');
-    $inline = (string) $this->container->get('daedalus_stylish.style_backend')->build($entity, $map)['#value'];
+    $inline = (string) $this->container->get('daedalus_stylish.style_backend')->build($this->host($entity), $map)['#value'];
     $this->assertStringContainsString('padding: 2rem;', $inline);
     $this->assertStringNotContainsString('teal', $inline);
 
@@ -951,7 +960,7 @@ class VariantStylesheetTest extends KernelTestBase {
     $entity->save();
 
     $this->container->get('request_stack')->getCurrentRequest()->cookies->set('navigationMode', 'edit');
-    $css = (string) $this->container->get('daedalus_stylish.style_backend')->build($entity, $map)['#value'];
+    $css = (string) $this->container->get('daedalus_stylish.style_backend')->build($this->host($entity), $map)['#value'];
     $this->assertLessThan(strpos($css, 'padding: 2rem;'), strpos($css, 'padding: 5rem;'));
   }
 
@@ -1005,7 +1014,7 @@ class VariantStylesheetTest extends KernelTestBase {
     foreach (['edit', NULL] as $mode) {
       $request = $this->container->get('request_stack')->getCurrentRequest();
       $mode === NULL ? $request->cookies->remove('navigationMode') : $request->cookies->set('navigationMode', $mode);
-      $element = $this->container->get('daedalus_stylish.style_backend')->build($entity, $map);
+      $element = $this->container->get('daedalus_stylish.style_backend')->build($this->host($entity), $map);
       $css = (string) $element['#value'];
       $this->assertStringContainsString($expected_rule_css, $css, $mode ?? 'live');
       // Own beats worn by order: the rule's own padding prints after the
@@ -1069,7 +1078,7 @@ class VariantStylesheetTest extends KernelTestBase {
     foreach (['edit', NULL] as $mode) {
       $request = $this->container->get('request_stack')->getCurrentRequest();
       $mode === NULL ? $request->cookies->remove('navigationMode') : $request->cookies->set('navigationMode', $mode);
-      $element = $this->container->get('daedalus_stylish.style_backend')->build($entity, $map);
+      $element = $this->container->get('daedalus_stylish.style_backend')->build($this->host($entity), $map);
       $this->assertStringContainsString('padding: 2rem;', (string) $element['#value'], $mode ?? 'live');
       $tags = $element['#cache']['tags'];
       $this->assertSame([], array_values(array_intersect($list_tags, $tags)), $mode ?? 'live');

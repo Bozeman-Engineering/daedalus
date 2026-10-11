@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Drupal\Tests\daedalus_stylish\Kernel;
 
 use Drupal\daedalus_blueprint\Result\BlueprintError;
+use Drupal\daedalus_stylish\Plugin\Field\FieldType\SkinTokensItem;
 use Drupal\KernelTests\KernelTestBase;
 use Drupal\daedalus_stylish\Entity\DaedalusStylishSkin;
 use Drupal\daedalus_stylish\Entity\DaedalusStylishSwatch;
@@ -75,6 +76,7 @@ class SwatchValidationTest extends KernelTestBase {
     $this->installEntitySchema('daedalus_skin');
     $this->installEntitySchema('daedalus_swatch');
     $this->installEntitySchema('daedalus_animation');
+    $this->installEntitySchema('daedalus_font');
     // The validator's universes are the materials roster's, whose daedalus_stylish
     // provider reads all four storages on every build.
     $this->installEntitySchema('daedalus_variant');
@@ -83,7 +85,13 @@ class SwatchValidationTest extends KernelTestBase {
     // definitions (ShippedSync::onDesignSystemActivated()): the importers
     // mirror motion-* and --swatch-* references into the usage tables and
     // switch to an administrative account, so the fixture carries both.
-    $this->installSchema('daedalus_stylish', ['daedalus_variant_usage', 'daedalus_swatch_usage', 'daedalus_animation_usage']);
+    $this->installSchema('daedalus_stylish', [
+      'daedalus_variant_usage',
+      'daedalus_swatch_usage',
+      'daedalus_animation_usage',
+      'daedalus_token_usage',
+      'daedalus_font_usage',
+    ]);
     $this->setUpCurrentUser([], [], TRUE);
     $this->container->get('state')->set('daedalus_stylish_control_test.site', [
       'token_scales' => [
@@ -113,7 +121,7 @@ class SwatchValidationTest extends KernelTestBase {
    */
   protected function activateAccentSkin(): void {
     $skin = DaedalusStylishSkin::create(['label' => 'Site skin']);
-    $skin->setTokens(['color' => ['accent' => '#1a1a2e']])->save();
+    $skin->setPackageTokens(['color' => ['accent' => '#1a1a2e']])->save();
     $this->activateSkin($skin);
   }
 
@@ -305,11 +313,11 @@ class SwatchValidationTest extends KernelTestBase {
     $this->enforce('strict');
 
     // A skin token may reference a published swatch...
-    $this->assertSame([], $validator->validateTokens(['color' => ['accent' => 'var(--swatch-brand)']], ['theme' => self::THEME]));
+    $this->assertSame([], $validator->validateTokens(SkinTokensItem::canonicalizeTokens(['color' => ['accent' => 'var(--swatch-brand)']]), ['theme' => self::THEME]));
     // ...but never an unpublished or missing one.
-    $errors = $validator->validateTokens(['color' => ['accent' => 'var(--swatch-nope)']], ['theme' => self::THEME]);
+    $errors = $validator->validateTokens(SkinTokensItem::canonicalizeTokens(['color' => ['accent' => 'var(--swatch-nope)']]), ['theme' => self::THEME]);
     $error = $this->assertSingleError($errors, 'STYLE_SWATCH_NOT_PUBLISHED');
-    $this->assertSame('color.accent', $error->getPath());
+    $this->assertSame('color.accent.value', $error->getPath());
   }
 
 }

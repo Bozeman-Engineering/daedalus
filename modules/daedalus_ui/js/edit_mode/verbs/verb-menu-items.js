@@ -11,7 +11,11 @@ import { verbsForSet, runVerbOn } from './verbs';
  * item here is ever disabled. Label and run mirror the floating bar
  * exactly: the menuLabel refinement names a single selection's target,
  * a real set keeps the static label and runs the verb's multi path
- * (runMany's atomic batch when it has one).
+ * (runMany's atomic batch when it has one). An element the registry's
+ * capability gate refuses every verb on (verb-gate.js) gets an empty
+ * menu; the document notice at the top of the page elements panel is
+ * the one explanation, and T5's selection rule keeps such an element
+ * from being selected at all.
  *
  * @param {string[]} keys
  *   The selection set's selectable keys, captured at open time.

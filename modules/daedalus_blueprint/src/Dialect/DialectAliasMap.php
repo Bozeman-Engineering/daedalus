@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Drupal\daedalus_blueprint\Dialect;
 
-use Drupal\Core\Entity\FieldableEntityInterface;
+use Drupal\daedalus_blueprint\Host\HostInterface;
 use Drupal\Core\TempStore\SharedTempStoreFactory;
 
 /**
@@ -12,7 +12,7 @@ use Drupal\Core\TempStore\SharedTempStoreFactory;
  *
  * Two namespaces share one layer. The element namespace: an author writes
  * `id="hero"`; the op layer mints the RFC 4122 uuid (the uuid identity
- * model is untouched) and remembers the pairing here, per entity per
+ * model is untouched) and remembers the pairing here, per host per
  * conversation, so `ref: "hero"` keeps resolving on later turns and the
  * printer can echo `data-alias="hero"` beside the uuid id. The files
  * namespace: a file the conversation holds (an attachment, bytes the
@@ -22,7 +22,7 @@ use Drupal\Core\TempStore\SharedTempStoreFactory;
  * entity, since a file is the conversation's, not a page's.
  *
  * Storage is shared tempstore (collection
- * 'daedalus_blueprint.dialect_aliases'), keyed by conversation + entity
+ * 'daedalus_blueprint.dialect_aliases'), keyed by conversation + host
  * for elements and by conversation + 'file' for files: aliases are
  * working-session state, not content; they expire with the tempstore and
  * are never part of the saved entity.
@@ -59,20 +59,20 @@ final class DialectAliasMap {
   ) {}
 
   /**
-   * The alias => uuid map for an entity in a conversation.
+   * The alias => uuid map for a host in a conversation.
    *
    * Persisted pairings with the batch overlay applied (recordings win,
    * removals filter).
    */
-  public function aliases(FieldableEntityInterface $entity, string $conversation): array {
-    return $this->mapFor($this->storeKey($entity, $conversation));
+  public function aliases(HostInterface $host, string $conversation): array {
+    return $this->mapFor($this->storeKey($host, $conversation));
   }
 
   /**
    * Resolves an alias to its uuid, or NULL when unknown.
    */
-  public function resolve(FieldableEntityInterface $entity, string $conversation, string $alias): ?string {
-    return $this->aliases($entity, $conversation)[$alias] ?? NULL;
+  public function resolve(HostInterface $host, string $conversation, string $alias): ?string {
+    return $this->aliases($host, $conversation)[$alias] ?? NULL;
   }
 
   /**
@@ -81,9 +81,9 @@ final class DialectAliasMap {
    * When several aliases point at one uuid, the most recently recorded
    * pairing wins (array order: stored first, overlay last).
    */
-  public function printAliases(FieldableEntityInterface $entity, string $conversation): array {
+  public function printAliases(HostInterface $host, string $conversation): array {
     $by_uuid = [];
-    foreach ($this->aliases($entity, $conversation) as $alias => $uuid) {
+    foreach ($this->aliases($host, $conversation) as $alias => $uuid) {
       $by_uuid[$uuid] = $alias;
     }
     return $by_uuid;
@@ -92,15 +92,15 @@ final class DialectAliasMap {
   /**
    * Records an alias => uuid pairing on the overlay.
    */
-  public function record(FieldableEntityInterface $entity, string $conversation, string $alias, string $uuid): void {
-    $this->recordOn($this->storeKey($entity, $conversation), $alias, $uuid);
+  public function record(HostInterface $host, string $conversation, string $alias, string $uuid): void {
+    $this->recordOn($this->storeKey($host, $conversation), $alias, $uuid);
   }
 
   /**
    * Forgets every alias pointing at a uuid (the element was removed).
    */
-  public function forget(FieldableEntityInterface $entity, string $conversation, string $uuid): void {
-    $this->forgetOn($this->storeKey($entity, $conversation), $uuid);
+  public function forget(HostInterface $host, string $conversation, string $uuid): void {
+    $this->forgetOn($this->storeKey($host, $conversation), $uuid);
   }
 
   /**
@@ -195,11 +195,10 @@ final class DialectAliasMap {
   }
 
   /**
-   * The tempstore key for the element namespace: conversation + entity.
+   * The tempstore key for the element namespace: conversation + host.
    */
-  private function storeKey(FieldableEntityInterface $entity, string $conversation): string {
-    $identity = $entity->uuid() ?: (string) $entity->id();
-    return $conversation . '|' . $entity->getEntityTypeId() . '|' . $identity;
+  private function storeKey(HostInterface $host, string $conversation): string {
+    return $conversation . '|' . $host->entityTypeId() . '|' . $host->uuid();
   }
 
   /**

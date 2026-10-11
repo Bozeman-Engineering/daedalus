@@ -333,7 +333,7 @@ const KeyframesSession = ({ animation, guide, materials, source, onClose }) => {
     updateMaterial(
       source,
       { kind: 'animation', id: original.id, steps: stepsOf(latest.current) },
-      Drupal.t('Updated the animation @label', { '@label': original.label }),
+      Drupal.t('Updated the animation !label', { '!label': original.label }),
     )
       .then(() => {
         // The committed record supersedes the preview: the store holds the
@@ -341,8 +341,8 @@ const KeyframesSession = ({ animation, guide, materials, source, onClose }) => {
         previewed.current = false;
         source.notify?.(
           'status',
-          Drupal.t('Updated "@label"; everything wearing it follows.', {
-            '@label': original.label,
+          Drupal.t('Updated "!label"; everything wearing it follows.', {
+            '!label': original.label,
           }),
         );
         onClose();
@@ -503,8 +503,8 @@ const AnimationCard = ({
         source.applyResponse(response);
         source.notify?.(
           'status',
-          Drupal.t('Renamed to "@label".', {
-            '@label':
+          Drupal.t('Renamed to "!label".', {
+            '!label':
               respondedMaterial(response, 'animation', reference)?.label ??
               label,
           }),
@@ -519,9 +519,9 @@ const AnimationCard = ({
       fetchAnimationUsage(reference).then(async ({ usages }) => {
         const confirmed = await Drupal.Daedalus.dialog.confirm({
           title: Drupal.t('Restore revision'),
-          message: Drupal.t('Restore "@label" to its revision of @date?', {
-            '@label': animation.label,
-            '@date': revisionDate(revision.created),
+          message: Drupal.t('Restore "!label" to its revision of !date?', {
+            '!label': animation.label,
+            '!date': revisionDate(revision.created),
           }),
           detail:
             usages === 0
@@ -543,11 +543,11 @@ const AnimationCard = ({
             source.applyResponse(response);
             source.notify?.(
               'status',
-              Drupal.t('Restored "@label" from its revision of @date.', {
-                '@label':
+              Drupal.t('Restored "!label" from its revision of !date.', {
+                '!label':
                   respondedMaterial(response, 'animation', reference)?.label ??
                   animation.label,
-                '@date': revisionDate(revision.created),
+                '!date': revisionDate(revision.created),
               }),
             );
             return null;
@@ -562,8 +562,8 @@ const AnimationCard = ({
       fetchAnimationUsage(reference).then(async ({ usages }) => {
         const confirmed = await Drupal.Daedalus.dialog.confirm({
           title: Drupal.t('Revert to defaults'),
-          message: Drupal.t('Revert "@label" to the steps its module ships?', {
-            '@label': animation.label,
+          message: Drupal.t('Revert "!label" to the steps its module ships?', {
+            '!label': animation.label,
           }),
           detail:
             usages === 0
@@ -584,8 +584,8 @@ const AnimationCard = ({
           source.applyResponse(response);
           source.notify?.(
             'status',
-            Drupal.t('Reverted "@label" to its shipped defaults.', {
-              '@label':
+            Drupal.t('Reverted "!label" to its shipped defaults.', {
+              '!label':
                 respondedMaterial(response, 'animation', reference)?.label ??
                 animation.label,
             }),
@@ -606,7 +606,7 @@ const AnimationCard = ({
         const confirmed = await Drupal.Daedalus.dialog.confirm({
           danger: true,
           title: Drupal.t('Delete animation'),
-          message: Drupal.t('Delete "@label"?', { '@label': animation.label }),
+          message: Drupal.t('Delete "!label"?', { '!label': animation.label }),
           detail:
             usages === 0
               ? Drupal.t('Nothing wears it; it is deleted immediately.')
@@ -634,7 +634,7 @@ const AnimationCard = ({
           onCard(null);
           source.notify?.(
             'status',
-            Drupal.t('Deleted "@label".', { '@label': animation.label }),
+            Drupal.t('Deleted "!label".', { '!label': animation.label }),
           );
           return null;
         });
@@ -686,11 +686,11 @@ const AnimationCard = ({
                 source,
                 { kind: 'animation', id: reference, offered: next },
                 next
-                  ? Drupal.t('Offered the animation @label to the AI', {
-                      '@label': animation.label,
+                  ? Drupal.t('Offered the animation !label to the AI', {
+                      '!label': animation.label,
                     })
-                  : Drupal.t('Kept the animation @label from the AI', {
-                      '@label': animation.label,
+                  : Drupal.t('Kept the animation !label from the AI', {
+                      '!label': animation.label,
                     }),
               ).then(() => null),
             )
@@ -745,8 +745,8 @@ const AnimationCard = ({
           )}
           {progress && (
             <div className="daedalus-stylish-library-card__progress">
-              {Drupal.t('Rewriting… @percent%', {
-                '@percent': progress.percentage ?? '0',
+              {Drupal.t('Rewriting… !percent%', {
+                '!percent': progress.percentage ?? '0',
               })}
             </div>
           )}
@@ -834,14 +834,14 @@ const MintCard = ({ guide, materials, source, onClose }) => {
         offered: offered ? undefined : false,
         steps: stepsOf(latest.current),
       },
-      Drupal.t('Added the animation @label', { '@label': label.trim() }),
+      Drupal.t('Added the animation !label', { '!label': label.trim() }),
     )
       .then((record) => {
         source.notify?.(
           'status',
-          Drupal.t('Added the @label animation; wear it as @spelling.', {
-            '@label': record.label,
-            '@spelling': animationSpelling(record) ?? record.id,
+          Drupal.t('Added the !label animation; wear it as !spelling.', {
+            '!label': record.label,
+            '!spelling': animationSpelling(record) ?? record.id,
           }),
         );
         onClose();

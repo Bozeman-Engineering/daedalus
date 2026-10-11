@@ -6,7 +6,7 @@ namespace Drupal\daedalus_stylish;
 
 // cspell:ignore pading zzzx
 use Drupal\Core\Entity\EntityTypeManagerInterface;
-use Drupal\Core\Entity\FieldableEntityInterface;
+use Drupal\daedalus_blueprint\Host\HostInterface;
 use Drupal\Core\Extension\ThemeHandlerInterface;
 use Drupal\daedalus_blueprint\DesignSystem\DesignSystemInterface;
 use Drupal\daedalus_blueprint\Entity\DesignSystem;
@@ -20,6 +20,7 @@ use Drupal\daedalus_blueprint\Result\BlueprintError;
 use Drupal\daedalus_blueprint\Result\BlueprintWarning;
 use Drupal\daedalus_stylish\Materials\DaedalusStylishMaterialsProvider;
 use Drupal\daedalus_stylish\Plugin\Field\FieldType\AnimationStepsItem;
+use Drupal\daedalus_stylish\Plugin\Field\FieldType\SkinTokensItem;
 use Drupal\daedalus_stylish\Vocabulary\VocabularyRoster;
 use Drupal\daedalus_stylish\Vocabulary\VocabularyRosterBuilder;
 
@@ -381,7 +382,7 @@ class StyleMapValidator {
    *   The decoded style map: selectable keys mapped to style data.
    * @param array $context
    *   Optional context:
-   *   - entity (\Drupal\Core\Entity\FieldableEntityInterface): the entity the
+   *   - host (\Drupal\daedalus_blueprint\Host\HostInterface): the host the
    *     map lives on. Enables per-block-type validation of block:{uuid} keys
    *     by resolving the placement's inline block bundle from its layout, and
    *     per-layout validation of container:{uuid} keys by resolving the
@@ -679,19 +680,25 @@ class StyleMapValidator {
   }
 
   /**
-   * Validates a skin's token values against the declared token scales.
+   * Validates a skin's token records against the declared token scales.
    *
    * The token seam of the one validation engine: every path that writes
    * skin tokens — the daedalus_blueprint field handler (blueprint
-   * create/update, AI ops), the skin admin form, and the disk import lane —
-   * converges here, so the grammar cannot fork per surface.
+   * create/update, AI ops), the token operations, and the disk import lane
+   * converges here, so the grammar cannot fork per surface. The map is the
+   * CANONICAL shape (SkinTokensItem::canonicalizeTokens(): the doors that
+   * take authored text wrap a bare value into its record before calling),
+   * so error paths name places in the canonical document.
    *
-   * The grammar (scales are code, names and values are data):
+   * The grammar (scales are code, names and records are data):
    * - Scale keys must name a declared token scale
    *   (StyleGuide::getTokenScales()); minting a token on an undeclared
    *   scale is an error, never an implicit scale.
    * - Token names follow TOKEN_NAME: they become the tail of the derived
    *   custom property (--{prefix}-{name}).
+   * - A token is a record {value, description, offered}
+   *   (SkinTokensItem::RECORD_KEYS): value required, description a string,
+   *   offered a boolean, nothing else (INVALID_TOKEN_RECORD).
    * - A value is a string (unconditional) or a condition-keyed map whose
    *   'default' entry is REQUIRED — a token undefined in the default state
    *   would make every var() reference silently unresolved outside its
@@ -710,14 +717,15 @@ class StyleMapValidator {
    *   (inert, never unsafe), mirroring the style-value posture.
    *
    * @param array $tokens
-   *   The decoded tokens: {scale: {name: value}}.
+   *   The canonical tokens: {scale: {name: {value, description, offered}}}.
    * @param array $context
    *   Optional context: theme (string), as validate().
    *
    * @return \Drupal\daedalus_blueprint\Result\BlueprintError[]
-   *   Errors with paths relative to the tokens map
-   *   ("{scale}", "{scale}.{name}", "{scale}.{name}.{condition}"). The
-   *   caller re-roots them onto its own path space. Empty when valid.
+   *   Errors with paths relative to the tokens map ("{scale}",
+   *   "{scale}.{name}", "{scale}.{name}.{record key}",
+   *   "{scale}.{name}.value.{condition}"). The caller re-roots them onto
+   *   its own path space. Empty when valid.
    */
   public function validateTokens(array $tokens, array $context = []): array {
     $theme = $context['theme'] ?? ($this->themeHandler->getDefault() ?: NULL);
@@ -732,7 +740,12 @@ class StyleMapValidator {
       $minted = [];
       foreach ($tokens as $scale => $names) {
         if (isset($scales[$scale]) && is_array($names) && !array_is_list($names)) {
-          $minted[(string) $scale] = $names;
+          // A universe is a {name: value} map; a malformed record mints
+          // nothing (its own error reports it).
+          $minted[(string) $scale] = array_map(
+            static fn (mixed $token): mixed => SkinTokensItem::isRecord($token) ? $token['value'] : NULL,
+            array_filter($names, [SkinTokensItem::class, 'isRecord']),
+          );
         }
       }
     }
@@ -758,7 +771,7 @@ class StyleMapValidator {
           $errors[] = new BlueprintError($at, 'INVALID_TOKEN_NAME', sprintf('"%s" is not a valid token name.', $name), [], 'Token names are lowercase letters, digits, and inner hyphens ("4", "2xl", "accent-hover"); the name becomes the tail of the CSS custom property.');
           continue;
         }
-        array_push($errors, ...$this->validateTokenValue($at, $value, $declaration, $scales, $minted));
+        array_push($errors, ...$this->validateTokenRecord($at, $value, $declaration, $scales, $minted));
       }
     }
 
@@ -766,10 +779,51 @@ class StyleMapValidator {
   }
 
   /**
-   * Validates one token's value: a string or a condition-keyed map.
+   * Validates one token's record: {value, description, offered}.
    *
    * @param string $at
    *   The error path of the token ("{scale}.{name}").
+   * @param mixed $record
+   *   The token's stored record.
+   * @param array $declaration
+   *   The scale's declaration ({label, shape, ...}).
+   * @param array $scales
+   *   The declared token scales (for resolving var() references).
+   * @param array|null $minted
+   *   The submitted map's tokens per scale ({scale: {name: value}}), or
+   *   NULL on permissive sites (no reference check runs).
+   *
+   * @return \Drupal\daedalus_blueprint\Result\BlueprintError[]
+   *   Errors at the record's path, its keys ("{at}.description",
+   *   "{at}.offered") and its value ("{at}.value", conditions beneath).
+   */
+  protected function validateTokenRecord(string $at, mixed $record, array $declaration, array $scales = [], ?array $minted = NULL): array {
+    if (!SkinTokensItem::isRecord($record)) {
+      return [
+        new BlueprintError($at, 'INVALID_TOKEN_RECORD', sprintf('%s is not a token record.', $at), ['keys' => SkinTokensItem::RECORD_KEYS], 'A token is a record {"value": ..., "description": "...", "offered": true}; a bare value ("1rem", or a condition-keyed map with a "default" entry) is accepted as shorthand for {"value": ...}.'),
+      ];
+    }
+    if ($unknown = array_diff(array_keys($record), SkinTokensItem::RECORD_KEYS)) {
+      return [
+        new BlueprintError($at, 'INVALID_TOKEN_RECORD', sprintf('Unknown key(s) %s in the record of %s.', implode(', ', array_map(static fn ($key) => "\"$key\"", $unknown)), $at), ['keys' => SkinTokensItem::RECORD_KEYS], sprintf('A token record carries %s and nothing else.', implode(', ', SkinTokensItem::RECORD_KEYS))),
+      ];
+    }
+    $errors = [];
+    if (!is_string($record['description'])) {
+      $errors[] = new BlueprintError("$at.description", 'INVALID_TOKEN_RECORD', sprintf('The description of %s is not a string.', $at), [], 'A description is prose: why the token exists and when to reach for it, or "" for none.');
+    }
+    if (!is_bool($record['offered'])) {
+      $errors[] = new BlueprintError("$at.offered", 'INVALID_TOKEN_RECORD', sprintf('The offered flag of %s is not a boolean.', $at), [], 'offered is true (rows bound to the scale offer the token as an everyday step, the AI sees it) or false (minted and legal, offered nowhere).');
+    }
+    array_push($errors, ...$this->validateTokenValue("$at.value", $record['value'], $declaration, $scales, $minted));
+    return $errors;
+  }
+
+  /**
+   * Validates one token's value: a string or a condition-keyed map.
+   *
+   * @param string $at
+   *   The error path of the token's value ("{scale}.{name}.value").
    * @param mixed $value
    *   The token's value.
    * @param array $declaration
@@ -1256,11 +1310,12 @@ class StyleMapValidator {
    * Validates a skin's site defaults: scope-keyed element-relative styles.
    *
    * The defaults seam of the one validation engine, riding the address
-   * door (validateAt()): every path that writes skin defaults — the
-   * daedalus_blueprint field handler, the skin admin form, the future disk
-   * lane — converges here, so the grammar cannot fork per surface. A site
-   * default is exactly a variant's styles applied globally to a declared
-   * scope, with two narrowings the global application forces:
+   * door (validateAt()): every path that writes skin defaults (the
+   * update_default operation and the disk import lane, which lands
+   * shipped defaults itself) converges here, so the grammar cannot fork
+   * per surface. A site default is exactly a variant's styles applied
+   * globally to a declared scope, with two narrowings the global
+   * application forces:
    * - The scope vocabulary is the variant scope vocabulary
    *   (variantScope(): the base:{tag} family included; kind:region is not
    *   a scope anywhere, see SCOPE_KINDS).
@@ -1287,8 +1342,9 @@ class StyleMapValidator {
     // A skin's defaults deliver only while THAT skin is active, so their
     // var() references resolve against ITS tokens, not whatever skin
     // happens to be active at write time (a shipped or staged skin must be
-    // self-contained). Callers pass the owning skin's token map as
-    // 'skin_tokens'; without it the active-skin universe applies.
+    // self-contained). Callers pass the owning skin's canonical token map
+    // (records per name) as 'skin_tokens'; without it the active-skin
+    // universe applies.
     $skin_tokens = $context['skin_tokens'] ?? NULL;
     if (is_array($skin_tokens)) {
       return $this->withMintedUniverse($skin_tokens, $theme, fn (): array => $this->validateDefaults($defaults, ['theme' => $theme] + array_diff_key($context, ['skin_tokens' => TRUE])));
@@ -1495,7 +1551,7 @@ class StyleMapValidator {
    * @param string $key
    *   A style map key.
    * @param array $context
-   *   The validate() context; "entity" enables block bundle and section
+   *   The validate() context; "host" enables block bundle and section
    *   layout resolution.
    *
    * @return \Drupal\daedalus_blueprint\Materials\Address|null
@@ -1558,17 +1614,17 @@ class StyleMapValidator {
    *
    * The kind wildcard serves both ways a kind arises. Declared:
    * "kind:container" variants style what every layout shares, so they
-   * apply to any container. Degraded capture (no host entity in context,
+   * apply to any container. Degraded capture (no host in context,
    * or a placement/section not yet in its layout): degraded context must
    * not fail styles that resolved context would accept.
    *
-   * Stencil ownership and root-only depth
+   * Blueprint ownership and root-only depth
    * share the VALIDATION posture of scope: existing references always
    * validate, render and stay detachable, because a whole-map write cannot
    * tell a new reference from an existing one it must tolerate. The apply
    * GESTURE hard-gates them through the applicability seam
-   * (VariantApplicabilityCheckerInterface): StencilVariantOwnershipChecker
-   * in daedalus_blueprint_stencil for ownership, RootOnlyVariantChecker here
+   * (VariantApplicabilityCheckerInterface): BlueprintVariantOwnershipChecker
+   * in daedalus_blueprint_library for ownership, RootOnlyVariantChecker here
    * for depth (the roster record's applies.depth stamp, the one fact the
    * picker, the dialect and the op spine read). Curation only the picker
    * respects isn't curation, so the op spine backstops the offer filter.
@@ -2497,7 +2553,7 @@ class StyleMapValidator {
    * BASE plugin id ('block_plugin' — derivatives share one template, so
    * the :derivative suffix strips, mirroring the file grammar).
    *
-   * Best-effort: needs the host entity in context and the placement already
+   * Best-effort: needs the host in context and the placement already
    * in its layout (a whole-blueprint create processes fields before layout,
    * so brand-new placements resolve on the next write). Unresolvable
    * placements resolve to NULL and validate against the universal block
@@ -2509,11 +2565,11 @@ class StyleMapValidator {
    *   cannot resolve.
    */
   protected function resolveBlockRefinement(string $uuid, array $context): ?array {
-    $entity = $context['entity'] ?? NULL;
-    if (!$entity instanceof FieldableEntityInterface) {
+    $host = $context['host'] ?? NULL;
+    if (!$host instanceof HostInterface) {
       return NULL;
     }
-    $located = ($this->elementLocator)()->locate($entity, $uuid);
+    $located = ($this->elementLocator)()->locate($host, $uuid);
     if ($located === NULL || !$located->isLbComponent()) {
       return NULL;
     }
@@ -2541,7 +2597,7 @@ class StyleMapValidator {
    * Whether a parsed key names a container nested inside another section.
    *
    * The depth fact behind ownedPropertyWarnings(): positional, read from
-   * the host entity in context through the locator
+   * the host in context through the locator
    * (ElementLocator::isNestedSection()). Only container keys have a
    * depth; any other kind, a missing host, or a section the locator
    * cannot place reads as root, so depth-blind callers keep the ungated
@@ -2550,17 +2606,17 @@ class StyleMapValidator {
    * @param array $parsed
    *   The key as parseKey() returns it.
    * @param array $context
-   *   The validate() context (the optional host entity).
+   *   The validate() context (the optional host).
    */
   protected function isNestedContainer(array $parsed, array $context): bool {
     if ($parsed['kind'] !== 'container') {
       return FALSE;
     }
-    $entity = $context['entity'] ?? NULL;
-    if (!$entity instanceof FieldableEntityInterface) {
+    $host = $context['host'] ?? NULL;
+    if (!$host instanceof HostInterface) {
       return FALSE;
     }
-    return ($this->elementLocator)()->isNestedSection($entity, $parsed['uuid']);
+    return ($this->elementLocator)()->isNestedSection($host, $parsed['uuid']);
   }
 
   /**
@@ -2568,16 +2624,16 @@ class StyleMapValidator {
    *
    * The container counterpart of resolveBlockBundle(): the layout plugin id
    * is to containers what the bundle is to inline blocks. Best-effort with
-   * the same limits — needs the host entity in context and the section
+   * the same limits — needs the host in context and the section
    * already in its layout; unresolvable containers validate against the
    * universal container kind.
    */
   protected function resolveSectionLayout(string $uuid, array $context): ?string {
-    $entity = $context['entity'] ?? NULL;
-    if (!$entity instanceof FieldableEntityInterface) {
+    $host = $context['host'] ?? NULL;
+    if (!$host instanceof HostInterface) {
       return NULL;
     }
-    $located = ($this->elementLocator)()->locate($entity, $uuid);
+    $located = ($this->elementLocator)()->locate($host, $uuid);
     if ($located === NULL || !$located->isSection()) {
       return NULL;
     }
@@ -3065,10 +3121,10 @@ class StyleMapValidator {
         new BlueprintError('design_system', 'DESIGN_SYSTEM_UNKNOWN', sprintf('"%s" is not a design system on this site.', $design_system), ['design_systems' => $known], $known === [] ? 'The site has no design systems; omit design_system for a global material.' : sprintf('The site\'s design systems: %s. Name one of these, or omit design_system for a global material (offered under every design system).', implode(', ', $known))),
       ];
     }
-    $skin = $system->getDefaultSkin() === NULL ? NULL : $this->skinManager->loadByMachineName($system->getDefaultSkin());
+    $skin = $this->skinManager->loadSkinFor($design_system);
     return $this->withUniverse(
       $this->rosterBuilder->buildFor($design_system),
-      fn (): array => $this->withMintedUniverse($skin?->getTokens() ?? [], $theme, $run),
+      fn (): array => $this->withMintedUniverse($skin?->tokens() ?? [], $theme, $run),
     );
   }
 
@@ -3281,15 +3337,17 @@ class StyleMapValidator {
    *
    * The self-containment seam behind validateDefaults()'s skin_tokens
    * context: the given token map (a skin's own, in the entity's stored
-   * shape) becomes the universe every strict var() check inside $run
-   * resolves against, scoped to the declared scales exactly like
-   * mintedTokens(). The roster is not consulted meanwhile: a skin under
+   * shape, records per name) is projected to its values
+   * (SkinTokensItem::values()) and becomes the universe every strict
+   * var() check inside $run resolves against, scoped to the declared
+   * scales exactly like mintedTokens(). The roster is not consulted
+   * meanwhile: a skin under
    * validation must reference only what IT mints, whatever the active skin
    * carries. The override is dropped afterwards so the request's other
    * validations keep seeing the site's materials.
    *
    * @param array $skin_tokens
-   *   The owning skin's token map ({scale: {name: value}}).
+   *   The owning skin's canonical token map ({scale: {name: record}}).
    * @param string|null $theme
    *   The theme the nested validation resolves scales for; must match what
    *   the nested calls pass to mintedTokens() or the seed misses.
@@ -3303,9 +3361,10 @@ class StyleMapValidator {
     $flow = FiberFlow::id();
     $saved = $this->universeOverrides[$flow] ?? NULL;
     $universe = [];
+    $values = SkinTokensItem::values($skin_tokens);
     foreach ($this->styleGuide->getTokenScales($theme) as $scale => $declaration) {
-      if (isset($skin_tokens[$scale]) && is_array($skin_tokens[$scale])) {
-        $universe[$scale] = $skin_tokens[$scale];
+      if (isset($values[$scale])) {
+        $universe[$scale] = $values[$scale];
       }
     }
     $this->universeOverrides[$flow] = [($theme ?? '') => $universe];

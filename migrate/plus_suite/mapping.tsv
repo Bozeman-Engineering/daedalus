@@ -58,7 +58,6 @@ id	entity_blueprint_ai_dev_tools	daedalus_blueprint_ai_dev_tools
 id	entity_blueprint_ai_log_repair	daedalus_blueprint_ai_log_repair	
 id	entity_blueprint_config	daedalus_blueprint_config	
 id	entity_blueprint_config_ai	daedalus_blueprint_config_ai	
-id	entity_blueprint_stencil	daedalus_blueprint_stencil	
 id	ai_plus_anthropic	daedalus_ai_anthropic	
 id	ai_plus_gemini	daedalus_ai_gemini	
 id	stylish_layouts	daedalus_stylish_layouts	
@@ -70,7 +69,7 @@ id	stylish_guide_example	daedalus_stylish_guide_example
 id	stylish_layers	daedalus_stylish_layers	
 # --- content entity types (base tables, revision tables, *_usage, *_list,
 # --- the skin_tokens/variant_styles/swatch_value/animation_steps plugins and
-# --- entity-derived config follow by prefix); design_system and stencil stay.
+# --- entity-derived config follow by prefix); design_system stays.
 id	stylish_skin	daedalus_skin	entity type; stylish_skins_test (plural) is a module and rides `stylish`
 id	stylish_variant	daedalus_variant	entity type
 id	stylish_swatch	daedalus_swatch	entity type
@@ -178,7 +177,6 @@ id	Plus Suite	Daedalus	package, recipe, prose
 id	use navigation plus edit mode	use daedalus ui edit mode	permission
 id	configure navigation plus modes	configure daedalus ui modes	permission
 id	administer layout builder + configuration	administer daedalus layout configuration	permission
-id	promote layout builder + blocks	promote daedalus layout blocks	permission
 id	navigation plus	daedalus ui	lowercase prose
 id	Navigation plus	Daedalus UI	
 id	layout builder +	daedalus layout	lowercase prose
@@ -305,9 +303,12 @@ id	ebs	dd-blueprint-serialize	drush daedalus-blueprint:serialize
 id	ait	dd-blueprint-tail	drush daedalus-blueprint:ai-tail
 id	pau	dd-blueprint-audit	drush daedalus-blueprint:prompt-audit
 # --- plus-suite-to-daedalus-migration (2026-09-19): the rows a site's persisted
-# --- state needs beyond the code rename. The lb_plus permission rows above
-# --- (`administer layout builder + configuration`, `promote layout builder + blocks`)
-# --- are the migration's too: lb_plus 3.6.x has no update hook for them.
+# --- state needs beyond the code rename. The lb_plus permission row above
+# --- (`administer layout builder + configuration`) is the migration's too:
+# --- lb_plus 3.6.x has no update hook for it. lb_plus's per-display block
+# --- promotion has no successor (the Add panel's favorites are a fact on the
+# --- block type or the blueprint), so its permission gets no row and a
+# --- migrated role keeps the string until it is removed by hand.
 # --- navigation_plus 2.3.x's `use toolbar plus edit mode` and `configure toolbar
 # --- plus modes` get no row: daedalus_ui_update_10401 renames them.
 regex	/modules/contrib/lb_plus/	/modules/contrib/daedalus/modules/daedalus_layout/	stored asset paths (block_config.icon third-party settings on view displays); listed so the counts show them, the id rows would produce the same result

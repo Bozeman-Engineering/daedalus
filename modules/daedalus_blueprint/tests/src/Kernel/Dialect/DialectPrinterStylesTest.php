@@ -8,6 +8,7 @@ use Drupal\Core\Cache\CacheableMetadata;
 use Drupal\daedalus_blueprint\Dialect\DialectCatalog;
 use Drupal\daedalus_blueprint\Dialect\DialectCssParser;
 use Drupal\daedalus_blueprint\Dialect\DialectPrinter;
+use Drupal\daedalus_blueprint\Dialect\DialectPrintNoteKind;
 use Drupal\daedalus_blueprint\Materials\Address;
 use Drupal\daedalus_blueprint\Materials\MaterialKind;
 use Drupal\daedalus_blueprint\Materials\MaterialRecord;
@@ -136,7 +137,7 @@ class DialectPrinterStylesTest extends BlueprintKernelTestBase {
       #$text { font-weight: bold; }
 
     CSS;
-    $this->assertSame($expected, $this->printer->printStyles($this->subtree(), $this->catalog));
+    $this->assertSame($expected, $this->printer->printStyles($this->subtree(), $this->catalog)->text);
   }
 
   /**
@@ -148,7 +149,7 @@ class DialectPrinterStylesTest extends BlueprintKernelTestBase {
    */
   public function testPrintParsesBackToTheSameTuples(): void {
     $nodes = $this->subtree();
-    $print = $this->printer->printStyles($nodes, $this->catalog);
+    $print = $this->printer->printStyles($nodes, $this->catalog)->text;
     $errors = [];
     $tuples = (new DialectCssParser($this->catalog))->parseStyleBlock($print, 1, DialectCssParser::knownIds($nodes, $this->catalog), $errors);
     $this->assertSame([], array_map('strval', $errors));
@@ -179,7 +180,7 @@ class DialectPrinterStylesTest extends BlueprintKernelTestBase {
       'block_type' => 'text',
       'styles' => ['' => ['default' => ['font-weight' => 'bold']]],
     ];
-    $this->assertSame("  #$text { font-weight: bold; }\n", $this->printer->printStyles([$bold], $this->catalog));
+    $this->assertSame("  #$text { font-weight: bold; }\n", $this->printer->printStyles([$bold], $this->catalog)->text);
     $this->assertSame('', $this->printer->printStyles([
       [
         'kind' => 'block',
@@ -187,7 +188,7 @@ class DialectPrinterStylesTest extends BlueprintKernelTestBase {
         'block_type' => 'text',
         '_element' => ['type' => 'Text', 'name' => 'Text'],
       ],
-    ], $this->catalog));
+    ], $this->catalog)->text);
     $this->assertSame("  /* Section */\n  /* wears class=\"band\" */\n", $this->printer->printStyles([
       [
         'kind' => 'container',
@@ -205,10 +206,126 @@ class DialectPrinterStylesTest extends BlueprintKernelTestBase {
           ],
         ],
       ],
-    ], $this->catalog));
+    ], $this->catalog)->text);
     $this->assertSame("  #$text { font-weight: bold; }\n", $this->printer->printStyles([
       ['kind' => 'region', 'region' => 'content', 'children' => [$bold]],
-    ], $this->catalog));
+    ], $this->catalog)->text);
+  }
+
+  /**
+   * A style entry the grammar cannot spell prints as a comment, noted.
+   *
+   * The style layer's gaps (an element's or a rule's variant with no
+   * axis or class spelling, a field-scoped local, a condition outside
+   * the catalog, a local outside the relative selector grammar,
+   * conditions on an element without an id) each print as one comment
+   * line naming the element and the reason, in the document print's
+   * <style> block and among the CSS print's lines alike, while every
+   * entry the grammar does spell still prints (a rule keeps its
+   * declarations when its wear has no spelling). The result notes each
+   * gap; both parsers blank the comments, so the print reads back to the
+   * entries the grammar owns.
+   */
+  public function testStyleGapsPrintAsComments(): void {
+    $section = self::SECTION;
+    $tree = [
+      [
+        'kind' => 'container',
+        'uuid' => self::SECTION,
+        'layout_id' => 'layout_onecol',
+        '_element' => ['type' => 'Section', 'name' => 'Welcome'],
+        'styles' => [
+          '' => [
+            'variants' => [['variant' => 'ghost', 'fragment' => '']],
+            'default' => ['color' => 'red'],
+            'sepia' => ['color' => 'brown'],
+          ],
+          ':field_body' => ['default' => ['gap' => '1rem']],
+          '::> pb-text ::after' => ['default' => ['content' => '""']],
+          '::> pb-container' => [
+            'variants' => [['variant' => 'ghost', 'fragment' => '']],
+            'default' => ['gap' => '2rem'],
+          ],
+        ],
+        'children' => [
+          [
+            'kind' => 'container',
+            'layout_id' => 'layout_onecol',
+            'styles' => ['' => ['hover' => ['color' => 'blue']]],
+          ],
+        ],
+      ],
+    ];
+    $expected_details = [
+      "#$section wears variant \"ghost\", which spells as neither an axis attribute of <pb-container> nor a published style class",
+      "#$section carries the condition \"sepia\", which is not in the catalog vocabulary",
+      "#$section carries the field-scoped style local \":field_body\", which the page language does not spell",
+      "#$section carries the style local \"::> pb-text ::after\", which is outside the relative selector grammar",
+      "#$section wears variant \"ghost\" on its rule > pb-container, which spells as neither an axis attribute nor a published style class",
+      '<pb-container> carries conditions or parts, which have no print on an element without an id',
+    ];
+
+    // The document print: the tag keeps its spellable attributes, the
+    // <style> block carries the comments in print order among the rules.
+    $print = $this->printer->print($tree, $this->catalog);
+    $this->assertSame(<<<HTML
+    <pb-container id="$section" style="color: red">
+      <pb-container>
+      </pb-container>
+    </pb-container>
+    <style>
+      /* {$expected_details[0]} */
+      /* {$expected_details[1]} */
+      /* {$expected_details[2]} */
+      /* {$expected_details[3]} */
+      /* {$expected_details[4]} */
+      #$section > pb-container { gap: 2rem; }
+      /* {$expected_details[5]} */
+    </style>
+
+    HTML, $print->text);
+    $this->assertFalse($print->isAuthored());
+    $this->assertSame($expected_details, array_map(static fn ($note) => $note->detail, $print->notes));
+    $this->assertSame(array_fill(0, 6, DialectPrintNoteKind::UnprintedStyle), array_map(static fn ($note) => $note->kind, $print->notes));
+    $this->assertSame([self::SECTION, self::SECTION, self::SECTION, self::SECTION, self::SECTION, NULL], array_map(static fn ($note) => $note->elementId, $print->notes));
+    $reparse = $this->container->get('daedalus_blueprint.dialect_parser')->parseDocument($print->text, $this->catalog);
+    $this->assertSame([], array_map('strval', $reparse->errors));
+    $this->assertSame([
+      '' => ['default' => ['color' => 'red']],
+      '::> pb-container' => ['default' => ['gap' => '2rem']],
+    ], $reparse->tree[0]['styles'], 'The comments blank; the entries the grammar spells read back.');
+
+    // The CSS print: the same comments among the element's lines (the
+    // own default as a rule, the rule-level comments in entry order, the
+    // element's own wear gap last, as its wear line would be).
+    $css = $this->printer->printStyles($tree, $this->catalog);
+    $this->assertSame(<<<CSS
+      /* Section: Welcome */
+      #$section { color: red; }
+      /* {$expected_details[1]} */
+      /* {$expected_details[2]} */
+      /* {$expected_details[3]} */
+      /* {$expected_details[4]} */
+      #$section > pb-container { gap: 2rem; }
+      /* {$expected_details[0]} */
+      /* {$expected_details[5]} */
+
+    CSS, $css->text);
+    $this->assertSame([
+      $expected_details[1],
+      $expected_details[2],
+      $expected_details[3],
+      $expected_details[4],
+      $expected_details[0],
+      $expected_details[5],
+    ], array_map(static fn ($note) => $note->detail, $css->notes));
+    $errors = [];
+    $tuples = (new DialectCssParser($this->catalog))->parseStyleBlock($css->text, 1, DialectCssParser::knownIds($tree, $this->catalog), $errors);
+    $this->assertSame([], array_map('strval', $errors));
+    $this->assertSame([
+      [self::SECTION, '', 'default', ['color' => 'red']],
+      [self::SECTION, '::> pb-container', 'default', ['gap' => '2rem']],
+    ], $tuples);
   }
 
 }

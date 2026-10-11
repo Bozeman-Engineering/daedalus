@@ -63,9 +63,14 @@ final class SelectableFieldDelivery implements EventSubscriberInterface {
     }
 
     // Mirror the gates wrapAndAttributeFieldsForEditing() stamps under: only
-    // wrap when the selectable key should have been present.
+    // wrap when the selectable key should have been present (in edit mode a
+    // field of an entity the route host's canvas edits, ownsFields(); on a
+    // live render a demanded key).
     $key = SelectableKey::field($entity->uuid(), $field_name);
-    if ($this->daedalusUi->getMode() !== 'edit' && !$this->liveAttribution->demandsKey($key, $entity)) {
+    $stamped = $this->daedalusUi->getMode() === 'edit'
+      ? $this->daedalusUi->ownsFields($entity)
+      : $this->liveAttribution->demandsKey($key, $entity);
+    if (!$stamped) {
       return;
     }
 

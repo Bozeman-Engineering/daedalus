@@ -4,7 +4,7 @@ daedalus_stylish.settings:
   mapping:
     ai_minting:
       type: boolean
-      label: 'Whether AI may mint new palette swatches and animations through the blueprint create lane. Its own governance axis, never derived from how the active design system enforces its law: humans stay governed by the "create swatches" / "create animations" permissions, disk-shipped materials by the importers. Only an explicit false closes the gate (fail-open for sites predating the key).'
+      label: 'Whether AI may mint new tokens, palette swatches and animations through the material gestures and the blueprint create lane. Its own governance axis, never derived from how the active design system enforces its law: humans stay governed by the "create tokens" / "create swatches" / "create animations" permissions, disk-shipped materials by the importers. Only an explicit false closes the gate (fail-open for sites predating the key).'
     container_roots:
       type: boolean
       label: 'Emit the page-level width-band query container rule (container-type: inline-size on the page canvas) wherever container breakpoint conditions are styled (turn off when the theme manages its own query container)'
@@ -17,6 +17,12 @@ daedalus_stylish.settings:
       sequence:
         type: string
         label: 'Bundle key'
+    skin_choice:
+      type: sequence
+      label: 'The skin the site wears per design system, keyed by design system id: the site''s choice among the system''s published, conforming member skins. A system absent here wears its default_skin (the package''s answer); a choice the system may no longer wear (unpublished, moved, nonconforming) falls back to it too'
+      sequence:
+        type: string
+        label: 'Skin machine name'
     breakpoints:
       type: mapping
       label: 'Condition breakpoint thresholds, in px'
@@ -60,6 +66,22 @@ field.value.daedalus_skin_tokens:
       type: string
       label: 'Skin tokens JSON'
 
+field.storage_settings.daedalus_skin_site_tokens:
+  type: mapping
+  label: 'Skin site tokens storage settings'
+
+field.field_settings.daedalus_skin_site_tokens:
+  type: mapping
+  label: 'Skin site tokens settings'
+
+field.value.daedalus_skin_site_tokens:
+  type: mapping
+  label: 'Default value'
+  mapping:
+    value:
+      type: string
+      label: 'Skin site tokens JSON'
+
 field.storage_settings.daedalus_variant_styles:
   type: mapping
   label: 'Variant styles storage settings'
@@ -75,3 +97,48 @@ field.value.daedalus_variant_styles:
     value:
       type: string
       label: 'Variant styles JSON'
+
+# A template's style map: a Layout Builder enabled entity view display hosts
+# its default layout as a page document, and the document's styles live here
+# (the display host's store; a content host's is its style map field). The
+# map is stored as a list of {key, entry} rows in map order (config refuses
+# a dot in any key, and a part or rule key carries one), each entry in the
+# style map grammar, whose one validation seam is the style map field
+# handler (StyleMapValidator), so the entry itself is opaque to typed config.
+# The config hosts (DisplayHost, FrameHost through ConfigStyleMapTrait) are
+# the one reader and writer of the shape.
+core.entity_view_display.*.*.*.third_party.daedalus_stylish:
+  type: mapping
+  label: 'Daedalus Stylish display settings'
+  mapping:
+    styles:
+      type: daedalus_stylish.style_map
+      label: 'Style map'
+
+# The site frame's style map: the same store on the frame host's config
+# entity (daedalus_blueprint.frame.*).
+daedalus_blueprint.frame.*.third_party.daedalus_stylish:
+  type: mapping
+  label: 'Daedalus Stylish frame settings'
+  mapping:
+    styles:
+      type: daedalus_stylish.style_map
+      label: 'Style map'
+
+daedalus_stylish.style_map:
+  type: sequence
+  label: 'Style map: rows of a selectable key and its style entry'
+  sequence:
+    type: mapping
+    label: 'Style map row'
+    mapping:
+      key:
+        type: string
+        label: 'Selectable key'
+      entry:
+        type: daedalus_stylish.style_entry
+        label: 'Style entry'
+
+daedalus_stylish.style_entry:
+  type: ignore
+  label: 'A style entry: condition keys to property values and an optional variants list, in the style map grammar the style map field handler validates'

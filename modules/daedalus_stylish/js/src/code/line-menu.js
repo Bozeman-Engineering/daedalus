@@ -10,9 +10,12 @@
  *   layers deliver beneath resurfaces (deleting the line, as a click).
  * - "Edit skin…" on a skin line (any `skin:{scope}` layer, the base:{tag}
  *   block included): the doorway the row menu already offers
- *   (provenance-model.js skinDoorway); the Island opens guide.skinEditUrl.
- *   A floor line never offers Unset: nothing in the map holds it, and the
- *   declared tier has no doorway (a declaration is code).
+ *   (provenance-model.js skinDoorway); the item carries the line's
+ *   layer scope and the Island opens the editing session on the skin's
+ *   document there (code/layers.js skinDocument through the Inspector's
+ *   openDocument). A floor line never offers Unset: nothing in the map
+ *   holds it, and the declared tier has no doorway (a declaration is
+ *   code).
  *
  * Variant content changes ONLY through the pending lane: edit the
  * variant's document in the editing session, or pre-stage the element's
@@ -29,7 +32,8 @@
  * layer run above its lines (line-marks.js) is a handle, and its
  * right-click opens the layer's doorways, the same doorways the widget
  * rows' provenance menu carries (provenance-model.js): a variant's
- * editing session, the skin's form. The own run has none, and the
+ * editing session, the skin's session at the run's scope. The own run
+ * has none, and the
  * ancestor tier's own run has none either: the tier never prints on an
  * island (element-model.js ownIslandLines drops it because every rule
  * reaching the element prints as a RULE ISLAND of its own, whose header
@@ -63,7 +67,9 @@ import { addressKey } from '../write-address.js';
  *
  * @return {Array<{type: string}>}
  *   Menu items in render order: [{type: 'unset'}], [{type: 'lift'}], or
- *   [{type: 'lift'}, {type: 'edit-skin'}]; empty for no line.
+ *   [{type: 'lift'}, {type: 'edit-skin', scope}] (scope: the skin
+ *   layer's declaring scope, the document the doorway opens); empty for
+ *   no line.
  */
 export const lineMenuItems = (line) => {
   if (!line || typeof line.property !== 'string') {
@@ -73,7 +79,7 @@ export const lineMenuItems = (line) => {
     return [{ type: 'unset' }];
   }
   if (layerTier(line.layer) === TIER_SKIN) {
-    return [{ type: 'lift' }, { type: 'edit-skin' }];
+    return [{ type: 'lift' }, { type: 'edit-skin', scope: layerScope(line.layer) }];
   }
   return [{ type: 'lift' }];
 };
@@ -111,14 +117,15 @@ const carrierRule = (carrier) =>
  * stack's layer record names when a rule wears it, because a value a
  * rule's wear delivers at a continued position is worn by the rule, and
  * a session anchored at the position itself would find no wearing to
- * mount over); a skin run opens the skin's form; a worn ancestor run
+ * mount over); a skin run opens the skin's session at its scope; a worn
+ * ancestor run
  * opens the variant's session anchored at the carrier (a value a worn
  * variant delivers is edited at the carrier, never at the position it
- * lands at, the provenance row's reading); a declared run says it is
- * code (the inert item the row menu offers too, so the menu opens and
- * says why there is nothing to do); the own run has no doorway, and
- * neither has an ancestor rule's own run (the rule's seat is its rule
- * island's header; see the file docblock).
+ * lands at, the provenance row's reading); a declared run opens the
+ * Materials place's Law tab at its declaring scope (the row menu's
+ * declared doorway, a law document through the same openDocument); the
+ * own run has no doorway, and neither has an ancestor rule's own run
+ * (the rule's seat is its rule island's header; see the file docblock).
  *
  * @param {string} layer
  *   The run's layer id (layers.js grammar).
@@ -129,8 +136,9 @@ const carrierRule = (carrier) =>
  * @return {Array<{type: string}>}
  *   Menu items in render order: [{type: 'edit-variant', reference,
  *   anchor}] (anchor: the carrier rule's key, or null for the island's
- *   own wearer), [{type: 'edit-skin'}], [{type: 'declared'}]; empty for
- *   the own run and an ancestor rule's own run.
+ *   own wearer), [{type: 'edit-skin', scope}], [{type: 'declared',
+ *   scope}] (scope: the declaring scope the Law tab opens at); empty
+ *   for the own run and an ancestor rule's own run.
  */
 export const runMenuItems = (layer, layers = []) => {
   if (typeof layer !== 'string' || layer === ELEMENT_LAYER) {
@@ -138,10 +146,10 @@ export const runMenuItems = (layer, layers = []) => {
   }
   const tier = layerTier(layer);
   if (tier === TIER_SKIN) {
-    return [{ type: 'edit-skin' }];
+    return [{ type: 'edit-skin', scope: layerScope(layer) }];
   }
   if (tier === TIER_DECLARED) {
-    return [{ type: 'declared' }];
+    return [{ type: 'declared', scope: layerScope(layer) }];
   }
   if (tier === TIER_VARIANT) {
     // A root carrier is the island's own wearer, the wear key the

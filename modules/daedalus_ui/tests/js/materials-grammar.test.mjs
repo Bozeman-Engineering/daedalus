@@ -17,7 +17,7 @@ import { createRoster, rootOnly, scopesPair, wears } from '../../js/edit_mode/ma
 
 const record = (fields) => ({
   kind: 'token', id: '', label: '', description: '', value: null, group: null, spellings: [], scope: null, applies: [],
-  owned_by: null, published: true, weight: 0, icon: null, root_kind: null, origin: 'user', updatable: true, ...fields,
+  owned_by: null, published: true, weight: 0, icon: null, origin: 'user', updatable: true, ...fields,
 });
 
 /**
@@ -31,8 +31,9 @@ const RECORDS = [
   record({ kind: 'variant', id: 'block_full', label: 'Full width', group: 'width', spellings: { 'attr:kind:block:width': 'full' }, scope: 'kind:block', origin: 'shipped' }),
   record({ kind: 'variant', id: 'hero_glow', label: 'Hero glow', group: 'style', spellings: { class: 'hero_glow' }, scope: 'kind:container', owned_by: 'hero', origin: 'ai' }),
   record({ kind: 'variant', id: 'link_quiet', label: 'Quiet link', group: 'style', spellings: { class: 'link_quiet' }, scope: 'base:a' }),
-  record({ kind: 'stencil', id: 'hero', label: 'Hero', spellings: { stencil: 'hero' }, icon: '/modules/x/assets/hero.svg', root_kind: 'section', origin: 'shipped', updatable: false }),
+  record({ kind: 'blueprint', id: 'hero', label: 'Hero', spellings: { blueprint: 'hero' }, icon: '/modules/x/assets/hero.svg', origin: 'shipped', updatable: false }),
   record({ kind: 'animation', id: 'fade_in', label: 'Fade in', description: 'Fade the element in from transparent.', value: { '0%': { opacity: '0' }, '100%': { opacity: '1' } }, spellings: { animation: 'motion-fade_in' }, origin: 'shipped' }),
+  record({ kind: 'font', id: 'inter', label: 'Inter', description: 'The body face.', value: { family: 'Inter', faces: [{ weight: '400', style: 'normal', source: { file: 'f1' } }] }, spellings: { font: '"Inter"' } }),
 ];
 
 const roster = () => createRoster(RECORDS);
@@ -50,14 +51,14 @@ test('slots: the five shapes, nothing else; the attribute slot is scoped', () =>
     assert.equal(slotScope(malformed), null, `${malformed} names no scope`);
     assert.ok(!isSlot(malformed), `${malformed} is no slot`);
   }
-  assert.ok(isSlot(SLOT.STYLE) && isSlot(SLOT.CLASS) && isSlot(SLOT.STENCIL) && isSlot(SLOT.ANIMATION) && isSlot('attr:kind:container:width'));
+  assert.ok(isSlot(SLOT.STYLE) && isSlot(SLOT.CLASS) && isSlot(SLOT.BLUEPRINT) && isSlot(SLOT.ANIMATION) && isSlot(SLOT.FONT) && isSlot('attr:kind:container:width'));
   assert.ok(!isSlot('field') && !isSlot(undefined));
   assert.throws(() => resolveValue('x', 'field', roster()), /Unknown value slot "field"/);
   assert.throws(() => references('x', 'attr:width', roster()), /Unknown value slot "attr:width"/);
 });
 
 test('kind predicates split materials from inline values', () => {
-  assert.ok(isMaterialKind(KIND.TOKEN) && isMaterialKind(KIND.STENCIL) && isMaterialKind(KIND.ANIMATION));
+  assert.ok(isMaterialKind(KIND.TOKEN) && isMaterialKind(KIND.BLUEPRINT) && isMaterialKind(KIND.ANIMATION) && isMaterialKind(KIND.FONT));
   assert.ok(isInlineKind(KIND.LITERAL) && isInlineKind(KIND.MEDIA) && isInlineKind(KIND.GENERATE));
   assert.ok(!isMaterialKind(KIND.UNKNOWN) && !isInlineKind(KIND.UNKNOWN));
 });
@@ -82,8 +83,8 @@ test('a resolved material carries its record; inline values carry none', () => {
 test('unknown is a reference-shaped value the roster lacks, never a literal', () => {
   const r = roster();
   assert.deepEqual(resolveValue('var(--swatch-limegreen)', SLOT.STYLE, r), { kind: KIND.UNKNOWN, id: '--swatch-limegreen', spelling: 'var(--swatch-limegreen)', record: null });
-  assert.equal(resolveValue('hero', SLOT.CLASS, r).kind, KIND.UNKNOWN, 'slots are separate vocabularies: the stencil "hero" is no class');
-  assert.equal(resolveValue('hero', SLOT.STENCIL, r).kind, KIND.STENCIL);
+  assert.equal(resolveValue('hero', SLOT.CLASS, r).kind, KIND.UNKNOWN, 'slots are separate vocabularies: the blueprint "hero" is no class');
+  assert.equal(resolveValue('hero', SLOT.BLUEPRINT, r).kind, KIND.BLUEPRINT);
   assert.equal(resolveValue('full', attrSlot('kind:container', 'width'), r).id, 'container_full');
   assert.equal(resolveValue('full', attrSlot('kind:block', 'width'), r).id, 'block_full', 'an attribute value resolves in its scope: the same spelling on another scope is that scope\'s variant');
   assert.equal(resolveValue('full', attrSlot('kind:container', 'height'), r).kind, KIND.UNKNOWN);
@@ -99,6 +100,13 @@ test('the animation slot resolves a keyframes name by its prefixed ident; the st
   assert.deepEqual(references(' motion-fade_in ', SLOT.ANIMATION, r).map((ref) => [ref.kind, ref.id]), [['animation', 'fade_in']]);
   assert.equal(canonical(' motion-fade_in ', SLOT.ANIMATION, r), 'motion-fade_in');
   assert.equal(spell(r.get('animation', 'fade_in'), SLOT.ANIMATION), 'motion-fade_in');
+  // The font slot: a quoted family is the reference form (the property-
+  // scoped component of a font-family stack); the whole stack is the
+  // consumer's to split, exactly as an animation-name list is.
+  assert.equal(resolveValue(' "Inter" ', SLOT.FONT, r).kind, KIND.FONT);
+  assert.equal(resolveValue('"Inter"', SLOT.FONT, r).record, r.get('font', 'inter'));
+  assert.equal(resolveValue('"Nope"', SLOT.FONT, r).record, null, 'an unrostered family is nobody\'s');
+  assert.equal(spell(r.get('font', 'inter'), SLOT.FONT), '"Inter"');
 });
 
 test('references walks a compound style value and a class list in source order', () => {
@@ -111,7 +119,7 @@ test('references walks a compound style value and a class list in source order',
   assert.deepEqual(references('  ', SLOT.CLASS, r), []);
   assert.deepEqual(references('', attrSlot('kind:container', 'width'), r), []);
   assert.deepEqual(references(' full ', attrSlot('kind:block', 'width'), r).map((ref) => ref.id), ['block_full']);
-  assert.equal(references(' hero ', SLOT.STENCIL, r)[0].kind, KIND.STENCIL);
+  assert.equal(references(' hero ', SLOT.BLUEPRINT, r)[0].kind, KIND.BLUEPRINT);
   assert.deepEqual(references('red', SLOT.STYLE, r), [], 'a literal carries no reference');
 });
 
@@ -129,10 +137,10 @@ test('spell reads the provider spelling and refuses a slot the material lacks', 
 
 test('the roster index: read surface and loud refusals', () => {
   const r = roster();
-  assert.deepEqual(r.all().map((x) => x.id), ['color/accent', 'lime_green', 'button', 'container_full', 'block_full', 'hero_glow', 'link_quiet', 'hero', 'fade_in']);
+  assert.deepEqual(r.all().map((x) => x.id), ['color/accent', 'lime_green', 'button', 'container_full', 'block_full', 'hero_glow', 'link_quiet', 'hero', 'fade_in', 'inter']);
   assert.deepEqual(r.ofKind('variant').map((x) => x.id), ['button', 'container_full', 'block_full', 'hero_glow', 'link_quiet']);
   assert.deepEqual(r.ofKind('nothing'), []);
-  assert.ok(r.has('stencil', 'hero') && !r.has('class', 'hero'));
+  assert.ok(r.has('blueprint', 'hero') && !r.has('class', 'hero'));
   assert.equal(r.get('token', 'nope'), null);
   assert.deepEqual(Object.keys(r.spellings(SLOT.CLASS)), ['button', 'hero_glow', 'link_quiet']);
   assert.deepEqual(r.spellings('attr:kind:container:nothing'), {});
@@ -144,10 +152,10 @@ test('the roster index: read surface and loud refusals', () => {
   assert.ok(!r.isEmpty() && createRoster([]).isEmpty());
   assert.throws(() => createRoster([record({ kind: 'paint', id: 'x' })]), /material kind only/);
   assert.throws(() => createRoster([RECORDS[1], RECORDS[1]]), /Two swatch records share the id "lime_green"/);
-  assert.throws(() => createRoster([RECORDS[2], record({ kind: 'stencil', id: 'button', spellings: { class: 'button' } })]), /both spell "button" in the class slot/);
+  assert.throws(() => createRoster([RECORDS[2], record({ kind: 'blueprint', id: 'button', spellings: { class: 'button' } })]), /both spell "button" in the class slot/);
 });
 
-test('applicability: scope family, root-only depth, stencil ownership', () => {
+test('applicability: scope family, root-only depth, blueprint ownership', () => {
   const r = roster();
   const { applicable } = r;
   const button = r.get('variant', 'button');
@@ -161,40 +169,40 @@ test('applicability: scope family, root-only depth, stencil ownership', () => {
   assert.ok(!applicable(glow, 'kind:container') && !applicable(glow, 'kind:container', true, 'call_to_action'));
   assert.ok(applicable(glow, 'kind:container', true, 'hero') && applicable(button, 'block_type:text', true, 'hero'));
   assert.ok(applicable(quiet, 'block_type:text') && applicable(quiet, 'layout:layout_onecol', false));
-  assert.ok(applicable(r.get('swatch', 'lime_green'), 'block_type:image', false) && applicable(r.get('stencil', 'hero'), 'kind:container', false));
+  assert.ok(applicable(r.get('swatch', 'lime_green'), 'block_type:image', false) && applicable(r.get('blueprint', 'hero'), 'kind:container', false));
   assert.ok(applicable(r.get('animation', 'fade_in'), 'block_type:image', false), 'non-variant kinds apply everywhere');
   assert.ok(!applicable(record({ kind: 'variant', id: 'scopeless' }), 'kind:block'), 'a variant with no scope applies nowhere');
-  assert.ok(rootOnly(full) && !rootOnly(button) && !rootOnly(r.get('stencil', 'hero')), 'rootOnly reads the depth stamp');
-  assert.deepEqual(wears(r.get('stencil', 'hero')), [], 'a stencil captured with no wearings wears nothing');
+  assert.ok(rootOnly(full) && !rootOnly(button) && !rootOnly(r.get('blueprint', 'hero')), 'rootOnly reads the depth stamp');
+  assert.deepEqual(wears(r.get('blueprint', 'hero')), [], 'a blueprint captured with no wearings wears nothing');
 });
 
-test('applicability, the stencil case: a band (its root wears a root-only variant) places at top level only', () => {
-  // Stencils beyond the reference set: a band wearing the root-only width
+test('applicability, the blueprint case: a band (its root wears a root-only variant) places at top level only', () => {
+  // Blueprints beyond the reference set: a band wearing the root-only width
   // variant, a card wearing a plain style, one wearing a name no record
   // answers, and one wearing both a plain style and the root-only width.
-  const stencil = (id, worn) => record({
-    kind: 'stencil', id, label: id, spellings: { stencil: id }, root_kind: 'section', applies: { wears: worn },
+  const blueprint = (id, worn) => record({
+    kind: 'blueprint', id, label: id, spellings: { blueprint: id }, applies: { wears: worn },
   });
   const r = createRoster([
     ...RECORDS,
-    stencil('band', ['container_full']),
-    stencil('card', ['button']),
-    stencil('orphan', ['retired_width']),
-    stencil('dressed_band', ['button', 'container_full']),
+    blueprint('band', ['container_full']),
+    blueprint('card', ['button']),
+    blueprint('orphan', ['retired_width']),
+    blueprint('dressed_band', ['button', 'container_full']),
   ]);
   const { applicable, isBand, rootOnlyWears } = r;
-  const band = r.get('stencil', 'band');
-  const card = r.get('stencil', 'card');
-  const orphan = r.get('stencil', 'orphan');
-  const dressed = r.get('stencil', 'dressed_band');
+  const band = r.get('blueprint', 'band');
+  const card = r.get('blueprint', 'card');
+  const orphan = r.get('blueprint', 'orphan');
+  const dressed = r.get('blueprint', 'dressed_band');
   assert.ok(applicable(band, 'kind:container', true) && !applicable(band, 'kind:container', false), 'a band places at top level, never nested');
-  assert.ok(applicable(card, 'kind:container', true) && applicable(card, 'kind:container', false), 'a stencil wearing no root-only variant places anywhere');
+  assert.ok(applicable(card, 'kind:container', true) && applicable(card, 'kind:container', false), 'a blueprint wearing no root-only variant places anywhere');
   assert.ok(applicable(orphan, 'kind:container', false), 'a wearing that names no record has no opinion');
-  assert.ok(applicable(r.get('stencil', 'hero'), 'kind:container', false), 'a stencil wearing nothing places anywhere');
+  assert.ok(applicable(r.get('blueprint', 'hero'), 'kind:container', false), 'a blueprint wearing nothing places anywhere');
   assert.ok(applicable(dressed, 'kind:container', true) && !applicable(dressed, 'kind:container', false), 'one root-only wearing among plain ones makes a band');
   assert.ok(applicable(band, 'kind:container', false, 'hero') === false, 'ownership never admits a band nested');
-  assert.ok(isBand(band) && isBand(dressed) && !isBand(card) && !isBand(orphan) && !isBand(r.get('stencil', 'hero')));
-  assert.ok(!isBand(r.get('variant', 'container_full')), 'only a stencil is ever a band');
+  assert.ok(isBand(band) && isBand(dressed) && !isBand(card) && !isBand(orphan) && !isBand(r.get('blueprint', 'hero')));
+  assert.ok(!isBand(r.get('variant', 'container_full')), 'only a blueprint is ever a band');
   assert.deepEqual([...rootOnlyWears(dressed).keys()], ['container_full'], 'the root-only wearings are named, in wearing order');
   assert.equal(rootOnlyWears(dressed).get('container_full'), r.get('variant', 'container_full'), 'each names its variant record');
   assert.deepEqual([...rootOnlyWears(card).keys()], []);
@@ -203,9 +211,9 @@ test('applicability, the stencil case: a band (its root wears a root-only varian
   const relaxed = createRoster([
     ...RECORDS.filter((entry) => entry.id !== 'container_full'),
     record({ kind: 'variant', id: 'container_full', label: 'Full width', group: 'width', spellings: { 'attr:kind:container:width': 'full' }, scope: 'kind:container', origin: 'shipped' }),
-    stencil('band', ['container_full']),
+    blueprint('band', ['container_full']),
   ]);
-  assert.ok(!relaxed.isBand(relaxed.get('stencil', 'band')) && relaxed.applicable(relaxed.get('stencil', 'band'), 'kind:container', false));
+  assert.ok(!relaxed.isBand(relaxed.get('blueprint', 'band')) && relaxed.applicable(relaxed.get('blueprint', 'band'), 'kind:container', false));
 });
 
 test('scopesPair: the family rule (MaterialsRosterTest::scopePairs)', () => {
@@ -238,6 +246,6 @@ test('canonical rewrites references only, byte-identical elsewhere', () => {
   assert.equal(canonical("url(generate: a dog )", SLOT.STYLE, r), "url('generate:a dog')");
   assert.equal(canonical('url("file: hero.svg ")', SLOT.STYLE, r), "url('file:hero.svg')");
   assert.equal(canonical('  button   nope ', SLOT.CLASS, r), 'button nope', 'a class list is its tokens, unknown ones kept');
-  assert.equal(canonical(' hero ', SLOT.STENCIL, r), 'hero');
+  assert.equal(canonical(' hero ', SLOT.BLUEPRINT, r), 'hero');
   assert.equal(canonical('', SLOT.STYLE, r), '');
 });

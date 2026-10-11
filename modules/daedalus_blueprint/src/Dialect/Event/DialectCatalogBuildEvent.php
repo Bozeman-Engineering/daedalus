@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Drupal\daedalus_blueprint\Dialect\Event;
 
 use Drupal\Component\EventDispatcher\Event;
+use Drupal\daedalus_blueprint\Dialect\DialectCatalog;
 use Drupal\daedalus_blueprint\Materials\Address;
 use Drupal\daedalus_blueprint\Materials\RelativeSelector;
 use Drupal\daedalus_blueprint\Materials\VocabularyProseInterface;
@@ -16,7 +17,7 @@ use Drupal\daedalus_blueprint\Materials\VocabularyRosterInterface;
  * The catalog builder derives everything the spine itself owns (block
  * types with their field attribute contracts, the container layout id)
  * and reads the site's MATERIALS from the materials roster (tokens,
- * swatches, variants, stencils, animations: MaterialsRosterBuilder over
+ * swatches, variants, blueprints, animations: MaterialsRosterBuilder over
  * the tagged
  * providers), then dispatches this event so the styling layer (daedalus_stylish,
  * or whatever declares conditions and axes on a site) can contribute the
@@ -29,6 +30,10 @@ use Drupal\daedalus_blueprint\Materials\VocabularyRosterInterface;
  * block), the instance namespaces, the vocabulary rosters per element
  * kind with the prose that teaches them, the birth defaults each
  * placement scope stamps and the base tags the active skin dresses.
+ * The site's group vocabulary (the filter categories blueprints and
+ * block types are filed under on the surfaces that offer them) rides
+ * the same event: its declaration lives in a family the spine cannot
+ * read, so the UI layer that parses it contributes the groups here.
  * Nothing here names a material by spelling: a
  * material reaches the catalog through the roster or not at all (a birth
  * default names a variant by id, which the roster resolves), so the
@@ -67,6 +72,13 @@ final class DialectCatalogBuildEvent extends Event {
    * The active skin's label, NULL until a layer names one.
    */
   private ?string $skin = NULL;
+
+  /**
+   * The site's group vocabulary: group id => {label, description}.
+   *
+   * @var array<string, array{label: string, description: string}>
+   */
+  private array $groups = [];
 
   /**
    * Condition name => CSS wrapper, in canonical order.
@@ -278,6 +290,51 @@ final class DialectCatalogBuildEvent extends Event {
    */
   public function getSkin(): ?string {
     return $this->skin;
+  }
+
+  /**
+   * Contributes the site's group vocabulary, in declaration order.
+   *
+   * A group is the site's word for what a block is for: a filter category
+   * the surfaces that offer blueprints and block types (the Add panel, the
+   * page chooser, the model's index) file them under, and nothing else; no
+   * operation, fit or placement rule reads it. The layer that parses the
+   * declaration family contributes the groups validated; the catalog
+   * carries them so every surface reads one answer. Each id is a machine
+   * name with a non-empty label and an optional description ('' when none).
+   * DialectCatalog::UNGROUPED is the reserved bucket for the things in no
+   * group and may never be declared. An id contributed twice keeps its
+   * first declaration.
+   *
+   * @param array<string, array{label: string, description?: ?string}> $groups
+   *   Group id => its label and optional description, in declaration order.
+   */
+  public function addGroups(array $groups): void {
+    foreach ($groups as $id => $declaration) {
+      $id = (string) $id;
+      if (!preg_match(DialectCatalog::GROUP_ID_PATTERN, $id)) {
+        throw new \InvalidArgumentException(sprintf('A group id is a machine name (lowercase letters, digits and underscores); "%s" is not one.', $id));
+      }
+      if ($id === DialectCatalog::UNGROUPED) {
+        throw new \InvalidArgumentException(sprintf('"%s" is the reserved bucket for the things in no group; a declared group never takes it.', DialectCatalog::UNGROUPED));
+      }
+      $label = is_array($declaration) ? ($declaration['label'] ?? NULL) : NULL;
+      $description = is_array($declaration) ? ($declaration['description'] ?? '') : NULL;
+      if (!is_string($label) || trim($label) === '' || !is_string($description)) {
+        throw new \InvalidArgumentException(sprintf('The group "%s" is declared as a non-empty label and an optional description (a string).', $id));
+      }
+      $this->groups[$id] ??= ['label' => trim($label), 'description' => trim($description)];
+    }
+  }
+
+  /**
+   * The contributed group vocabulary: group id => {label, description}.
+   *
+   * @return array<string, array{label: string, description: string}>
+   *   The groups in declaration order; the description '' when none.
+   */
+  public function getGroups(): array {
+    return $this->groups;
   }
 
   /**

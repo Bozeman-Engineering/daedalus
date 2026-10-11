@@ -10,6 +10,7 @@ use Drupal\Core\Entity\EntityInterface;
 use Drupal\Core\Entity\FieldableEntityInterface;
 use Drupal\Core\Form\FormPreprocess;
 use Drupal\Core\Form\FormStateInterface;
+use Drupal\daedalus_blueprint\Host\HostInterface;
 use Drupal\Core\Hook\Attribute\LegacyModuleImplementsAlter;
 use Drupal\daedalus_blueprint_api\Render\SelectableKey;
 use Drupal\daedalus_edit\EditIdentity;
@@ -115,8 +116,8 @@ function daedalus_edit_cache_tag(EntityInterface $entity) {
  * invalidating the entity's real cache tags, churning live-site caches for a
  * change that only exists in tempstore.
  */
-function daedalus_edit_daedalus_blueprint_entity_persisted(EntityInterface $entity, bool $saved, array $component_uuids): void {
-  Cache::invalidateTags([daedalus_edit_cache_tag($entity)]);
+function daedalus_edit_daedalus_blueprint_entity_persisted(HostInterface $host, bool $saved, array $component_uuids): void {
+  Cache::invalidateTags([daedalus_edit_cache_tag($host->entity())]);
 }
 
 /**

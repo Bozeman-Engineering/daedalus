@@ -121,7 +121,7 @@ class BlueprintOperationsAddParityTest extends BlueprintKernelTestBase {
   public function testAddPluginBlock(): void {
     $entity = $this->createLbEntity();
 
-    $result = $this->operations->batchOperations($entity, [
+    $result = $this->operations->batchOperations($this->host($entity), [
       [
         'op' => 'add_element',
         'plugin_id' => 'system_powered_by_block',
@@ -152,7 +152,7 @@ class BlueprintOperationsAddParityTest extends BlueprintKernelTestBase {
   public function testAddPluginBlockContextMapping(): void {
     $entity = $this->createLbEntity();
 
-    $result = $this->operations->addElement($entity, ['anchor' => self::SEED_UUID, 'placement' => 'after'], [
+    $result = $this->operations->addElement($this->host($entity), ['anchor' => self::SEED_UUID, 'placement' => 'after'], [
       'plugin_id' => 'field_block:entity_test:entity_test:name',
       'uuid' => 'c6dc08ba-6496-2e1f-d981-f19d62e14d1b',
     ]);
@@ -171,27 +171,27 @@ class BlueprintOperationsAddParityTest extends BlueprintKernelTestBase {
     $location = ['anchor' => self::SEED_UUID, 'placement' => 'after'];
 
     // Unknown plugin ID.
-    $result = $this->operations->addElement($entity, $location, ['plugin_id' => 'does_not_exist']);
+    $result = $this->operations->addElement($this->host($entity), $location, ['plugin_id' => 'does_not_exist']);
     $this->assertFalse($result->isSuccess());
     $this->assertSame('INVALID_PLUGIN_ID', $result->toArray()['errors'][0]['code']);
 
     // Inline-block plugin IDs are placed via block_type.
-    $result = $this->operations->addElement($entity, $location, ['plugin_id' => 'inline_block:text_section']);
+    $result = $this->operations->addElement($this->host($entity), $location, ['plugin_id' => 'inline_block:text_section']);
     $this->assertFalse($result->isSuccess());
     $error = $result->toArray()['errors'][0];
     $this->assertSame('INVALID_PLUGIN_ID', $error['code']);
     $this->assertStringContainsString('block_type', $error['hint']);
 
     // block_type and plugin_id are mutually exclusive.
-    $result = $this->operations->addElement($entity, $location, [
+    $result = $this->operations->addElement($this->host($entity), $location, [
       'block_type' => 'text_section',
       'plugin_id' => 'system_powered_by_block',
     ]);
     $this->assertFalse($result->isSuccess());
     $this->assertSame('AMBIGUOUS_BLOCK', $result->toArray()['errors'][0]['code']);
 
-    // Plugin blocks have no content fields.
-    $result = $this->operations->batchOperations($entity, [
+    // A plugin without config schema of its own takes no properties.
+    $result = $this->operations->batchOperations($this->host($entity), [
       [
         'op' => 'add_element',
         'plugin_id' => 'system_powered_by_block',
@@ -200,10 +200,10 @@ class BlueprintOperationsAddParityTest extends BlueprintKernelTestBase {
       ],
     ]);
     $this->assertFalse($result->isSuccess());
-    $this->assertSame('PROPERTIES_NOT_SUPPORTED', $result->toArray()['errors'][0]['code']);
+    $this->assertSame('NO_PLUGIN_SCHEMA', $result->toArray()['errors'][0]['code']);
 
     // Unknown populate mode.
-    $result = $this->operations->addElement($entity, $location, [
+    $result = $this->operations->addElement($this->host($entity), $location, [
       'block_type' => 'text_section',
       'populate' => 'everything',
     ]);
@@ -236,7 +236,7 @@ class BlueprintOperationsAddParityTest extends BlueprintKernelTestBase {
 
     // No fields provided: the configured generator fills field_heading and
     // the policy-less field_subheading stays empty.
-    $result = $this->operations->addElement($entity, ['anchor' => self::SEED_UUID, 'placement' => 'after'], [
+    $result = $this->operations->addElement($this->host($entity), ['anchor' => self::SEED_UUID, 'placement' => 'after'], [
       'block_type' => 'text_section',
       'uuid' => 'f0f45ea4-c594-783b-9ccb-94c896ee4891',
       'populate' => 'sample',
@@ -251,7 +251,7 @@ class BlueprintOperationsAddParityTest extends BlueprintKernelTestBase {
     $this->assertSame('default', $configuration['view_mode']);
 
     // A provided field wins over sample population.
-    $result = $this->operations->addElement($entity, ['anchor' => self::SEED_UUID, 'placement' => 'after'], [
+    $result = $this->operations->addElement($this->host($entity), ['anchor' => self::SEED_UUID, 'placement' => 'after'], [
       'block_type' => 'text_section',
       'uuid' => '1b0c68f4-6d6b-7bf8-a809-82c138f35910',
       'block_fields' => ['field_heading' => 'Explicit heading'],
@@ -263,7 +263,7 @@ class BlueprintOperationsAddParityTest extends BlueprintKernelTestBase {
     $this->assertSame('Explicit heading', $block->get('field_heading')->value);
 
     // Without the flag, nothing is populated (the AI path is untouched).
-    $result = $this->operations->addElement($entity, ['anchor' => self::SEED_UUID, 'placement' => 'after'], [
+    $result = $this->operations->addElement($this->host($entity), ['anchor' => self::SEED_UUID, 'placement' => 'after'], [
       'block_type' => 'text_section',
       'uuid' => '9f54008f-23e5-e778-5a33-2bbfbc916244',
     ]);
@@ -294,12 +294,12 @@ class BlueprintOperationsAddParityTest extends BlueprintKernelTestBase {
         $configuration['label'] = 'Adjusted by subscriber';
         $event->getComponent()->setConfiguration($configuration);
         // A subscriber that writes a root field declares it as a target.
-        $event->addTarget($event->getEntity()->uuid(), 'field_listener');
+        $event->addTarget($event->getHost()->uuid(), 'field_listener');
       },
     );
 
     // No populate flag: the event fires all the same, undressed.
-    $result = $this->operations->addElement($entity, ['anchor' => self::SEED_UUID, 'placement' => 'after'], [
+    $result = $this->operations->addElement($this->host($entity), ['anchor' => self::SEED_UUID, 'placement' => 'after'], [
       'block_type' => 'text_section',
       'uuid' => '035ade4f-441b-c333-29e3-1dcf67a9dbf9',
     ]);
@@ -320,7 +320,7 @@ class BlueprintOperationsAddParityTest extends BlueprintKernelTestBase {
 
     // With the flag: the same event, inline blocks carry their block
     // content entity.
-    $result = $this->operations->addElement($entity, ['anchor' => self::SEED_UUID, 'placement' => 'after'], [
+    $result = $this->operations->addElement($this->host($entity), ['anchor' => self::SEED_UUID, 'placement' => 'after'], [
       'block_type' => 'text_section',
       'uuid' => 'fdc3f116-9f99-dce6-3429-3eac7ddbba73',
       'populate' => 'sample',
@@ -331,7 +331,7 @@ class BlueprintOperationsAddParityTest extends BlueprintKernelTestBase {
     $this->assertNotNull($received[1]->getBlockContent());
 
     // Plugin blocks dispatch too, without block content.
-    $result = $this->operations->addElement($entity, ['anchor' => self::SEED_UUID, 'placement' => 'after'], [
+    $result = $this->operations->addElement($this->host($entity), ['anchor' => self::SEED_UUID, 'placement' => 'after'], [
       'plugin_id' => 'system_powered_by_block',
       'uuid' => '981f76e8-8247-22ae-e9db-598865bf6ba5',
     ]);
@@ -376,7 +376,7 @@ class BlueprintOperationsAddParityTest extends BlueprintKernelTestBase {
     );
 
     // An undressed batch: both event kinds answer FALSE.
-    $result = $this->operations->batchOperations($entity, [
+    $result = $this->operations->batchOperations($this->host($entity), [
       [
         'op' => 'add_element',
         'plugin_id' => 'system_powered_by_block',
@@ -392,7 +392,7 @@ class BlueprintOperationsAddParityTest extends BlueprintKernelTestBase {
     // A dressed batch: both event kinds answer TRUE.
     $element_events = [];
     $section_events = [];
-    $result = $this->operations->batchOperations($entity, [
+    $result = $this->operations->batchOperations($this->host($entity), [
       [
         'op' => 'add_element',
         'plugin_id' => 'system_powered_by_block',
@@ -411,7 +411,7 @@ class BlueprintOperationsAddParityTest extends BlueprintKernelTestBase {
     $element_events = [];
     $section_events = [];
     $nested = function (SectionCreatedEvent $event): void {
-      $result = $this->operations->batchOperations($event->getEntity(), [
+      $result = $this->operations->batchOperations($event->getHost(), [
         [
           'op' => 'add_element',
           'plugin_id' => 'system_powered_by_block',
@@ -422,7 +422,7 @@ class BlueprintOperationsAddParityTest extends BlueprintKernelTestBase {
       $this->assertTrue($result->isSuccess(), print_r($result->toArray()['errors'] ?? [], TRUE));
     };
     $dispatcher->addListener(SectionCreatedEvent::class, $nested);
-    $result = $this->operations->batchOperations($entity, [
+    $result = $this->operations->batchOperations($this->host($entity), [
       ['op' => 'add_section', 'location' => ['anchor' => $entity->uuid(), 'placement' => 'inside']],
     ], ['dressed' => TRUE]);
     $dispatcher->removeListener(SectionCreatedEvent::class, $nested);
@@ -433,7 +433,7 @@ class BlueprintOperationsAddParityTest extends BlueprintKernelTestBase {
     // The posture does not leak past the batch: the next undressed add is
     // undressed again.
     $element_events = [];
-    $result = $this->operations->batchOperations($entity, [
+    $result = $this->operations->batchOperations($this->host($entity), [
       [
         'op' => 'add_element',
         'plugin_id' => 'system_powered_by_block',
@@ -455,7 +455,7 @@ class BlueprintOperationsAddParityTest extends BlueprintKernelTestBase {
   public function testAddSectionRootInside(): void {
     $entity = $this->createLbEntity();
 
-    $result = $this->operations->batchOperations($entity, [
+    $result = $this->operations->batchOperations($this->host($entity), [
       [
         'op' => 'add_section',
         'location' => ['anchor' => $entity->uuid(), 'placement' => 'inside'],
@@ -479,22 +479,22 @@ class BlueprintOperationsAddParityTest extends BlueprintKernelTestBase {
     $entity = $this->createLbEntity();
 
     // Anchor is required.
-    $result = $this->operations->addSection($entity, ['placement' => 'inside']);
+    $result = $this->operations->addSection($this->host($entity), ['placement' => 'inside']);
     $this->assertFalse($result->isSuccess());
     $this->assertSame('MISSING_ANCHOR', $result->toArray()['errors'][0]['code']);
 
     // Placement must be valid.
-    $result = $this->operations->addSection($entity, ['anchor' => $entity->uuid(), 'placement' => 'around']);
+    $result = $this->operations->addSection($this->host($entity), ['anchor' => $entity->uuid(), 'placement' => 'around']);
     $this->assertFalse($result->isSuccess());
     $this->assertSame('INVALID_PLACEMENT', $result->toArray()['errors'][0]['code']);
 
     // The root entity only supports inside.
-    $result = $this->operations->addSection($entity, ['anchor' => $entity->uuid(), 'placement' => 'before']);
+    $result = $this->operations->addSection($this->host($entity), ['anchor' => $entity->uuid(), 'placement' => 'before']);
     $this->assertFalse($result->isSuccess());
     $this->assertSame('INVALID_PLACEMENT_ANCHOR', $result->toArray()['errors'][0]['code']);
 
     // Unknown anchors fail loudly.
-    $result = $this->operations->addSection($entity, [
+    $result = $this->operations->addSection($this->host($entity), [
       'anchor' => '266985a2-5059-ae4c-d8ac-2dd69846853e',
       'placement' => 'after',
     ]);
@@ -504,13 +504,13 @@ class BlueprintOperationsAddParityTest extends BlueprintKernelTestBase {
     // A section beside a block is legal in the grammar (the region flow
     // holds sections as container components), but containers require
     // daedalus_layout, absent here.
-    $add = $this->operations->addElement($entity, ['anchor' => self::SEED_UUID, 'placement' => 'after'], [
+    $add = $this->operations->addElement($this->host($entity), ['anchor' => self::SEED_UUID, 'placement' => 'after'], [
       'block_type' => 'text_section',
       'uuid' => 'a44ea751-8f43-361c-8603-08d54ba84ab5',
     ]);
     $this->assertTrue($add->isSuccess());
     $entity = $add->getEntity();
-    $result = $this->operations->addSection($entity, [
+    $result = $this->operations->addSection($this->host($entity), [
       'anchor' => 'a44ea751-8f43-361c-8603-08d54ba84ab5',
       'placement' => 'before',
     ]);
@@ -519,7 +519,7 @@ class BlueprintOperationsAddParityTest extends BlueprintKernelTestBase {
 
     // A block has no interior flow: 'inside' cannot anchor on it, with or
     // without daedalus_layout.
-    $result = $this->operations->addSection($entity, [
+    $result = $this->operations->addSection($this->host($entity), [
       'anchor' => 'a44ea751-8f43-361c-8603-08d54ba84ab5',
       'placement' => 'inside',
     ]);
@@ -529,7 +529,7 @@ class BlueprintOperationsAddParityTest extends BlueprintKernelTestBase {
     // No Layout Builder, no sections (entity_test_rev has no LB display).
     $plain = $this->createRevEntity(['name' => 'Plain']);
     $plain->save();
-    $result = $this->operations->addSection($plain, ['anchor' => $plain->uuid(), 'placement' => 'inside']);
+    $result = $this->operations->addSection($this->host($plain), ['anchor' => $plain->uuid(), 'placement' => 'inside']);
     $this->assertFalse($result->isSuccess());
     $this->assertSame('NO_LAYOUT', $result->toArray()['errors'][0]['code']);
   }

@@ -1,0 +1,27 @@
+# Shipped default fonts: a two-face family (a regular woff2 and a bold
+# woff, the two kinds the lane admits) with a description, and a one-face
+# serif withheld from the AI. Each face's source names a file under this
+# module's assets/fonts/; the importer lands the bytes through the font
+# store and the face on the site names the managed file by uuid. Named
+# test_* because machine names are the site-wide vocabulary and the sweep
+# on daedalus_stylish's own install imports every enabled module's file.
+test_sans:
+  label: 'Test Sans'
+  family: 'Test Sans'
+  description: 'The body face of the fonts test.'
+  faces:
+    - weight: 400
+      style: normal
+      source:
+        file: test-sans-regular.woff2
+    - weight: bold
+      source:
+        file: test-sans-bold.woff
+test_serif:
+  label: 'Test Serif'
+  # The family is the label when omitted.
+  # The AI opt-out: kept out of the brief and the schema, still compiled.
+  ai: false
+  faces:
+    - source:
+        file: test-serif-regular.woff2

@@ -78,6 +78,7 @@ class VariantManagerTest extends KernelTestBase {
     // daedalus_stylish provider reads all four storages on every build.
     $this->installEntitySchema('daedalus_swatch');
     $this->installEntitySchema('daedalus_animation');
+    $this->installEntitySchema('daedalus_font');
     $this->installEntitySchema('daedalus_skin');
     $this->installSchema('daedalus_stylish', ['daedalus_variant_usage']);
     $this->installConfig(['daedalus_stylish']);
@@ -327,17 +328,17 @@ class VariantManagerTest extends KernelTestBase {
   }
 
   /**
-   * The resolveEntity loads by id or uuid and tolerates junk.
+   * The resolveHost loads by id or uuid and tolerates junk.
    */
-  public function testResolveEntity(): void {
+  public function testResolveHost(): void {
     $entity = EntityTest::create(['name' => 'host']);
     $entity->save();
 
-    $this->assertSame($entity->id(), $this->manager->resolveEntity('entity_test', (string) $entity->id())?->id());
-    $this->assertSame($entity->id(), $this->manager->resolveEntity('entity_test', $entity->uuid())?->id());
-    $this->assertNull($this->manager->resolveEntity('entity_test', '999999'));
-    $this->assertNull($this->manager->resolveEntity('no_such_type', '1'));
-    $this->assertNull($this->manager->resolveEntity(NULL, NULL));
+    $this->assertSame($entity->id(), $this->manager->resolveHost('entity_test', (string) $entity->id())?->id());
+    $this->assertSame($entity->id(), $this->manager->resolveHost('entity_test', $entity->uuid())?->id());
+    $this->assertNull($this->manager->resolveHost('entity_test', '999999'));
+    $this->assertNull($this->manager->resolveHost('no_such_type', '1'));
+    $this->assertNull($this->manager->resolveHost(NULL, NULL));
   }
 
 }

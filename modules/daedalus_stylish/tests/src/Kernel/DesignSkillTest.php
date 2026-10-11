@@ -14,7 +14,7 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  * The design skill is the ONE copy of the page design doctrine, shaped in three
  * parts: a thinking step (subject, audience, the one job, the one thing to
  * remember, one direction) with the two postures; distinctiveness inside the
- * system (on brand is a boundary with full liberty inside it, stencils are
+ * system (on brand is a boundary with full liberty inside it, blueprints are
  * blocks or inspiration, never anchors) with the composition principles
  * (hierarchy, rhythm, contrast, one signature); and the anti-patterns (the
  * generic page). Then the generation workflow (read, skills, plan, compose and
@@ -23,7 +23,7 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  * recipe is a silhouette every page would share regardless of brand, so the
  * shape of a page is decided per page. It is page-builder-generic on
  * purpose: the design system brief carries the system's
- * identity, axes, looks and stencils, the Page language section carries every
+ * identity, axes, looks and blueprints, the Page language section carries every
  * write mechanic, and the schema carries the block catalog, so the doctrine
  * must name zero bundle block types, zero materials (no variant id the suite
  * ships), restate no grammar and say nothing about type or color (the system's
@@ -59,6 +59,21 @@ class DesignSkillTest extends KernelTestBase {
     'daedalus_stylish',
     'daedalus_stylish_layouts',
   ];
+
+  /**
+   * {@inheritdoc}
+   */
+  protected function setUp(): void {
+    parent::setUp();
+    // The composed create_entity checklist lists the bundles with their
+    // page mark (BundleListBuilder asks PageHosts::isPage()), which builds
+    // the dialect catalog and with it the roster; the daedalus_stylish
+    // provider reads all four material storages.
+    $this->installEntitySchema('daedalus_swatch');
+    $this->installEntitySchema('daedalus_animation');
+    $this->installEntitySchema('daedalus_font');
+    $this->installEntitySchema('daedalus_variant');
+  }
 
   /**
    * Tests discovery, composition, and the skill's load-bearing content.
@@ -121,10 +136,11 @@ class DesignSkillTest extends KernelTestBase {
     $this->assertStringContainsString('ONE atomic page_edit batch', $instructions);
     $this->assertStringContainsString("the page's single job", $flat);
     // The PLAN step is the thinking step applied, and it names the three
-    // ways a stencil can serve a page (filled, built beside, placed as is)
-    // without preferring any: a stencil is a material, not the mechanism.
+    // ways a blueprint can serve a page (filled, built beside, placed as
+    // is) without preferring any: a blueprint is a material, not the
+    // mechanism.
     $this->assertStringContainsString('Think, then commit (above)', $instructions);
-    $this->assertStringContainsString('which stencils filled, built beside, or placed as is', $flat);
+    $this->assertStringContainsString('which blueprints filled, built beside, or placed as is', $flat);
     // The centering recipe moved here from the styling skill: the
     // container arranges its contents, so the write lands on it. A
     // container is born a flex column, so the recipe is the flex one and
@@ -175,28 +191,32 @@ class DesignSkillTest extends KernelTestBase {
 
     // Part two, distinctiveness inside the system: arrangement is the
     // difference between pages built from the same brushes; a material is
-    // a choice, never a checklist; stencils are pre-approved blocks and
+    // a choice, never a checklist; blueprints are pre-approved blocks and
     // worked examples, never anchors, and per page each is filled, built
     // beside or skipped, with hand-rolled work as on brand as a placement
     // (hand-rolling is never discouraged). Saving one is reactive only
-    // (the user asks, the AI never volunteers it). Promotion prose for
-    // variants, tokens and the skin stays. Placement mechanics are the
-    // cached stencil sentence's, so the doctrine spells no <pb-stencil>
-    // grammar; the retired instantiate_stencil op and the retired schema
-    // key are never named.
+    // (the user asks, the AI never volunteers it); a saved blueprint is a
+    // page of its own, edited with the page tools as entity_type blueprint
+    // when the user means the blueprint, not a placement. Promotion prose
+    // for variants, tokens and the skin stays. Placement mechanics are the
+    // cached blueprint sentence's, so the doctrine spells no <pb-blueprint>
+    // grammar; the retired place_blueprint op and the retired schema
+    // key are never named (the retired word is the recipe's
+    // PromptSurfaceSnapshotTest's to ban, on every tier).
     $this->assertStringContainsString('Distinctive inside the system', $instructions);
     $this->assertStringContainsString('The system is not a template', $instructions);
     $this->assertStringContainsString('a material is a choice, never a checklist', $flat);
     $this->assertStringContainsString('never anchors', $instructions);
     $this->assertStringContainsString('fill it with this page\'s content when it fits, build beside it in the same spirit, or skip it for a better idea', $flat);
     $this->assertStringContainsString('as on brand as a placement', $flat);
-    $this->assertStringNotContainsString('available_stencils', $instructions);
-    $this->assertStringNotContainsString('<pb-stencil', $instructions);
+    $this->assertStringNotContainsString('<pb-blueprint', $instructions);
     $this->assertStringContainsString('only when the user asks', $instructions);
     $this->assertStringNotContainsString('propose saving', $instructions);
     $this->assertStringContainsString('save_material', $instructions);
     $this->assertStringContainsString('propose promoting', $instructions);
-    $this->assertStringNotContainsString('instantiate_stencil', $instructions);
+    $this->assertStringNotContainsString('place_blueprint', $instructions);
+    $this->assertStringContainsString('A saved blueprint is a page of its own', $instructions);
+    $this->assertStringContainsString('edit it with the page tools as entity_type blueprint', $flat);
 
     // The composition principles: hierarchy, rhythm, contrast, one
     // signature, copy and images as material, one purpose per section.
@@ -215,13 +235,13 @@ class DesignSkillTest extends KernelTestBase {
 
     // Part three, the anti-patterns: the generic page is named so it can
     // be revised out of a plan (the hero/grid/CTA silhouette, equal
-    // cards, every band the same shape, filler copy, a stencil with the
+    // cards, every band the same shape, filler copy, a blueprint with the
     // copy swapped, even emphasis), and a match is a formula to redo.
     $this->assertStringContainsString('The generic page', $instructions);
     $this->assertStringContainsString('the silhouette every generated page shares', $flat);
     $this->assertStringContainsString('Cards of the same size for things of different importance', $flat);
     $this->assertStringContainsString('Every band the same shape', $flat);
-    $this->assertStringContainsString('A stencil with the sample copy swapped', $instructions);
+    $this->assertStringContainsString('A blueprint with the sample copy swapped', $flat);
     $this->assertStringContainsString('Emphasis spread evenly', $instructions);
     $this->assertStringContainsString('a formula, not a decision', $instructions);
 

@@ -13,9 +13,9 @@ use Drupal\Core\Entity\Routing\AdminHtmlRouteProvider;
 use Drupal\Core\Field\BaseFieldDefinition;
 use Drupal\Core\StringTranslation\TranslatableMarkup;
 use Drupal\daedalus_blueprint\Entity\DesignSystemMemberTrait;
-use Drupal\daedalus_stylish\Form\DaedalusStylishSkinForm;
 use Drupal\daedalus_stylish\Plugin\Field\FieldType\SkinDefaultsItem;
 use Drupal\daedalus_stylish\Plugin\Field\FieldType\SkinTokensItem;
+use Drupal\daedalus_stylish\Plugin\Field\FieldType\StyleMapItem;
 use Drupal\daedalus_stylish\DaedalusStylishSkinAccessControlHandler;
 use Drupal\daedalus_stylish\DaedalusStylishSkinInterface;
 use Drupal\daedalus_stylish\DaedalusStylishSkinListBuilder;
@@ -32,10 +32,28 @@ use Drupal\user\EntityOwnerTrait;
  * disk relationship belongs to the skin, so revision reverts never change
  * what a skin IS, only what it says.
  *
- * Unlike variants, skins DO have admin routes: the skin list and edit form
- * (/admin/appearance/skins) are the token editing UI, beside the AI
- * write surface. Delivery (the compiled skin stylesheet) is a separate
- * concern and never reads these forms.
+ * A skin has no add or edit form. It is authored on the canvas, in Edit
+ * Mode's Materials place, through the same operations the AI submits:
+ * tokens as materials (save_material, update_material, remove_material
+ * with kind token) and defaults through update_default, and its
+ * lifecycle (choose, copy, restore, revert) through SkinManager's routes.
+ * The admin routes that remain are the skin list (/admin/appearance/skins)
+ * and the delete form. Delivery (the compiled skin stylesheet) is a
+ * separate concern and reads none of them.
+ *
+ * A skin is two layers on one entity. The PACKAGE layer (tokens,
+ * defaults) is what a module ships: the disk lane's fields, the only
+ * ones the importer writes and the shipper reads, the payload the source
+ * hash covers. The SITE layer (site_tokens, site_defaults) holds what
+ * the site added or changed over it, by name down to the fact (a token's
+ * value, description or offered) or the property (a default): a package
+ * update lands in its own layer and shows through wherever the site
+ * changed nothing, and removing a site entry reveals the package's. Every
+ * reader but the disk lane reads the merge (tokens(), defaults()). A skin
+ * with no provider is the site's own and has one layer, the package one,
+ * edited directly. Both layers are revisionable and the identity fields
+ * are not, so a revision revert changes what either layer says and never
+ * what the skin is.
  */
 #[ContentEntityType(
   id: 'daedalus_skin',
@@ -61,9 +79,6 @@ use Drupal\user\EntityOwnerTrait;
     'access' => DaedalusStylishSkinAccessControlHandler::class,
     'list_builder' => DaedalusStylishSkinListBuilder::class,
     'form' => [
-      'default' => DaedalusStylishSkinForm::class,
-      'add' => DaedalusStylishSkinForm::class,
-      'edit' => DaedalusStylishSkinForm::class,
       'delete' => ContentEntityDeleteForm::class,
     ],
     'route_provider' => [
@@ -72,8 +87,6 @@ use Drupal\user\EntityOwnerTrait;
   ],
   links: [
     'collection' => '/admin/appearance/skins',
-    'add-form' => '/admin/appearance/skins/add',
-    'edit-form' => '/admin/appearance/skins/{daedalus_skin}',
     'delete-form' => '/admin/appearance/skins/{daedalus_skin}/delete',
   ],
   admin_permission: 'administer skins',
@@ -117,13 +130,32 @@ class DaedalusStylishSkin extends EditorialContentEntityBase implements Daedalus
 
     $fields['tokens'] = BaseFieldDefinition::create('daedalus_skin_tokens')
       ->setLabel(new TranslatableMarkup('Tokens'))
-      ->setDescription(new TranslatableMarkup("The design token values: {scale: {name: value}} against the site's declared token scales, each value a string or a condition-keyed map with a 'default' entry."))
+      ->setDescription(new TranslatableMarkup("The design tokens: {scale: {name: {value, description, offered}}} against the site's declared token scales, each value a string or a condition-keyed map with a 'default' entry; a bare value is shorthand for {value}."))
       ->setRevisionable(TRUE);
 
     $fields['defaults'] = BaseFieldDefinition::create('daedalus_skin_defaults')
       ->setLabel(new TranslatableMarkup('Site defaults'))
       ->setDescription(new TranslatableMarkup('The site element defaults: {scope: element-relative styles} with LIVE semantics — they restyle existing placements through the compiled skin stylesheet, and per-entity style maps beat them by cascade.'))
       ->setRevisionable(TRUE);
+
+    // The site layer: what the site added or changed over the package
+    // layer, merged per token fact (site_tokens) and per property
+    // (site_defaults). Internal, deliberately: the blueprint's generic
+    // field spine skips internal fields, so its whole-field handlers
+    // (which canonicalize to full records and validate a whole map) never
+    // reach the layer; its doors are the token operations and
+    // update_default, which write through the entity.
+    $fields['site_tokens'] = BaseFieldDefinition::create('daedalus_skin_site_tokens')
+      ->setLabel(new TranslatableMarkup('Site tokens'))
+      ->setDescription(new TranslatableMarkup("The site's layer over the shipped tokens: {scale: {name: the facts the site changed or the record it minted}}; an unstated fact shows through from the package layer."))
+      ->setRevisionable(TRUE)
+      ->setInternal(TRUE);
+
+    $fields['site_defaults'] = BaseFieldDefinition::create('daedalus_skin_defaults')
+      ->setLabel(new TranslatableMarkup('Site layer defaults'))
+      ->setDescription(new TranslatableMarkup("The site's layer over the shipped defaults, the same {scope: element-relative styles} grammar; a site property replaces the package's, everything else shows through."))
+      ->setRevisionable(TRUE)
+      ->setInternal(TRUE);
 
     // Shipped-source identity (the disk lane): which module's
     // MODULE.daedalus_stylish.skins.yml this skin came from, and the hash of the
@@ -140,7 +172,7 @@ class DaedalusStylishSkin extends EditorialContentEntityBase implements Daedalus
 
     $fields['source_hash'] = BaseFieldDefinition::create('string')
       ->setLabel(new TranslatableMarkup('Source hash'))
-      ->setDescription(new TranslatableMarkup("Hash of the shipped tokens at the last import or sync. One stored hash, two comparisons: against the entity's current tokens (user modified?) and against the current disk tokens (defaults changed?)."))
+      ->setDescription(new TranslatableMarkup("Hash of the shipped {tokens, defaults} payload (the package layer, tokens as records) at the last import or sync. Sync compares it against the current disk payload (defaults changed?); the ship lane compares it against the entity's package layer (edited under the developer gate?)."))
       ->setSetting('max_length', 64);
 
     $fields['created'] = BaseFieldDefinition::create('created')
@@ -174,51 +206,104 @@ class DaedalusStylishSkin extends EditorialContentEntityBase implements Daedalus
   /**
    * {@inheritdoc}
    */
-  public function getTokens(): array {
-    $item = $this->get('tokens')->first();
-    return $item instanceof SkinTokensItem ? $item->getStyleMap() : [];
+  public function packageTokens(): array {
+    return $this->layer('tokens');
   }
 
   /**
    * {@inheritdoc}
    */
-  public function setTokens(array $tokens): static {
-    $list = $this->get('tokens');
+  public function setPackageTokens(array $tokens): static {
+    return $this->setLayer('tokens', $tokens);
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function siteTokens(): array {
+    return $this->layer('site_tokens');
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function setSiteTokens(array $tokens): static {
+    return $this->setLayer('site_tokens', $tokens);
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function tokens(): array {
+    return SkinTokensItem::mergeLayers($this->packageTokens(), $this->siteTokens());
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function packageDefaults(): array {
+    return $this->layer('defaults');
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function setPackageDefaults(array $defaults): static {
+    return $this->setLayer('defaults', $defaults);
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function siteDefaults(): array {
+    return $this->layer('site_defaults');
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function setSiteDefaults(array $defaults): static {
+    return $this->setLayer('site_defaults', $defaults);
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function defaults(): array {
+    return SkinDefaultsItem::mergeLayers($this->packageDefaults(), $this->siteDefaults());
+  }
+
+  /**
+   * One layer field's stored map, empty when the field is.
+   */
+  protected function layer(string $field): array {
+    $item = $this->get($field)->first();
+    return $item instanceof StyleMapItem ? $item->getStyleMap() : [];
+  }
+
+  /**
+   * Writes one layer field through its item, which canonicalizes.
+   */
+  protected function setLayer(string $field, array $map): static {
+    $list = $this->get($field);
     $item = $list->first() ?? $list->appendItem();
-    assert($item instanceof SkinTokensItem);
-    $item->setStyleMap($tokens);
-    return $this;
-  }
-
-  /**
-   * {@inheritdoc}
-   */
-  public function getDefaults(): array {
-    $item = $this->get('defaults')->first();
-    return $item instanceof SkinDefaultsItem ? $item->getStyleMap() : [];
-  }
-
-  /**
-   * {@inheritdoc}
-   */
-  public function setDefaults(array $defaults): static {
-    $list = $this->get('defaults');
-    $item = $list->first() ?? $list->appendItem();
-    assert($item instanceof SkinDefaultsItem);
-    $item->setStyleMap($defaults);
+    assert($item instanceof StyleMapItem);
+    $item->setStyleMap($map);
     return $this;
   }
 
   /**
    * {@inheritdoc}
    *
-   * The shipped payload covers everything a skins file ships — tokens AND
-   * defaults — under stable keys, so adding a tier never silently changes
-   * the hash of a tier-less skin ({} hashes the same under both shapes
-   * only if the shape is keyed; hence the explicit map).
+   * The shipped payload is the PACKAGE layer, everything a skins file
+   * ships — tokens AND defaults — under stable keys, so adding a tier
+   * never silently changes the hash of a tier-less skin ({} hashes the
+   * same under both shapes only if the shape is keyed; hence the explicit
+   * map). The site layer is outside it: a site's additions and changes
+   * are not a modification of what the package shipped.
    */
   protected function shippedData(): array {
-    return ['tokens' => $this->getTokens(), 'defaults' => $this->getDefaults()];
+    return ['tokens' => $this->packageTokens(), 'defaults' => $this->packageDefaults()];
   }
 
 }

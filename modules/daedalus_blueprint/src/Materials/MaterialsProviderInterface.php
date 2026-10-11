@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Drupal\daedalus_blueprint\Materials;
 
 use Drupal\Core\Cache\CacheableMetadata;
-use Drupal\Core\Entity\FieldableEntityInterface;
+use Drupal\daedalus_blueprint\Host\HostInterface;
 
 /**
  * A source of material records: one per module that owns a material kind.
@@ -16,7 +16,7 @@ use Drupal\Core\Entity\FieldableEntityInterface;
  * published rule, the sort order, and the spellings (the reserved
  * variable prefix, the attribute derivation); nothing downstream re-walks
  * the storage. daedalus_stylish provides tokens, swatches, variants and
- * animations; daedalus_blueprint_stencil provides stencils.
+ * animations; daedalus_blueprint_library provides blueprints.
  *
  * A provider is also the ONE implementation of its kinds' gestures: the
  * material gesture family (save_material / update_material /
@@ -83,16 +83,16 @@ interface MaterialsProviderInterface {
    *   The gesture's keys (label, value, element, ...), the op payload
    *   without op/kind. An `element` is already a uuid: the op handler
    *   resolved any page-language alias.
-   * @param \Drupal\Core\Entity\FieldableEntityInterface|null $entity
-   *   The host entity whose staged state a capture reads (the batch's live
-   *   entity on the op spine), or NULL on a lane with no page behind it.
+   * @param \Drupal\daedalus_blueprint\Host\HostInterface|null $host
+   *   The host whose staged state a capture reads (the batch's live host
+   *   on the op spine), or NULL on a lane with no page behind it.
    * @param array $options
    *   The request options (MaterialGestureOperationHandler::ORIGIN_OPTION
    *   names the writer's origin; absent means a person).
    *
    * @throws \Drupal\daedalus_blueprint\Materials\MaterialGestureException
    */
-  public function capture(MaterialKind $kind, array $operation, ?FieldableEntityInterface $entity, array $options): MaterialGestureResult;
+  public function capture(MaterialKind $kind, array $operation, ?HostInterface $host, array $options): MaterialGestureResult;
 
   /**
    * Rewrites a saved material in place (update_material).
@@ -108,14 +108,14 @@ interface MaterialsProviderInterface {
    * @param array $operation
    *   The keys to change, the op payload without op/kind/id (an `element`
    *   already a uuid).
-   * @param \Drupal\Core\Entity\FieldableEntityInterface|null $entity
-   *   The host entity a push captures from, or NULL.
+   * @param \Drupal\daedalus_blueprint\Host\HostInterface|null $host
+   *   The host a push captures from, or NULL.
    * @param array $options
    *   The request options.
    *
    * @throws \Drupal\daedalus_blueprint\Materials\MaterialGestureException
    */
-  public function update(MaterialKind $kind, string $id, array $operation, ?FieldableEntityInterface $entity, array $options): MaterialGestureResult;
+  public function update(MaterialKind $kind, string $id, array $operation, ?HostInterface $host, array $options): MaterialGestureResult;
 
   /**
    * Deletes a material (remove_material).

@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Drupal\Tests\daedalus_stylish\Kernel;
 
 // cspell:ignore siez
-use Drupal\daedalus_blueprint\DesignSystem\ActiveDesignSystem;
 use Drupal\daedalus_blueprint\Materials\Address;
 use Drupal\KernelTests\KernelTestBase;
 use Drupal\daedalus_stylish\Exception\StyleGuideException;
@@ -20,11 +19,12 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  * Tests authored constraint_defaults: grammar, the merge, and enforcement.
  *
  * The site declaration's constraint_defaults section is the site's own
- * site-wide bindings: constraint blocks (CSS property => the same
- * {scale, stops, allowed, min, max, units} grammar node constraints
- * speak), the BASE layer under every node's own blocks. The guide build
+ * site-wide bindings: constraint blocks (CSS property => the
+ * {scale, allowed, min, max, units} grammar node constraints speak,
+ * never stops: a site-wide offer is the skin's `offered` flag per
+ * token), the BASE layer under every node's own blocks. The guide build
  * validates code-vs-code facts loudly (recognized property, declared
- * scale, stops grammar); StyleGuide::constraintDefaults() serves the
+ * scale, no stops); StyleGuide::constraintDefaults() serves the
  * authored entries expanded over the shorthand families and nothing
  * derived from nodes (a node's block is that node's value space, never a
  * site-wide line); the validator enforces an authored default wherever
@@ -84,12 +84,19 @@ class StyleGuideConstraintDefaultsTest extends KernelTestBase {
     $this->installEntitySchema('daedalus_skin');
     $this->installEntitySchema('daedalus_swatch');
     $this->installEntitySchema('daedalus_animation');
+    $this->installEntitySchema('daedalus_font');
     $this->installConfig(['daedalus_stylish']);
     // Activating a design system syncs every enabled module's shipped
     // definitions (ShippedSync::onDesignSystemActivated()): the importers
     // mirror motion-* and --swatch-* references into the usage tables and
     // switch to an administrative account, so the fixture carries both.
-    $this->installSchema('daedalus_stylish', ['daedalus_variant_usage', 'daedalus_swatch_usage', 'daedalus_animation_usage']);
+    $this->installSchema('daedalus_stylish', [
+      'daedalus_variant_usage',
+      'daedalus_swatch_usage',
+      'daedalus_animation_usage',
+      'daedalus_token_usage',
+      'daedalus_font_usage',
+    ]);
     $this->setUpCurrentUser([], [], TRUE);
     $this->styleGuide = $this->container->get('daedalus_stylish.style_guide');
     $this->validator = $this->container->get('daedalus_stylish.style_map_validator');
@@ -146,17 +153,17 @@ class StyleGuideConstraintDefaultsTest extends KernelTestBase {
       ],
       'constraint_defaults' => [
         'font-size' => ['scale' => 'text'],
-        'gap' => ['scale' => 'space', 'stops' => ['2', '4', '8']],
+        'gap' => ['scale' => 'space', 'allowed' => ['0']],
         'line-height' => ['min' => '1', 'max' => '2'],
       ],
     ]);
     $served = $this->styleGuide->getConstraintDefaults(self::THEME);
     $this->assertSame([
       'font-size' => ['scale' => 'text'],
-      'gap' => ['scale' => 'space', 'stops' => ['2', '4', '8']],
+      'gap' => ['scale' => 'space', 'allowed' => ['0']],
       // The gap family's longhands, right after their shorthand.
-      'row-gap' => ['scale' => 'space', 'stops' => ['2', '4', '8']],
-      'column-gap' => ['scale' => 'space', 'stops' => ['2', '4', '8']],
+      'row-gap' => ['scale' => 'space', 'allowed' => ['0']],
+      'column-gap' => ['scale' => 'space', 'allowed' => ['0']],
       'line-height' => ['min' => '1', 'max' => '2'],
     ], $served);
     // The serialization map IS the served map.
@@ -313,56 +320,53 @@ class StyleGuideConstraintDefaultsTest extends KernelTestBase {
   }
 
   /**
-   * A package's stops: merge over the suite's scale:; null withdraws it.
+   * A package layer merges over the suite's blocks; null withdraws one.
    *
-   * The olivero package restates no suite binding: its site section
-   * carries `padding: {stops: [sm, md, lg, xl]}` and the same for gap,
-   * and while its design system is active that layer merges over the
-   * suite's map (maps merge across providers, daedalus_ui's
-   * PageBuilderDeclarations), so padding resolves to the suite's scale
-   * and zero literal with the package's stops beside them, expanded to
-   * the four sides, and the bindings the package leaves alone (the
-   * type trio, border-radius) are served as the suite authored them.
-   * A higher layer's `padding: null` withdraws the merged block whole
-   * (the family with it, since the suite authors the shorthand alone),
-   * reopening padding to the built-in offer while gap keeps its binding.
+   * A package's site section layers above the suite's while its design
+   * system is active (maps merge across providers, daedalus_ui's
+   * PageBuilderDeclarations), so a block carrying only an extra
+   * `allowed:` literal lands as the merged block (the suite's scale and
+   * zero literal kept, the literal appended), expanded to the four
+   * sides, and the bindings the layer leaves alone (the type trio,
+   * border-radius) are served as the suite authored them. A layer's
+   * `padding: null` withdraws the merged block whole (the family with
+   * it, since the suite authors the shorthand alone), reopening padding
+   * to the built-in offer while gap keeps its binding. The control
+   * test's site_layer state is that package layer.
    */
-  public function testPackageStopsMergeOverSuiteBinding(): void {
-    // The activation syncs the package's skin through the importers,
-    // which switch to an administrative account: give them one.
-    $this->setUpCurrentUser([], [], TRUE);
-    $this->enableModules(['daedalus_stylish_olivero_skin']);
-    $this->installConfig(['daedalus_stylish_olivero_skin']);
-    $this->container->get(ActiveDesignSystem::SERVICE_ID)->activate('olivero');
-    $this->styleGuide = $this->container->get('daedalus_stylish.style_guide');
-    $this->validator = $this->container->get('daedalus_stylish.style_map_validator');
+  public function testPackageLayerMergesOverSuiteBinding(): void {
+    $this->container->get('state')->set('daedalus_stylish_control_test.site_layer', [
+      'constraint_defaults' => ['padding' => ['allowed' => ['0', 'auto']], 'gap' => ['allowed' => ['0', 'auto']]],
+    ]);
     $this->styleGuide->resetCache();
 
-    $merged = ['scale' => 'space', 'allowed' => ['0'], 'stops' => ['sm', 'md', 'lg', 'xl']];
+    $merged = ['scale' => 'space', 'allowed' => ['0', 'auto']];
     $served = $this->styleGuide->getConstraintDefaults(self::THEME);
-    $this->assertSame($merged, $served['padding'], 'the package\'s stops merge over the suite\'s scale and allowed literal');
+    $this->assertSame($merged, $served['padding'], 'the layer\'s literal merges over the suite\'s scale and allowed literal');
     $this->assertSame($merged, $served['padding-left'], 'the merged block reaches the family\'s sides');
     $this->assertSame($merged, $served['gap'], 'gap merges the same way');
     $this->assertSame($merged, $served['column-gap'], 'and reaches its longhands');
-    $this->assertSame(['scale' => 'radius', 'allowed' => ['0']], $served['border-radius'], 'a binding the package leaves alone is served as the suite authored it');
+    $this->assertSame(['scale' => 'radius', 'allowed' => ['0']], $served['border-radius'], 'a binding the layer leaves alone is served as the suite authored it');
     $this->assertSame(['scale' => 'text'], $served['font-size']);
 
     $this->declareKinds(['block' => ['property_groups' => ['spacing' => [], 'layout' => []]]]);
     $rosters = $this->container->get('daedalus_stylish.vocabulary_roster');
     $this->assertSame($merged, $rosters->build(Address::fromString('kind:block'), self::THEME)->valueSpace('padding'), 'the roster serves the merged block as the value space');
 
-    // A layer above the package withdraws the binding whole: padding and
-    // its sides leave the map and the roster, gap stays bound, and the
-    // validator (guarded, so the suite's blocks are law) accepts the
-    // literal padding it refused a moment ago while still refusing the
-    // literal gap.
+    // A layer withdraws the binding whole: padding and its sides leave
+    // the map and the roster, gap stays bound, and the validator
+    // (guarded, so the suite's blocks are law) accepts the literal
+    // padding it refused a moment ago while still refusing the literal
+    // gap.
     $this->enforce('guarded');
     $codes = $this->codes($this->validator->validateAt([
       '' => ['default' => ['padding' => '2rem', 'gap' => '2rem']],
     ], Address::fromString('kind:block'), ['theme' => self::THEME]));
     $this->assertSame(['default.padding' => ['STYLE_VALUE_NOT_ON_SCALE'], 'default.gap' => ['STYLE_VALUE_NOT_ON_SCALE']], $codes, 'before the withdrawal both literals are off the merged scale');
 
-    $this->container->get('state')->set('daedalus_stylish_control_test.site_layer', ['constraint_defaults' => ['padding' => NULL]]);
+    $this->container->get('state')->set('daedalus_stylish_control_test.site_layer', [
+      'constraint_defaults' => ['padding' => NULL, 'gap' => ['allowed' => ['0', 'auto']]],
+    ]);
     $this->styleGuide->resetCache();
     $served = $this->styleGuide->getConstraintDefaults(self::THEME);
     foreach (['padding', 'padding-top', 'padding-right', 'padding-bottom', 'padding-left'] as $property) {
@@ -376,6 +380,64 @@ class StyleGuideConstraintDefaultsTest extends KernelTestBase {
       '' => ['default' => ['padding' => '2rem', 'gap' => '2rem']],
     ], Address::fromString('kind:block'), ['theme' => self::THEME]));
     $this->assertSame(['default.gap' => ['STYLE_VALUE_NOT_ON_SCALE']], $codes, 'after the withdrawal the literal padding passes and the literal gap is still off the scale');
+  }
+
+  /**
+   * Site-wide stops are a build error whose corrective names `offered`.
+   *
+   * Which of a scale's tokens the basic rows offer everywhere is a fact
+   * about the tokens (the skin's `offered` flag per token), never a
+   * guide list, so a `stops` list under the site's constraint_defaults
+   * fails the build, wherever the layer sits: a package layer merging
+   * `padding: {stops: [...]}` over the suite's block (the shape the
+   * olivero fragment used to ship) and a site authoring the list beside
+   * its own scale alike. The error is one per block (a stops-only block
+   * is not also "without a scale") and names the token flag to set and
+   * the per-element home stops keep.
+   */
+  public function testSiteWideStopsRefused(): void {
+    $this->container->get('state')->set('daedalus_stylish_control_test.site_layer', [
+      'constraint_defaults' => ['padding' => ['stops' => ['sm', 'md', 'lg', 'xl']]],
+    ]);
+    $this->styleGuide->resetCache();
+    try {
+      $this->styleGuide->getConstraintDefaults(self::THEME);
+      $this->fail('A package layer curating site-wide stops fails the build.');
+    }
+    catch (StyleGuideException $e) {
+      $message = $e->getMessage();
+      $this->assertStringContainsString('The constraint default on property "padding" curates stops, but a site-wide offer is not guide code: which of a scale\'s tokens the basic rows offer everywhere is each token\'s "offered" flag on the skin', $message);
+      $this->assertStringContainsString('a stops list belongs to one element\'s constraint in its declaration\'s property_groups', $message);
+      $this->assertStringContainsString('mark the tokens the rows should not lead with offered: false in the skin', $message);
+      $this->assertStringNotContainsString('declares stops without a scale', $message, 'the merged block carries the suite\'s scale; one error per block');
+      $this->assertStringNotContainsString('token contract', $message, 'no contract check runs on a refused list');
+    }
+    $this->container->get('state')->delete('daedalus_stylish_control_test.site_layer');
+
+    // A site's own list beside its own scale, and a stops-only block
+    // with no scale anywhere: the same one error each.
+    $this->declareSite([
+      'token_scales' => ['text' => ['label' => 'Type scale', 'shape' => 'dimension']],
+      'token_contract' => ['text' => ['lg', 'xl']],
+      'constraint_defaults' => ['font-size' => ['scale' => 'text', 'stops' => ['lg', 'xl']]],
+    ]);
+    try {
+      $this->styleGuide->getConstraintDefaults(self::THEME);
+      $this->fail('A site curating site-wide stops beside its scale fails the build.');
+    }
+    catch (StyleGuideException $e) {
+      $this->assertStringContainsString('The constraint default on property "font-size" curates stops', $e->getMessage());
+      $this->assertSame(1, substr_count($e->getMessage(), 'font-size'), 'one error for the block');
+    }
+    $this->declareDefaults(['font-size' => ['stops' => ['lg', 'xl']]]);
+    try {
+      $this->styleGuide->getConstraintDefaults(self::THEME);
+      $this->fail('A stops-only site block fails the build.');
+    }
+    catch (StyleGuideException $e) {
+      $this->assertStringContainsString('The constraint default on property "font-size" curates stops', $e->getMessage());
+      $this->assertStringNotContainsString('without a scale', $e->getMessage(), 'the missing scale is not a second error on a refused list');
+    }
   }
 
   /**
@@ -474,20 +536,6 @@ class StyleGuideConstraintDefaultsTest extends KernelTestBase {
     $this->declareDefaults(['font-size' => ['scale' => 'type']]);
     $this->expectException(StyleGuideException::class);
     $this->expectExceptionMessageMatches('/constraint on property "font-size" of the site\'s constraint_defaults references the token scale \'type\', which is not declared/');
-    $this->styleGuide->getConstraintDefaults(self::THEME);
-  }
-
-  /**
-   * Stops is only meaningful beside a scale, exactly like node constraints.
-   *
-   * The stops NAMES themselves stay unchecked here: they are skin data,
-   * answered at delivery (the client drops un-minted names), so naming a
-   * token the skin does not mint never fails the build.
-   */
-  public function testStopsWithoutScaleFails(): void {
-    $this->declareDefaults(['font-size' => ['stops' => ['lg', 'xl']]]);
-    $this->expectException(StyleGuideException::class);
-    $this->expectExceptionMessageMatches('/constraint on property "font-size" of the site\'s constraint_defaults declares stops without a scale/');
     $this->styleGuide->getConstraintDefaults(self::THEME);
   }
 

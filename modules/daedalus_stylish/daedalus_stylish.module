@@ -11,6 +11,9 @@ use Drupal\Core\Cache\Cache;
 use Drupal\Core\Config\Entity\ConfigEntityBundleBase;
 use Drupal\Core\Entity\Display\EntityViewDisplayInterface;
 use Drupal\Core\Render\Element;
+use Drupal\daedalus_blueprint\DesignSystem\ActiveDesignSystem;
+use Drupal\daedalus_blueprint\Host\HostInterface;
+use Drupal\daedalus_blueprint\DesignSystem\DesignSystemInterface;
 use Drupal\daedalus_blueprint\Materials\MaterialKind;
 use Drupal\daedalus_blueprint_api\Render\SelectableKey;
 use Drupal\Core\Entity\EntityInterface;
@@ -22,7 +25,8 @@ use Drupal\daedalus_stylish\AnimationStylesheet;
 use Drupal\daedalus_stylish\DefaultsStylesheet;
 use Drupal\daedalus_stylish\StyleMapValidator;
 use Drupal\daedalus_stylish\DaedalusStylishAnimationInterface;
-use Drupal\daedalus_stylish\DaedalusStylishFieldManager;
+use Drupal\daedalus_stylish\DaedalusStylishFontInterface;
+use Drupal\daedalus_stylish\FontStylesheet;
 use Drupal\daedalus_stylish\DaedalusStylishSkinInterface;
 use Drupal\daedalus_stylish\DaedalusStylishSwatchInterface;
 use Drupal\daedalus_stylish\DaedalusStylishVariantInterface;
@@ -34,44 +38,150 @@ use Drupal\daedalus_stylish\VariantStylesheet;
  */
 function daedalus_stylish_form_alter(&$form, FormStateInterface $form_state, $form_id): void {
   \Drupal::service('daedalus_stylish.form_alter.bundle_edit')->formAlter($form, $form_state);
+  \Drupal::service('daedalus_stylish.form_alter.design_system')->formAlter($form, $form_state);
 }
 
 /**
  * Implements hook_entity_view().
  *
- * Delivers a styled entity's CSS by embedding the style backend's output in
- * the entity's own build: it renders inside the entity's wrapper markup, so
- * it rides the entity's render cache (style edits invalidate via ordinary
- * entity tags — no new cache contexts) and travels with every subtree swap,
- * covering all mutation paths without CSS in the response contract.
+ * Delivers a rendered entity's CSS. Styling follows the host: the entity
+ * owns a style store of its own and renders a document some host owns
+ * (RenderStyles, over HostResolver::renderHost()): its own override, or its
+ * display's template when it has none. The two lanes deliver differently:
+ * - The INLINE lane (the entity's own map, layered over the template's
+ *   document-level entries re-keyed onto the entity's root) embeds the
+ *   style backend's output in the entity's own build: it renders inside
+ *   the entity's wrapper markup, so it rides the entity's render cache
+ *   (style edits invalidate via ordinary entity tags) and travels with
+ *   every subtree swap, covering all mutation paths without CSS in the
+ *   response contract.
+ * - The SHARED lane (the template's element entries) is identical for
+ *   every un-overridden entity of the bundle, so it rides the page head
+ *   once per display (an html_head attachment keyed by the display), and
+ *   the entity's render is tagged with the display's config so a template
+ *   style save rebuilds every page showing it.
  */
 function daedalus_stylish_entity_view(array &$build, EntityInterface $entity, EntityViewDisplayInterface $display, string $view_mode): void {
-  // Nested Layout Builder content render-caches as its own fragment
-  // (block_content view), but its live attribution is answered by the ROOT
-  // entity's style map — so the fragment must depend on the root: styling a
-  // nested element saves the root, which must rebuild the nested markup that
-  // carries (or now needs) the @scope root attributes.
-  if ($entity->getEntityTypeId() === 'block_content' && \Drupal::hasService('daedalus_layout.root_entity_registry')) {
-    $root = \Drupal::service('daedalus_layout.root_entity_registry')->getRoot($entity);
-    if ($root instanceof FieldableEntityInterface && $root->hasField(DaedalusStylishFieldManager::FIELD_NAME)) {
-      $build['#cache']['tags'] = Cache::mergeTags($build['#cache']['tags'] ?? [], $root->getCacheTags());
-      // Nested Layout Builder sections build inside this fragment, but their
-      // block/section/region keys — and therefore their variant references —
-      // live on the ROOT map, so the class stamps are resolved from it here.
-      $root_item = $root->get(DaedalusStylishFieldManager::FIELD_NAME)->first();
-      _daedalus_stylish_stamp_variant_classes($build, $root_item?->getStyleMap() ?? []);
-    }
-  }
-
-  if (!$entity instanceof FieldableEntityInterface || !$entity->hasField(DaedalusStylishFieldManager::FIELD_NAME)) {
+  /** @var \Drupal\daedalus_stylish\RenderStyles $render_styles */
+  $render_styles = \Drupal::service('daedalus_stylish.render_styles');
+  $hosts = $render_styles->hosts($entity, $display);
+  if ($hosts === NULL) {
     return;
   }
-  $item = $entity->get(DaedalusStylishFieldManager::FIELD_NAME)->first();
-  $map = $item?->getStyleMap() ?? [];
+  ['own' => $own, 'document' => $document] = $hosts;
+  ['inline' => $inline, 'shared' => $shared] = $render_styles->maps($hosts);
+
+  if ($entity->getEntityTypeId() === 'block_content' && $own->uuid() !== $entity->uuid()) {
+    // Nested Layout Builder content render-caches as its own fragment
+    // (block_content view), but its live attribution is answered by the
+    // ROOT's maps, so the fragment must depend on the root's hosts: styling
+    // a nested element saves the root (or its template), which must rebuild
+    // the nested markup that carries (or now needs) the @scope root
+    // attributes. Nested sections build inside this fragment, but their
+    // block/section keys, and therefore their variant references, live on
+    // the root's maps, so the class stamps are resolved from them here.
+    $build['#cache']['tags'] = Cache::mergeTags($build['#cache']['tags'] ?? [], $own->entity()->getCacheTags());
+    $build['#cache']['tags'] = Cache::mergeTags($build['#cache']['tags'], $document->entity()->getCacheTags());
+    _daedalus_stylish_stamp_variant_classes($build, $shared + $inline);
+    return;
+  }
+
+  if ($document !== $own) {
+    // A template render: every page of the bundle rebuilds when the
+    // template's styles change, whether or not it holds styles yet.
+    $build['#cache']['tags'] = Cache::mergeTags($build['#cache']['tags'] ?? [], $document->entity()->getCacheTags());
+  }
+  if ($shared !== []) {
+    $addition = \Drupal::service('daedalus_stylish.style_backend')->build($document, $shared);
+    if ($addition !== []) {
+      $build['#cache']['tags'] = Cache::mergeTags($build['#cache']['tags'] ?? [], $addition['#cache']['tags'] ?? []);
+      unset($addition['#cache'], $addition['#weight']);
+      $build['#attached']['html_head'][] = [
+        $addition,
+        'daedalus_stylish:' . $document->entityTypeId() . ':' . $document->id(),
+      ];
+    }
+    // The template's element keys stamp their variant classes on this
+    // render's sections and blocks exactly as an own map's would.
+    _daedalus_stylish_stamp_variant_classes($build, $shared);
+    _daedalus_stylish_attach_variant_delivery($build, $shared);
+  }
+  _daedalus_stylish_deliver($build, $own, $inline);
+}
+
+/**
+ * Implements hook_daedalus_blueprint_inner_render_alter().
+ *
+ * Styles follow the inner host. An inner document rendered inside an
+ * outer one (the render primitive, InnerRender) shows its own host's map:
+ * a linked blueprint's map delivers inside the linked placement, so the
+ * blueprint looks on the page as it looks on its own canvas, variants its
+ * owned ones included (the render IS the owner's document); the site
+ * frame's map delivers inside the frame's layout root, around every route
+ * of its theme, with or without a subject. The inner's root key rides the
+ * render's #attributes, which a linked placement moves onto its wrapper
+ * and a document root wears.
+ *
+ * An inner that IS the subject (a page's own slot section rendered by the
+ * door that declares the slot; a door whose default is the route's own
+ * blueprint) gets its variant classes and nothing else. The two halves of
+ * live variant delivery part ways here. The style tag is delivered once,
+ * by the subject's own view: its @scope CSS is keyed by data-selectable
+ * and reaches every copy of an element on the page, so a second tag would
+ * only repeat it. A variant class rides each rendered element, and the
+ * subject's own view never walks these renders: a fill claimed from the
+ * frame renders inside the frame's door, and a door showing the subject's
+ * own document renders in the frame, both outside the subject's build (a
+ * fill shown by a door in the page's own template IS walked, the page's
+ * view building it eagerly; the stamp here lands on it a second time,
+ * idempotently). Without the stamp the copy falls back to the composed
+ * container's default column while the scoped CSS still colours it.
+ */
+function daedalus_stylish_daedalus_blueprint_inner_render_alter(array &$build, HostInterface $inner, ?FieldableEntityInterface $subject): void {
+  if (!$inner->hasStyleStore()) {
+    return;
+  }
+  if ($inner->entity()->uuid() === $subject?->uuid()) {
+    _daedalus_stylish_stamp_variant_classes($build, $inner->styleMap());
+    return;
+  }
+  _daedalus_stylish_deliver($build, $inner, $inner->styleMap());
+}
+
+/**
+ * Implements hook_daedalus_layout_canvas_root_alter().
+ *
+ * A host with no entity view (a template host on core's manage-display
+ * route) renders through the layout_builder_plus element's own canvas
+ * root, which is the host's render root exactly as an entity's build is on
+ * its page: the host's own map delivers there, inline, so the tag rides
+ * every canvas swap. Core's manage-layout route of an entity is the same
+ * shape (the form, not the entity view, hosts the canvas).
+ */
+function daedalus_stylish_daedalus_layout_canvas_root_alter(array &$element, HostInterface $host): void {
+  _daedalus_stylish_deliver($element, $host, $host->hasStyleStore() ? $host->styleMap() : []);
+}
+
+/**
+ * Delivers a map inside a host's render root: the inline lane.
+ *
+ * The style tag, the variant class stamps, the root's own variant classes,
+ * the compiled variants library with its cache contexts, and the root's
+ * scope key (the data-selectable attribute the printed CSS scopes to).
+ *
+ * @param array $build
+ *   The render root's build (an entity view build, the canvas root).
+ * @param \Drupal\daedalus_blueprint\Host\HostInterface $host
+ *   The host whose root it is.
+ * @param array $map
+ *   The map to deliver, keyed for this root (entity:{host uuid} is its
+ *   document-level key).
+ */
+function _daedalus_stylish_deliver(array &$build, HostInterface $host, array $map): void {
   if ($map === []) {
     return;
   }
-  $addition = \Drupal::service('daedalus_stylish.style_backend')->build($entity, $map);
+  $addition = \Drupal::service('daedalus_stylish.style_backend')->build($host, $map);
   if ($addition !== []) {
     $build['daedalus_stylish_css'] = $addition;
   }
@@ -93,48 +203,61 @@ function daedalus_stylish_entity_view(array &$build, EntityInterface $entity, En
   // identical CSS, kept unconditional so the stamped markup itself never
   // varies by mode.
   _daedalus_stylish_stamp_variant_classes($build, $map);
-  // The entity root's classes ride the entity template's own root element
-  // in every mode (the walk above runs before the entity-root stamp below,
-  // so the root is classed directly here), one class per reference in
-  // axis-declaration order.
-  foreach (\Drupal::service('daedalus_stylish.style_map_validator')->orderedEntryRefs($map[SelectableKey::entity($entity->uuid())] ?? NULL) as $ref) {
+  // The root's classes ride the root element itself in every mode (the
+  // walk above runs before the root stamp below, so the root is classed
+  // directly here), one class per reference in axis-declaration order.
+  $root_key = SelectableKey::entity($host->uuid());
+  foreach (\Drupal::service('daedalus_stylish.style_map_validator')->orderedEntryRefs($map[$root_key] ?? NULL) as $ref) {
     _daedalus_stylish_add_class($build, VariantStylesheet::fragmentClass($ref['variant'], $ref['fragment']));
   }
-  if (_daedalus_stylish_map_has_variant_refs($map)) {
-    $build['#attached']['library'][] = 'daedalus_stylish/variants';
-    $build['#cache']['tags'][] = VariantStylesheet::CACHE_TAG;
-    // Edit mode resolves the references INLINE into the entity's style tag,
-    // key-rooted (the canvas never carries variant classes — see
-    // VariantStylesheet::editModeInlineCss()), so a render with refs varies
-    // by the effective mode. Added in every mode: a live render cached
-    // without the context would otherwise answer edit-mode requests too.
-    $build['#cache']['contexts'][] = 'daedalus_ui_mode';
-    if (\Drupal::hasService('workspaces.manager')) {
-      // Workspace previews inline the referenced variants' staged CSS into
-      // the entity's style tag (the preview edge), so the render varies by
-      // workspace. Added unconditionally when workspaces exists: a live
-      // render cached without the context would otherwise answer workspace
-      // requests too.
-      $build['#cache']['contexts'][] = 'workspace';
-    }
-  }
+  _daedalus_stylish_attach_variant_delivery($build, $map);
 
-  // The entity root's @scope root: the entity key rides the entity's own
-  // markup root (core merges a build's #attributes into the template's
+  // The root's @scope root: the host's key rides the root's own markup
+  // element (core merges a build's #attributes into the template's
   // {{ attributes }}; block_content has no entity template, so its stamp is
   // hoisted onto the wrapping block template's root by
-  // BlockViewBuilder::preRender()): bytes on an existing element, no
-  // wrapper. Stamped in EVERY mode: daedalus_ui stamps the same
-  // attribute and value on the same build for editors (for block_content
-  // only when it is the ROOT on its standalone editing surface; nested and
-  // region-placed blocks are attributed at their placement instead), so the
-  // writes are idempotent and live, browsing, and edit mode all target ONE
-  // identical root (no mode cache variance, no double-root, no edit/live
-  // divergence).
-  $entity_key = SelectableKey::entity($entity->uuid());
-  $has_entity_styles = array_filter(array_keys($map), fn (string $key) => $key === $entity_key || str_starts_with($key, $entity_key . '::')) !== [];
-  if ($has_entity_styles) {
-    $build['#attributes'][SelectableKey::ATTRIBUTE] = $entity_key;
+  // BlockViewBuilder::preRender(); the canvas root carries it already):
+  // bytes on an existing element, no wrapper. Stamped in EVERY mode:
+  // daedalus_ui stamps the same attribute and value on the same build for
+  // editors (for block_content only when it is the ROOT on its standalone
+  // editing surface; nested and region-placed blocks are attributed at
+  // their placement instead), so the writes are idempotent and live,
+  // browsing, and edit mode all target ONE identical root (no mode cache
+  // variance, no double-root, no edit/live divergence). A template's
+  // document-level entries reach this root re-keyed onto it (RenderStyles),
+  // which is why the stamp is the rendered root's own key in every case.
+  $has_root_styles = array_filter(array_keys($map), fn (string $key) => $key === $root_key || str_starts_with($key, $root_key . '::')) !== [];
+  if ($has_root_styles) {
+    $build['#attributes'][SelectableKey::ATTRIBUTE] = $root_key;
+  }
+}
+
+/**
+ * Attaches the compiled variants library and its cache contexts for a map.
+ *
+ * Only a map holding variant references needs the library; its render
+ * varies by mode (edit mode resolves the references inline, key-rooted)
+ * and by workspace (previews inline the staged variants).
+ */
+function _daedalus_stylish_attach_variant_delivery(array &$build, array $map): void {
+  if (!_daedalus_stylish_map_has_variant_refs($map)) {
+    return;
+  }
+  $build['#attached']['library'][] = 'daedalus_stylish/variants';
+  $build['#cache']['tags'][] = VariantStylesheet::CACHE_TAG;
+  // Edit mode resolves the references INLINE into the style tag,
+  // key-rooted (the canvas never carries variant classes — see
+  // VariantStylesheet::editModeInlineCss()), so a render with refs varies
+  // by the effective mode. Added in every mode: a live render cached
+  // without the context would otherwise answer edit-mode requests too.
+  $build['#cache']['contexts'][] = 'daedalus_ui_mode';
+  if (\Drupal::hasService('workspaces.manager')) {
+    // Workspace previews inline the referenced variants' staged CSS into
+    // the style tag (the preview edge), so the render varies by
+    // workspace. Added unconditionally when workspaces exists: a live
+    // render cached without the context would otherwise answer workspace
+    // requests too.
+    $build['#cache']['contexts'][] = 'workspace';
   }
 }
 
@@ -158,10 +281,10 @@ function daedalus_stylish_preprocess_field(&$variables): void {
   if (!$entity instanceof FieldableEntityInterface || empty($element['#field_name'])) {
     return;
   }
-  if (!$entity->hasField(DaedalusStylishFieldManager::FIELD_NAME)) {
-    return;
-  }
-  $map = $entity->get(DaedalusStylishFieldManager::FIELD_NAME)->first()?->getStyleMap() ?? [];
+  // A field key is the field's own entity's: its map, never a template's,
+  // read as a render reads it (RenderStyles: a never-edited page's first
+  // read seeds a disposable clone, never the request's entity).
+  $map = \Drupal::service('daedalus_stylish.render_styles')->ownMap($entity);
   $entry = $map[SelectableKey::field($entity->uuid(), (string) $element['#field_name'])] ?? NULL;
   foreach (\Drupal::service('daedalus_stylish.style_map_validator')->orderedEntryRefs($entry) as $ref) {
     $class = VariantStylesheet::fragmentClass($ref['variant'], $ref['fragment']);
@@ -253,6 +376,20 @@ function daedalus_stylish_library_info_build(): array {
       'weight' => -15,
     ];
   }
+  // The "daedalus_stylish/fonts" library delivers the compiled fonts
+  // stylesheet (the @font-face at-rules), same posture again.
+  $libraries['fonts'] = ['css' => ['theme' => []]];
+  $path = \Drupal::service('daedalus_stylish.font_stylesheet')->libraryPath();
+  if ($path !== NULL) {
+    $libraries['fonts']['css']['theme'][$path] = [
+      'preprocess' => FALSE,
+      'daedalus_stylish_layers_exempt' => TRUE,
+      // Before the swatch file (-20): the skin's font tokens and every
+      // variant may name a family, so the declarations lead the delivered
+      // document (see FontStylesheet).
+      'weight' => -25,
+    ];
+  }
   return $libraries;
 }
 
@@ -300,11 +437,13 @@ function daedalus_stylish_page_attachments(array &$attachments): void {
   $attachments['#attached']['library'][] = 'daedalus_stylish/defaults';
   $attachments['#attached']['library'][] = 'daedalus_stylish/swatches';
   $attachments['#attached']['library'][] = 'daedalus_stylish/animations';
+  $attachments['#attached']['library'][] = 'daedalus_stylish/fonts';
   $tags = [
     DefaultsStylesheet::CACHE_TAG,
     'config:daedalus_stylish.settings',
     SwatchStylesheet::CACHE_TAG,
     AnimationStylesheet::CACHE_TAG,
+    FontStylesheet::CACHE_TAG,
   ];
   if (\Drupal::hasService('workspaces.manager')) {
     $attachments['#cache']['contexts'] = Cache::mergeContexts($attachments['#cache']['contexts'] ?? [], ['workspace']);
@@ -387,10 +526,11 @@ function daedalus_stylish_preprocess_off_canvas_page_wrapper(&$variables): void 
 /**
  * The workspace preview services, keyed by id, valued by their tag attribute.
  *
- * Print order: the skin, the palette, the keyframes.
+ * Print order: the fonts, the skin, the palette, the keyframes.
  */
 function _daedalus_stylish_workspace_previews(): array {
   return [
+    'daedalus_stylish.font_stylesheet' => 'data-daedalus-stylish-font-preview',
     'daedalus_stylish.defaults_stylesheet' => 'data-daedalus-stylish-defaults-preview',
     'daedalus_stylish.swatch_stylesheet' => 'data-daedalus-stylish-swatch-preview',
     'daedalus_stylish.animation_stylesheet' => 'data-daedalus-stylish-animation-preview',
@@ -545,8 +685,10 @@ function daedalus_stylish_entity_insert(EntityInterface $entity): void {
   _daedalus_stylish_gate_check($entity);
   _daedalus_variant_change($entity);
   _daedalus_skin_change($entity);
+  _daedalus_design_system_change($entity);
   _daedalus_swatch_change($entity);
   _daedalus_animation_change($entity);
+  _daedalus_font_change($entity);
   _daedalus_stylish_media_change($entity);
   _daedalus_stylish_usage_track($entity);
   _daedalus_stylish_value_usage_track($entity);
@@ -559,8 +701,10 @@ function daedalus_stylish_entity_update(EntityInterface $entity): void {
   _daedalus_stylish_gate_check($entity);
   _daedalus_variant_change($entity);
   _daedalus_skin_change($entity);
+  _daedalus_design_system_change($entity);
   _daedalus_swatch_change($entity);
   _daedalus_animation_change($entity);
+  _daedalus_font_change($entity);
   _daedalus_stylish_media_change($entity);
   _daedalus_stylish_usage_track($entity);
   _daedalus_stylish_value_usage_track($entity);
@@ -574,13 +718,16 @@ function daedalus_stylish_entity_delete(EntityInterface $entity): void {
   _daedalus_skin_change($entity);
   _daedalus_swatch_change($entity);
   _daedalus_animation_change($entity);
+  _daedalus_font_change($entity, TRUE);
   _daedalus_stylish_media_change($entity);
-  if ($entity instanceof FieldableEntityInterface && $entity->hasField(DaedalusStylishFieldManager::FIELD_NAME)) {
+  if (_daedalus_stylish_style_host($entity) !== NULL) {
     \Drupal::service('daedalus_stylish.variant_usage')->untrack($entity);
   }
   if (_daedalus_stylish_value_usage_source($entity)) {
     \Drupal::service('daedalus_stylish.swatch_usage')->untrack($entity);
     \Drupal::service('daedalus_stylish.animation_usage')->untrack($entity);
+    \Drupal::service('daedalus_stylish.font_usage')->untrack($entity);
+    \Drupal::service('daedalus_stylish.token_usage')->untrack($entity);
   }
   // A deleted bundle takes its opt-out record with it, so a future bundle
   // reusing the machine name defaults ON like any other new bundle. Config
@@ -669,7 +816,7 @@ function _daedalus_stylish_declarations_changed(): void {
  * Activates every enabled module's shipped definitions at the end of
  * drupal_flush_all_caches(), so `drush cr`, the UI's clear-all, `drush
  * updb`, and site install all bring a pulled package live in one step
- * (the way a module's stencil file already goes live through discovery).
+ * (the way a module's blueprint file already goes live through discovery).
  * A deliberate departure from core's install-and-update-hooks-only
  * posture; see ShippedSync for the reasoning, the pending-entity-updates
  * guard, and the log. The defaults stylesheet recompiles behind the same
@@ -753,6 +900,55 @@ function _daedalus_skin_change(EntityInterface $entity): void {
 }
 
 /**
+ * Restyles the site when the active design system's own save changes its skin.
+ *
+ * The unit names its default_skin, and SkinManager wears it whenever the
+ * site's choice for the unit does not outrank it, so a save of the
+ * ACTIVE unit that changes which skin it wears is a skin change for
+ * delivery: what a choice does through DefaultsSettingsSubscriber and a
+ * switch through DesignSystemSwitchSubscriber, here for the third writer
+ * of the worn skin. Every writer of the unit reaches it (the design
+ * system form, config sync's entity import, and the copy gesture: a
+ * site's own unit takes its first copy as its default_skin, written
+ * AFTER the copy's save, where _daedalus_skin_change() saw a skin that
+ * was not yet worn, so this hook is what lands the copy's tokens on the
+ * delta and recompiles the file). The skin worn before is judged from
+ * the original unit through the same rule the read applies
+ * (SkinManager::resolveChoice()), so a standing choice reads as worn on
+ * both sides and the save touches nothing. A save that leaves the worn
+ * skin as it was (a description edit, the package ship stamping
+ * `package`) touches nothing; an inactive unit's save touches nothing.
+ * An entity hook rather than the config save event because the config
+ * entity storage resets its static cache only after the config save,
+ * so at that event SkinManager would still read the unit as it was.
+ */
+function _daedalus_design_system_change(EntityInterface $entity): void {
+  if (!$entity instanceof DesignSystemInterface) {
+    return;
+  }
+  if ($entity->id() !== \Drupal::service(ActiveDesignSystem::SERVICE_ID)->activeId()) {
+    return;
+  }
+  $skin_manager = \Drupal::service('daedalus_stylish.skin_manager');
+  $choice = $skin_manager->choice((string) $entity->id());
+  $original = $entity->getOriginal();
+  $before = $original instanceof DesignSystemInterface ? $skin_manager->resolveChoice($original, $choice) : NULL;
+  $after = $skin_manager->resolveChoice($entity, $choice);
+  if ($before === $after) {
+    return;
+  }
+  \Drupal::service('daedalus_blueprint.materials_roster_builder')->reset();
+  $provider = \Drupal::service('daedalus_stylish.materials_provider');
+  foreach (array_filter([$before, $after]) as $name) {
+    $skin = $skin_manager->loadByMachineName($name);
+    if ($skin !== NULL) {
+      \Drupal::service('daedalus_blueprint.materials_change_set')->touch(MaterialKind::Token, ...$provider->tokenIds($skin));
+    }
+  }
+  \Drupal::service('daedalus_stylish.defaults_stylesheet')->compile();
+}
+
+/**
  * Recompiles the swatch stylesheet when a swatch changes.
  *
  * The swatch counterpart of _daedalus_variant_change(): compilation always
@@ -808,6 +1004,39 @@ function _daedalus_animation_change(EntityInterface $entity): void {
 }
 
 /**
+ * Recompiles the fonts stylesheet and syncs file usage when a font changes.
+ *
+ * The font counterpart of _daedalus_animation_change(), same posture:
+ * compilation always reads the live default revisions, workspace PUBLISH
+ * is covered by FontWorkspaceSubscriber, and the repository reset comes
+ * first. The font's files are held through core's file usage, synced to
+ * the faces here (FontFiles::hold(), a diff against the pre-save faces)
+ * and released on delete, so a face's file is never garbage while the
+ * font lives.
+ *
+ * @param \Drupal\Core\Entity\EntityInterface $entity
+ *   The saved or deleted entity.
+ * @param bool $deleted
+ *   TRUE from hook_entity_delete().
+ */
+function _daedalus_font_change(EntityInterface $entity, bool $deleted = FALSE): void {
+  if ($entity instanceof DaedalusStylishFontInterface) {
+    $files = \Drupal::service('daedalus_stylish.font_files');
+    if ($deleted) {
+      $files->release($entity);
+    }
+    else {
+      $original = $entity->getOriginal();
+      $files->hold($entity, $original instanceof DaedalusStylishFontInterface ? $original : NULL);
+    }
+    \Drupal::service('daedalus_stylish.font_repository')->reset();
+    \Drupal::service('daedalus_blueprint.materials_roster_builder')->reset();
+    \Drupal::service('daedalus_blueprint.materials_change_set')->touch(MaterialKind::Font, $entity->getMachineName());
+    \Drupal::service('daedalus_stylish.font_stylesheet')->compile();
+  }
+}
+
+/**
  * Recompiles the shared variant stylesheet when referenced media changes.
  *
  * A media token in a compiled variant resolves to a concrete file URL baked
@@ -839,23 +1068,44 @@ function _daedalus_stylish_media_change(EntityInterface $entity): void {
 /**
  * Keeps the daedalus_variant_usage table in step with a saved map host.
  *
- * The map field's save chokepoint: every style map write (op spine,
- * blueprint write, programmatic save) ends in a host entity save, so this
- * hook pair is the ONE maintenance point of the usage table every usage
- * consumer reads (VariantUsage). Default revisions only, matching what a
- * push affects: the compiled stylesheet live pages load.
+ * The map's save chokepoint: every style map write (op spine, blueprint
+ * write, programmatic save) ends in a host save, a content entity's or a
+ * template display's, so this hook pair is the ONE maintenance point of
+ * the usage table every usage consumer reads (VariantUsage). Default
+ * revisions only, matching what a push affects: the compiled stylesheet
+ * live pages load.
  */
 function _daedalus_stylish_usage_track(EntityInterface $entity): void {
-  if ($entity instanceof FieldableEntityInterface && $entity->hasField(DaedalusStylishFieldManager::FIELD_NAME)) {
+  if (_daedalus_stylish_style_host($entity) !== NULL) {
     \Drupal::service('daedalus_stylish.variant_usage')->track($entity);
   }
 }
 
 /**
+ * The host of a saved or rendered entity when it keeps a style store.
+ *
+ * The one gate every save and render hook reads: a content entity whose
+ * bundle carries the auto-managed map field, a Layout Builder enabled
+ * display (its template's map is its third-party setting). NULL for
+ * everything else, so unrelated saves never instantiate the services
+ * behind the gate.
+ */
+function _daedalus_stylish_style_host(EntityInterface $entity): ?HostInterface {
+  /** @var \Drupal\daedalus_blueprint\Host\HostResolver $resolver */
+  $resolver = \Drupal::service('daedalus_blueprint.host_resolver');
+  if (!$resolver->hosts($entity)) {
+    return NULL;
+  }
+  $host = $resolver->fromEntity($entity);
+  return $host->hasStyleStore() ? $host : NULL;
+}
+
+/**
  * Keeps the value-level usage tables in step with a saved source entity.
  *
- * The variant chokepoint's hard twin, for both value-level references:
- * swatch references (var(--swatch-*)) and animation references (the
+ * The variant chokepoint's hard twin, for the three value-level
+ * references: swatch references (var(--swatch-*)), token references
+ * (var() of every other custom property) and animation references (the
  * motion-{name} keyframes ident in a motion property) live inside CSS
  * VALUES across the same THREE stores, so the one maintenance point
  * listens on three entity families — map hosts (every style map write
@@ -868,6 +1118,8 @@ function _daedalus_stylish_value_usage_track(EntityInterface $entity): void {
   if (_daedalus_stylish_value_usage_source($entity)) {
     \Drupal::service('daedalus_stylish.swatch_usage')->track($entity);
     \Drupal::service('daedalus_stylish.animation_usage')->track($entity);
+    \Drupal::service('daedalus_stylish.font_usage')->track($entity);
+    \Drupal::service('daedalus_stylish.token_usage')->track($entity);
   }
 }
 
@@ -876,12 +1128,12 @@ function _daedalus_stylish_value_usage_track(EntityInterface $entity): void {
  *
  * Mirrors the usage services' own dispatch (ValueUsageBase::sourceKind())
  * so unrelated saves never instantiate them; each service re-derives the
- * kind itself, so the reads cannot drift in effect, only in cost.
+ * kind itself through the same host rule, so the reads cannot drift.
  */
 function _daedalus_stylish_value_usage_source(EntityInterface $entity): bool {
   return $entity instanceof DaedalusStylishVariantInterface
     || $entity instanceof DaedalusStylishSkinInterface
-    || ($entity instanceof FieldableEntityInterface && $entity->hasField(DaedalusStylishFieldManager::FIELD_NAME));
+    || _daedalus_stylish_style_host($entity) !== NULL;
 }
 
 /**
@@ -948,5 +1200,12 @@ function daedalus_stylish_daedalus_blueprint_ai_bundle_list_alter(array &$bundle
   if (isset($bundle_list['daedalus_animation']['bundles']['daedalus_animation'])) {
     $bundle_list['daedalus_animation']['bundles']['daedalus_animation']['description'] =
       'An animation: a named @keyframes block (steps: offsets mapping CSS properties to values) worn from styles as animation-name: motion-{machine_name}. Published animations are live site-wide; the design system brief lists them under ANIMATIONS. Mint and edit one through the material gestures (save_material, update_material, remove_material with kind animation, page_edit ops; the brief\'s MINT line carries the keys), never through an entity write; never write @keyframes into a style.';
+  }
+  // Fonts likewise: the type material, ungated; the description routes
+  // the AI to the material gestures and the use (a font-family stack)
+  // before it improvises an @font-face block.
+  if (isset($bundle_list['daedalus_font']['bundles']['daedalus_font'])) {
+    $bundle_list['daedalus_font']['bundles']['daedalus_font']['description'] =
+      'A font: a self-hosted family (faces: weight, style and an uploaded font file per face) named from styles in a font-family stack as "{family}". Published fonts are live site-wide; the design system brief lists them under FONTS. Mint and edit one through the material gestures (save_material, update_material, remove_material with kind font, page_edit ops; the brief\'s MINT line carries the keys), never through an entity write; never write @font-face into a style.';
   }
 }

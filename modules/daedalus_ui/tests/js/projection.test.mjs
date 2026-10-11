@@ -78,6 +78,7 @@ const { registerPartBehavior } = await import('../../js/edit_mode/components/pag
 const { generatedRows, withGeneratedRows } = await import('../../js/edit_mode/components/page-elements/generated-rows.js');
 const { withInstanceRows, MARKUP_VIEW_ID } = await import('../../js/edit_mode/components/page-elements/markup-view.js');
 const { instanceRows } = await import('../../js/edit_mode/components/page-elements/instance-rows.js');
+const { boxGlyph } = await import('../../js/edit_mode/components/page-elements/row-glyphs.js');
 const { depictedRows, reachOver, seatAddress } = await import('../../js/edit_mode/components/page-elements/reach.js');
 const { default: store } = await import('../../js/edit_mode/store/store.js');
 const { blueprintBooted, blueprintReplaced } = await import('../../js/edit_mode/store/slices/blueprint-slice.js');
@@ -99,6 +100,10 @@ const root = { uuid: ROOT, label: 'Page' };
 const named = (name, type = name) => ({ name, type });
 const page = named('Page');
 const section = named('Section');
+// An open verdict: reach is gated on the actor (a row whose verdict allows
+// nothing is never reachable), so the index fixture's linked image, whose
+// part rows the seat cases read through reach, carries one.
+const OPEN = { content: true, configure: true, style: true, arrange: true, insert: true };
 
 const find = (node, predicate) => {
   if (predicate(node)) {
@@ -119,7 +124,7 @@ const withComponent = (component) => ({
   _element: page,
   // The lean node tree, as delivered: kind-discriminated nodes, ONE child
   // axis (a multi-region layout's slots are region nodes), no regions map.
-  _tree: [{
+  layout: [{
     kind: 'container',
     uuid: SECTION,
     layout_id: 'layout_onecol',
@@ -242,20 +247,25 @@ test('a nested section projects as a section row with its subtree', () => {
   assert.equal(nested.label, 'Inner');
   assert.equal(nested.elementType, 'Container');
   assert.equal(nested.customLabel, 'Inner');
-  assert.notEqual(find(nested, (node) => node.key === 'block:ffffffff-1111-2222-3333-444444444444'), null);
+  const block = find(nested, (node) => node.key === 'block:ffffffff-1111-2222-3333-444444444444');
+  assert.notEqual(block, null);
+  // A block row carries its stored configuration label too (the rename
+  // input's seed), beside the name the annotator minted.
+  assert.equal(block.customLabel, 'Inner text');
+  assert.equal(block.label, 'Text');
 });
 
 test('a container section\'s children list projects like a one-region section', () => {
-  // A container section carries `children: []` (ordered) in place of
-  // `regions: {}` — the serializer's container shape. No region rows in
-  // any view; the entries land directly under the section row, in order,
-  // nested containers recursing as sections.
+  // A container layout holds its element nodes directly, no region
+  // nodes (the tree's one-flow shape). No region rows in any view; the
+  // entries land directly under the section row, in order, nested
+  // containers recursing as sections.
   const INNER_BLOCK = 'ffffffff-1111-2222-3333-444444444444';
   const blueprint = {
     bundle: 'page',
     fields: {},
     _element: page,
-    _tree: [{
+    layout: [{
       kind: 'container',
       uuid: SECTION,
       layout_id: 'daedalus_stylish_container',
@@ -310,7 +320,7 @@ test('the root absorbs its edit target and folds nonexistent fields', () => {
       daedalus_stylish_styles: { map: {} },
       field_summary: 'A summary',
     },
-    _tree: [],
+    layout: [],
     _element: {
       // The root names by its entity label (re-minted with every delivered
       // mirror, so a title edit shows live) and types by its bundle label.
@@ -346,7 +356,7 @@ test('a declared nonexistent title never rows; the root row stays its face', () 
       title: 'Welcome to the Page Builder!',
       field_summary: 'A summary',
     },
-    _tree: [],
+    layout: [],
     _element: {
       ...named('Welcome to the Page Builder!', 'Page'),
       presentation: { mode: 'open', edit_target: 'title' },
@@ -379,6 +389,63 @@ test('a blueprint with no presentation facts projects everything open', () => {
   const block = find(tree, (node) => node.key === `block:${BLOCK}`);
   assert.equal(block.presentation, 'open');
   assert.notEqual(find(tree, (node) => node.key === `block:${BLOCK}:field_text_text`), null);
+});
+
+test('a root with no fields projects from its annotation alone, the sections its only children', () => {
+  // A template host's canvas: the display hosts the document, has no
+  // fields of its own, and its root annotation carries the two words
+  // and an open presentation with no edit target.
+  const blueprint = withComponent({
+    kind: 'block',
+    uuid: BLOCK,
+    block_type: 'text',
+    label: 'Text',
+    block_fields: { field_text_text: 'Hello' },
+    _element: named('Text'),
+  });
+  delete blueprint.fields;
+  blueprint._element = { ...named('node.page.default', 'Template'), presentation: { mode: 'open' } };
+
+  const tree = projectTree({ uuid: ROOT, label: 'node.page.default' }, blueprint);
+  assert.equal(tree.key, `entity:${ROOT}`);
+  assert.equal(tree.label, 'node.page.default');
+  assert.equal(tree.elementType, 'Template');
+  assert.equal(tree.editTarget, null);
+  assert.deepEqual(tree.children.map((node) => node.kind), ['container']);
+  assert.notEqual(find(tree, (node) => node.key === `block:${BLOCK}`), null);
+  // A fixture without a verdict stamp projects none: the gate then
+  // refuses, the closed default.
+  assert.equal(tree.can, null);
+  assert.equal(tree.children[0].can, null);
+  assert.equal(find(tree, (node) => node.key === `block:${BLOCK}`).can, null);
+});
+
+test('rows carry the verdict the annotator copied (`_element.can`), the root included', () => {
+  // A plain host's canvas: the page renders its display's template, so
+  // every container and block is refused everything, the root keeps its
+  // fields (content) and its own key (style).
+  const refused = { content: false, configure: false, style: false, arrange: false, insert: false };
+  const rootCan = { content: true, configure: false, style: true, arrange: false, insert: false };
+  const blueprint = withComponent({
+    kind: 'block',
+    uuid: BLOCK,
+    block_type: 'text',
+    label: 'Text',
+    block_fields: { field_text_text: 'Hello' },
+    _element: { ...named('Hello', 'Text'), can: refused, presentation: { mode: 'merged', label: 'Text', edit_target: 'field_text_text' } },
+  });
+  blueprint.layout[0]._element = { ...section, can: refused };
+  blueprint._element = { ...page, can: rootCan };
+  blueprint.fields = { title: 'Own title' };
+
+  const tree = projectTree(root, blueprint);
+  assert.deepEqual(tree.can, rootCan, 'the root row carries the host\'s verdict');
+  const container = find(tree, (node) => node.key === `container:${SECTION}`);
+  assert.deepEqual(container.can, refused);
+  const block = find(tree, (node) => node.key === `block:${BLOCK}`);
+  assert.deepEqual(block.can, refused, 'a merged row carries the verdict too');
+  // Field rows carry none of their own: the index lets them inherit.
+  assert.equal(find(tree, (node) => node.key === `field:${ROOT}:title`).can, undefined);
 });
 
 test('a rendered label gets its selection row; a hidden label does not', () => {
@@ -488,10 +555,10 @@ const indexComponents = () => [
     uuid: LINKED,
     block_type: 'image',
     label: 'Image',
-    label_display: '0',
     block_fields: { field_image: { target_id: 3, _label: 'Pic' }, field_link: { uri: 'https://example.com' } },
     _element: {
       ...named('Image'),
+      can: OPEN,
       markup: {
         tag: 'a',
         classes: ['image-block'],
@@ -506,7 +573,6 @@ const indexComponents = () => [
     uuid: UNLINKED,
     block_type: 'image',
     label: 'Image',
-    label_display: '0',
     block_fields: { field_image: { target_id: 4, _label: 'Other pic' } },
     _element: {
       ...named('Image'),
@@ -524,7 +590,6 @@ const indexComponents = () => [
     uuid: TEXT,
     block_type: 'text',
     label: 'Formatted text',
-    label_display: '0',
     block_fields: { field_text_text: '<ul><li>First</li></ul>' },
     _element: {
       ...named('<ul><li>First</li></ul>', 'Formatted text'),
@@ -550,17 +615,15 @@ const indexComponents = () => [
 ];
 
 /**
- * The delivered mirror carries BOTH section shapes: the lean `_tree` the
- * built-in projection reads and the classic layout_builder__layout the
- * composition still walks. One component list feeds both so the two
- * projections describe one page.
+ * The delivered mirror's lean `layout`: the one structure the built-in
+ * projection and the composition (the index's source) both read, so the
+ * two projections describe one page by construction.
  */
 const indexBlueprint = (components = indexComponents()) => ({
   bundle: 'page',
   fields: {},
   _element: page,
-  layout_builder__layout: [{ uuid: SECTION, layout_id: 'layout_onecol', _element: section, regions: { content: components } }],
-  _tree: [{
+  layout: [{
     kind: 'container',
     uuid: SECTION,
     layout_id: 'layout_onecol',
@@ -599,7 +662,6 @@ test('the element tier is exactly the built-in projection\'s key set, in both st
       uuid: BLOCK,
       block_type: 'test',
       label: 'Test',
-      label_display: '0',
       block_fields: { field_hieah: 'Secundum', field_stub: { _form_only: true, _label: 'Stub label' } },
       _element: { ...named('Secundum', 'Test'), presentation: { mode: 'merged', label: 'Hieah', edit_target: 'field_hieah' } },
     },
@@ -639,6 +701,63 @@ test('the element tier is exactly the built-in projection\'s key set, in both st
     assert.equal(index.get(key).source, 'element', key);
   }
   assert.equal(projectionRoot(), `entity:${ROOT}`);
+});
+
+test('the index carries the verdict on every address: elements their own, fields and parts their element\'s', () => {
+  const refused = { content: false, configure: false, style: false, arrange: false, insert: false };
+  const open = { content: true, configure: true, style: true, arrange: true, insert: true };
+  const rootCan = { content: true, configure: false, style: true, arrange: false, insert: false };
+  const components = indexComponents().map((component) => ({
+    ...component,
+    _element: { ...component._element, can: refused },
+  }));
+  const blueprint = indexBlueprint(components);
+  blueprint._element = { ...page, can: rootCan };
+  blueprint.fields = { title: 'Own title' };
+  blueprint.layout[0]._element = { ...section, can: refused };
+  bootIndex(blueprint);
+  const index = projectionIndex();
+  assert.deepEqual(index.get(`entity:${ROOT}`).can, rootCan);
+  assert.deepEqual(index.get(`container:${SECTION}`).can, refused);
+  assert.deepEqual(index.get(`block:${LINKED}`).can, refused);
+  // A field row inherits its element's verdict: the root's for a root
+  // field, the block's for an inline block field.
+  assert.deepEqual(index.get(`field:${ROOT}:title`).can, rootCan);
+  assert.deepEqual(index.get(`block:${LINKED}:field_link`).can, refused);
+  // A placed part answers its element's verdict.
+  assert.deepEqual(index.get(selectorAddress(`block:${LINKED}`, '.image-block-image')).can, refused);
+  // A fixture stamped nowhere: every entry answers null, which the gate
+  // reads as refused.
+  bootIndex(indexBlueprint(indexComponents().map((component) => {
+    const { can, ...unstamped } = component._element;
+    return { ...component, _element: unstamped };
+  })));
+  for (const [key, entry] of projectionIndex()) {
+    assert.equal(entry.can, null, key);
+  }
+  // The host's own document, every verdict open: every entry open.
+  const own = indexBlueprint(indexComponents().map((component) => ({
+    ...component,
+    _element: { ...component._element, can: open },
+  })));
+  own._element = { ...page, can: open };
+  own.layout[0]._element = { ...section, can: open };
+  bootIndex(own);
+  for (const [key, entry] of projectionIndex()) {
+    assert.deepEqual(entry.can, open, key);
+  }
+});
+
+test('the index projects a root with no fields: the root entry, then the sections', () => {
+  const blueprint = indexBlueprint();
+  delete blueprint.fields;
+  blueprint._element = { ...named('node.page.default', 'Template'), presentation: { mode: 'open' } };
+  bootIndex(blueprint);
+  const index = projectionIndex();
+  assert.equal(projectionRoot(), `entity:${ROOT}`);
+  assert.equal(index.get(`entity:${ROOT}`).elementType, 'Template');
+  assert.deepEqual(index.get(`entity:${ROOT}`).children, [`container:${SECTION}`]);
+  assert.equal([...index.keys()].some((key) => key.startsWith(`field:${ROOT}:`)), false);
 });
 
 test('the index folds a field block placement exactly as the built-in projection does', () => {
@@ -682,6 +801,7 @@ test('a linked image has its Raster row under the block; an unlinked one has non
     tier: 'part',
     source: MARKUP_VIEW_ID,
     owner: `block:${LINKED}`,
+    can: OPEN,
     tag: 'img',
   });
   // The block's rows lead with the part (shells first, the composition's
@@ -729,7 +849,9 @@ test('list carriers nest: the li under the ul under its owner', () => {
   assert.equal(index.get(ul).owner, owner);
   assert.deepEqual(index.get(ul).rows, [li]);
   assert.deepEqual(index.get(ul).children, []);
-  assert.equal(index.get(li).label, 'List item');
+  // A carrier is named by what it says (its excerpt); a list wrapper by
+  // its word, since its text is only its items' (instance-rows.js).
+  assert.equal(index.get(li).label, 'First');
   assert.equal(index.get(li).tag, 'li');
   // Carriers are content: their source is 'instance', never the markup
   // view's, so reach depicts them whatever the Show menu says.
@@ -761,7 +883,7 @@ test('the index memoizes on the mirror reference and re-derives on replacement',
     parts: {},
     slots: [],
   };
-  store.dispatch(blueprintReplaced(indexBlueprint(components)));
+  store.dispatch(blueprintReplaced({ blueprint: indexBlueprint(components) }));
   const replaced = projectionIndex();
   assert.notEqual(replaced, index);
   assert.equal(replaced.has(selectorAddress(`block:${LINKED}`, '.image-block-image')), false);
@@ -811,6 +933,7 @@ test('a delivered box is a part-tier row under its element, addressed as the box
     tier: 'part',
     source: MARKUP_VIEW_ID,
     owner,
+    can: OPEN,
     tag: null,
   });
   assert.equal(index.get(after).label, 'After');
@@ -850,8 +973,8 @@ test('the tree composes the box rows under every tree and draws them only while 
   const tree = withGeneratedRows(withInstanceRows(projectTree(root, blueprint), instanceRows), generatedRows);
   const block = find(tree, (node) => node.key === owner);
   assert.deepEqual(block.children.slice(-2), [
-    { pseudo: true, id: '&::before', parentKey: owner, label: 'Before', source: MARKUP_VIEW_ID, children: [] },
-    { pseudo: true, id: '&::after', parentKey: owner, label: 'After', source: MARKUP_VIEW_ID, children: [] },
+    { pseudo: true, id: '&::before', parentKey: owner, label: 'Before', icon: boxGlyph(), source: MARKUP_VIEW_ID, children: [] },
+    { pseudo: true, id: '&::after', parentKey: owner, label: 'After', icon: boxGlyph(), source: MARKUP_VIEW_ID, children: [] },
   ]);
   assert.equal(block.children.length, 4);
   assert.equal(find(tree, (node) => node.pseudo && node.parentKey === `block:${UNLINKED}`), null);
@@ -940,7 +1063,7 @@ test('the box answer is memoized on the mirror, the materials and the behavior',
   assert.equal(afterDelta.has(before), true);
   assert.equal(asks(), 2);
   // A mirror replacement re-derives.
-  store.dispatch(blueprintReplaced(indexBlueprint()));
+  store.dispatch(blueprintReplaced({ blueprint: indexBlueprint() }));
   assert.equal(projectionIndex().has(before), true);
   assert.equal(asks(), 3);
   // A behavior registered after the index was built replaces the index:
@@ -975,4 +1098,151 @@ test('a behavior without generated() and an absorbed row list no boxes', () => {
   );
   assert.deepEqual(asked, ['entity:x']);
   assert.deepEqual(tree.children.map((node) => node.pseudo ? node.parentKey : node.key), ['block:absorbed', null, 'entity:x']);
+});
+
+// ---- A locked page's slot fills (slot-fills.js). --------------------------
+
+const DOOR = '11111111-5107-4000-8000-444444444444';
+const FILL = '22222222-5107-4000-8000-444444444444';
+const FILL_BLOCK = '33333333-5107-4000-8000-444444444444';
+const STRAY_FILL = '44444444-5107-4000-8000-444444444444';
+const door = (slot) => ({
+  kind: 'block',
+  uuid: DOOR,
+  plugin_id: `daedalus_slot:${slot}`,
+  label: 'Hero',
+  slot,
+  _element: named('Hero', 'Slot'),
+});
+const fill = (uuid, slot) => ({
+  kind: 'container',
+  uuid,
+  slot,
+  layout_id: 'layout_onecol',
+  _element: section,
+  children: [{
+    kind: 'region',
+    region: 'content',
+    children: [{ kind: 'block', uuid: FILL_BLOCK, block_type: 'text', label: 'Fill text', block_fields: {}, _element: named('Text') }],
+  }],
+});
+/**
+ * The lean tree of a locked page, as delivered: the template's section
+ * holding the door (nested one level down, where a template may place
+ * it), then the page's own fill tagged with the slot.
+ */
+const lockedBlueprint = (slot, fills) => ({
+  bundle: 'locked',
+  fields: {},
+  _element: page,
+  layout: [{
+    kind: 'container',
+    uuid: SECTION,
+    layout_id: 'layout_onecol',
+    _element: section,
+    children: [{ kind: 'region', region: 'content', children: [{
+      kind: 'container',
+      uuid: NESTED_SECTION,
+      layout_id: 'layout_onecol',
+      _element: named('Section', 'Container'),
+      children: [{ kind: 'region', region: 'content', children: [door(slot)] }],
+    }] }],
+  }, ...fills],
+});
+
+test('a slot fill projects under its door at any depth, leaving the root list', () => {
+  const tree = projectTree(root, lockedBlueprint('hero', [fill(FILL, 'hero')]));
+  // The root's only section is the template's: the fill left the list.
+  assert.deepEqual(tree.children.map((node) => node.key), [`container:${SECTION}`]);
+  const doorRow = find(tree, (node) => node.key === `block:${DOOR}`);
+  assert.equal(doorRow.kind, 'block');
+  // The fill is the door's child: a container row, its key unchanged, its
+  // subtree projected as any section's.
+  assert.deepEqual(doorRow.children.map((node) => [node.kind, node.key]), [['container', `container:${FILL}`]]);
+  assert.equal(find(doorRow, (node) => node.key === `block:${FILL_BLOCK}`).label, 'Text');
+});
+
+test('an empty door projects as a leaf; a fill no door declares stays at the root', () => {
+  const tree = projectTree(root, lockedBlueprint('hero', [fill(STRAY_FILL, 'aside')]));
+  assert.deepEqual(find(tree, (node) => node.key === `block:${DOOR}`).children, []);
+  assert.deepEqual(tree.children.map((node) => node.key), [`container:${SECTION}`, `container:${STRAY_FILL}`]);
+});
+
+// ---- The shown document under a door (shown-rows.js). ----------------------
+
+/**
+ * The spine's showing on a door (`_element.showing`, the annotator copying
+ * VerdictStamper::showing() with the portal's url resolved).
+ */
+const showing = (shows) => ({
+  shows,
+  document: shows === 'default' ? { entity_type: 'blueprint', id: '1', label: 'Header' } : null,
+  blueprint: shows === 'default' ? 'header' : null,
+  portal: shows === 'default' ? { entity_type: 'blueprint', entity_id: '1', label: 'Header', url: '/blueprint/1' } : null,
+  claimable: shows === 'default',
+});
+const showingDoor = (slot, shows) => ({
+  ...door(slot),
+  _element: { ...named('Header slot', 'Slot'), showing: showing(shows) },
+});
+const withDoor = (doorNode, fills = []) => ({
+  ...lockedBlueprint('hero', fills),
+  layout: [{
+    kind: 'container',
+    uuid: SECTION,
+    layout_id: 'layout_onecol',
+    _element: section,
+    children: [{ kind: 'region', region: 'content', children: [doorNode] }],
+  }, ...fills],
+});
+
+test('a door showing its default projects one shown-document row under it, after the fills', () => {
+  const tree = projectTree(root, withDoor(showingDoor('hero', 'default')));
+  const doorRow = find(tree, (node) => node.key === `block:${DOOR}`);
+  // The door row reads the words the annotator minted for a slot.
+  assert.equal(doorRow.label, 'Header slot');
+  assert.equal(doorRow.elementType, 'Slot');
+  // One child: the shown document, a row of its own kind (no key, so no
+  // selection and no address), named by the blueprint, typed by reference.
+  assert.equal(doorRow.children.length, 1);
+  const [shown] = doorRow.children;
+  assert.equal(shown.shown, true);
+  assert.equal(shown.key, undefined);
+  assert.equal(shown.label, 'Header');
+  assert.equal(shown.elementType, 'Blueprint, by reference');
+  assert.equal(shown.parentKey, `block:${DOOR}`);
+  assert.equal(shown.showing.shows, 'default');
+  assert.deepEqual(shown.children, []);
+  // The composition order: the fills first, the shown row after them (the
+  // spine shows FILL on a filled door, so the two never meet in one
+  // delivery; the rule is pinned on a synthetic node carrying both).
+  const both = projectTree(root, withDoor(showingDoor('hero', 'default'), [fill(FILL, 'hero')]));
+  const bothDoor = find(both, (node) => node.key === `block:${DOOR}`);
+  assert.deepEqual(bothDoor.children.map((node) => node.shown ? 'shown' : node.key), [`container:${FILL}`, 'shown']);
+});
+
+test('a door showing a fill, the route or nothing grows no shown row', () => {
+  for (const shows of ['fill', 'route', 'nothing']) {
+    const tree = projectTree(root, withDoor(showingDoor('hero', shows)));
+    assert.deepEqual(find(tree, (node) => node.key === `block:${DOOR}`).children, [], shows);
+  }
+  // A filled door: its fill rows and nothing else.
+  const filled = projectTree(root, withDoor(showingDoor('hero', 'fill'), [fill(FILL, 'hero')]));
+  assert.deepEqual(find(filled, (node) => node.key === `block:${DOOR}`).children.map((node) => node.key), [`container:${FILL}`]);
+});
+
+test('the shown row is no address: the index and reach never see it', () => {
+  const index = bootIndex(withDoor(showingDoor('hero', 'default')));
+  assert.ok(index.has(`block:${DOOR}`), 'the door is an address');
+  // The door's rows and children list nothing for the shown document (the
+  // suite's registered part behavior delivers a generated box under every
+  // key, so the door's rows are part addresses alone), and no entry names
+  // it under any spelling.
+  assert.deepEqual(index.get(`block:${DOOR}`).children, []);
+  assert.ok(index.get(`block:${DOOR}`).rows.every((address) => address.includes('::')), 'part rows only');
+  for (const [address, entry] of index) {
+    assert.notEqual(entry.label, 'Header', `${address} names the shown document`);
+    assert.ok(!address.startsWith('shown:'), address);
+  }
+  assert.equal(reachOver(index, {})(`shown:block:${DOOR}`), false);
 });

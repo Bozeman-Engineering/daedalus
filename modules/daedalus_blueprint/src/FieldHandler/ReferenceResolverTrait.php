@@ -106,6 +106,61 @@ trait ReferenceResolverTrait {
   }
 
   /**
+   * Resolves a reference by uuid.
+   *
+   * The spelling a template ships with: a display's value blocks name
+   * their references by uuid, since config export carries no serial ids
+   * and default content resolves uuids across sites.
+   *
+   * @param string $uuid
+   *   The target entity's uuid.
+   * @param string $target_type
+   *   The target entity type.
+   * @param array|null $target_bundles
+   *   Allowed bundles, or NULL for any.
+   * @param string $path
+   *   The error path.
+   *
+   * @return array|\Drupal\daedalus_blueprint\Result\BlueprintError
+   *   The resolved ['target_id' => N] or an error.
+   */
+  protected function resolveByUuid(
+    string $uuid,
+    string $target_type,
+    ?array $target_bundles,
+    string $path,
+  ): array|BlueprintError {
+    $entities = $this->entityTypeManager->getStorage($target_type)->loadByProperties(['uuid' => $uuid]);
+    $entity = reset($entities);
+    if ($entity === FALSE) {
+      $this->logger->notice('Reference not found: @type uuid @uuid at @path', [
+        '@type' => $target_type,
+        '@uuid' => $uuid,
+        '@path' => $path,
+      ]);
+      return new BlueprintError(
+        path: $path,
+        code: 'REFERENCE_NOT_FOUND',
+        message: "No {$target_type} entity found with uuid {$uuid}.",
+        hint: 'Verify the entity exists.',
+      );
+    }
+
+    if ($target_bundles && !in_array($entity->bundle(), $target_bundles, TRUE)) {
+      return new BlueprintError(
+        path: $path,
+        code: 'REFERENCE_NOT_FOUND',
+        message: "Entity {$target_type} {$uuid} has bundle '{$entity->bundle()}' which is not allowed.",
+        context: ['allowed_bundles' => $target_bundles],
+        hint: 'The referenced entity must be one of the allowed bundles.',
+      );
+    }
+
+    $id = $entity->id();
+    return ['target_id' => is_numeric($id) ? (int) $id : $id];
+  }
+
+  /**
    * Resolves a reference by label.
    *
    * Queries for an exact match. On multiple matches, returns

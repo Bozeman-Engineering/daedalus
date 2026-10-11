@@ -1,9 +1,0 @@
-name: Daedalus Blueprint Stencil File Owned Variant Test
-type: module
-description: Ships a variant owned by a module-shipped FILE stencil (the cross-site package shape).
-package: Testing
-core_version_requirement: ^10.3 || ^11
-dependencies:
-  - daedalus:daedalus_blueprint_stencil
-  - daedalus:daedalus_blueprint_stencil_test
-  - daedalus:daedalus_stylish

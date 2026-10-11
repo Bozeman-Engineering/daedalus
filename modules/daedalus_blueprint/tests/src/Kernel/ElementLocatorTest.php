@@ -95,7 +95,7 @@ class ElementLocatorTest extends BlueprintKernelTestBase {
     ]);
     $entity->save();
 
-    $context = $this->locator->locate($entity, $component_uuid);
+    $context = $this->locator->locate($this->host($entity), $component_uuid);
 
     $this->assertNotNull($context);
     $this->assertTrue($context->isLbComponent());
@@ -105,7 +105,7 @@ class ElementLocatorTest extends BlueprintKernelTestBase {
     $this->assertSame($entity->id(), $context->parentEntity->id());
     $this->assertNotNull($context->section);
     $this->assertEquals(0, $context->sectionIndex);
-    $this->assertEquals('layout_builder__layout[0].components[0]', $context->path);
+    $this->assertEquals('layout[0].components[0]', $context->path);
   }
 
   /**
@@ -126,7 +126,7 @@ class ElementLocatorTest extends BlueprintKernelTestBase {
     // Reload to get fresh references.
     $entity = $this->entityTypeManager->getStorage('entity_test')->load($entity->id());
 
-    $context = $this->locator->locate($entity, $child->uuid());
+    $context = $this->locator->locate($this->host($entity), $child->uuid());
 
     $this->assertNotNull($context);
     $this->assertTrue($context->isParagraph());
@@ -163,7 +163,7 @@ class ElementLocatorTest extends BlueprintKernelTestBase {
 
     $entity = $this->entityTypeManager->getStorage('entity_test')->load($entity->id());
 
-    $context = $this->locator->locate($entity, $grandchild->uuid());
+    $context = $this->locator->locate($this->host($entity), $grandchild->uuid());
 
     $this->assertNotNull($context);
     $this->assertTrue($context->isParagraph());
@@ -189,7 +189,7 @@ class ElementLocatorTest extends BlueprintKernelTestBase {
 
     $entity = $this->entityTypeManager->getStorage('entity_test')->load($entity->id());
 
-    $context = $this->locator->locate($entity, $second->uuid());
+    $context = $this->locator->locate($this->host($entity), $second->uuid());
 
     $this->assertNotNull($context);
     $this->assertEquals('fields.field_paragraphs[1]', $context->path);
@@ -202,7 +202,7 @@ class ElementLocatorTest extends BlueprintKernelTestBase {
   public function testLocateReturnsNullForNonexistentUuid(): void {
     $entity = $this->createTestEntity();
 
-    $context = $this->locator->locate($entity, 'c68c9561-d36d-b4fc-77ac-50039f354800');
+    $context = $this->locator->locate($this->host($entity), 'c68c9561-d36d-b4fc-77ac-50039f354800');
 
     $this->assertNull($context);
   }
@@ -236,7 +236,7 @@ class ElementLocatorTest extends BlueprintKernelTestBase {
 
     $entity = $this->entityTypeManager->getStorage('entity_test')->load($entity->id());
 
-    $context = $this->locator->locate($entity, $level5->uuid());
+    $context = $this->locator->locate($this->host($entity), $level5->uuid());
 
     $this->assertNotNull($context);
     $this->assertEquals(
@@ -302,11 +302,11 @@ class ElementLocatorTest extends BlueprintKernelTestBase {
     $entity->save();
 
     // Without daedalus_layout, nested layout components are not reachable.
-    $context = $this->locator->locate($entity, $nested_comp_uuid);
+    $context = $this->locator->locate($this->host($entity), $nested_comp_uuid);
     $this->assertNull($context);
 
     // The parent (root-level) component should still be found.
-    $context = $this->locator->locate($entity, $parent_comp_uuid);
+    $context = $this->locator->locate($this->host($entity), $parent_comp_uuid);
     $this->assertNotNull($context);
     $this->assertTrue($context->isLbComponent());
     $this->assertEquals($parent_comp_uuid, $context->target->getUuid());
@@ -353,11 +353,11 @@ class ElementLocatorTest extends BlueprintKernelTestBase {
     ]);
     $entity->save();
 
-    $context = $this->locator->locate($entity, $target_uuid);
+    $context = $this->locator->locate($this->host($entity), $target_uuid);
 
     $this->assertNotNull($context);
     $this->assertEquals(1, $context->sectionIndex);
-    $this->assertEquals('layout_builder__layout[1].components[0]', $context->path);
+    $this->assertEquals('layout[1].components[0]', $context->path);
   }
 
   /**
@@ -366,7 +366,7 @@ class ElementLocatorTest extends BlueprintKernelTestBase {
   public function testLocateOnPlainEntityReturnsNull(): void {
     $entity = $this->createTestEntity(['field_subtitle' => 'Hello']);
 
-    $context = $this->locator->locate($entity, 'any-uuid');
+    $context = $this->locator->locate($this->host($entity), 'any-uuid');
 
     $this->assertNull($context);
   }

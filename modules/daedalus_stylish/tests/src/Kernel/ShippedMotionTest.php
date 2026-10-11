@@ -105,14 +105,22 @@ class ShippedMotionTest extends KernelTestBase {
     parent::setUp();
     $this->installEntitySchema('user');
     $this->installEntitySchema('daedalus_animation');
+    $this->installEntitySchema('daedalus_font');
     $this->installEntitySchema('daedalus_variant');
     // The materials roster's daedalus_stylish provider reads all four storages on
     // every build, and every compile and validation builds it.
     $this->installEntitySchema('daedalus_swatch');
     $this->installEntitySchema('daedalus_skin');
-    // A reference-carrying variant save mirrors its motion-* names into the
-    // usage table (the delete-in-use grade reads it).
-    $this->installSchema('daedalus_stylish', ['daedalus_variant_usage', 'daedalus_animation_usage']);
+    // A reference-carrying variant save mirrors its references into the
+    // usage tables (the delete-in-use grade reads them): the entrances'
+    // motion-* names, and the container family's var() token references.
+    $this->installSchema('daedalus_stylish', [
+      'daedalus_variant_usage',
+      'daedalus_swatch_usage',
+      'daedalus_animation_usage',
+      'daedalus_font_usage',
+      'daedalus_token_usage',
+    ]);
     $this->installConfig(['daedalus_stylish']);
     // The importers switch to an administrative account (shipped materials
     // are code, not user input); give the switcher one to find.

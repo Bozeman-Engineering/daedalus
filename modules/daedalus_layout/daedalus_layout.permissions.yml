@@ -1,4 +1,5 @@
 administer daedalus layout configuration:
   title: 'Administer Daedalus Layout configuration'
-promote daedalus layout blocks:
-  title: 'Promote blocks'
+
+permission_callbacks:
+  - Drupal\daedalus_layout\LockedBundlePermissions::permissions

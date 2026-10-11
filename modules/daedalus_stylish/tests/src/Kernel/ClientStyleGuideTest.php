@@ -76,6 +76,7 @@ class ClientStyleGuideTest extends KernelTestBase {
     $this->installEntitySchema('block_content');
     $this->installEntitySchema('daedalus_swatch');
     $this->installEntitySchema('daedalus_animation');
+    $this->installEntitySchema('daedalus_font');
     // The materials roster's daedalus_stylish provider reads all four storages on
     // every build, and every compile and validation builds it.
     $this->installEntitySchema('daedalus_variant');
@@ -85,7 +86,13 @@ class ClientStyleGuideTest extends KernelTestBase {
     // definitions (ShippedSync::onDesignSystemActivated()): the importers
     // mirror motion-* and --swatch-* references into the usage tables and
     // switch to an administrative account, so the fixture carries both.
-    $this->installSchema('daedalus_stylish', ['daedalus_variant_usage', 'daedalus_swatch_usage', 'daedalus_animation_usage']);
+    $this->installSchema('daedalus_stylish', [
+      'daedalus_variant_usage',
+      'daedalus_swatch_usage',
+      'daedalus_animation_usage',
+      'daedalus_token_usage',
+      'daedalus_font_usage',
+    ]);
     $this->setUpCurrentUser([], [], TRUE);
     $this->container->get('theme_installer')->install([self::THEME]);
     $this->clientStyleGuide = $this->container->get('daedalus_stylish.client_style_guide');
@@ -279,7 +286,10 @@ class ClientStyleGuideTest extends KernelTestBase {
     // curated grant resolves in the typed groups catalog; a group id
     // outside it is by construction the generated wide tier (the
     // client's csstree lane), its granted names riding like any other.
-    $encoded = json_encode($payload);
+    // The law projection is outside the invariant: it names the roster's
+    // value spaces `constraints` on purpose (the law's own word), and
+    // testLaw() pins them equal to the served nodes'.
+    $encoded = json_encode(array_diff_key($payload, ['law' => TRUE]));
     $this->assertStringNotContainsString('"property_groups"', $encoded);
     $this->assertStringNotContainsString('"variant_axes"', $encoded);
     $this->assertStringNotContainsString('"sets"', $encoded);
@@ -730,8 +740,10 @@ class ClientStyleGuideTest extends KernelTestBase {
     }
 
     // The served-shape invariants hold with boxes in the payload: the
-    // authored wire is gone everywhere, boxes included.
-    $encoded = json_encode($payload);
+    // authored wire is gone everywhere, boxes included (the law
+    // projection aside, whose `constraints` are the roster's value
+    // spaces under the law's word; testPayload() says why).
+    $encoded = json_encode(array_diff_key($payload, ['law' => TRUE]));
     $this->assertStringNotContainsString('"property_groups"', $encoded);
     $this->assertStringNotContainsString('"constraints"', $encoded);
     foreach (['kinds', 'blockTypes', 'blockPlugins', 'layouts', 'instances', 'base'] as $dimension) {
@@ -777,27 +789,6 @@ class ClientStyleGuideTest extends KernelTestBase {
   }
 
   /**
-   * The active published skin's edit URL rides the payload, else NULL.
-   *
-   * The inspector's "Edit skin…" doorway for a skin-supplied value: served
-   * under the same gate as skinDefaults (active AND published), so the
-   * doorway exists exactly when a skin value can show.
-   */
-  public function testSkinEditUrl(): void {
-    $this->assertNull($this->clientStyleGuide->build(self::THEME)['skinEditUrl'], 'No active skin: no edit URL.');
-
-    $skin = DaedalusStylishSkin::create(['label' => 'Aurora', 'machine_name' => 'aurora']);
-    $skin->save();
-    $this->assertNull($this->clientStyleGuide->build(self::THEME)['skinEditUrl'], 'A saved but inactive skin: no edit URL.');
-
-    $this->activateSkin($skin);
-    $this->assertSame('/admin/appearance/skins/' . $skin->id(), $this->clientStyleGuide->build(self::THEME)['skinEditUrl'], 'The active published skin serves its edit-form URL.');
-
-    $skin->setUnpublished()->save();
-    $this->assertNull($this->clientStyleGuide->build(self::THEME)['skinEditUrl'], 'An unpublished active skin serves no edit URL, matching the skinDefaults gate.');
-  }
-
-  /**
    * The declared defaults tier rides the payload always, beside the skin's.
    *
    * A declaration's own defaults are code, so they serve with no skin at
@@ -835,7 +826,7 @@ class ClientStyleGuideTest extends KernelTestBase {
     // An active published skin adds its own tier and leaves the declared
     // one exactly as it was: two keys, two suppliers.
     $skin = DaedalusStylishSkin::create(['label' => 'Aurora', 'machine_name' => 'aurora', 'status' => TRUE]);
-    $skin->setDefaults(['block_type:image' => ['' => ['default' => ['display' => 'inline-block']]]])->save();
+    $skin->setPackageDefaults(['block_type:image' => ['' => ['default' => ['display' => 'inline-block']]]])->save();
     $this->activateSkin($skin);
     $payload = $this->clientStyleGuide->build(self::THEME);
     $this->assertSame($expected, $payload['declaredDefaults'], 'With a skin: the declared tier is unchanged.');
@@ -889,11 +880,11 @@ class ClientStyleGuideTest extends KernelTestBase {
     // itself: the gap block is row-gap's and column-gap's too.
     $this->container->get('state')->set('daedalus_stylish_control_test.site', [
       'token_scales' => ['space' => ['label' => 'Space', 'shape' => 'dimension']],
-      'constraint_defaults' => ['gap' => ['scale' => 'space', 'stops' => ['2', '4']]],
+      'constraint_defaults' => ['gap' => ['scale' => 'space', 'allowed' => ['0', 'auto']]],
     ]);
     $this->container->get('daedalus_stylish.style_guide')->resetCache();
     $payload = $this->clientStyleGuide->build(self::THEME);
-    $gap = ['scale' => 'space', 'stops' => ['2', '4']];
+    $gap = ['scale' => 'space', 'allowed' => ['0', 'auto']];
     $this->assertSame(['gap' => $gap, 'row-gap' => $gap, 'column-gap' => $gap], $payload['constraintDefaults'], 'the payload carries the site map the guide serves, the gap family expanded at the source');
   }
 
@@ -986,6 +977,209 @@ class ClientStyleGuideTest extends KernelTestBase {
   public function testEnforcement(): void {
     $this->enforce('strict');
     $this->assertSame('strict', $this->clientStyleGuide->build(self::THEME)['enforcement']);
+  }
+
+  /**
+   * The law projection: what the guide declares, each fact with its origin.
+   *
+   * Self-contained under `law`: the enforcement reading, the scales with
+   * the contract, the site's bindings and one node per served kind,
+   * block type, block plugin and layout, each node restating the
+   * roster's answers (grants, value spaces, axes) beside the facts no
+   * served node carries (birth defaults, declared defaults) and an
+   * origins mirror naming the last layer to write every fact, effective
+   * origins composed as effective declarations are.
+   */
+  public function testLaw(): void {
+    BlockContentType::create(['id' => 'testimonial', 'label' => 'Testimonial'])->save();
+    $payload = $this->clientStyleGuide->build(self::THEME);
+    $law = $payload['law'];
+    $this->assertSame(['enforcement', 'properties', 'constraints', 'scales', 'bindings', 'nodes'], array_keys($law));
+    $origin = static fn (string $provider, string $file): array => ['provider' => $provider, 'file' => $file];
+
+    // The reading: guarded by default, so constraints are law and the
+    // property world stays open.
+    $this->assertSame('guarded', $law['enforcement']);
+    $this->assertSame('open', $law['properties']);
+    $this->assertSame('law', $law['constraints']);
+
+    // The scales are the token scale vocabulary, each naming the suite's
+    // shipped site declaration as the one layer whose facts (label,
+    // shape) it carries, no contract declared.
+    $suite = $origin('daedalus_stylish', 'daedalus_stylish.page_builder.yml');
+    $this->assertSame(array_keys($payload['tokenScales']), array_keys($law['scales']));
+    foreach ($law['scales'] as $scale => $entry) {
+      $this->assertSame(['label', 'shape', 'prefix', 'contract', 'origins'], array_keys($entry), $scale);
+      $this->assertSame($payload['tokenScales'][$scale]['label'], $entry['label']);
+      $this->assertSame($payload['tokenScales'][$scale]['prefix'], $entry['prefix']);
+      $this->assertSame([], $entry['contract']);
+      $this->assertSame(['scale' => [$suite], 'contract' => NULL], $entry['origins']);
+    }
+
+    // The bindings are the site's constraint defaults with their origins,
+    // both expanded over the shorthand families at the source: a
+    // padding side's block and its origin are the padding entry's.
+    $this->assertSame(array_keys($payload['constraintDefaults']), array_keys($law['bindings']));
+    $this->assertSame($payload['constraintDefaults']['padding-top'], $law['bindings']['padding-top']['block']);
+    $this->assertSame(['scale' => $suite, 'allowed' => $suite], $law['bindings']['padding-top']['origins']);
+    $this->assertSame(['scale' => $suite], $law['bindings']['font-size']['origins']);
+
+    // One node per served kind, block type, block plugin and layout, in
+    // the declaring-scope grammar.
+    $expected_nodes = [
+      ...array_map(static fn (string $kind): string => "kind:$kind", array_keys($payload['kinds'])),
+      ...array_map(static fn (string $bundle): string => "block_type:$bundle", array_keys($payload['blockTypes'])),
+      ...array_map(static fn (string $plugin): string => "block_plugin:$plugin", array_keys($payload['blockPlugins'])),
+      ...array_map(static fn (string $layout): string => "layout:$layout", array_keys($payload['layouts'])),
+    ];
+    $this->assertSame($expected_nodes, array_keys($law['nodes']));
+
+    // A root node restates the served node's rosters exactly.
+    $container = $law['nodes']['kind:container'];
+    $this->assertSame(['grants', 'constraints', 'origins', 'children', 'axes', 'birth', 'defaults'], array_keys($container));
+    $this->assertSame($payload['kinds']['container']['grants'], $container['grants']);
+    $this->assertSame($payload['kinds']['container']['valueSpaces'], $container['constraints']);
+    $this->assertSame($payload['kinds']['container']['axes'], $container['axes']);
+    $this->assertSame([], $container['birth']);
+    $this->assertSame([], $container['defaults']);
+    $this->assertSame(['grants', 'constraints', 'axes', 'birth', 'defaults'], array_keys($container['origins']));
+    $this->assertNull($container['origins']['axes'], 'No variant_axes declared: the style axis is built in.');
+
+    // The container's padding block is the node's own, assembled across
+    // three layers: the extra module's cap, the sub theme's units (the
+    // last write over the base theme's), and the side its own block
+    // narrows; an unauthored side's origins are the shorthand's, expanded
+    // as the block is.
+    $extra = $origin('daedalus_stylish_guide_test_extra', 'daedalus_stylish_guide_test_extra.page_builder.yml');
+    $theme = $origin(self::THEME, self::THEME . '.page_builder.yml');
+    $this->assertSame(['source' => 'node', 'facts' => ['max' => $extra, 'units' => $theme]], $container['origins']['constraints']['padding']);
+    $this->assertSame(['source' => 'node', 'facts' => ['max' => $extra, 'units' => $theme]], $container['origins']['constraints']['padding-top']);
+    $this->assertSame(['source' => 'node', 'facts' => ['max' => $extra]], $container['origins']['constraints']['padding-left']);
+    $this->assertSame(['max' => '3rem'], $container['constraints']['padding-left']);
+    // A grant names every layer whose facts survive under the group; a
+    // bare {} grant names its one writer.
+    $this->assertSame([$extra, $theme], $container['origins']['grants']['spacing']);
+    $this->assertSame([$extra], $container['origins']['grants']['background']);
+    $guide_test = $origin('daedalus_stylish_guide_test', 'daedalus_stylish_guide_test.page_builder.yml');
+    $this->assertSame(['layout'], array_keys($container['children']['grants']));
+    $this->assertContains('display', $container['children']['grants']['layout']);
+    $this->assertSame([$guide_test], $container['children']['origins']['grants']['layout']);
+    $this->assertArrayNotHasKey('axes', $container['children'], 'A children section is a part node: no axes, birth or defaults of its own.');
+
+    // A block type's effective origins compose the block kind's beneath
+    // its own: the spacing grant is the kind's bare {}, the typography
+    // constraints are two files' (the extra module's allowed list replaced
+    // the base one whole; the cap is the base file's), and a property
+    // the node grants without a block of its own binds through the site.
+    $testimonial = $law['nodes']['block_type:testimonial'];
+    $this->assertSame('Testimonial', $testimonial['label']);
+    $this->assertSame($payload['blockTypes']['testimonial']['grants'], $testimonial['grants']);
+    $this->assertSame($payload['blockTypes']['testimonial']['valueSpaces'], $testimonial['constraints']);
+    $this->assertSame([$guide_test], $testimonial['origins']['grants']['spacing']);
+    $type_file = $origin('daedalus_stylish_guide_test', 'daedalus_stylish_guide_test.page_builder.block_type.testimonial.yml');
+    $extra_type_file = $origin('daedalus_stylish_guide_test_extra', 'daedalus_stylish_guide_test_extra.page_builder.block_type.testimonial.yml');
+    $this->assertEqualsCanonicalizing([$type_file, $extra_type_file], $testimonial['origins']['grants']['typography']);
+    $this->assertSame(['allowed' => ['Arial']], $testimonial['constraints']['font-family']);
+    $this->assertSame(['source' => 'node', 'facts' => ['allowed' => $extra_type_file]], $testimonial['origins']['constraints']['font-family']);
+    $this->assertSame(['source' => 'node', 'facts' => ['max' => $type_file]], $testimonial['origins']['constraints']['font-size']);
+    $this->assertSame(['scale' => 'space', 'allowed' => ['0']], $testimonial['constraints']['padding']);
+    $this->assertSame(['source' => 'site', 'facts' => ['scale' => $suite, 'allowed' => $suite]], $testimonial['origins']['constraints']['padding']);
+    // Axes and birth: the declared list is one leaf, each default variant
+    // its own; a plain entry carries no depth.
+    $this->assertSame(['style', 'emphasis'], array_keys($testimonial['axes']));
+    $this->assertSame($type_file, $testimonial['origins']['axes']);
+    $this->assertSame([
+      'style' => ['variant' => 'testimonial_default', 'depth' => NULL],
+      'emphasis' => ['variant' => 'testimonial_emphatic', 'depth' => NULL],
+    ], $testimonial['birth']);
+    $this->assertSame(['style' => $type_file, 'emphasis' => $type_file], $testimonial['origins']['birth']);
+    // A part rides as a node of its own: rosters, origins and label.
+    $quote = $testimonial['elements']['.testimonial__quote'];
+    $this->assertSame($payload['blockTypes']['testimonial']['elements']['.testimonial__quote']['grants'], $quote['grants']);
+    $this->assertSame(['max' => '1.75rem'], $quote['constraints']['font-size']);
+    $this->assertSame(['source' => 'node', 'facts' => ['max' => $type_file]], $quote['origins']['constraints']['font-size']);
+    $this->assertArrayNotHasKey('birth', $quote);
+
+    // A layout composes the container kind beneath, a block plugin the
+    // block kind; a depth-qualified axis is still the list's one origin.
+    $twocol = $law['nodes']['layout:layout_twocol_section'];
+    $layout_file = $origin('daedalus_stylish_guide_test', 'daedalus_stylish_guide_test.page_builder.layout.layout_twocol_section.yml');
+    $extra_layout_file = $origin('daedalus_stylish_guide_test_extra', 'daedalus_stylish_guide_test_extra.page_builder.layout.layout_twocol_section.yml');
+    $this->assertSame(['style', 'proportions', 'width'], array_keys($twocol['axes']));
+    $this->assertSame($layout_file, $twocol['origins']['axes']);
+    $this->assertSame(['max' => '96rem'], $twocol['constraints']['max-width']);
+    $this->assertSame(['source' => 'node', 'facts' => ['max' => $extra_layout_file]], $twocol['origins']['constraints']['max-width']);
+    $this->assertSame(['source' => 'node', 'facts' => ['max' => $extra, 'units' => $theme]], $twocol['origins']['constraints']['padding'], 'The container kind\'s block reaches the layout with its origins.');
+    $this->assertSame(['source' => 'node', 'facts' => ['max' => $layout_file]], $twocol['elements']['.band-content']['origins']['constraints']['max-width']);
+    $this->assertSame([$layout_file], $twocol['elements']['.band-content']['children']['origins']['grants']['layout']);
+    $menu = $law['nodes']['block_plugin:fancy_menu'];
+    $plugin_file = $origin('daedalus_stylish_guide_test', 'daedalus_stylish_guide_test.page_builder.block_plugin.fancy_menu.yml');
+    $this->assertSame(['source' => 'node', 'facts' => ['max' => $plugin_file]], $menu['origins']['constraints']['font-size']);
+    $this->assertSame(['max' => '1.25rem'], $menu['elements']['.menu-item']['constraints']['font-size']);
+    $this->assertSame([$guide_test], $menu['origins']['grants']['spacing'], 'The block kind\'s grant reaches the plugin.');
+
+    // The reading follows the mode: strict closes the property world,
+    // open demotes every constraint to offer-shaping; the facts served
+    // do not change, only how they bind.
+    $this->enforce('strict');
+    $strict = $this->clientStyleGuide->build(self::THEME)['law'];
+    $this->assertSame('strict', $strict['enforcement']);
+    $this->assertSame(['closed', 'law'], [$strict['properties'], $strict['constraints']]);
+    $this->assertSame($testimonial, $strict['nodes']['block_type:testimonial']);
+    $this->enforce('open');
+    $open = $this->clientStyleGuide->build(self::THEME)['law'];
+    $this->assertSame(['open', 'open', 'offer'], [$open['enforcement'], $open['properties'], $open['constraints']]);
+    $this->enforce('guarded');
+
+    // The alter hook's values carry the alter origin: a cap it changes is
+    // attributed to no file, the facts it left alone keep theirs.
+    $state = $this->container->get('state');
+    $state->set('daedalus_stylish_control_test.block_types', ['testimonial' => ['property_groups' => ['typography' => ['constraints' => ['font-size' => ['max' => '3rem']]]]]]);
+    $this->container->get('daedalus_ui.page_builder_declarations')->resetCache();
+    $this->container->get('daedalus_stylish.style_guide')->resetCache();
+    $altered = $this->clientStyleGuide->build(self::THEME)['law']['nodes']['block_type:testimonial'];
+    $this->assertSame(['max' => '3rem'], $altered['constraints']['font-size']);
+    $this->assertSame(['source' => 'node', 'facts' => ['max' => ['provider' => NULL, 'file' => NULL]]], $altered['origins']['constraints']['font-size']);
+    $this->assertSame(['source' => 'node', 'facts' => ['allowed' => $extra_type_file]], $altered['origins']['constraints']['font-family']);
+    $state->delete('daedalus_stylish_control_test.block_types');
+    $this->container->get('daedalus_ui.page_builder_declarations')->resetCache();
+    $this->container->get('daedalus_stylish.style_guide')->resetCache();
+
+    // The contract rides its scale with its own origin: the state-injected
+    // site is the alter hook's, attributed by difference, so the space
+    // scale it restates exactly as the suite ships it keeps the suite's
+    // file and only the contract, new, is the hook's. A declared default
+    // rides the node with the declaring file's origin per property, at
+    // its own scope only (the stack layers a kind's beneath a
+    // refinement's apart).
+    $state->set('daedalus_stylish_control_test.site', [
+      'token_scales' => ['space' => ['label' => 'Space', 'shape' => 'dimension']],
+      'token_contract' => ['space' => ['sm', 'md']],
+    ]);
+    $this->enableModules(['daedalus_stylish_declared_defaults_test']);
+    $this->container->get('daedalus_stylish.style_guide')->resetCache();
+    $this->clientStyleGuide = $this->container->get('daedalus_stylish.client_style_guide');
+    $payload = $this->clientStyleGuide->build(self::THEME);
+    $law = $payload['law'];
+    $alter = ['provider' => NULL, 'file' => NULL];
+    $this->assertSame(['space'], array_keys($law['scales']));
+    $this->assertSame(['sm', 'md'], $law['scales']['space']['contract']);
+    $this->assertSame(['scale' => [$suite], 'contract' => $alter], $law['scales']['space']['origins']);
+    $this->assertSame([], $law['bindings'], 'The injected site declares no bindings.');
+    $defaults_file = $origin('daedalus_stylish_declared_defaults_test', 'daedalus_stylish_declared_defaults_test.page_builder.block_type.image.yml');
+    $image = $law['nodes']['block_type:image'];
+    $this->assertSame($payload['declaredDefaults']['block_type:image'], $image['defaults']);
+    $this->assertSame([
+      '' => ['default' => ['display' => $defaults_file, 'width' => $defaults_file]],
+      '::.image-block-image' => ['default' => ['display' => $defaults_file]],
+    ], $image['origins']['defaults']);
+    $this->assertSame([], $law['nodes']['kind:block']['defaults']);
+    $onecol = $law['nodes']['layout:layout_onecol'];
+    $layout_defaults_file = $origin('daedalus_stylish_declared_defaults_test', 'daedalus_stylish_declared_defaults_test.page_builder.layout.layout_onecol.yml');
+    $this->assertSame($layout_defaults_file, $onecol['origins']['defaults']['']['narrow']['display']);
+    $this->assertSame($layout_defaults_file, $onecol['origins']['defaults']['::.band-inner']['default']['max-width']);
+    $state->delete('daedalus_stylish_control_test.site');
+    $this->container->get('daedalus_stylish.style_guide')->resetCache();
   }
 
   /**

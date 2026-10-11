@@ -54,10 +54,10 @@ html {
       white-space: nowrap;
     }
     /* Core rounds at --admin-toolbar-space-8; the chrome rounds on its own
-       token. The split button's main half keeps its directional corners
-       (split-button.css) — this higher-specificity rule must not flatten
+       token. The split control's two halves keep their directional corners
+       (split-button.css); this higher-specificity rule must not flatten
        them. */
-    .toolbar-button:not(.daedalus-ui-split-button__main) {
+    .toolbar-button:not(.daedalus-ui-split-button__main, .daedalus-ui-split-button__caret) {
       border-radius: var(--daedalus-border-radius);
     }
 

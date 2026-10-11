@@ -21,15 +21,17 @@ use Drupal\layout_builder\Entity\LayoutBuilderEntityViewDisplay;
  * the enablement state — there is no parallel setting to drift from it.
  *
  * Styling defaults ON for page-builder bundles: whenever a bundle has both
- * Layout Builder and Edit Mode enabled (the gate), the field is created
- * automatically, on any save of a gate carrier and on syncAll() sweeps, not
- * just on the save that opened the gate. What makes a deliberate opt-out
- * stick is an explicit opt-out record in daedalus_stylish.settings (`opt_outs`, a list
- * of "entity_type_id.bundle" keys): disable() records it, enable() clears it,
- * and auto-enablement never re-defaults a recorded bundle. Field absence
- * alone is NOT a memory of anything: a bundle whose field is missing without
- * a record simply hasn't been enabled yet and will default ON at the next
- * gate check.
+ * Layout Builder and Edit Mode enabled (the gate; a bundle-less type has
+ * no Edit Mode carrier and passes on Layout Builder alone, see
+ * editModeEnabled()), the field is created automatically, on any save of a
+ * gate carrier and on syncAll() sweeps (install, update, every applied
+ * recipe), not just on the save that opened the gate. What makes a
+ * deliberate opt-out stick is an explicit opt-out record in
+ * daedalus_stylish.settings (`opt_outs`, a list of "entity_type_id.bundle"
+ * keys): disable() records it, enable() clears it, and auto-enablement
+ * never re-defaults a recorded bundle. Field absence alone is NOT a memory
+ * of anything: a bundle whose field is missing without a record simply
+ * hasn't been enabled yet and will default ON at the next gate check.
  */
 class DaedalusStylishFieldManager {
 
@@ -48,6 +50,27 @@ class DaedalusStylishFieldManager {
    */
   public function isEnabled(string $entity_type_id, string $bundle): bool {
     return FieldConfig::loadByName($entity_type_id, $bundle, self::FIELD_NAME) !== NULL;
+  }
+
+  /**
+   * How many of a bundle's entities store styles today.
+   *
+   * What disable() deletes: the entities of the bundle whose style map
+   * field holds a value. Zero where styling is not enabled (no field, so
+   * nothing stored).
+   */
+  public function countStyled(string $entity_type_id, string $bundle): int {
+    if (!$this->isEnabled($entity_type_id, $bundle)) {
+      return 0;
+    }
+    $query = $this->entityTypeManager->getStorage($entity_type_id)->getQuery()
+      ->accessCheck(FALSE)
+      ->exists(self::FIELD_NAME)
+      ->count();
+    if ($bundle_key = $this->entityTypeManager->getDefinition($entity_type_id)->getKey('bundle')) {
+      $query->condition($bundle_key, $bundle);
+    }
+    return (int) $query->execute();
   }
 
   /**
@@ -121,11 +144,12 @@ class DaedalusStylishFieldManager {
   /**
    * Defaults styling ON for every bundle currently passing the gate.
    *
-   * The install-time and update-time sweep: walks all Layout Builder-enabled
-   * view displays and auto-enables each bundle (opt-out records respected).
-   * Covers bundles whose gate opened while Daedalus Stylish's hooks weren't around to
-   * see the save: a site gaining Daedalus Stylish after the fact, or a missed hook
-   * during an exotic install pipeline.
+   * The install-time, update-time and recipe-applied sweep: walks all Layout
+   * Builder-enabled view displays and auto-enables each bundle (opt-out
+   * records respected). Covers bundles whose gate opened while Daedalus
+   * Stylish's hooks weren't around to see the save: a site gaining Daedalus
+   * Stylish after the fact, or a hook suppressed by an install pipeline
+   * running under the syncing flag (RecipeAppliedSubscriber).
    */
   public function syncAll(): void {
     $displays = $this->entityTypeManager->getStorage('entity_view_display')->loadMultiple();
@@ -146,20 +170,26 @@ class DaedalusStylishFieldManager {
   /**
    * Whether Edit Mode is enabled for a bundle.
    *
-   * Reads daedalus_ui's per-bundle mode status third-party setting —
-   * the state ModeController::enable()/disable() toggles.
+   * Reads daedalus_ui's per-bundle `enabled` third-party setting ("the page
+   * builder is on for this bundle", the bundle form's leading control),
+   * which lives on the bundle CONFIG entity. A type with no bundle entity
+   * type (the blueprint type, entity_test, user) has no carrier for the
+   * setting and therefore no gate: Edit Mode counts as enabled, so Layout
+   * Builder alone opens styling for it. That is the rule the other reader
+   * of the same setting, daedalus_ui's ShouldNotEditMode, applies on the
+   * canvas (no bundle entity type, no veto), and the two readers must agree
+   * or a bundle could be edited with no style store to write to.
    */
   public function editModeEnabled(string $entity_type_id, string $bundle): bool {
     $bundle_entity_type = $this->entityTypeManager->getDefinition($entity_type_id)->getBundleEntityType();
     if (!$bundle_entity_type) {
-      return FALSE;
+      return TRUE;
     }
     $bundle_entity = $this->entityTypeManager->getStorage($bundle_entity_type)->load($bundle);
     if (!$bundle_entity instanceof ConfigEntityInterface) {
       return FALSE;
     }
-    $statuses = $bundle_entity->getThirdPartySetting('daedalus_ui', 'status', []);
-    return !empty($statuses['edit']);
+    return (bool) $bundle_entity->getThirdPartySetting('daedalus_ui', 'enabled', FALSE);
   }
 
   /**

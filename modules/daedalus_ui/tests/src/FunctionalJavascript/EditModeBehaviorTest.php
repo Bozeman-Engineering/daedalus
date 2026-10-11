@@ -8,8 +8,11 @@ use Drupal\Core\Url;
 use Drupal\FunctionalJavascriptTests\WebDriverTestBase;
 use Drupal\Tests\daedalus\Traits\EditModeTrait;
 use Drupal\Tests\daedalus\Traits\DaedalusFixtureTrait;
-use Drupal\block\Entity\Block;
+use Drupal\block_content\Entity\BlockContent;
+use Drupal\daedalus_blueprint_library\Entity\Blueprint;
 use Drupal\daedalus_layout\Entity\LayoutBuilderEntityViewDisplay;
+use Drupal\layout_builder\Section;
+use Drupal\layout_builder\SectionComponent;
 use Drupal\node\Entity\Node;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
@@ -47,10 +50,12 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  * One fixture, one scenario. A full site install from the recipe is by far
  * the most expensive part of a run (the framework installs and tears down
  * per method), so all behavior lives in the single test method. The recipe
- * ships its footer layout block in daedalus_theme's footer region: a
- * foreign, fully attributed host on the node page, for the editing-universe
- * step (the editor door and the Tab walk ignore what the root blueprint's
- * projection does not contain).
+ * ships its footer as a site_chrome blueprint shown by daedalus_theme's
+ * site frame (the footer slot's default): a foreign, attributed host rendered around
+ * the node page, for the editing-universe step (the editor door and the Tab
+ * walk ignore what the root blueprint's projection does not contain). The
+ * portal step links a section blueprint of the test's own into a page-built
+ * node, the one foreign host the editor role may open.
  *
  * Step order is cookie-driven. The toggle cycle runs FIRST: its enable half
  * needs a page arriving outside Edit Mode, which an API-created node gives
@@ -74,12 +79,17 @@ class EditModeBehaviorTest extends WebDriverTestBase {
    *
    * The inline_block:text ("Pro tip: to edit things quickly, use tab to move
    * through elements.", inline block 42ed7027) that is the only component of
-   * the footer's second root section (01c25804) in the daedalus recipe's
-   * footer content. The test installs from the recipe on disk, so a recipe
-   * content change that drops this component fails the editing-universe
-   * step below: re-pin it to the footer's LAST attributed block leaf,
-   * because the Tab step and the chip-face step both depend on that
-   * position.
+   * the Pro tip band (01c25804), the second band nested under the footer's
+   * one root, in the daedalus recipe's site chrome content (the `footer`
+   * blueprint the frame places linked after the main slot; a block blueprint
+   * holds one root and its bands nest under it). The test installs from the
+   * recipe on disk, so a
+   * recipe content change that drops this component fails the
+   * editing-universe step below: re-pin it to the footer's LAST attributed
+   * block leaf, because the Tab step depends on that position. (The
+   * chip-face legs run on the page-built page's own block: the footer is
+   * outside the editing universe, so the one selection gate never lands
+   * it.)
    */
   private const FOOTER_COMPONENT_UUID = '1832e9b4-502a-4711-a5df-4c62de02d13f';
 
@@ -116,19 +126,45 @@ class EditModeBehaviorTest extends WebDriverTestBase {
    *   container and an editable leaf alike; the dash and the edit's widget
    *   verbs appear only while a live edit lands on the primary (the store's
    *   editingKey, written by the engine's editChanged report).
+   * - The selection door, the press decision's second road: with the text
+   *   block's edit open and text typed, a block placed through the
+   *   mutation spine with `select` ends the edit (a commit: the typed text
+   *   reaches the mirror), lands the selection on the placed block and
+   *   leaves the frame plain, the same end a press on keep-nothing chrome
+   *   decides, through the door that owns every selection write that is
+   *   not a press.
+   * - A multi-region section on the page-built page: the selection index
+   *   draws its region rows from the mirror's one lean tree, and a block
+   *   dropped through a tree row lands in the anchor's region (the second,
+   *   then moved to the first), the panel's region row, the mirror's
+   *   region node and the canvas's region wrapper agreeing after each
+   *   gesture.
    * - The element picker: the page elements root row's picker toggle (and
    *   its mod+shift+c hotkey) arms the depth policy, so the next canvas
    *   hover resolves the deepest presented element as a Cmd/Ctrl gesture
    *   does; (e) the picker followed by a double-click on a nested leaf
    *   edits it (the click consumes the arming, the deepen rule keeps the
-   *   leaf through the second click, the dblclick is the door), and
+   *   leaf through the second click, the even click is the door), and
    *   Cmd+double-click does the same in one gesture; a press on the toggle
    *   over an open edit commits the edit and arms; Escape drops the picker
    *   first.
+   * - The stationary second double-click: the gesture is the even OS click
+   *   count on `click` (the browser fires `dblclick` only at count 2, and
+   *   macOS keeps counting fast stationary clicks past it), so a pair at a
+   *   block inside a section selects the section and drills to the block,
+   *   and a second pair at the same spot arriving as counts 3 and 4
+   *   advances again exactly as a fresh pair would: at the leaf, it opens
+   *   the editor.
    * - The collapse controls: the page elements root row's collapse-all
    *   and expand-all pair and the `4` hotkey act on the tree's one outline
    *   at once, and selecting a deep leaf over a collapsed outline reveals
    *   its path only, the row clear of the pinned root row.
+   * - A row drop onto a section's start: the page elements panel's drop
+   *   unit is the gap line between rows, so a block row dragged down onto
+   *   a sibling section row's bottom band is offered the section's start
+   *   (the caret's chip names the section, never a new container in the
+   *   page) and the drop lands the block as the section's first child in
+   *   the mirror, the panel and the canvas.
    * - The Page form's toggle presents the root through the editor door:
    *   the panel opens on the top-level form with its first revealed widget
    *   as the open edit.
@@ -206,10 +242,10 @@ class EditModeBehaviorTest extends WebDriverTestBase {
     ]);
     $node->save();
 
-    // A foreign host on the same page: the recipe ships its footer layout
-    // block (a layout_block block_content whose own layout carries an
-    // attributed "Pro tip" text component) placed in daedalus_theme's
-    // footer region. It renders on the node page fully attributed but
+    // A foreign host on the same page: the recipe ships its footer as a
+    // site_chrome blueprint (its own layout carries an attributed "Pro tip"
+    // text component) shown by daedalus_theme's site frame as its footer
+    // slot's default, after the main slot. It renders around the node page attributed but
     // OUTSIDE the node's blueprint: the editing-universe step below drives
     // it.
     $this->drupalGet($node->toUrl());
@@ -365,10 +401,11 @@ class EditModeBehaviorTest extends WebDriverTestBase {
     );
 
     // --- The editing universe: a foreign host is inert (off-canvas). ---
-    // The footer placed in setUp renders its "Pro tip" text component on
-    // this page fully attributed (selectable key, editable item) because
-    // attribution is host-blind by design: the same render is cached and
-    // shared across hosts, and daedalus_stylish's styling identity must land for
+    // The frame's footer renders its "Pro tip" text component on this page
+    // attributed (its selectable key: Layout Builder placements are stamped
+    // for editors on every host of a render) because attribution is
+    // host-blind by design: the same render is cached and shared across
+    // hosts, and daedalus_stylish's styling identity must land for
     // visitors too. So attribution is an address, never authorization. The
     // editing universe is the ROOT blueprint's projection (the same Map the
     // pointer resolves within), enforced at one seam (keyForEditableItem,
@@ -378,12 +415,13 @@ class EditModeBehaviorTest extends WebDriverTestBase {
     // would fail the run on the mirror-miss error this used to raise) and
     // sends no request, and Tab from the last in-universe leaf's open
     // edit never lands in the foreign host. Its editing surface is its own
-    // root (the block_content edit route).
-    $footer_leaf = "[data-selectable='block:" . self::FOOTER_COMPONENT_UUID . "'][data-daedalus-edit-editor]";
+    // root (the footer blueprint's canvas, the site builder's: the editor
+    // role holds no site_chrome grant, so it wears no portal here).
+    $footer_leaf = "[data-selectable='block:" . self::FOOTER_COMPONENT_UUID . "']";
     $this->assertNotNull(
       $assert_session->waitForElement('css', $footer_leaf),
-      'The footer "Pro tip" text component rendered attributed in the theme'
-      . ' region.',
+      'The footer "Pro tip" text component rendered attributed in the site'
+      . ' frame.',
     );
     $this->assertJsCondition(
       sprintf(
@@ -421,10 +459,9 @@ class EditModeBehaviorTest extends WebDriverTestBase {
     // viewport can land on the fixed chrome instead of the leaf. The click
     // resolves no key (nothing to select, and the keyless clear applies
     // inside the canvas only), so no editor door is reached. Not a
-    // double-click: the footer is a portal, and a double-click inside a
-    // portal is the drill gesture crossing the entity boundary (it
-    // navigates to the footer's editing route), pinned by the portal step
-    // below.
+    // double-click: that is the drill gesture, and crossing the entity
+    // boundary through a portal is pinned by the portal step below on a
+    // linked blueprint the editor may open.
     $this->getSession()->executeScript(sprintf(
       "performance.clearResourceTimings();"
       . "document.querySelector(\"%s\").dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));",
@@ -509,39 +546,102 @@ class EditModeBehaviorTest extends WebDriverTestBase {
     );
     $this->getSession()->executeScript('Drupal.Daedalus.Selection.clear();');
 
-    // --- The portal: the foreign host's bridge to its own root. ---
-    // The footer is inert here by design (above), and its editing surface
-    // is the block_content edit route. The bridge is a portal: the server
-    // stamps the placement root with the entity's label and editing URL
-    // (DaedalusUiHooks::entityView, the URL from the one derivation,
-    // DaedalusUi::getEditingUrl()), and the client's Portal component
-    // reads those two attributes to paint a hover chip beside the selection
+    // --- The portal: a foreign host's bridge to its own root. ---
+    // A linked blueprint is a document shown by reference: inert where it
+    // is placed, edited on the blueprint's own canvas. The bridge is a
+    // portal: the server stamps the placement root with the blueprint's
+    // label, kind and editing URL (LayoutBuilderBlockAttributes::
+    // stampShowing, from the spine's showing carrying the portal for an
+    // actor who may update the blueprint, the URL from the one derivation,
+    // DaedalusUi::getEditingUrl()), and the client's Portal component reads
+    // those two attributes to paint a hover chip beside the selection
     // frame: the label and one Edit link. This step locks the seam (the
     // stamp to the chip) and the two ways through: the link's href and the
-    // double-click drill applied across the entity boundary (a portal has
-    // no key, so the editor door has nothing to open there).
-    $footer_block_content = \Drupal::service('entity.repository')->loadEntityByUuid(
-      'block_content',
-      Block::load('daedalus_theme_footer')->getPlugin()->getDerivativeId(),
-    );
-    $footer_editing_url = \Drupal::service('daedalus_ui.ui')->getEditingUrl($footer_block_content)->toString();
-    $footer_portal = '#block-daedalus-theme-footer[data-daedalus-ui-portal-url]';
+    // double-click drill applied across the entity boundary. The fixture
+    // is a page-built node linking a `section` blueprint of this test's
+    // own: the editor role edits section blueprints, while the recipe's
+    // footer is site chrome (the site builder's) and wears no portal for
+    // an editor.
+    $uuid_service = \Drupal::service('uuid');
+    $linked_uuid = $uuid_service->generate();
+    $inner_uuid = $uuid_service->generate();
+    $inner_block = BlockContent::create([
+      'type' => 'text',
+      'info' => 'Linked copy',
+      'reusable' => FALSE,
+      'field_text_text' => 'Linked copy, edited on its own canvas.',
+      'field_text_tag' => 'p',
+    ]);
+    $inner_block->save();
+    $blueprint_section = new Section('daedalus_stylish_container');
+    $blueprint_section->setThirdPartySetting('daedalus_layout', 'uuid', $uuid_service->generate());
+    $blueprint_section->appendComponent(new SectionComponent($inner_uuid, 'content', [
+      'id' => 'inline_block:text',
+      'label' => 'Text',
+      'label_display' => '0',
+      'view_mode' => 'full',
+      'block_revision_id' => $inner_block->getRevisionId(),
+      'block_serialized' => NULL,
+    ]));
+    $blueprint = Blueprint::create([
+      'type' => 'section',
+      'label' => 'Portal fixture',
+      'machine_name' => 'portal_fixture',
+      'description' => 'A linked composition for the portal step.',
+      'scope' => 'block',
+      'subject_type' => 'node',
+      'subject_bundle' => 'page',
+      'status' => 1,
+      'layout_builder__layout' => [$blueprint_section],
+    ]);
+    $blueprint->save();
+    $page_section_uuid = $uuid_service->generate();
+    $page_section = new Section('daedalus_stylish_container');
+    $page_section->setThirdPartySetting('daedalus_layout', 'uuid', $page_section_uuid);
+    $page_section->appendComponent(new SectionComponent($linked_uuid, 'content', [
+      'id' => 'daedalus_blueprint_linked:portal_fixture',
+      'label' => 'Portal fixture',
+      'label_display' => '0',
+      'context_mapping' => ['entity' => 'layout_builder.entity', 'view_mode' => 'view_mode'],
+    ]));
+    $portal_node = Node::create([
+      'type' => 'page',
+      'title' => 'Portal test page',
+      'layout_builder__layout' => [$page_section],
+    ]);
+    $portal_node->save();
+    $this->drupalGet($portal_node->toUrl());
+    $this->enterEditMode();
+    $blueprint_editing_url = \Drupal::service('daedalus_ui.ui')->getEditingUrl($blueprint)->toString();
+    $portal_root = "[data-selectable='block:$linked_uuid'][data-daedalus-ui-portal-url]";
+    $inner_leaf = "[data-selectable='block:$inner_uuid']";
     $this->assertJsCondition(
       sprintf(
         "document.querySelector(\"%s\")?.getAttribute('data-daedalus-ui-portal-url') === %s"
         . " && document.querySelector(\"%s\").getAttribute('data-daedalus-ui-portal-label') === %s"
         . " && document.querySelector(\"%s\").contains(document.querySelector(\"%s\"))",
-        $footer_portal,
-        json_encode($footer_editing_url),
-        $footer_portal,
-        json_encode($footer_block_content->label()),
-        $footer_portal,
-        $footer_leaf,
+        $portal_root,
+        json_encode($blueprint_editing_url),
+        $portal_root,
+        json_encode($blueprint->label()),
+        $portal_root,
+        $inner_leaf,
       ),
       20000,
-      'The footer placement root carries the portal stamp: the entity label and the editing URL, wrapping the inert leaf.',
+      'The linked placement root carries the portal stamp: the blueprint label and its editing URL, wrapping the inert inner leaf.',
     );
-    $this->getSession()->executeScript($hover($footer_leaf));
+    // The inner leaf is outside the universe (the blueprint's document is
+    // not in the page's projection), so the chain under the pointer holds
+    // only the page's own keys: the placement and the container holding
+    // it. The boundary policy names the outermost of them (the container,
+    // as for any block under the page root: resolver.js), never the inner
+    // key.
+    $this->getSession()->executeScript($hover($inner_leaf));
+    $this->assertJsCondition(
+      sprintf("Drupal.Daedalus.Selection.getHovered() === 'container:%s'", $page_section_uuid),
+      20000,
+      'Hovering inside the linked placement names the page\'s own container holding it (the boundary stop), never a key inside the foreign document.',
+    );
     $portal_chip = '#daedalus-root .daedalus-ui-frame__chip--portal';
     $this->assertNotNull(
       $assert_session->waitForElement('css', $portal_chip),
@@ -550,35 +650,36 @@ class EditModeBehaviorTest extends WebDriverTestBase {
     $this->assertJsCondition(
       sprintf(
         "document.querySelector(\"%s\").querySelector('.daedalus-ui-frame__name').textContent === %s"
-        . " && document.querySelector(\"%s\").querySelector('a.daedalus-ui-frame__verb').getAttribute('href') === %s"
-        . " && Drupal.Daedalus.Selection.getHovered() === null",
+        . " && document.querySelector(\"%s\").querySelector('a.daedalus-ui-frame__verb').getAttribute('href') === %s",
         $portal_chip,
-        json_encode($footer_block_content->label()),
+        json_encode($blueprint->label()),
         $portal_chip,
-        json_encode($footer_editing_url),
+        json_encode($blueprint_editing_url),
       ),
       20000,
-      'The portal chip reads the stamp: the footer\'s label and an Edit link to its editing route, and the selection hover stays clear.',
+      'The portal chip reads the stamp: the blueprint\'s label and an Edit link to its canvas.',
     );
-    // Double-click inside the portal: the drill gesture crosses the entity
-    // boundary and leaves for the editing route in this tab.
-    $this->getSession()->executeScript(sprintf(
-      "document.querySelector(\"%s\").dispatchEvent(new MouseEvent('dblclick', { bubbles: true, cancelable: true }));",
-      $footer_leaf,
-    ));
+    // Double-click inside the portal, as a pointer sends it (two clicks
+    // carrying the OS click count; the portal reads the even one off
+    // `click` exactly as the canvas drill does): the odd click commits the
+    // page's own container holding the placement, and the even click
+    // crosses the entity boundary (the key it resolved is the page's, above
+    // the portal, so nothing inside the portal keeps the drill) and leaves
+    // for the blueprint's canvas in this tab.
+    $this->dispatchDoubleClick($inner_leaf);
     $this->assertJsCondition(
-      sprintf('window.location.pathname === %s', json_encode($footer_editing_url)),
+      sprintf('window.location.pathname === %s', json_encode($blueprint_editing_url)),
       20000,
-      'Double-clicking inside the portal navigated to the footer\'s editing route.',
+      'Double-clicking inside the portal navigated to the blueprint\'s canvas.',
     );
-    // On its own root the footer IS the main entity: the same leaf that was
-    // outside the universe on the node page now sits inside it.
+    // On its own canvas the blueprint IS the main entity: the same leaf
+    // that was outside the universe on the page now sits inside it.
     $this->assertNotNull(
-      $assert_session->waitForElement('css', "[data-main-entity] $footer_leaf"),
-      'The editing route renders the footer as the main entity, its leaf inside the universe.',
+      $assert_session->waitForElement('css', "[data-main-entity] $inner_leaf"),
+      'The blueprint canvas renders the blueprint as the main entity, its leaf inside the universe.',
     );
     // Back to the node: Edit Mode persists across the reload (its cookie is
-    // not path-scoped to the editing route).
+    // path-scoped to the node, untouched by the canvas visits).
     $this->drupalGet($node->toUrl());
     $this->assertJsCondition("document.documentElement.getAttribute('data-daedalus-ui-mode') === 'edit'", 20000, 'Returning to the node keeps Edit Mode.');
     $this->assertJsCondition(
@@ -741,26 +842,20 @@ class EditModeBehaviorTest extends WebDriverTestBase {
       'ArrowRight with the Markup view off drills past the undrawn layout-root shell to the root\'s first field row.',
     );
     // The Markup view on, through the Show menu's real toggle (the view
-    // slice's setViewVisibility): the panel draws the shell row and the
-    // same Right from the root now lands on it, a styling target on the
-    // root key (getSelected() stays the root, getTarget() names the
-    // shell's selector under it) exactly as Right from a linked Image
-    // lands on its Raster. Down from it reaches the first field row, its
-    // sibling in the root's rows, never a section. Then the toggle back
-    // off: the rest of the class runs over the default tree.
-    $markup_item_js = "Array.from(document.querySelectorAll('.daedalus-ui-popover > .daedalus-ui-menu .daedalus-ui-menu__item'))"
-      . ".find((item) => item.querySelector('.daedalus-ui-menu__label')?.textContent === 'Markup') ?? null";
-    $this->getSession()->executeScript("document.querySelector('.daedalus-ui-show-menu__button').click();");
+    // slice's setViewVisibility, driven by EditModeTrait::setMarkupView(),
+    // which asserts the item's aria-checked flip and the menu's close):
+    // the panel draws the shell row and the same Right from the root now
+    // lands on it, a styling target on the root key (getSelected() stays
+    // the root, getTarget() names the shell's selector under it) exactly
+    // as Right from a linked Image lands on its Raster. Down from it
+    // reaches the first field row, its sibling in the root's rows, never
+    // a section. Then the toggle back off: the rest of the class runs
+    // over the default tree.
+    $this->setMarkupView(TRUE);
     $this->assertJsCondition(
-      "(() => { const item = $markup_item_js; return !!item && item.getAttribute('role') === 'menuitemcheckbox' && item.getAttribute('aria-checked') === 'false'; })()",
+      "$shell_row_js !== null",
       20000,
-      'The Show menu lists the Markup view as an unchecked item.',
-    );
-    $this->getSession()->executeScript("($markup_item_js).click();");
-    $this->assertJsCondition(
-      "!document.querySelector('.daedalus-ui-popover') && $shell_row_js !== null",
-      20000,
-      'Activating the Markup item closed the Show menu and the panel drew the layout-root shell row.',
+      'With the Markup view on the panel drew the layout-root shell row.',
     );
     $this->getSession()->executeScript("Drupal.Daedalus.Selection.select('$root_key');");
     $this->pressHotkey('ArrowRight');
@@ -778,17 +873,11 @@ class EditModeBehaviorTest extends WebDriverTestBase {
       20000,
       'ArrowDown from the shell part steps to the first field row, its sibling in the root\'s rows.',
     );
-    $this->getSession()->executeScript("document.querySelector('.daedalus-ui-show-menu__button').click();");
+    $this->setMarkupView(FALSE);
     $this->assertJsCondition(
-      "(() => { const item = $markup_item_js; return !!item && item.getAttribute('aria-checked') === 'true'; })()",
+      "$shell_row_js === null",
       20000,
-      'The reopened Show menu shows the Markup view checked.',
-    );
-    $this->getSession()->executeScript("($markup_item_js).click();");
-    $this->assertJsCondition(
-      "!document.querySelector('.daedalus-ui-popover') && $shell_row_js === null",
-      20000,
-      'Activating the Markup item again closed the Show menu and the panel dropped the shell row.',
+      'With the Markup view off again the panel dropped the layout-root shell row.',
     );
 
     // The panel is THE accessible surface: a real ARIA tree with
@@ -1014,149 +1103,6 @@ class EditModeBehaviorTest extends WebDriverTestBase {
       20000,
       "No single-selection verb leaks onto a multi-select set's chip.",
     );
-    // A single block at CLEAN density: the face is the registry's own
-    // tab partition (the flagged verbs as the chip's buttons), the
-    // chevron opens the shared menu with the rest, and nothing appears
-    // in both. The seam: the partition and the face are visible only
-    // where both render. Density is set explicitly because the DEFAULT
-    // tier is full, whose face is every verb (asserted below).
-    $this->getSession()->executeScript(
-      "document.documentElement.setAttribute('data-daedalus-ui-chrome-density', 'clean');"
-    );
-    $footer_key = 'block:' . self::FOOTER_COMPONENT_UUID;
-    $this->getSession()->executeScript("Drupal.Daedalus.Selection.select('$footer_key');");
-    $face_labels = "Array.from(document.querySelectorAll('.daedalus-ui-frame__chip--primary .daedalus-ui-frame__verb:not(.daedalus-ui-frame__more)'))"
-      . ".map((button) => button.getAttribute('aria-label'))";
-    $this->assertJsCondition(
-      "(() => { const labels = $face_labels;"
-      . " return labels.includes('Duplicate') && labels.includes('Remove') && !labels.includes('Insert'); })()",
-      20000,
-      "A block's chip face carries the tab-flagged verbs and never an unflagged one.",
-    );
-    $this->getSession()->executeScript("document.querySelector('.daedalus-ui-frame__more').click();");
-    $this->assertJsCondition(
-      "document.querySelector('.daedalus-ui-menu') !== null",
-      20000,
-      'The chevron opens the menu.',
-    );
-    $menu_labels = $this->getSession()->evaluateScript(
-      "Array.from(document.querySelectorAll('.daedalus-ui-menu__label')).map((label) => label.textContent)"
-    );
-    // Configure registers in the same file as Duplicate and Remove (whose
-    // face presence just proved that file loaded), so its listing is
-    // deterministic where Insert's is not (add-panel's library does not
-    // ride this fixture's page).
-    $this->assertContains('Configure', $menu_labels, 'The chevron menu lists the unflagged verbs. Labels: ' . implode(', ', $menu_labels));
-    $this->assertNotContains('Duplicate', $menu_labels, 'The chevron menu never repeats a face verb. Labels: ' . implode(', ', $menu_labels));
-    $this->assertNotContains('Remove', $menu_labels, 'The chevron menu never repeats a face verb. Labels: ' . implode(', ', $menu_labels));
-    // pressHotkey dispatches on document, so the menu's focus-scoped
-    // keydown handler never sees an Escape from it; on document the key
-    // is the global clear-selection binding, which would empty the
-    // chip the next assertion reads. Dismiss the menu on its real
-    // outside-pointerdown path instead; the selection survives.
-    $this->getSession()->executeScript(
-      "document.body.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));"
-    );
-    // Density tiers on the chip (the chrome-density spine), a strictly
-    // shrinking ladder: MINIMAL puts every applicable verb on the face
-    // in menu order as icons only and unrenders the chevron, so
-    // Configure, chevron-only at clean, surfaces as a face button; FULL
-    // is the same face with text labels beside the icons. The frame
-    // re-renders on the html attribute mutation, the same live mirror
-    // the settings select writes; the full step also restores the
-    // fixture's default tier.
-    $this->getSession()->executeScript(
-      "document.documentElement.setAttribute('data-daedalus-ui-chrome-density', 'minimal');"
-    );
-    $this->assertJsCondition(
-      "(() => { const labels = $face_labels;"
-      . " return document.querySelector('.daedalus-ui-frame__more') === null"
-      . " && labels.includes('Configure') && labels.includes('Duplicate')"
-      . " && document.querySelector('.daedalus-ui-frame__chip--primary .daedalus-ui-frame__label') === null; })()",
-      20000,
-      'Minimal density lists every verb on the face, icons only, and unrenders the chevron.',
-    );
-    // The chrome tooltip spine (data-daedalus-ui-tooltip + the delegated engine):
-    // below full density a top bar button's inline label is hidden, so
-    // hovering it shows the singleton pill carrying the label. The seam:
-    // the engine serving server-rendered chrome through nothing but the
-    // attribute the button declares.
-    $this->getSession()->executeScript(
-      "document.querySelector('#edit-mode-top-bar [data-daedalus-ui-tooltip]')"
-      . ".dispatchEvent(new PointerEvent('pointerover', { bubbles: true }));"
-    );
-    $this->assertJsCondition(
-      "(() => { const pill = document.querySelector('.daedalus-ui-tooltip--floating');"
-      . " const trigger = document.querySelector('#edit-mode-top-bar [data-daedalus-ui-tooltip]');"
-      . " return pill !== null && pill.classList.contains('daedalus-ui-tooltip--visible')"
-      . " && pill.getClientRects().length > 0"
-      . " && pill.textContent === trigger.getAttribute('data-daedalus-ui-tooltip'); })()",
-      20000,
-      "Hovering an icon-only top bar button shows the tooltip pill with the button's label.",
-    );
-    $this->getSession()->executeScript(
-      "document.querySelector('#edit-mode-top-bar [data-daedalus-ui-tooltip]')"
-      . ".dispatchEvent(new PointerEvent('pointerout', { bubbles: true, relatedTarget: document.body }));"
-    );
-    $this->assertJsCondition(
-      "document.querySelector('.daedalus-ui-tooltip--floating').classList.contains('daedalus-ui-tooltip--visible') === false",
-      20000,
-      'Leaving the button hides the tooltip pill.',
-    );
-    // The same spine serves the preact-rendered chip face (the second
-    // rendering model, opted in by nothing but the attribute): at minimal
-    // density a verb button is icon-only, so hovering it shows its label
-    // in the pill.
-    $this->getSession()->executeScript(
-      "document.querySelector('.daedalus-ui-frame__chip--primary .daedalus-ui-frame__verb')"
-      . ".dispatchEvent(new PointerEvent('pointerover', { bubbles: true }));"
-    );
-    $this->assertJsCondition(
-      "(() => { const pill = document.querySelector('.daedalus-ui-tooltip--floating');"
-      . " const verb = document.querySelector('.daedalus-ui-frame__chip--primary .daedalus-ui-frame__verb');"
-      . " return pill.classList.contains('daedalus-ui-tooltip--visible')"
-      . " && pill.textContent === verb.getAttribute('data-daedalus-ui-tooltip'); })()",
-      20000,
-      "Hovering an icon-only chip face verb shows the tooltip pill with the verb's label.",
-    );
-    $this->getSession()->executeScript(
-      "document.querySelector('.daedalus-ui-frame__chip--primary .daedalus-ui-frame__verb')"
-      . ".dispatchEvent(new PointerEvent('pointerout', { bubbles: true, relatedTarget: document.body }));"
-    );
-    $this->getSession()->executeScript(
-      "document.documentElement.setAttribute('data-daedalus-ui-chrome-density', 'full');"
-    );
-    $this->assertJsCondition(
-      "(() => { const labels = $face_labels;"
-      . " return document.querySelector('.daedalus-ui-frame__more') === null"
-      . " && labels.includes('Configure') && labels.includes('Duplicate')"
-      . " && document.querySelector('.daedalus-ui-frame__chip--primary .daedalus-ui-frame__label') !== null; })()",
-      20000,
-      'Full density lists every verb on the face with its text label and unrenders the chevron.',
-    );
-    // Full density is "show everything" in the top bar too — on viewports
-    // wide enough to afford it (labeled, the bar overflows a laptop width
-    // and pushes the right toggles off-screen, so labels gate on 90rem):
-    // the button's inline label is visible (the density mirror needs no
-    // reload), and the engine never shows a pill over a visible label, so
-    // the same hover that produced a tooltip at minimal now produces none.
-    $this->getSession()->resizeWindow(1600, 800);
-    $this->assertJsCondition(
-      "document.querySelector('#edit-mode-top-bar [data-daedalus-ui-tooltip] .toolbar-button__label').getClientRects().length > 0",
-      20000,
-      "Full density on a wide viewport shows the top bar button's inline label.",
-    );
-    $this->getSession()->executeScript(
-      "document.querySelector('#edit-mode-top-bar [data-daedalus-ui-tooltip]')"
-      . ".dispatchEvent(new PointerEvent('pointerover', { bubbles: true }));"
-    );
-    $this->assertFalse(
-      $this->getSession()->evaluateScript(
-        "document.querySelector('.daedalus-ui-tooltip--floating').classList.contains('daedalus-ui-tooltip--visible')"
-      ),
-      'Hovering a labeled top bar button shows no tooltip pill.',
-    );
-    $this->getSession()->resizeWindow(1024, 768);
     $this->getSession()->executeScript('Drupal.Daedalus.Selection.clear();');
 
     // Dispatcher capabilities the old flat hotkey map could not express,
@@ -1690,6 +1636,169 @@ class EditModeBehaviorTest extends WebDriverTestBase {
       'The band ruler leaves with edit mode.',
     );
 
+    // --- A multi-region section: the index's region slots against the
+    // mounted page's gaps. ---
+    // The selection index composes its rows from the mirror's one lean
+    // tree (the blueprint's `layout`, compose.js), where a multi-region layout's named
+    // slots are region nodes; the panel draws them as keyless region
+    // rows and the canvas renders core's region wrappers. The client's
+    // drag layer speaks {anchor, placement} alone (a block's region is the
+    // flow its anchor sits in), so a drop lands in a named region by
+    // anchoring beside a block that already sits there. The seam only a
+    // browser proves: after a row drop, the region row the dropped block
+    // sits under, the region node the mirror places it in and the region
+    // wrapper the page renders it in all agree, and agree again after the
+    // move to the section's other region. The page is built in PHP: the
+    // recipe's add road offers the stylish container layout alone
+    // (daedalus_stylish_layouts filters the picker and the placement
+    // restrictions alike), while a section already carrying core's
+    // layout_twocol_section still renders and still takes moves. One
+    // stylish container holding the block to move, then the twocol
+    // section with one text block in each region, so both regions stay
+    // addressable.
+    $uuid_service = \Drupal::service('uuid');
+    $band_uuid = $uuid_service->generate();
+    $twocol_uuid = $uuid_service->generate();
+    $first_block_uuid = $uuid_service->generate();
+    $second_block_uuid = $uuid_service->generate();
+    $hopper_uuid = $uuid_service->generate();
+    $text_component = function (string $uuid, string $region, string $text): SectionComponent {
+      $block = BlockContent::create([
+        'type' => 'text',
+        'info' => $text,
+        'reusable' => FALSE,
+        'field_text_text' => $text,
+        'field_text_tag' => 'p',
+      ]);
+      $block->save();
+      return new SectionComponent($uuid, $region, [
+        'id' => 'inline_block:text',
+        'label' => 'Text',
+        'label_display' => '0',
+        'view_mode' => 'full',
+        'block_revision_id' => $block->getRevisionId(),
+        'block_serialized' => NULL,
+      ]);
+    };
+    $band = new Section('daedalus_stylish_container');
+    $band->setThirdPartySetting('daedalus_layout', 'uuid', $band_uuid);
+    $band->appendComponent($text_component($hopper_uuid, 'content', 'Column hopper'));
+    $twocol = new Section('layout_twocol_section');
+    $twocol->setThirdPartySetting('daedalus_layout', 'uuid', $twocol_uuid);
+    $twocol->appendComponent($text_component($first_block_uuid, 'first', 'First column'));
+    $twocol->appendComponent($text_component($second_block_uuid, 'second', 'Second column'));
+    $region_node = Node::create([
+      'type' => 'page',
+      'title' => 'Region slots test page',
+      'layout_builder__layout' => [$band, $twocol],
+    ]);
+    $region_node->save();
+    $this->drupalGet($region_node->toUrl());
+    $this->enterEditMode();
+    $this->assertJsCondition(
+      'window.Drupal && Drupal.Daedalus && Drupal.Daedalus.Blueprint && !!Drupal.Daedalus.Blueprint.getRoot()',
+      20000,
+      'The blueprint mirror booted on the region slots page.',
+    );
+    // The region a block sits in, read off the mirror's tree: the twocol
+    // container's region node holding the uuid, or null.
+    $region_of_js = "((uuid) => { const section = (Drupal.Daedalus.Blueprint.getBlueprint().layout ?? []).find((node) => node.uuid === '$twocol_uuid');"
+      . " const region = (section?.children ?? []).find((child) => child.kind === 'region' && (child.children ?? []).some((node) => node.uuid === uuid));"
+      . " return region ? region.region : null; })";
+    // The region row a block's panel row sits under (the row before its
+    // group, a keyless region row), by its label; null when its parent
+    // row is no region row.
+    $region_row_of_js = "((uuid) => { const row = document.querySelector('.daedalus-ui-tree__row[data-tree-key=\"block:' + uuid + '\"]');"
+      . " const parent = row?.parentElement.closest('ul[role=\"group\"]')?.previousElementSibling;"
+      . " return parent?.classList.contains('daedalus-ui-tree__row--region') ? parent.querySelector('.daedalus-ui-outline__name')?.textContent : null; })";
+    // The region wrapper a block renders in on the canvas (core's
+    // layout__region--{name} class on the twocol's region), or null.
+    $canvas_region_of_js = "((uuid) => { const el = document.querySelector(\"[data-main-entity] [data-selectable='container:$twocol_uuid'] [data-selectable='block:\" + uuid + \"']\");"
+      . " const wrapper = el?.closest('.layout__region');"
+      . " return wrapper ? ['first', 'second'].find((name) => wrapper.classList.contains('layout__region--' + name)) ?? null : null; })";
+    // The index's region slots: the panel draws the two region rows from
+    // the tree's region nodes, one block under each, and the hopper sits
+    // under the container band with no region row (a lone region
+    // collapses into its section row).
+    $this->assertJsCondition(
+      "$region_of_js('$first_block_uuid') === 'first' && $region_of_js('$second_block_uuid') === 'second' && $region_of_js('$hopper_uuid') === null"
+      . " && $region_row_of_js('$first_block_uuid') === 'First' && $region_row_of_js('$second_block_uuid') === 'Second'"
+      . " && $region_row_of_js('$hopper_uuid') === null"
+      . " && $canvas_region_of_js('$first_block_uuid') === 'first' && $canvas_region_of_js('$second_block_uuid') === 'second'",
+      20000,
+      'The panel draws the twocol section\'s region rows from the tree\'s region nodes, each holding its block, and the canvas renders each block in its region wrapper. Tree: '
+      . (string) $session->evaluateScript('JSON.stringify(Drupal.Daedalus.Blueprint.getBlueprint()?.layout ?? null)'),
+    );
+
+    // Drop into the second region: the hopper's row, selected (a live
+    // drag source), dragged onto the second block's row and dropped on its
+    // 'after' zone. The tree-row target reads {anchor: second block,
+    // after} off the index; the server places the hopper in the anchor's
+    // flow, the second region.
+    $hopper_row_js = "document.querySelector('.daedalus-ui-tree__row[data-tree-key=\"block:$hopper_uuid\"]')";
+    $first_row_js = "document.querySelector('.daedalus-ui-tree__row[data-tree-key=\"block:$first_block_uuid\"]')";
+    $second_row_js = "document.querySelector('.daedalus-ui-tree__row[data-tree-key=\"block:$second_block_uuid\"]')";
+    $this->assertJsCondition(
+      "(() => { const row = $hopper_row_js; return !!row && !row.hasAttribute('data-tree-inert') && row.getAttribute('draggable') === 'true'; })()",
+      20000,
+      'The hopper\'s row is live and armed as a drag source.',
+    );
+    $session->executeScript("$hopper_row_js.click();");
+    $this->assertJsCondition(
+      "Drupal.Daedalus.Selection.getSelected() === 'block:$hopper_uuid'",
+      20000,
+      'Clicking the hopper\'s row selects it.',
+    );
+    $started = $this->startDrag($hopper_row_js, $second_row_js);
+    $this->assertTrue($started, 'The row drag started: arrange is open on the hopper.');
+    $this->finishDrag($hopper_row_js, $second_row_js);
+    $this->assertJsCondition(
+      "$region_of_js('$hopper_uuid') === 'second'",
+      20000,
+      'The drop landed the hopper in the twocol section\'s second region (the mirror\'s region node).',
+    );
+    $this->assertJsCondition(
+      "$region_row_of_js('$hopper_uuid') === 'Second' && $canvas_region_of_js('$hopper_uuid') === 'second'"
+      . " && $region_row_of_js('$second_block_uuid') === 'Second' && $region_row_of_js('$first_block_uuid') === 'First'",
+      20000,
+      'The hopper sits under the Second region row in the panel and inside the second region wrapper on the canvas; the other two blocks stayed put.',
+    );
+    // Rows re-project from the fresh mirror: the hopper's row is a new
+    // element, so it is re-read before the next drag.
+    $this->assertJsCondition(
+      "(() => { const row = $hopper_row_js; return !!row && row.getAttribute('draggable') === 'true'; })()",
+      20000,
+      'The hopper\'s re-projected row is a drag source.',
+    );
+
+    // Move to the first region of the same section: the same gesture
+    // onto the first block's row. One section, two regions, the block
+    // crossing between them.
+    $session->executeScript("$hopper_row_js.click();");
+    $this->assertJsCondition(
+      "Drupal.Daedalus.Selection.getSelected() === 'block:$hopper_uuid'",
+      20000,
+      'The hopper is selected again for the second drag.',
+    );
+    $started = $this->startDrag($hopper_row_js, $first_row_js);
+    $this->assertTrue($started, 'The second row drag started.');
+    $this->finishDrag($hopper_row_js, $first_row_js);
+    $this->assertJsCondition(
+      "$region_of_js('$hopper_uuid') === 'first'",
+      20000,
+      'The move landed the hopper in the twocol section\'s first region.',
+    );
+    $this->assertJsCondition(
+      "$region_row_of_js('$hopper_uuid') === 'First' && $canvas_region_of_js('$hopper_uuid') === 'first'"
+      . " && $region_row_of_js('$second_block_uuid') === 'Second' && $region_row_of_js('$first_block_uuid') === 'First'"
+      . " && (() => { const first = document.querySelector(\"[data-main-entity] [data-selectable='container:$twocol_uuid'] .layout__region--first\");"
+      . " const order = Array.from(first.querySelectorAll(\"[data-selectable^='block:']\")).map((el) => el.getAttribute('data-selectable'));"
+      . " return order[0] === 'block:$first_block_uuid' && order[1] === 'block:$hopper_uuid'; })()",
+      20000,
+      'The hopper sits under the First region row and after the first block inside the first region wrapper; the second region keeps its block.',
+    );
+    $this->getSession()->executeScript('Drupal.Daedalus.Selection.clear();');
+
     // --- The one keyboard grammar on a page-built page. ---
     // Editing is a state of the ONE selection, entered by a gesture that
     // means "edit this" (Enter, a double-click at a leaf, the tree row's
@@ -1715,7 +1824,6 @@ class EditModeBehaviorTest extends WebDriverTestBase {
       20000,
       'The blueprint mirror booted on the page-built page.',
     );
-    $uuid_service = \Drupal::service('uuid');
     $section_uuid = $uuid_service->generate();
     $component_uuid = $uuid_service->generate();
     $session->executeScript(<<<JS
@@ -1749,6 +1857,151 @@ class EditModeBehaviorTest extends WebDriverTestBase {
     );
     $gate_placement_error = $session->evaluateScript('window.__gatePlacementError ?? null');
     $this->assertNull($gate_placement_error, 'Placement failed: ' . ($gate_placement_error ?? ''));
+
+    // A single block at CLEAN density: the face is the registry's own
+    // tab partition (the flagged verbs as the chip's buttons), the
+    // chevron opens the shared menu with the rest, and nothing appears
+    // in both. The seam: the partition and the face are visible only
+    // where both render. Density is set explicitly because the DEFAULT
+    // tier is full, whose face is every verb (asserted below).
+    $this->getSession()->executeScript(
+      "document.documentElement.setAttribute('data-daedalus-ui-chrome-density', 'clean');"
+    );
+    $gate_block_key = 'block:' . $component_uuid;
+    $this->getSession()->executeScript("Drupal.Daedalus.Selection.select('$gate_block_key');");
+    $face_labels = "Array.from(document.querySelectorAll('.daedalus-ui-frame__chip--primary .daedalus-ui-frame__verb:not(.daedalus-ui-frame__more)'))"
+      . ".map((button) => button.getAttribute('aria-label'))";
+    $this->assertJsCondition(
+      "(() => { const labels = $face_labels;"
+      . " return labels.includes('Duplicate') && labels.includes('Remove') && !labels.includes('Insert'); })()",
+      20000,
+      "A block's chip face carries the tab-flagged verbs and never an unflagged one.",
+    );
+    $this->getSession()->executeScript("document.querySelector('.daedalus-ui-frame__more').click();");
+    $this->assertJsCondition(
+      "document.querySelector('.daedalus-ui-menu') !== null",
+      20000,
+      'The chevron opens the menu.',
+    );
+    $menu_labels = $this->getSession()->evaluateScript(
+      "Array.from(document.querySelectorAll('.daedalus-ui-menu__label')).map((label) => label.textContent)"
+    );
+    // Configure registers in the same file as Duplicate and Remove (whose
+    // face presence just proved that file loaded), so its listing is
+    // deterministic where Insert's is not (add-panel's library does not
+    // ride this fixture's page).
+    $this->assertContains('Configure', $menu_labels, 'The chevron menu lists the unflagged verbs. Labels: ' . implode(', ', $menu_labels));
+    $this->assertNotContains('Duplicate', $menu_labels, 'The chevron menu never repeats a face verb. Labels: ' . implode(', ', $menu_labels));
+    $this->assertNotContains('Remove', $menu_labels, 'The chevron menu never repeats a face verb. Labels: ' . implode(', ', $menu_labels));
+    // pressHotkey dispatches on document, so the menu's focus-scoped
+    // keydown handler never sees an Escape from it; on document the key
+    // is the global clear-selection binding, which would empty the
+    // chip the next assertion reads. Dismiss the menu on its real
+    // outside-pointerdown path instead; the selection survives.
+    $this->getSession()->executeScript(
+      "document.body.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));"
+    );
+    // Density tiers on the chip (the chrome-density spine), a strictly
+    // shrinking ladder: MINIMAL puts every applicable verb on the face
+    // in menu order as icons only and unrenders the chevron, so
+    // Configure, chevron-only at clean, surfaces as a face button; FULL
+    // is the same face with text labels beside the icons. The frame
+    // re-renders on the html attribute mutation, the same live mirror
+    // the settings select writes; the full step also restores the
+    // fixture's default tier.
+    $this->getSession()->executeScript(
+      "document.documentElement.setAttribute('data-daedalus-ui-chrome-density', 'minimal');"
+    );
+    $this->assertJsCondition(
+      "(() => { const labels = $face_labels;"
+      . " return document.querySelector('.daedalus-ui-frame__more') === null"
+      . " && labels.includes('Configure') && labels.includes('Duplicate')"
+      . " && document.querySelector('.daedalus-ui-frame__chip--primary .daedalus-ui-frame__label') === null; })()",
+      20000,
+      'Minimal density lists every verb on the face, icons only, and unrenders the chevron.',
+    );
+    // The chrome tooltip spine (data-daedalus-ui-tooltip + the delegated engine):
+    // below full density a top bar button's inline label is hidden, so
+    // hovering it shows the singleton pill carrying the label. The seam:
+    // the engine serving server-rendered chrome through nothing but the
+    // attribute the button declares.
+    $this->getSession()->executeScript(
+      "document.querySelector('#edit-mode-top-bar [data-daedalus-ui-tooltip]')"
+      . ".dispatchEvent(new PointerEvent('pointerover', { bubbles: true }));"
+    );
+    $this->assertJsCondition(
+      "(() => { const pill = document.querySelector('.daedalus-ui-tooltip--floating');"
+      . " const trigger = document.querySelector('#edit-mode-top-bar [data-daedalus-ui-tooltip]');"
+      . " return pill !== null && pill.classList.contains('daedalus-ui-tooltip--visible')"
+      . " && pill.getClientRects().length > 0"
+      . " && pill.textContent === trigger.getAttribute('data-daedalus-ui-tooltip'); })()",
+      20000,
+      "Hovering an icon-only top bar button shows the tooltip pill with the button's label.",
+    );
+    $this->getSession()->executeScript(
+      "document.querySelector('#edit-mode-top-bar [data-daedalus-ui-tooltip]')"
+      . ".dispatchEvent(new PointerEvent('pointerout', { bubbles: true, relatedTarget: document.body }));"
+    );
+    $this->assertJsCondition(
+      "document.querySelector('.daedalus-ui-tooltip--floating').classList.contains('daedalus-ui-tooltip--visible') === false",
+      20000,
+      'Leaving the button hides the tooltip pill.',
+    );
+    // The same spine serves the preact-rendered chip face (the second
+    // rendering model, opted in by nothing but the attribute): at minimal
+    // density a verb button is icon-only, so hovering it shows its label
+    // in the pill.
+    $this->getSession()->executeScript(
+      "document.querySelector('.daedalus-ui-frame__chip--primary .daedalus-ui-frame__verb')"
+      . ".dispatchEvent(new PointerEvent('pointerover', { bubbles: true }));"
+    );
+    $this->assertJsCondition(
+      "(() => { const pill = document.querySelector('.daedalus-ui-tooltip--floating');"
+      . " const verb = document.querySelector('.daedalus-ui-frame__chip--primary .daedalus-ui-frame__verb');"
+      . " return pill.classList.contains('daedalus-ui-tooltip--visible')"
+      . " && pill.textContent === verb.getAttribute('data-daedalus-ui-tooltip'); })()",
+      20000,
+      "Hovering an icon-only chip face verb shows the tooltip pill with the verb's label.",
+    );
+    $this->getSession()->executeScript(
+      "document.querySelector('.daedalus-ui-frame__chip--primary .daedalus-ui-frame__verb')"
+      . ".dispatchEvent(new PointerEvent('pointerout', { bubbles: true, relatedTarget: document.body }));"
+    );
+    $this->getSession()->executeScript(
+      "document.documentElement.setAttribute('data-daedalus-ui-chrome-density', 'full');"
+    );
+    $this->assertJsCondition(
+      "(() => { const labels = $face_labels;"
+      . " return document.querySelector('.daedalus-ui-frame__more') === null"
+      . " && labels.includes('Configure') && labels.includes('Duplicate')"
+      . " && document.querySelector('.daedalus-ui-frame__chip--primary .daedalus-ui-frame__label') !== null; })()",
+      20000,
+      'Full density lists every verb on the face with its text label and unrenders the chevron.',
+    );
+    // Full density is "show everything" in the top bar too — on viewports
+    // wide enough to afford it (labeled, the bar overflows a laptop width
+    // and pushes the right toggles off-screen, so labels gate on 90rem):
+    // the button's inline label is visible (the density mirror needs no
+    // reload), and the engine never shows a pill over a visible label, so
+    // the same hover that produced a tooltip at minimal now produces none.
+    $this->getSession()->resizeWindow(1600, 800);
+    $this->assertJsCondition(
+      "document.querySelector('#edit-mode-top-bar [data-daedalus-ui-tooltip] .toolbar-button__label').getClientRects().length > 0",
+      20000,
+      "Full density on a wide viewport shows the top bar button's inline label.",
+    );
+    $this->getSession()->executeScript(
+      "document.querySelector('#edit-mode-top-bar [data-daedalus-ui-tooltip]')"
+      . ".dispatchEvent(new PointerEvent('pointerover', { bubbles: true }));"
+    );
+    $this->assertFalse(
+      $this->getSession()->evaluateScript(
+        "document.querySelector('.daedalus-ui-tooltip--floating').classList.contains('daedalus-ui-tooltip--visible')"
+      ),
+      'Hovering a labeled top bar button shows no tooltip pill.',
+    );
+    $this->getSession()->resizeWindow(1024, 768);
+    $this->getSession()->executeScript('Drupal.Daedalus.Selection.clear();');
 
     // daedalus_layout's interaction guard surviving a mutation swap (the behavior
     // under test is daedalus_layout's js/settings/disable-interactive-elements.js;
@@ -1971,6 +2224,59 @@ class EditModeBehaviorTest extends WebDriverTestBase {
       20000,
       'A click on an editable tree row is a plain selection too: no editor opens from a click.',
     );
+    // --- Block rename, round trip. ---
+    // Seam: the inline input inside a treeitem (page-elements-tree.js
+    // renders rename-commit.js's grammar, which admits a block beside a
+    // section), the op (update_element {label} on an inline block's
+    // component configuration), and the response re-minting the row's
+    // words agree only in a browser. The row's NAME is the annotator's one
+    // rule, unchanged: a merged text block names itself by its content, so
+    // the row and the breadcrumb keep reading "Gate probe" after the rename
+    // while the mirror's lean node carries the new label (a block whose
+    // label renders as page content would show it on the canvas instead;
+    // this block's label is hidden). The input seeds from the STORED label
+    // (the lean node's `label`, absent when nothing was configured), never
+    // from the shown name, and seeds from the renamed label on the next
+    // rename: the round trip.
+    $block_row = ".daedalus-ui-tree__row[data-tree-key=\"block:$component_uuid\"]";
+    $rename_input_js = "document.querySelector('$block_row .daedalus-ui-tree__rename')";
+    $stored_label_js = "(Drupal.Daedalus.Blueprint.componentForUuid(Drupal.Daedalus.Blueprint.getBlueprint(), '$component_uuid')?.label ?? '')";
+    $this->dispatchDoubleClick("$block_row .daedalus-ui-outline__name");
+    $this->assertJsCondition(
+      "(() => { const input = $rename_input_js;"
+      . " return !!input && document.activeElement === input"
+      . " && input.value === $stored_label_js"
+      . " && input.getAttribute('aria-label') === 'Block name'"
+      . " && Drupal.Daedalus.Edit.CurrentlyEditingElement === null; })()",
+      20000,
+      'Double-clicking a text block\'s row name opens the inline rename input, focused and seeded with the block\'s stored label, no editor opened.',
+    );
+    $session->executeScript("$rename_input_js.value = 'Hero copy';");
+    $this->pressKeyOnFocused('Enter');
+    $this->assertJsCondition(
+      "(() => { const row = document.querySelector('$block_row');"
+      . " return !!row && !$rename_input_js"
+      . " && $stored_label_js === 'Hero copy'"
+      . " && row.querySelector('.daedalus-ui-outline__name')?.textContent.includes('Gate probe')"
+      . " && document.querySelector('.daedalus-ui-breadcrumb__crumb--current')?.textContent.includes('Gate probe')"
+      . " && Drupal.Daedalus.Selection.getSelected() === 'block:$component_uuid'; })()",
+      20000,
+      'Enter committed update_element {label} on the block: the mirror\'s lean node carries "Hero copy", the input is gone, and the row and the breadcrumb keep the merged block\'s content as its name.',
+    );
+    $this->dispatchDoubleClick("$block_row .daedalus-ui-outline__name");
+    $this->assertJsCondition(
+      "(() => { const input = $rename_input_js; return !!input && document.activeElement === input && input.value === 'Hero copy'; })()",
+      20000,
+      'The next rename seeds its input from the renamed label: the round trip through the response.',
+    );
+    $this->pressKeyOnFocused('Escape');
+    $this->assertJsCondition(
+      "!$rename_input_js && $stored_label_js === 'Hero copy'"
+      . " && document.activeElement?.getAttribute('data-tree-key') === 'block:$component_uuid'"
+      . " && Drupal.Daedalus.Selection.getSelected() === 'block:$component_uuid'",
+      20000,
+      'Escape cancels the rename with the label untouched and the row focused and selected.',
+    );
     // (g) The tree row's Enter opens the edit. The row is a treeitem in a
     // role=tree widget, which the keyboard sensor's focused-control rule
     // exempts, so a real press on the focused row reaches the dispatcher,
@@ -2058,6 +2364,77 @@ class EditModeBehaviorTest extends WebDriverTestBase {
       20000,
       'Escape out of an open edit leaves a solid chip carrying selection verbs.',
     );
+    // --- The selection door: the second road into the same engine. ---
+    // The press decision owns a click; the selection door
+    // (selection/select-door.js) owns every selection write that is not
+    // one: a placement's `select` option (op-queue.js applySelect, what a
+    // drag from the Add panel lands through), the facade's select, the
+    // tree's row menu, the inspector's parent and wearer selects. With the
+    // text block's edit open and text typed on its surface, a second text
+    // block placed through Blueprint.mutate with `select` must END the
+    // edit (a commit, never a cancel: the typed text is what the user
+    // meant), land the selection on the placed block and leave the frame
+    // plain on it, the same end a press decides. The seam only a browser
+    // runs end to end: the queue applies the response (the region swap
+    // captures and resumes the draft), then applySelect asks the door, the
+    // door asks the engine (canEndEdit, then endEdit through the plugin's
+    // blur, which enqueues the update_element behind the placement) and
+    // the selection lands; the typed text reaches the mirror on the blur's
+    // own round trip. Enter re-opens the edit on the still-selected block,
+    // as the Escape leg did.
+    $this->pressHotkey('Enter');
+    $this->assertJsCondition(
+      'Drupal.Daedalus.EditSession.isEditing() === true'
+      . " && Drupal.Daedalus.Selection.getSelected() === 'block:$component_uuid'",
+      20000,
+      'Enter re-opened the text block\'s editor for the selection door leg.',
+    );
+    // The typed text keeps "Gate probe" at its head: the picker leg below
+    // finds the block's deepest text leaf by that content.
+    $door_placed_uuid = $uuid_service->generate();
+    $door_typed_text = 'Gate probe typed before a placement';
+    $session->executeScript(<<<JS
+      (() => {
+        const text = document.querySelector(
+          "[data-selectable='block:$component_uuid'][data-daedalus-edit-text], [data-selectable='block:$component_uuid'] [data-daedalus-edit-text]",
+        );
+        text.textContent = '$door_typed_text';
+        text.dispatchEvent(new Event('input', { bubbles: true }));
+        const Blueprint = Drupal.Daedalus.Blueprint;
+        Blueprint.mutate(Object.assign({}, Blueprint.rootContext(), {
+          operations: [{
+            op: 'add_element',
+            uuid: '$door_placed_uuid',
+            block_type: 'text',
+            properties: { field_text_text: 'Placed over an open edit', field_text_tag: 'p' },
+            location: { anchor: '$section_uuid', placement: 'inside' },
+          }],
+          select: '$door_placed_uuid',
+        })).catch((error) => {
+          window.__doorPlacementError = error.message;
+        });
+      })();
+      JS);
+    $this->assertJsCondition(
+      <<<JS
+      (() => {
+        if (window.__doorPlacementError !== undefined) {
+          return true;
+        }
+        const Blueprint = Drupal.Daedalus.Blueprint;
+        const edited = Blueprint.componentForUuid(Blueprint.getBlueprint(), '$component_uuid');
+        const frame = document.querySelector('.daedalus-ui-frame');
+        return Drupal.Daedalus.EditSession.isEditing() === false
+          && Drupal.Daedalus.Selection.getSelected() === 'block:$door_placed_uuid'
+          && !!frame && !frame.classList.contains('daedalus-ui-frame--editing')
+          && JSON.stringify(edited).includes('$door_typed_text');
+      })()
+      JS,
+      20000,
+      'A placement with select over the open text block edit ended the edit, landed the selection on the placed block under a plain frame, and the typed text reached the mirror through the commit.',
+    );
+    $door_placement_error = $session->evaluateScript('window.__doorPlacementError ?? null');
+    $this->assertNull($door_placement_error, 'The mid-edit placement failed: ' . ($door_placement_error ?? ''));
     $this->getSession()->executeScript('Drupal.Daedalus.Selection.clear();');
 
     // --- The element picker: the DevTools "select an element" toggle. ---
@@ -2076,8 +2453,8 @@ class EditModeBehaviorTest extends WebDriverTestBase {
     // hover resolves the section bare and the block armed), (e) the
     // picker followed by a double-click on the nested leaf editing it (the
     // click consumes the arming and deep-selects, the deepen rule keeps
-    // the leaf through the second click, the dblclick at chain index 0 is
-    // the editor door: no rule of its own, the resolver's), the press on
+    // the leaf through the second click, the even click at chain index 0
+    // is the editor door: no rule of its own, the resolver's), the press on
     // the toggle over an open edit (the toggle keeps nothing, so the edit
     // commits and the picker arms), Escape's first rung (the picker drops,
     // the selection stays), and Cmd+double-click editing the same nested
@@ -2100,10 +2477,13 @@ class EditModeBehaviorTest extends WebDriverTestBase {
         const r = el.getBoundingClientRect();
         el.dispatchEvent(new MouseEvent(type, Object.assign({ bubbles: true, cancelable: true, clientX: r.left + 4, clientY: r.top + 4 }, init)));
       };
-      // A double-click as a pointer sends it: click, click, dblclick on
-      // the same point.
+      // A double-click as a pointer sends it: two clicks on the same point
+      // carrying the OS click count as detail (1, then 2); Edit Mode reads
+      // the even one as the double-click (selection/double-click.js), and
+      // nothing listens to dblclick. A synthetic click's detail defaults
+      // to 0, a single click, so the count is set on purpose.
       window.__pickerDoubleClick = (init = {}) => {
-        ['click', 'click', 'dblclick'].forEach((type) => window.__pickerPointer(type, init));
+        [1, 2].forEach((detail) => window.__pickerPointer('click', Object.assign({}, init, { detail })));
       };
       JS);
     $this->assertJsCondition(
@@ -2135,10 +2515,10 @@ class EditModeBehaviorTest extends WebDriverTestBase {
     );
     // (c) (e) The picker then a double-click on the nested leaf edits it:
     // the first click commits the leaf (resolved at picker depth) and
-    // consumes the arming; the second click, bare, still resolves the
-    // leaf because it is selected (the resolver's deepen rule: pointing at
-    // the selection means the selection); the dblclick finds the leaf at
-    // chain index 0 and calls the editor door.
+    // consumes the arming; the second click, the even one, is the
+    // double-click: it finds the leaf at chain index 0 (the resolver's
+    // deepen rule: pointing at the selection means the selection) and
+    // calls the editor door.
     $session->executeScript('window.__pickerDoubleClick();');
     $this->assertJsCondition(
       "(() => { const editing = Drupal.Daedalus.Edit.CurrentlyEditingElement;"
@@ -2184,7 +2564,7 @@ class EditModeBehaviorTest extends WebDriverTestBase {
     );
     // (e) Cmd+double-click is the same one gesture with the modifier as
     // the depth signal: from nothing selected, the deep clicks resolve the
-    // leaf under the pointer directly and the dblclick edits it.
+    // leaf under the pointer directly and the even click edits it.
     $this->getSession()->executeScript('Drupal.Daedalus.Selection.clear();');
     $session->executeScript('window.__pickerDoubleClick({ metaKey: true });');
     $this->assertJsCondition(
@@ -2204,6 +2584,59 @@ class EditModeBehaviorTest extends WebDriverTestBase {
       'Escape cancelled the Cmd+double-click edit with the block still selected.',
     );
     $this->getSession()->executeScript('Drupal.Daedalus.Selection.clear();');
+
+    // --- The stationary second double-click: the OS click count on click. ---
+    // Seam: the browser fires `dblclick` only on the click whose OS count
+    // is exactly 2, and macOS keeps counting fast stationary clicks past
+    // it (3, 4, 5...) until the pointer moves past the slop or the
+    // double-click interval lapses, so drilling section, block, editor at
+    // one spot stalled after the first pair: the second pair arrived as
+    // clicks 3 and 4 and no `dblclick` ever fired. Edit Mode reads the
+    // gesture off `click` through `event.detail` instead, every even count
+    // a double-click (selection/double-click.js). The trait sends that
+    // grammar, two clicks with the count, and its third argument is the
+    // first count, so the failing sequence is dispatched as a pointer
+    // would: counts 1 and 2, then 3 and 4 at the same element with nothing
+    // between (no mousemove, no pause). The chain here is two deep (the
+    // text block's field is merged into its row), so the second pair's
+    // even click is the drill's shape at a leaf: the editor opens.
+    $stationary_block = "[data-main-entity] [data-selectable='container:$section_uuid'] [data-selectable='block:$component_uuid']";
+    $this->dispatchDoubleClick($stationary_block);
+    $this->assertJsCondition(
+      "Drupal.Daedalus.Selection.getSelected() === 'block:$component_uuid'"
+      . " && Drupal.Daedalus.Selection.getDrill() === 'container:$section_uuid'"
+      . ' && Drupal.Daedalus.EditSession.isEditing() === false',
+      20000,
+      'A double-click pair (OS click counts 1 and 2 on click) at a block inside a section selected the section and drilled to the block: the block selected, the section the drill context.',
+    );
+    $this->dispatchDoubleClick($stationary_block, [], 3);
+    $this->assertJsCondition(
+      "(() => { const editing = Drupal.Daedalus.Edit.CurrentlyEditingElement;"
+      . " return Drupal.Daedalus.EditSession.isEditing() === true"
+      . " && Drupal.Daedalus.Selection.getSelected() === 'block:$component_uuid'"
+      . " && Drupal.Daedalus.Selection.getDrill() === 'container:$section_uuid'"
+      . " && !!editing && !!document.querySelector(\"[data-selectable='block:$component_uuid']\")?.contains(editing.getPageElement()); })()",
+      20000,
+      'A second pair at the same spot arriving as OS click counts 3 and 4 on click advanced the gesture as a fresh pair would: the even click at the block (chain index 0) opened its editor with the selection and the drill context unchanged.',
+    );
+    // The Escape ladder back to nothing: the open edit cancels first (the
+    // block stays selected under its drill context), then the selection
+    // clears and the drill context with it.
+    $this->pressHotkey('Escape');
+    $this->assertJsCondition(
+      'Drupal.Daedalus.EditSession.isEditing() === false'
+      . " && Drupal.Daedalus.Selection.getSelected() === 'block:$component_uuid'"
+      . " && Drupal.Daedalus.Selection.getDrill() === 'container:$section_uuid'",
+      20000,
+      'Escape cancelled the edit the stationary second double-click opened, the block still selected under its drill context.',
+    );
+    $this->pressHotkey('Escape');
+    $this->assertJsCondition(
+      'Drupal.Daedalus.Selection.getSelected() === null'
+      . ' && Drupal.Daedalus.Selection.getDrill() === null',
+      20000,
+      'The next Escape cleared the selection and the drill context the stationary double-clicks built.',
+    );
 
     // --- The collapse controls over the page elements outline. ---
     // The tree's rows collapse and expand through daedalus_ui's one
@@ -2291,6 +2724,117 @@ class EditModeBehaviorTest extends WebDriverTestBase {
       "$foldable_rows.every((row) => row.getAttribute('aria-expanded') === 'true') && $expand_all.disabled",
       20000,
       'The expand-all hotkey (4) reached the outline registered from inside the tree mount: every row open, expand all disabled.',
+    );
+    $this->getSession()->executeScript('Drupal.Daedalus.Selection.clear();');
+
+    // --- A row drop onto a section's start: the gap line, not the row. ---
+    // The page elements panel's drop unit is the gap LINE between rows
+    // (drag/tree-gaps.js; the node spec owns the model, including the
+    // depth the cursor's x picks where one line means several drops). The
+    // seam only a browser proves is the surface end to end: a dragover on
+    // a container row's bottom band resolves the START of that container
+    // (before its first child), the caret's chip names the section (never
+    // "New container in <page>", the root-flow gap after the section that
+    // the row model offered on the same pixel line when the cursor came
+    // from above), and the drop lands the block as the section's first
+    // child in the mirror, the panel and the canvas alike. A second
+    // section holding one text block is appended through the mutation
+    // spine the first was built with (client-named UUIDs), then the first
+    // section's probe block is dragged DOWN onto the second section's
+    // row: arriving from above is the direction the row model got wrong.
+    $second_section_uuid = $uuid_service->generate();
+    $second_section_block_uuid = $uuid_service->generate();
+    $session->executeScript(<<<JS
+      (() => {
+        const Blueprint = Drupal.Daedalus.Blueprint;
+        Blueprint.mutate(Object.assign({}, Blueprint.rootContext(), {
+          operations: [
+            {
+              op: 'add_section',
+              uuid: '$second_section_uuid',
+              location: { anchor: Blueprint.getRoot().uuid, placement: 'inside' },
+            },
+            {
+              op: 'add_element',
+              uuid: '$second_section_block_uuid',
+              block_type: 'text',
+              properties: { field_text_text: 'Second section text', field_text_tag: 'p' },
+              location: { anchor: '$second_section_uuid', placement: 'inside' },
+            },
+          ],
+        })).catch((error) => {
+          window.__secondSectionError = error.message;
+        });
+      })();
+      JS);
+    $this->assertJsCondition(
+      "window.__secondSectionError !== undefined"
+      . " || JSON.stringify(Drupal.Daedalus.Blueprint.getBlueprint()).includes('$second_section_block_uuid')",
+      20000,
+      'The second section and its text block placement resolved.',
+    );
+    $second_section_error = $session->evaluateScript('window.__secondSectionError ?? null');
+    $this->assertNull($second_section_error, 'Second section placement failed: ' . ($second_section_error ?? ''));
+    // A root section's flow children, read off the mirror's one lean tree
+    // in order (a region node, when the layout renders one, is
+    // transparent: its blocks are the section's).
+    $section_children_js = "((uuid) => { const section = (Drupal.Daedalus.Blueprint.getBlueprint().layout ?? []).find((node) => node.uuid === uuid);"
+      . " const flat = (nodes) => (nodes ?? []).flatMap((node) => (node.kind === 'region' ? flat(node.children) : [node.uuid]));"
+      . " return flat(section?.children); })";
+    $probe_row_js = "document.querySelector('.daedalus-ui-tree__row[data-tree-key=\"block:$component_uuid\"]')";
+    $second_section_row_js = "document.querySelector('.daedalus-ui-tree__row[data-tree-key=\"container:$second_section_uuid\"]')";
+    $caret_chip_js = "document.querySelector('.daedalus-ui-caret__chip')";
+    // The section row must SHOW its block for its bottom band to be its
+    // start (a collapsed container offers no start line), so the outline
+    // is opened through the root row's control (a no-op when nothing is
+    // folded: the control is disabled).
+    $session->executeScript("$expand_all.click();");
+    $this->assertJsCondition(
+      "(() => { const row = $second_section_row_js; const probe = $probe_row_js;"
+      . " return !!row && row.getAttribute('aria-expanded') === 'true'"
+      . " && !!probe && probe.getAttribute('draggable') === 'true'"
+      . " && $section_children_js('$second_section_uuid')[0] === '$second_section_block_uuid'"
+      . " && $section_children_js('$section_uuid').includes('$component_uuid'); })()",
+      20000,
+      'The second section\'s row shows its one block, and the probe block\'s row in the first section is armed as a drag source.',
+    );
+    $session->executeScript("$probe_row_js.click();");
+    $this->assertJsCondition(
+      "Drupal.Daedalus.Selection.getSelected() === 'block:$component_uuid'",
+      20000,
+      'Clicking the probe block\'s row selects it.',
+    );
+    // The y the gesture names: a container row's bottom band (8px,
+    // tree-gaps.js) is the container's START. Two pixels above the edge
+    // sits inside the band however the row's height rounds; the helper's
+    // default would too, but the step says which band it means.
+    $start_band_y = 'rect.bottom - 2';
+    $started = $this->startDrag($probe_row_js, $second_section_row_js, $start_band_y);
+    $this->assertTrue($started, 'The row drag started: arrange is open on the probe block.');
+    $this->assertJsCondition(
+      "(() => { const chip = $caret_chip_js; const label = $second_section_row_js.querySelector('.daedalus-ui-outline__name').textContent;"
+      . " return !!chip && !chip.hidden && chip.textContent === label && !chip.textContent.startsWith('New container'); })()",
+      20000,
+      'Over the second section row\'s bottom band the caret\'s chip names the section (the drop is its start), not a new container in the page.',
+    );
+    $this->finishDrag($probe_row_js, $second_section_row_js, $start_band_y);
+    $this->assertJsCondition(
+      "(() => { const second = $section_children_js('$second_section_uuid');"
+      . " return second[0] === '$component_uuid' && second[1] === '$second_section_block_uuid'"
+      . " && !$section_children_js('$section_uuid').includes('$component_uuid'); })()",
+      20000,
+      'The drop landed the probe block as the second section\'s first child in the mirror, ahead of the block it held, and out of the first section.',
+    );
+    $this->assertJsCondition(
+      "(() => { const row = $probe_row_js; const group = row?.parentElement.closest('ul[role=\"group\"]');"
+      . " const owner = group?.previousElementSibling; const first = group?.querySelector('[data-tree-key]');"
+      . " const canvas = document.querySelector(\"[data-main-entity] [data-selectable='container:$second_section_uuid']\");"
+      . " const order = Array.from(canvas?.querySelectorAll(\"[data-selectable^='block:']\") ?? [])"
+      . " .map((el) => el.getAttribute('data-selectable')).filter((key) => key.split(':').length === 2);"
+      . " return owner?.getAttribute('data-tree-key') === 'container:$second_section_uuid' && first === row"
+      . " && order[0] === 'block:$component_uuid' && order[1] === 'block:$second_section_block_uuid'; })()",
+      20000,
+      'The probe block\'s row is the first row under the second section\'s row, and its canvas element the first block inside the section\'s container.',
     );
     $this->getSession()->executeScript('Drupal.Daedalus.Selection.clear();');
 

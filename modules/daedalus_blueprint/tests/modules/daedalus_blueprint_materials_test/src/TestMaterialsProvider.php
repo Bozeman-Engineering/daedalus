@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Drupal\daedalus_blueprint_materials_test;
 
 use Drupal\Core\Cache\CacheableMetadata;
-use Drupal\Core\Entity\FieldableEntityInterface;
+use Drupal\daedalus_blueprint\Host\HostInterface;
 use Drupal\daedalus_blueprint\Materials\Address;
 use Drupal\daedalus_blueprint\Materials\MaterialGestureException;
 use Drupal\daedalus_blueprint\Materials\MaterialGestureResult;
@@ -36,8 +36,8 @@ final class TestMaterialsProvider implements MaterialsProviderInterface {
   /**
    * An override for the gesture lines, or NULL for the reference pair.
    *
-   * A harness enabling the real stencil provider beside this fixture
-   * (PageReadTest) drops the stencil gesture here: two providers
+   * A harness enabling the real blueprint provider beside this fixture
+   * (PageReadTest) drops the blueprint gesture here: two providers
    * teaching one kind is refused loudly by the roster builder.
    *
    * @var array<string, string>|null
@@ -79,7 +79,7 @@ final class TestMaterialsProvider implements MaterialsProviderInterface {
   public function gestureLines(): array {
     return self::$gestureLines ?? [
       MaterialKind::Swatch->value => 'value',
-      MaterialKind::Stencil->value => 'element',
+      MaterialKind::Blueprint->value => 'element',
     ];
   }
 
@@ -90,8 +90,8 @@ final class TestMaterialsProvider implements MaterialsProviderInterface {
    * from the label. A missing label refuses, so the handler's semantic
    * failure path is observable too.
    */
-  public function capture(MaterialKind $kind, array $operation, ?FieldableEntityInterface $entity, array $options): MaterialGestureResult {
-    $this->record('capture', $kind, NULL, $operation, $entity, $options);
+  public function capture(MaterialKind $kind, array $operation, ?HostInterface $host, array $options): MaterialGestureResult {
+    $this->record('capture', $kind, NULL, $operation, $host, $options);
     $label = trim((string) ($operation['label'] ?? ''));
     if ($label === '') {
       throw new MaterialGestureException([
@@ -105,8 +105,8 @@ final class TestMaterialsProvider implements MaterialsProviderInterface {
   /**
    * {@inheritdoc}
    */
-  public function update(MaterialKind $kind, string $id, array $operation, ?FieldableEntityInterface $entity, array $options): MaterialGestureResult {
-    $this->record('update', $kind, $id, $operation, $entity, $options);
+  public function update(MaterialKind $kind, string $id, array $operation, ?HostInterface $host, array $options): MaterialGestureResult {
+    $this->record('update', $kind, $id, $operation, $host, $options);
     return new MaterialGestureResult($kind, $id);
   }
 
@@ -121,13 +121,13 @@ final class TestMaterialsProvider implements MaterialsProviderInterface {
   /**
    * Logs a dispatched gesture.
    */
-  protected function record(string $verb, MaterialKind $kind, ?string $id, array $operation, ?FieldableEntityInterface $entity, array $options): void {
+  protected function record(string $verb, MaterialKind $kind, ?string $id, array $operation, ?HostInterface $host, array $options): void {
     self::$gestures[] = [
       'verb' => $verb,
       'kind' => $kind->value,
       'id' => $id,
       'operation' => $operation,
-      'entity' => $entity?->uuid(),
+      'entity' => $host?->uuid(),
       'options' => $options,
     ];
   }
@@ -214,15 +214,16 @@ final class TestMaterialsProvider implements MaterialsProviderInterface {
         scope: Address::fromString('base:a'),
       ),
       new MaterialRecord(
-        kind: MaterialKind::Stencil,
+        kind: MaterialKind::Blueprint,
         id: 'hero',
         label: 'Hero',
         description: 'Single-column hero banner with a heading.',
-        spellings: [MaterialRecord::SLOT_STENCIL => 'hero'],
+        spellings: [MaterialRecord::SLOT_BLUEPRINT => 'hero'],
         icon: '/modules/x/assets/hero.svg',
-        rootKind: 'section',
+        blueprintScope: 'block',
         origin: MaterialRecord::ORIGIN_SHIPPED,
         updatable: FALSE,
+        favorite: TRUE,
       ),
       new MaterialRecord(
         kind: MaterialKind::Animation,

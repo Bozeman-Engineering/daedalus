@@ -137,6 +137,57 @@ class HtmlProjectorTest extends BlueprintKernelTestBase {
   }
 
   /**
+   * Region comments come from the tree's region nodes.
+   *
+   * The print walks the delivered lean tree: a container holding more than
+   * one region node prints a region comment before each region's members,
+   * in region order; a one-column layout's lone region node is the flow
+   * itself and prints no comment. A plugin block prints as its comment
+   * line, inside its region. projectElement() finds the element through
+   * the same tree, region nodes transparent.
+   */
+  public function testRegionCommentsComeFromRegionNodes(): void {
+    $this->enableModules(['daedalus_layout']);
+    $this->container->get('daedalus_ui.page_builder_declarations')->resetCache();
+    $twocol_uuid = 'cccccccc-1111-2222-3333-444444444444';
+    $first_uuid = 'cccccccc-1111-2222-3333-555555555555';
+    $second_uuid = 'cccccccc-1111-2222-3333-666666666666';
+    $twocol = $this->createSection('layout_twocol_section', [
+      [
+        'uuid' => $second_uuid,
+        'region' => 'second',
+        'configuration' => ['id' => 'system_powered_by_block', 'label' => 'Second'],
+      ],
+      [
+        'uuid' => $first_uuid,
+        'region' => 'first',
+        'configuration' => ['id' => 'system_powered_by_block', 'label' => 'First'],
+      ],
+    ]);
+    $twocol->setThirdPartySetting('daedalus_layout', 'uuid', $twocol_uuid);
+    $this->entity->get('layout_builder__layout')->appendSection($twocol);
+    $this->entity->save();
+
+    $html = implode("\n", $this->printedLines());
+    $first = strpos($html, '<!-- region: first -->');
+    $second = strpos($html, '<!-- region: second -->');
+    $this->assertNotFalse($first, 'The first region prints its comment.');
+    $this->assertNotFalse($second, 'The second region prints its comment.');
+    $this->assertTrue($first < strpos($html, "<!-- block:$first_uuid") && strpos($html, "<!-- block:$first_uuid") < $second, 'The first region\'s member prints between the two region comments.');
+    $this->assertTrue($second < strpos($html, "<!-- block:$second_uuid"), 'The second region\'s member prints after its comment.');
+    $this->assertStringNotContainsString('<!-- region: content -->', $html, 'A one-column layout\'s lone region prints no comment.');
+
+    $element = $this->container->get('daedalus_ui.html_projector')->projectElement($this->host($this->entity), $twocol_uuid);
+    $this->assertIsString($element);
+    // The box's tag is the grammar's (the div stand-in where the site
+    // declares none); the key and type are the print format's.
+    $this->assertMatchesRegularExpression('/^<[a-z]+ data-key="container:' . $twocol_uuid . '" data-type="layout_twocol_section">/', $element);
+    $this->assertStringContainsString('<!-- region: first -->', $element);
+    $this->assertStringContainsString("<!-- block:$first_uuid", $element);
+    $this->assertNull($this->container->get('daedalus_ui.html_projector')->projectElement($this->host($this->entity), 'dddddddd-1111-2222-3333-444444444444'));
+  }
+
+  /**
    * Prints the host through the projector service of the current container.
    *
    * @return string[]
@@ -145,7 +196,7 @@ class HtmlProjectorTest extends BlueprintKernelTestBase {
   protected function printedLines(): array {
     $projector = $this->container->get('daedalus_ui.html_projector');
     $this->assertInstanceOf(HtmlProjector::class, $projector);
-    $html = $projector->projectEntity($this->entity);
+    $html = $projector->projectHost($this->host($this->entity));
     $this->assertIsString($html);
     return explode("\n", $html);
   }

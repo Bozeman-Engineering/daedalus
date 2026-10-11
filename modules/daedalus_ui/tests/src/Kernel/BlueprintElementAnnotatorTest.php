@@ -4,6 +4,15 @@ declare(strict_types=1);
 
 namespace Drupal\Tests\daedalus_ui\Kernel;
 
+use Drupal\Core\Cache\CacheableMetadata;
+use Drupal\Core\Entity\FieldableEntityInterface;
+use Drupal\daedalus_blueprint\Entity\Frame;
+use Drupal\daedalus_blueprint\Host\HostInterface;
+use Drupal\daedalus_blueprint\Plugin\Block\LinkedBlueprintBlock;
+use Drupal\daedalus_blueprint\Plugin\Block\SlotBlock;
+use Drupal\daedalus_blueprint\Slot\SlotRoster;
+use Drupal\daedalus_blueprint_library\Entity\Blueprint;
+use Drupal\daedalus_ui_icon_test\LeadingIconProvider;
 use Drupal\field\Entity\FieldConfig;
 use Drupal\field\Entity\FieldStorageConfig;
 use Drupal\file\Entity\File;
@@ -14,23 +23,26 @@ use Drupal\layout_builder\SectionComponent;
 use Drupal\media\Entity\Media;
 use Drupal\daedalus_ui\Presentation\Presentation;
 use Drupal\Tests\media\Traits\MediaTypeCreationTrait;
+use Drupal\Tests\user\Traits\UserCreationTrait;
 use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 
 /**
  * Tests the delivered-blueprint `_element` annotations.
  *
- * The annotator is a pure walk over a delivered blueprint calling the one
- * model, so the fixture is a hand-built blueprint array over real bundle
- * config — the wire shapes the serializer emits, without paying for a full
- * Layout Builder render. One uniform annotation on every owning node, the
- * root included: the naming spine's `name` and `type`, presentation,
- * compose, the resolver's markup tree, and per-field facts (existence +
- * presentation + rich-text instances) all
- * ride `_element`. Markup for components resolves against the entities the
- * root's REAL section data carries, so the hand-built nodes here (no
- * backing section entity) carry no component markup, the annotation only
- * claims what the data can back, while sections and the root, which need
- * no entity lookup, are stamped on every walk.
+ * The annotator walks a delivered blueprint's `layout` (the lean node
+ * tree), calling the one model, so the fixture is a hand-built blueprint
+ * array over real bundle config — the node shapes the serializer emits,
+ * without paying for a full Layout Builder render — and every assertion
+ * reads the annotation off `layout`, the one shape the mirror's consumers
+ * walk. One uniform
+ * annotation on every owning node, the root included: the naming spine's
+ * `name` and `type`, presentation, compose, the resolver's markup tree,
+ * and per-field facts (existence + presentation + rich-text instances)
+ * all ride `_element`. Markup for components resolves against the
+ * entities the root's REAL section data carries, so the hand-built nodes
+ * here (no backing section entity) carry no component markup, the
+ * annotation only claims what the data can back, while containers and
+ * the root, which need no entity lookup, are stamped on every walk.
  *
  * @group daedalus_ui
  */
@@ -38,6 +50,7 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 class BlueprintElementAnnotatorTest extends KernelTestBase {
 
   use MediaTypeCreationTrait;
+  use UserCreationTrait;
 
   /**
    * {@inheritdoc}
@@ -88,6 +101,13 @@ class BlueprintElementAnnotatorTest extends KernelTestBase {
    * @var \Drupal\daedalus_ui\ElementModel\BlueprintElementAnnotator
    */
   protected $annotator;
+
+  /**
+   * The host of an entity, as the spine's doors resolve it.
+   */
+  protected function host(FieldableEntityInterface $entity): HostInterface {
+    return $this->container->get('daedalus_blueprint.host_resolver')->fromEntity($entity);
+  }
 
   /**
    * {@inheritdoc}
@@ -151,50 +171,63 @@ class BlueprintElementAnnotatorTest extends KernelTestBase {
         'field_cta_text' => 'Hello',
         'field_cta_image' => ['target_id' => 3, '_label' => 'A picture'],
       ],
-      'layout_builder__layout' => [
+      'layout' => [
         [
+          'kind' => 'container',
           'uuid' => 'section-uuid',
           'layout_id' => 'layout_onecol',
-          'regions' => [
-            'content' => [
-              [
-                'uuid' => 'merged-uuid',
-                'block_type' => 'text_block',
-                'label' => 'Machine label',
-                'label_display' => '0',
-                'block_fields' => ['field_text' => 'Some text'],
-              ],
-              [
-                'uuid' => 'open-uuid',
-                'block_type' => 'cta',
-                'label' => 'CTA',
-                'label_display' => '0',
-                'block_fields' => [
-                  'field_cta_text' => 'CTA text',
-                  'field_cta_image' => ['target_id' => 4, '_label' => 'CTA picture'],
+          'children' => [
+            [
+              'kind' => 'region',
+              'region' => 'content',
+              'children' => [
+                [
+                  'kind' => 'block',
+                  'uuid' => 'merged-uuid',
+                  'block_type' => 'text_block',
+                  'label' => 'Machine label',
+                  'block_fields' => ['field_text' => 'Some text'],
                 ],
-              ],
-              [
-                'uuid' => 'plugin-uuid',
-                'plugin_id' => 'system_powered_by_block',
-              ],
-              [
-                'uuid' => 'collapsed-plugin-uuid',
-                'plugin_id' => 'collapse_test_cooperative',
-              ],
-              // A nested SECTION node: a region entry carrying layout_id
-              // presents as a section, and its components ride the same walk.
-              [
-                'uuid' => 'nested-section-uuid',
-                'layout_id' => 'layout_onecol',
-                'regions' => [
-                  'content' => [
+                [
+                  'kind' => 'block',
+                  'uuid' => 'open-uuid',
+                  'block_type' => 'cta',
+                  'label' => 'CTA',
+                  'block_fields' => [
+                    'field_cta_text' => 'CTA text',
+                    'field_cta_image' => ['target_id' => 4, '_label' => 'CTA picture'],
+                  ],
+                ],
+                [
+                  'kind' => 'block',
+                  'uuid' => 'plugin-uuid',
+                  'plugin_id' => 'system_powered_by_block',
+                ],
+                [
+                  'kind' => 'block',
+                  'uuid' => 'collapsed-plugin-uuid',
+                  'plugin_id' => 'collapse_test_cooperative',
+                ],
+                // A nested container node inside a region's children: it
+                // presents as a container, and its blocks ride the same
+                // walk.
+                [
+                  'kind' => 'container',
+                  'uuid' => 'nested-section-uuid',
+                  'layout_id' => 'layout_onecol',
+                  'children' => [
                     [
-                      'uuid' => 'nested-collapsed-uuid',
-                      'block_type' => 'text_block',
-                      'label' => 'Nested',
-                      'label_display' => '0',
-                      'block_fields' => ['field_text' => 'Nested text'],
+                      'kind' => 'region',
+                      'region' => 'content',
+                      'children' => [
+                        [
+                          'kind' => 'block',
+                          'uuid' => 'nested-collapsed-uuid',
+                          'block_type' => 'text_block',
+                          'label' => 'Nested',
+                          'block_fields' => ['field_text' => 'Nested text'],
+                        ],
+                      ],
                     ],
                   ],
                 ],
@@ -205,7 +238,7 @@ class BlueprintElementAnnotatorTest extends KernelTestBase {
       ],
     ];
 
-    $annotated = $this->annotator->annotate($blueprint, $root, 'full');
+    $annotated = $this->annotator->annotate($blueprint, $this->host($root), 'full');
 
     // The ROOT node carries the same uniform annotation. A block_content
     // root's label key (info) is DECLARED element: false, but the derived
@@ -218,6 +251,7 @@ class BlueprintElementAnnotatorTest extends KernelTestBase {
       [
         'name' => 'Root fixture',
         'type' => 'Cta',
+        'icon' => $this->glyph('page'),
         'presentation' => ['mode' => Presentation::OPEN, 'edit_target' => 'info'],
         'markup' => $this->emptyMarkup(),
         'fields' => ['field_cta_image' => ['presentation' => Presentation::UNIT]],
@@ -225,7 +259,10 @@ class BlueprintElementAnnotatorTest extends KernelTestBase {
       $annotated['_element'],
     );
 
-    $components = $annotated['layout_builder__layout'][0]['regions']['content'];
+    // A one-column layout's sole region is a region node under the
+    // container; the region carries nothing, its blocks are annotated.
+    $this->assertArrayNotHasKey('_element', $annotated['layout'][0]['children'][0]);
+    $components = $annotated['layout'][0]['children'][0]['children'];
 
     // The single-field block derives MERGED with its content's identity,
     // and its type declares compose (`composed: true` in its
@@ -238,6 +275,7 @@ class BlueprintElementAnnotatorTest extends KernelTestBase {
       [
         'name' => 'Some text',
         'type' => 'Text block',
+        'icon' => NULL,
         'presentation' => ['mode' => Presentation::MERGED, 'label' => 'Text', 'edit_target' => 'field_text'],
         'composed' => TRUE,
       ],
@@ -250,6 +288,7 @@ class BlueprintElementAnnotatorTest extends KernelTestBase {
       [
         'name' => 'CTA',
         'type' => 'Cta',
+        'icon' => NULL,
         'presentation' => ['mode' => Presentation::OPEN],
         'fields' => ['field_cta_image' => ['presentation' => Presentation::UNIT]],
       ],
@@ -262,9 +301,10 @@ class BlueprintElementAnnotatorTest extends KernelTestBase {
     // They are still elements on the canvas with rows in the tree, so they
     // carry the naming spine's two words: the plugin's admin label as the
     // type and, unlabeled, as the name; a plugin the manager does not know
-    // degrades to its id, the one fact left.
-    $this->assertSame(['name' => 'Powered by Drupal', 'type' => 'Powered by Drupal'], $components[2]['_element']);
-    $this->assertSame(['name' => 'collapse_test_cooperative', 'type' => 'collapse_test_cooperative'], $components[3]['_element']);
+    // degrades to its id, the one fact left. Their icon is daedalus_ui's
+    // own plugin-block glyph: the providers are never asked for them.
+    $this->assertSame($this->pluginWords('Powered by Drupal', 'Powered by Drupal'), $components[2]['_element']);
+    $this->assertSame($this->pluginWords('collapse_test_cooperative', 'collapse_test_cooperative'), $components[3]['_element']);
 
     // The walk reaches nested sections: the section node presents AS a
     // section (no component annotation, no block facade) but carries the
@@ -272,20 +312,22 @@ class BlueprintElementAnnotatorTest extends KernelTestBase {
     // multi-form root resolves the plain div there — and its inner
     // components are annotated like any others. Nested, it is a Container
     // in the layout vocabulary, and unrenamed its name is that type word.
-    $this->assertSame(['name', 'type', 'markup'], array_keys($components[4]['_element']));
+    $this->assertSame(['name', 'type', 'icon', 'markup'], array_keys($components[4]['_element']));
+    $this->assertNull($components[4]['_element']['icon'], 'A container is daedalus_layout\'s concept: no icon until a provider answers.');
     $this->assertSame('Container', $components[4]['_element']['name']);
     $this->assertSame('Container', $components[4]['_element']['type']);
     $this->assertSame('div', $components[4]['_element']['markup']['tag']);
-    $this->assertSame([], $components[4]['_element']['markup']['attributes'], 'A populated section is not empty; the annotator fed the fact from its component lists.');
-    $nested = $components[4]['regions']['content'][0];
+    $this->assertSame([], $components[4]['_element']['markup']['attributes'], 'A populated container is not empty; the annotator fed the fact from its region nodes.');
+    $nested = $components[4]['children'][0]['children'][0];
     $this->assertTrue($nested['_element']['composed']);
 
     // The top-level section resolves the same declaration at ROOT depth:
     // ONE box, a real <section>, no parts and no slots (children mount at
     // the root per the mounting rule). At page depth it is a Section.
-    $section = $annotated['layout_builder__layout'][0];
+    $section = $annotated['layout'][0];
     $this->assertSame('Section', $section['_element']['name']);
     $this->assertSame('Section', $section['_element']['type']);
+    $this->assertNull($section['_element']['icon']);
     $this->assertSame(
       [
         'tag' => 'section',
@@ -300,12 +342,12 @@ class BlueprintElementAnnotatorTest extends KernelTestBase {
   }
 
   /**
-   * The walk covers container sections' ordered children lists.
+   * The walk covers container layouts' ordered children lists.
    *
-   * A container section serializes `children: []` in place of
-   * `regions: {}` (its sole region is a storage vestige); the annotator
-   * annotates the list's components and recurses into nested container
-   * nodes exactly like region entries.
+   * A container layout's node holds its element children directly (its
+   * sole region is a storage vestige), no region node between; the
+   * annotator annotates them and recurses into nested container nodes
+   * exactly like a region node's children.
    */
   public function testAnnotatesContainerChildren(): void {
     $root = $this->container->get('entity_type.manager')
@@ -315,28 +357,30 @@ class BlueprintElementAnnotatorTest extends KernelTestBase {
     $blueprint = [
       'bundle' => 'cta',
       'fields' => [],
-      'layout_builder__layout' => [
+      'layout' => [
         [
+          'kind' => 'container',
           'uuid' => 'container-uuid',
           'layout_id' => 'daedalus_stylish_container',
           'children' => [
             [
+              'kind' => 'block',
               'uuid' => 'merged-uuid',
               'block_type' => 'text_block',
               'label' => 'Machine label',
-              'label_display' => '0',
               'block_fields' => ['field_text' => 'Some text'],
             ],
             // A nested container node inside a children list.
             [
+              'kind' => 'container',
               'uuid' => 'nested-container-uuid',
               'layout_id' => 'daedalus_stylish_container',
               'children' => [
                 [
+                  'kind' => 'block',
                   'uuid' => 'nested-block-uuid',
                   'block_type' => 'text_block',
                   'label' => 'Nested',
-                  'label_display' => '0',
                   'block_fields' => ['field_text' => 'Nested text'],
                 ],
               ],
@@ -344,6 +388,7 @@ class BlueprintElementAnnotatorTest extends KernelTestBase {
             // An EMPTY nested container: no children at all, so the
             // annotator's emptiness feed answers the {empty: true} fact.
             [
+              'kind' => 'container',
               'uuid' => 'empty-container-uuid',
               'layout_id' => 'daedalus_stylish_container',
               'children' => [],
@@ -353,13 +398,14 @@ class BlueprintElementAnnotatorTest extends KernelTestBase {
       ],
     ];
 
-    $annotated = $this->annotator->annotate($blueprint, $root, 'full');
-    $children = $annotated['layout_builder__layout'][0]['children'];
+    $annotated = $this->annotator->annotate($blueprint, $this->host($root), 'full');
+    $children = $annotated['layout'][0]['children'];
 
     $this->assertSame(
       [
         'name' => 'Some text',
         'type' => 'Text block',
+        'icon' => NULL,
         'presentation' => ['mode' => Presentation::MERGED, 'label' => 'Text', 'edit_target' => 'field_text'],
         'composed' => TRUE,
       ],
@@ -369,7 +415,8 @@ class BlueprintElementAnnotatorTest extends KernelTestBase {
     // The nested container node presents AS a section (markup only, no
     // block facade) at NESTED depth — the multi-form root resolves the
     // plain div — and its inner components are annotated like any others.
-    $this->assertSame(['name', 'type', 'markup'], array_keys($children[1]['_element']));
+    $this->assertSame(['name', 'type', 'icon', 'markup'], array_keys($children[1]['_element']));
+    $this->assertNull($children[1]['_element']['icon']);
     $this->assertSame('div', $children[1]['_element']['markup']['tag']);
     $this->assertSame([], $children[1]['_element']['markup']['attributes']);
     $this->assertTrue($children[1]['children'][0]['_element']['composed']);
@@ -382,8 +429,8 @@ class BlueprintElementAnnotatorTest extends KernelTestBase {
 
     // The top-level container holds children, so at ROOT depth the
     // populated section form matches.
-    $this->assertSame('section', $annotated['layout_builder__layout'][0]['_element']['markup']['tag']);
-    $this->assertSame([], $annotated['layout_builder__layout'][0]['_element']['markup']['attributes']);
+    $this->assertSame('section', $annotated['layout'][0]['_element']['markup']['tag']);
+    $this->assertSame([], $annotated['layout'][0]['_element']['markup']['attributes']);
   }
 
   /**
@@ -437,15 +484,16 @@ class BlueprintElementAnnotatorTest extends KernelTestBase {
         'title' => 'Hello there',
         'field_root_gone' => 'infrastructure',
       ],
-      'layout_builder__layout' => [],
+      'layout' => [],
     ];
 
-    $annotated = $this->annotator->annotate($blueprint, $root, 'full');
+    $annotated = $this->annotator->annotate($blueprint, $this->host($root), 'full');
 
     $this->assertSame(
       [
         'name' => 'Hello there',
         'type' => 'Landing page',
+        'icon' => $this->glyph('page'),
         'presentation' => ['mode' => Presentation::OPEN, 'edit_target' => 'title'],
         'markup' => $this->emptyMarkup(),
         'fields' => [
@@ -490,61 +538,59 @@ class BlueprintElementAnnotatorTest extends KernelTestBase {
     $blueprint = [
       'bundle' => 'landing_page',
       'fields' => ['title' => 'Hello there', 'field_summary' => 'Placed'],
-      'layout_builder__layout' => [
+      'layout' => [
         [
+          'kind' => 'container',
           'uuid' => 'section-uuid',
           'layout_id' => 'layout_onecol',
-          'regions' => [
-            'content' => [
-              ['uuid' => 'summary-block-uuid', 'plugin_id' => 'field_block:node:landing_page:field_summary'],
-              ['uuid' => 'foreign-field-uuid', 'plugin_id' => 'field_block:node:article:field_summary'],
-              ['uuid' => 'missing-field-uuid', 'plugin_id' => 'field_block:node:landing_page:field_nope'],
-              ['uuid' => 'plugin-uuid', 'plugin_id' => 'system_powered_by_block'],
-              ['uuid' => 'named-plugin-uuid', 'plugin_id' => 'system_powered_by_block', 'label' => 'Footer credits', 'label_display' => '0'],
-              ['uuid' => 'headed-plugin-uuid', 'plugin_id' => 'system_powered_by_block', 'label' => 'Footer credits', 'label_display' => 'visible'],
+          'children' => [
+            [
+              'kind' => 'region',
+              'region' => 'content',
+              'children' => [
+                ['kind' => 'block', 'uuid' => 'summary-block-uuid', 'field' => 'field_summary'],
+                ['kind' => 'block', 'uuid' => 'missing-field-uuid', 'field' => 'field_nope'],
+                ['kind' => 'block', 'uuid' => 'plugin-uuid', 'plugin_id' => 'system_powered_by_block'],
+                ['kind' => 'block', 'uuid' => 'named-plugin-uuid', 'plugin_id' => 'system_powered_by_block', 'label' => 'Footer credits'],
+                ['kind' => 'block', 'uuid' => 'headed-plugin-uuid', 'plugin_id' => 'system_powered_by_block', 'label' => 'Footer credits', 'label_rendered' => TRUE],
+              ],
             ],
           ],
         ],
       ],
     ];
 
-    $annotated = $this->annotator->annotate($blueprint, $root, 'full');
-    $components = $annotated['layout_builder__layout'][0]['regions']['content'];
+    $annotated = $this->annotator->annotate($blueprint, $this->host($root), 'full');
+    $components = $annotated['layout'][0]['children'][0]['children'];
 
     $this->assertSame(
       [
         'name' => 'Summary',
         'type' => 'Summary',
+        'icon' => $this->glyph('field-block'),
         'presentation' => ['mode' => Presentation::MERGED, 'label' => 'Summary', 'edit_target' => 'field_summary'],
         'presented_field' => 'field:' . $root->uuid() . ':field_summary',
       ],
       $components[0]['_element'],
       'The field block presents merged into the root field it renders and names it by key; the field label is both its name and its type.',
     );
-    // A field block of another bundle, or of a field the root lacks,
-    // presents nothing of this root: no presentation, no presented field.
-    // Like any plugin block it still names itself, here by its id, since
-    // no such field block derivative exists to lend an admin label.
+    // A field node of a field the root lacks presents nothing of this root:
+    // no presentation, no presented field. Like any plugin block it still
+    // names itself, here by the field name, since the subject has no such
+    // field to lend a label. (The tree names the field, never a per-bundle
+    // derivative, so there is no "field block of another bundle" to spell.)
     $this->assertSame(
-      ['name' => 'field_block:node:article:field_summary', 'type' => 'field_block:node:article:field_summary'],
+      ['name' => 'field_nope', 'type' => 'field_nope', 'icon' => $this->glyph('field-block')],
       $components[1]['_element'],
-      'A field block of another bundle presents nothing of this root.',
-    );
-    $this->assertSame(
-      ['name' => 'field_block:node:landing_page:field_nope', 'type' => 'field_block:node:landing_page:field_nope'],
-      $components[2]['_element'],
-      'A field block of a field the root lacks presents nothing of it.',
+      'A field node of a field the root lacks presents nothing of it.',
     );
     // A plain plugin block: the admin label is its type; a hidden
     // configured label is its name, a rendered one is content, so the type
     // stands in.
-    $this->assertSame(['name' => 'Powered by Drupal', 'type' => 'Powered by Drupal'], $components[3]['_element']);
-    $this->assertSame(['name' => 'Footer credits', 'type' => 'Powered by Drupal'], $components[4]['_element']);
-    $this->assertSame(['name' => 'Powered by Drupal', 'type' => 'Powered by Drupal'], $components[5]['_element']);
-    // The lean tree carries the same facts.
-    $tree_block = $annotated['_tree'][0]['children'][0]['children'][0];
-    $this->assertSame('summary-block-uuid', $tree_block['uuid']);
-    $this->assertSame('field:' . $root->uuid() . ':field_summary', $tree_block['_element']['presented_field']);
+    $this->assertSame($this->pluginWords('Powered by Drupal', 'Powered by Drupal'), $components[2]['_element']);
+    $this->assertSame($this->pluginWords('Footer credits', 'Powered by Drupal'), $components[3]['_element']);
+    $this->assertSame($this->pluginWords('Powered by Drupal', 'Powered by Drupal'), $components[4]['_element']);
+    $this->assertSame('summary-block-uuid', $components[0]['uuid']);
   }
 
   /**
@@ -581,28 +627,33 @@ class BlueprintElementAnnotatorTest extends KernelTestBase {
         'field_cta_text' => 'Hello',
         'field_cta_image' => ['target_id' => 3, '_label' => 'A picture'],
       ],
-      'layout_builder__layout' => [
+      'layout' => [
         [
+          'kind' => 'container',
           'uuid' => 'section-uuid',
           'layout_id' => 'layout_onecol',
-          'regions' => [
-            'content' => [
-              [
-                'uuid' => 'cta-uuid',
-                'block_type' => 'cta',
-                'label' => 'CTA',
-                'label_display' => '0',
-                'block_fields' => [
-                  'field_cta_text' => 'CTA text',
-                  'field_cta_image' => ['target_id' => 4, '_label' => 'CTA picture'],
+          'children' => [
+            [
+              'kind' => 'region',
+              'region' => 'content',
+              'children' => [
+                [
+                  'kind' => 'block',
+                  'uuid' => 'cta-uuid',
+                  'block_type' => 'cta',
+                  'label' => 'CTA',
+                  'block_fields' => [
+                    'field_cta_text' => 'CTA text',
+                    'field_cta_image' => ['target_id' => 4, '_label' => 'CTA picture'],
+                  ],
                 ],
-              ],
-              [
-                'uuid' => 'displayless-uuid',
-                'block_type' => 'text_block',
-                'label' => 'Text',
-                'label_display' => '0',
-                'block_fields' => ['field_text' => 'Some text'],
+                [
+                  'kind' => 'block',
+                  'uuid' => 'displayless-uuid',
+                  'block_type' => 'text_block',
+                  'label' => 'Text',
+                  'block_fields' => ['field_text' => 'Some text'],
+                ],
               ],
             ],
           ],
@@ -610,8 +661,8 @@ class BlueprintElementAnnotatorTest extends KernelTestBase {
       ],
     ];
 
-    $annotated = $this->annotator->annotate($blueprint, $root, 'full');
-    $components = $annotated['layout_builder__layout'][0]['regions']['content'];
+    $annotated = $this->annotator->annotate($blueprint, $this->host($root), 'full');
+    $components = $annotated['layout'][0]['children'][0]['children'];
 
     $this->assertSame(
       ['field_cta_image' => ['element' => FALSE]],
@@ -631,26 +682,44 @@ class BlueprintElementAnnotatorTest extends KernelTestBase {
   }
 
   /**
-   * A visible label joins the meaningful-content count at the delivery seam.
+   * A rendered label joins the meaningful-content count at the delivery seam.
+   *
+   * The fact is the tree's `label_rendered` (NodeTreeBuilder::labelRendered:
+   * a non-empty label with display on, which the serializer spells on the
+   * node only when TRUE), the same rule the canvas attribution reads, so a
+   * label that is displayed but empty renders nothing and counts for
+   * nothing: the one-field block stays merged.
    */
-  public function testLabelDisplayFeedsTheDerivedDefault(): void {
+  public function testLabelRenderedFeedsTheDerivedDefault(): void {
     $root = $this->container->get('entity_type.manager')
       ->getStorage('block_content')
       ->create(['type' => 'cta', 'info' => 'Root fixture']);
 
     $blueprint = [
-      'layout_builder__layout' => [
+      'layout' => [
         [
+          'kind' => 'container',
           'uuid' => 'section-uuid',
           'layout_id' => 'layout_onecol',
-          'regions' => [
-            'content' => [
-              [
-                'uuid' => 'labeled-uuid',
-                'block_type' => 'text_block',
-                'label' => 'Shown label',
-                'label_display' => 'visible',
-                'block_fields' => ['field_text' => 'Some text'],
+          'children' => [
+            [
+              'kind' => 'region',
+              'region' => 'content',
+              'children' => [
+                [
+                  'kind' => 'block',
+                  'uuid' => 'labeled-uuid',
+                  'block_type' => 'text_block',
+                  'label' => 'Shown label',
+                  'label_rendered' => TRUE,
+                  'block_fields' => ['field_text' => 'Some text'],
+                ],
+                [
+                  'kind' => 'block',
+                  'uuid' => 'blank-label-uuid',
+                  'block_type' => 'text_block',
+                  'block_fields' => ['field_text' => 'Some text'],
+                ],
               ],
             ],
           ],
@@ -658,11 +727,13 @@ class BlueprintElementAnnotatorTest extends KernelTestBase {
       ],
     ];
 
-    $annotated = $this->annotator->annotate($blueprint, $root, 'full');
-    $component = $annotated['layout_builder__layout'][0]['regions']['content'][0];
+    $annotated = $this->annotator->annotate($blueprint, $this->host($root), 'full');
+    $components = $annotated['layout'][0]['children'][0]['children'];
 
-    // Visible label + one field = two meaningful things: open.
-    $this->assertSame(['mode' => Presentation::OPEN], $component['_element']['presentation']);
+    // Rendered label + one field = two meaningful things: open.
+    $this->assertSame(['mode' => Presentation::OPEN], $components[0]['_element']['presentation']);
+    // Nothing rendered: one meaningful thing, merged.
+    $this->assertSame(Presentation::MERGED, $components[1]['_element']['presentation']['mode']);
   }
 
   /**
@@ -783,25 +854,30 @@ class BlueprintElementAnnotatorTest extends KernelTestBase {
         'title' => 'Hello there',
         'field_prose' => 'Root prose',
       ],
-      'layout_builder__layout' => [
+      'layout' => [
         [
+          'kind' => 'container',
           'uuid' => 'section-uuid',
           'layout_id' => 'layout_onecol',
-          'regions' => [
-            'content' => [
-              [
-                'uuid' => $component_uuid,
-                'block_type' => 'text',
-                'label' => 'Linked heading',
-                'label_display' => '0',
-                'block_fields' => ['field_text_text' => 'Read more'],
-              ],
-              [
-                'uuid' => $unminted_uuid,
-                'block_type' => 'text',
-                'label' => 'Unminted prose',
-                'label_display' => '0',
-                'block_fields' => ['field_text_text' => 'Plain'],
+          'children' => [
+            [
+              'kind' => 'region',
+              'region' => 'content',
+              'children' => [
+                [
+                  'kind' => 'block',
+                  'uuid' => $component_uuid,
+                  'block_type' => 'text',
+                  'label' => 'Linked heading',
+                  'block_fields' => ['field_text_text' => 'Read more'],
+                ],
+                [
+                  'kind' => 'block',
+                  'uuid' => $unminted_uuid,
+                  'block_type' => 'text',
+                  'label' => 'Unminted prose',
+                  'block_fields' => ['field_text_text' => 'Plain'],
+                ],
               ],
             ],
           ],
@@ -809,14 +885,14 @@ class BlueprintElementAnnotatorTest extends KernelTestBase {
       ],
     ];
 
-    $annotated = $this->annotator->annotate($blueprint, $root, 'full');
+    $annotated = $this->annotator->annotate($blueprint, $this->host($root), 'full');
 
     // The component's markup: the data-decided tag, the present link part
     // carrying its resolved href, the text slot claimed by the anchor,
     // the composed block's instance elements, first-carrier-owned, nested
     // carriers nesting, and the distinct tags the prose contains (the
     // unminted `strong` included) in first-occurrence order.
-    $component = $annotated['layout_builder__layout'][0]['regions']['content'][0];
+    $component = $annotated['layout'][0]['children'][0]['children'][0];
     $this->assertTrue($component['_element']['composed']);
     $this->assertSame(
       [
@@ -864,7 +940,7 @@ class BlueprintElementAnnotatorTest extends KernelTestBase {
     // No carrier anywhere: `instances` is absent (the annotation claims
     // nothing it cannot back) while `tags` still answers presence, so a
     // never-minting link or emphasis is offerable on this block.
-    $unminted_markup = $annotated['layout_builder__layout'][0]['regions']['content'][1]['_element']['markup'];
+    $unminted_markup = $annotated['layout'][0]['children'][0]['children'][1]['_element']['markup'];
     $this->assertArrayNotHasKey('instances', $unminted_markup);
     $this->assertSame(['p', 'a', 'em'], $unminted_markup['tags']);
 
@@ -992,25 +1068,30 @@ class BlueprintElementAnnotatorTest extends KernelTestBase {
     $blueprint = [
       'bundle' => 'landing_page',
       'fields' => ['title' => 'Hello there'],
-      'layout_builder__layout' => [
+      'layout' => [
         [
+          'kind' => 'container',
           'uuid' => 'section-uuid',
           'layout_id' => 'layout_onecol',
-          'regions' => [
-            'content' => [
-              [
-                'uuid' => $linked_uuid,
-                'block_type' => 'image',
-                'label' => 'Linked vector',
-                'label_display' => '0',
-                'block_fields' => [],
-              ],
-              [
-                'uuid' => $unlinked_uuid,
-                'block_type' => 'image',
-                'label' => 'Unlinked raster',
-                'label_display' => '0',
-                'block_fields' => [],
+          'children' => [
+            [
+              'kind' => 'region',
+              'region' => 'content',
+              'children' => [
+                [
+                  'kind' => 'block',
+                  'uuid' => $linked_uuid,
+                  'block_type' => 'image',
+                  'label' => 'Linked vector',
+                  'block_fields' => [],
+                ],
+                [
+                  'kind' => 'block',
+                  'uuid' => $unlinked_uuid,
+                  'block_type' => 'image',
+                  'label' => 'Unlinked raster',
+                  'block_fields' => [],
+                ],
               ],
             ],
           ],
@@ -1018,8 +1099,8 @@ class BlueprintElementAnnotatorTest extends KernelTestBase {
       ],
     ];
 
-    $annotated = $this->annotator->annotate($blueprint, $root, 'full');
-    $components = $annotated['layout_builder__layout'][0]['regions']['content'];
+    $annotated = $this->annotator->annotate($blueprint, $this->host($root), 'full');
+    $components = $annotated['layout'][0]['children'][0]['children'];
 
     // Linked vector: the anchor form wins first-match on the root, the
     // part nests as its matched svg form's element, and the form's own
@@ -1062,10 +1143,9 @@ class BlueprintElementAnnotatorTest extends KernelTestBase {
   /**
    * The naming spine: `name` and `type` ride every node of the lean tree.
    *
-   * The two facts are minted once here and delivered as data, so the
-   * assertions read them off `_tree`, the shape the satellite receives
-   * over the broadcast channel (no facade, no `Drupal.t`), not only off
-   * `layout_builder__layout`. Per node kind and depth: a section of the
+   * The two facts are minted once here and delivered as data, read off
+   * `layout`, the shape the satellite receives over the broadcast channel
+   * (no facade, no `Drupal.t`). Per node kind and depth: a section of the
    * root layout is a Section, one nested inside a component list a
    * Container, and either is NAMED by its custom label when renamed, else
    * by its type word (never a humanized layout id); a fresh text block
@@ -1105,35 +1185,34 @@ class BlueprintElementAnnotatorTest extends KernelTestBase {
     $blueprint = [
       'bundle' => 'landing_page',
       'fields' => ['title' => 'Hello there', 'field_summary' => 'Placed'],
-      'layout_builder__layout' => [
+      'layout' => [
         [
+          'kind' => 'container',
           'uuid' => 'renamed-band-uuid',
           'layout_id' => 'daedalus_stylish_container',
           'label' => 'Welcome',
           'children' => [
             [
+              'kind' => 'block',
               'uuid' => 'fresh-text-uuid',
               'block_type' => 'text_block',
-              'label' => '',
-              'label_display' => '0',
               'block_fields' => ['field_text' => "Try it\nA second line the name never shows"],
             ],
             [
+              'kind' => 'container',
               'uuid' => 'nested-container-uuid',
               'layout_id' => 'daedalus_stylish_container',
               'children' => [
                 [
+                  'kind' => 'block',
                   'uuid' => 'long-text-uuid',
                   'block_type' => 'text_block',
-                  'label' => '',
-                  'label_display' => '0',
                   'block_fields' => ['field_text' => $long],
                 ],
                 [
+                  'kind' => 'block',
                   'uuid' => 'empty-text-uuid',
                   'block_type' => 'text_block',
-                  'label' => '',
-                  'label_display' => '0',
                   'block_fields' => ['field_text' => '   '],
                 ],
               ],
@@ -1141,27 +1220,35 @@ class BlueprintElementAnnotatorTest extends KernelTestBase {
           ],
         ],
         [
+          'kind' => 'container',
           'uuid' => 'fresh-band-uuid',
           'layout_id' => 'layout_onecol',
-          'regions' => [
-            'content' => [
-              [
-                'uuid' => 'heading-uuid',
-                'block_type' => 'heading',
-                'label' => $long,
-                'label_display' => 'visible',
-                'block_fields' => [],
-              ],
-              [
-                'uuid' => 'blank-heading-uuid',
-                'block_type' => 'heading',
-                'label' => '',
-                'label_display' => 'visible',
-                'block_fields' => [],
-              ],
-              [
-                'uuid' => 'summary-block-uuid',
-                'plugin_id' => 'field_block:node:landing_page:field_summary',
+          'children' => [
+            [
+              'kind' => 'region',
+              'region' => 'content',
+              'children' => [
+                [
+                  'kind' => 'block',
+                  'uuid' => 'heading-uuid',
+                  'block_type' => 'heading',
+                  'label' => $long,
+                  'label_rendered' => TRUE,
+                  'block_fields' => [],
+                ],
+                // A blank label with display on renders nothing: the
+                // serializer spells no label and no label_rendered.
+                [
+                  'kind' => 'block',
+                  'uuid' => 'blank-heading-uuid',
+                  'block_type' => 'heading',
+                  'block_fields' => [],
+                ],
+                [
+                  'kind' => 'block',
+                  'uuid' => 'summary-block-uuid',
+                  'field' => 'field_summary',
+                ],
               ],
             ],
           ],
@@ -1169,8 +1256,8 @@ class BlueprintElementAnnotatorTest extends KernelTestBase {
       ],
     ];
 
-    $annotated = $this->annotator->annotate($blueprint, $root, 'full');
-    $tree = $annotated['_tree'];
+    $annotated = $this->annotator->annotate($blueprint, $this->host($root), 'full');
+    $tree = $annotated['layout'];
     $names = static fn (array $node): array => [$node['_element']['name'], $node['_element']['type']];
 
     // The root (not a tree node) names by its entity label, types by its
@@ -1213,6 +1300,235 @@ class BlueprintElementAnnotatorTest extends KernelTestBase {
     // The field block: the field's label is both name and type.
     $this->assertSame('summary-block-uuid', $blocks[2]['uuid']);
     $this->assertSame(['Summary', 'Summary'], $names($blocks[2]));
+  }
+
+  /**
+   * A container's and an inline block's icon are the providers' answer.
+   *
+   * The annotator answers its own kinds; a container and an inline block
+   * are another module's concepts, so with no provider they carry NULL (the
+   * pins above) and with providers the collector asks them in service
+   * priority order, the first non-null answer winning: the test module's
+   * leading provider names the container and passes on the block, which
+   * its trailing provider names, although the trailing one is declared
+   * first. A plugin block is never asked. What a provider reads rides the
+   * caller's cacheability.
+   */
+  public function testIconProvidersAnswerContainersAndInlineBlocks(): void {
+    $this->enableModules(['daedalus_ui_icon_test']);
+    $annotator = $this->container->get('daedalus_ui.element_annotator');
+    $root = $this->container->get('entity_type.manager')
+      ->getStorage('block_content')
+      ->create(['type' => 'cta', 'info' => 'Root fixture']);
+    $blueprint = [
+      'bundle' => 'cta',
+      'fields' => ['field_cta_text' => 'Hello'],
+      'layout' => [
+        [
+          'kind' => 'container',
+          'uuid' => 'section-uuid',
+          'layout_id' => 'layout_onecol',
+          'children' => [
+            [
+              'kind' => 'region',
+              'region' => 'content',
+              'children' => [
+                [
+                  'kind' => 'block',
+                  'uuid' => 'text-uuid',
+                  'block_type' => 'text_block',
+                  'block_fields' => ['field_text' => 'Some text'],
+                ],
+                ['kind' => 'block', 'uuid' => 'plugin-uuid', 'plugin_id' => 'system_powered_by_block'],
+              ],
+            ],
+          ],
+        ],
+      ],
+    ];
+
+    $cacheability = new CacheableMetadata();
+    $annotated = $annotator->annotate($blueprint, $this->host($root), 'full', $cacheability);
+    $section = $annotated['layout'][0];
+    $components = $section['children'][0]['children'];
+
+    $this->assertSame('/leading/container.svg', $section['_element']['icon'], 'The higher-priority provider answers first, whatever the declaration order.');
+    $this->assertSame(['name', 'type', 'icon', 'markup'], array_keys($section['_element']), 'The icon sits beside the two words.');
+    $this->assertSame('/trailing/block.svg', $components[0]['_element']['icon'], 'A NULL answer falls through to the next provider.');
+    $this->assertSame($this->glyph('plugin-block'), $components[1]['_element']['icon'], 'A plugin block is daedalus_ui\'s own kind: the providers are never asked.');
+    $this->assertSame($this->glyph('page'), $annotated['_element']['icon'], 'The root is daedalus_ui\'s own kind too.');
+    $this->assertContains(LeadingIconProvider::CACHE_TAG, $cacheability->getCacheTags(), 'What a provider read rides the caller\'s cacheability.');
+
+    // The tree-only seam mints the same way.
+    $tree = $annotator->annotateTree($blueprint['layout'], $this->host($root));
+    $this->assertSame('/leading/container.svg', $tree[0]['_element']['icon']);
+    $this->assertSame('/trailing/block.svg', $tree[0]['children'][0]['children'][0]['_element']['icon']);
+  }
+
+  /**
+   * A join carries its words, the door glyph and the showing; roots their kind.
+   *
+   * A slot door is typed "Slot" and named by its derivative's admin label
+   * (the roster's word with the kind's, "Hero slot"), wears daedalus_ui's
+   * own slot glyph and carries `showing`: the spine's one answer for what
+   * it shows seen from this canvas (VerdictStamper::showing()), the
+   * portal's url resolved here. A linked placement carries the same
+   * `showing` instead of a url of its own, and a plain plugin block, no
+   * join, carries none. The portal rides only for an actor who may update
+   * the shown blueprint. The frame's root is typed "Site frame", a saved
+   * blueprint's "Blueprint" (not its blueprint type's bundle label).
+   */
+  public function testJoinsCarryTheShowingAndRootsTheirKind(): void {
+    // daedalus_layout for the section uuid's config schema on the frame,
+    // the library for the blueprint entity a door defaults to.
+    $this->enableModules(['daedalus_layout', 'options', 'daedalus_blueprint_library']);
+    $this->installEntitySchema('file');
+    $this->installSchema('file', ['file_usage']);
+    $this->installEntitySchema('media');
+    $this->installEntitySchema('blueprint');
+    $this->installConfig(['image', 'file', 'media', 'daedalus_blueprint_library']);
+    $this->container->get('theme_installer')->install(['stark']);
+    $this->setUpCurrentUser([], [], TRUE);
+    // The rebuilt container's annotator: setUp()'s predates the library.
+    $annotator = $this->container->get('daedalus_ui.element_annotator');
+    // A frame-tier slot: the roster save rebuilds the slot block
+    // definitions, so daedalus_slot:hero exists at once.
+    $this->container->get('config.factory')->getEditable(SlotBlock::CONFIG_NAME)
+      ->set(SlotBlock::ROSTER_KEY, ['hero' => ['label' => 'Hero', 'tier' => SlotRoster::TIER_FRAME]])
+      ->save();
+    $blueprint = Blueprint::create([
+      'type' => 'section',
+      'label' => 'Card',
+      'machine_name' => 'card',
+      'description' => 'A door default.',
+      'scope' => 'block',
+      // A sample of the subject renders the blueprint's canvas: a bundle
+      // the sample generator can fill (no media reference).
+      'subject_type' => 'block_content',
+      'subject_bundle' => 'text_block',
+      'status' => 1,
+      'layout_builder__layout' => [new Section('layout_onecol')],
+    ]);
+    $blueprint->save();
+    $uuid = $this->container->get('uuid');
+    $door = $uuid->generate();
+    $linked = $uuid->generate();
+    $plain = $uuid->generate();
+    $section = new Section('layout_onecol', [], [
+      new SectionComponent($door, 'content', [
+        'id' => SlotBlock::PLUGIN_ID . ':hero',
+        // A door's configured label is never its name.
+        'label' => 'Top of every page',
+        'label_display' => '0',
+        'context_mapping' => SlotBlock::CONTEXT_MAPPING,
+        SlotBlock::DEFAULT_KEY => 'card',
+      ]),
+      new SectionComponent($linked, 'content', [
+        'id' => LinkedBlueprintBlock::pluginId('card'),
+        'label_display' => '0',
+        'context_mapping' => LinkedBlueprintBlock::CONTEXT_MAPPING,
+      ]),
+      new SectionComponent($plain, 'content', [
+        'id' => 'system_powered_by_block',
+        'label' => 'Chrome',
+        'label_display' => '0',
+      ]),
+    ]);
+    $section->setThirdPartySetting('daedalus_layout', 'uuid', $uuid->generate());
+    $frame = Frame::create(['id' => 'stark']);
+    $frame->appendSection($section);
+    $frame->save();
+
+    $host = $this->container->get('daedalus_blueprint.host_resolver')->fromEntity($frame);
+    $stamper = $this->container->get('daedalus_blueprint.verdict_stamper');
+    $tree = $this->container->get('daedalus_blueprint.node_tree_builder')->build($host);
+    $annotate = fn (): array => $annotator->annotateTree($stamper->stampTree($tree, $host), $host);
+    $nodes = $this->componentsByUuid($annotate());
+    $document = ['entity_type' => 'blueprint', 'id' => (string) $blueprint->id(), 'label' => 'Card'];
+    $portal = [
+      'entity_type' => 'blueprint',
+      'entity_id' => (string) $blueprint->id(),
+      'label' => 'Card',
+      'url' => $blueprint->toUrl()->toString(),
+    ];
+
+    $element = $nodes[$door]['_element'];
+    $this->assertSame('Hero slot', $element['name'], 'The door is named by its derivative\'s admin label, never its configured label.');
+    $this->assertSame('Slot', $element['type']);
+    $this->assertSame($this->glyph('slot'), $element['icon']);
+    $this->assertSame(['name', 'type', 'icon', 'can', 'refused', 'showing'], array_keys($element));
+    $this->assertSame([
+      'shows' => 'default',
+      'document' => $document,
+      'blueprint' => 'card',
+      'portal' => $portal,
+      'claimable' => FALSE,
+    ], $element['showing'], 'The door shows its default by reference on the frame\'s own canvas, with the portal to the blueprint\'s canvas; a door is claimed from the page it frames, never from its own canvas.');
+
+    $element = $nodes[$linked]['_element'];
+    $this->assertSame('Card', $element['name']);
+    $this->assertSame('Linked blueprint', $element['type']);
+    $this->assertSame(['name', 'type', 'icon', 'can', 'refused', 'showing'], array_keys($element), 'The showing replaces the url the linked node once carried.');
+    $this->assertSame([
+      'shows' => 'default',
+      'document' => $document,
+      'blueprint' => 'card',
+      'portal' => $portal,
+      'claimable' => FALSE,
+    ], $element['showing']);
+
+    $this->assertSame(
+      $this->pluginWords('Powered by Drupal', 'Powered by Drupal'),
+      array_intersect_key($nodes[$plain]['_element'], array_flip(['name', 'type', 'icon'])),
+      'A plugin block keeps its words and glyph.',
+    );
+    $this->assertArrayNotHasKey('showing', $nodes[$plain]['_element'], 'A plugin block that is no join carries no showing.');
+
+    // An actor who may not update the blueprint sees what the door shows
+    // and gets no portal: the spine's rule, copied, never re-judged here.
+    $this->setCurrentUser($this->createUser([]));
+    $nodes = $this->componentsByUuid($annotate());
+    $this->assertSame('default', $nodes[$door]['_element']['showing']['shows']);
+    $this->assertNull($nodes[$door]['_element']['showing']['portal']);
+    $this->assertNull($nodes[$linked]['_element']['showing']['portal']);
+
+    // The roots: the frame's and a saved blueprint's.
+    $root = $annotator->annotate(['layout' => []], $host, 'full')['_element'];
+    $this->assertSame('Stark', $root['name']);
+    $this->assertSame('Site frame', $root['type']);
+    $this->assertSame($this->glyph('template'), $root['icon']);
+    $blueprint_host = $this->container->get('daedalus_blueprint.host_resolver')->fromEntity($blueprint);
+    $root = $annotator->annotate(['bundle' => 'section', 'fields' => [], 'layout' => []], $blueprint_host, 'full')['_element'];
+    $this->assertSame('Card', $root['name']);
+    $this->assertSame('Blueprint', $root['type'], 'A blueprint\'s canvas root is typed by what it is to the editor, not by its blueprint type.');
+    $this->assertSame($this->glyph('page'), $root['icon']);
+  }
+
+  /**
+   * The component nodes of a tree's first section, keyed by uuid.
+   */
+  protected function componentsByUuid(array $tree): array {
+    $nodes = [];
+    foreach ($tree[0]['children'] ?? [] as $child) {
+      foreach (($child['kind'] ?? NULL) === 'region' ? $child['children'] : [$child] as $node) {
+        $nodes[$node['uuid']] = $node;
+      }
+    }
+    return $nodes;
+  }
+
+  /**
+   * A plugin block's whole annotation: its two words and the plugin glyph.
+   */
+  protected function pluginWords(string $name, string $type): array {
+    return ['name' => $name, 'type' => $type, 'icon' => $this->glyph('plugin-block')];
+  }
+
+  /**
+   * The URL of one of daedalus_ui's own outline glyphs (assets/outline).
+   */
+  protected function glyph(string $name): string {
+    return '/' . $this->container->get('extension.list.module')->getPath('daedalus_ui') . '/assets/outline/' . $name . '.svg';
   }
 
   /**

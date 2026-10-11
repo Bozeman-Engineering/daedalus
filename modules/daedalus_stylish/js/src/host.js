@@ -40,8 +40,14 @@ const PopOutIcon = () => (
  *   The variant gesture gates (drupalSettings.daedalusStylish.variants).
  * @param {object} [props.swatches]
  *   The swatch gesture gates (drupalSettings.daedalusStylish.swatches).
+ * @param {object} [props.tokens]
+ *   The token gesture gates (drupalSettings.daedalusStylish.tokens).
  * @param {object} [props.animations]
  *   The animation gesture gates (drupalSettings.daedalusStylish.animations).
+ * @param {object} [props.fonts]
+ *   The font gesture gates (drupalSettings.daedalusStylish.fonts).
+ * @param {object} [props.skin]
+ *   The skin gesture gates (drupalSettings.daedalusStylish.skin).
  * @param {?object} [props.previewWindow]
  *   The preview-window opener {url, scope} for the chip row's width-menu
  *   tail, composed by the entry point from daedalusUi.responsivePreview.url
@@ -53,7 +59,10 @@ export const InspectorHost = ({
   guide = {},
   variants = {},
   swatches = {},
+  tokens = {},
   animations = {},
+  fonts = {},
+  skin = {},
   previewWindow = null,
 }) => {
   const [poppedOut, setPoppedOut] = useState(
@@ -117,7 +126,10 @@ export const InspectorHost = ({
       rail
       variants={variants}
       swatches={swatches}
+      tokens={tokens}
       animations={animations}
+      fonts={fonts}
+      skin={skin}
       previewWindow={previewWindow}
     />
   );

@@ -63,6 +63,7 @@ class AnimationStylesheetTest extends KernelTestBase {
     parent::setUp();
     $this->installEntitySchema('user');
     $this->installEntitySchema('daedalus_animation');
+    $this->installEntitySchema('daedalus_font');
     $this->installConfig(['daedalus_stylish']);
   }
 

@@ -13,11 +13,11 @@ type: default
 # repeats page to page. It names no material and restates no grammar:
 # the design system brief in the cached instructions carries the
 # system's identity, its axes with their descriptions, its looks, its
-# stencils and named values; the Page language section carries every
-# write mechanic (ops, selectors, wrappers, class wear, stencil
+# blueprints and named values; the Page language section carries every
+# write mechanic (ops, selectors, wrappers, class wear, blueprint
 # placement, the motion trigger pair); the schema carries the entity's
-# fields, the full material descriptions and every stencil printed as a
-# fragment. A fact about one material lives on its record, never here.
+# fields, the full material descriptions and every blueprint printed as
+# a fragment. A fact about one material lives on its record, never here.
 # Type and color are the design system's business (the identity, the
 # skin, the tokens), so the doctrine says nothing about them.
 blocking_step_of:
@@ -27,11 +27,11 @@ instructions: |
   designed thing instead of an assembly of parts. The FACTS live
   elsewhere and win on conflict: the design system brief in your
   instructions carries the system you design inside (its identity, its
-  axes and what each value is for, its saved looks, its stencils and
+  axes and what each value is for, its saved looks, its blueprints and
   named values), the Page language section carries every write mechanic,
   and the schema (eb_read_schema) carries the block catalog with each
   type's anatomy and field guidance, the entity's fields, the materials
-  in full and every stencil printed as a fragment. This doctrine names
+  in full and every blueprint printed as a fragment. This doctrine names
   no block types and no materials on purpose, and it carries no section
   recipe: the brief and the catalog say what exists on this site, and
   what THIS page is made of is decided fresh from its subject.
@@ -88,13 +88,17 @@ instructions: |
   spare and what is dense, what stands alone and what clusters. Every
   axis offers its values so you can pick the ones this page needs and
   leave the rest; a material is a choice, never a checklist.
-  Stencils are the system's pre-approved blocks and its worked examples,
-  never anchors. Per page, decide for each one: fill it with this page's
-  content when it fits, build beside it in the same spirit, or skip it
-  for a better idea. Hand-rolled work from the same materials is as on
-  brand as a placement, and it is where a page gets its own shape. Save
-  a section as a stencil (save_material with kind stencil, a page_edit
-  op) only when the user asks; never volunteer it.
+  Blueprints are the system's pre-approved blocks and its worked
+  examples, never anchors. Per page, decide for each one: fill it with
+  this page's content when it fits, build beside it in the same spirit,
+  or skip it for a better idea. Hand-rolled work from the same materials
+  is as on brand as a placement, and it is where a page gets its own
+  shape. Save a section as a blueprint (save_material with kind
+  blueprint, a page_edit op) only when the user asks; never volunteer
+  it. A saved blueprint is a page of its own: when the user asks to
+  change the blueprint itself (not one placement), edit it with the page
+  tools as entity_type blueprint, and compose a new one from scratch
+  with page_create the way you would a page.
   Materials first: wear a saved look when one expresses the intent,
   compose from the named values next, write raw values last. Before
   overriding a value on an element that wears a look, read the element's
@@ -145,8 +149,8 @@ instructions: |
   shape: a heading, a paragraph, three items. A section that exists
   because pages usually have one, not because this page needs it. Copy
   that could introduce any organization ("Welcome to our site", "We are
-  passionate about"). A stencil with the sample copy swapped and nothing
-  else changed. Emphasis spread evenly so nothing leads. If your plan
+  passionate about"). A blueprint with the sample copy swapped and
+  nothing else changed. Emphasis spread evenly so nothing leads. If your plan
   matches any of these, that part was a formula, not a decision; decide
   it again from the subject.
 
@@ -156,7 +160,7 @@ instructions: |
      page-language print, and your instructions carry the design system
      brief and the element vocabulary. eb_read_schema adds what those do
      not carry (the entity's fields, the block catalog's anatomy and
-     field guidance, every material's full description, every stencil
+     field guidance, every material's full description, every blueprint
      in full): read it before designing a NEW page.
   2. SKILLS. Invoke the skins skill only if you are about to change
      site-wide vocabulary (a token, a skin, the site's element
@@ -167,7 +171,7 @@ instructions: |
      name the one section that could only exist for this page, sketch
      the sequence of bands in the order the job wants them, and name
      what each will wear from the brief (which axis values, which
-     looks, which stencils filled, built beside, or placed as is). In
+     looks, which blueprints filled, built beside, or placed as is). In
      the workshopping posture, critique the plan before building (see
      the postures). When the workflow requires approval (creating a
      whole entity), present this plan and wait.

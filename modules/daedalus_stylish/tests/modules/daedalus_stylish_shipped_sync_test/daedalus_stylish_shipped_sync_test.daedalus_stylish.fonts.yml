@@ -1,0 +1,8 @@
+# The font the shipped skin's font token names as "Sync Test Sans": the
+# family a stack references, its one face's bytes under assets/fonts/.
+sync_test_font:
+  label: 'Sync test font'
+  family: 'Sync Test Sans'
+  faces:
+    - source:
+        file: sync-test-sans.woff2

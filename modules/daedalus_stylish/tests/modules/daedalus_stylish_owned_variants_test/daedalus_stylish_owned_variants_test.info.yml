@@ -1,6 +1,6 @@
 name: 'Daedalus Stylish owned variants test'
 type: module
-description: 'Ships a stencil-owned variant for testing the disk lane without daedalus_blueprint_stencil.'
+description: 'Ships a blueprint-owned variant for testing the disk lane without daedalus_blueprint_library.'
 package: Testing
 core_version_requirement: '*'
 hidden: true

@@ -4,15 +4,11 @@ declare(strict_types=1);
 
 namespace Drupal\Tests\daedalus_stylish\Kernel;
 
-use Drupal\Core\Logger\RfcLoggerTrait;
 use Drupal\KernelTests\KernelTestBase;
-use Drupal\daedalus_stylish\Entity\DaedalusStylishSkin;
 use Drupal\daedalus_stylish\Exception\StyleGuideException;
 use Drupal\daedalus_stylish\StyleGuide;
-use Drupal\Tests\daedalus\Traits\DesignSystemActivationTrait;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
-use Psr\Log\LoggerInterface;
 use Drupal\Tests\user\Traits\UserCreationTrait;
 
 /**
@@ -30,7 +26,6 @@ use Drupal\Tests\user\Traits\UserCreationTrait;
 #[RunTestsInSeparateProcesses]
 class StyleGuideTokenScalesTest extends KernelTestBase {
 
-  use DesignSystemActivationTrait;
   use UserCreationTrait;
 
   /**
@@ -72,6 +67,7 @@ class StyleGuideTokenScalesTest extends KernelTestBase {
     // consumer needs the swatch entity schema.
     $this->installEntitySchema('daedalus_swatch');
     $this->installEntitySchema('daedalus_animation');
+    $this->installEntitySchema('daedalus_font');
     // The materials roster's daedalus_stylish provider reads all four storages on
     // every build, and every compile and validation builds it.
     $this->installEntitySchema('daedalus_variant');
@@ -82,7 +78,13 @@ class StyleGuideTokenScalesTest extends KernelTestBase {
     // mirror motion-* and --swatch-* references into the usage tables and
     // switch to an administrative account, so the fixture carries both.
     $this->installEntitySchema('user');
-    $this->installSchema('daedalus_stylish', ['daedalus_variant_usage', 'daedalus_swatch_usage', 'daedalus_animation_usage']);
+    $this->installSchema('daedalus_stylish', [
+      'daedalus_variant_usage',
+      'daedalus_swatch_usage',
+      'daedalus_animation_usage',
+      'daedalus_token_usage',
+      'daedalus_font_usage',
+    ]);
     $this->setUpCurrentUser([], [], TRUE);
     $this->styleGuide = $this->container->get('daedalus_stylish.style_guide');
   }
@@ -354,7 +356,7 @@ class StyleGuideTokenScalesTest extends KernelTestBase {
    *
    * Entries are token names as the skin spells them; a numeric name
    * arrives from YAML as an int and is legal (consumers compare its
-   * string form).
+   * string form, as the contract check does).
    */
   public function testStopsCurationParses(): void {
     $this->container->get('state')->set('daedalus_stylish_control_test.kinds', [
@@ -364,7 +366,12 @@ class StyleGuideTokenScalesTest extends KernelTestBase {
         ],
       ],
     ]);
-    $this->declareScales(['space' => ['label' => 'Space', 'shape' => 'dimension']]);
+    // A curated scale declares its contract, and the stops name it
+    // (TokenContractTest owns that grammar).
+    $this->declareSite([
+      'token_scales' => ['space' => ['label' => 'Space', 'shape' => 'dimension']],
+      'token_contract' => ['space' => ['2', '4', '8']],
+    ]);
     $declaration = $this->styleGuide->getKind('block', self::THEME);
     $this->assertSame(['2', 4, '8'], $declaration['property_groups']['spacing']['constraints']['padding']['stops']);
   }
@@ -415,68 +422,6 @@ class StyleGuideTokenScalesTest extends KernelTestBase {
     $this->expectException(StyleGuideException::class);
     $this->expectExceptionMessageMatches('/property "font-size" of part "\.quote" of block type "testimonial" references the token scale \'radius\'/');
     $this->styleGuide->getBlockType('testimonial', self::THEME);
-  }
-
-  /**
-   * Un-minted stops warn at payload build; fully minted stops stay quiet.
-   *
-   * Stops entries are guide code naming skin data, so membership is
-   * deliberately NOT a guide-build error (skin data must never brick the
-   * guide); the payload build is where the two meet, and the drift logs
-   * there — once, naming the property, its declaration, and the missing
-   * names.
-   */
-  public function testUnmintedStopsWarnAtPayloadBuild(): void {
-    $warnings = [];
-    $this->container->get('logger.factory')->addLogger(new class ($warnings) implements LoggerInterface {
-      use RfcLoggerTrait;
-
-      /**
-       * The test's log lines, aliased.
-       */
-      protected array $sink;
-
-      /**
-       * Promotion can't take a reference: the sink must alias the test's
-       * local array so assertions read what the walk logged.
-       */
-      public function __construct(array &$sink) {
-        $this->sink = &$sink;
-      }
-
-      /**
-       * {@inheritdoc}
-       */
-      public function log($level, string|\Stringable $message, array $context = []): void {
-        if ($context['channel'] === 'daedalus_stylish') {
-          $this->sink[] = strtr((string) $message, ['@drift' => (string) ($context['@drift'] ?? '')]);
-        }
-      }
-
-    });
-    $this->container->get('state')->set('daedalus_stylish_control_test.kinds', [
-      'block' => [
-        'property_groups' => [
-          'spacing' => ['constraints' => ['padding' => ['scale' => 'space', 'stops' => ['2', '16']]]],
-        ],
-      ],
-    ]);
-    $this->declareScales(['space' => ['label' => 'Space', 'shape' => 'dimension']]);
-
-    $skin = DaedalusStylishSkin::create(['label' => 'Test', 'machine_name' => 'test', 'status' => TRUE]);
-    $skin->setTokens(['space' => ['2' => '0.5rem']])->save();
-    $this->activateSkin($skin);
-    // The activation syncs every enabled module and logs the outcomes on
-    // the same channel: the sink reads the payload build alone.
-    $warnings = [];
-    $this->container->get('daedalus_stylish.client_style_guide')->build(self::THEME);
-    $this->assertCount(1, $warnings, 'One drift warning logs per payload build.');
-    $this->assertStringContainsString('padding of kind "block" ("space" scale: 16)', $warnings[0], 'The warning names the property, its declaration, and only the un-minted names.');
-
-    $warnings = [];
-    $skin->setTokens(['space' => ['2' => '0.5rem', '16' => '4rem']])->save();
-    $this->container->get('daedalus_stylish.client_style_guide')->build(self::THEME);
-    $this->assertSame([], $warnings, 'Fully minted stops log nothing.');
   }
 
 }

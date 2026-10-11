@@ -2,7 +2,7 @@
  * @file
  * Locks the variant picker's pure half (variant-picker-model.js): the
  * offer regrouped by axis in declaration order, worn variants marked,
- * fit hints, the owner heading (a stencil's curated looks ahead of the
+ * fit hints, the owner heading (a blueprint's curated looks ahead of the
  * axis's generic ones), the axis preset (the swap) and type-to-filter.
  * The offer itself is variant-scope's (applicableVariants / rankVariants, locked
  * in variant-scope.test.mjs); the picker derives none. Run with:
@@ -12,15 +12,15 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { matchesNeedle, pickerGroups, pickerHome, pickerIds } from '../../js/src/variant-picker-model.js';
 import { listboxTarget } from '../../js/src/palette-picker-model.js';
-import { roster, stencilRecord, variantRecord } from './materials-fixture.mjs';
+import { roster, blueprintRecord, variantRecord } from './materials-fixture.mjs';
 
 const GUIDE = { axisLabels: { container_layout: 'Layout' } };
 const VOCABULARY = ['style', 'container_layout', 'animation', 'hover'];
-// The owners: a content stencil and a file-shipped one, both named by
+// The owners: a content blueprint and a file-shipped one, both named by
 // their machine name in the roster (the two ownership lanes).
 const MATERIALS = roster(
-  stencilRecord('card', { label: 'Card' }),
-  stencilRecord('hero', { label: 'Hero', updatable: false }),
+  blueprintRecord('card', { label: 'Card' }),
+  blueprintRecord('hero', { label: 'Hero', updatable: false }),
 );
 
 const card = variantRecord('card', { label: 'Card', description: 'Padded surface with a soft shadow.' });
@@ -61,8 +61,8 @@ test('pickerGroups: one group per axis with an offer, vocabulary order, ranked o
   assert.deepEqual(groups.map((group) => group.owner), [null, null, null, null]);
 });
 
-// The owned offer: a card placement's stencil curates two style looks and
-// a hover look; a file-shipped hero stencil curates one style look. The
+// The owned offer: a card placement's blueprint curates two style looks and
+// a hover look; a file-shipped hero blueprint curates one style look. The
 // offer gate (applicableVariants) admits only the placement's own owner
 // in production; the model groups whatever it is handed.
 const cardBold = variantRecord('card_bold', { label: 'Bold', owned_by: 'card', description: 'Heavy border, loud shadow.' });
@@ -127,7 +127,7 @@ test('pickerGroups: search matches the owner label, and an owned option still an
   // The owner label counts as a token beside the axis label and description.
   assert.deepEqual(at('card loud'), [['Card', ['card_bold']]]);
   assert.deepEqual(at('card hover'), [['Card', ['card_lift']]]);
-  // A generic option never answers to a stencil's name.
+  // A generic option never answers to a blueprint's name.
   assert.deepEqual(at('hero quiet'), []);
 });
 

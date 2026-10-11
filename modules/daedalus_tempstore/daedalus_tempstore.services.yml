@@ -40,6 +40,7 @@ services:
         '@daedalus_tempstore.strategy_selector',
         '@tempstore.shared',
         '@current_user',
+        '@daedalus_blueprint.host_resolver',
       ]
 
   daedalus_tempstore.history_response_subscriber:
@@ -50,7 +51,11 @@ services:
 
   daedalus_tempstore.section_storage_helper:
     class: Drupal\daedalus_tempstore\SectionStorageHelper
-    arguments: ['@plugin.manager.layout_builder.section_storage']
+    arguments:
+      - '@plugin.manager.layout_builder.section_storage'
+      # The editable storage of a content entity is its host's, seeded from
+      # the display's template on first read.
+      - '@daedalus_blueprint.host_resolver'
 
   daedalus_tempstore.entity_tempstore_repository:
     class: Drupal\daedalus_tempstore\EntityTempstoreRepository

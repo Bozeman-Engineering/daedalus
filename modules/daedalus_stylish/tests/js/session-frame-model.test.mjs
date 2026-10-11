@@ -20,8 +20,17 @@ import {
   sessionHeader,
   switcherRoster,
 } from '../../js/src/session-frame-model.js';
-import { saveSession, stageLine, updateSession } from '../../js/src/pending.js';
-import { EMPTY_MATERIALS, roster, stencilRecord, variantRecord } from './materials-fixture.mjs';
+import { saveSession, skinSession, stageLine, updateSession } from '../../js/src/pending.js';
+import { EMPTY_MATERIALS, roster, blueprintRecord, variantRecord } from './materials-fixture.mjs';
+
+// Drupal.t at call time (a skin session's scope words), placeholders
+// substituted the way Drupal.formatString does.
+globalThis.Drupal = {
+  t: (text, args = {}) => Object.entries(args).reduce(
+    (out, [key, value]) => out.split(key).join(String(value)),
+    text,
+  ),
+};
 
 const UUID_CTA = '00000000-0000-0000-0000-000000000001';
 // The store's variant records; a reference resolves by id alone.
@@ -43,6 +52,12 @@ test('framePosture mounts the frame only over an anchored session', () => {
   // Parked renders the chip instead of the frame, either kind.
   assert.equal(framePosture(update, null, true), 'parked');
   assert.equal(framePosture(saveSession('block:b1'), null, true), 'parked');
+  // A skin session mounts the same editing frame over its document's
+  // reference, and waits for the echo like an update session.
+  const skin = skinSession('base:h2', 'block:b1');
+  assert.equal(framePosture(skin, 'skin:base:h2'), 'editing');
+  assert.equal(framePosture(skin, null), null);
+  assert.equal(framePosture(skin, null, true), 'parked');
 });
 
 test('park clears the synced editing field; resume restores it from the session', () => {
@@ -53,24 +68,26 @@ test('park clears the synced editing field; resume restores it from the session'
   // session, and no phantom document reaches the other window.
   assert.deepEqual(resumeTransition(saveSession('block:b1')), { editing: null, parked: false });
   assert.deepEqual(resumeTransition(null), { editing: null, parked: false });
+  // A skin session resumes on its skin document's reference.
+  assert.deepEqual(resumeTransition(skinSession('base:h2', 'block:b1')), { editing: 'skin:base:h2', parked: false });
 });
 
 test('sessionHeader resolves an update session through the records', () => {
   const header = sessionHeader(updateSession('cta', 'block:b1'), LIBRARY);
-  assert.deepEqual(header, { posture: 'editing', label: 'CTA', axis: 'style', axisLabel: 'Style' });
+  assert.deepEqual(header, { posture: 'editing', label: 'CTA', axis: 'style', axisLabel: 'Style', scope: null });
   // Declared axis labels win over the derived form.
   const declared = sessionHeader(
     updateSession('wide', 'block:b1'),
     LIBRARY,
     { axisLabels: { width: 'Breite' } },
   );
-  assert.deepEqual(declared, { posture: 'editing', label: 'Wide', axis: 'width', axisLabel: 'Breite' });
+  assert.deepEqual(declared, { posture: 'editing', label: 'Wide', axis: 'width', axisLabel: 'Breite', scope: null });
   // An unresolvable reference (deleted, or the retired uuid spelling)
   // degrades honestly to the verbatim reference and the built-in axis:
   // the session must still render its exits.
   assert.deepEqual(
     sessionHeader(updateSession('gone', 'block:b1'), LIBRARY),
-    { posture: 'editing', label: 'gone', axis: 'style', axisLabel: 'Style' },
+    { posture: 'editing', label: 'gone', axis: 'style', axisLabel: 'Style', scope: null },
   );
   assert.equal(sessionHeader(updateSession(UUID_CTA, 'block:b1'), LIBRARY).label, UUID_CTA);
   assert.equal(sessionHeader(null, LIBRARY), null);
@@ -81,27 +98,40 @@ test('sessionHeader speaks a draft\'s own name and axis pick', () => {
   draft = { ...draft, label: '  Hero  ' };
   assert.deepEqual(
     sessionHeader(draft, LIBRARY),
-    { posture: 'creating', label: 'Hero', axis: 'container_layout', axisLabel: 'Container layout' },
+    { posture: 'creating', label: 'Hero', axis: 'container_layout', axisLabel: 'Container layout', scope: null },
   );
   // An unnamed draft returns '': the view supplies its translated
   // fallback.
   assert.equal(sessionHeader(saveSession('block:b1'), LIBRARY).label, '');
 });
 
+test('sessionHeader speaks a skin session\'s scope in words, no axis (a default competes on none)', () => {
+  assert.deepEqual(
+    sessionHeader(skinSession('base:h2', 'block:b1'), LIBRARY, { tagLabels: { h2: 'Heading 2' } }),
+    { posture: 'skin', label: 'Heading 2', axis: null, axisLabel: null, scope: 'base:h2' },
+  );
+  assert.deepEqual(
+    sessionHeader(skinSession('block_type:text', 'block:b1'), LIBRARY),
+    { posture: 'skin', label: 'text block type', axis: null, axisLabel: null, scope: 'block_type:text' },
+  );
+  // Only drafts mint: a skin session consents to nothing.
+  assert.equal(mintConsent(skinSession('base:h2', 'block:b1'), 'call_to_action', EMPTY_MATERIALS), null);
+});
+
 test('mintConsent links a draft to its placement provenance until unlinked', () => {
   const draft = saveSession('block:b1');
-  const materials = roster(stencilRecord('call_to_action', { label: 'Call to action' }));
+  const materials = roster(blueprintRecord('call_to_action', { label: 'Call to action' }));
   // Born linked: the chip names the owner, label through the store's
-  // stencil record...
+  // blueprint record...
   assert.deepEqual(
     mintConsent(draft, 'call_to_action', materials),
-    { stencil: 'call_to_action', label: 'Call to action' },
+    { blueprint: 'call_to_action', label: 'Call to action' },
   );
-  // ...and the id when the roster holds no such stencil (the linked fact
+  // ...and the id when the roster holds no such blueprint (the linked fact
   // never depends on the name).
   assert.deepEqual(
     mintConsent(draft, 'call_to_action', EMPTY_MATERIALS),
-    { stencil: 'call_to_action', label: 'call_to_action' },
+    { blueprint: 'call_to_action', label: 'call_to_action' },
   );
   // Unlink is the opt-out: no chip, and by the one-read rule the push
   // bar sends no owner.
@@ -161,4 +191,9 @@ test('resumeChip carries the parked session\'s label and loud count', () => {
   // An unnamed draft returns '': the view supplies its fallback.
   assert.equal(resumeChip(saveSession('block:b1'), LIBRARY).label, '');
   assert.equal(resumeChip(null, LIBRARY), null);
+  // A parked skin session names its scope and counts its staged lines.
+  let skin = skinSession('kind:container', 'container:c1');
+  skin = stageLine(skin, { relative: '', condition: 'default', property: 'gap', value: '2rem' });
+  assert.deepEqual(resumeChip(skin, LIBRARY), { kind: 'skin', label: 'container kind', count: 1 });
+  assert.equal(resumeChip(skinSession('base:h2', 'block:b1'), LIBRARY, null, { tagLabels: { h2: 'Heading 2' } }).label, 'Heading 2');
 });

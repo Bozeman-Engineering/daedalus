@@ -41,11 +41,16 @@ class SkinShipperTest extends KernelTestBase {
   protected const TARGET = 'daedalus_stylish_ship_target';
 
   /**
-   * The tokens of the site-created dusk skin.
+   * The tokens of the site-created dusk skin, as stored and as shipped.
+   *
+   * Records: a machine-written skins file carries what the entity holds,
+   * never the bare shorthand a hand-authored file may use.
    */
   protected const DUSK_TOKENS = [
-    'space' => ['gutter' => '2rem'],
-    'color' => ['accent' => ['default' => '#111111', 'dark' => '#eeeeee']],
+    'space' => ['gutter' => ['value' => '2rem', 'description' => 'The band gutter.', 'offered' => TRUE]],
+    'color' => [
+      'accent' => ['value' => ['default' => '#111111', 'dark' => '#eeeeee'], 'description' => '', 'offered' => FALSE],
+    ],
   ];
 
   /**
@@ -112,7 +117,16 @@ class SkinShipperTest extends KernelTestBase {
     $this->installEntitySchema('daedalus_variant');
     $this->installEntitySchema('daedalus_swatch');
     $this->installEntitySchema('daedalus_animation');
-    $this->installSchema('daedalus_stylish', ['daedalus_animation_usage']);
+    $this->installEntitySchema('daedalus_font');
+    // Every value-usage table: a skin's save mirrors its var() and family
+    // references at the chokepoint, and a missing table is a hard error.
+    $this->installSchema('daedalus_stylish', [
+      'daedalus_variant_usage',
+      'daedalus_swatch_usage',
+      'daedalus_animation_usage',
+      'daedalus_font_usage',
+      'daedalus_token_usage',
+    ]);
     $this->installConfig(['daedalus_stylish']);
     // The vocabulary a skin syncing back through the importer validates
     // against (the deserializer runs the skin field handlers on CREATED and
@@ -168,8 +182,8 @@ class SkinShipperTest extends KernelTestBase {
       'machine_name' => $machine_name,
     ]);
     assert($skin instanceof DaedalusStylishSkinInterface);
-    $skin->setTokens($tokens);
-    $skin->setDefaults($defaults);
+    $skin->setPackageTokens($tokens);
+    $skin->setPackageDefaults($defaults);
     $skin->save();
     return $skin;
   }
@@ -236,8 +250,8 @@ class SkinShipperTest extends KernelTestBase {
     $this->assertFalse($adopted->hasNewDefaults(['tokens' => self::DUSK_TOKENS, 'defaults' => self::DUSK_DEFAULTS]));
     $this->assertSame(DaedalusStylishSkin::hashData(['tokens' => self::DUSK_TOKENS, 'defaults' => self::DUSK_DEFAULTS]), $adopted->getSourceHash());
     $this->assertTrue($adopted->isPublished());
-    $this->assertSame(self::DUSK_TOKENS, $adopted->getTokens());
-    $this->assertSame(self::DUSK_DEFAULTS, $adopted->getDefaults());
+    $this->assertSame(self::DUSK_TOKENS, $adopted->packageTokens());
+    $this->assertSame(self::DUSK_DEFAULTS, $adopted->packageDefaults());
     $revision_id = $adopted->getRevisionId();
 
     // Disk and site agree: discovery serves the file, sync touches nothing.
@@ -266,7 +280,7 @@ class SkinShipperTest extends KernelTestBase {
     // An edit to the defaults tier alone: the one hash covers both tiers.
     $edited_defaults = ['base:h2' => ['' => ['default' => ['font-size' => '4rem']]]];
     $edited = $this->loadSkin('dusk');
-    $edited->setDefaults($edited_defaults);
+    $edited->setPackageDefaults($edited_defaults);
     $edited->save();
     $this->assertTrue($edited->isModified());
     $this->assertSame([self::TARGET => ['dusk' => SkinImporter::UNCHANGED]], $this->importer()->sync([self::TARGET])->outcomes());

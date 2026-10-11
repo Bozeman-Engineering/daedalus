@@ -28,7 +28,6 @@ use Symfony\Contracts\EventDispatcher\EventDispatcherInterface;
   id: 'edit_front_page',
   label: new TranslatableMarkup('Edit Mode'),
   weight: 100,
-  per_bundle: FALSE,
 )]
 final class EditFrontPage extends ModePluginBase {
 
@@ -75,7 +74,7 @@ final class EditFrontPage extends ModePluginBase {
    */
   public function applies(): bool {
     $path = $this->requestStack->getCurrentRequest()->getPathInfo();
-    $entity = $this->ui->deriveEntityFromRoute();
+    $entity = $this->ui->deriveHostFromRoute()?->entity();
     return !empty($entity) && $path === '/';
   }
 
@@ -91,7 +90,7 @@ final class EditFrontPage extends ModePluginBase {
    * {@inheritdoc}
    */
   public function buildModeButton(): array {
-    $entity = $this->daedalusUi->deriveEntityFromRoute();
+    $entity = $this->daedalusUi->deriveHostFromRoute()?->entity();
     $mode_state = $this->ui->getMode();
     $mode_id = $this->getPluginId();
     $url = $entity->toUrl();

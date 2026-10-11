@@ -27,9 +27,11 @@ class TokenPropagationSubscriber implements EventSubscriberInterface {
   protected ?string $viewMode = NULL;
 
   /**
-   * Entity context resolved during the current request.
+   * The route host's facts resolved during the current request.
    *
    * @var array|null
+   *
+   * @see \Drupal\daedalus_ai\RouteEntityResolver::describe()
    */
   protected ?array $entityContext = NULL;
 
@@ -59,24 +61,22 @@ class TokenPropagationSubscriber implements EventSubscriberInterface {
     }
 
     if (!empty($context['current_route'])) {
-      $entity = $this->routeEntityResolver->resolve($context['current_route']);
-      if ($entity) {
-        $this->entityContext = [
-          'entity_type' => $entity->getEntityTypeId(),
-          'entity_id' => $entity->id(),
-          'uuid' => $entity->uuid(),
-          'bundle' => method_exists($entity, 'bundle') ? $entity->bundle() : $entity->getEntityTypeId(),
-          'label' => $entity->label(),
-        ];
+      $host = $this->routeEntityResolver->resolve($context['current_route']);
+      if ($host) {
+        $this->entityContext = $this->routeEntityResolver->describe($host);
 
-        // Hand the current entity to daedalus_blueprint so AI tools and skills
-        // can resolve guidance for the page the user is on. Tools execute with
-        // no access to these tokens (see CurrentEntityContext), so this shared
+        // Hand the current document's kind to daedalus_blueprint so AI tools
+        // and skills can resolve guidance for the page the user is on (a
+        // template's guidance is its target bundle's; the site frame has no
+        // kind and no guidance of a bundle's). Tools execute with no
+        // access to these tokens (see CurrentEntityContext), so this shared
         // service is how that context reaches them.
-        $this->currentEntityContext->set(
-          $this->entityContext['entity_type'],
-          $this->entityContext['bundle'],
-        );
+        if ($this->entityContext['kind'] !== NULL) {
+          $this->currentEntityContext->set(
+            $this->entityContext['kind']['entity_type'],
+            $this->entityContext['kind']['bundle'],
+          );
+        }
       }
     }
   }

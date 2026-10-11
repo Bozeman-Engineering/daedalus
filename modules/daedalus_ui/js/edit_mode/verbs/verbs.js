@@ -1,5 +1,8 @@
 import store from '../store/store';
 import { kindOf } from '../selection/selectable-key';
+import { capable } from '../selection/capable';
+import { projectionIndex } from '../components/page-elements/projection-index';
+import { verbApplies, declaredCapability } from './verb-gate';
 import {
   register as registerHotkey,
   unregister as unregisterHotkey,
@@ -42,22 +45,20 @@ const listeners = new Set();
 const notify = () => listeners.forEach((listener) => listener());
 
 /**
- * Whether a verb applies to one selectable key: kind, edit scope, then
- * the verb's own applies() refinement. The edit-scope gate reads the
- * store's reactive editingKey (the engine's editChanged report is its
- * only writer): a selection verb applies only while no live edit lands
- * on the key, an edit-scoped verb only while the live edit IS the key.
+ * Whether a verb applies to one selectable key: kind, edit scope, the
+ * capability gate, then the verb's own applies() refinement
+ * (verb-gate.js verbApplies, the pure gate). The edit-scope gate reads
+ * the store's reactive editingKey (the engine's editChanged report is
+ * its only writer); the capability is asked of the key, or of its
+ * projection parent, through the one client gate (selection/capable.js).
  */
-const appliesTo = (verb, key) => {
-  if (!key || !verb.kinds.includes(kindOf(key))) {
-    return false;
-  }
-  const { editingKey } = store.getState().selection;
-  if (verb.editScoped ? editingKey !== key : editingKey === key) {
-    return false;
-  }
-  return !verb.applies || verb.applies(key);
-};
+const appliesTo = (verb, key) =>
+  verbApplies(verb, key, {
+    kind: kindOf(key),
+    editingKey: store.getState().selection.editingKey,
+    capable,
+    parent: projectionIndex()?.get(key)?.parent ?? null,
+  });
 
 /**
  * Runs a verb against a multi-select set: runMany when the verb provides
@@ -115,7 +116,7 @@ const runOnSelection = (verb) => {
  *   - id: unique id, e.g. 'daedalus_layout.trash'. Also the hotkey binding id.
  *   - label: menu-button label (and hotkey settings-tray label).
  *   - menuLabel: optional (key) => string refinement of the label for a
- *     SINGLE selection: a verb naming its target ("Update stencil 'X'").
+ *     SINGLE selection: a verb naming its target ("Update blueprint 'X'").
  *     The static label stays the verb's identity everywhere else (hotkey
  *     tray, menu ordering, multi-select sets).
  *   - icon: optional inline SVG markup, rendered beside the label in the
@@ -130,6 +131,20 @@ const runOnSelection = (verb) => {
  *   - runMany: optional function(keys) — perform the verb on the whole set
  *     as ONE atomic action (one mutation batch, one history entry). Multi
  *     verbs without it fall back to run() per member.
+ *   - capability: REQUIRED. The capability the verb's gesture needs, one
+ *     of content, configure, style, arrange, insert (the spine's closed
+ *     vocabulary, selection/capable-model.js CAPABILITIES), or a map of
+ *     those by kind when the verb's kinds differ (Rename: configure of a
+ *     container, content of the root entity). The registry asks the one
+ *     client gate (selection/capable.js) before the verb's own applies(),
+ *     so a verb never sees a key its capability is refused on: a template
+ *     element on a plain host, a frozen translation, a role without the
+ *     grant. Registration THROWS without a valid declaration, naming the
+ *     five; there is no default (daedalus_ui.api.php, the verb contract).
+ *   - of: optional, 'element' (default) or 'parent', or a map by kind:
+ *     which key the capability is asked of, the selected key itself or
+ *     its projection parent (Insert after a block asks insert of the
+ *     container it lands in).
  *   - editScoped: optional bool. The verb acts on the key's OPEN edit
  *     (a staged-preview control like tag/link/format/media) instead of
  *     the selected element: it applies only while the store's
@@ -151,6 +166,26 @@ const runOnSelection = (verb) => {
  *     (the icon row on the primary's chip, selection-frame.js);
  *     unflagged verbs live behind the chip's chevron in the context
  *     menu, and nothing appears in both. Default false.
+ *   - document: optional bool. The verb opts onto the top bar's DOCUMENT
+ *     menu, the caret beside Save (tool_manager/top-bar.js), the surface
+ *     for whole-page gestures: the menu lists the root entity's verbs
+ *     that carry the flag, through the same applies gate as every other
+ *     face, so a document verb registers on kinds ['entity'] and refines
+ *     applies() to the root key. It keeps its other faces (the root's
+ *     own context menu, its hotkeys); the flag adds a face, it moves
+ *     nothing. Default false.
+ *   - group: optional id string naming the control the verb shares with
+ *     the other verbs carrying the same id ('daedalus_layout.blueprint'
+ *     on Open, Update and Save as): one control where a face can draw
+ *     one, plain members everywhere else. A face that draws groups
+ *     (the selection chip's split button) folds its verbs through
+ *     verb-groups.js groupVerbs(): the group sits where its lightest
+ *     applicable member sits, that member is the control's main button,
+ *     the rest wait behind its caret in weight order, and a group with
+ *     one applicable member is the plain button it would be alone. Menus
+ *     (the context menu, the tree's row menu, the document menu) and the
+ *     hotkeys never read the key: they list the members flat in weight
+ *     order. Default null.
  *   - widget: optional function(key, container, context) — a
  *     custom-rendered menu entry (a stepper, a popover control, a small
  *     control cluster) instead of a button. Called with the
@@ -173,6 +208,7 @@ const register = (spec) => {
   ) {
     throw new Error(`Invalid verb: ${JSON.stringify(spec)}`);
   }
+  const { capability, of } = declaredCapability(spec);
   const verb = {
     weight: 0,
     icon: null,
@@ -184,9 +220,13 @@ const register = (spec) => {
     widget: null,
     run: null,
     tab: false,
+    document: false,
+    group: null,
     editScoped: false,
     typingHotkeys: false,
     ...spec,
+    capability,
+    of,
   };
   verb.hotkeys = Array.isArray(verb.hotkeys) ? verb.hotkeys : [verb.hotkeys];
   verbs.set(verb.id, verb);

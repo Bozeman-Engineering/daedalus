@@ -109,6 +109,74 @@ function daedalus_stylish_schema(): array {
       'entity' => ['entity_type', 'entity_id'],
     ],
   ];
+  $schema['daedalus_font_usage'] = [
+    'description' => 'Tracks which source entities name which font families inside their saved default-revision CSS values, across the three stores (see \Drupal\daedalus_stylish\FontUsage).',
+    'fields' => [
+      'family' => [
+        'description' => 'The font family, bare, verbatim as the quoted font-family component spells it ("Inter").',
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => TRUE,
+      ],
+      'source' => [
+        'description' => 'The store the reference lives in: map (host style maps), variant (variant styles), or skin (skin defaults and font-bound tokens).',
+        'type' => 'varchar_ascii',
+        'length' => 16,
+        'not null' => TRUE,
+      ],
+      'entity_type' => [
+        'description' => 'The source entity type id.',
+        'type' => 'varchar_ascii',
+        'length' => 32,
+        'not null' => TRUE,
+      ],
+      'entity_id' => [
+        'description' => 'The source entity id.',
+        'type' => 'varchar_ascii',
+        'length' => 128,
+        'not null' => TRUE,
+      ],
+    ],
+    'primary key' => ['family', 'source', 'entity_type', 'entity_id'],
+    'indexes' => [
+      // The save chokepoint and delete cleanup address rows by source.
+      'entity' => ['entity_type', 'entity_id'],
+    ],
+  ];
+  $schema['daedalus_token_usage'] = [
+    'description' => 'Tracks which source entities reference which custom properties (a token\'s var(--{prefix}-{name})) inside their saved default-revision CSS values, across the three stores (see \Drupal\daedalus_stylish\TokenUsage).',
+    'fields' => [
+      'token' => [
+        'description' => 'The custom property, verbatim as the var() reference spells it ("--space-4"); the swatch namespace is the swatch table\'s.',
+        'type' => 'varchar_ascii',
+        'length' => 255,
+        'not null' => TRUE,
+      ],
+      'source' => [
+        'description' => 'The store the reference lives in: map (host style maps), variant (variant styles), or skin (skin tokens and defaults).',
+        'type' => 'varchar_ascii',
+        'length' => 16,
+        'not null' => TRUE,
+      ],
+      'entity_type' => [
+        'description' => 'The source entity type id.',
+        'type' => 'varchar_ascii',
+        'length' => 32,
+        'not null' => TRUE,
+      ],
+      'entity_id' => [
+        'description' => 'The source entity id.',
+        'type' => 'varchar_ascii',
+        'length' => 128,
+        'not null' => TRUE,
+      ],
+    ],
+    'primary key' => ['token', 'source', 'entity_type', 'entity_id'],
+    'indexes' => [
+      // The save chokepoint and delete cleanup address rows by source.
+      'entity' => ['entity_type', 'entity_id'],
+    ],
+  ];
   return $schema;
 }
 

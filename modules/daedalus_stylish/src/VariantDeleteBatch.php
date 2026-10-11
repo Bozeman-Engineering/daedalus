@@ -95,7 +95,8 @@ final class VariantDeleteBatch {
     if (!$entity instanceof FieldableEntityInterface) {
       return FALSE;
     }
-    if (!\Drupal::service('daedalus_stylish.operation_handler')->detachVariantEverywhere($entity, $variant)) {
+    $host = \Drupal::service('daedalus_blueprint.host_resolver')->fromEntity($entity);
+    if (!\Drupal::service('daedalus_stylish.operation_handler')->detachVariantEverywhere($host, $variant)) {
       return FALSE;
     }
     if ($entity instanceof RevisionableInterface && $entity->getEntityType()->isRevisionable()) {

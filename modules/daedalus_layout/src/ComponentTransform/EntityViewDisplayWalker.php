@@ -92,7 +92,7 @@ class EntityViewDisplayWalker {
       // third-party settings (LayoutBuilderEntityViewDisplayStorage maps them
       // to objects on load), so in-place component mutation dirties the
       // display without a setSections() dance.
-      if ($this->transforms->transformSectionList($display, $display)) {
+      if ($this->transforms->transformDisplay($display)) {
         // Deliberately not a syncing save: layout_builder's inline block
         // presave machinery must run so a block_serialized replacement
         // written by a transform is saved and usage-tracked for the display.

@@ -79,7 +79,7 @@ class BlueprintReadAccessTest extends BlueprintKernelTestBase {
     // An editor who can view the entity but not the restricted field.
     $this->setUpCurrentUser([], ['view test entity']);
 
-    $result = $this->serializer->serialize($entity);
+    $result = $this->serializer->serialize($this->host($entity));
 
     $this->assertSame(7, $result['fields']['field_count']);
     // Exact-shape assertion: the stub carries NOTHING beyond identity — in
@@ -104,7 +104,7 @@ class BlueprintReadAccessTest extends BlueprintKernelTestBase {
     // A user holding both the entity- and field-view permissions.
     $this->setUpCurrentUser([], ['view test entity', 'view test entity field']);
 
-    $result = $this->serializer->serialize($entity);
+    $result = $this->serializer->serialize($this->host($entity));
 
     $this->assertArrayHasKey('field_subtitle', $result['fields']);
     $this->assertSame('Subtitle', $result['fields']['field_subtitle']);
@@ -128,7 +128,7 @@ class BlueprintReadAccessTest extends BlueprintKernelTestBase {
     // A user who cannot view entity_test entities at all.
     $this->setUpCurrentUser([], []);
 
-    $result = $this->serializer->serialize($host);
+    $result = $this->serializer->serialize($this->host($host));
 
     // Plain field access defaults to allowed, so the control field still
     // serializes; the unviewable reference yields only the stub.
@@ -152,7 +152,7 @@ class BlueprintReadAccessTest extends BlueprintKernelTestBase {
     // A user who can view entity_test entities.
     $this->setUpCurrentUser([], ['view test entity']);
 
-    $result = $this->serializer->serialize($host);
+    $result = $this->serializer->serialize($this->host($host));
 
     $this->assertArrayHasKey('field_ref', $result['fields']);
     $this->assertSame((int) $target->id(), $result['fields']['field_ref']['target_id']);

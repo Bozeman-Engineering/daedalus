@@ -9,9 +9,9 @@ use Drupal\Core\Form\FormBase;
 use Drupal\Core\Ajax\AjaxResponse;
 use Drupal\Core\Ajax\InvokeCommand;
 use Drupal\Core\Ajax\ReplaceCommand;
-use Drupal\daedalus_layout\DaedalusLayoutSettingsTrait;
 use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\Ajax\CloseModalDialogCommand;
+use Drupal\daedalus_blueprint\LayoutBuilder\PlacementRestrictionsInterface;
 use Drupal\daedalus_ui\DaedalusUi;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\Entity\EntityFieldManagerInterface;
@@ -28,13 +28,12 @@ use Symfony\Component\DependencyInjection\ContainerInterface;
  */
 final class MediaBlockFileAssociationForm extends FormBase {
 
-  use DaedalusLayoutSettingsTrait;
-
   public function __construct(
     protected NewMedia $newMedia,
     protected EntityTypeManagerInterface $entityTypeManager,
     protected EntityFieldManagerInterface $entityFieldManager,
     protected DaedalusUi $ui,
+    protected PlacementRestrictionsInterface $placementRestrictions,
   ) {}
 
   /**
@@ -46,6 +45,7 @@ final class MediaBlockFileAssociationForm extends FormBase {
       $container->get('entity_type.manager'),
       $container->get('entity_field.manager'),
       $container->get('daedalus_ui.ui'),
+      $container->get('daedalus_blueprint.placement_restrictions'),
     );
   }
 
@@ -167,38 +167,40 @@ final class MediaBlockFileAssociationForm extends FormBase {
   /**
    * Gets the block content types that can reference a compatible media type.
    *
+   * The chooser offers what the Add panel offers: every block type the
+   * placement restrictions admit on the layout being edited (the same
+   * answer the panel's faces are built from), narrowed to the types with
+   * a media reference field that accepts one of the compatible media
+   * types. Nothing per display is read.
+   *
    * @param array $compatible_media_types
    *   An array of MediaType entities compatible with a file extension.
    * @param \Drupal\Core\Form\FormStateInterface $form_state
    *   The form state carrying the section storage details.
    *
    * @return array
-   *   An array of BlockContentType entities that have a media reference field
-   *   allowing at least one of the compatible media types.
+   *   Block type id to label, for every placeable block type that has a
+   *   media reference field allowing at least one of the compatible media
+   *   types.
    *
    * @throws \Drupal\Component\Plugin\Exception\InvalidPluginDefinitionException
    * @throws \Drupal\Component\Plugin\Exception\PluginNotFoundException
    */
   public function getCompatibleBlockContentTypes(array $compatible_media_types, FormStateInterface $form_state): array {
-    // What block types are allowed to be placed?
     [$section_storage] = $this->newMedia->getSectionStorageDetails($form_state);
-
-    $promoted_block_plugin_ids = $this->getDaedalusLayoutSetting($section_storage, 'promoted_blocks');
-    $promoted_block_content_ids = array_map(function ($block_plugin_id) {
-      return explode(':', $block_plugin_id)[1];
-    }, $promoted_block_plugin_ids);
+    $placeable_bundles = $this->placementRestrictions->allowedInlineBlockBundles($section_storage);
+    if ($placeable_bundles === []) {
+      return [];
+    }
 
     $compatible_media_type_ids = array_map(function ($media_type) {
       return $media_type->id();
     }, $compatible_media_types);
 
-    $block_content_types = $this->entityTypeManager->getStorage('block_content_type')->loadMultiple();
+    $block_content_types = $this->entityTypeManager->getStorage('block_content_type')->loadMultiple($placeable_bundles);
     $relevant_block_content_types = [];
 
     foreach ($block_content_types as $block_content_type) {
-      if (!in_array($block_content_type->id(), $promoted_block_content_ids)) {
-        continue;
-      }
       $fields = $this->entityFieldManager->getFieldDefinitions('block_content', $block_content_type->id());
 
       foreach ($fields as $field) {

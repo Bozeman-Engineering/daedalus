@@ -111,6 +111,14 @@ const FIELD_BLOCK = 'eeeeeeee-1111-2222-3333-444444444444';
 const FOREIGN = 'ffffffff-1111-2222-3333-444444444444';
 
 /**
+ * The verdict every fixture node carries: the gate also asks whether the
+ * committed key is SELECTABLE (its verdict allows anything), so a fixture
+ * without a verdict would edit nothing. The not-selectable suite covers
+ * the refused shapes.
+ */
+const open = { content: true, configure: true, style: true, arrange: true, insert: true };
+
+/**
  * The page's components: one merged block (its inner text entity is what
  * the DOM actually attributes), one OPEN block with a display-hidden field
  * (annotated nonexistent, so the tree folds its row), and one Layout
@@ -124,7 +132,7 @@ const components = () => [
     block_type: 'text',
     label: 'Text',
     block_fields: { field_text: { uuid: TEXT, type: 'text', fields: { field_text_text: 'Body' } } },
-    _element: { presentation: { mode: 'merged', edit_target: 'field_text' } },
+    _element: { presentation: { mode: 'merged', edit_target: 'field_text' }, can: open },
   },
   {
     kind: 'block',
@@ -132,7 +140,7 @@ const components = () => [
     block_type: 'card',
     label: 'Card',
     block_fields: { field_card_text: 'Shown', field_card_note: 'Hidden on the display' },
-    _element: { presentation: { mode: 'open' }, fields: { field_card_note: { element: false } } },
+    _element: { presentation: { mode: 'open' }, fields: { field_card_note: { element: false } }, can: open },
   },
   {
     kind: 'block',
@@ -142,6 +150,7 @@ const components = () => [
     _element: {
       presentation: { mode: 'merged', label: 'Dropped', edit_target: 'field_dropped' },
       presented_field: `field:${ROOT}:field_dropped`,
+      can: open,
     },
   },
 ];
@@ -149,12 +158,9 @@ const components = () => [
 /**
  * The route entity's delivered blueprint: a title (the root's edit target,
  * absorbed into the root row) and a body, plus one section holding the
- * merged block. Like the delivered mirror it carries BOTH section shapes,
- * the lean `_tree` and the classic layout_builder__layout, from one
- * component list: the projection index (the universe this gate consults)
- * composes through compose.js, which still walks the classic copy, while
- * projection.js reads the tree. A tree-only fixture would model a mirror
- * the server never delivers and empty the universe of the section.
+ * merged block, as the lean `layout` the delivered mirror carries (the
+ * projection index, the universe this gate consults, composes it through
+ * compose.js; projection.js reads the same tree).
  */
 const boot = () =>
   store.dispatch(blueprintBooted({
@@ -170,16 +176,17 @@ const boot = () =>
       // display: the feeder marks it nonexistent, so the tree gives it no
       // row of its own (it renders through the field block instead).
       fields: { title: 'Hello', body: 'Original body text.', field_dropped: 'Placed by a field block' },
-      layout_builder__layout: [{ uuid: SECTION, layout_id: 'layout_onecol', regions: { content: components() } }],
-      _tree: [{
+      layout: [{
         kind: 'container',
         uuid: SECTION,
         layout_id: 'layout_onecol',
+        _element: { can: open },
         children: [{ kind: 'region', region: 'content', children: components() }],
       }],
       _element: {
         presentation: { mode: 'merged', edit_target: 'title' },
         fields: { field_dropped: { element: false } },
+        can: open,
       },
     },
   }));

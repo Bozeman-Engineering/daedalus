@@ -1,0 +1,7 @@
+services:
+  # Claims every field named field_form_only ahead of the shipped handlers
+  # and serializes nothing: a form-only field in the grammar.
+  daedalus_blueprint_form_only_test.handler:
+    class: Drupal\daedalus_blueprint_form_only_test\FormOnlyFieldHandler
+    tags:
+      - { name: daedalus_blueprint.field_handler, priority: 100 }

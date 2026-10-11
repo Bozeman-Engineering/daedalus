@@ -794,6 +794,7 @@
         label: Drupal.t('Text format'),
         icon: FORMAT_ICON,
         kinds: ['block'],
+        capability: 'content',
         editScoped: true,
         tab: true,
         applies: () => {

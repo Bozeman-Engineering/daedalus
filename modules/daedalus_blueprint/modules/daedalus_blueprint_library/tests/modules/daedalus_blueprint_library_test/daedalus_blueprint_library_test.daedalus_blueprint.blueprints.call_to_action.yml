@@ -1,0 +1,32 @@
+label: 'Call to Action'
+description: 'Two-column card: heading with link beside an image.'
+scope: block
+subject: 'entity_test:entity_test'
+layout:
+  -
+    kind: container
+    layout_id: layout_twocol_section
+    label: 'Call to Action'
+    styles:
+      '':
+        default:
+          display: flex
+          justify-content: center
+          align-items: center
+    children:
+      -
+        kind: region
+        region: first
+        children:
+          -
+            kind: block
+            block_type: text
+            block_fields:
+              field_text_tag: h2
+      -
+        kind: region
+        region: second
+        children:
+          -
+            kind: block
+            block_type: image

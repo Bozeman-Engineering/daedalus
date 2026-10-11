@@ -2,3 +2,8 @@ administer design systems:
   title: 'Administer design systems'
   description: 'Create, edit, delete and activate design systems. Activating one switches the materials every editor is offered.'
   restrict access: true
+
+configure the site frame:
+  title: 'Configure the site frame'
+  description: 'Edit and style the document a theme renders around every page: the site builder''s layer of the document stack.'
+  restrict access: true

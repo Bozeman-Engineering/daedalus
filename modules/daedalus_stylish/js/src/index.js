@@ -10,6 +10,7 @@ import { createForceState } from './force-state.js';
 import { uiMode } from './ui-mode.js';
 import { stopsFromConditions } from './canvas-stops.js';
 import { openPicker as openVariantPicker } from './apply-variant-hotkey.js';
+import { createVariantDoors, createVariantRowFacts } from './row-facts.js';
 import { registerCollapseHotkeys } from '../../../daedalus_ui/js/outline/collapse-hotkeys.js';
 import { OUTLINE_ID, readOutline, applyOutline } from './code/collapse-seam.js';
 import { copyStyles, pasteStyles } from './copy-styles.js';
@@ -97,19 +98,68 @@ import './media-library.js';
   // "style" badge and the part resolution seam (part clicks, hover, and
   // active state live on the selection spine itself). The canvas
   // selector paint rides the same behavior: a spine subscriber rendering
-  // the hover facet and the styling target as dashed @scope boxes through
-  // selectorFor. Guarded: an older daedalus_ui without the behavior
-  // seam just renders inert shell rows, and one without the hover facet
-  // paints no selector boxes. The paint also renders the write
-  // address's matches (the source's selection-scoped address, the
-  // switcher's pick), so the chosen rule's reach shows before its first
-  // write.
+  // the hover facet and the subject facet as dashed @scope boxes and the
+  // write address's matches (the spine's address, the switcher's pick)
+  // as dotted ones through selectorFor, so the chosen rule's reach shows
+  // before its first write. Guarded: an older daedalus_ui without the
+  // behavior seam just renders inert shell rows, and one without the
+  // hover facet paints no selector boxes.
   if (app.tree?.registerPartBehavior) {
     const partBehavior = createPartBehavior({ source, guide });
     app.tree.registerPartBehavior(partBehavior);
     if (app.onHoverSelectorChange && app.onTargetChange) {
       createCanvasSelectorPaint({ app, behavior: partBehavior });
     }
+  }
+
+  // The inspector's sidebar panel: whether it is showing, and opening
+  // it (the sidebar manager's open, the same path as the panel's toggle)
+  // for the gestures that land something in it. The inspector stays
+  // mounted while its panel is closed, so a gesture can run with the
+  // panel closed and nobody would see it land; these open it first. A
+  // same-slot panel refusing to close (an invalid daedalus_edit form)
+  // has already told the user, so the open resolves false and the
+  // gesture stays undone; anything else is a real failure.
+  const PANEL_ID = 'daedalus_stylish_inspector';
+  const isPanelOpen = () => {
+    const panel = document.getElementById(PANEL_ID);
+    return Boolean(panel) && !panel.classList.contains('daedalus-ui-hidden');
+  };
+  const openPanel = () => {
+    if (isPanelOpen()) {
+      return Promise.resolve(true);
+    }
+    if (!document.getElementById(PANEL_ID)) {
+      return Promise.resolve(false);
+    }
+    return Drupal.Daedalus.SidebarManager.openSidebar(PANEL_ID).then(
+      () => true,
+      (error) => {
+        if (error !== Drupal.Daedalus.SidebarPluginBase.CLOSE_BLOCKED) {
+          throw error;
+        }
+        return false;
+      },
+    );
+  };
+
+  // The variant row facts: what a page elements row says about styling
+  // (a dot per worn variant in its hue, one in the element hue when the
+  // element is styled on itself) and the doorways from the row to where
+  // that styling lives ("Edit {variant}", "Outline everything wearing
+  // it", "Show its own styles in code"), through daedalus_ui's row-facts
+  // seam. Always on while registered: variants have no switch. The
+  // doors reach the mounted inspector through its doors seam
+  // (inspector-doors.js) and, popped out, the satellite's inspector over
+  // stylish's protocol (row-facts.js createVariantDoors). Guarded: an
+  // older daedalus_ui without the seam shows rows without facts.
+  if (app.tree?.registerRowFacts) {
+    app.tree.registerRowFacts(
+      createVariantRowFacts({
+        source,
+        doors: createVariantDoors({ source, popout, mode: uiMode, openPanel }),
+      }),
+    );
   }
 
   // The canvas highlight: transient tint chrome for invisible-geometry
@@ -178,19 +228,10 @@ import './media-library.js';
         popout.openVariantPicker();
         return true;
       }
-      const panel = document.getElementById('daedalus_stylish_inspector');
-      if (!panel?.classList.contains('daedalus-ui-hidden')) {
+      if (isPanelOpen()) {
         return openVariantPicker();
       }
-      Drupal.Daedalus.SidebarManager.openSidebar('daedalus_stylish_inspector')
-        .then(() => openVariantPicker())
-        .catch((error) => {
-          // A same-slot panel refusing to close (an invalid daedalus_edit form)
-          // has already told the user; anything else is a real failure.
-          if (error !== Drupal.Daedalus.SidebarPluginBase.CLOSE_BLOCKED) {
-            throw error;
-          }
-        });
+      openPanel().then((open) => open && openVariantPicker());
       return true;
     },
   });
@@ -266,7 +307,10 @@ import './media-library.js';
           guide={guide}
           variants={drupalSettings.daedalusStylish?.variants ?? {}}
           swatches={drupalSettings.daedalusStylish?.swatches ?? {}}
+          tokens={drupalSettings.daedalusStylish?.tokens ?? {}}
           animations={drupalSettings.daedalusStylish?.animations ?? {}}
+          fonts={drupalSettings.daedalusStylish?.fonts ?? {}}
+          skin={drupalSettings.daedalusStylish?.skin ?? {}}
           previewWindow={
             // The opener's {url, scope}, composed from the two settings
             // the Edit mode attaches together (the preview route's URL and

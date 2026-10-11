@@ -1,0 +1,10 @@
+langcode: en
+status: true
+dependencies:
+  module:
+    - daedalus_blueprint_library
+id: blueprint.full
+label: 'Full content'
+description: "The blueprint's canvas: its document, rendered against its subject."
+targetEntityType: blueprint
+cache: true

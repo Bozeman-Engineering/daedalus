@@ -2,6 +2,7 @@ ai_minting: true
 container_roots: true
 media_image_style: ''
 opt_outs: {  }
+skin_choice: {  }
 breakpoints:
   narrow: 767
   medium: 1023

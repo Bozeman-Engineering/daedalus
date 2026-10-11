@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Drupal\daedalus_stylish;
 
 use Drupal\Core\StringTranslation\TranslatableMarkup;
-use Drupal\daedalus_stylish\Entity\MachineNameInterface;
 
 /**
  * The rewrite-then-delete Batch API job behind swatch deletion.
@@ -49,7 +48,7 @@ final class SwatchDeleteBatch extends ValueDeleteBatchBase {
   /**
    * {@inheritdoc}
    */
-  protected static function rewriter(MachineNameInterface $material): \Closure {
+  protected static function rewriter(object $material): \Closure {
     assert($material instanceof DaedalusStylishSwatchInterface);
     $name = $material->getMachineName();
     $value = $material->getSwatchValue();
@@ -60,34 +59,11 @@ final class SwatchDeleteBatch extends ValueDeleteBatchBase {
   /**
    * {@inheritdoc}
    *
-   * Token values are scalars or condition-keyed scalar maps ({scale:
-   * {name: value}}), one level flatter than style entries; a token has no
-   * property, and a var() needs none.
+   * A var() lives in a token value as it does anywhere: the shared
+   * property-blind walk.
    */
   protected static function rewriteTokens(array $tokens, \Closure $rewrite, bool &$changed): array {
-    foreach ($tokens as $scale => $names) {
-      if (!is_array($names)) {
-        continue;
-      }
-      foreach ($names as $token => $token_value) {
-        if (is_array($token_value)) {
-          foreach ($token_value as $condition => $conditioned) {
-            $rewritten = static::rewriteScalar('', $conditioned, $rewrite);
-            if ($rewritten !== NULL) {
-              $changed = TRUE;
-              $tokens[$scale][$token][$condition] = $rewritten;
-            }
-          }
-          continue;
-        }
-        $rewritten = static::rewriteScalar('', $token_value, $rewrite);
-        if ($rewritten !== NULL) {
-          $changed = TRUE;
-          $tokens[$scale][$token] = $rewritten;
-        }
-      }
-    }
-    return $tokens;
+    return static::rewriteTokenValues($tokens, $rewrite, $changed);
   }
 
   /**

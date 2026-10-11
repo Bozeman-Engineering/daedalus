@@ -15,8 +15,13 @@ use Drupal\Core\Plugin\Context\ContextHandlerInterface;
 use Drupal\Core\Plugin\Context\ContextRepositoryInterface;
 use Drupal\Core\Plugin\Context\EntityContext;
 use Drupal\Core\Plugin\ContextAwarePluginInterface;
+use Drupal\Core\Session\AccountInterface;
+use Drupal\Core\Session\AccountProxyInterface;
 use Drupal\Core\TypedData\TranslatableInterface;
 use Drupal\daedalus_blueprint\Access\BlueprintAccessChecker;
+use Drupal\daedalus_blueprint\Capability\Capability;
+use Drupal\daedalus_blueprint\Capability\CapabilityResolver;
+use Drupal\daedalus_blueprint\Capability\Requirement;
 use Drupal\daedalus_blueprint\Event\ElementCreatedEvent;
 use Drupal\daedalus_blueprint\Event\FieldAppliedEvent;
 use Drupal\daedalus_blueprint\Event\SectionCreatedEvent;
@@ -24,17 +29,27 @@ use Drupal\daedalus_blueprint\Event\ElementDuplicatedEvent;
 use Drupal\daedalus_blueprint\Event\ElementMovedEvent;
 use Drupal\daedalus_blueprint\Event\LifecycleEventBase;
 use Drupal\daedalus_blueprint\FieldHandler\FieldHandlerManager;
+use Drupal\daedalus_blueprint\Host\HostInterface;
+use Drupal\daedalus_blueprint\Host\HostResolver;
+use Drupal\daedalus_blueprint\Host\BlueprintHost;
+use Drupal\daedalus_blueprint\Host\InnerRender;
 use Drupal\daedalus_blueprint\LayoutBuilder\AvailableLayouts;
 use Drupal\daedalus_blueprint\LayoutBuilder\PlacementRestrictionsInterface;
-use Drupal\daedalus_blueprint\LayoutBuilder\LayoutDeserializer;
 use Drupal\daedalus_blueprint\LayoutBuilder\LayoutSerializer;
+use Drupal\daedalus_blueprint\Materials\BlueprintRequirements;
+use Drupal\daedalus_blueprint\Plugin\Block\SlotBlock;
+use Drupal\daedalus_blueprint\Plugin\Block\LinkedBlueprintBlock;
 use Drupal\daedalus_blueprint\LayoutBuilder\DaedalusLayoutAdapter;
+use Drupal\daedalus_blueprint\LayoutBuilder\FrameHost;
+use Drupal\daedalus_blueprint\LayoutBuilder\InlineBlockValues;
 use Drupal\daedalus_blueprint\LayoutBuilder\OpaqueDataMerger;
+use Drupal\daedalus_blueprint\LayoutBuilder\PluginBlockConfiguration;
 use Drupal\daedalus_blueprint\Dialect\DialectAliasMap;
 use Drupal\daedalus_blueprint\OperationHandler\OperationHandlerRegistry;
 use Drupal\daedalus_blueprint\Result\BlueprintError;
 use Drupal\daedalus_blueprint\Result\BlueprintResult;
 use Drupal\daedalus_blueprint\Result\TargetType;
+use Drupal\daedalus_blueprint\Utility\ElementKey;
 use Drupal\daedalus_blueprint\Utility\FormOnlyStub;
 use Drupal\daedalus_blueprint\Utility\HtmlEntityDecoder;
 use Drupal\daedalus_blueprint\Utility\SampleRequest;
@@ -93,8 +108,7 @@ class BlueprintOperations implements BlueprintOperationsInterface {
    */
   protected const BUILTIN_OPERATIONS = [
     'update_element', 'add_element', 'add_section', 'remove_element',
-    'duplicate_element', 'move_element',
-    'restructure_layout', 'reorder_field',
+    'duplicate_element', 'move_element', 'reorder_field',
   ];
 
   /**
@@ -102,7 +116,7 @@ class BlueprintOperations implements BlueprintOperationsInterface {
    *
    * The ONE map of retired vocabulary, shared by every surface that meets
    * old spellings: op dispatch consults it for retired operation names, and
-   * the stencil handler consults it for retired relative style forms. An
+   * the blueprint handler consults it for retired relative style forms. An
    * entry is not backwards compatibility (the spelling fails either way);
    * it is a teaching corrective, earned only when the MENTAL MODEL changed
    * and the replacement is non-obvious. Pure renames never get one: the
@@ -111,7 +125,7 @@ class BlueprintOperations implements BlueprintOperationsInterface {
    * @var array<string, string>
    */
   public const RETIRED_GRAMMAR = [
-    'change_section_layout' => 'Sections are born with their layout and keep it for life. add_section mints a container by default (arrangement is styling, not layout choice); pass "layout" (+ optional "layout_settings") on add_section for a named-slot layout. To rearrange existing content, use move_element or restructure_layout.',
+    'change_section_layout' => 'Sections are born with their layout and keep it for life. add_section mints a container by default (arrangement is styling, not layout choice); pass "layout" (+ optional "layout_settings") on add_section for a named-slot layout. To rearrange existing content, use move_element.',
     'region:NAME' => "Sections are containers with one flow of children. Style the section itself ('') or a child container node's '' instead.",
   ];
 
@@ -140,12 +154,12 @@ class BlueprintOperations implements BlueprintOperationsInterface {
    *   The placement-restriction spine (blocks and layouts).
    * @param \Drupal\daedalus_blueprint\BlueprintContextResolverInterface $contextResolver
    *   The blueprint context resolver.
-   * @param \Drupal\daedalus_blueprint\LayoutBuilder\LayoutDeserializer $layoutDeserializer
-   *   The layout deserializer.
    * @param \Drupal\daedalus_blueprint\Access\BlueprintAccessChecker $accessChecker
    *   The access checker, used to gate surgical field writes on edit access.
    * @param \Drupal\daedalus_blueprint\LayoutBuilder\OpaqueDataMerger $opaqueDataMerger
    *   The opaque data merger, used to patch managed configuration keys.
+   * @param \Drupal\daedalus_blueprint\LayoutBuilder\PluginBlockConfiguration $pluginBlockConfiguration
+   *   A plugin block's property bag, schema and validation from its config schema.
    * @param \Drupal\Core\Block\BlockManagerInterface $blockManager
    *   The block plugin manager, used to create plugin block components.
    * @param \Symfony\Contracts\EventDispatcher\EventDispatcherInterface $eventDispatcher
@@ -169,6 +183,23 @@ class BlueprintOperations implements BlueprintOperationsInterface {
    *   what the site answers (placement stops after the generator rung), the
    *   `_sample` request may continue to core when no generator is
    *   configured. A configured generator's answer is final on both.
+   * @param \Drupal\daedalus_blueprint\Host\HostResolver $hostResolver
+   *   The host resolver: every operation resolves the entity's host at its
+   *   door and reads and writes the document through it.
+   * @param \Drupal\daedalus_blueprint\Host\InnerRender $innerRender
+   *   The render primitive (a linked placement's blueprint host).
+   * @param \Drupal\daedalus_blueprint\LayoutBuilder\LayoutSerializer $layoutSerializer
+   *   The layout serializer (a linked blueprint's tree, for its fit).
+   * @param \Drupal\daedalus_blueprint\Materials\BlueprintRequirements $requirements
+   *   The fit judgement of a linked placement.
+   * @param \Drupal\daedalus_blueprint\LayoutBuilder\InlineBlockValues $inlineBlockValues
+   *   Inline blocks as values: a host whose persistence is valueBlocks (a
+   *   display) refuses a block the field grammar cannot spell.
+   * @param \Drupal\daedalus_blueprint\Capability\CapabilityResolver $capabilityResolver
+   *   The capability resolver: the op door asks it, before dispatch, for
+   *   every capability an operation declares of its targets.
+   * @param \Drupal\Core\Session\AccountProxyInterface $currentUser
+   *   The current user, the actor of a batch that names none.
    * @param \Drupal\Core\Layout\LayoutPluginManagerInterface|null $layoutPluginManager
    *   The layout plugin manager (NULL when layout_discovery is not installed).
    */
@@ -184,9 +215,9 @@ class BlueprintOperations implements BlueprintOperationsInterface {
     protected EntityTypeBundleInfoInterface $bundleInfo,
     protected PlacementRestrictionsInterface $placementRestrictions,
     protected BlueprintContextResolverInterface $contextResolver,
-    protected LayoutDeserializer $layoutDeserializer,
     protected BlueprintAccessChecker $accessChecker,
     protected OpaqueDataMerger $opaqueDataMerger,
+    protected PluginBlockConfiguration $pluginBlockConfiguration,
     protected BlockManagerInterface $blockManager,
     protected EventDispatcherInterface $eventDispatcher,
     protected ContextRepositoryInterface $contextRepository,
@@ -194,13 +225,20 @@ class BlueprintOperations implements BlueprintOperationsInterface {
     protected OperationHandlerRegistry $operationHandlerRegistry,
     protected DialectAliasMap $dialectAliasMap,
     protected SampleFiller $sampleFiller,
+    protected HostResolver $hostResolver,
+    protected InnerRender $innerRender,
+    protected LayoutSerializer $layoutSerializer,
+    protected BlueprintRequirements $requirements,
+    protected InlineBlockValues $inlineBlockValues,
+    protected CapabilityResolver $capabilityResolver,
+    protected AccountProxyInterface $currentUser,
     protected ?LayoutPluginManagerInterface $layoutPluginManager = NULL,
   ) {}
 
   /**
    * The current batch nesting depth.
    *
-   * Compound operations (DOM ops, stencils) run nested batches; alias
+   * Compound operations (DOM ops, blueprints) run nested batches; alias
    * settlement (persist/discard) belongs to the OUTERMOST batch only.
    */
   protected int $batchDepth = 0;
@@ -209,13 +247,46 @@ class BlueprintOperations implements BlueprintOperationsInterface {
    * How many batches on the current stack declared themselves dressed.
    *
    * A batch declares `['dressed' => TRUE]` when its elements arrive with
-   * their styles (a stencil expansion, a document dialect); the posture
+   * their styles (a blueprint expansion, a document dialect); the posture
    * rides every lifecycle event the batch dispatches (LifecycleEventBase::
    * dressed()) so birth subscribers stamp nothing under it. Any enclosing
    * dressed batch dresses its nested batches: the count is positive for
    * the whole span of the outermost dressed frame.
    */
   protected int $dressedDepth = 0;
+
+  /**
+   * How many batches on the current stack declared themselves admitted.
+   *
+   * A batch declares `['admitted' => TRUE]` when it copies a document the
+   * display already holds (the seed of a page from its template): the
+   * placement restrictions gate what an author may pick, never what a
+   * display already carries, so no restriction answer is asked under it.
+   * Any enclosing admitted batch admits its nested batches.
+   */
+  protected int $admittedDepth = 0;
+
+  /**
+   * How many batches on the current stack declared themselves system.
+   *
+   * A batch declares `['system' => TRUE]` when it acts for the site, not
+   * for an actor: the seed of a page from its template (which a read can
+   * trigger, so a reader's role must not refuse it), an importer. Nothing
+   * is judged for an actor under it: the capability gate is not asked,
+   * and neither are field edit access nor the field handlers' own checks
+   * (they receive the `system` option). Any enclosing system batch covers
+   * its nested batches.
+   */
+  protected int $systemDepth = 0;
+
+  /**
+   * The actor of the batch on the current stack, or NULL outside a batch.
+   *
+   * The outermost batch's `actor` option (defaulting to the current user);
+   * nested batches inherit it, and the resolver always receives it
+   * explicitly.
+   */
+  protected ?AccountInterface $actor = NULL;
 
   /**
    * {@inheritdoc}
@@ -227,47 +298,47 @@ class BlueprintOperations implements BlueprintOperationsInterface {
   /**
    * {@inheritdoc}
    */
-  public function getBlueprint(FieldableEntityInterface $entity, ?string $langcode = NULL): array {
-    return $this->serializer->serialize($entity, $langcode);
+  public function getBlueprint(HostInterface $host, ?string $langcode = NULL): array {
+    return $this->serializer->serialize($host, $langcode);
   }
 
   /**
    * {@inheritdoc}
    */
-  public function getBlueprintSummary(FieldableEntityInterface $entity, ?string $langcode = NULL): array {
-    return $this->serializer->serializeSummary($entity, $langcode);
+  public function getBlueprintSummary(HostInterface $host, ?string $langcode = NULL): array {
+    return $this->serializer->serializeSummary($host, $langcode);
   }
 
   /**
    * {@inheritdoc}
    */
-  public function getElement(FieldableEntityInterface $entity, string $uuid, ?string $langcode = NULL): ?array {
-    return $this->serializer->serializeElement($entity, $uuid, $langcode);
+  public function getElement(HostInterface $host, string $uuid, ?string $langcode = NULL): ?array {
+    return $this->serializer->serializeElement($host, $uuid, $langcode);
   }
 
   /**
    * {@inheritdoc}
    */
-  public function updateElement(FieldableEntityInterface $entity, ?string $uuid, array $properties, array $options = []): BlueprintResult {
-    $uuid = $uuid ?: $entity->uuid();
-    if ($uuid === $entity->uuid()) {
-      return $this->updateElementRootFields($entity, $properties, $options);
+  public function updateElement(HostInterface $host, ?string $uuid, array $properties, array $options = []): BlueprintResult {
+    $uuid = $uuid ?: $host->uuid();
+    if ($uuid === $host->uuid()) {
+      return $this->updateElementRootFields($host, $properties, $options);
     }
 
-    $context = $this->locateElement($entity, $uuid, 'element', 'ELEMENT_NOT_FOUND');
+    $context = $this->locateElement($host, $uuid, 'element', 'ELEMENT_NOT_FOUND');
     if ($context instanceof BlueprintResult) {
       return $context;
     }
 
     if ($context->isLbComponent()) {
-      return $this->updateElementLbComponent($entity, $context, $uuid, $properties, $options);
+      return $this->updateElementLbComponent($host, $context, $uuid, $properties, $options);
     }
 
     if ($context->isSection()) {
-      return $this->updateElementSection($entity, $context, $uuid, $properties, $options);
+      return $this->updateElementSection($host, $context, $uuid, $properties, $options);
     }
 
-    return $this->updateElementParagraph($entity, $context, $uuid, $properties, $options);
+    return $this->updateElementParagraph($host, $context, $uuid, $properties, $options);
   }
 
   /**
@@ -285,8 +356,8 @@ class BlueprintOperations implements BlueprintOperationsInterface {
    * its layout and keeps it for life — arrangement is styling, not a
    * property write.
    *
-   * @param \Drupal\Core\Entity\FieldableEntityInterface $entity
-   *   The root entity.
+   * @param \Drupal\daedalus_blueprint\Host\HostInterface $host
+   *   The host.
    * @param \Drupal\daedalus_blueprint\ElementContext $context
    *   The located section context.
    * @param string $uuid
@@ -300,7 +371,7 @@ class BlueprintOperations implements BlueprintOperationsInterface {
    * @return \Drupal\daedalus_blueprint\Result\BlueprintResult
    *   The result with the modified entity on success.
    */
-  protected function updateElementSection(FieldableEntityInterface $entity, ElementContext $context, string $uuid, array $properties, array $options = []): BlueprintResult {
+  protected function updateElementSection(HostInterface $host, ElementContext $context, string $uuid, array $properties, array $options = []): BlueprintResult {
     $available = ['label', 'layout_settings'];
     $errors = [];
     foreach ($properties as $key => $value) {
@@ -337,7 +408,7 @@ class BlueprintOperations implements BlueprintOperationsInterface {
       return BlueprintResult::structuralFailure($errors);
     }
     if ($properties === []) {
-      return BlueprintResult::success($entity);
+      return BlueprintResult::success($host);
     }
 
     /** @var \Drupal\layout_builder\Section $section */
@@ -361,15 +432,15 @@ class BlueprintOperations implements BlueprintOperationsInterface {
     $section->setLayoutSettings($settings);
     $this->bubbleNestedChanges($context);
 
-    return BlueprintResult::success($entity)
+    return BlueprintResult::success($host)
       ->withTargetsFrom($uuid, array_keys($properties));
   }
 
   /**
    * Updates root entity fields from a flat property bag.
    *
-   * @param \Drupal\Core\Entity\FieldableEntityInterface $entity
-   *   The entity to update.
+   * @param \Drupal\daedalus_blueprint\Host\HostInterface $host
+   *   The host to update.
    * @param array $properties
    *   Flat map of property names to values.
    * @param array $options
@@ -379,8 +450,12 @@ class BlueprintOperations implements BlueprintOperationsInterface {
    * @return \Drupal\daedalus_blueprint\Result\BlueprintResult
    *   The result with the modified entity on success.
    */
-  protected function updateElementRootFields(FieldableEntityInterface $entity, array $properties, array $options = []): BlueprintResult {
-    $result = $this->validateAndApplyFields($entity, $properties, 'properties', $options + [
+  protected function updateElementRootFields(HostInterface $host, array $properties, array $options = []): BlueprintResult {
+    $fields = $this->requireFields($host, 'element');
+    if ($fields instanceof BlueprintResult) {
+      return $fields;
+    }
+    $result = $this->validateAndApplyFields($host, $fields, $properties, 'properties', $options + [
       'rejectedTypes' => static::REJECTED_FIELD_TYPES,
       'is_update' => TRUE,
     ]);
@@ -390,18 +465,20 @@ class BlueprintOperations implements BlueprintOperationsInterface {
       return $failure;
     }
 
-    return BlueprintResult::success($entity, $result['warnings'])
-      ->withTargetsFrom($entity->uuid(), $this->appliedTargetNames(array_keys($properties), $result));
+    return BlueprintResult::success($host, $result['warnings'])
+      ->withTargetsFrom($host->uuid(), $this->appliedTargetNames(array_keys($properties), $result));
   }
 
   /**
-   * Updates an LB inline block from a flat property bag.
+   * Updates an LB block component from a flat property bag.
    *
-   * Sorts properties into fields (on the block_content entity), managed keys
-   * (component configuration), and label.
+   * An inline block sorts its properties into fields (on the block_content
+   * entity), managed keys (component configuration), and label; a plugin
+   * block's bag is its configuration, spelled by its config schema
+   * (updateElementPluginBlock).
    *
-   * @param \Drupal\Core\Entity\FieldableEntityInterface $entity
-   *   The root entity.
+   * @param \Drupal\daedalus_blueprint\Host\HostInterface $host
+   *   The host.
    * @param \Drupal\daedalus_blueprint\ElementContext $context
    *   The located element context.
    * @param string $uuid
@@ -415,28 +492,37 @@ class BlueprintOperations implements BlueprintOperationsInterface {
    * @return \Drupal\daedalus_blueprint\Result\BlueprintResult
    *   The result with the modified entity on success.
    */
-  protected function updateElementLbComponent(FieldableEntityInterface $entity, ElementContext $context, string $uuid, array $properties, array $options = []): BlueprintResult {
+  protected function updateElementLbComponent(HostInterface $host, ElementContext $context, string $uuid, array $properties, array $options = []): BlueprintResult {
     $component = $context->target;
 
-    $block = $this->requireInlineBlock($component, $context, 'element');
-    if ($block instanceof BlueprintResult) {
-      return $block;
+    if (!$this->daedalusLayoutAdapter->isInlineBlock($component)) {
+      return $this->updateElementPluginBlock($host, $context, $uuid, $properties, $options);
+    }
+    $block = $this->daedalusLayoutAdapter->extractBlockContent($component);
+    if ($block === NULL) {
+      return BlueprintResult::structuralFailure([
+        new BlueprintError(
+          path: 'element',
+          code: 'BLOCK_CONTENT_NOT_FOUND',
+          message: 'Could not load block_content for this element.',
+        ),
+      ]);
     }
 
     // Sort properties into fields, configuration, and label.
     $block_type = $this->daedalusLayoutAdapter->getInlineBlockType($component);
-    $sorted = $this->sortElementProperties($entity, $block_type, $block, $properties);
+    $sorted = $this->sortElementProperties($host, $block_type, $block, $properties);
     if (!empty($sorted['errors'])) {
       return BlueprintResult::structuralFailure($sorted['errors']);
     }
 
     // Apply fields on the block_content entity.
-    $result = $this->validateAndApplyFields($block, $sorted['fields'], 'properties', $options + [
+    $result = $this->validateAndApplyFields($host, $block, $sorted['fields'], 'properties', $options + [
       'is_update' => TRUE,
       'element_uuid' => $uuid,
     ]);
 
-    $failure = $this->fieldResultToFailure($result);
+    $failure = $this->fieldResultToFailure($result) ?? $this->valueBlockFailure($host, $block, $block_type, 'properties');
     if ($failure !== NULL) {
       return $failure;
     }
@@ -452,10 +538,13 @@ class BlueprintOperations implements BlueprintOperationsInterface {
       $label = HtmlEntityDecoder::decode($label);
     }
 
-    // Serialize block back into the component's configuration.
+    // Serialize block back into the component's configuration. The
+    // serialized block is the staged truth until the host commits: a
+    // content host saves it as an entity, a display host stores it as
+    // values (InlineBlockValues::store()), so stale values go with the id.
     $config = $component->get('configuration');
     $config['block_serialized'] = serialize($block);
-    unset($config['block_revision_id']);
+    unset($config['block_revision_id'], $config[InlineBlockValues::KEY]);
 
     if (isset($label)) {
       $config['label'] = $label;
@@ -476,15 +565,64 @@ class BlueprintOperations implements BlueprintOperationsInterface {
     }
     $applied_field_names = array_merge($applied_field_names, array_keys($sorted['configuration'] ?? []));
 
-    return BlueprintResult::success($entity, $result['warnings'])
+    return BlueprintResult::success($host, $result['warnings'])
       ->withTargetsFrom($uuid, $this->appliedTargetNames($applied_field_names, $result));
+  }
+
+  /**
+   * Updates a plugin block's configuration from a flat property bag.
+   *
+   * The bag is the plugin's own config schema (PluginBlockConfiguration):
+   * label, label_display and the plugin's settings keys, validated as typed
+   * config over the resulting settings. A plugin without schema of its own
+   * is refused with NO_PLUGIN_SCHEMA.
+   *
+   * @param \Drupal\daedalus_blueprint\Host\HostInterface $host
+   *   The host.
+   * @param \Drupal\daedalus_blueprint\ElementContext $context
+   *   The located element context.
+   * @param string $uuid
+   *   The component UUID.
+   * @param array $properties
+   *   Flat map of property names to values.
+   * @param array $options
+   *   Deserialization options (decode_html_entities applies to the label).
+   *
+   * @return \Drupal\daedalus_blueprint\Result\BlueprintResult
+   *   The result with the modified entity on success.
+   */
+  protected function updateElementPluginBlock(HostInterface $host, ElementContext $context, string $uuid, array $properties, array $options = []): BlueprintResult {
+    /** @var \Drupal\layout_builder\SectionComponent $component */
+    $component = $context->target;
+    $configuration = $component->get('configuration');
+    $plugin_id = $configuration['id'] ?? $component->getPluginId();
+
+    // The label is plain text, so it gets the same LLM entity-escape
+    // defense as an inline block's label.
+    if (!empty($options['decode_html_entities']) && isset($properties['label']) && is_string($properties['label'])) {
+      $properties['label'] = HtmlEntityDecoder::decode($properties['label']);
+    }
+
+    $applied = $this->pluginBlockConfiguration->apply($plugin_id, $configuration, $properties, 'properties');
+    if ($applied['structural'] !== []) {
+      return BlueprintResult::structuralFailure($applied['structural']);
+    }
+    if ($applied['errors'] !== []) {
+      return BlueprintResult::semanticFailure($applied['errors']);
+    }
+
+    $component->set('configuration', $applied['settings']);
+    $this->bubbleNestedChanges($context);
+
+    return BlueprintResult::success($host)
+      ->withTargetsFrom($uuid, array_keys($properties));
   }
 
   /**
    * Updates a paragraph entity from a flat property bag.
    *
-   * @param \Drupal\Core\Entity\FieldableEntityInterface $entity
-   *   The root entity.
+   * @param \Drupal\daedalus_blueprint\Host\HostInterface $host
+   *   The host.
    * @param \Drupal\daedalus_blueprint\ElementContext $context
    *   The located paragraph context.
    * @param string $uuid
@@ -498,9 +636,9 @@ class BlueprintOperations implements BlueprintOperationsInterface {
    * @return \Drupal\daedalus_blueprint\Result\BlueprintResult
    *   The result with the modified entity on success.
    */
-  protected function updateElementParagraph(FieldableEntityInterface $entity, ElementContext $context, string $uuid, array $properties, array $options = []): BlueprintResult {
+  protected function updateElementParagraph(HostInterface $host, ElementContext $context, string $uuid, array $properties, array $options = []): BlueprintResult {
     $paragraph = $context->target;
-    $result = $this->validateAndApplyFields($paragraph, $properties, 'properties', $options + [
+    $result = $this->validateAndApplyFields($host, $paragraph, $properties, 'properties', $options + [
       'is_update' => TRUE,
     ]);
 
@@ -509,7 +647,7 @@ class BlueprintOperations implements BlueprintOperationsInterface {
       return $failure;
     }
 
-    return BlueprintResult::success($entity, $result['warnings'])
+    return BlueprintResult::success($host, $result['warnings'])
       ->withTargetsFrom($uuid, $this->appliedTargetNames(array_keys($properties), $result));
   }
 
@@ -520,8 +658,8 @@ class BlueprintOperations implements BlueprintOperationsInterface {
    * (PLACEMENT_CONFIGURATION) on every inline block, and the block type's
    * managed keys.
    *
-   * @param \Drupal\Core\Entity\FieldableEntityInterface $entity
-   *   The root entity (for managed keys lookup).
+   * @param \Drupal\daedalus_blueprint\Host\HostInterface $host
+   *   The host (for managed keys lookup).
    * @param string $block_type
    *   The block content type machine name.
    * @param \Drupal\Core\Entity\FieldableEntityInterface $block
@@ -532,10 +670,10 @@ class BlueprintOperations implements BlueprintOperationsInterface {
    * @return array
    *   Keys: 'fields', 'configuration', 'label', 'errors'.
    */
-  protected function sortElementProperties(FieldableEntityInterface $entity, string $block_type, FieldableEntityInterface $block, array $properties): array {
+  protected function sortElementProperties(HostInterface $host, string $block_type, FieldableEntityInterface $block, array $properties): array {
     $managed_keys = $this->managedKeysRegistry->getManagedKeys(
-      $entity->getEntityTypeId(),
-      $entity->bundle(),
+      $host->entityTypeId(),
+      $host->bundle(),
     );
     $inline_managed = $managed_keys['inline_block_configuration'][$block_type] ?? [];
     $processable_fields = $this->fieldHandlerManager->getProcessableFieldDefinitions($block);
@@ -558,8 +696,8 @@ class BlueprintOperations implements BlueprintOperationsInterface {
       elseif (isset($inline_managed[$key]) || in_array($key, static::PLACEMENT_CONFIGURATION, TRUE)) {
         $configuration[$key] = $value;
       }
-      elseif ($key === 'layout_builder__layout') {
-        // The layout field is deliberately not a processable property, so a
+      elseif ($key === 'layout') {
+        // The document key is deliberately not a processable property, so a
         // generic UNKNOWN_PROPERTY would mislead: blocks hold no nested
         // layouts under the one container model.
         $errors[] = new BlueprintError(
@@ -615,8 +753,8 @@ class BlueprintOperations implements BlueprintOperationsInterface {
    * operation sees the elements its predecessors inserted: a uuid repeated
    * across two operations of one batch collides on the second.
    *
-   * @param \Drupal\Core\Entity\FieldableEntityInterface $entity
-   *   The entity the minted identity will live on.
+   * @param \Drupal\daedalus_blueprint\Host\HostInterface $host
+   *   The host the minted identity will live on.
    * @param array<string, mixed> $uuids
    *   Submitted values keyed by their JSON error path. NULL values (the
    *   parameter was omitted, identity will be generated) are skipped.
@@ -625,7 +763,7 @@ class BlueprintOperations implements BlueprintOperationsInterface {
    *   A structural failure naming every unusable value, or NULL when all
    *   supplied values are valid and free.
    */
-  protected function validateMintedUuids(FieldableEntityInterface $entity, array $uuids): ?BlueprintResult {
+  protected function validateMintedUuids(HostInterface $host, array $uuids): ?BlueprintResult {
     $errors = [];
     foreach ($uuids as $path => $value) {
       if ($value === NULL) {
@@ -635,7 +773,7 @@ class BlueprintOperations implements BlueprintOperationsInterface {
         $errors[] = BlueprintError::invalidUuid($path, $value);
         continue;
       }
-      if ($this->elementLocator->locate($entity, $value) !== NULL) {
+      if ($this->elementLocator->locate($host, $value) !== NULL) {
         $errors[] = BlueprintError::uuidInUse($path, $value);
       }
     }
@@ -643,41 +781,14 @@ class BlueprintOperations implements BlueprintOperationsInterface {
   }
 
   /**
-   * Seeds a fresh override field with the display's default sections.
-   *
-   * Until the first write lands, an overridable entity's layout field is
-   * empty (or holds core's blank placeholder, which reads as empty) while
-   * the page still renders the display's sections, and the serializer
-   * exposes those with their real daedalus_layout uuids. Materializing them
-   * makes the entity's identity tree match what the writer was shown, so
-   * anchors can name a default-seeded section and minted identity is
-   * checked against it. Idempotent, and a no-op without Layout Builder.
-   *
-   * @param \Drupal\Core\Entity\FieldableEntityInterface $entity
-   *   The entity to seed.
-   */
-  protected function materializeDefaultSections(FieldableEntityInterface $entity): void {
-    if (!$entity->hasField('layout_builder__layout') || $this->daedalusLayoutAdapter->getFieldSections($entity) !== []) {
-      return;
-    }
-    $sections = $this->daedalusLayoutAdapter->getDefaultSections($entity);
-    if (!empty($sections)) {
-      $entity->set('layout_builder__layout', $sections);
-    }
-  }
-
-  /**
    * {@inheritdoc}
    */
-  public function addElement(FieldableEntityInterface $entity, array $location, array $data, array $options = []): BlueprintResult {
+  public function addElement(HostInterface $host, array $location, array $data, array $options = []): BlueprintResult {
     // The gate answers "is this uuid free" against the identity tree the
-    // operation is about to write into, so a fresh override materializes
-    // its default sections first: their uuids are already published by the
-    // serializer and are exactly the ones a writer is tempted to copy.
-    if (isset($location['anchor'])) {
-      $this->materializeDefaultSections($entity);
-    }
-    if ($failure = $this->validateMintedUuids($entity, [
+    // operation is about to write into: the host's own document, seeded
+    // from the display's template at its storage door, so the uuids the
+    // serializer published are exactly the ones the write sees.
+    if ($failure = $this->validateMintedUuids($host, [
       'data.uuid' => $data['uuid'] ?? NULL,
     ])) {
       return $failure;
@@ -687,15 +798,117 @@ class BlueprintOperations implements BlueprintOperationsInterface {
     // position for the paragraph flow). The paragraph family's own
     // {field, position} spelling addresses reference fields directly.
     if (isset($location['anchor'])) {
-      $resolved = $this->resolvePlacement($entity, $location);
+      $door = $this->throughSlotDoor($host, $location);
+      if ($door instanceof BlueprintResult) {
+        return $door;
+      }
+      $resolved = $this->resolvePlacement($host, $door['location']);
       if ($resolved instanceof BlueprintResult) {
         return $resolved;
       }
-      return isset($resolved['_section'])
-        ? $this->addLbComponent($entity, $resolved, $data, $options)
-        : $this->addParagraphElement($entity, $resolved, $data, $options);
+      $result = isset($resolved['_section'])
+        ? $this->addLbComponent($host, $resolved, $data, $options)
+        : $this->addParagraphElement($host, $resolved, $data, $options);
+      return $this->withDoorTargets($result, $door['targets']);
     }
-    return $this->addParagraphElement($entity, $location, $data, $options);
+    return $this->addParagraphElement($host, $location, $data, $options);
+  }
+
+  /**
+   * The slot a location anchored inside a slot door of the host fills.
+   *
+   * A slot door is a slot block (daedalus_slot:{id}) of a document the
+   * host is rendered inside: the template it renders inside (its foreign
+   * owner) or the site frame around the route (InnerRender::frameHost(),
+   * the active theme's). A location anchored 'inside' it names the host's
+   * slot section for that id, whether or not one exists yet. The frame's
+   * main slot is no door: it holds the route's output, the page itself.
+   *
+   * @param \Drupal\daedalus_blueprint\Host\HostInterface $host
+   *   The host.
+   * @param array $location
+   *   A placement-grammar location.
+   *
+   * @return string|null
+   *   The slot id, or NULL when the location is not anchored inside a
+   *   slot door of the host (every other location, the host's own slot
+   *   blocks included: a document never fills its own slot).
+   */
+  protected function slotDoor(HostInterface $host, array $location): ?string {
+    $anchor = $location['anchor'] ?? NULL;
+    if (($location['placement'] ?? NULL) !== 'inside' || !is_string($anchor) || $anchor === '' || $anchor === $host->uuid()) {
+      return NULL;
+    }
+    if (!InnerRender::fillsSlots($host)) {
+      return NULL;
+    }
+    foreach ([$this->hostResolver->foreignOwner($host), $this->innerRender->frameHost()] as $holder) {
+      if ($holder === NULL) {
+        continue;
+      }
+      $context = $this->daedalusLayoutAdapter->locateElement($holder, $anchor);
+      if ($context === NULL || !$context->isLbComponent()) {
+        continue;
+      }
+      /** @var \Drupal\layout_builder\SectionComponent $component */
+      $component = $context->target;
+      $slot = SlotBlock::slotIdOf($component->getPluginId());
+      return $slot === FrameHost::MAIN_SLOT ? NULL : $slot;
+    }
+    return NULL;
+  }
+
+  /**
+   * The uuid of the host's own section filling a slot, or NULL.
+   */
+  protected function slotSectionUuid(HostInterface $host, string $slot): ?string {
+    foreach ($host->ownSections() as $section) {
+      if (LayoutSerializer::slotOf($section) === $slot) {
+        return $this->daedalusLayoutAdapter->getSectionUuid($section);
+      }
+    }
+    return NULL;
+  }
+
+  /**
+   * Lands a location anchored inside a slot door on the slot's section.
+   *
+   * The door's interior IS the host's slot section: the location is
+   * rewritten to 'inside' that section, minted at the root of the host's
+   * own document (a default container tagged with the slot id, the same
+   * birth add_section gives one) when nothing fills the slot yet. Any
+   * other location passes through unchanged. The mint's targets (the
+   * section added, the root restructured) ride along so the response
+   * re-renders the slot the template shows around the newborn section.
+   *
+   * @param \Drupal\daedalus_blueprint\Host\HostInterface $host
+   *   The host.
+   * @param array $location
+   *   A placement-grammar location.
+   *
+   * @return array{location: array, targets: array}|\Drupal\daedalus_blueprint\Result\BlueprintResult
+   *   The location to resolve and the mint's targets ([] when nothing was
+   *   minted), or the mint's failure.
+   */
+  protected function throughSlotDoor(HostInterface $host, array $location): array|BlueprintResult {
+    $slot = $this->slotDoor($host, $location);
+    if ($slot === NULL) {
+      return ['location' => $location, 'targets' => []];
+    }
+    $targets = [];
+    $section_uuid = $this->slotSectionUuid($host, $slot);
+    if ($section_uuid === NULL) {
+      $minted = $this->addSection($host, ['anchor' => $host->uuid(), 'placement' => 'inside'], NULL, NULL, [], NULL, $slot);
+      if (!$minted->isSuccess()) {
+        return $minted;
+      }
+      $targets = $minted->getTargets();
+      $section_uuid = $this->slotSectionUuid($host, $slot);
+    }
+    return [
+      'location' => ['anchor' => $section_uuid, 'placement' => 'inside'],
+      'targets' => $targets,
+    ];
   }
 
   /**
@@ -713,8 +926,8 @@ class BlueprintOperations implements BlueprintOperationsInterface {
    * section list holds only sections, so a block beside a ROOT section is
    * refused with the wrap composition (add_section, then place inside).
    *
-   * @param \Drupal\Core\Entity\FieldableEntityInterface $entity
-   *   The root entity.
+   * @param \Drupal\daedalus_blueprint\Host\HostInterface $host
+   *   The host.
    * @param array $location
    *   Location with anchor, placement, and optionally region or field.
    * @param object|null $storage
@@ -727,9 +940,7 @@ class BlueprintOperations implements BlueprintOperationsInterface {
    *   _section, _storage, region, weight) or addParagraphElement (keys
    *   _parent_entity, field, position), or a failure result.
    */
-  protected function resolvePlacement(FieldableEntityInterface $entity, array $location, ?object $storage = NULL): array|BlueprintResult {
-    $this->materializeDefaultSections($entity);
-
+  protected function resolvePlacement(HostInterface $host, array $location, ?object $storage = NULL): array|BlueprintResult {
     $anchor = $location['anchor'];
     $placement = $location['placement'] ?? NULL;
     if (!in_array($placement, ['before', 'after', 'inside'], TRUE)) {
@@ -745,7 +956,7 @@ class BlueprintOperations implements BlueprintOperationsInterface {
     }
 
     // "Inside" the root entity targets one of its reference fields.
-    if ($anchor === $entity->uuid()) {
+    if ($anchor === $host->uuid()) {
       if ($placement !== 'inside') {
         return BlueprintResult::structuralFailure([
           new BlueprintError(
@@ -759,7 +970,7 @@ class BlueprintOperations implements BlueprintOperationsInterface {
       return $this->requireField($location, ['field' => $location['field'] ?? NULL]);
     }
 
-    $context = $this->locateElement($entity, $anchor, 'location.anchor', 'ANCHOR_NOT_FOUND', $storage);
+    $context = $this->locateElement($host, $anchor, 'location.anchor', 'ANCHOR_NOT_FOUND', $storage);
     if ($context instanceof BlueprintResult) {
       return $context;
     }
@@ -1004,21 +1215,32 @@ class BlueprintOperations implements BlueprintOperationsInterface {
   /**
    * {@inheritdoc}
    */
-  public function addSection(FieldableEntityInterface $entity, array $location, ?string $uuid = NULL, ?string $layout = NULL, array $layout_settings = [], ?string $stencil = NULL): BlueprintResult {
-    if ($failure = $this->validateMintedUuids($entity, ['uuid' => $uuid])) {
+  public function addSection(HostInterface $host, array $location, ?string $uuid = NULL, ?string $layout = NULL, array $layout_settings = [], ?string $blueprint = NULL, ?string $slot = NULL): BlueprintResult {
+    if ($failure = $this->validateMintedUuids($host, ['uuid' => $uuid])) {
       return $failure;
     }
-    if ($stencil === '') {
+    if ($blueprint === '') {
       return BlueprintResult::structuralFailure([
         new BlueprintError(
-          path: 'stencil',
-          code: 'INVALID_STENCIL',
-          message: 'stencil is a non-empty stencil ID.',
-          hint: 'Pass the source stencil machine name, or omit the key for a section that is not a stencil placement.',
+          path: 'blueprint',
+          code: 'INVALID_BLUEPRINT',
+          message: 'blueprint is a non-empty blueprint ID.',
+          hint: 'Pass the source blueprint machine name, or omit the key for a section that is not a blueprint placement.',
         ),
       ]);
     }
-    if (!$entity->hasField('layout_builder__layout')) {
+    if ($slot !== NULL && !preg_match(LayoutSerializer::SLOT_ID_PATTERN, $slot)) {
+      return BlueprintResult::structuralFailure([
+        new BlueprintError(
+          path: 'slot',
+          code: 'INVALID_SLOT',
+          message: 'slot is a slot id: lowercase letters, digits and underscores.',
+          context: ['slot' => $slot],
+          hint: 'Name the slot the section fills (the id the slot block around this document was placed with), or omit the key for a section that fills no slot.',
+        ),
+      ]);
+    }
+    if (!$host->hasDocument()) {
       return BlueprintResult::structuralFailure([
         new BlueprintError(
           path: 'location',
@@ -1053,12 +1275,39 @@ class BlueprintOperations implements BlueprintOperationsInterface {
       ]);
     }
 
+    // A section anchored inside a slot door of the host (a slot block of
+    // the document around it) is the host's fill of that slot: the slot
+    // section itself when nothing fills the slot yet, else a section
+    // nested inside the one that does. The door names the slot; a
+    // different slot named beside it is a contradiction.
+    if (($door = $this->slotDoor($host, $location)) !== NULL) {
+      if ($slot !== NULL && $slot !== $door) {
+        return BlueprintResult::structuralFailure([
+          new BlueprintError(
+            path: 'slot',
+            code: 'INVALID_SLOT',
+            message: sprintf('The anchor is the door of slot "%s", not of slot "%s".', $door, $slot),
+            context: ['slot' => $slot, 'door' => $door],
+            hint: 'Omit slot when anchoring inside a slot block: the section fills the slot the block declares.',
+          ),
+        ]);
+      }
+      $filled = $this->slotSectionUuid($host, $door);
+      if ($filled === NULL) {
+        $anchor = $host->uuid();
+        $slot = $door;
+      }
+      else {
+        $anchor = $filled;
+      }
+    }
+
     // One storage wrapper for every locate in this operation (see
     // moveElement). A section is born with its real layout: an explicit
     // layout when named, otherwise the spine's default ladder (a container
     // layout from the allowed set when one exists, then the configured
     // default_section, then the first allowed layout).
-    $storage = $this->daedalusLayoutAdapter->getSectionStorage($entity);
+    $storage = $host->sectionStorage();
     if ($layout !== NULL) {
       $section = $this->createExplicitSection($layout, $layout_settings, $uuid);
       if ($section instanceof BlueprintResult) {
@@ -1076,7 +1325,7 @@ class BlueprintOperations implements BlueprintOperationsInterface {
           ),
         ]);
       }
-      $section = $this->daedalusLayoutAdapter->createDefaultSection($entity, $uuid, $storage);
+      $section = $this->daedalusLayoutAdapter->createDefaultSection($host, $uuid, $storage);
       if ($section === NULL) {
         return BlueprintResult::structuralFailure([
           new BlueprintError(
@@ -1098,16 +1347,16 @@ class BlueprintOperations implements BlueprintOperationsInterface {
     }
 
     // A placement's provenance is a birth fact: the root create op carries
-    // the source stencil ID, exactly as uuid carries identity, so the stamp
+    // the source blueprint ID, exactly as uuid carries identity, so the stamp
     // exists the moment the section does — style operations trailing the
-    // structural expansion (a stencil's own owned-variant applies) already
+    // structural expansion (a blueprint's own owned-variant applies) already
     // see it. Block roots do the same through add_element's additional
     // data; this is the section half of that one grammar.
-    if ($stencil !== NULL) {
-      $section->setThirdPartySetting(LayoutSerializer::STENCIL_PROVENANCE_KEY, 'stencil', $stencil);
+    if ($blueprint !== NULL) {
+      $section->setThirdPartySetting(LayoutSerializer::BLUEPRINT_PROVENANCE_KEY, 'blueprint', $blueprint);
     }
 
-    if ($anchor === $entity->uuid()) {
+    if ($anchor === $host->uuid()) {
       if ($placement !== 'inside') {
         return BlueprintResult::structuralFailure([
           new BlueprintError(
@@ -1118,18 +1367,40 @@ class BlueprintOperations implements BlueprintOperationsInterface {
           ),
         ]);
       }
-      // Root sections live on the entity's field items, shared with any
-      // storage wrapper — append directly.
-      $entity->get('layout_builder__layout')->appendSection($section);
-      if ($failure = $this->validateSectionListOwner($entity)) {
+      if ($slot !== NULL && ($failure = $this->stampSlot($host, $section, $slot))) {
         return $failure;
       }
-      return $this->addSectionResult($entity, $section);
+      // Root sections are the storage's root list.
+      $this->daedalusLayoutAdapter->rootList($storage)->appendSection($section);
+      if ($failure = $this->validateSectionListOwner($host)) {
+        return $failure;
+      }
+      return $this->addSectionResult($host, $section);
     }
 
-    $context = $this->locateElement($entity, $anchor, 'location.anchor', 'ANCHOR_NOT_FOUND', $storage);
+    $context = $this->locateElement($host, $anchor, 'location.anchor', 'ANCHOR_NOT_FOUND', $storage);
     if ($context instanceof BlueprintResult) {
       return $context;
+    }
+
+    // A slot is a birth fact of the root flow: the section fills one slot
+    // of the host's own document, so it lands beside a top-level section
+    // (or at the root, above) and nowhere nested.
+    if ($slot !== NULL) {
+      if ($placement === 'inside' || !$context->isSection() || $this->daedalusLayoutAdapter->locateContainer($storage, $anchor) !== NULL) {
+        return BlueprintResult::structuralFailure([
+          new BlueprintError(
+            path: 'location',
+            code: 'BLUEPRINT_SLOT_NESTED',
+            message: 'A slot section is a top-level section of the document.',
+            context: ['slot' => $slot],
+            hint: "Anchor the root entity UUID with placement 'inside', or a top-level section with before/after (a slot section fills a slot of the document around this one; its place on the page is the slot's), or omit slot for an ordinary section.",
+          ),
+        ]);
+      }
+      if ($failure = $this->stampSlot($host, $section, $slot)) {
+        return $failure;
+      }
     }
 
     // ONE placement grammar over one mixed flow per region: before/after
@@ -1207,7 +1478,7 @@ class BlueprintOperations implements BlueprintOperationsInterface {
       }
       else {
         // Root-flow anchor: the sibling is a new layout field row.
-        $list = $this->getContainingSectionList($entity, $anchor, $storage);
+        $list = $this->getContainingSectionList($host, $anchor, $storage);
         $delta = $list !== NULL ? $this->findSectionDelta($list, $anchor) : NULL;
         if ($delta === NULL) {
           return BlueprintResult::structuralFailure([
@@ -1223,11 +1494,11 @@ class BlueprintOperations implements BlueprintOperationsInterface {
       }
     }
 
-    if ($failure = $this->validateSectionListOwner($entity)) {
+    if ($failure = $this->validateSectionListOwner($host)) {
       return $failure;
     }
     $this->bubbleStorageChanges($storage);
-    return $this->addSectionResult($entity, $section);
+    return $this->addSectionResult($host, $section);
   }
 
   /**
@@ -1242,23 +1513,23 @@ class BlueprintOperations implements BlueprintOperationsInterface {
    * the ADDED entry carries the new section's identity for history and
    * optimistic-UI reconciliation.
    *
-   * @param \Drupal\Core\Entity\FieldableEntityInterface $entity
-   *   The root entity.
+   * @param \Drupal\daedalus_blueprint\Host\HostInterface $host
+   *   The host.
    * @param \Drupal\layout_builder\Section $section
    *   The inserted section.
    *
    * @return \Drupal\daedalus_blueprint\Result\BlueprintResult
    *   The success result.
    */
-  protected function addSectionResult(FieldableEntityInterface $entity, Section $section): BlueprintResult {
+  protected function addSectionResult(HostInterface $host, Section $section): BlueprintResult {
     $section_uuid = $this->daedalusLayoutAdapter->getSectionUuid($section);
-    $event_targets = $this->dispatchLifecycle(new SectionCreatedEvent($entity, $section, $section_uuid, $this->isDressed()));
+    $event_targets = $this->dispatchLifecycle(new SectionCreatedEvent($host, $section, $section_uuid, $this->isDressed()));
     $targets = [];
     if ($section_uuid !== NULL) {
       $targets[] = ['uuid' => $section_uuid, 'field_name' => TargetType::ADDED];
     }
-    $targets[] = ['uuid' => $entity->uuid(), 'field_name' => TargetType::RESTRUCTURED];
-    return BlueprintResult::success($entity)->withTargets(array_merge($targets, $event_targets));
+    $targets[] = ['uuid' => $host->uuid(), 'field_name' => TargetType::RESTRUCTURED];
+    return BlueprintResult::success($host)->withTargets(array_merge($targets, $event_targets));
   }
 
   /**
@@ -1296,7 +1567,7 @@ class BlueprintOperations implements BlueprintOperationsInterface {
    *
    * The birth-layout door for everything the default container ladder does
    * not cover: genuinely named-slot layouts and pinned layout settings
-   * (a stencil's column_widths). The section is born as its layout —
+   * (a blueprint's column_widths). The section is born as its layout —
    * there is no later layout change.
    *
    * @param string $layout_id
@@ -1353,6 +1624,45 @@ class BlueprintOperations implements BlueprintOperationsInterface {
   }
 
   /**
+   * Stamps a newborn section with the slot it fills, once per document.
+   *
+   * The one uniqueness rule of slot sections (a slot id appears at most
+   * once per document), judged over ownSections(): the sections the host
+   * itself holds, never the owner's a locked page renders inside (the
+   * template's own fills of a frame slot are another document's). The
+   * stamp is written before the section joins the list, so a refusal
+   * leaves nothing behind.
+   *
+   * @param \Drupal\daedalus_blueprint\Host\HostInterface $host
+   *   The host.
+   * @param \Drupal\layout_builder\Section $section
+   *   The newborn section.
+   * @param string $slot
+   *   The slot id it fills.
+   *
+   * @return \Drupal\daedalus_blueprint\Result\BlueprintResult|null
+   *   The BLUEPRINT_SLOT_DUPLICATE failure, or NULL once stamped.
+   */
+  protected function stampSlot(HostInterface $host, Section $section, string $slot): ?BlueprintResult {
+    foreach ($host->ownSections() as $filled) {
+      if (LayoutSerializer::slotOf($filled) !== $slot) {
+        continue;
+      }
+      return BlueprintResult::structuralFailure([
+        new BlueprintError(
+          path: 'slot',
+          code: 'BLUEPRINT_SLOT_DUPLICATE',
+          message: sprintf('Slot "%s" is already filled on this document.', $slot),
+          context: ['slot' => $slot, 'section' => $this->daedalusLayoutAdapter->getSectionUuid($filled)],
+          hint: 'A slot fills once: add into the section that fills it, or remove that section first.',
+        ),
+      ]);
+    }
+    $section->setThirdPartySetting(LayoutSerializer::SLOT_PROVIDER, LayoutSerializer::SLOT_SETTING, $slot);
+    return NULL;
+  }
+
+  /**
    * Validates the layout field of an entity whose section list was mutated.
    *
    * Section-list operations (add/move/remove) bypass the field-write path,
@@ -1369,35 +1679,58 @@ class BlueprintOperations implements BlueprintOperationsInterface {
    * always the root entity; nested-section cardinality (one section per
    * container) is enforced structurally by the container itself.
    *
-   * @param \Drupal\Core\Entity\FieldableEntityInterface $owner
-   *   The root entity whose layout field was mutated.
+   * @param \Drupal\daedalus_blueprint\Host\HostInterface $host
+   *   The host whose section list was mutated.
    *
    * @return \Drupal\daedalus_blueprint\Result\BlueprintResult|null
    *   A semantic failure carrying the violations, or NULL when valid.
    */
-  protected function validateSectionListOwner(FieldableEntityInterface $owner): ?BlueprintResult {
-    $errors = $this->semanticValidator->validateConstraints($owner, ['layout_builder__layout'], []);
+  protected function validateSectionListOwner(HostInterface $host): ?BlueprintResult {
+    // The constraints of the owner's section-list fields (core's field type
+    // names the storage; which field carries it is the host's mapping). A
+    // host with no fields keeps its document under no field constraint.
+    $owner = $host->fields();
+    if ($owner === NULL) {
+      return NULL;
+    }
+    $section_lists = [];
+    foreach ($owner->getFieldDefinitions() as $name => $definition) {
+      if ($definition->getType() === 'layout_section') {
+        $section_lists[] = $name;
+      }
+    }
+    $errors = $this->semanticValidator->validateConstraints($owner, $section_lists, [], FALSE, $this->systemDepth > 0);
     return $errors ? BlueprintResult::semanticFailure($errors) : NULL;
   }
 
   /**
    * {@inheritdoc}
    */
-  public function removeElement(FieldableEntityInterface $entity, string $uuid): BlueprintResult {
-    $context = $this->locateElement($entity, $uuid, 'element', 'ELEMENT_NOT_FOUND');
+  public function removeElement(HostInterface $host, string $uuid): BlueprintResult {
+    $context = $this->locateElement($host, $uuid, 'element', 'ELEMENT_NOT_FOUND');
     if ($context instanceof BlueprintResult) {
       return $context;
     }
 
     if ($context->isLbComponent()) {
       $context->section->removeComponent($uuid);
+      $emptied = $this->emptiedSlotSection($host, $context);
+      if ($emptied instanceof BlueprintResult) {
+        return $emptied;
+      }
+      if ($emptied !== NULL) {
+        return BlueprintResult::success($host)->withTargets(array_merge(
+          [['uuid' => $uuid, 'field_name' => TargetType::REMOVED]],
+          $emptied,
+        ));
+      }
       $this->bubbleNestedChanges($context);
-      return BlueprintResult::success($entity)
+      return BlueprintResult::success($host)
         ->withTargets([['uuid' => $uuid, 'field_name' => TargetType::REMOVED]]);
     }
 
     if ($context->isSection()) {
-      return $this->removeSection($entity, $uuid, $context);
+      return $this->removeSection($host, $uuid, $context);
     }
 
     // Paragraph: remove from parent's ERR field.
@@ -1410,8 +1743,40 @@ class BlueprintOperations implements BlueprintOperationsInterface {
     }
     $context->parentEntity->set($context->fieldName, $items);
 
-    return BlueprintResult::success($entity)
+    return BlueprintResult::success($host)
       ->withTargets([['uuid' => $uuid, 'field_name' => TargetType::REMOVED]]);
+  }
+
+  /**
+   * Removes a slot section the last element just left, if that is what happened.
+   *
+   * The last element leaving a slot section empties the slot: the section
+   * goes with it, so the slot shows its default (or its stand-in) again
+   * rather than an empty container of the page's. Asked after a removal
+   * or a move out of a section, with the context the element was located
+   * in.
+   *
+   * @param \Drupal\daedalus_blueprint\Host\HostInterface $host
+   *   The host.
+   * @param \Drupal\daedalus_blueprint\ElementContext $context
+   *   The context of the element that left (its section and storage).
+   *
+   * @return array|\Drupal\daedalus_blueprint\Result\BlueprintResult|null
+   *   The removal's targets (the section REMOVED) when the section was an
+   *   emptied top-level slot section, a failure when its removal failed,
+   *   NULL when the section stays.
+   */
+  protected function emptiedSlotSection(HostInterface $host, ElementContext $context): array|BlueprintResult|null {
+    $section = $context->section;
+    if (!$section instanceof Section || LayoutSerializer::slotOf($section) === NULL || $section->getComponents() !== []) {
+      return NULL;
+    }
+    $section_uuid = $this->daedalusLayoutAdapter->getSectionUuid($section);
+    if ($section_uuid === NULL || $this->daedalusLayoutAdapter->locateContainer($context->sectionStorage, $section_uuid) !== NULL) {
+      return NULL;
+    }
+    $removed = $this->removeSection($host, $section_uuid, $context);
+    return $removed->isSuccess() ? $removed->getTargets() : $removed;
   }
 
   /**
@@ -1421,8 +1786,8 @@ class BlueprintOperations implements BlueprintOperationsInterface {
    * sections from the containing list resolved through the nested-aware
    * section storage, with changes bubbled back to the root entity.
    *
-   * @param \Drupal\Core\Entity\FieldableEntityInterface $entity
-   *   The root entity.
+   * @param \Drupal\daedalus_blueprint\Host\HostInterface $host
+   *   The host.
    * @param string $uuid
    *   The section UUID.
    * @param \Drupal\daedalus_blueprint\ElementContext $context
@@ -1431,24 +1796,27 @@ class BlueprintOperations implements BlueprintOperationsInterface {
    * @return \Drupal\daedalus_blueprint\Result\BlueprintResult
    *   The result with the modified entity on success.
    */
-  protected function removeSection(FieldableEntityInterface $entity, string $uuid, ElementContext $context): BlueprintResult {
+  protected function removeSection(HostInterface $host, string $uuid, ElementContext $context): BlueprintResult {
     $storage = $context->sectionStorage;
-    if ($storage !== NULL && method_exists($storage, 'getSectionsFor')) {
-      $list = $storage->getSectionsFor($uuid);
-    }
-    else {
-      $list = $context->parentEntity->get('layout_builder__layout');
-    }
+    $list = $this->getContainingSectionList($host, $uuid, $storage);
 
     if ($list !== NULL) {
       foreach ($list->getSections() as $delta => $section) {
         if ($this->daedalusLayoutAdapter->getSectionUuid($section) === $uuid) {
           $list->removeSection($delta);
-          if ($failure = $this->validateSectionListOwner($entity)) {
+          // A page rendered inside a foreign document owns its slot
+          // sections or nothing: core's blank marker, written when the
+          // last root section goes, means "started and empty", which a
+          // page that never owned its whole document cannot be, and an
+          // unlock would read it as one (ContentHost::seed()).
+          if ($this->hostResolver->foreignOwner($host) !== NULL && DaedalusLayoutAdapter::isBlankSectionList($list->getSections())) {
+            $list->removeAllSections();
+          }
+          if ($failure = $this->validateSectionListOwner($host)) {
             return $failure;
           }
           $this->bubbleNestedChanges($context);
-          return BlueprintResult::success($entity)
+          return BlueprintResult::success($host)
             ->withTargets([['uuid' => $uuid, 'field_name' => TargetType::REMOVED]]);
         }
       }
@@ -1467,7 +1835,7 @@ class BlueprintOperations implements BlueprintOperationsInterface {
   /**
    * {@inheritdoc}
    */
-  public function moveElement(FieldableEntityInterface $entity, string $uuid, array $location): BlueprintResult {
+  public function moveElement(HostInterface $host, string $uuid, array $location): BlueprintResult {
     $anchor = $location['anchor'] ?? NULL;
     if (empty($anchor)) {
       return BlueprintResult::structuralFailure([
@@ -1489,12 +1857,22 @@ class BlueprintOperations implements BlueprintOperationsInterface {
         ),
       ]);
     }
+    // A move into a slot door lands inside the slot's section, minted when
+    // nothing fills the slot yet (throughSlotDoor), before the storage
+    // wrapper below is taken so every locate sees the newborn section.
+    $door = $this->throughSlotDoor($host, $location);
+    if ($door instanceof BlueprintResult) {
+      return $door;
+    }
+    $location = $door['location'];
+    $anchor = $location['anchor'];
+
     // One storage wrapper for every locate in this operation: separate
     // wrappers do not share nested Section/entity instances, so mutations
     // spread across them lose each other on bubbling.
-    $storage = $this->daedalusLayoutAdapter->getSectionStorage($entity);
+    $storage = $host->sectionStorage();
 
-    $context = $this->locateElement($entity, $uuid, 'element', 'ELEMENT_NOT_FOUND', $storage);
+    $context = $this->locateElement($host, $uuid, 'element', 'ELEMENT_NOT_FOUND', $storage);
     if ($context instanceof BlueprintResult) {
       return $context;
     }
@@ -1516,7 +1894,7 @@ class BlueprintOperations implements BlueprintOperationsInterface {
     // branch decides here, before the anchor locate and the containment
     // check. The root flow holds only sections; a block wraps (clients
     // compose the wrap themselves, the hint says how).
-    if ($anchor === $entity->uuid()) {
+    if ($anchor === $host->uuid()) {
       if (!$context->isSection()) {
         return BlueprintResult::structuralFailure([
           new BlueprintError(
@@ -1527,10 +1905,10 @@ class BlueprintOperations implements BlueprintOperationsInterface {
           ),
         ]);
       }
-      return $this->moveSectionElement($entity, $uuid, $location, NULL, $storage);
+      return $this->withDoorTargets($this->moveSectionElement($host, $uuid, $location, NULL, $storage), $door['targets']);
     }
 
-    $anchor_context = $this->locateElement($entity, $anchor, 'location.anchor', 'ANCHOR_NOT_FOUND', $storage);
+    $anchor_context = $this->locateElement($host, $anchor, 'location.anchor', 'ANCHOR_NOT_FOUND', $storage);
     if ($anchor_context instanceof BlueprintResult) {
       return $anchor_context;
     }
@@ -1546,9 +1924,33 @@ class BlueprintOperations implements BlueprintOperationsInterface {
     }
 
     if ($context->isSection()) {
-      return $this->moveSectionElement($entity, $uuid, $location, $anchor_context, $storage);
+      // A slot section stays in the root flow: a move beside anything but
+      // a top-level section would nest it, and a nested section fills no
+      // slot.
+      $slot = LayoutSerializer::slotOf($context->target);
+      if ($slot !== NULL && (($location['placement'] ?? NULL) === 'inside' || !$anchor_context->isSection() || $this->daedalusLayoutAdapter->locateContainer($storage, $anchor) !== NULL)) {
+        return BlueprintResult::structuralFailure([
+          new BlueprintError(
+            path: 'location',
+            code: 'BLUEPRINT_SLOT_NESTED',
+            message: sprintf('A slot section (slot "%s") stays at the top level of the document.', $slot),
+            context: ['slot' => $slot],
+            hint: 'Move it before or after another top-level section, or anchor the root entity to move it last; its place on the page is the slot\'s, so reordering only changes the document\'s own flow.',
+          ),
+        ]);
+      }
+      return $this->withDoorTargets($this->moveSectionElement($host, $uuid, $location, $anchor_context, $storage), $door['targets']);
     }
-    return $this->moveLbComponent($entity, $uuid, $location, $context, $storage);
+    return $this->withDoorTargets($this->moveLbComponent($host, $uuid, $location, $context, $storage), $door['targets']);
+  }
+
+  /**
+   * Merges a slot door's mint targets into a successful result.
+   */
+  protected function withDoorTargets(BlueprintResult $result, array $targets): BlueprintResult {
+    return $targets === [] || !$result->isSuccess()
+      ? $result
+      : $result->withTargets(array_merge($result->getTargets(), $targets));
   }
 
   /**
@@ -1562,8 +1964,8 @@ class BlueprintOperations implements BlueprintOperationsInterface {
    * sections' depth), and the targets subscribers declare merge into the
    * result after the operation's own.
    *
-   * @param \Drupal\Core\Entity\FieldableEntityInterface $entity
-   *   The root entity.
+   * @param \Drupal\daedalus_blueprint\Host\HostInterface $host
+   *   The host.
    * @param string $uuid
    *   The component UUID being moved.
    * @param array $location
@@ -1576,8 +1978,8 @@ class BlueprintOperations implements BlueprintOperationsInterface {
    * @return \Drupal\daedalus_blueprint\Result\BlueprintResult
    *   The result with the modified entity on success.
    */
-  protected function moveLbComponent(FieldableEntityInterface $entity, string $uuid, array $location, ElementContext $context, ?object $storage): BlueprintResult {
-    $resolved = $this->resolvePlacement($entity, $location, $storage);
+  protected function moveLbComponent(HostInterface $host, string $uuid, array $location, ElementContext $context, ?object $storage): BlueprintResult {
+    $resolved = $this->resolvePlacement($host, $location, $storage);
     if ($resolved instanceof BlueprintResult) {
       return $resolved;
     }
@@ -1614,8 +2016,8 @@ class BlueprintOperations implements BlueprintOperationsInterface {
     // A component's depth is its section's depth, read BEFORE mutating so
     // both facts come off the same tree. A section without an daedalus_layout UUID
     // cannot be nested (nesting needs daedalus_layout), so it reads as root.
-    $was_nested = $source_section_uuid !== NULL && $this->elementLocator->isNestedSection($entity, $source_section_uuid);
-    $is_nested = $dest_section_uuid !== NULL && $this->elementLocator->isNestedSection($entity, $dest_section_uuid);
+    $was_nested = $source_section_uuid !== NULL && $this->elementLocator->isNestedSection($host, $source_section_uuid);
+    $is_nested = $dest_section_uuid !== NULL && $this->elementLocator->isNestedSection($host, $dest_section_uuid);
 
     // The resolved weight indexes the destination region as it stands with
     // the element still in place. Removing the element first shifts later
@@ -1636,23 +2038,40 @@ class BlueprintOperations implements BlueprintOperationsInterface {
     $dest_section->insertComponent($weight, $component);
     $this->bubbleStorageChanges($storage ?? $context->sectionStorage);
 
-    $event_targets = $this->dispatchLifecycle(new ElementMovedEvent($entity, $uuid, FALSE, $was_nested, $is_nested));
+    $event_targets = $this->dispatchLifecycle(new ElementMovedEvent($host, $uuid, FALSE, $was_nested, $is_nested));
 
     $cross_section = $source_section_uuid !== NULL
       ? $source_section_uuid !== $dest_section_uuid
       : $source_section !== $dest_section;
     $targets = [['uuid' => $uuid, 'field_name' => TargetType::ADDED]];
+    // The last element moving out of a slot section empties the slot.
+    $emptied = $cross_section ? $this->emptiedSlotSection($host, $context) : NULL;
+    if ($emptied instanceof BlueprintResult) {
+      return $emptied;
+    }
+    if ($emptied !== NULL) {
+      return BlueprintResult::success($host)->withTargets(array_merge($targets, $emptied, $event_targets));
+    }
     if ($cross_section || $source_region !== $region) {
       // The ADDED target only re-renders the destination region, so any move
       // that left its source region behind needs a source-side target too —
       // the source section when it has a UUID, otherwise the root-entity
       // fallback covers it.
-      $targets[] = $source_section_uuid !== NULL
-        ? ['uuid' => $source_section_uuid, 'field_name' => TargetType::RESTRUCTURED]
-        : ['uuid' => $entity->uuid(), 'field_name' => TargetType::RESTRUCTURED];
+      $targets[] = ['uuid' => $source_section_uuid ?? $host->uuid(), 'field_name' => TargetType::RESTRUCTURED];
+    }
+    if ($cross_section) {
+      // The ADDED target resolves to whichever container holds the block
+      // when it is asked. History replays these targets against the
+      // restored document, where that is the source again, so the
+      // destination is named by its own identity too: an undo re-renders
+      // the container the block leaves as well as the one it returns to.
+      $destination = ['uuid' => $dest_section_uuid ?? $host->uuid(), 'field_name' => TargetType::RESTRUCTURED];
+      if (!in_array($destination, $targets, TRUE)) {
+        $targets[] = $destination;
+      }
     }
 
-    return BlueprintResult::success($entity)->withTargets(array_merge($targets, $event_targets));
+    return BlueprintResult::success($host)->withTargets(array_merge($targets, $event_targets));
   }
 
   /**
@@ -1674,8 +2093,8 @@ class BlueprintOperations implements BlueprintOperationsInterface {
    * root section list), and the targets subscribers declare merge into the
    * result after the operation's own.
    *
-   * @param \Drupal\Core\Entity\FieldableEntityInterface $entity
-   *   The root entity.
+   * @param \Drupal\daedalus_blueprint\Host\HostInterface $host
+   *   The host.
    * @param string $uuid
    *   The section UUID being moved.
    * @param array $location
@@ -1689,7 +2108,7 @@ class BlueprintOperations implements BlueprintOperationsInterface {
    * @return \Drupal\daedalus_blueprint\Result\BlueprintResult
    *   The result with the modified entity on success.
    */
-  protected function moveSectionElement(FieldableEntityInterface $entity, string $uuid, array $location, ?ElementContext $anchor_context, ?object $storage): BlueprintResult {
+  protected function moveSectionElement(HostInterface $host, string $uuid, array $location, ?ElementContext $anchor_context, ?object $storage): BlueprintResult {
     $placement = $location['placement'] ?? NULL;
     if (!in_array($placement, ['before', 'after', 'inside'], TRUE)) {
       return BlueprintResult::structuralFailure([
@@ -1739,7 +2158,7 @@ class BlueprintOperations implements BlueprintOperationsInterface {
     // a tree index built from the current structure.
     $source_container = $this->daedalusLayoutAdapter->locateContainer($storage, $uuid);
     $source_list = $source_container === NULL
-      ? $this->getContainingSectionList($entity, $uuid, $storage)
+      ? $this->getContainingSectionList($host, $uuid, $storage)
       : NULL;
     $source_delta = $source_list !== NULL ? $this->findSectionDelta($source_list, $uuid) : NULL;
     if ($source_container === NULL && $source_delta === NULL) {
@@ -1758,7 +2177,7 @@ class BlueprintOperations implements BlueprintOperationsInterface {
     if ($anchor_context !== NULL && $placement !== 'inside') {
       $dest_flow = $this->resolveAnchorFlow($anchor_context, $anchor, $storage);
       if ($dest_flow === NULL) {
-        $dest_list = $this->getContainingSectionList($entity, $anchor, $storage);
+        $dest_list = $this->getContainingSectionList($host, $anchor, $storage);
         if ($dest_list === NULL) {
           return BlueprintResult::structuralFailure([
             new BlueprintError(
@@ -1790,11 +2209,9 @@ class BlueprintOperations implements BlueprintOperationsInterface {
     // Insert at the destination (deltas/weights computed AFTER removal so
     // same-list moves land correctly).
     if ($anchor_context === NULL) {
-      // Root append: root sections live on the entity's field items, shared
-      // with any storage wrapper (the same list addSection() appends to).
-      /** @var \Drupal\layout_builder\Field\LayoutSectionItemList $root_list */
-      $root_list = $entity->get('layout_builder__layout');
-      $root_list->appendSection($section);
+      // Root append: the storage's root list (the same list addSection()
+      // appends to).
+      $this->daedalusLayoutAdapter->rootList($storage)->appendSection($section);
     }
     elseif ($placement === 'inside') {
       /** @var \Drupal\layout_builder\Section $anchor_section */
@@ -1827,7 +2244,7 @@ class BlueprintOperations implements BlueprintOperationsInterface {
       $dest_list->insertSection($placement === 'after' ? $anchor_delta + 1 : $anchor_delta, $section);
     }
 
-    if ($failure = $this->validateSectionListOwner($entity)) {
+    if ($failure = $this->validateSectionListOwner($host)) {
       return $failure;
     }
     $this->bubbleStorageChanges($storage);
@@ -1837,7 +2254,7 @@ class BlueprintOperations implements BlueprintOperationsInterface {
     // section and a region flow both land inside a section, the root list
     // (a root-anchored append or a root-row sibling) is root.
     $event_targets = $this->dispatchLifecycle(new ElementMovedEvent(
-      $entity,
+      $host,
       $uuid,
       TRUE,
       $source_container !== NULL,
@@ -1846,8 +2263,8 @@ class BlueprintOperations implements BlueprintOperationsInterface {
 
     // A section's position only exists in its parent container's markup, so
     // the whole entity re-renders (root fallback).
-    return BlueprintResult::success($entity)
-      ->withTargets([['uuid' => $entity->uuid(), 'field_name' => TargetType::RESTRUCTURED], ...$event_targets]);
+    return BlueprintResult::success($host)
+      ->withTargets([['uuid' => $host->uuid(), 'field_name' => TargetType::RESTRUCTURED], ...$event_targets]);
   }
 
   /**
@@ -1876,7 +2293,7 @@ class BlueprintOperations implements BlueprintOperationsInterface {
    *   A structural failure when the placement is restricted, NULL otherwise.
    */
   protected function checkBlockPlacement(string $plugin_id, ?object $storage, Section $section, string $region, string $path): ?BlueprintResult {
-    if ($this->placementRestrictions->blockAllowed($plugin_id, $storage, $section, $region)) {
+    if ($this->admittedDepth > 0 || $this->placementRestrictions->blockAllowed($plugin_id, $storage, $section, $region)) {
       return NULL;
     }
     if (str_starts_with($plugin_id, 'inline_block:')) {
@@ -1902,12 +2319,72 @@ class BlueprintOperations implements BlueprintOperationsInterface {
   }
 
   /**
+   * The fit gate of a linked placement: the blueprint must fit the host.
+   *
+   * A linked node (daedalus_blueprint_linked:{machine_name}) renders the
+   * blueprint's document live under this host's contexts, so what the
+   * blueprint needs of a host (BlueprintRequirements: the subject's fields
+   * its field blocks present, the block types, plugins and layouts, the
+   * author's allow-list) is judged here as a detached placement judges it
+   * (BlueprintOperationHandler), once, at the one op door every road into
+   * the document passes: place_blueprint's linked mode, a tree's
+   * {kind: linked} node, the dialect's <pb-linked>, and a raw add_element.
+   * The plugin derives per published block-scope blueprint entity, so a
+   * stale derivative (the entity unpublished since the definitions were
+   * cached) is refused as not found rather than placed to render nothing.
+   *
+   * @param \Drupal\daedalus_blueprint\Host\HostInterface $host
+   *   The host.
+   * @param string $plugin_id
+   *   The block plugin ID being placed.
+   * @param string $path
+   *   The error path for a failure.
+   *
+   * @return \Drupal\daedalus_blueprint\Result\BlueprintResult|null
+   *   A semantic failure when the blueprint is gone or does not fit, NULL
+   *   for any other block and for a linked placement that fits.
+   */
+  protected function checkLinkedPlacement(HostInterface $host, string $plugin_id, string $path): ?BlueprintResult {
+    $name = LinkedBlueprintBlock::blueprintOf($plugin_id);
+    if ($name === NULL) {
+      return NULL;
+    }
+    $blueprint = $this->innerRender->blueprintHost($name);
+    if (!$blueprint instanceof BlueprintHost) {
+      return BlueprintResult::semanticFailure([
+        new BlueprintError($path, 'BLUEPRINT_NOT_FOUND', sprintf('"%s" is not a published blueprint saved on this site, so nothing can link it.', $name), ['blueprint' => $name], 'Link a published block blueprint saved on this site (the schema\'s materials.blueprints names them; a shipped file is material for copies, never linked), or publish the blueprint first.'),
+      ]);
+    }
+    $missing = $this->requirements->missing(
+      BlueprintRequirements::derive($this->layoutSerializer->serialize($blueprint), $blueprint->bundles(), $blueprint->frameOnly()),
+      $host,
+    );
+    if ($missing === []) {
+      return NULL;
+    }
+    $spelled = BlueprintRequirements::spellSubject($host);
+    $hint = match (TRUE) {
+      isset($missing[BlueprintRequirements::FRAME]) => 'The site chrome is the frame\'s material: link it on the site frame, where every page shows it; a page takes a slot\'s default as its own through a claim (detach_blueprint with slot), never a placement.',
+      isset($missing[BlueprintRequirements::BUNDLES]) => 'Link it on a page of a bundle its allow-list names, or widen the allow-list in the blueprint\'s details.',
+      default => 'Link a blueprint that fits this page (the Add panel lists them), or place it detached and adapt the copy.',
+    };
+    return BlueprintResult::semanticFailure([
+      new BlueprintError($path, 'BLUEPRINT_DOES_NOT_FIT', sprintf('Blueprint "%s" does not fit this %s: it needs %s.', $name, $spelled, BlueprintRequirements::describe($missing, $host)), [
+        'blueprint' => $name,
+        'subject' => $spelled,
+        'missing' => $missing,
+      ], $hint),
+    ]);
+  }
+
+  /**
    * Enforces the allowed-layouts answer for a section's layout.
    *
    * Applies where a section acquires a layout: add_section, whether the
    * ladder minted it or an explicit layout named it — a section is born
    * with its layout for life. Moves need no check — a moved section keeps
-   * a layout the same root display already allowed.
+   * a layout the same root display already allowed, and neither does an
+   * admitted batch (a template's own sections, copied into a page).
    *
    * @param string $layout_id
    *   The layout plugin ID.
@@ -1920,7 +2397,7 @@ class BlueprintOperations implements BlueprintOperationsInterface {
    *   A structural failure when the layout is restricted, NULL otherwise.
    */
   protected function checkLayoutAllowed(string $layout_id, ?object $storage, string $path): ?BlueprintResult {
-    if ($this->placementRestrictions->layoutAllowed($layout_id, $storage)) {
+    if ($this->admittedDepth > 0 || $this->placementRestrictions->layoutAllowed($layout_id, $storage)) {
       return NULL;
     }
     return BlueprintResult::structuralFailure([
@@ -1937,8 +2414,8 @@ class BlueprintOperations implements BlueprintOperationsInterface {
   /**
    * Resolves the section list containing a section UUID.
    *
-   * @param \Drupal\Core\Entity\FieldableEntityInterface $entity
-   *   The root entity.
+   * @param \Drupal\daedalus_blueprint\Host\HostInterface $host
+   *   The host.
    * @param string $uuid
    *   The section UUID.
    * @param object|null $storage
@@ -1947,13 +2424,12 @@ class BlueprintOperations implements BlueprintOperationsInterface {
    * @return object|null
    *   The containing section list, or NULL when it cannot be resolved.
    */
-  protected function getContainingSectionList(FieldableEntityInterface $entity, string $uuid, ?object $storage): ?object {
+  protected function getContainingSectionList(HostInterface $host, string $uuid, ?object $storage): ?object {
     if ($storage !== NULL && method_exists($storage, 'getSectionsFor')) {
       return $storage->getSectionsFor($uuid);
     }
-    return $entity->hasField('layout_builder__layout')
-      ? $entity->get('layout_builder__layout')
-      : NULL;
+    $storage ??= $host->sectionStorage();
+    return $storage === NULL ? NULL : $this->daedalusLayoutAdapter->rootList($storage);
   }
 
   /**
@@ -2009,17 +2485,17 @@ class BlueprintOperations implements BlueprintOperationsInterface {
   /**
    * {@inheritdoc}
    */
-  public function duplicateElement(FieldableEntityInterface $entity, string $uuid, ?string $new_uuid = NULL): BlueprintResult {
-    if ($failure = $this->validateMintedUuids($entity, ['uuid' => $new_uuid])) {
+  public function duplicateElement(HostInterface $host, string $uuid, ?string $new_uuid = NULL): BlueprintResult {
+    if ($failure = $this->validateMintedUuids($host, ['uuid' => $new_uuid])) {
       return $failure;
     }
-    $context = $this->locateElement($entity, $uuid, 'element', 'ELEMENT_NOT_FOUND');
+    $context = $this->locateElement($host, $uuid, 'element', 'ELEMENT_NOT_FOUND');
     if ($context instanceof BlueprintResult) {
       return $context;
     }
 
     if ($context->isSection()) {
-      return $this->duplicateSection($entity, $uuid, $new_uuid, $context);
+      return $this->duplicateSection($host, $uuid, $new_uuid, $context);
     }
 
     if (!$context->isLbComponent()) {
@@ -2041,9 +2517,9 @@ class BlueprintOperations implements BlueprintOperationsInterface {
     $this->bubbleNestedChanges($context);
     // Modules keying data by placement/section UUIDs (style maps, per-
     // placement metadata) carry their entries to the clone's fresh identity.
-    $event_targets = $this->dispatchLifecycle(new ElementDuplicatedEvent($entity, $clone, $uuid, $uuid_map));
+    $event_targets = $this->dispatchLifecycle(new ElementDuplicatedEvent($host, $clone, $uuid, $uuid_map));
 
-    return BlueprintResult::success($entity)
+    return BlueprintResult::success($host)
       ->withTargets(array_merge(
         [['uuid' => $clone->getUuid(), 'field_name' => TargetType::ADDED]],
         $event_targets,
@@ -2059,8 +2535,8 @@ class BlueprintOperations implements BlueprintOperationsInterface {
    * sections, inline content), reported through the duplicated event so
    * UUID-keyed data (style maps) carries over.
    *
-   * @param \Drupal\Core\Entity\FieldableEntityInterface $entity
-   *   The root entity.
+   * @param \Drupal\daedalus_blueprint\Host\HostInterface $host
+   *   The host.
    * @param string $uuid
    *   The section UUID to duplicate.
    * @param string|null $new_uuid
@@ -2071,12 +2547,27 @@ class BlueprintOperations implements BlueprintOperationsInterface {
    * @return \Drupal\daedalus_blueprint\Result\BlueprintResult
    *   The result with the modified entity on success.
    */
-  protected function duplicateSection(FieldableEntityInterface $entity, string $uuid, ?string $new_uuid, ElementContext $context): BlueprintResult {
-    $storage = $context->sectionStorage ?? $this->daedalusLayoutAdapter->getSectionStorage($entity);
+  protected function duplicateSection(HostInterface $host, string $uuid, ?string $new_uuid, ElementContext $context): BlueprintResult {
+    $storage = $context->sectionStorage ?? $host->sectionStorage();
 
     $uuid_map = [];
     /** @var \Drupal\layout_builder\Section $section */
     $section = $context->target;
+    // A slot fills once: a copy of a slot section would claim the same
+    // slot (the clone carries the section's settings), so the verb refuses
+    // and points at the elements inside, which duplicate freely.
+    $slot = LayoutSerializer::slotOf($section);
+    if ($slot !== NULL) {
+      return BlueprintResult::structuralFailure([
+        new BlueprintError(
+          path: 'element',
+          code: 'BLUEPRINT_SLOT_DUPLICATE',
+          message: sprintf('Slot "%s" is already filled on this document.', $slot),
+          context: ['slot' => $slot, 'section' => $uuid],
+          hint: 'A slot fills once: duplicate the elements inside the slot section instead.',
+        ),
+      ]);
+    }
     $clone = $this->cloneSection($section, $uuid_map, $new_uuid);
 
     $container = $this->daedalusLayoutAdapter->locateContainer($storage, $uuid);
@@ -2090,7 +2581,7 @@ class BlueprintOperations implements BlueprintOperationsInterface {
       $parent_section->insertComponent($weight, $this->daedalusLayoutAdapter->createSectionComponent($clone, $region, $weight));
     }
     else {
-      $list = $this->getContainingSectionList($entity, $uuid, $storage);
+      $list = $this->getContainingSectionList($host, $uuid, $storage);
       $delta = $list !== NULL ? $this->findSectionDelta($list, $uuid) : NULL;
       if ($delta === NULL) {
         return BlueprintResult::structuralFailure([
@@ -2105,18 +2596,18 @@ class BlueprintOperations implements BlueprintOperationsInterface {
       $list->insertSection($delta + 1, $clone);
     }
 
-    if ($failure = $this->validateSectionListOwner($entity)) {
+    if ($failure = $this->validateSectionListOwner($host)) {
       return $failure;
     }
     $this->bubbleStorageChanges($storage);
     $clone_uuid = $this->daedalusLayoutAdapter->getSectionUuid($clone);
-    $event_targets = $this->dispatchLifecycle(new ElementDuplicatedEvent($entity, NULL, $uuid, $uuid_map));
+    $event_targets = $this->dispatchLifecycle(new ElementDuplicatedEvent($host, NULL, $uuid, $uuid_map));
 
-    return BlueprintResult::success($entity)
+    return BlueprintResult::success($host)
       ->withTargets(array_merge(
         [
-          ['uuid' => $clone_uuid ?? $entity->uuid(), 'field_name' => TargetType::ADDED],
-          ['uuid' => $entity->uuid(), 'field_name' => TargetType::RESTRUCTURED],
+          ['uuid' => $clone_uuid ?? $host->uuid(), 'field_name' => TargetType::ADDED],
+          ['uuid' => $host->uuid(), 'field_name' => TargetType::RESTRUCTURED],
         ],
         $event_targets,
       ));
@@ -2199,8 +2690,9 @@ class BlueprintOperations implements BlueprintOperationsInterface {
     $uuid_map[$block->uuid()] = $duplicate->uuid();
 
     $configuration['block_serialized'] = serialize($duplicate);
-    // The clone must not keep pointing at the original's saved revision.
-    unset($configuration['block_revision_id']);
+    // The clone must not keep pointing at the original's saved revision or
+    // carry the original's stored values beside its own serialized copy.
+    unset($configuration['block_revision_id'], $configuration[InlineBlockValues::KEY]);
   }
 
   /**
@@ -2241,8 +2733,12 @@ class BlueprintOperations implements BlueprintOperationsInterface {
   /**
    * {@inheritdoc}
    */
-  public function updateFields(FieldableEntityInterface $entity, array $fields, array $options = []): BlueprintResult {
-    $result = $this->validateAndApplyFields($entity, $fields, 'fields', $options + [
+  public function updateFields(HostInterface $host, array $fields, array $options = []): BlueprintResult {
+    $owner = $this->requireFields($host, 'fields');
+    if ($owner instanceof BlueprintResult) {
+      return $owner;
+    }
+    $result = $this->validateAndApplyFields($host, $owner, $fields, 'fields', $options + [
       'rejectedTypes' => static::REJECTED_FIELD_TYPES,
       'is_update' => TRUE,
     ]);
@@ -2252,52 +2748,21 @@ class BlueprintOperations implements BlueprintOperationsInterface {
       return $failure;
     }
 
-    return BlueprintResult::success($entity, $result['warnings'])
-      ->withTargetsFrom($entity->uuid(), $this->appliedTargetNames(array_keys($fields), $result));
+    return BlueprintResult::success($host, $result['warnings'])
+      ->withTargetsFrom($host->uuid(), $this->appliedTargetNames(array_keys($fields), $result));
   }
 
   /**
    * {@inheritdoc}
    */
-  public function restructureLayout(FieldableEntityInterface $entity, array $structure, array $options = []): BlueprintResult {
-    if (!$entity->hasField('layout_builder__layout')) {
-      return BlueprintResult::structuralFailure([
-        new BlueprintError(
-          path: 'layout_builder__layout',
-          code: 'NO_LAYOUT',
-          message: 'Entity does not have a Layout Builder layout.',
-          hint: 'Enable Layout Builder on this entity type.',
-        ),
-      ]);
-    }
-
-    $layout_sections = $structure['layout_builder__layout'] ?? $structure;
-
-    $layout_result = $this->layoutDeserializer->deserialize($layout_sections, $entity, 'full', $options);
-    if ($layout_result->hasErrors()) {
-      return BlueprintResult::structuralFailure($layout_result->getErrors());
-    }
-
-    // Collect all component UUIDs from the new layout for targeting.
-    $targets = [];
-    foreach ($layout_result->getSections() as $section) {
-      foreach ($section->getComponents() as $component) {
-        $targets[] = ['uuid' => $component->getUuid(), 'field_name' => TargetType::RESTRUCTURED];
-      }
-    }
-
-    return BlueprintResult::success($entity, $layout_result->getWarnings())
-      ->withTargets($targets);
-  }
-
-  /**
-   * {@inheritdoc}
-   */
-  public function reorderField(FieldableEntityInterface $entity, array $structure): BlueprintResult {
+  public function reorderField(HostInterface $host, array $structure): BlueprintResult {
     // Determine target entity.
-    $target_entity = $entity;
+    $target_entity = $this->requireFields($host, 'field');
+    if ($target_entity instanceof BlueprintResult) {
+      return $target_entity;
+    }
     if (isset($structure['parent_uuid'])) {
-      $context = $this->locateElement($entity, $structure['parent_uuid'], 'parent_uuid', 'PARENT_NOT_FOUND');
+      $context = $this->locateElement($host, $structure['parent_uuid'], 'parent_uuid', 'PARENT_NOT_FOUND');
       if ($context instanceof BlueprintResult) {
         return $context;
       }
@@ -2373,7 +2838,7 @@ class BlueprintOperations implements BlueprintOperationsInterface {
     $target_entity->set($field_name, $new_items);
 
     $element_uuids = array_column($items, 'uuid');
-    return BlueprintResult::success($entity)->withTargets(
+    return BlueprintResult::success($host)->withTargets(
       array_map(fn(string $uuid) => ['uuid' => $uuid, 'field_name' => TargetType::REORDERED], $element_uuids),
     );
   }
@@ -2381,7 +2846,7 @@ class BlueprintOperations implements BlueprintOperationsInterface {
   /**
    * {@inheritdoc}
    */
-  public function batchOperations(FieldableEntityInterface $entity, array $operations, array $options = []): BlueprintResult {
+  public function batchOperations(HostInterface $host, array $operations, array $options = []): BlueprintResult {
     // Envelope leniency: a bare op object is a one-element batch. Models
     // measurably drop the array when one op suffices; the semantics are
     // identical, so accept the spelling.
@@ -2389,7 +2854,7 @@ class BlueprintOperations implements BlueprintOperationsInterface {
       $operations = [$operations];
     }
     if (empty($operations)) {
-      return BlueprintResult::success($entity);
+      return BlueprintResult::success($host);
     }
 
     // The batch mutates the translation the caller names, resolved by the
@@ -2400,28 +2865,52 @@ class BlueprintOperations implements BlueprintOperationsInterface {
     // response builder, the storage handler) addresses the translation by
     // langcode rather than by which object it holds.
     $langcode = $options['langcode'] ?? NULL;
-    $target = is_string($langcode) && $langcode !== '' && $entity instanceof TranslatableInterface
-      ? $entity->getTranslation($langcode)
-      : $entity;
+    $fields = $host->fields();
+    $target = is_string($langcode) && $langcode !== '' && $fields instanceof TranslatableInterface
+      ? $this->hostResolver->fromEntity($fields->getTranslation($langcode))
+      : $host;
 
     $dressed = !empty($options['dressed']);
+    $admitted = !empty($options['admitted']);
+    $system = !empty($options['system']);
     $judge = !empty($options['judge']);
     // The judge posture is THIS batch's: a nested batch an op runs (a
-    // stencil expansion, a translated fragment) lands on the doomed
+    // blueprint expansion, a translated fragment) lands on the doomed
     // entity like any other op, so later ops are judged against a world
     // where it happened; the one restore is the judged batch's own.
     unset($options['judge']);
+    // The actor is the outermost batch's: a nested batch names none and
+    // inherits it, so one gesture is judged for one account throughout.
+    $actor = $options['actor'] ?? NULL;
+    if ($actor !== NULL && !$actor instanceof AccountInterface) {
+      throw new \InvalidArgumentException('The actor batch option is an account (AccountInterface).');
+    }
+    $enclosing_actor = $this->actor;
+    $this->actor = $actor ?? $enclosing_actor ?? $this->currentUser;
     $this->batchDepth++;
     if ($dressed) {
       $this->dressedDepth++;
+    }
+    if ($admitted) {
+      $this->admittedDepth++;
+    }
+    if ($system) {
+      $this->systemDepth++;
     }
     try {
       $result = $this->doBatchOperations($target, $operations, $options + ['judge' => $judge]);
     }
     finally {
       $this->batchDepth--;
+      $this->actor = $enclosing_actor;
       if ($dressed) {
         $this->dressedDepth--;
+      }
+      if ($admitted) {
+        $this->admittedDepth--;
+      }
+      if ($system) {
+        $this->systemDepth--;
       }
     }
     // Alias settlement is the outermost batch's: nested successes are
@@ -2430,8 +2919,8 @@ class BlueprintOperations implements BlueprintOperationsInterface {
     if ($this->batchDepth === 0) {
       $result->isSuccess() && !$judge ? $this->dialectAliasMap->persist() : $this->dialectAliasMap->discard();
     }
-    if ($target !== $entity && $result->isSuccess()) {
-      $result = BlueprintResult::success($entity, $result->getWarnings())
+    if ($target !== $host && $result->isSuccess()) {
+      $result = BlueprintResult::success($host, $result->getWarnings())
         ->withTargets($result->getTargets())
         ->withAliases($result->getAliases());
     }
@@ -2443,9 +2932,9 @@ class BlueprintOperations implements BlueprintOperationsInterface {
    *
    * @see ::batchOperations()
    */
-  protected function doBatchOperations(FieldableEntityInterface $entity, array $operations, array $options = []): BlueprintResult {
+  protected function doBatchOperations(HostInterface $host, array $operations, array $options = []): BlueprintResult {
     // Snapshot entity state for rollback.
-    $snapshot = $this->snapshotEntity($entity);
+    $snapshot = $this->snapshotEntity($host);
 
     $batch_errors = [];
     $has_structural_errors = FALSE;
@@ -2463,7 +2952,7 @@ class BlueprintOperations implements BlueprintOperationsInterface {
     $judge = !empty($options['judge']);
     unset($options['judge']);
     foreach ($operations as $index => $operation) {
-      $result = $this->applyOperation($entity, $operation, $options);
+      $result = $this->applyOperation($host, $operation, $options);
 
       if ($result->isSuccess()) {
         array_push($all_warnings, ...$result->getWarnings());
@@ -2504,7 +2993,7 @@ class BlueprintOperations implements BlueprintOperationsInterface {
     }
 
     if (!empty($batch_errors)) {
-      $this->restoreEntity($entity, $snapshot);
+      $this->restoreEntity($host, $snapshot);
 
       // Shared-hint deduplication is the OUTERMOST batch's: nested batches
       // (DOM ops expanding into spine ops) bubble their errors up marked,
@@ -2525,10 +3014,10 @@ class BlueprintOperations implements BlueprintOperationsInterface {
     if ($judge) {
       // A judged batch reports what WOULD have landed and lands nothing:
       // the same total rollback a failure takes, on a clean run.
-      $this->restoreEntity($entity, $snapshot);
+      $this->restoreEntity($host, $snapshot);
     }
 
-    return BlueprintResult::success($entity, $all_warnings)
+    return BlueprintResult::success($host, $all_warnings)
       ->withTargets($all_targets)
       ->withAliases($all_aliases);
   }
@@ -2568,8 +3057,8 @@ class BlueprintOperations implements BlueprintOperationsInterface {
   /**
    * Locates an element by UUID, returning a failure result if not found.
    *
-   * @param \Drupal\Core\Entity\FieldableEntityInterface $entity
-   *   The entity to search.
+   * @param \Drupal\daedalus_blueprint\Host\HostInterface $host
+   *   The host to search.
    * @param string $uuid
    *   The element UUID.
    * @param string $path
@@ -2584,8 +3073,8 @@ class BlueprintOperations implements BlueprintOperationsInterface {
    * @return \Drupal\daedalus_blueprint\ElementContext|\Drupal\daedalus_blueprint\Result\BlueprintResult
    *   The element context on success, or a structural failure result.
    */
-  protected function locateElement(FieldableEntityInterface $entity, string $uuid, string $path, string $code, ?object $storage = NULL): ElementContext|BlueprintResult {
-    $context = $this->elementLocator->locate($entity, $uuid, $storage);
+  protected function locateElement(HostInterface $host, string $uuid, string $path, string $code, ?object $storage = NULL): ElementContext|BlueprintResult {
+    $context = $this->elementLocator->locate($host, $uuid, $storage);
     if ($context === NULL) {
       return BlueprintResult::structuralFailure([
         new BlueprintError(
@@ -2600,42 +3089,70 @@ class BlueprintOperations implements BlueprintOperationsInterface {
   }
 
   /**
-   * Validates that a component is an inline block and extracts its entity.
+   * The corrective for a block a value-block host cannot hold, or NULL.
    *
-   * @param \Drupal\layout_builder\SectionComponent $component
-   *   The section component.
-   * @param \Drupal\daedalus_blueprint\ElementContext $context
-   *   The element context (for section storage).
+   * A host whose persistence is valueBlocks (a display) stores an inline
+   * block as its fields in the field grammar; a non-empty field the
+   * grammar cannot spell (a form-only field: its handler serializes
+   * nothing) would be lost at the commit, so the op is refused at the door
+   * instead, naming the fields. A content host stores the block entity and
+   * holds anything.
+   *
+   * @param \Drupal\daedalus_blueprint\Host\HostInterface $host
+   *   The host.
+   * @param \Drupal\Core\Entity\FieldableEntityInterface $block
+   *   The block as the op left it.
+   * @param string $block_type
+   *   The block type.
    * @param string $path
-   *   The error path (e.g., 'element', 'uuid').
+   *   The error path.
+   *
+   * @return \Drupal\daedalus_blueprint\Result\BlueprintResult|null
+   *   The FORM_ONLY_FIELDS failure, or NULL when the block is spellable.
+   */
+  protected function valueBlockFailure(HostInterface $host, FieldableEntityInterface $block, string $block_type, string $path): ?BlueprintResult {
+    if (!$host->persistence()->valueBlocks) {
+      return NULL;
+    }
+    $unspellable = $this->inlineBlockValues->unspellable($block);
+    if ($unspellable === []) {
+      return NULL;
+    }
+    return BlueprintResult::structuralFailure([
+      new BlueprintError(
+        path: $path,
+        code: 'FORM_ONLY_FIELDS',
+        message: sprintf("Block type '%s' holds fields the field grammar cannot spell (%s); a template stores its blocks as values.", $block_type, implode(', ', $unspellable)),
+        context: ['fields' => $unspellable],
+        hint: 'Leave those fields empty, use a block type whose fields all serialize, or add a field handler for the field type.',
+      ),
+    ]);
+  }
+
+  /**
+   * The host's fields entity, or the corrective for a host without fields.
+   *
+   * Field writes (root properties, paragraph fields, reorders) need an
+   * entity to write on; a host with no fields of its own (a template)
+   * answers none, and the op is refused rather than landing nowhere.
+   *
+   * @param \Drupal\daedalus_blueprint\Host\HostInterface $host
+   *   The host.
+   * @param string $path
+   *   The error path.
    *
    * @return \Drupal\Core\Entity\FieldableEntityInterface|\Drupal\daedalus_blueprint\Result\BlueprintResult
-   *   The block_content entity on success, or a structural failure result.
+   *   The fields entity, or a NO_FIELDS structural failure.
    */
-  protected function requireInlineBlock(SectionComponent $component, ElementContext $context, string $path): FieldableEntityInterface|BlueprintResult {
-    if (!$this->daedalusLayoutAdapter->isInlineBlock($component)) {
-      return BlueprintResult::structuralFailure([
-        new BlueprintError(
-          path: $path,
-          code: 'NOT_INLINE_BLOCK',
-          message: 'Element is not an inline block and has no editable properties.',
-          hint: 'Only inline block elements have editable fields and configuration.',
-        ),
-      ]);
-    }
-
-    $block = $this->daedalusLayoutAdapter->extractBlockContent($component);
-    if ($block === NULL) {
-      return BlueprintResult::structuralFailure([
-        new BlueprintError(
-          path: $path,
-          code: 'BLOCK_CONTENT_NOT_FOUND',
-          message: 'Could not load block_content for this element.',
-        ),
-      ]);
-    }
-
-    return $block;
+  protected function requireFields(HostInterface $host, string $path): FieldableEntityInterface|BlueprintResult {
+    return $host->fields() ?? BlueprintResult::structuralFailure([
+      new BlueprintError(
+        path: $path,
+        code: 'NO_FIELDS',
+        message: "{$host->entityTypeId()} {$host->id()} has no fields of its own.",
+        hint: 'Field writes address a content entity; a template carries a document only.',
+      ),
+    ]);
   }
 
   /**
@@ -2677,8 +3194,12 @@ class BlueprintOperations implements BlueprintOperationsInterface {
    * constraint validation scoped to the written fields. Every landed set
    * dispatches a FieldAppliedEvent before constraints run.
    *
+   * @param \Drupal\daedalus_blueprint\Host\HostInterface $host
+   *   The host the operation runs against (rides the field-applied event
+   *   and the handler options as 'host').
    * @param \Drupal\Core\Entity\FieldableEntityInterface $entity
-   *   The entity to apply fields to.
+   *   The entity to apply fields to: the host's fields entity, an inline
+   *   block or a paragraph.
    * @param array $fields
    *   The field data keyed by field name: grammar values or ExtractedValue
    *   objects.
@@ -2706,6 +3227,7 @@ class BlueprintOperations implements BlueprintOperationsInterface {
    *     appliedTargetNames().
    */
   protected function validateAndApplyFields(
+    HostInterface $host,
     FieldableEntityInterface $entity,
     array $fields,
     string $path_prefix,
@@ -2734,7 +3256,7 @@ class BlueprintOperations implements BlueprintOperationsInterface {
         $structural_errors[] = new BlueprintError(
           path: "{$path_prefix}.{$field_name}",
           code: 'UNKNOWN_FIELD',
-          message: "Field '$field_name' does not exist on {$entity->getEntityTypeId()}:{$entity->bundle()}.",
+          message: "Field '$field_name' does not exist on {$host->entityTypeId()}:{$host->bundle()}.",
           context: ['available' => array_keys($processable_fields)],
           hint: 'Check the field machine name spelling.',
         );
@@ -2787,7 +3309,12 @@ class BlueprintOperations implements BlueprintOperationsInterface {
     // paths too, matching the root deserialize path.
     $options['entity'] = $entity;
     $options['fields'] = $fields;
+    $options['host'] = $host;
     $options['element_uuid'] ??= $entity->uuid();
+    $system = $this->systemDepth > 0;
+    if ($system) {
+      $options['system'] = TRUE;
+    }
     $errors = [];
     $warnings = [];
     $error_field_names = [];
@@ -2803,7 +3330,8 @@ class BlueprintOperations implements BlueprintOperationsInterface {
       // operations skip field-edit access entirely. Denial errors rather than
       // silently dropping the field. Field access defaults allowed in core, so
       // this only bites explicitly-restricted fields (forward correctness).
-      if (!$this->accessChecker->fieldEditable($entity->get($field_name))) {
+      // A system batch names no actor to judge.
+      if (!$system && !$this->accessChecker->fieldEditable($entity->get($field_name))) {
         $errors[] = new BlueprintError(
           path: "{$path_prefix}.{$field_name}",
           code: 'ACCESS_DENIED_FIELD',
@@ -2837,7 +3365,7 @@ class BlueprintOperations implements BlueprintOperationsInterface {
         if ($was_empty !== $entity->get($field_name)->isEmpty()) {
           $presence_changed[] = $field_name;
         }
-        $this->eventDispatcher->dispatch(new FieldAppliedEvent($entity, $field_name, $options['element_uuid'], FieldValueKind::Extracted));
+        $this->eventDispatcher->dispatch(new FieldAppliedEvent($host, $entity, $field_name, $options['element_uuid'], FieldValueKind::Extracted));
         continue;
       }
 
@@ -2865,7 +3393,7 @@ class BlueprintOperations implements BlueprintOperationsInterface {
         if ($was_empty !== $entity->get($field_name)->isEmpty()) {
           $presence_changed[] = $field_name;
         }
-        $this->eventDispatcher->dispatch(new FieldAppliedEvent($entity, $field_name, $options['element_uuid'], FieldValueKind::Value));
+        $this->eventDispatcher->dispatch(new FieldAppliedEvent($host, $entity, $field_name, $options['element_uuid'], FieldValueKind::Value));
       }
 
       array_push($warnings, ...$handler_result->getWarnings());
@@ -2877,6 +3405,7 @@ class BlueprintOperations implements BlueprintOperationsInterface {
       $valid_field_names,
       $error_field_names,
       $is_full_create,
+      $system,
     );
 
     if ($rewrite_paths) {
@@ -2930,8 +3459,8 @@ class BlueprintOperations implements BlueprintOperationsInterface {
    * Plugin blocks (plugin_id): builds the component from the block plugin's
    * default configuration with context mappings defaulted.
    *
-   * @param \Drupal\Core\Entity\FieldableEntityInterface $entity
-   *   The root entity.
+   * @param \Drupal\daedalus_blueprint\Host\HostInterface $host
+   *   The host.
    * @param array $location
    *   The resolved location: _section (and _storage for nested sections)
    *   from the placement grammar, plus region and optional weight.
@@ -2948,8 +3477,8 @@ class BlueprintOperations implements BlueprintOperationsInterface {
    * @return \Drupal\daedalus_blueprint\Result\BlueprintResult
    *   The result with the modified entity on success.
    */
-  protected function addLbComponent(FieldableEntityInterface $entity, array $location, array $data, array $options = []): BlueprintResult {
-    if (!$entity->hasField('layout_builder__layout')) {
+  protected function addLbComponent(HostInterface $host, array $location, array $data, array $options = []): BlueprintResult {
+    if (!$host->hasDocument()) {
       return BlueprintResult::structuralFailure([
         new BlueprintError(
           path: 'location',
@@ -2976,7 +3505,7 @@ class BlueprintOperations implements BlueprintOperationsInterface {
     // Opaque per-placement metadata riding the SectionComponent's additional
     // slot (the third-party seam clone/move/restructure already preserve):
     // never rendered, never serialized to clients, never validated beyond
-    // its map shape. The stencil provenance stamp is the canonical consumer.
+    // its map shape. The blueprint provenance stamp is the canonical consumer.
     $additional = $data['additional'] ?? [];
     if (!is_array($additional) || (array_is_list($additional) && $additional !== [])) {
       return BlueprintResult::structuralFailure([
@@ -3012,7 +3541,7 @@ class BlueprintOperations implements BlueprintOperationsInterface {
       ]);
     }
     if ($plugin_id !== NULL) {
-      return $this->addPluginBlockComponent($entity, $section_info, $location, $data);
+      return $this->addPluginBlockComponent($host, $section_info, $location, $data);
     }
     if ($block_type === NULL) {
       return BlueprintResult::structuralFailure([
@@ -3042,7 +3571,7 @@ class BlueprintOperations implements BlueprintOperationsInterface {
     // section storage (the entity's actual render display, any depth), so
     // data.view_mode stays what it is: the BLOCK's render view mode.
     $region = $location['region'] ?? 'content';
-    $op_storage = $section_info['storage'] ?? $this->daedalusLayoutAdapter->getSectionStorage($entity);
+    $op_storage = $section_info['storage'] ?? $host->sectionStorage();
     if ($failure = $this->checkBlockPlacement('inline_block:' . $block_type, $op_storage, $section, $region, 'data.block_type')) {
       return $failure;
     }
@@ -3056,7 +3585,7 @@ class BlueprintOperations implements BlueprintOperationsInterface {
 
     // Sort the flat property bag into fields, configuration, and label.
     $block_fields = $data['block_fields'] ?? [];
-    $sorted = $this->sortElementProperties($entity, $block_type, $block, $block_fields);
+    $sorted = $this->sortElementProperties($host, $block_type, $block, $block_fields);
     if (!empty($sorted['errors'])) {
       return BlueprintResult::structuralFailure($sorted['errors']);
     }
@@ -3071,17 +3600,17 @@ class BlueprintOperations implements BlueprintOperationsInterface {
     }
 
     // Blocks never carry nested layouts: sections nest inside sections. The
-    // old layout-capable-block grammar (data.layout_builder__layout subtree,
+    // old layout-capable-block grammar (a data.layout subtree,
     // data.section_uuid) is refused loudly with a pointer to the one
     // placement grammar.
-    foreach (['layout_builder__layout', 'section_uuid'] as $dead_key) {
+    foreach (['layout', 'section_uuid'] as $dead_key) {
       if (isset($data[$dead_key])) {
         return BlueprintResult::structuralFailure([
           new BlueprintError(
             path: "data.$dead_key",
             code: 'NO_LAYOUT',
             message: 'Blocks do not hold nested layouts.',
-            hint: "Sections nest inside sections: use add_section with placement 'inside' anchored on a section (any depth), or place a section node in restructure_layout / create_entity regions.",
+            hint: "Sections nest inside sections: use add_section with placement 'inside' anchored on a section (any depth), or nest a container node in a created entity's layout tree.",
           ),
         ]);
       }
@@ -3116,12 +3645,12 @@ class BlueprintOperations implements BlueprintOperationsInterface {
 
     // Apply block_content fields through the gated pipeline. `info`, when
     // provided, is gated and routed here like any other field.
-    $result = $this->validateAndApplyFields($block, $sorted['fields'], 'block_fields', $options + [
+    $result = $this->validateAndApplyFields($host, $block, $sorted['fields'], 'block_fields', $options + [
       'isFullCreate' => TRUE,
       'element_uuid' => $uuid,
     ]);
 
-    $failure = $this->fieldResultToFailure($result);
+    $failure = $this->fieldResultToFailure($result) ?? $this->valueBlockFailure($host, $block, $block_type, 'block_fields');
     if ($failure !== NULL) {
       return $failure;
     }
@@ -3138,7 +3667,7 @@ class BlueprintOperations implements BlueprintOperationsInterface {
 
     // Apply block type defaults from context YAML, then explicit overrides.
     $block_context = $this->contextResolver->getBlockTypeContext(
-      $entity->getEntityTypeId(), $entity->bundle(), $block_type,
+      $host->entityTypeId(), $host->bundle(), $block_type,
     );
     $config_defaults = $block_context['defaults']['configuration'] ?? [];
     if (!empty($config_defaults)) {
@@ -3150,7 +3679,7 @@ class BlueprintOperations implements BlueprintOperationsInterface {
 
     // Build SectionComponent and insert at the requested position.
     $component = new SectionComponent($uuid, $region, $configuration, $additional);
-    $event_targets = $this->dispatchLifecycle(new ElementCreatedEvent($entity, $component, $block, $this->isDressed()));
+    $event_targets = $this->dispatchLifecycle(new ElementCreatedEvent($host, $component, $block, $this->isDressed()));
     $region_count = count($section->getComponentsByRegion($region));
     $position = isset($location['weight']) ? min((int) $location['weight'], $region_count) : $region_count;
     $section->insertComponent($position, $component);
@@ -3158,7 +3687,7 @@ class BlueprintOperations implements BlueprintOperationsInterface {
 
     $targets = [['uuid' => $uuid, 'field_name' => TargetType::ADDED], ...$event_targets];
 
-    return BlueprintResult::success($entity, array_merge($result['warnings'], $nested_warnings))
+    return BlueprintResult::success($host, array_merge($result['warnings'], $nested_warnings))
       ->withTargets($targets);
   }
 
@@ -3171,39 +3700,33 @@ class BlueprintOperations implements BlueprintOperationsInterface {
    * the daedalus_layout palette did (Dropzones::createBlockPlugin): unambiguous
    * required contexts are assigned and an unresolved 'entity' slot falls
    * back to the layout_builder.entity context, which FieldBlock expects.
+   * The properties bag, when given, is the plugin's configuration as its
+   * config schema spells it (PluginBlockConfiguration), applied over the
+   * placement defaults; a plugin without schema takes no properties.
    *
-   * @param \Drupal\Core\Entity\FieldableEntityInterface $entity
-   *   The root entity.
+   * @param \Drupal\daedalus_blueprint\Host\HostInterface $host
+   *   The host.
    * @param array $section_info
    *   The resolved section and storage.
    * @param array $location
    *   Location with region and weight.
    * @param array $data
-   *   Component data with plugin_id and optionally uuid, label, populate
-   *   (accepted for parity with inline blocks; a plugin block has no
-   *   fields to sample), and additional (opaque per-placement metadata).
+   *   Component data with plugin_id and optionally uuid, label,
+   *   block_fields (the properties bag: label, label_display and the
+   *   plugin's own settings keys), populate (accepted for parity with
+   *   inline blocks; a plugin block has no fields to sample), and
+   *   additional (opaque per-placement metadata).
    *
    * @return \Drupal\daedalus_blueprint\Result\BlueprintResult
    *   The result with the modified entity on success.
    */
-  protected function addPluginBlockComponent(FieldableEntityInterface $entity, array $section_info, array $location, array $data): BlueprintResult {
+  protected function addPluginBlockComponent(HostInterface $host, array $section_info, array $location, array $data): BlueprintResult {
     $plugin_id = $data['plugin_id'];
 
-    if (!empty($data['block_fields'])) {
+    if (isset($data['layout'])) {
       return BlueprintResult::structuralFailure([
         new BlueprintError(
-          path: 'properties',
-          code: 'PROPERTIES_NOT_SUPPORTED',
-          message: 'Plugin blocks do not take properties — they have no content fields.',
-          hint: 'Properties apply to inline blocks (block_type). Configure a plugin block via update_element after placing it.',
-        ),
-      ]);
-    }
-
-    if (isset($data['layout_builder__layout'])) {
-      return BlueprintResult::structuralFailure([
-        new BlueprintError(
-          path: 'data.layout_builder__layout',
+          path: 'data.layout',
           code: 'NO_LAYOUT',
           message: 'Blocks do not hold nested layouts.',
           hint: "Sections nest inside sections: use add_section with placement 'inside' anchored on a section.",
@@ -3239,8 +3762,11 @@ class BlueprintOperations implements BlueprintOperationsInterface {
     // container — sections are placed via the section grammar, never as
     // blocks).
     $region = $location['region'] ?? 'content';
-    $op_storage = $section_info['storage'] ?? $this->daedalusLayoutAdapter->getSectionStorage($entity);
+    $op_storage = $section_info['storage'] ?? $host->sectionStorage();
     if ($failure = $this->checkBlockPlacement($plugin_id, $op_storage, $section_info['section'], $region, 'data.plugin_id')) {
+      return $failure;
+    }
+    if ($failure = $this->checkLinkedPlacement($host, $plugin_id, 'data.plugin_id')) {
       return $failure;
     }
 
@@ -3248,12 +3774,26 @@ class BlueprintOperations implements BlueprintOperationsInterface {
     $block_plugin = $this->blockManager->createInstance($plugin_id);
     $configuration = $block_plugin->getConfiguration();
     if ($block_plugin instanceof ContextAwarePluginInterface) {
-      $configuration['context_mapping'] = $this->defaultContextMapping($block_plugin, $entity, $section_info['storage'])
+      $configuration['context_mapping'] = $this->defaultContextMapping($block_plugin, $host, $section_info['storage'])
         + ($configuration['context_mapping'] ?? []);
     }
     $configuration['label_display'] = '0';
     if (isset($data['label'])) {
       $configuration['label'] = $data['label'];
+    }
+
+    // The properties bag is the plugin's configuration, spelled by its
+    // config schema and validated as typed config over the result.
+    $properties = $data['block_fields'] ?? [];
+    if ($properties !== []) {
+      $applied = $this->pluginBlockConfiguration->apply($plugin_id, $configuration, $properties, 'properties');
+      if ($applied['structural'] !== []) {
+        return BlueprintResult::structuralFailure($applied['structural']);
+      }
+      if ($applied['errors'] !== []) {
+        return BlueprintResult::semanticFailure($applied['errors']);
+      }
+      $configuration = $applied['settings'];
     }
 
     $section = $section_info['section'];
@@ -3264,13 +3804,13 @@ class BlueprintOperations implements BlueprintOperationsInterface {
     // entity everywhere (containers forward it).
     $component = new SectionComponent($uuid, $region, $configuration, $data['additional'] ?? []);
 
-    $event_targets = $this->dispatchLifecycle(new ElementCreatedEvent($entity, $component, NULL, $this->isDressed()));
+    $event_targets = $this->dispatchLifecycle(new ElementCreatedEvent($host, $component, NULL, $this->isDressed()));
     $region_count = count($section->getComponentsByRegion($region));
     $position = isset($location['weight']) ? min((int) $location['weight'], $region_count) : $region_count;
     $section->insertComponent($position, $component);
     $this->bubbleStorageChanges($section_info['storage']);
 
-    return BlueprintResult::success($entity)
+    return BlueprintResult::success($host)
       ->withTargets([['uuid' => $uuid, 'field_name' => TargetType::ADDED], ...$event_targets]);
   }
 
@@ -3278,22 +3818,26 @@ class BlueprintOperations implements BlueprintOperationsInterface {
    * Computes default context mappings for a context-aware block plugin.
    *
    * Port of the resolution the daedalus_layout palette produced through core's
-   * form-element defaulting (ContextAwarePluginAssignmentTrait): a slot
-   * with exactly one matching required context is assigned it; ambiguous
-   * or optional slots stay NULL; an unresolved 'entity' slot falls back to
-   * 'layout_builder.entity'. Slots with no matching context get no entry.
+   * form-element defaulting (ContextAwarePluginAssignmentTrait): a required
+   * slot with exactly one matching context is assigned it; an ambiguous
+   * required slot stays NULL; an unresolved 'entity' slot falls back to
+   * 'layout_builder.entity'. Slots with no matching context get no entry,
+   * and neither does an optional slot: it is read under its own id when a
+   * render carries that context and is absent otherwise (the frame render's
+   * frame and route-output contexts, which a template's config must never
+   * name), and a mapping it needs is the plugin's own default.
    *
    * @param \Drupal\Core\Plugin\ContextAwarePluginInterface $block_plugin
    *   The block plugin.
-   * @param \Drupal\Core\Entity\FieldableEntityInterface $entity
-   *   The root entity, used as the context source when no storage exists.
+   * @param \Drupal\daedalus_blueprint\Host\HostInterface $host
+   *   The host, whose subject is the context source when no storage exists.
    * @param object|null $storage
    *   The section storage whose preview contexts to match against, if any.
    *
    * @return array
    *   The context mapping (slot => context ID or NULL).
    */
-  protected function defaultContextMapping(ContextAwarePluginInterface $block_plugin, FieldableEntityInterface $entity, ?object $storage): array {
+  protected function defaultContextMapping(ContextAwarePluginInterface $block_plugin, HostInterface $host, ?object $storage): array {
     $available_ids = array_keys($this->contextRepository->getAvailableContexts());
     $contexts = array_filter(
       $this->contextRepository->getRuntimeContexts($available_ids),
@@ -3302,19 +3846,20 @@ class BlueprintOperations implements BlueprintOperationsInterface {
     if ($storage !== NULL && method_exists($storage, 'getContextsDuringPreview')) {
       $contexts += $storage->getContextsDuringPreview();
     }
-    else {
-      $contexts['layout_builder.entity'] = EntityContext::fromEntity($entity);
+    elseif (($subject = $host->subject()) !== NULL) {
+      $contexts['layout_builder.entity'] = EntityContext::fromEntity($subject);
     }
 
     $mapping = [];
     foreach ($block_plugin->getContextDefinitions() as $slot => $definition) {
+      if (!$definition->isRequired()) {
+        continue;
+      }
       $valid = $this->contextHandler->getMatchingContexts($contexts, $definition);
       if (empty($valid)) {
         continue;
       }
-      $mapping[$slot] = (count($valid) === 1 && $definition->isRequired())
-        ? array_key_first($valid)
-        : NULL;
+      $mapping[$slot] = count($valid) === 1 ? array_key_first($valid) : NULL;
     }
     if (array_key_exists('entity', $mapping) && empty($mapping['entity'])) {
       $mapping['entity'] = 'layout_builder.entity';
@@ -3380,8 +3925,8 @@ class BlueprintOperations implements BlueprintOperationsInterface {
    * Creates a new paragraph entity, applies fields via FieldHandlers,
    * and inserts it at the specified position in the target field.
    *
-   * @param \Drupal\Core\Entity\FieldableEntityInterface $entity
-   *   The root entity.
+   * @param \Drupal\daedalus_blueprint\Host\HostInterface $host
+   *   The host.
    * @param array $location
    *   Location with field name, optional position, and optional parent_uuid.
    * @param array $data
@@ -3393,19 +3938,24 @@ class BlueprintOperations implements BlueprintOperationsInterface {
    * @return \Drupal\daedalus_blueprint\Result\BlueprintResult
    *   The result with the modified entity on success.
    */
-  protected function addParagraphElement(FieldableEntityInterface $entity, array $location, array $data, array $options = []): BlueprintResult {
-    // Find target entity (root, parent paragraph, or one already resolved
-    // by the placement grammar).
-    $target_entity = $entity;
+  protected function addParagraphElement(HostInterface $host, array $location, array $data, array $options = []): BlueprintResult {
+    // Find target entity (the host's fields, a parent paragraph, or one
+    // already resolved by the placement grammar).
     if (isset($location['_parent_entity'])) {
       $target_entity = $location['_parent_entity'];
     }
     elseif (isset($location['parent_uuid'])) {
-      $context = $this->locateElement($entity, $location['parent_uuid'], 'location.parent_uuid', 'PARENT_NOT_FOUND');
+      $context = $this->locateElement($host, $location['parent_uuid'], 'location.parent_uuid', 'PARENT_NOT_FOUND');
       if ($context instanceof BlueprintResult) {
         return $context;
       }
       $target_entity = $context->target;
+    }
+    else {
+      $target_entity = $this->requireFields($host, 'location.field');
+      if ($target_entity instanceof BlueprintResult) {
+        return $target_entity;
+      }
     }
 
     // Validate field exists and is ERR type.
@@ -3466,7 +4016,7 @@ class BlueprintOperations implements BlueprintOperationsInterface {
     $paragraph = $this->entityTypeManager->getStorage($target_type)->create($create_values);
 
     $paragraph_fields = $data['fields'] ?? [];
-    $result = $this->validateAndApplyFields($paragraph, $paragraph_fields, 'fields', $options + [
+    $result = $this->validateAndApplyFields($host, $paragraph, $paragraph_fields, 'fields', $options + [
       'isFullCreate' => TRUE,
     ]);
 
@@ -3495,15 +4045,15 @@ class BlueprintOperations implements BlueprintOperationsInterface {
 
     $targets = [['uuid' => $uuid, 'field_name' => TargetType::ADDED]];
 
-    return BlueprintResult::success($entity, $result['warnings'])
+    return BlueprintResult::success($host, $result['warnings'])
       ->withTargets($targets);
   }
 
   /**
    * Dispatches a single batch operation to the appropriate method.
    *
-   * @param \Drupal\Core\Entity\FieldableEntityInterface $entity
-   *   The entity to operate on.
+   * @param \Drupal\daedalus_blueprint\Host\HostInterface $host
+   *   The host to operate on.
    * @param array $operation
    *   The operation definition with an 'op' key.
    * @param array $options
@@ -3513,14 +4063,14 @@ class BlueprintOperations implements BlueprintOperationsInterface {
    * @return \Drupal\daedalus_blueprint\Result\BlueprintResult
    *   The operation result.
    */
-  protected function applyOperation(FieldableEntityInterface $entity, array $operation, array $options = []): BlueprintResult {
+  protected function applyOperation(HostInterface $host, array $operation, array $options = []): BlueprintResult {
     $op = $operation['op'] ?? '';
 
     // Normalize string-encoded JSON parameters. LLMs frequently double-encode
     // nested values when constructing batch operations.
     $json_parameter_keys = [
-      'fields', 'data', 'structure', 'location', 'properties', 'regions',
-      'layout_settings', 'layout_builder__layout', 'at', 'attrs', 'remove',
+      'fields', 'data', 'structure', 'location', 'properties',
+      'layout_settings', 'layout', 'at', 'attrs', 'remove',
     ];
     foreach ($json_parameter_keys as $key) {
       if (isset($operation[$key]) && is_string($operation[$key])) {
@@ -3531,47 +4081,295 @@ class BlueprintOperations implements BlueprintOperationsInterface {
       }
     }
 
+    // The capability gate: every op, built-in or registered, is judged
+    // here before dispatch, so no op can dodge it by not calling a
+    // particular locator. A system batch acts for the site, not an actor,
+    // and is not judged.
+    if ($this->systemDepth === 0) {
+      $refused = $this->gate($host, $op, $operation);
+      if ($refused !== NULL) {
+        return $refused;
+      }
+    }
+
     return match ($op) {
       'update_element' => $this->updateElement(
-        $entity,
+        $host,
         $operation['element'] ?? NULL,
         $operation['properties'] ?? [],
         $options,
       ),
-      'add_element' => $this->applyAddElement($entity, $operation, $options),
+      'add_element' => $this->applyAddElement($host, $operation, $options),
       'add_section' => $this->addSection(
-        $entity,
+        $host,
         $operation['location'] ?? [],
         $operation['uuid'] ?? NULL,
         $operation['layout'] ?? NULL,
         $operation['layout_settings'] ?? [],
-        $operation['stencil'] ?? NULL,
+        $operation['blueprint'] ?? NULL,
+        $operation['slot'] ?? NULL,
       ),
       'remove_element' => $this->removeElement(
-        $entity,
+        $host,
         $operation['element'] ?? '',
       ),
       'duplicate_element' => $this->duplicateElement(
-        $entity,
+        $host,
         $operation['element'] ?? '',
         $operation['uuid'] ?? NULL,
       ),
       'move_element' => $this->moveElement(
-        $entity,
+        $host,
         $operation['element'] ?? '',
         $operation['location'] ?? [],
       ),
-      'restructure_layout' => $this->restructureLayout(
-        $entity,
-        $operation['structure'] ?? [],
-        $options,
-      ),
       'reorder_field' => $this->reorderField(
-        $entity,
+        $host,
         $operation['structure'] ?? [],
       ),
-      default => $this->applyRegisteredOperation($entity, $op, $operation, $options),
+      default => $this->applyRegisteredOperation($host, $op, $operation, $options),
     };
+  }
+
+  /**
+   * Asks the capability resolver for everything an operation requires.
+   *
+   * The built-in operations resolve their requirements here (update_element
+   * per property: an inline block's fields are content, its label and
+   * configuration keys configure); a registered operation's declared
+   * shapes (OperationHandlerInterface::getRequirements()) resolve against
+   * the operation. A requirement that names no live target (an anchor
+   * nowhere on the page, a key that is not a key) is not asked: the
+   * operation reports that itself, in its own words.
+   *
+   * @param \Drupal\daedalus_blueprint\Host\HostInterface $host
+   *   The host (the translation when the batch named one).
+   * @param string $op
+   *   The operation name.
+   * @param array $operation
+   *   The operation, its JSON parameters decoded.
+   *
+   * @return \Drupal\daedalus_blueprint\Result\BlueprintResult|null
+   *   The first refusal as a structural failure, or NULL when every
+   *   requirement is allowed.
+   */
+  protected function gate(HostInterface $host, string $op, array $operation): ?BlueprintResult {
+    $actor = $this->actor ?? $this->currentUser;
+    foreach ($this->requirementsOf($host, $op, $operation) as $requirement) {
+      $verdict = $this->capabilityResolver->verdict($host, $actor, $requirement->capability, $requirement->target);
+      if (!$verdict->isAllowed()) {
+        return BlueprintResult::structuralFailure([$verdict->refusal()->toError($requirement->path)]);
+      }
+    }
+    return NULL;
+  }
+
+  /**
+   * The resolved requirements of an operation.
+   *
+   * @param \Drupal\daedalus_blueprint\Host\HostInterface $host
+   *   The host.
+   * @param string $op
+   *   The operation name.
+   * @param array $operation
+   *   The operation.
+   *
+   * @return \Drupal\daedalus_blueprint\Capability\Requirement[]
+   *   Resolved requirements (each naming its target).
+   */
+  protected function requirementsOf(HostInterface $host, string $op, array $operation): array {
+    $root = $host->uuid();
+    $element = $operation['element'] ?? NULL;
+    $element = is_string($element) && $element !== '' ? $element : NULL;
+    $location = is_array($operation['location'] ?? NULL) ? $operation['location'] : [];
+    switch ($op) {
+      case 'update_element':
+        if ($element === NULL || $element === $root) {
+          return [Requirement::on(Capability::Content, $root, 'element')];
+        }
+        $properties = is_array($operation['properties'] ?? NULL) ? $operation['properties'] : [];
+        return $this->updateElementRequirements($host, $element, $properties);
+
+      case 'add_element':
+        return $this->addElementRequirements($host, $location);
+
+      case 'add_section':
+        $destination = $this->destinationOf($host, $location);
+        return $destination === NULL ? [] : [Requirement::on(Capability::Insert, $destination, 'location.anchor')];
+
+      case 'remove_element':
+        return $element === NULL ? [] : [Requirement::on(Capability::Arrange, $element, 'element')];
+
+      case 'duplicate_element':
+        if ($element === NULL) {
+          return [];
+        }
+        $requirements = [Requirement::on(Capability::Arrange, $element, 'element')];
+        $index = $this->daedalusLayoutAdapter->parentIndex($host->sections());
+        if (array_key_exists($element, $index)) {
+          $requirements[] = Requirement::on(Capability::Insert, $index[$element] ?? $root, 'element');
+        }
+        return $requirements;
+
+      case 'move_element':
+        if ($element === NULL) {
+          return [];
+        }
+        $requirements = [Requirement::on(Capability::Arrange, $element, 'element')];
+        $destination = $this->destinationOf($host, $location);
+        if ($destination !== NULL) {
+          $requirements[] = Requirement::on(Capability::Insert, $destination, 'location.anchor');
+        }
+        return $requirements;
+
+      case 'reorder_field':
+        $structure = is_array($operation['structure'] ?? NULL) ? $operation['structure'] : [];
+        $parent = $structure['parent_uuid'] ?? NULL;
+        return is_string($parent) && $parent !== ''
+          ? [Requirement::on(Capability::Content, $parent, 'parent_uuid')]
+          : [Requirement::on(Capability::Content, $root, 'structure')];
+    }
+
+    $handler = $this->operationHandlerRegistry->getHandler($op);
+    if ($handler === NULL) {
+      return [];
+    }
+    $resolved = [];
+    foreach ($handler->getRequirements()[$op] ?? [] as $requirement) {
+      $target = match ($requirement->kind) {
+        Requirement::ROOT => $root,
+        Requirement::ELEMENT => $requirement->isResolved() ? $requirement->target : $this->uuidParameter($operation, $requirement->parameter),
+        Requirement::STYLE_KEY => ElementKey::uuid((string) ($operation[$requirement->parameter] ?? '')),
+        Requirement::DESTINATION => $this->destinationOf($host, is_array($operation[$requirement->parameter] ?? NULL) ? $operation[$requirement->parameter] : []),
+      };
+      if ($target !== NULL) {
+        $resolved[] = $requirement->at($target);
+      }
+    }
+    return $resolved;
+  }
+
+  /**
+   * A uuid an operation parameter carries, or NULL.
+   */
+  protected function uuidParameter(array $operation, string $parameter): ?string {
+    $value = $operation[$parameter] ?? NULL;
+    return is_string($value) && $value !== '' ? $value : NULL;
+  }
+
+  /**
+   * What update_element requires of its element, per property.
+   *
+   * A section's properties (label, layout settings) and a plugin block's
+   * configuration are configure; a paragraph's properties are its fields,
+   * content; an inline block's bag is sorted the way the write sorts it:
+   * its fields are content, its label and configuration keys configure.
+   * An element that cannot be located asks configure, so a foreign
+   * element is refused as such and an unknown one reaches the op's own
+   * ELEMENT_NOT_FOUND.
+   *
+   * @return \Drupal\daedalus_blueprint\Capability\Requirement[]
+   *   The resolved requirements.
+   */
+  protected function updateElementRequirements(HostInterface $host, string $uuid, array $properties): array {
+    $context = $this->elementLocator->locate($host, $uuid);
+    if ($context === NULL || $context->isSection()) {
+      return [Requirement::on(Capability::Configure, $uuid, 'element')];
+    }
+    if ($context->isParagraph()) {
+      return [Requirement::on(Capability::Content, $uuid, 'element')];
+    }
+    /** @var \Drupal\layout_builder\SectionComponent $component */
+    $component = $context->target;
+    $block = $this->daedalusLayoutAdapter->isInlineBlock($component)
+      ? $this->daedalusLayoutAdapter->extractBlockContent($component)
+      : NULL;
+    if ($block === NULL) {
+      return [Requirement::on(Capability::Configure, $uuid, 'element')];
+    }
+    $sorted = $this->sortElementProperties($host, $this->daedalusLayoutAdapter->getInlineBlockType($component), $block, $properties);
+    $requirements = [];
+    if ($sorted['fields'] !== []) {
+      $requirements[] = Requirement::on(Capability::Content, $uuid, 'properties');
+    }
+    if ($sorted['label'] !== NULL || $sorted['configuration'] !== []) {
+      $requirements[] = Requirement::on(Capability::Configure, $uuid, 'properties');
+    }
+    return $requirements === [] ? [Requirement::on(Capability::Configure, $uuid, 'element')] : $requirements;
+  }
+
+  /**
+   * What add_element requires: insert on a layout destination, or content on a parent.
+   *
+   * The placement grammar names a layout destination (insert on the
+   * container the location resolves to) or a paragraph slot: inside the
+   * root or a paragraph with a field, beside a paragraph, or the paragraph
+   * family's own field addressing (parent_uuid, or the root). A paragraph
+   * is content of the entity whose field holds it.
+   *
+   * @return \Drupal\daedalus_blueprint\Capability\Requirement[]
+   *   The resolved requirements.
+   */
+  protected function addElementRequirements(HostInterface $host, array $location): array {
+    $root = $host->uuid();
+    $anchor = $location['anchor'] ?? NULL;
+    if (!is_string($anchor) || $anchor === '') {
+      $parent = $location['parent_uuid'] ?? NULL;
+      return is_string($parent) && $parent !== ''
+        ? [Requirement::on(Capability::Content, $parent, 'parent_uuid')]
+        : [Requirement::on(Capability::Content, $root, 'location')];
+    }
+    if ($anchor === $root) {
+      return [Requirement::on(Capability::Content, $root, 'location.anchor')];
+    }
+    $destination = $this->destinationOf($host, $location);
+    if ($destination !== NULL) {
+      return [Requirement::on(Capability::Insert, $destination, 'location.anchor')];
+    }
+    $context = $this->elementLocator->locate($host, $anchor);
+    if ($context === NULL || !$context->isParagraph()) {
+      return [];
+    }
+    $parent = ($location['placement'] ?? NULL) === 'inside' ? $anchor : $context->parentEntity?->uuid();
+    return $parent === NULL ? [] : [Requirement::on(Capability::Content, $parent, 'location.anchor')];
+  }
+
+  /**
+   * The container a placement grammar location inserts into.
+   *
+   * The host for the root anchor; the anchor itself for 'inside'; the
+   * section holding the anchor for before/after, the host when the anchor
+   * is a top-level section. NULL when the anchor is not a layout element
+   * of the document the host renders (the operation says why).
+   *
+   * @param \Drupal\daedalus_blueprint\Host\HostInterface $host
+   *   The host.
+   * @param array $location
+   *   The location.
+   *
+   * @return string|null
+   *   The destination uuid (the host's for the root), or NULL.
+   */
+  protected function destinationOf(HostInterface $host, array $location): ?string {
+    $anchor = $location['anchor'] ?? NULL;
+    if (!is_string($anchor) || $anchor === '') {
+      return NULL;
+    }
+    if ($anchor === $host->uuid()) {
+      return $host->uuid();
+    }
+    $index = $this->daedalusLayoutAdapter->parentIndex($host->sections());
+    if (!array_key_exists($anchor, $index)) {
+      // The site frame's slot blocks are doors of the host too, and the
+      // frame's nodes are nowhere in the host's tree: a location anchored
+      // inside one inserts on the door itself (the host's gesture, judged
+      // as insert on that node), never on nothing.
+      return $this->slotDoor($host, $location) !== NULL ? $anchor : NULL;
+    }
+    if (($location['placement'] ?? NULL) === 'inside') {
+      return $anchor;
+    }
+    return $index[$anchor] ?? $host->uuid();
   }
 
   /**
@@ -3580,8 +4378,8 @@ class BlueprintOperations implements BlueprintOperationsInterface {
    * Fallback for operation names not handled by applyOperation()'s built-in
    * match, checked before failing with INVALID_OPERATION.
    *
-   * @param \Drupal\Core\Entity\FieldableEntityInterface $entity
-   *   The entity to operate on.
+   * @param \Drupal\daedalus_blueprint\Host\HostInterface $host
+   *   The host to operate on.
    * @param string $op
    *   The operation name.
    * @param array $operation
@@ -3594,10 +4392,10 @@ class BlueprintOperations implements BlueprintOperationsInterface {
    *   The handler's result, or an INVALID_OPERATION structural failure when
    *   no handler provides the operation.
    */
-  protected function applyRegisteredOperation(FieldableEntityInterface $entity, string $op, array $operation, array $options = []): BlueprintResult {
+  protected function applyRegisteredOperation(HostInterface $host, string $op, array $operation, array $options = []): BlueprintResult {
     $handler = $this->operationHandlerRegistry->getHandler($op);
     if ($handler !== NULL) {
-      return $handler->apply($entity, $operation, $options);
+      return $handler->apply($host, $operation, $options);
     }
 
     if (isset(self::RETIRED_GRAMMAR[$op])) {
@@ -3639,11 +4437,11 @@ class BlueprintOperations implements BlueprintOperationsInterface {
    * Maps the element format (block_type or plugin_id, the anchor-grammar
    * location, properties, populate, additional) to the internal
    * addElement format. The retired nested-layout keys (section_uuid,
-   * layout_builder__layout) still pass through so addLbComponent can refuse
+   * layout) still pass through so addLbComponent can refuse
    * them with a pointer at the one placement grammar.
    *
-   * @param \Drupal\Core\Entity\FieldableEntityInterface $entity
-   *   The entity to operate on.
+   * @param \Drupal\daedalus_blueprint\Host\HostInterface $host
+   *   The host to operate on.
    * @param array $operation
    *   The operation definition.
    * @param array $options
@@ -3653,18 +4451,18 @@ class BlueprintOperations implements BlueprintOperationsInterface {
    * @return \Drupal\daedalus_blueprint\Result\BlueprintResult
    *   The operation result.
    */
-  protected function applyAddElement(FieldableEntityInterface $entity, array $operation, array $options = []): BlueprintResult {
+  protected function applyAddElement(HostInterface $host, array $operation, array $options = []): BlueprintResult {
     $data = [
       'block_type' => $operation['block_type'] ?? NULL,
       'block_fields' => $operation['properties'] ?? [],
     ];
-    foreach (['plugin_id', 'uuid', 'populate', 'additional', 'section_uuid', 'layout_builder__layout'] as $key) {
+    foreach (['plugin_id', 'uuid', 'populate', 'additional', 'section_uuid', 'layout'] as $key) {
       if (isset($operation[$key])) {
         $data[$key] = $operation[$key];
       }
     }
 
-    return $this->addElement($entity, $operation['location'] ?? [], $data, $options);
+    return $this->addElement($host, $operation['location'] ?? [], $data, $options);
   }
 
   /**
@@ -3741,12 +4539,6 @@ class BlueprintOperations implements BlueprintOperationsInterface {
    * 'uuid' keys REFERENCE existing items instead of minting, so it is
    * excluded rather than tainting live identity.
    *
-   * A restructure_layout definition can also carry the uuid of an existing
-   * section it re-declares; a failed restructure taints it deliberately —
-   * later results against a layout the writer meant to reshape are just as
-   * untrustworthy, and a suppressed real error simply resurfaces on the
-   * next round's full re-evaluation.
-   *
    * @param array $operation
    *   The operation definition.
    *
@@ -3809,30 +4601,34 @@ class BlueprintOperations implements BlueprintOperationsInterface {
    * Snapshots layout sections, field values, and paragraph entity state
    * so the entity can be restored if a batch operation fails.
    *
-   * @param \Drupal\Core\Entity\FieldableEntityInterface $entity
-   *   The entity to snapshot.
+   * @param \Drupal\daedalus_blueprint\Host\HostInterface $host
+   *   The host to snapshot.
    *
    * @return array
    *   The snapshot data.
    */
-  protected function snapshotEntity(FieldableEntityInterface $entity): array {
+  protected function snapshotEntity(HostInterface $host): array {
     $snapshot = [
       'layout' => NULL,
       'fields' => [],
       'paragraphs' => [],
     ];
 
-    // Snapshot layout sections via Section::toArray().
-    if ($entity->hasField('layout_builder__layout')) {
+    // Snapshot the root sections of the host's storage via
+    // Section::toArray().
+    $storage = $host->sectionStorage();
+    if ($storage !== NULL) {
       $snapshot['layout'] = [];
-      foreach ($entity->get('layout_builder__layout') as $item) {
-        $snapshot['layout'][] = $item->section->toArray();
+      foreach ($this->daedalusLayoutAdapter->rootList($storage)->getSections() as $section) {
+        $snapshot['layout'][] = $section->toArray();
       }
     }
 
-    // Snapshot field values.
-    foreach ($entity->getFieldDefinitions() as $name => $def) {
-      if ($name === 'layout_builder__layout') {
+    // Snapshot field values (the section list is the document's, above);
+    // a host with no fields of its own has nothing more to snapshot.
+    $entity = $host->fields();
+    foreach ($entity?->getFieldDefinitions() ?? [] as $name => $def) {
+      if ($def->getType() === 'layout_section') {
         continue;
       }
       if ($def->getType() === 'entity_reference_revisions') {
@@ -3895,19 +4691,20 @@ class BlueprintOperations implements BlueprintOperationsInterface {
   /**
    * Restores entity state from a snapshot.
    *
-   * @param \Drupal\Core\Entity\FieldableEntityInterface $entity
-   *   The entity to restore.
+   * @param \Drupal\daedalus_blueprint\Host\HostInterface $host
+   *   The host to restore.
    * @param array $snapshot
    *   The snapshot data from snapshotEntity().
    */
-  protected function restoreEntity(FieldableEntityInterface $entity, array $snapshot): void {
-    // Restore layout sections.
-    if ($snapshot['layout'] !== NULL && $entity->hasField('layout_builder__layout')) {
-      $values = [];
+  protected function restoreEntity(HostInterface $host, array $snapshot): void {
+    // Restore the root sections of the host's storage.
+    $storage = $snapshot['layout'] === NULL ? NULL : $host->sectionStorage();
+    if ($storage !== NULL) {
+      $list = $this->daedalusLayoutAdapter->rootList($storage);
+      $list->removeAllSections();
       foreach ($snapshot['layout'] as $section_array) {
-        $values[] = ['section' => Section::fromArray($section_array)];
+        $list->appendSection(Section::fromArray($section_array));
       }
-      $entity->set('layout_builder__layout', $values);
 
       // Reset block_content static cache so that block_revision_id loads
       // return the original (unmodified) entities from the database,
@@ -3917,7 +4714,8 @@ class BlueprintOperations implements BlueprintOperationsInterface {
       }
     }
 
-    // Restore field values.
+    // Restore field values (snapshotted only for a host with fields).
+    $entity = $host->fields();
     foreach ($snapshot['fields'] as $name => $field_data) {
       if ($field_data['type'] === 'err') {
         $entity->set($name, $field_data['items']);

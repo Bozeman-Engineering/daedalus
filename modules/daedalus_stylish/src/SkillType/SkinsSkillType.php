@@ -11,17 +11,20 @@ use Drupal\daedalus_stylish\SkinManager;
 use Drupal\daedalus_stylish\StyleGuide;
 
 /**
- * Skill type for the skins skill: live skin state + editing recipes.
+ * Skill type for the skins skill: live skin state + the skin operations.
  *
  * On the CreateEntitySkillType pattern: compose() runs fresh per
  * invocation, so the response opens with the live catalog (the declared
- * scales, every skin with its entity id and machine name, and which one is
- * ACTIVE) before the skill file's static recipes. The catalog is what the
- * static instructions cannot carry: without it the AI has no way to find
- * the active skin's entity id to read or update it. The skill definition's
- * permission key ('administer skins') gates who sees and may invoke the
- * skill; skins are the design system, and changing it is access-gated even
- * though the token vocabulary itself is not.
+ * scales, every skin with its entity id and machine name, which one the
+ * site wears, and whether a shipped skin carries a site layer) before the
+ * skill file's static teaching of the operations (the token gestures with
+ * kind token, update_default, the create door and the gestures that are a
+ * person's). The catalog is what the static instructions cannot carry:
+ * which skin the operations write, and the entity ids the generic read
+ * and create doors take. The skill definition's permission key
+ * ('administer skins') gates who sees and may invoke the skill; skins are
+ * the design system, and changing it is access-gated even though the
+ * token vocabulary itself is not.
  */
 class SkinsSkillType implements SkillTypeInterface {
 
@@ -74,7 +77,7 @@ class SkinsSkillType implements SkillTypeInterface {
       $lines[] = 'No skins exist yet.';
     }
     else {
-      $lines[] = 'Skins (entity_type daedalus_skin; a skin is a member of the design system its design_system field names, and ACTIVE marks the active design system\'s default_skin):';
+      $lines[] = 'Skins (entity_type daedalus_skin; a skin is a member of the design system its design_system field names, and ACTIVE marks the skin the site wears: its choice for the active design system while that names a published, conforming member, else the system\'s default_skin):';
       foreach ($skins as $skin) {
         /** @var \Drupal\daedalus_stylish\DaedalusStylishSkinInterface $skin */
         $line = sprintf('- id %s, machine_name %s, "%s"', $skin->id(), $skin->getMachineName(), $skin->label());
@@ -85,12 +88,13 @@ class SkinsSkillType implements SkillTypeInterface {
         $flags[] = $skin->getDesignSystem() === NULL ? 'global' : 'member of ' . $skin->getDesignSystem();
         $flags[] = $skin->isPublished() ? 'published' : 'unpublished';
         if ($skin->isShipped()) {
-          $flags[] = $skin->isModified() ? 'shipped, locally modified' : 'shipped';
+          $flags[] = $skin->isModified() ? 'shipped, package layer locally modified' : 'shipped';
+          $flags[] = $this->skinManager->hasSiteLayer($skin) ? 'with a site layer' : 'no site layer yet';
         }
         $lines[] = $line . ': ' . implode(', ', $flags);
       }
       if ($active === NULL) {
-        $lines[] = 'No skin is active: the active design system names no default_skin (or no system is active), so no tokens or defaults deliver until an administrator sets one on the system.';
+        $lines[] = 'No skin is worn: the active design system names no default_skin and the site has chosen none (or no system is active), so no tokens or defaults deliver and the operations have no skin to write until a person chooses one.';
       }
     }
 

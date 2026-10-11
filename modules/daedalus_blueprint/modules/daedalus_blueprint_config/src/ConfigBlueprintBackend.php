@@ -8,13 +8,18 @@ use Drupal\Core\Config\Entity\ConfigEntityInterface;
 use Drupal\Core\Entity\EntityInterface;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\daedalus_blueprint\Dispatch\BlueprintBackendInterface;
+use Drupal\daedalus_blueprint\Host\HostResolver;
 use Drupal\daedalus_blueprint\Result\BlueprintResultInterface;
 
 /**
  * Blueprint backend for config entities.
  *
  * Delegates to config-specific services. Registered at priority 0 so it is
- * checked before the content backend (priority -10).
+ * checked before the content backend (priority -10) for a type-level ask;
+ * at the entity door it declines whatever the host resolver hosts, so a
+ * Layout Builder enabled display (a page document that happens to be
+ * config) reaches the page backend and every other config entity stays
+ * here.
  */
 class ConfigBlueprintBackend implements BlueprintBackendInterface {
 
@@ -31,6 +36,8 @@ class ConfigBlueprintBackend implements BlueprintBackendInterface {
    *   The config schema builder.
    * @param \Drupal\daedalus_blueprint_config\ConfigOperations $operations
    *   The config operations service.
+   * @param \Drupal\daedalus_blueprint\Host\HostResolver $hostResolver
+   *   The host resolver: what it hosts is a page document, not config.
    */
   public function __construct(
     protected EntityTypeManagerInterface $entityTypeManager,
@@ -38,6 +45,7 @@ class ConfigBlueprintBackend implements BlueprintBackendInterface {
     protected ConfigDeserializer $deserializer,
     protected ConfigSchemaBuilder $schemaBuilder,
     protected ConfigOperations $operations,
+    protected HostResolver $hostResolver,
   ) {}
 
   /**
@@ -49,6 +57,13 @@ class ConfigBlueprintBackend implements BlueprintBackendInterface {
       return FALSE;
     }
     return $entity_type->entityClassImplements(ConfigEntityInterface::class);
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function supportsEntity(EntityInterface $entity): bool {
+    return $entity instanceof ConfigEntityInterface && !$this->hostResolver->hosts($entity);
   }
 
   /**

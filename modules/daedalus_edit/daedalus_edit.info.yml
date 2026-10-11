@@ -6,6 +6,7 @@ core_version_requirement: '>=11.3 <11.5'
 dependencies:
   - daedalus:daedalus
   - drupal:editor
+  - drupal:block_content
   - daedalus:daedalus_tempstore
   - twig_events:twig_events
   - field_sample_value:field_sample_value

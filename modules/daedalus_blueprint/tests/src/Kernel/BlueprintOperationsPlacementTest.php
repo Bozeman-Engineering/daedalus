@@ -116,7 +116,7 @@ class BlueprintOperationsPlacementTest extends BlueprintKernelTestBase {
   public function testAnchorAfterComponent(): void {
     $entity = $this->createLbEntityWithTwoComponents();
 
-    $result = $this->operations->addElement($entity, [
+    $result = $this->operations->addElement($this->host($entity), [
       'anchor' => 'faf95c53-35e7-74e1-184e-041152031df4',
       'placement' => 'after',
     ], [
@@ -139,7 +139,7 @@ class BlueprintOperationsPlacementTest extends BlueprintKernelTestBase {
   public function testAnchorBeforeComponent(): void {
     $entity = $this->createLbEntityWithTwoComponents();
 
-    $result = $this->operations->addElement($entity, [
+    $result = $this->operations->addElement($this->host($entity), [
       'anchor' => '9bc043d4-072e-d2ff-9909-5b1e2e3c9826',
       'placement' => 'before',
     ], [
@@ -186,7 +186,7 @@ class BlueprintOperationsPlacementTest extends BlueprintKernelTestBase {
     ]);
     $entity->save();
 
-    $result = $this->operations->addElement($entity, [
+    $result = $this->operations->addElement($this->host($entity), [
       'anchor' => '954a3461-12eb-33d0-0e18-a5c309143f7f',
       'placement' => 'after',
     ], [
@@ -206,7 +206,7 @@ class BlueprintOperationsPlacementTest extends BlueprintKernelTestBase {
   public function testAnchorComponentInsideRejected(): void {
     $entity = $this->createLbEntityWithTwoComponents();
 
-    $result = $this->operations->addElement($entity, [
+    $result = $this->operations->addElement($this->host($entity), [
       'anchor' => 'faf95c53-35e7-74e1-184e-041152031df4',
       'placement' => 'inside',
     ], [
@@ -226,7 +226,7 @@ class BlueprintOperationsPlacementTest extends BlueprintKernelTestBase {
     $entity = $this->createParagraphEntity();
     $anchor_uuid = $entity->get('field_paragraphs')->get(0)->entity->uuid();
 
-    $result = $this->operations->addElement($entity, [
+    $result = $this->operations->addElement($this->host($entity), [
       'anchor' => $anchor_uuid,
       'placement' => 'after',
     ], [
@@ -249,7 +249,7 @@ class BlueprintOperationsPlacementTest extends BlueprintKernelTestBase {
     $entity = $this->createParagraphEntity();
     $anchor_uuid = $entity->get('field_paragraphs')->get(1)->entity->uuid();
 
-    $result = $this->operations->addElement($entity, [
+    $result = $this->operations->addElement($this->host($entity), [
       'anchor' => $anchor_uuid,
       'placement' => 'before',
     ], [
@@ -300,7 +300,7 @@ class BlueprintOperationsPlacementTest extends BlueprintKernelTestBase {
 
     $parent_uuid = $entity->get('field_paragraphs')->first()->entity->uuid();
 
-    $result = $this->operations->addElement($entity, [
+    $result = $this->operations->addElement($this->host($entity), [
       'anchor' => $parent_uuid,
       'placement' => 'inside',
       'field' => 'field_items',
@@ -323,7 +323,7 @@ class BlueprintOperationsPlacementTest extends BlueprintKernelTestBase {
     $entity = $this->createParagraphEntity();
     $anchor_uuid = $entity->get('field_paragraphs')->get(0)->entity->uuid();
 
-    $result = $this->operations->addElement($entity, [
+    $result = $this->operations->addElement($this->host($entity), [
       'anchor' => $anchor_uuid,
       'placement' => 'inside',
     ], [
@@ -342,7 +342,7 @@ class BlueprintOperationsPlacementTest extends BlueprintKernelTestBase {
   public function testAnchorRootEntityInside(): void {
     $entity = $this->createParagraphEntity();
 
-    $result = $this->operations->addElement($entity, [
+    $result = $this->operations->addElement($this->host($entity), [
       'anchor' => $entity->uuid(),
       'placement' => 'inside',
       'field' => 'field_paragraphs',
@@ -363,7 +363,7 @@ class BlueprintOperationsPlacementTest extends BlueprintKernelTestBase {
   public function testAnchorRootEntityBeforeRejected(): void {
     $entity = $this->createParagraphEntity();
 
-    $result = $this->operations->addElement($entity, [
+    $result = $this->operations->addElement($this->host($entity), [
       'anchor' => $entity->uuid(),
       'placement' => 'before',
       'field' => 'field_paragraphs',
@@ -382,7 +382,7 @@ class BlueprintOperationsPlacementTest extends BlueprintKernelTestBase {
   public function testAnchorNotFound(): void {
     $entity = $this->createLbEntityWithTwoComponents();
 
-    $result = $this->operations->addElement($entity, [
+    $result = $this->operations->addElement($this->host($entity), [
       'anchor' => 'c68c9561-d36d-b4fc-77ac-50039f354800',
       'placement' => 'after',
     ], [
@@ -401,7 +401,7 @@ class BlueprintOperationsPlacementTest extends BlueprintKernelTestBase {
   public function testInvalidPlacementKeyword(): void {
     $entity = $this->createLbEntityWithTwoComponents();
 
-    $result = $this->operations->addElement($entity, [
+    $result = $this->operations->addElement($this->host($entity), [
       'anchor' => 'faf95c53-35e7-74e1-184e-041152031df4',
       'placement' => 'above',
     ], [
@@ -421,7 +421,7 @@ class BlueprintOperationsPlacementTest extends BlueprintKernelTestBase {
   public function testMissingPlacementKeyword(): void {
     $entity = $this->createLbEntityWithTwoComponents();
 
-    $result = $this->operations->addElement($entity, [
+    $result = $this->operations->addElement($this->host($entity), [
       'anchor' => 'faf95c53-35e7-74e1-184e-041152031df4',
     ], [
       'block_type' => 'text_section',
@@ -438,7 +438,7 @@ class BlueprintOperationsPlacementTest extends BlueprintKernelTestBase {
   public function testAnchorViaBatchAddElement(): void {
     $entity = $this->createLbEntityWithTwoComponents();
 
-    $result = $this->operations->batchOperations($entity, [
+    $result = $this->operations->batchOperations($this->host($entity), [
       [
         'op' => 'add_element',
         'block_type' => 'text_section',

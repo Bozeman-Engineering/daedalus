@@ -23,12 +23,14 @@ use PHPUnit\Framework\Attributes\Group;
  * value lives entirely in the assembled string: (1) the AI-visible bundle
  * catalog (so the LLM discovers which entity types/bundles exist), and (2) the
  * BLOCKING REQUIREMENT checklist: a shared identify-bundle step, then a fork by
- * kind. The page branch (any bundle with a layout) runs read schema, any skill
- * that declared itself a blocking step via `blocking_step_of`, the plan's
- * approval, and ends at page_create with ONE page-language document; the
- * non-page branch runs read schema and ends at eb_create_entity with a
- * blueprint. If a refactor dropped the formatAsMarkdown() call or changed the
- * array glue so the checklist vanished, the AI would start creating entities
+ * kind. The page branch (any bundle whose entities render a page document)
+ * runs read schema, any skill that declared itself a blocking step via
+ * `blocking_step_of`, the plan's approval, and ends at page_create with ONE
+ * page-language document, or with fields alone when the bundle's pages render
+ * the template; the non-page branch runs read schema and ends at
+ * eb_create_entity with a blueprint. If a refactor dropped the
+ * formatAsMarkdown() call or changed the array glue so the checklist
+ * vanished, the AI would start creating entities
  * without discovering bundles or pausing for approval, and no other test would
  * catch it. We assert the catalog, the fork, and both branch endpoints are
  * present (the fork is what makes the skill kind-blind: one discovery door
@@ -106,13 +108,18 @@ class SkillTypeComposeTest extends UnitTestCase {
 
     // The checklist forks by kind after bundle identification: this is what
     // makes the skill kind-blind (one discovery door for both create paths).
-    // The page branch must end at page_create as ONE page-language document;
-    // the non-page branch must end at eb_create_entity with a blueprint. The
-    // page branch's endpoint comes after the approval step, so a page is
-    // never created before the user has signed off on the plan.
+    // The fork speaks the one meaning of page (an entity whose render is a
+    // page document, its own or its template's) through the mark the
+    // catalog carries on a page bundle. The page branch must end at
+    // page_create with the page's first document from one source (a start,
+    // or the whole page as ONE page-language document) and say when both
+    // are omitted (a bundle marked as rendering its template takes fields
+    // only); the non-page branch must end at eb_create_entity with a
+    // blueprint. The page branch's endpoint comes after the approval step,
+    // so a page is never created before the user has signed off on the plan.
     $this->assertStringContainsString('the workflow forks by kind', $output);
-    $this->assertStringContainsString('If the bundle is a page (any bundle with a layout):', $output);
-    $this->assertStringContainsString('4. Call page_create with the entity fields and the whole page as ONE page-language document.', $output);
+    $this->assertStringContainsString('If the bundle is marked [page] in the list above (its entities render a page document):', $output);
+    $this->assertStringContainsString('4. Call page_create with the entity fields and the page\'s first document from ONE source: start or layout. start is template (the bundle\'s default layout), blank (an empty page) or the id of a page blueprint the schema read lists under starts (a whole saved page, copied into the new one); layout is the whole page authored as ONE page-language document. Pass exactly one of them; a bundle marked [page, renders its template] owns no layout, so pass neither and fields only.', $output);
     $this->assertStringContainsString('If it is any other entity:', $output);
     $this->assertStringContainsString('3. Call eb_create_entity with the blueprint.', $output);
     $this->assertGreaterThan(
@@ -163,7 +170,7 @@ class SkillTypeComposeTest extends UnitTestCase {
     $this->assertStringContainsString('2. Call eb_read_schema(entity_type, bundle)', $output);
     $this->assertStringContainsString('3. DESIGN-STEP-SENTINEL Invoke the design skill.', $output);
     $this->assertStringContainsString('4. Present your plan', $output);
-    $this->assertStringContainsString('5. Call page_create with the entity fields and the whole page as ONE page-language document.', $output);
+    $this->assertStringContainsString('5. Call page_create with the entity fields and the page\'s first document from ONE source: start or layout.', $output);
 
     // The declared step lands in the page branch only: it renders before the
     // non-page branch header, and the non-page branch keeps its unshifted

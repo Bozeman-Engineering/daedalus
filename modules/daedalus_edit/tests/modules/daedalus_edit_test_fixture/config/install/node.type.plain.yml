@@ -5,9 +5,8 @@ dependencies:
     - daedalus_ui
 third_party_settings:
   daedalus_ui:
+    enabled: true
     initial_mode: none
-    status:
-      edit: true
 name: Plain
 type: plain
 description: 'The non-Layout-Builder fixture bundle: inline field editing through the entity form path.'

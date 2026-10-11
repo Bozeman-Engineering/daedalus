@@ -146,6 +146,16 @@ html[data-daedalus-ui-canvas-view] .daedalus-ui-frame__anchor {
   padding-inline-start: 0.25rem;
 }
 
+/* The portal chip's kind word ("Header · blueprint"): what the document
+   behind the portal is, said quietly after the name it is known by. */
+.daedalus-ui-frame__type {
+  padding-inline-end: 0.45rem;
+  margin-inline-start: -0.45rem;
+  font-weight: 400;
+  opacity: 0.75;
+  white-space: pre;
+}
+
 .daedalus-ui-frame__verb {
   display: inline-flex;
   align-items: center;
@@ -167,6 +177,40 @@ html[data-daedalus-ui-canvas-view] .daedalus-ui-frame__anchor {
 .daedalus-ui-frame__verb:hover,
 .daedalus-ui-frame__verb:focus-visible {
   background: rgb(255, 255, 255, 0.22);
+}
+
+/**
+ * A verb group as a split control (selection-frame.js GroupControl). The
+ * control itself, one pill of a main half and a caret half with a seam
+ * between them, is the top bar's split-button.css (daedalus_ui/modes, a
+ * dependency of edit_mode, so the sheet is already on the page); the
+ * halves wear .daedalus-ui-frame__verb for the chip's size, inverse
+ * colour and hover wash. The rules below are only what the chip needs
+ * over that sheet. split-button.css nests its rules under
+ * `:is(#extra-specificity-hack, [data-drupal-admin-styles]), html`, and
+ * :is() takes its most specific argument, so every rule there weighs
+ * (1,1,0); a chip rule must carry an id to win, and the frame's one true
+ * ancestor id is its mount, #daedalus-root (the frame is document-
+ * positioned inside it, see above). The modifiers are the chip's own, so
+ * nothing here names the shared control's classes.
+ */
+
+/* split-button.css rounds the main half with --daedalus-border-radius,
+   the top bar pill's 0.5rem; the chip's verbs are 2px (.daedalus-ui-frame__verb). */
+#daedalus-root .daedalus-ui-frame__chip .daedalus-ui-frame__verb--main {
+  border-radius: 2px 0 0 2px;
+}
+
+/* The caret: split-button.css draws the seam in --daedalus-lines, chrome
+   grey on a light surface, invisible on the selection blue; the chip's own
+   divider colour is the white wash the widget slot uses. Its radius is the
+   chip's 2px for the same reason as the main half. A caret is a glyph
+   alone, so it sits narrower than a verb's 1.4rem minimum: split-button.css
+   sets the inline padding (2px) and this keeps the verb's block height. */
+#daedalus-root .daedalus-ui-frame__chip .daedalus-ui-frame__verb--caret {
+  min-width: 1rem;
+  border-left-color: rgb(255, 255, 255, 0.4);
+  border-radius: 0 2px 2px 0;
 }
 
 .daedalus-ui-frame__icon {

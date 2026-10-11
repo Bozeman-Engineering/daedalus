@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Drupal\daedalus_blueprint\OperationHandler;
 
+use Drupal\daedalus_blueprint\Capability\Capability;
+use Drupal\daedalus_blueprint\Capability\Requirement;
 use Drupal\daedalus_blueprint\Dialect\PageLanguageOperationsInterface;
 use Drupal\daedalus_blueprint\Dialect\PageOnlyOperationsInterface;
 
@@ -12,7 +14,10 @@ use Drupal\daedalus_blueprint\Dialect\PageOnlyOperationsInterface;
  *
  * Populated by the service_collector compiler pass from services tagged
  * `daedalus_blueprint.operation_handler`. When two handlers claim the same
- * operation name, the higher-priority handler wins.
+ * operation name, the higher-priority handler wins. A handler that
+ * provides an operation without declaring what it requires
+ * (OperationHandlerInterface::getRequirements()) is refused: a default of
+ * "needs everything" would keep the code running and hide the contract.
  */
 class OperationHandlerRegistry {
 
@@ -39,8 +44,34 @@ class OperationHandlerRegistry {
    *   The operation handler service.
    * @param int $priority
    *   Handler priority. Higher values win operation name conflicts.
+   *
+   * @throws \LogicException
+   *   When the handler provides an operation its requirements declaration
+   *   does not cover, or declares something that is not a Requirement.
    */
   public function addHandler(OperationHandlerInterface $handler, int $priority = 0): void {
+    $declared = $handler->getRequirements();
+    foreach ($handler->getOperations() as $op) {
+      if (!array_key_exists($op, $declared) || !is_array($declared[$op])) {
+        throw new \LogicException(sprintf(
+          '%s provides the operation "%s" without declaring what it requires: getRequirements() must list every operation with the capabilities (%s) it asks of its targets, an empty list for an operation with nothing to judge.',
+          $handler::class,
+          $op,
+          implode(', ', Capability::names()),
+        ));
+      }
+      foreach ($declared[$op] as $requirement) {
+        if (!$requirement instanceof Requirement) {
+          throw new \LogicException(sprintf(
+            '%s declares a requirement of "%s" that is not a %s; declare the capability (%s) and the parameter naming its target through the Requirement shapes.',
+            $handler::class,
+            $op,
+            Requirement::class,
+            implode(', ', Capability::names()),
+          ));
+        }
+      }
+    }
     $this->handlers[] = [
       'priority' => $priority,
       'handler' => $handler,

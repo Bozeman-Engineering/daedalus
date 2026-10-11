@@ -17,16 +17,25 @@
 # whole site restyles by changing the values above them and no default
 # has to be rewritten when the palette or the type ramp changes.
 #
-# Build a system off it: copy this module under a new name (the info
-# file, this skin and config/install's design system), rename the
-# system and the skin, re-value the tokens, keep the names the defaults
-# speak (or rename both sides), then decide the posture: stay open
-# while the look is being found, add a MODULE.page_builder.yml with
-# `stops:` curation and the package's own bindings (color, tracking)
-# as the look settles, and switch enforcement to guarded or strict once
-# every value on the site is a token. daedalus_stylish_guide_example is the
-# finished strict shape of exactly that. Skins are content: after
-# editing this file, `drush daedalus_stylish:sync daedalus_stylish_starter_skin` lands
+# Build a system off it on the canvas, never by re-valuing this file:
+# activate starter, then in Edit Mode's Materials place re-value the
+# tokens in the Palette (live on the page), describe them, mark the
+# ones the rows should not lead with `offered: false` (a token is a
+# record {value, description, offered}; a bare value here is the record
+# with the defaults; site-wide stop curation is the token's flag, never
+# a guide list), change a scope's defaults through "Edit skin..." on a
+# row the skin supplies, and mint variants, swatches, animations and
+# fonts as members. A tenant copies the skin as its own from the skin
+# card or extends this one in its site layer; a developer starts from a
+# unit of their own (the README walks both roads) and ships it with
+# `drush daedalus-blueprint:design-system:ship SYSTEM`. Then decide the
+# posture: stay open while the look is being found, add a
+# MODULE.page_builder.yml with the token contract, per-element `stops:`
+# curation and the package's own bindings (color, tracking) as the look
+# settles, and switch enforcement to guarded or strict once every value
+# on the site is a token. daedalus_stylish_guide_example is the finished
+# strict shape of exactly that. Skins are content: after editing this
+# file, `drush daedalus_stylish:sync daedalus_stylish_starter_skin` lands
 # the change on the site.
 starter:
   label: 'Starter'

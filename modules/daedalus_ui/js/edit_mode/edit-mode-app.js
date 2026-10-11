@@ -22,6 +22,7 @@ import { initDrag } from './drag/drag-controller';
 import { initSelectorDrag } from './drag/selector-drag';
 import { initKeyboardLift } from './drag/keyboard-lift';
 import { initPageElementsTree } from './components/page-elements/page-elements-tree';
+import { initSelectionReseat } from './components/page-elements/reseat';
 import { initTopBar } from './tool_manager/top-bar';
 import { initEditModePlugin } from './edit-mode-plugin';
 import { drainRegistrationQueue } from './registration';
@@ -61,6 +62,10 @@ const boot = () => {
   // After initDrag: the lift facade extends Drupal.Daedalus.Drag.
   initKeyboardLift();
   initPageElementsTree();
+  // The selection follows the rows on a view flip (reseat.js): installed
+  // after the tree, since it reads the projection index the tree's views
+  // compose, and before contrib, whose Markup mirror is a writer it hears.
+  initSelectionReseat();
   // The app's own verbs and plugins go through the same registries
   // contrib uses.
   registerRenameVerb();

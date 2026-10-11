@@ -71,11 +71,12 @@ class InstallTest extends KernelTestBase {
   public function testPageConfigInstalls(): void {
     $node_type = NodeType::load('page');
     $this->assertNotNull($node_type);
+    // The page builder is on for the bundle: one boolean, and the mode it
+    // opens new pages in.
     $daedalus_ui = $node_type->getThirdPartySettings('daedalus_ui');
+    $this->assertTrue($daedalus_ui['enabled']);
     $this->assertSame('edit', $daedalus_ui['initial_mode']);
-    $this->assertSame(['edit' => TRUE], $daedalus_ui['status']);
-    // Edit Mode keeps no per-bundle configuration (there are no tools).
-    $this->assertArrayNotHasKey('modes', $daedalus_ui);
+    $this->assertSame(['enabled', 'initial_mode'], array_keys($daedalus_ui));
     $this->assertSame(['footer', 'main'], $node_type->getThirdPartySetting('menu_ui', 'available_menus'));
     // Previewing happens in place through the page builder; core's preview
     // button is disabled so it cannot detour out of it.
@@ -88,13 +89,11 @@ class InstallTest extends KernelTestBase {
     $display = EntityViewDisplay::load('node.page.default');
     $this->assertNotNull($display);
     $this->assertTrue($display->getThirdPartySetting('layout_builder', 'enabled'));
-    $daedalus_layout = $display->getThirdPartySettings('daedalus_layout');
-    $this->assertSame([
-      'inline_block:image',
-      'inline_block:formatted_text',
-      'inline_block:text',
-      'inline_block:teaser',
-    ], array_keys($daedalus_layout['promoted_blocks']));
+    // Nothing is curated per display: a block type's favorite is its own
+    // setting (the three shipped block types carry it), so the display
+    // holds no daedalus_layout settings at all.
+    $this->assertSame([], $display->getThirdPartySettings('daedalus_layout'));
+    $this->assertNotContains('daedalus_layout', $display->getDependencies()['module'] ?? []);
   }
 
   /**

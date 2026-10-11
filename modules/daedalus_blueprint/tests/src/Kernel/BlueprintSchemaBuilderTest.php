@@ -348,15 +348,47 @@ class BlueprintSchemaBuilderTest extends BlueprintKernelTestBase {
 
     // Block type and layout anatomy inline into their catalog entries, the
     // managed-keys pattern.
-    $this->assertTrue($schema['layout_builder__layout']['available_block_types']['anatomy_block']['anatomy']['composed']);
+    $this->assertTrue($schema['layout']['available_block_types']['anatomy_block']['anatomy']['composed']);
     $onecol = array_values(array_filter(
-      $schema['layout_builder__layout']['available_layouts'],
+      $schema['layout']['available_layouts'],
       static fn (array $layout) => $layout['id'] === 'layout_onecol',
     ))[0];
     $this->assertSame('regions', $onecol['anatomy']['elements']['.layout__container']['contains']);
 
     // The bookkeeping key stays out of the schema.
     $this->assertArrayNotHasKey('cache_tags', $schema);
+  }
+
+  /**
+   * The bundle's placeable fields are available_fields, not block plugins.
+   *
+   * A field block node names the field (field_block_structure), so the
+   * schema lists the fields the display may place by name with their
+   * label and formatter configuration schema, and the bundle's own
+   * field_block derivatives leave available_block_plugins; other plugins
+   * stay.
+   */
+  public function testFieldBlocksAreAvailableFields(): void {
+    $this->enableLayoutBuilder();
+    \Drupal::cache()->deleteAll();
+    $schema = $this->container->get('daedalus_blueprint.schema_builder')->getSchema('entity_test', 'entity_test');
+
+    $structure = $schema['layout']['field_block_structure'];
+    $this->assertSame('Required: "block".', $structure['kind']);
+    $this->assertStringContainsString('available_fields', $structure['field']);
+    $this->assertStringContainsString('FIELD_NOT_ON_HOST', $structure['field']);
+    $this->assertStringContainsString('field_block_structure', $schema['layout']['plugin_block_structure']['plugin_id']);
+
+    $fields = $schema['layout']['available_fields'];
+    $this->assertArrayHasKey('name', $fields);
+    $this->assertArrayHasKey('field_subtitle', $fields);
+    $this->assertSame('Name', $fields['name']['label']);
+    $this->assertSame(['formatter'], array_keys($fields['name']['configuration']));
+    $this->assertSame(['type', 'label', 'settings', 'third_party_settings'], array_keys($fields['name']['configuration']['formatter']['properties']));
+
+    $plugins = $schema['layout']['available_block_plugins'];
+    $this->assertSame([], array_filter(array_keys($plugins), static fn (string $id): bool => str_starts_with($id, 'field_block:entity_test:entity_test:')), 'The bundle\'s field blocks are fields, not plugins.');
+    $this->assertArrayHasKey('system_powered_by_block', $plugins);
   }
 
   /**

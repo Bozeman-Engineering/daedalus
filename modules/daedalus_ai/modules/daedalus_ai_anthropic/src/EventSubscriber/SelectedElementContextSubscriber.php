@@ -16,16 +16,18 @@ use Symfony\Component\EventDispatcher\EventSubscriberInterface;
  *
  * Formats resolved elements as a numbered <system-reminder> ACTIVE SELECTION
  * block prepended to the last user message. Each element names the
- * styling target the user pointed at when it is a rule under the element
- * (one sentence of vocabulary: the rule, its style-map key, and that
- * styling acts on every match, so the AI writes at the rule rather than
- * on the element), what it wears (its style stack's worn variants by
- * label, at the target when one rides, each wearing with its origin:
+ * styling subject the user is looking at when it is a rule under the
+ * element (one sentence of vocabulary: the rule and its style-map key)
+ * and the write address when styling acts at a rule other than the
+ * subject's own (the rule, its owner, the element or an ancestor, and its
+ * style-map key, so the AI writes at the rule the user picked rather
+ * than on the element), what it wears (its style stack's worn variants by
+ * label, at the subject when one rides, each wearing with its origin:
  * applied here with its spelling, via a composition, or a fragment of
  * one; labels only, the values are explain_element_styles' answer) and
- * the stencil it was placed from (by id and label) so imprecise references
- * resolve against the materials and "update the stencil this came from"
- * needs no print read; per-turn facts, never on the prefix. What an
+ * the blueprint it was placed from (by id and label) so imprecise
+ * references resolve against the materials and "update the blueprint this
+ * came from" needs no print read; per-turn facts, never on the prefix. What an
  * element KIND is for is not
  * repeated here: the cached design system brief and the schema teach
  * elements once, and a selection block that restated it paid that teaching
@@ -74,11 +76,11 @@ class SelectedElementContextSubscriber implements EventSubscriberInterface {
     }
 
     $current_route = $context['current_route'] ?? NULL;
-    $entity = $current_route ? $this->routeEntityResolver->resolve($current_route) : NULL;
+    $host = $current_route ? $this->routeEntityResolver->resolve($current_route) : NULL;
 
     $resolved = $this->elementSelectionResolver->resolve(
       $context['selected_elements'],
-      $entity,
+      $host,
     );
 
     if (empty($resolved)) {
@@ -101,7 +103,7 @@ class SelectedElementContextSubscriber implements EventSubscriberInterface {
    *
    * @param \Drupal\ai_agents\PluginInterfaces\AiAgentInterface $agent
    *   The agent instance.
-   * @param array<int, array{description: string, target?: string, materials?: string, placed_from?: string}> $elements
+   * @param array<int, array{description: string, target?: string, address?: string, materials?: string, placed_from?: string}> $elements
    *   Resolved elements keyed by selection number.
    */
   protected function injectIntoLastUserMessage(AiAgentInterface $agent, array $elements): void {
@@ -114,7 +116,10 @@ class SelectedElementContextSubscriber implements EventSubscriberInterface {
     foreach ($elements as $number => $element) {
       $lines[] = '- Element ' . $number . ': ' . $element['description'];
       if (!empty($element['target'])) {
-        $lines[] = '  Styling target: ' . $element['target'] . '.';
+        $lines[] = '  Styling subject: ' . $element['target'] . '.';
+      }
+      if (!empty($element['address'])) {
+        $lines[] = '  Styling address: ' . $element['address'] . '.';
       }
       if (!empty($element['materials'])) {
         $lines[] = '  Wears: ' . $element['materials'];

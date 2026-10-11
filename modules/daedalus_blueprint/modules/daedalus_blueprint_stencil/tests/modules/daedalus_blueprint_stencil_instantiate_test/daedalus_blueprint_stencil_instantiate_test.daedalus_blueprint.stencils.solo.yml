@@ -1,9 +1,0 @@
-label: 'Solo'
-description: 'A single block-rooted stencil: block roots stay supported.'
-element:
-  kind: block
-  block_type: basic
-  styles:
-    '':
-      default:
-        margin: 1rem

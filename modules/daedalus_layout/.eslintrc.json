@@ -1,10 +1,19 @@
 {
   // Layered over core's .eslintrc.passing.json, which drupal.org's eslint job
-  // links into the directory above the project. The add panel and the verbs
-  // ship as browser-native ES modules (daedalus_layout.libraries.yml attaches them
-  // with type: module and no bundler), which is why each entry below exists.
+  // links into the directory above the project. The js tree is the Add
+  // panel app (js/src, preact JSX bundled by webpack into js/dist) plus the
+  // verbs and the classic scripts, which ship as browser-native ES modules
+  // (daedalus_layout.libraries.yml attaches them with type: module and no
+  // bundler). Each entry below exists because of one of them.
+  "parserOptions": {
+    // Core's parser stops at ES2020 and has no JSX; the app is JSX with
+    // logical assignment.
+    "ecmaVersion": 2022,
+    "ecmaFeatures": { "jsx": true }
+  },
   "rules": {
-    // A browser resolves a relative import only with its extension.
+    // A browser resolves a relative import only with its extension, and
+    // the node suites import js/src/model directly.
     "import/extensions": ["error", "ignorePackages", { "js": "always" }],
     // Modules export named bindings on purpose so an importer binds the
     // registration function under its own name beside the app it registers
@@ -13,7 +22,7 @@
   },
   "overrides": [
     {
-      "files": ["js/add-panel/add-panel.js"],
+      "files": ["js/src/insert-session.js"],
       "rules": {
         // The insert session is a small state machine whose arm, disarm and
         // anchor-advance steps call one another only from callbacks (drag

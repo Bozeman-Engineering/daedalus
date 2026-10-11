@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Drupal\daedalus_blueprint\Event;
 
-use Drupal\Core\Entity\FieldableEntityInterface;
+use Drupal\daedalus_blueprint\Host\HostInterface;
 use Drupal\layout_builder\SectionComponent;
 
 /**
@@ -30,8 +30,8 @@ class ElementDuplicatedEvent extends LifecycleEventBase {
   /**
    * Constructs a ElementDuplicatedEvent.
    *
-   * @param \Drupal\Core\Entity\FieldableEntityInterface $entity
-   *   The root entity the duplicate happened on.
+   * @param \Drupal\daedalus_blueprint\Host\HostInterface $host
+   *   The host the duplicate happened on.
    * @param \Drupal\layout_builder\SectionComponent|null $clone
    *   The inserted clone component, or NULL for a duplicated section (the
    *   section is the identity; its container wrapper is plumbing).
@@ -44,12 +44,12 @@ class ElementDuplicatedEvent extends LifecycleEventBase {
    *   block_content entities.
    */
   public function __construct(
-    FieldableEntityInterface $entity,
+    HostInterface $host,
     protected ?SectionComponent $clone,
     protected string $sourceUuid,
     protected array $uuidMap,
   ) {
-    parent::__construct($entity);
+    parent::__construct($host);
   }
 
   /**

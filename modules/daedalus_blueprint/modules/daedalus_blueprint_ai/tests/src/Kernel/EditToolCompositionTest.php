@@ -16,7 +16,7 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  * These tests prove the tool actually forwards the minted uuid to the spine,
  * so the guidance never advertises a parameter the tool would silently drop,
  * and that the collapse is total: the retired single-purpose mutation tools
- * (add/update/remove element, restructure_layout, reorder_field, the
+ * (add/update/remove element, reorder_field, the
  * batch_operations spelling, and config_ai's manage_plugin_collection) are
  * gone from the roster, not merely deprecated beside it.
  *
@@ -128,7 +128,7 @@ class EditToolCompositionTest extends BlueprintKernelTestBase {
     $reloaded = $this->entityTypeManager->getStorage('entity_test')
       ->loadUnchanged($this->entity->id());
     $adapter = $this->container->get('daedalus_blueprint.daedalus_layout_adapter');
-    $storage = $adapter->getSectionStorage($reloaded);
+    $storage = $this->container->get('daedalus_blueprint.host_resolver')->fromEntity($reloaded)->sectionStorage();
     $component = NULL;
     foreach ($storage->getSections() as $section) {
       foreach ($section->getComponents() as $candidate) {
@@ -156,7 +156,6 @@ class EditToolCompositionTest extends BlueprintKernelTestBase {
       'daedalus_blueprint:add_element',
       'daedalus_blueprint:update_element',
       'daedalus_blueprint:remove_element',
-      'daedalus_blueprint:restructure_layout',
       'daedalus_blueprint:reorder_field',
       'daedalus_blueprint:batch_operations',
       'daedalus_blueprint_config:manage_plugin_collection',

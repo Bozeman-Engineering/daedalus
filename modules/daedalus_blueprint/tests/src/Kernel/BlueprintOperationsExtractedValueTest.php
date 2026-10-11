@@ -228,7 +228,7 @@ class BlueprintOperationsExtractedValueTest extends BlueprintKernelTestBase {
       'field_description' => ['value' => '<p>Saved</p>', 'format' => 'plain_text'],
     ]);
 
-    $result = $this->operations->batchOperations($entity, [
+    $result = $this->operations->batchOperations($this->host($entity), [
       $this->rootOp($entity, [
         'field_description' => $this->extracted('entity_test', 'field_description', $this->text('<p>Extracted</p>')),
       ]),
@@ -242,7 +242,7 @@ class BlueprintOperationsExtractedValueTest extends BlueprintKernelTestBase {
     $this->assertSame([], $this->spyHandler->deserialized, 'An ExtractedValue never reaches the field handler.');
 
     // The grammar path through the same field goes through the handler.
-    $grammar = $this->operations->batchOperations($entity, [
+    $grammar = $this->operations->batchOperations($this->host($entity), [
       $this->rootOp($entity, ['field_description' => ['value' => '<p>Grammar</p>', 'format' => 'plain_text']]),
     ]);
     $this->assertTrue($grammar->isSuccess());
@@ -250,12 +250,12 @@ class BlueprintOperationsExtractedValueTest extends BlueprintKernelTestBase {
 
     // Persisting the result stages it: the saved row is untouched and the
     // tempstore copy carries the write.
-    $this->operations->batchOperations($entity, [
+    $this->operations->batchOperations($this->host($entity), [
       $this->rootOp($entity, [
         'field_description' => $this->extracted('entity_test', 'field_description', $this->text('<p>Staged</p>')),
       ]),
     ]);
-    $where = $this->container->get('daedalus_blueprint.storage_handler')->persist($entity);
+    $where = $this->container->get('daedalus_blueprint.storage_handler')->persist($this->host($entity));
     $this->assertSame('tempstore', $where);
     $storage = $this->entityTypeManager->getStorage('entity_test');
     $saved = $storage->loadUnchanged($entity->id());
@@ -270,7 +270,7 @@ class BlueprintOperationsExtractedValueTest extends BlueprintKernelTestBase {
   public function testBlockSubject(): void {
     $entity = $this->createBlockFixture();
 
-    $result = $this->operations->batchOperations($entity, [
+    $result = $this->operations->batchOperations($this->host($entity), [
       [
         'op' => 'update_element',
         'element' => self::BLOCK_UUID,
@@ -307,14 +307,14 @@ class BlueprintOperationsExtractedValueTest extends BlueprintKernelTestBase {
   public function testFormOnlyFieldWritten(): void {
     $entity = $this->createTestEntity(['field_subtitle' => 'Sub']);
 
-    $blueprint = $this->operations->getBlueprint($entity);
+    $blueprint = $this->operations->getBlueprint($this->host($entity));
     $this->assertTrue(FormOnlyStub::isStub($blueprint['fields']['field_email']), 'The empty email field is a form-only stub in the FULL blueprint.');
     $this->assertTrue(FormOnlyStub::isStub($blueprint['fields']['field_description']));
 
     $extracted = $this->extracted('entity_test', 'field_email', 'tim@example.com');
     $this->assertFalse(FormOnlyStub::isStub($extracted));
 
-    $result = $this->operations->batchOperations($entity, [
+    $result = $this->operations->batchOperations($this->host($entity), [
       $this->rootOp($entity, [
         'field_email' => $extracted,
         'field_description' => $blueprint['fields']['field_description'],
@@ -343,19 +343,19 @@ class BlueprintOperationsExtractedValueTest extends BlueprintKernelTestBase {
     $field = ['uuid' => $entity->uuid(), 'field_name' => 'field_subtitle'];
     $presence = ['uuid' => $entity->uuid(), 'field_name' => TargetType::PRESENCE];
 
-    $filled = $this->operations->batchOperations($entity, [
+    $filled = $this->operations->batchOperations($this->host($entity), [
       $this->rootOp($entity, ['field_subtitle' => $this->extracted('entity_test', 'field_subtitle', 'Filled')]),
     ]);
     $this->assertTrue($filled->isSuccess(), print_r($filled->toArray(), TRUE));
     $this->assertSame([$field, $presence], $filled->getTargets(), 'Filling an empty field targets its presence.');
 
-    $changed = $this->operations->batchOperations($entity, [
+    $changed = $this->operations->batchOperations($this->host($entity), [
       $this->rootOp($entity, ['field_subtitle' => 'Changed']),
     ]);
     $this->assertTrue($changed->isSuccess(), print_r($changed->toArray(), TRUE));
     $this->assertSame([$field], $changed->getTargets(), 'A write between two values targets the field alone.');
 
-    $emptied = $this->operations->batchOperations($entity, [
+    $emptied = $this->operations->batchOperations($this->host($entity), [
       $this->rootOp($entity, ['field_subtitle' => NULL]),
     ]);
     $this->assertTrue($emptied->isSuccess(), print_r($emptied->toArray(), TRUE));
@@ -375,14 +375,14 @@ class BlueprintOperationsExtractedValueTest extends BlueprintKernelTestBase {
 
     // The grammar's PATCH-omit semantics: a non-processable key is left
     // alone, silently.
-    $grammar = $this->operations->batchOperations($entity, [
+    $grammar = $this->operations->batchOperations($this->host($entity), [
       $this->rootOp($entity, ['created' => 1700000000]),
     ]);
     $this->assertTrue($grammar->isSuccess());
     $this->assertSame(1600000000, (int) $entity->get('created')->value);
     $this->assertSame([], $this->appliedEvents, 'A dropped grammar value applies nothing.');
 
-    $result = $this->operations->batchOperations($entity, [
+    $result = $this->operations->batchOperations($this->host($entity), [
       $this->rootOp($entity, ['created' => $this->extracted('entity_test', 'created', 1700000000)]),
     ]);
     $this->assertTrue($result->isSuccess(), print_r($result->toArray(), TRUE));
@@ -402,7 +402,7 @@ class BlueprintOperationsExtractedValueTest extends BlueprintKernelTestBase {
     \Drupal::state()->set('views_field_access_test-field', 'field_description');
     $this->setUpCurrentUser([], ['administer entity_test content']);
 
-    $result = $this->operations->batchOperations($entity, [
+    $result = $this->operations->batchOperations($this->host($entity), [
       $this->rootOp($entity, [
         'field_description' => $this->extracted('entity_test', 'field_description', $this->text('<p>Blocked</p>')),
       ]),
@@ -424,7 +424,7 @@ class BlueprintOperationsExtractedValueTest extends BlueprintKernelTestBase {
   public function testConstraintViolation(): void {
     $entity = $this->createTestEntity(['field_subtitle' => 'Short']);
 
-    $result = $this->operations->batchOperations($entity, [
+    $result = $this->operations->batchOperations($this->host($entity), [
       $this->rootOp($entity, [
         'field_subtitle' => $this->extracted('entity_test', 'field_subtitle', str_repeat('x', 300)),
       ]),
@@ -450,7 +450,7 @@ class BlueprintOperationsExtractedValueTest extends BlueprintKernelTestBase {
       'field_subtitle' => 'Sub',
     ]);
 
-    $result = $this->operations->batchOperations($entity, [
+    $result = $this->operations->batchOperations($this->host($entity), [
       $this->rootOp($entity, [
         'field_description' => $this->extracted('entity_test', 'field_description', $this->text('<p>Extracted</p>')),
         'field_subtitle' => 'Grammar',
@@ -479,7 +479,7 @@ class BlueprintOperationsExtractedValueTest extends BlueprintKernelTestBase {
         }
       },
     );
-    $rewritten = $this->operations->batchOperations($entity, [
+    $rewritten = $this->operations->batchOperations($this->host($entity), [
       $this->rootOp($entity, ['field_subtitle' => 'Fine on its own']),
     ]);
     $this->assertFalse($rewritten->isSuccess());
@@ -504,7 +504,7 @@ class BlueprintOperationsExtractedValueTest extends BlueprintKernelTestBase {
     $entity->save();
 
     // A grammar value on the named translation.
-    $result = $this->operations->batchOperations($entity, [
+    $result = $this->operations->batchOperations($this->host($entity), [
       $this->rootOp($entity, ['field_body' => ['value' => '<p>Actualizado</p>', 'format' => 'plain_text']]),
     ], ['langcode' => 'es']);
     $this->assertTrue($result->isSuccess(), print_r($result->toArray(), TRUE));
@@ -515,7 +515,7 @@ class BlueprintOperationsExtractedValueTest extends BlueprintKernelTestBase {
 
     // An ExtractedValue on the named translation.
     $source = $storage->create(['field_body' => ['value' => '<p>Extraído</p>', 'format' => 'plain_text']]);
-    $result = $this->operations->batchOperations($entity, [
+    $result = $this->operations->batchOperations($this->host($entity), [
       $this->rootOp($entity, ['field_body' => new ExtractedValue($source->get('field_body'))]),
     ], ['langcode' => 'es']);
     $this->assertTrue($result->isSuccess(), print_r($result->toArray(), TRUE));
@@ -523,7 +523,7 @@ class BlueprintOperationsExtractedValueTest extends BlueprintKernelTestBase {
     $this->assertSame('<p>English</p>', $entity->get('field_body')->value);
 
     // No langcode: the object as handed in, here the default translation.
-    $result = $this->operations->batchOperations($entity, [
+    $result = $this->operations->batchOperations($this->host($entity), [
       $this->rootOp($entity, ['field_body' => ['value' => '<p>Updated</p>', 'format' => 'plain_text']]),
     ]);
     $this->assertTrue($result->isSuccess());
@@ -531,7 +531,7 @@ class BlueprintOperationsExtractedValueTest extends BlueprintKernelTestBase {
     $this->assertSame('<p>Extraído</p>', $entity->getTranslation('es')->get('field_body')->value);
 
     // Rollback restores the named translation.
-    $failed = $this->operations->batchOperations($entity, [
+    $failed = $this->operations->batchOperations($this->host($entity), [
       $this->rootOp($entity, ['field_body' => ['value' => '<p>Doomed</p>', 'format' => 'plain_text']]),
       $this->missingElementOp('field_body'),
     ], ['langcode' => 'es']);
@@ -552,7 +552,7 @@ class BlueprintOperationsExtractedValueTest extends BlueprintKernelTestBase {
       'field_description' => ['value' => '<p>Saved</p>', 'format' => 'plain_text'],
     ]);
 
-    $result = $this->operations->batchOperations($entity, [
+    $result = $this->operations->batchOperations($this->host($entity), [
       $this->missingElementOp('field_subtitle'),
       $this->rootOp($entity, [
         'field_description' => $this->extracted('entity_test', 'field_description', $this->text('<p>Extracted</p>')),

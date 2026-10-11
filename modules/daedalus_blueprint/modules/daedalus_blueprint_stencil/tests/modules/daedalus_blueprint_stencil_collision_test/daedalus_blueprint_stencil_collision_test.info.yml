@@ -1,8 +1,0 @@
-name: Daedalus Blueprint Stencil Collision Test
-type: module
-description: Ships a stencil ID that collides with daedalus_blueprint_stencil_test for kernel tests.
-package: Testing
-core_version_requirement: ^10.3 || ^11
-hidden: true
-dependencies:
-  - daedalus:daedalus_blueprint_stencil

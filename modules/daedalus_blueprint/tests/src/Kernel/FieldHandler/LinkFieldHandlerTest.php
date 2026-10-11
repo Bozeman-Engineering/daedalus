@@ -448,7 +448,7 @@ class LinkFieldHandlerTest extends BlueprintKernelTestBase {
       ],
     ]);
 
-    $blueprint = $this->container->get('daedalus_blueprint.serializer')->serialize($entity);
+    $blueprint = $this->container->get('daedalus_blueprint.serializer')->serialize($this->host($entity));
     $this->assertArrayHasKey('_displayable', $blueprint['fields']['field_link']);
     $this->assertArrayHasKey('_displayable', $blueprint['fields']['field_links'][0]);
 

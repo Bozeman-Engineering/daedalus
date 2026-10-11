@@ -9,12 +9,6 @@ daedalus_ui.settings:
         type: string
         label: 'Color'
 
-node.type.*.third_party.daedalus_ui:
-  type: daedalus_ui.bundle.options
-  label: 'Daedalus UI Mode plugin configuration'
-block_content.type.*.third_party.daedalus_ui:
-  type: daedalus_ui.bundle.options
-  label: 'Daedalus UI Mode plugin configuration'
 field.field.*.*.*.third_party.daedalus_ui:
   type: mapping
   label: 'Daedalus UI field presentation'
@@ -22,38 +16,41 @@ field.field.*.*.*.third_party.daedalus_ui:
     presentation:
       type: string
       label: 'Presentation (unit / open) — overrides the field-type default'
+
+# The per-bundle page builder settings, one mapping for every bundle config
+# type. Core names a third-party section per bundle config type
+# (`{config prefix}.*.third_party.{module}`) and forbids adding names from
+# hook_config_schema_info_alter(), so the bundle config types of core's
+# page-capable content entity types are each named here; a bundle config
+# type from another module declares the same one-line type for its own
+# prefix. BundleEditFormAlter::hasSettingsSchema() is the one probe of
+# whether a bundle config type carries the settings.
 daedalus_ui.bundle.options:
   type: mapping
-  label: 'Daedalus UI Options'
+  label: 'Daedalus UI bundle options'
   mapping:
+    enabled:
+      type: boolean
+      label: 'The page builder is on for this bundle'
     initial_mode:
       type: string
       label: 'Initial mode'
     presentation:
       type: string
       label: 'Presentation (auto / unit / open / merged) — how the page builder presents blocks of this type'
-    status:
-      type: sequence
-      label: 'Enabled modes'
-      orderby: key
-      sequence:
-        type: boolean
-        label: 'Mode status'
-    modes:
-      type: sequence
-      label: 'Mode configurations'
-      orderby: key
-      sequence:
-        type: daedalus_ui.mode.[%key]
-        label: 'Mode configuration'
-daedalus_ui.mode.plugin:
-  type: mapping
-  label: 'Mode'
-  mapping:
-    id:
-      type: string
-      label: 'ID'
-      constraints:
-        PluginExists:
-          manager: plugin.manager.modes
-          interface: '\Drupal\daedalus_ui\ModeInterface'
+
+node.type.*.third_party.daedalus_ui:
+  type: daedalus_ui.bundle.options
+  label: 'Daedalus UI bundle options'
+block_content.type.*.third_party.daedalus_ui:
+  type: daedalus_ui.bundle.options
+  label: 'Daedalus UI bundle options'
+media.type.*.third_party.daedalus_ui:
+  type: daedalus_ui.bundle.options
+  label: 'Daedalus UI bundle options'
+taxonomy.vocabulary.*.third_party.daedalus_ui:
+  type: daedalus_ui.bundle.options
+  label: 'Daedalus UI bundle options'
+comment.type.*.third_party.daedalus_ui:
+  type: daedalus_ui.bundle.options
+  label: 'Daedalus UI bundle options'

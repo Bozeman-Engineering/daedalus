@@ -1,0 +1,7 @@
+label: 'Bare block'
+description: 'A block node as a layout root, which the envelope refuses: roots are always containers.'
+scope: block
+subject: 'entity_test:entity_test'
+layout:
+  - kind: block
+    block_type: text

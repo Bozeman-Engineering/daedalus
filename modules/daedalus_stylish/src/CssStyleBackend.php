@@ -4,8 +4,9 @@ declare(strict_types=1);
 
 namespace Drupal\daedalus_stylish;
 
-use Drupal\Core\Entity\FieldableEntityInterface;
 use Drupal\Core\Render\Markup;
+use Drupal\daedalus_blueprint\Host\HostInterface;
+use Drupal\daedalus_blueprint\NodeTree\NodeTreeBuilder;
 use Drupal\daedalus_ui\ModeState;
 
 /**
@@ -26,13 +27,31 @@ class CssStyleBackend implements StyleBackendInterface {
     protected ConditionTypePluginManager $conditionTypes,
     protected VariantStylesheet $variantStylesheet,
     protected MediaValueResolver $mediaValueResolver,
+    protected NodeTreeBuilder $treeBuilder,
     protected ?ModeState $modeState = NULL,
   ) {}
 
   /**
    * {@inheritdoc}
    */
-  public function build(FieldableEntityInterface $entity, array $map): array {
+  public function build(HostInterface $host, array $map): array {
+    // The map in its canonical order, the document's
+    // (NodeTreeBuilder::styleMapOf()): node-less keys first, then the
+    // host's nodes in document order. Storage keeps write order and this
+    // is the one place delivery reads the map, so every lane below prints
+    // the canonical order and the tag matches the client's preview byte
+    // for byte (the client derives the same order from the mirror's tree,
+    // styleMapOf in style-guide.js).
+    // Delivery reads the document a host renders and never authors one.
+    // A content host seeds an empty override from the display's template
+    // on the first read of either document door, in memory, for the next
+    // save to persist (the authoring posture), so the host handed here is
+    // a RENDER-ONLY host (RenderStyles::hosts(): over a disposable clone
+    // of a never-edited page's entity) and this read may seed it freely:
+    // the ordering then walks the seeded document, the tag carries the
+    // derived container and block keys the edit canvas renders a fresh
+    // page under on arrival, and the request's entity stays as loaded.
+    $map = $this->treeBuilder->orderedStyleMap($host, $map);
     // The enforcement posture, and the active design system whose members
     // the variant references below resolve against (the roster is
     // partitioned on it).
@@ -43,7 +62,7 @@ class CssStyleBackend implements StyleBackendInterface {
     // delete invalidates this entity's render cache entry. The variant
     // paths below resolve their own styles the same way inside
     // VariantStylesheet::printVariant().
-    $css = $this->printer->printMap($this->mediaValueResolver->resolveMap($map, $tags, $entity));
+    $css = $this->printer->printMap($this->mediaValueResolver->resolveMap($map, $tags, $host));
     // Variant references resolve per mode. EDIT mode treats a variant as a
     // preset: its styles print inline here, rooted at the referencing key's
     // data-selectable attribute — class stamping never reaches the canvas
@@ -87,9 +106,9 @@ class CssStyleBackend implements StyleBackendInterface {
     return [
       '#type' => 'html_tag',
       '#tag' => 'style',
-      // Identifies the authoritative tag per entity for the client (preview
+      // Identifies the authoritative tag per host for the client (preview
       // reconciliation, debugging).
-      '#attributes' => ['data-daedalus-stylish-entity' => $entity->uuid()],
+      '#attributes' => ['data-daedalus-stylish-entity' => $host->uuid()],
       // The printer is the emit gate — it enforces the validator's hygiene
       // and drops anything unsafe. Xss::filterAdmin would mangle CSS text.
       '#value' => Markup::create("\n" . $css . "\n"),

@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Drupal\Tests\daedalus_blueprint\Kernel\Access;
 
 use Drupal\daedalus_blueprint\FieldHandler\InlineEntityFieldHandler;
-use Drupal\daedalus_blueprint\LayoutBuilder\LayoutDeserializer;
+use Drupal\daedalus_blueprint\BlueprintDeserializerInterface;
 use Drupal\Tests\daedalus\Kernel\BlueprintKernelTestBase;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
@@ -33,11 +33,9 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 class BlueprintWriteAccessTest extends BlueprintKernelTestBase {
 
   /**
-   * The layout deserializer.
-   *
-   * @var \Drupal\daedalus_blueprint\LayoutBuilder\LayoutDeserializer
+   * The blueprint deserializer.
    */
-  protected LayoutDeserializer $layoutDeserializer;
+  protected BlueprintDeserializerInterface $deserializer;
 
   /**
    * {@inheritdoc}
@@ -48,11 +46,14 @@ class BlueprintWriteAccessTest extends BlueprintKernelTestBase {
     // Layout Builder with an inline block type carrying a restrictable field.
     // entity_reference_revisions is enabled per-method (it is optional and
     // absent in some builds), so it must not gate the whole class here.
+    // The whole-layout write anchors a container's children on its
+    // identity, which is daedalus_layout's.
     $this->enableLayoutBuilder();
+    $this->enableModules(['daedalus_ui', 'daedalus_tempstore', 'daedalus_blueprint_api', 'daedalus_layout']);
     $this->createBlockContentType('card', 'Card');
     $this->createBlockField('field_heading', 'string', 'card', ['max_length' => 255]);
 
-    $this->layoutDeserializer = $this->container->get('daedalus_blueprint.layout_deserializer');
+    $this->deserializer = $this->container->get('daedalus_blueprint.deserializer');
   }
 
   /**
@@ -145,19 +146,22 @@ class BlueprintWriteAccessTest extends BlueprintKernelTestBase {
   public function testInlineBlockFieldEditDenied(): void {
     \Drupal::state()->set('views_field_access_test-field', 'field_heading');
 
-    $this->setUpCurrentUser([], ['administer entity_test content']);
+    // The actor may write the page and place blocks (the root and per-op
+    // gates), lacking only the field's own permission.
+    $this->setUpCurrentUser([], [
+      'administer entity_test content',
+      'configure any layout',
+      'create and edit custom blocks',
+    ]);
 
-    $entity = $this->entityTypeManager->getStorage('entity_test')
-      ->create(['name' => 'host']);
+    $result = $this->deserializer->deserialize($this->cardBlueprint('Should be blocked'));
 
-    $result = $this->layoutDeserializer->deserialize($this->cardLayout('Should be blocked'), $entity);
-
-    $this->assertTrue($result->hasErrors());
+    $this->assertFalse($result->isSuccess());
     $errors = $result->getErrors();
     $this->assertCount(1, $errors);
     $this->assertSame('ACCESS_DENIED_FIELD', $errors[0]->getCode());
     $this->assertSame(
-      'layout_builder__layout[0].regions.content[0].block_fields.field_heading',
+      'layout[0].children[0].children[0].block_fields.field_heading',
       $errors[0]->getPath(),
     );
   }
@@ -168,15 +172,17 @@ class BlueprintWriteAccessTest extends BlueprintKernelTestBase {
   public function testInlineBlockFieldEditAllowed(): void {
     \Drupal::state()->set('views_field_access_test-field', 'field_heading');
 
-    $this->setUpCurrentUser([], ['view test entity field']);
+    $this->setUpCurrentUser([], [
+      'administer entity_test content',
+      'configure any layout',
+      'create and edit custom blocks',
+      'view test entity field',
+    ]);
 
-    $entity = $this->entityTypeManager->getStorage('entity_test')
-      ->create(['name' => 'host']);
+    $result = $this->deserializer->deserialize($this->cardBlueprint('Allowed'));
 
-    $result = $this->layoutDeserializer->deserialize($this->cardLayout('Allowed'), $entity);
-
-    $this->assertFalse($result->hasErrors());
-    $sections = $entity->get('layout_builder__layout')->getSections();
+    $this->assertTrue($result->isSuccess(), print_r(array_map(fn ($e) => $e->toArray(), $result->getErrors()), TRUE));
+    $sections = $result->getEntity()->get('layout_builder__layout')->getSections();
     $block = $this->unserializeBlock($sections[0]->getComponent('faf95c53-35e7-74e1-184e-041152031df4')->get('configuration')['block_serialized']);
     $this->assertSame('Allowed', $block->get('field_heading')->value);
   }
@@ -199,7 +205,7 @@ class BlueprintWriteAccessTest extends BlueprintKernelTestBase {
       ->create(['name' => 'host']);
 
     $operations = $this->container->get('daedalus_blueprint.operations');
-    $result = $operations->updateFields($entity, ['field_subtitle' => 'Blocked']);
+    $result = $operations->updateFields($this->host($entity), ['field_subtitle' => 'Blocked']);
 
     $this->assertFalse($result->isSuccess());
     $errors = $result->getErrors();
@@ -221,33 +227,44 @@ class BlueprintWriteAccessTest extends BlueprintKernelTestBase {
       ->create(['name' => 'host']);
 
     $operations = $this->container->get('daedalus_blueprint.operations');
-    $result = $operations->updateFields($entity, ['field_subtitle' => 'Allowed']);
+    $result = $operations->updateFields($this->host($entity), ['field_subtitle' => 'Allowed']);
 
     $this->assertTrue($result->isSuccess());
     $this->assertSame('Allowed', $entity->get('field_subtitle')->value);
   }
 
   /**
-   * Builds a one-section layout with a single 'card' inline block.
+   * Builds a create blueprint whose one container holds a 'card' block.
    *
    * @param string $heading
    *   The field_heading value for the card.
    *
    * @return array
-   *   The layout sections array for LayoutDeserializer::deserialize().
+   *   The blueprint for the deserializer.
    */
-  protected function cardLayout(string $heading): array {
+  protected function cardBlueprint(string $heading): array {
     return [
-      [
-        'layout_id' => 'layout_onecol',
-        'regions' => [
-          'content' => [
+      'entity_type' => 'entity_test',
+      'bundle' => 'entity_test',
+      'fields' => ['name' => 'host'],
+      'layout' => [
+        [
+          'kind' => 'container',
+          'layout_id' => 'layout_onecol',
+          'children' => [
             [
-              'uuid' => 'faf95c53-35e7-74e1-184e-041152031df4',
-              'block_type' => 'card',
-              'label' => 'Card',
-              'view_mode' => 'full',
-              'block_fields' => ['field_heading' => $heading],
+              'kind' => 'region',
+              'region' => 'content',
+              'children' => [
+                [
+                  'kind' => 'block',
+                  'uuid' => 'faf95c53-35e7-74e1-184e-041152031df4',
+                  'block_type' => 'card',
+                  'label' => 'Card',
+                  'view_mode' => 'full',
+                  'block_fields' => ['field_heading' => $heading],
+                ],
+              ],
             ],
           ],
         ],

@@ -33,7 +33,7 @@ namespace Drupal\daedalus_blueprint\Materials;
  * scope (axis variants: the same attribute value on the container kind
  * and on the block kind are two slots, so a look name may repeat across
  * scopes and a consumer resolves against the scope the element's axis
- * view names); "stencil" holds a
+ * view names); "blueprint" holds a
  * placement name; "animation" holds one keyframes name (an
  * animation-name value, or one name component of the animation
  * shorthand once a property-aware consumer has split it) and resolves
@@ -76,7 +76,7 @@ final class ValueGrammar {
    * inline kind; any
    * other style value is a literal, even when references sit inside it
    * (references() lists those). A class token, an axis attribute value,
-   * a stencil name and an animation name resolve to the variant, stencil
+   * a blueprint name and an animation name resolve to the variant, blueprint
    * or animation spelled so, or Unknown: those slots hold references
    * only. An empty value is the empty literal in every slot.
    */
@@ -107,7 +107,7 @@ final class ValueGrammar {
    * url('media:…')" is checked reference by reference; a plain url()
    * (a path or an external URL) is no reference and is not listed. A class list yields
    * one reference per whitespace-separated token. An attribute value, a
-   * stencil name or an animation name yields its one reference. Literals
+   * blueprint name or an animation name yields its one reference. Literals
    * never appear here:
    * the list is what must resolve for the value to be legal.
    *
@@ -147,7 +147,7 @@ final class ValueGrammar {
    * everything else in the value, a plain url() included, stays
    * byte-identical. A class list
    * canonicalizes to its tokens joined by one space; an attribute value,
-   * a stencil name or an animation name to its trimmed self. Unknown
+   * a blueprint name or an animation name to its trimmed self. Unknown
    * references keep their
    * spelling: what a value IS is settled here, whether it is acceptable
    * is the consumer's rule.
@@ -216,8 +216,9 @@ final class ValueGrammar {
     return in_array($slot, [
       MaterialRecord::SLOT_STYLE,
       MaterialRecord::SLOT_CLASS,
-      MaterialRecord::SLOT_STENCIL,
+      MaterialRecord::SLOT_BLUEPRINT,
       MaterialRecord::SLOT_ANIMATION,
+      MaterialRecord::SLOT_FONT,
     ], TRUE)
       || MaterialRecord::slotAttribute($slot) !== NULL;
   }
@@ -266,7 +267,7 @@ final class ValueGrammar {
    */
   private static function assertSlot(string $slot): void {
     if (!self::isSlot($slot)) {
-      throw new \InvalidArgumentException(sprintf('Unknown value slot "%s"; one of %s, %s, %s, %s or %s{scope}:{name}.', $slot, MaterialRecord::SLOT_STYLE, MaterialRecord::SLOT_CLASS, MaterialRecord::SLOT_STENCIL, MaterialRecord::SLOT_ANIMATION, MaterialRecord::SLOT_ATTR_PREFIX));
+      throw new \InvalidArgumentException(sprintf('Unknown value slot "%s"; one of %s, %s, %s, %s, %s or %s{scope}:{name}.', $slot, MaterialRecord::SLOT_STYLE, MaterialRecord::SLOT_CLASS, MaterialRecord::SLOT_BLUEPRINT, MaterialRecord::SLOT_ANIMATION, MaterialRecord::SLOT_FONT, MaterialRecord::SLOT_ATTR_PREFIX));
     }
   }
 

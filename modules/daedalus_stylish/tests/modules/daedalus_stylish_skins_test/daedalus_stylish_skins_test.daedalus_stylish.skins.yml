@@ -3,7 +3,9 @@
 # the defaults against its base: vocabulary. The defaults deliberately
 # reference a token THIS skin mints (var(--text-hero)): a shipped skin is
 # self-contained, so strict sites validate its defaults against its own
-# tokens, not the active skin's.
+# tokens, not the active skin's. A token is stored as a record {value,
+# description, offered}; a hand-authored file may spell the bare value
+# (gutter, accent) or the record (hero), and the importer canonicalizes.
 aurora:
   label: 'Aurora'
   tokens:
@@ -16,7 +18,9 @@ aurora:
         default: '#111111'
         dark: '#eeeeee'
     text:
-      hero: '3rem'
+      hero:
+        value: '3rem'
+        description: 'The hero size the h2 default speaks.'
   defaults:
     'base:h2':
       '':

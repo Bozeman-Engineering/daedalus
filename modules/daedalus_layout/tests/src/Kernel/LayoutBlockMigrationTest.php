@@ -30,6 +30,8 @@ use Drupal\Tests\daedalus\Kernel\NestedStorageKernelTestBase;
 #[RunTestsInSeparateProcesses]
 class LayoutBlockMigrationTest extends NestedStorageKernelTestBase {
 
+  use LegacyLayoutBlockFixtureTrait;
+
   /**
    * {@inheritdoc}
    */
@@ -55,6 +57,8 @@ class LayoutBlockMigrationTest extends NestedStorageKernelTestBase {
    */
   protected function setUp(): void {
     parent::setUp();
+    // The pre-migration shape: the retired layout_block bundle.
+    $this->createLayoutBlockType();
     $this->installConfig(['daedalus_stylish']);
     $this->container->get('daedalus_stylish.field_manager')->enable('entity_test', 'entity_test');
   }
@@ -454,14 +458,10 @@ class LayoutBlockMigrationTest extends NestedStorageKernelTestBase {
   }
 
   /**
-   * The retirement post update strips Add panel references and the bundle.
+   * The retirement post update strips the icon entry and the bundle.
    */
   public function testRemoveLayoutBlockModulePostUpdate(): void {
     $display = $this->entityTypeManager->getStorage('entity_view_display')->load('entity_test.entity_test.default');
-    $display->setThirdPartySetting('daedalus_layout', 'promoted_blocks', [
-      'inline_block:layout_block' => 'inline_block:layout_block',
-      'inline_block:basic' => 'inline_block:basic',
-    ]);
     $display->setThirdPartySetting('daedalus_layout', 'block_config', [
       'icon' => [
         'inline_block:layout_block' => '/modules/contrib/daedalus/modules/daedalus_layout/assets/layout.svg',
@@ -474,10 +474,6 @@ class LayoutBlockMigrationTest extends NestedStorageKernelTestBase {
     daedalus_layout_post_update_0004_remove_daedalus_edit_layout_block();
 
     $display = $this->entityTypeManager->getStorage('entity_view_display')->loadUnchanged('entity_test.entity_test.default');
-    $this->assertSame(
-      ['inline_block:basic' => 'inline_block:basic'],
-      $display->getThirdPartySetting('daedalus_layout', 'promoted_blocks'),
-    );
     $this->assertSame(
       ['icon' => ['inline_block:basic' => '/modules/contrib/daedalus/modules/daedalus_layout/assets/image.svg']],
       $display->getThirdPartySetting('daedalus_layout', 'block_config'),
@@ -510,9 +506,6 @@ class LayoutBlockMigrationTest extends NestedStorageKernelTestBase {
 
     $display_storage = $this->entityTypeManager->getStorage('entity_view_display');
     $display = $display_storage->load('entity_test.entity_test.default');
-    $display->setThirdPartySetting('daedalus_layout', 'promoted_blocks', [
-      'inline_block:basic' => 'inline_block:basic',
-    ]);
     $display->setThirdPartySetting('daedalus_layout', 'block_config', [
       'icon' => [
         'inline_block:basic' => '/modules/contrib/daedalus/modules/daedalus_layout/assets/image.svg',
@@ -533,7 +526,6 @@ class LayoutBlockMigrationTest extends NestedStorageKernelTestBase {
 
     $display = $display_storage->loadUnchanged('entity_test.entity_test.default');
     $this->assertNull($display->getThirdPartySetting('daedalus_layout', 'block_config'), 'The retired block_config setting left the display.');
-    $this->assertSame(['inline_block:basic' => 'inline_block:basic'], $display->getThirdPartySetting('daedalus_layout', 'promoted_blocks'), 'Promoted blocks stay per-display config.');
   }
 
 }

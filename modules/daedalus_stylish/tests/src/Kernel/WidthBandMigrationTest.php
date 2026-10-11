@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Drupal\Tests\daedalus_stylish\Kernel;
 
-use Drupal\daedalus_blueprint_stencil\Entity\Stencil;
 use Drupal\entity_test\Entity\EntityTest;
 use Drupal\layout_builder\Plugin\SectionStorage\OverridesSectionStorage;
 use Drupal\daedalus_stylish\Entity\DaedalusStylishSkin;
@@ -24,7 +23,7 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  * medium compound so that band keeps rendering as before. Covered stores:
  * host style maps via daedalus_layout's transform spine, daedalus_variant styles
  * across revisions, daedalus_skin tokens and defaults across revisions
- * (never covered by the container migration), and stored stencils.
+ * (never covered by the container migration).
  *
  * @group daedalus_stylish
  */
@@ -37,12 +36,9 @@ class WidthBandMigrationTest extends NestedStorageKernelTestBase {
    */
   protected static $modules = [
     'daedalus_stylish',
-    // The stencil entity's icon field references media, so installing the
-    // stencil schema needs the media entity type (and its field types).
     'file',
     'image',
     'media',
-    'daedalus_blueprint_stencil',
   ];
 
   /**
@@ -56,7 +52,7 @@ class WidthBandMigrationTest extends NestedStorageKernelTestBase {
     // every build, and every compile and validation builds it.
     $this->installEntitySchema('daedalus_swatch');
     $this->installEntitySchema('daedalus_animation');
-    $this->installEntitySchema('stencil');
+    $this->installEntitySchema('daedalus_font');
     $this->installSchema('daedalus_stylish', ['daedalus_variant_usage']);
     $this->installConfig(['daedalus_stylish']);
     $this->container->get('daedalus_stylish.field_manager')->enable('entity_test', 'entity_test');
@@ -248,13 +244,13 @@ class WidthBandMigrationTest extends NestedStorageKernelTestBase {
    */
   public function testSkinTokensAndDefaultsFold(): void {
     $skin = DaedalusStylishSkin::create(['label' => 'Aurora']);
-    $skin->setTokens([
+    $skin->setPackageTokens([
       'color' => [
         'accent' => ['default' => '#101', 'wide' => '#202', 'dark' => '#404', 'wide+dark' => '#303'],
         'plain' => '#000',
       ],
     ]);
-    $skin->setDefaults([
+    $skin->setPackageDefaults([
       'kind:container' => [
         '' => ['default' => ['max-width' => '60rem'], 'wide' => ['max-width' => '80rem']],
       ],
@@ -262,7 +258,7 @@ class WidthBandMigrationTest extends NestedStorageKernelTestBase {
     $skin->save();
     $first_revision_id = $skin->getRevisionId();
 
-    $skin->setTokens([
+    $skin->setPackageTokens([
       'color' => ['accent' => ['default' => '#111', 'wide' => '#222']],
     ]);
     $skin->setNewRevision(TRUE);
@@ -276,63 +272,28 @@ class WidthBandMigrationTest extends NestedStorageKernelTestBase {
     $old = $storage->loadRevision($first_revision_id);
     $this->assertSame([
       'color' => [
-        'accent' => ['default' => '#202', 'dark' => '#303', 'medium' => '#101', 'medium+dark' => '#404'],
-        'plain' => '#000',
+        'accent' => [
+          'value' => ['default' => '#202', 'dark' => '#303', 'medium' => '#101', 'medium+dark' => '#404'],
+          'description' => '',
+          'offered' => TRUE,
+        ],
+        'plain' => ['value' => '#000', 'description' => '', 'offered' => TRUE],
       ],
-    ], $old->getTokens());
+    ], $old->packageTokens());
     $this->assertSame([
       'kind:container' => [
         '' => ['default' => ['max-width' => '80rem'], 'medium' => ['max-width' => '60rem']],
       ],
-    ], $old->getDefaults());
+    ], $old->packageDefaults());
 
     /** @var \Drupal\daedalus_stylish\DaedalusStylishSkinInterface $current */
     $current = $storage->loadUnchanged($skin->id());
     $this->assertSame([
-      'color' => ['accent' => ['default' => '#222', 'medium' => '#111']],
-    ], $current->getTokens());
+      'color' => [
+        'accent' => ['value' => ['default' => '#222', 'medium' => '#111'], 'description' => '', 'offered' => TRUE],
+      ],
+    ], $current->packageTokens());
   }
 
-  /**
-   * Stored stencils fold recursively, entry order notwithstanding.
-   */
-  public function testStencilFold(): void {
-    $stencil = Stencil::create([
-      'label' => 'Legacy band',
-      'machine_name' => 'legacy_band',
-      'description' => 'Captured before the width-band fold.',
-      'status' => TRUE,
-    ]);
-    $stencil->setElement([
-      'layout_id' => 'daedalus_stylish_container',
-      'styles' => [
-        '' => ['default' => ['background-color' => 'aliceblue'], 'wide' => ['background-color' => 'white']],
-      ],
-      'regions' => [
-        'content' => [
-          [
-            'block_type' => 'text',
-            // Stored wide-first: the fold reads pre-fold values, so order
-            // cannot corrupt the spill.
-            'styles' => ['::.inner' => ['wide' => ['padding' => '2rem'], 'default' => ['padding' => '1rem']]],
-          ],
-        ],
-      ],
-    ]);
-    $stencil->save();
-
-    $lines = $this->container->get('daedalus_stylish.width_band_migration')->migrateStencils();
-    $this->assertNotEmpty($lines);
-    $storage = $this->entityTypeManager->getStorage('stencil');
-    $storage->resetCache();
-    $component = $storage->loadUnchanged($stencil->id())->getElement();
-
-    $this->assertSame([
-      '' => ['default' => ['background-color' => 'white'], 'medium' => ['background-color' => 'aliceblue']],
-    ], $component['styles']);
-    $this->assertSame([
-      '::.inner' => ['default' => ['padding' => '2rem'], 'medium' => ['padding' => '1rem']],
-    ], $component['regions']['content'][0]['styles']);
-  }
 
 }

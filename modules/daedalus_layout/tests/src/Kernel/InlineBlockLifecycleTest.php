@@ -8,7 +8,11 @@ use Drupal\block_content\BlockContentTypeInterface;
 use Drupal\block_content\Entity\BlockContent;
 use Drupal\block_content\Entity\BlockContentType;
 use Drupal\block_content\Event\BlockContentGetDependencyEvent;
+use Drupal\Core\Entity\EntityInterface;
+use Drupal\daedalus_blueprint\LayoutBuilder\InlineBlockValues;
 use Drupal\entity_test\Entity\EntityTest;
+use Drupal\entity_test\EntityTestHelper;
+use Drupal\layout_builder\Entity\LayoutBuilderEntityViewDisplay;
 use Drupal\layout_builder\InlineBlockEntityOperations as CoreInlineBlockEntityOperations;
 use Drupal\layout_builder\Section;
 use Drupal\layout_builder\SectionComponent;
@@ -27,8 +31,10 @@ use Drupal\Tests\daedalus\Kernel\NestedStorageKernelTestBase;
  * post-order presave saves (block_serialized -> block_revision_id at every
  * depth, propagated up into the stored root sections), usage rows pointing
  * at the ROOT host, on-save GC of removed nested blocks, host-delete plus
- * cron GC, access dependency resolution to the root host, and defaults
- * display dependency calculation/removal recursion.
+ * cron GC, access dependency resolution to the root host, defaults
+ * display dependency calculation/removal recursion, and the ownership
+ * rule: the presave saves what the host OWNS, so a host with no document
+ * of its own mints nothing of its template.
  *
  * This is the new-shape replacement for the old-model
  * testInlineBlockEntityOperationsIntegration coverage (nested inline blocks
@@ -120,6 +126,139 @@ class InlineBlockLifecycleTest extends NestedStorageKernelTestBase {
   }
 
   /**
+   * The usage row pointing at a host entity.
+   */
+  protected function usageRowForHost(EntityInterface $entity): object|false {
+    return \Drupal::database()->select('inline_block_usage', 'u')
+      ->fields('u')
+      ->condition('layout_entity_type', $entity->getEntityTypeId())
+      ->condition('layout_entity_id', $entity->id())
+      ->execute()
+      ->fetchObject();
+  }
+
+  /**
+   * An inline block component stored as values, a template's shape.
+   */
+  protected function valueBlockComponent(string $uuid, string $info): SectionComponent {
+    return new SectionComponent($uuid, 'content', [
+      'id' => 'inline_block:basic',
+      'label' => 'Basic block',
+      'label_display' => '0',
+      'view_mode' => 'full',
+      InlineBlockValues::KEY => ['info' => $info],
+    ]);
+  }
+
+  /**
+   * A component's configuration on the display as the request caches it.
+   *
+   * Read through the entity type manager, the same static-cached object
+   * core's render rule would have handed the presave: a walk of the
+   * template mutates these Section objects in memory for the rest of the
+   * request.
+   */
+  protected function cachedDisplayComponentConfiguration(string $display_id, string $component_uuid): array {
+    /** @var \Drupal\layout_builder\Entity\LayoutBuilderEntityViewDisplay $display */
+    $display = $this->entityTypeManager->getStorage('entity_view_display')->load($display_id);
+    foreach ($display->getSections() as $section) {
+      if (array_key_exists($component_uuid, $section->getComponents())) {
+        return $section->getComponent($component_uuid)->get('configuration');
+      }
+    }
+    $this->fail("The display $display_id holds no component $component_uuid.");
+  }
+
+  /**
+   * A save of a host that owns no document mints nothing of its template.
+   *
+   * The presave walks what the host OWNS, never what renders for it. A
+   * page following its template (an empty override on an overridable
+   * bundle), a plain host (a bundle whose display is not overridable) and a
+   * blank page (core's marker) each save, twice, with the template's value
+   * block left on the display: no block_content minted, no usage row at
+   * the page, the cached display's component still values. The page's
+   * first edit seeds its own document, and that save mints exactly one
+   * block, the page's own, with its usage row and its revision id in the
+   * stored override (the duplicate-on-first-document road).
+   */
+  public function testSaveOfTemplateFollowingHostMintsNothing(): void {
+    $block_storage = $this->entityTypeManager->getStorage('block_content');
+    $display_storage = $this->entityTypeManager->getStorage('entity_view_display');
+    $count = fn (): int => (int) $block_storage->getQuery()->accessCheck(FALSE)->count()->execute();
+
+    // The template: one section holding a value block.
+    $template_uuid = $this->uuid->generate();
+    /** @var \Drupal\layout_builder\Entity\LayoutBuilderEntityViewDisplay $display */
+    $display = $display_storage->load('entity_test.entity_test.default');
+    $display->appendSection($this->createSection('layout_onecol', [$this->valueBlockComponent($template_uuid, 'Template block')]));
+    $display->save();
+    $this->assertSame(0, $count(), 'The display stores its block as values: nothing minted.');
+
+    // A page following its template: an empty override, saved twice.
+    $entity = EntityTest::create(['name' => 'Follows the template']);
+    $entity->save();
+    $entity->save();
+    $this->assertSame(0, $count(), 'A template-following page mints nothing of the template.');
+    $this->assertFalse($this->usageRowForHost($entity), 'No usage row points at the template-following page.');
+    $configuration = $this->cachedDisplayComponentConfiguration('entity_test.entity_test.default', $template_uuid);
+    $this->assertSame('Template block', $configuration[InlineBlockValues::KEY]['info'], 'The cached display still carries its values.');
+    $this->assertArrayNotHasKey('block_revision_id', $configuration, 'The cached display names no block revision.');
+
+    // The first edit: the seed, then the save that lands it.
+    $seeded = $this->host($entity)->sectionStorage()->getSections();
+    $this->assertCount(1, $seeded, 'The first read of the document seeds it from the template.');
+    $entity->save();
+    $this->assertSame(1, $count(), 'The first edit saves exactly one block: the page\'s own.');
+    $row = $this->usageRowForHost($entity);
+    $this->assertNotFalse($row, 'The seeded page\'s block is used by the page.');
+    $stored = EntityTest::load($entity->id())->get(OverridesSectionStorage::FIELD_NAME)->getSections();
+    $this->assertCount(1, $stored);
+    $components = $stored[0]->getComponents();
+    $this->assertCount(1, $components);
+    $stored_configuration = reset($components)->get('configuration');
+    $this->assertNotEmpty($stored_configuration['block_revision_id'], 'The stored override carries the block\'s revision id.');
+    $this->assertArrayNotHasKey(InlineBlockValues::KEY, $stored_configuration, 'The page holds an entity, not values.');
+    $this->assertSame((string) $block_storage->loadRevision($stored_configuration['block_revision_id'])->id(), (string) $row->block_content_id, 'The usage row names the stored block.');
+    $configuration = $this->cachedDisplayComponentConfiguration('entity_test.entity_test.default', $template_uuid);
+    $this->assertArrayNotHasKey('block_revision_id', $configuration, 'The template is untouched by the page\'s first save.');
+
+    // A plain host: a bundle whose display is Layout Builder enabled and
+    // not overridable renders the template and owns nothing of its own
+    // inside it.
+    EntityTestHelper::createBundle('plain', 'Plain', 'entity_test');
+    $plain_uuid = $this->uuid->generate();
+    LayoutBuilderEntityViewDisplay::create([
+      'targetEntityType' => 'entity_test',
+      'bundle' => 'plain',
+      'mode' => 'default',
+      'status' => TRUE,
+    ])
+      ->enableLayoutBuilder()
+      ->appendSection($this->createSection('layout_onecol', [$this->valueBlockComponent($plain_uuid, 'Plain template block')]))
+      ->save();
+    $plain = EntityTest::create(['type' => 'plain', 'name' => 'Plain']);
+    $plain->save();
+    $plain->save();
+    $this->assertTrue($this->host($plain)->hasDocument(), 'A plain host owns a document (the override field is on every enabled bundle), empty here.');
+    $this->assertSame([], $this->host($plain)->ownSections(), 'A plain host is never seeded from its template.');
+    $this->assertSame(1, $count(), 'A plain host mints nothing of its template.');
+    $this->assertFalse($this->usageRowForHost($plain), 'No usage row points at the plain host.');
+    $configuration = $this->cachedDisplayComponentConfiguration('entity_test.plain.default', $plain_uuid);
+    $this->assertSame('Plain template block', $configuration[InlineBlockValues::KEY]['info'], 'The plain bundle\'s cached display still carries its values.');
+
+    // Blank: core's marker is an owned, empty document.
+    $blank = EntityTest::create([
+      'name' => 'Blank',
+      OverridesSectionStorage::FIELD_NAME => [new Section('layout_builder_blank')],
+    ]);
+    $blank->save();
+    $blank->save();
+    $this->assertSame(1, $count(), 'A blank page mints nothing.');
+    $this->assertFalse($this->usageRowForHost($blank), 'No usage row points at the blank page.');
+  }
+
+  /**
    * Presave saves nested inline blocks and propagates config to storage.
    */
   public function testPresaveWalkerSavesNestedInlineBlocks(): void {
@@ -198,29 +337,37 @@ class InlineBlockLifecycleTest extends NestedStorageKernelTestBase {
     $block_storage->resetCache();
     $this->assertNotNull($block_storage->load($deep_block_id), 'Content-entity hosts keep removed blocks on save (core parity); host delete plus cron cleans up.');
 
-    // Defaults display host: the on-save GC path runs and must see the
-    // removal at depth 2.
-    $display_ids = $this->buildDefaultsDisplay();
+    // Defaults display host: a display stores its inline blocks as values
+    // (a display is config; its export carries no content id), so a block
+    // it names by revision id (the shape before the display was a host) is
+    // converted at save, at depth 2, and the on-save GC path deletes the
+    // entity the display no longer names.
+    $saved_block = BlockContent::create([
+      'type' => 'basic',
+      'info' => 'Saved display block',
+      'reusable' => FALSE,
+    ]);
+    $saved_block->save();
+    // The pre-host shape lands through a syncing save (a config import),
+    // which neither the presave net nor the inline block machinery touches.
+    $display_ids = $this->buildDefaultsDisplay(['block_revision_id' => $saved_block->getRevisionId()], syncing: TRUE);
     /** @var \Drupal\daedalus_layout\Entity\LayoutBuilderEntityViewDisplay $display */
+    $display = $this->entityTypeManager->getStorage('entity_view_display')->loadUnchanged('entity_test.entity_test.default');
+    $this->assertStringContainsString('block_revision_id', serialize($display->toArray()), 'The syncing save kept the revision id verbatim.');
+    // An ordinary save converts.
+    $display->save();
     $display = $this->entityTypeManager->getStorage('entity_view_display')->loadUnchanged('entity_test.entity_test.default');
     $display_mid = $display->getSections()[0]->getComponent($display_ids['mid_container_uuid']);
     $display_mid_section = Section::fromArray($display_mid->get('configuration')[SectionBlock::SECTION_KEY]);
     $display_deep = $display_mid_section->getComponent($display_ids['deep_container_uuid']);
     $display_deep_section = Section::fromArray($display_deep->get('configuration')[SectionBlock::SECTION_KEY]);
-    $display_block_id = $block_storage->loadRevision($display_deep_section->getComponent($display_ids['inline_uuid'])->get('configuration')['block_revision_id'])->id();
-
-    $display_deep_section->removeComponent($display_ids['inline_uuid']);
-    $display_deep_configuration = $display_deep->get('configuration');
-    $display_deep_configuration[SectionBlock::SECTION_KEY] = $display_deep_section->toArray();
-    $display_deep->setConfiguration($display_deep_configuration);
-    $display_mid_configuration = $display_mid->get('configuration');
-    $display_mid_configuration[SectionBlock::SECTION_KEY] = $display_mid_section->toArray();
-    $display_mid->setConfiguration($display_mid_configuration);
-    $display->save();
+    $inline_configuration = $display_deep_section->getComponent($display_ids['inline_uuid'])->get('configuration');
+    $this->assertArrayNotHasKey('block_revision_id', $inline_configuration, 'The display names no block revision after its save.');
+    $this->assertSame('Saved display block', $inline_configuration[InlineBlockValues::KEY]['info'], 'The saved block became values at depth 2.');
 
     $block_storage->resetCache();
-    $this->assertNull($block_storage->load($display_block_id), 'The defaults display deleted the removed depth-2 inline block on save.');
-    $this->assertFalse($this->usageRow($display_block_id), 'Its usage row is gone.');
+    $this->assertNull($block_storage->load($saved_block->id()), 'The defaults display deleted the depth-2 inline block entity it no longer names.');
+    $this->assertFalse($this->usageRow($saved_block->id()), 'Its usage row is gone.');
   }
 
   /**
@@ -289,6 +436,13 @@ class InlineBlockLifecycleTest extends NestedStorageKernelTestBase {
    * plugin block and another container (depth 2) embedding a section with an
    * inline block.
    *
+   * @param array $block_configuration
+   *   The inline block's storage shape: block_serialized of a fresh block
+   *   by default, or a block_revision_id naming a saved one.
+   * @param bool $syncing
+   *   TRUE to save as a synchronization (a config import), which lands the
+   *   given shape verbatim: no presave net, no inline block machinery.
+   *
    * @return array{
    *   display: \Drupal\layout_builder\Entity\LayoutBuilderEntityViewDisplay,
    *   mid_container_uuid: string,
@@ -297,12 +451,15 @@ class InlineBlockLifecycleTest extends NestedStorageKernelTestBase {
    *   static_uuid: string,
    *   }
    */
-  protected function buildDefaultsDisplay(): array {
-    $block_content = BlockContent::create([
-      'type' => 'basic',
-      'info' => 'Defaults basic block',
-      'reusable' => FALSE,
-    ]);
+  protected function buildDefaultsDisplay(array $block_configuration = [], bool $syncing = FALSE): array {
+    if ($block_configuration === []) {
+      $block_content = BlockContent::create([
+        'type' => 'basic',
+        'info' => 'Defaults basic block',
+        'reusable' => FALSE,
+      ]);
+      $block_configuration = ['block_serialized' => serialize($block_content)];
+    }
     $inline_uuid = $this->uuid->generate();
     $inline = new SectionComponent($inline_uuid, 'content', [
       'id' => 'inline_block:basic',
@@ -311,8 +468,7 @@ class InlineBlockLifecycleTest extends NestedStorageKernelTestBase {
       // path, never a boolean.
       'label_display' => '0',
       'view_mode' => 'full',
-      'block_serialized' => serialize($block_content),
-    ]);
+    ] + $block_configuration);
 
     $deep_section = $this->createSection('layout_onecol', [$inline]);
     $deep_container = $this->createNestedSectionComponent($deep_section);
@@ -330,7 +486,8 @@ class InlineBlockLifecycleTest extends NestedStorageKernelTestBase {
     /** @var \Drupal\layout_builder\Entity\LayoutBuilderEntityViewDisplay $display */
     $display = $this->entityTypeManager->getStorage('entity_view_display')->load('entity_test.entity_test.default');
     $display->appendSection($this->createSection('layout_onecol', [$mid_container]));
-    $display->save();
+    $display->setSyncing($syncing)->save();
+    $display->setSyncing(FALSE);
 
     return [
       'display' => $display,
@@ -345,7 +502,9 @@ class InlineBlockLifecycleTest extends NestedStorageKernelTestBase {
    * Defaults display dependencies include nested component dependencies.
    *
    * Also exercises the presave walker on the DEFAULTS storage: saving the
-   * display persists the nested inline block.
+   * display stores the nested inline block as values (a display host's
+   * shape: the block's fields under block_values, no entity, no revision
+   * id), written back through both containers.
    */
   public function testDefaultsDisplayCalculateDependencies(): void {
     $ids = $this->buildDefaultsDisplay();
@@ -354,13 +513,16 @@ class InlineBlockLifecycleTest extends NestedStorageKernelTestBase {
     $display = $this->entityTypeManager->getStorage('entity_view_display')->loadUnchanged('entity_test.entity_test.default');
 
     // The walker ran for the defaults storage: the nested inline block was
-    // saved and its revision id written back through both containers.
+    // stored as values and the values written back through both containers.
     $mid_component = $display->getSections()[0]->getComponent($ids['mid_container_uuid']);
     $mid_section = Section::fromArray($mid_component->get('configuration')[SectionBlock::SECTION_KEY]);
     $deep_component = $mid_section->getComponent($ids['deep_container_uuid']);
     $deep_section = Section::fromArray($deep_component->get('configuration')[SectionBlock::SECTION_KEY]);
     $inline_configuration = $deep_section->getComponent($ids['inline_uuid'])->get('configuration');
-    $this->assertNotEmpty($inline_configuration['block_revision_id'], 'The nested inline block in the defaults display was saved.');
+    $this->assertSame('Defaults basic block', $inline_configuration[InlineBlockValues::KEY]['info'], 'The nested inline block in the defaults display was stored as values.');
+    foreach (InlineBlockValues::ENTITY_KEYS as $key) {
+      $this->assertArrayNotHasKey($key, $inline_configuration, "The display names no block entity ($key).");
+    }
 
     $dependencies = $display->calculateDependencies()->getDependencies();
     $this->assertContains('block_content.type.basic', $dependencies['config'] ?? [], 'A dependency of a depth-2 component reaches the display through the container aggregation.');

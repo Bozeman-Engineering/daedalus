@@ -269,6 +269,13 @@ class CssPrinter {
   /**
    * Prints a whole style map.
    *
+   * The blocks print in the map's order, and the printer imposes none of
+   * its own: delivery hands the map over in its canonical order, the
+   * document's (NodeTreeBuilder::styleMapOf(), applied by
+   * CssStyleBackend), which the client's printMap receives the same way
+   * from styleMapOf in style-guide.js, so both printers emit the same
+   * byte sequence for one document.
+   *
    * @param array $map
    *   The decoded style map: selectable keys mapped to style data.
    *
@@ -736,6 +743,59 @@ class CssPrinter {
       return '';
     }
     return sprintf("@keyframes %s {\n%s\n}", $name, implode("\n", $pieces));
+  }
+
+  /**
+   * Prints one @font-face at-rule for a face of a self-hosted font.
+   *
+   * A font face is an at-rule like a keyframes block: it sits outside
+   * every scope and is referenced by its family from a value, so it prints as
+   * its own top-level rule with nothing composed in. Every face declares
+   * `font-display: swap` (text renders in the fallback until the file
+   * lands, never blocking), and the declaration order is fixed so the
+   * compiled file is content-addressed on the faces alone. Delivered by
+   * the compiled fonts file and its workspace inline preview
+   * (FontStylesheet); no client mirror, the client never prints a face.
+   *
+   * The emit gate: the family is the quoted spelling
+   * (StyleGuide::fontFamily(), a double-quoted string with no raw quote
+   * or control character inside), the weight a number or an ascending
+   * "min max" range, the style normal, italic or oblique, the url free of
+   * quotes, parentheses and control characters, and the format one of the
+   * formats the font store admits. A face failing any of it prints
+   * nothing.
+   *
+   * @param string $family
+   *   The family as it delivers (StyleGuide::fontFamily()), quotes included.
+   * @param string $weight
+   *   The canonical weight ("400", "100 900").
+   * @param string $style
+   *   The canonical style (normal, italic, oblique).
+   * @param string $url
+   *   The file's URL as the browser fetches it (root-relative or absolute).
+   * @param string $format
+   *   The format() keyword (woff2, woff).
+   *
+   * @return string
+   *   The @font-face block, or '' when the face fails the gate.
+   */
+  public function printFontFace(string $family, string $weight, string $style, string $url, string $format): string {
+    if (!preg_match('/^"(?:[^"\\\\\x00-\x1F\x7F]|\\\\.)+"$/', $family)) {
+      return '';
+    }
+    if (!preg_match('/^\d+(?:\.\d+)?(?: \d+(?:\.\d+)?)?$/', $weight)) {
+      return '';
+    }
+    if (!in_array($style, ['normal', 'italic', 'oblique'], TRUE)) {
+      return '';
+    }
+    if ($url === '' || preg_match('/["\'()\s\x00-\x1F\x7F]/', $url)) {
+      return '';
+    }
+    if (!in_array($format, ['woff2', 'woff'], TRUE)) {
+      return '';
+    }
+    return sprintf("@font-face {\n  font-family: %s;\n  font-style: %s;\n  font-weight: %s;\n  font-display: swap;\n  src: url(\"%s\") format(\"%s\");\n}", $family, $style, $weight, $url, $format);
   }
 
   /**

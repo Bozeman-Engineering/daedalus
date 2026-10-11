@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Drupal\daedalus_stylish;
 
 use Drupal\Core\Entity\EntityTypeManagerInterface;
+use Drupal\Core\Entity\FieldableEntityInterface;
 use Drupal\Core\Extension\ModuleHandlerInterface;
 use Drupal\Component\Serialization\Yaml;
 use Drupal\daedalus_blueprint\Result\BlueprintError;
@@ -29,8 +30,8 @@ use Drupal\workspaces\WorkspaceManagerInterface;
  * emits exactly the keys its importer reads, and every definition a caller
  * ships is checked against the importer's shape rule before it is written,
  * so a shipper never writes what the importer would refuse to read.
- * Callers add what this module cannot know: the variants file's `stencil:`
- * key belongs to whoever owns stencils (daedalus_blueprint_stencil), not here.
+ * Callers add what this module cannot know: the variants file's `blueprint:`
+ * key belongs to whoever owns blueprints (daedalus_blueprint_library), not here.
  *
  * Machine names are the site-wide vocabulary of a kind, so a name already
  * shipped by another module, or by another file of the target module, is
@@ -105,10 +106,42 @@ abstract class ShippedDefinitionsShipper {
    * The slice of a definition the entity's source hash covers.
    *
    * Exactly what the importer passes to setShippedSource() on sync (styles
-   * for variants, {tokens, defaults} for skins), so the hash a ship stamps
-   * equals the hash the next sync computes and the sync reads UNCHANGED.
+   * for variants, {tokens, defaults} for skins, the content-addressed
+   * family and faces for fonts, read from the module's assets), so the
+   * hash a ship stamps equals the hash the next sync computes and the
+   * sync reads UNCHANGED. Called after the file (and any assets) were
+   * written, with the target module for a kind whose payload lives partly
+   * beside the file.
+   *
+   * @param array $definition
+   *   The definition as written.
+   * @param string $module
+   *   The target module.
+   * @param string $name
+   *   The entry's machine name.
    */
-  abstract protected function shippedData(array $definition): array;
+  abstract protected function shippedData(array $definition, string $module, string $name): array;
+
+  /**
+   * Whether a per-id file's entry differs from the definition that replaces it.
+   *
+   * The plan's UNCHANGED-or-UPDATED question, over whole definitions by
+   * default (the file holds exactly what the shipper would write). A
+   * kind whose entry is not the whole story (a font's faces name files
+   * whose bytes live beside the file) widens it.
+   *
+   * @param array $existing
+   *   The entry as the file holds it.
+   * @param array $definition
+   *   The definition the ship would write.
+   * @param string $module
+   *   The target module.
+   * @param \Drupal\daedalus_stylish\ShippedSourceInterface $entity
+   *   The site entity the definition was built from.
+   */
+  protected function definitionChanged(array $existing, array $definition, string $module, ShippedSourceInterface $entity): bool {
+    return $this->hash($existing) !== $this->hash($definition);
+  }
 
   /**
    * Hashes a data map the way the kind's entity does.
@@ -221,7 +254,7 @@ abstract class ShippedDefinitionsShipper {
       foreach ($definitions as $name => $definition) {
         $entity = $this->load((string) $name);
         assert($entity instanceof ShippedSourceInterface);
-        $data = $this->shippedData($definition);
+        $data = $this->shippedData($definition, $module, (string) $name);
         if ($entity->getProvider() === $module && $entity->getSourceHash() === $this->hash($data) && $entity->isPublished()) {
           continue;
         }
@@ -291,7 +324,7 @@ abstract class ShippedDefinitionsShipper {
       if (!array_key_exists($name, $existing)) {
         $plan[$name] = static::CREATED;
       }
-      elseif ($this->hash($existing[$name]) === $this->hash($definition)) {
+      elseif (!$this->definitionChanged(is_array($existing[$name]) ? $existing[$name] : [], $definition, $module, $entity)) {
         $plan[$name] = static::UNCHANGED;
       }
       else {
@@ -385,6 +418,53 @@ abstract class ShippedDefinitionsShipper {
     $entity = reset($entities) ?: NULL;
     assert($entity === NULL || $entity instanceof ShippedSourceInterface);
     return $entity;
+  }
+
+  /**
+   * The machine names of a design system's members nothing ships yet.
+   *
+   * The package ship's adoption set for this kind: every entity of the
+   * kind whose membership is the system and whose provider is empty (the
+   * site's own; a member another module ships is that module's, and one
+   * the target module ships is already in a file). In machine-name
+   * order, published or not: a ship publishes what it adopts, and the
+   * package is the developer's whole system.
+   *
+   * @param string $design_system
+   *   The design system id.
+   *
+   * @return string[]
+   *   The machine names.
+   */
+  public function unshippedMembers(string $design_system): array {
+    return $this->outsideWorkspace(function () use ($design_system): array {
+      $storage = $this->entityTypeManager->getStorage($this->entityTypeId());
+      $storage->resetCache();
+      $ids = $storage->getQuery()
+        ->accessCheck(FALSE)
+        ->condition('design_system', $design_system)
+        ->notExists('provider')
+        ->sort('machine_name')
+        ->execute();
+      $names = [];
+      foreach ($storage->loadMultiple($ids) as $entity) {
+        if ($entity instanceof ShippedSourceInterface && $entity instanceof FieldableEntityInterface && $this->shipsWithPackage($entity)) {
+          $names[] = (string) $entity->get('machine_name')->value;
+        }
+      }
+      return $names;
+    });
+  }
+
+  /**
+   * Whether an unshipped member of the kind rides the package ship.
+   *
+   * TRUE for every kind but the one with a reason to hold back (a
+   * variant a content blueprint outside the system owns rides that
+   * blueprint's ship, VariantShipper).
+   */
+  protected function shipsWithPackage(ShippedSourceInterface $entity): bool {
+    return TRUE;
   }
 
   /**

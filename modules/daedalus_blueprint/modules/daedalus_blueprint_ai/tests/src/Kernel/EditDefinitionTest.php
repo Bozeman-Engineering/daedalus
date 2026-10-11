@@ -83,7 +83,6 @@ class EditDefinitionTest extends BlueprintKernelTestBase {
       'remove_element',
       'duplicate_element',
       'move_element',
-      'restructure_layout',
       'reorder_field',
       'update_properties',
     ] as $op) {
@@ -146,7 +145,6 @@ class EditDefinitionTest extends BlueprintKernelTestBase {
       'remove_element',
       'duplicate_element',
       'move_element',
-      'restructure_layout',
       'reorder_field',
     ] as $op) {
       $this->assertStringNotContainsString($op, $operations, "The layout op $op left the surface.");

@@ -1,0 +1,8 @@
+name: Daedalus Blueprint Library Test
+type: module
+description: Ships valid blueprint fixtures for daedalus_blueprint_library kernel tests.
+package: Testing
+core_version_requirement: ^10.3 || ^11
+hidden: true
+dependencies:
+  - daedalus:daedalus_blueprint_library

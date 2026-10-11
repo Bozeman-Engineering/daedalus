@@ -1,0 +1,7 @@
+langcode: en
+status: true
+dependencies: {  }
+id: section
+label: Section
+description: 'A composition placed into pages: a band, a card, a hero, or a whole page of them. What editors save from a page and place from the Add panel.'
+frame_only: false

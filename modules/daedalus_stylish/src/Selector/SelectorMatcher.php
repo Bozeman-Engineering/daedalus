@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Drupal\daedalus_stylish\Selector;
 
 use Drupal\daedalus_blueprint\Materials\RelativeSelector;
+use Drupal\daedalus_blueprint\NodeTree\NodeTreeBuilder;
 use Drupal\daedalus_stylish\StyleMapValidator;
 use Drupal\daedalus_ui\Render\ElementAddress;
 
@@ -131,7 +132,7 @@ final class SelectorMatcher {
    *
    * @param array $tree
    *   The ordered top-level container nodes (NodeTreeBuilder::build(), or
-   *   the delivered blueprint's `_tree`), `_element` annotations riding
+   *   the delivered blueprint's `layout`), `_element` annotations riding
    *   the nodes where daedalus_ui delivered them.
    */
   public static function fromTree(array $tree): self {
@@ -186,8 +187,10 @@ final class SelectorMatcher {
       if (is_string($node['block_type'] ?? NULL) && $node['block_type'] !== '') {
         $address = ElementAddress::blockType($node['block_type']);
       }
-      elseif (is_string($node['plugin_id'] ?? NULL) && $node['plugin_id'] !== '') {
-        $address = ElementAddress::blockPlugin($node['plugin_id']);
+      elseif (($plugin = NodeTreeBuilder::pluginBase($node)) !== NULL) {
+        // The base plugin (a field node's is field_block): the one
+        // derivation the clients' twin shares.
+        $address = ElementAddress::blockPlugin($plugin);
       }
     }
     $markup = is_array($node['_element']['markup'] ?? NULL) ? $node['_element']['markup'] : [];

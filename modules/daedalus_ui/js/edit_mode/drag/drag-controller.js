@@ -24,6 +24,7 @@ import {
 } from './element-targets';
 import { projectionIndex } from '../components/page-elements/projection-index';
 import { representedChainKeys } from '../selection/resolver';
+import { capable } from '../selection/capable';
 import { isTypingTarget } from '../hotkeys/typing';
 import * as builders from './ops-builders';
 
@@ -58,6 +59,20 @@ import * as builders from './ops-builders';
  *   its element face; the element's interior claims the cursor, its edge
  *   bands fall through to gap resolution so the flow around it stays
  *   reachable.
+ *
+ * The capability gate (selection/capable.js) is asked HERE, once for
+ * every source and target, so no source decides legality by itself:
+ * - at dragstart, arrange of the element the drag MOVES, when the drag
+ *   data names one (`data.key`, the move sources' selectable key); a
+ *   refused element never starts a drag (the native dragstart is
+ *   cancelled). Sources that place something new carry no key.
+ * - at every resolved gap target, insert of the container the location
+ *   inserts into (dropAllowed); a refused gap is no target, so the caret
+ *   never offers it, for the pointer (updateDrop) and the keyboard lift
+ *   (which filters its enumerated gaps through the same predicate) alike.
+ * Element targets (landing ON an element) are the source's element face
+ * to judge: its accepts() asks the gate for the capability its drop
+ * needs (the media face asks content of the landing element).
  *
  * A drag source spec:
  * - targets: 'block' (region gaps, section gaps wrap in a new section) or
@@ -166,7 +181,12 @@ export const makeDraggable = (element, type, getData = null) => {
     if (!spec) {
       return;
     }
-    activeSource = { type, spec, data: getData?.(element, event) ?? {} };
+    const data = getData?.(element, event) ?? {};
+    if (!moveAllowed(data)) {
+      event.preventDefault();
+      return;
+    }
+    activeSource = { type, spec, data };
     // Some browsers only start a drag that carries data.
     event.dataTransfer.setData('text/plain', type);
     event.dataTransfer.effectAllowed = 'copyMove';
@@ -225,6 +245,12 @@ export const makeDragDelegate = (delegate, resolve) => {
       }
       return;
     }
+    if (!moveAllowed(resolved.data ?? {})) {
+      // The element may not be rearranged: no drag starts, and nothing
+      // inside it (an image, a link) drags natively in its place.
+      event.preventDefault();
+      return;
+    }
     event.stopPropagation();
     owns = true;
     activeSource = { type: resolved.type, spec, data: resolved.data ?? {} };
@@ -253,6 +279,38 @@ export const makeDragDelegate = (delegate, resolve) => {
     event.stopPropagation();
     endDrag();
   };
+};
+
+/**
+ * Whether a drag's data names an element the actor may rearrange.
+ *
+ * The move sources name the element they move as `data.key`; a source
+ * placing something new names none and is judged at its destination.
+ *
+ * @param {Object} data
+ *   The drag data.
+ *
+ * @return {boolean}
+ */
+const moveAllowed = (data) => !data.key || capable(data.key, 'arrange');
+
+/**
+ * Whether a gap target may be dropped into: insert of the container the
+ * location inserts into, through the one client gate.
+ *
+ * The pointer's updateDrop and the keyboard lift's gap walk both filter
+ * through here, so a refused container offers no gap to either. A
+ * location whose container the projection cannot name (no mirror yet, a
+ * tree-row target outside the index) is refused: no verdict, no drop.
+ *
+ * @param {Object} target
+ *   A resolved gap target ({location: {anchor, placement}}).
+ *
+ * @return {boolean}
+ */
+export const dropAllowed = (target) => {
+  const container = containerKeyForLocation(target?.location);
+  return !!container && capable(container, 'insert');
 };
 
 /**
@@ -407,6 +465,9 @@ const updateDrop = (target, x, y) => {
   let next = elementTargetAt(target, x, y, spec, data);
   if (!next) {
     next = resolveDropTarget(target, x, y, spec.targets);
+    if (next && !dropAllowed(next)) {
+      next = null;
+    }
     if (next && spec.acceptsTarget && !spec.acceptsTarget(next, data)) {
       next = null;
     }
@@ -435,18 +496,16 @@ const updateDrop = (target, x, y) => {
  *
  * Derived from the gap's neighboring items rather than drop.insert's raw
  * container guess, so it lands between the flow's real children. Returns
- * a null parent when the target has no canvas insertion point (tree-row
- * drops).
+ * a null parent when the target has no canvas insertion point: a tree
+ * drop (tree-gaps.js) carries neither items nor an insert, since the
+ * panel is no canvas surface and the canvas gap is not derivable from a
+ * row; the committing caret on the row is the drop feedback until the
+ * response's swap lands.
  */
 const insertionPoint = (drop) => {
-  // Tree ROWS are a drop surface, not canvas flow items: a row-derived
-  // point would insert real page nodes INTO the panel (and strand them
-  // there when the authoritative swap replaces only canvas subtrees).
-  // Rows ride drop.items solely for liveCaret's line geometry.
-  const canvasItem = (item) =>
-    item?.isConnected && !item.hasAttribute('data-tree-key') ? item : null;
-  const beforeItem = canvasItem(drop.items?.[drop.index] ?? null);
-  const anchorItem = canvasItem(drop.items?.[drop.index - 1] ?? null);
+  const connected = (item) => (item?.isConnected ? item : null);
+  const beforeItem = connected(drop.items?.[drop.index] ?? null);
+  const anchorItem = connected(drop.items?.[drop.index - 1] ?? null);
   if (beforeItem) {
     const unit = unitOf(beforeItem);
     return { parent: unit.parentElement, before: unit };
@@ -455,9 +514,11 @@ const insertionPoint = (drop) => {
     const unit = unitOf(anchorItem);
     return { parent: unit.parentElement, before: unit.nextSibling };
   }
-  // Empty containers resolve no items; the container itself is the parent
-  // (null for tree drops — their designed "no canvas insertion point").
-  return { parent: drop.insert.parent, before: drop.insert.before };
+  // Empty containers resolve no items; the container itself is the parent.
+  return {
+    parent: drop.insert?.parent ?? null,
+    before: drop.insert?.before ?? null,
+  };
 };
 
 /**
@@ -486,9 +547,9 @@ const insertPlaceholder = (drop) => {
 const optimisticMove = (drop, data) => {
   const element = data.element;
   const point = insertionPoint(drop);
-  // No live node to move, or no canvas insertion point (tree-row drops
-  // name no parent): fall back to non-optimistic — the mutation still
-  // lands, the response swap shows it.
+  // No live node to move, or no canvas insertion point (tree drops carry
+  // none): fall back to non-optimistic — the mutation still lands, the
+  // response swap shows it.
   if (!element?.isConnected || !point.parent) {
     return null;
   }
@@ -758,5 +819,6 @@ export const initDrag = () => {
     endExternalDrag,
     builders,
     isRootFlowLocation,
+    dropAllowed,
   };
 };

@@ -117,8 +117,7 @@ report, in this shape:
 3. **What to review in the browser.** The pages to look at (every layout
    page on a small site, a sample on a large one), what to check on each
    (sections and headings present, edit mode loads, nested sections show
-   their content, stencils carry the old section library templates), and
-   the result of `drush watchdog:show --severity=Error`.
+   their content), and the result of `drush watchdog:show --severity=Error`.
 4. **The custom code you ported.** File by file, what changed and why, and
    that the port has been applied and the site still loads.
 5. **The finishing steps** still to do, from the guide's step 5, and which

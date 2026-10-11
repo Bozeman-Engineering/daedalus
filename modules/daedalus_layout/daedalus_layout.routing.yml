@@ -10,52 +10,111 @@ daedalus_layout.settings.configure_default_section:
   requirements:
     _permission: 'administer daedalus layout configuration'
 
-daedalus_layout.settings.promoted_blocks:
-  path: '/admin/structure/types/manage/{entity}/promoted-blocks'
+# A start's live preview: the chooser card's face (StartChooser). A sample
+# entity of the bundle with the start applied, unsaved, rendered in the
+# full view mode; chromeless through daedalus_ui's preview mode, which the
+# frame's URL carries (StartPreview::url(): ?navigationMode=preview), never
+# the pop-out option (a pop-out is a tool window outside the skin's reach,
+# and a page's preview is the page as a visitor sees it). Access is the
+# entity type's create access for the bundle, resolved by the controller
+# because core's _entity_create_access substitutes the bundle placeholder
+# only, never the entity type's.
+daedalus_layout.start_preview:
+  path: '/daedalus-layout/start-preview/{entity_type}/{bundle}/{start}'
   defaults:
-    _title: 'Promoted blocks'
-    _form: 'Drupal\daedalus_layout\Form\PromotedBlocksForm'
+    _controller: '\Drupal\daedalus_layout\Controller\StartPreview::build'
+    _title_callback: '\Drupal\daedalus_layout\Controller\StartPreview::title'
+  requirements:
+    _custom_access: '\Drupal\daedalus_layout\Controller\StartPreview::access'
+    entity_type: '[a-z0-9_]+'
+    bundle: '[a-zA-Z0-9_\-]+'
+    start: '[a-zA-Z0-9_\-]+'
+
+# The Save as blueprint verb's dialog (inert markup; js/verbs/blueprint.js
+# owns the interaction and submits a save_material/update_material operation
+# (kind blueprint) through Blueprint.mutate). The gate is the library's
+# any-type question (daedalus_blueprint_library's `_blueprint_type_access`
+# check: may the actor create a blueprint of SOME type), chrome for a
+# gesture the operation gates for real by the blueprint's type; without
+# the library the requirement has no check and the dialog is closed.
+daedalus_layout.blueprint_save_dialog:
+  path: '/daedalus-layout/blueprint-save-dialog'
+  defaults:
+    _title: 'Save as blueprint'
+    _controller: '\Drupal\daedalus_layout\Controller\BlueprintSaveDialog::build'
+  requirements:
+    _blueprint_type_access: 'create'
+
+# The Update blueprint verb's dialog (same inert-markup pattern): the
+# confirm step plus adoption parity with save (the capture's unowned
+# variants render as the same checked adopt checkboxes, and
+# js/verbs/blueprint.js folds the picks into the update_material op's
+# adopt_variants).
+daedalus_layout.blueprint_update_dialog:
+  path: '/daedalus-layout/blueprint-update-dialog'
+  defaults:
+    _title: 'Update blueprint'
+    _controller: '\Drupal\daedalus_layout\Controller\BlueprintSaveDialog::update'
+  requirements:
+    _blueprint_type_access: 'update'
+
+# The Add panel blueprint menu's Edit details… dialog (same inert-markup
+# pattern): js/src/blueprint-gestures.js prefills the label and
+# description from the blueprint's record and POSTs to
+# daedalus_blueprint_library's CSRF-protected details route; nothing
+# mutates here. The query's `blueprint` reference is read-only chrome too:
+# it prefills the icon picker, the scope, the subject and the allow-list
+# with the stored values.
+daedalus_layout.blueprint_details_dialog:
+  path: '/daedalus-layout/blueprint-details-dialog'
+  defaults:
+    _title: 'Edit blueprint details'
+    _controller: '\Drupal\daedalus_layout\Controller\BlueprintSaveDialog::details'
+  requirements:
+    _blueprint_type_access: 'update'
+
+# The Add panel's "Favorite for everyone" on a block type's row
+# (js/src/site-favorite.js): writes the block type's site default,
+# `third_party_settings.daedalus_layout.favorite`, the key the block type
+# form writes too (BlockTypeFace). Gated by the block type's update
+# access, the bundle's own admin permission, and the session's CSRF header
+# token, as the blueprint gestures' routes are; the face's `editable`
+# (AddPanelFaces) tells the client where to offer the item, and this
+# enforces it. A blueprint's row writes through the library's details
+# route instead; a plain plugin has no face to write.
+daedalus_layout.block_type_favorite:
+  path: '/daedalus-layout/block-type/{block_content_type}/favorite'
+  methods: [POST]
+  defaults:
+    _title: 'Favorite for everyone'
+    _controller: '\Drupal\daedalus_layout\Controller\BlockTypeFavorite::set'
+  options:
+    no_cache: 'TRUE'
+    parameters:
+      block_content_type:
+        type: entity:block_content_type
+  requirements:
+    _entity_access: 'block_content_type.update'
+    _csrf_request_header_token: 'TRUE'
+
+# The site frame's canvas: the frame's canonical route (its one link,
+# FrameInterface::CANVAS_ROUTE, named by core's entity link convention so
+# the frame's toUrl() lands here). A frame has no public page; this route
+# is where it is edited: the layout_builder_plus element over the frame
+# storage (FrameCanvas), Edit Mode on the first visit in a session
+# (FrameCanvasMode), rendered in the frame's own theme (FrameCanvasTheme).
+# Not an administration route on purpose: the canvas is the frame seen in
+# its skin, and the frame page variant leaves this one route unframed (the
+# frame is the page's content here, not its frame). Access is the frame's
+# `update`: the one frame permission, `configure the site frame`.
+entity.daedalus_frame.canonical:
+  path: '/site-frame/{daedalus_frame}'
+  defaults:
+    _controller: '\Drupal\daedalus_layout\Controller\FrameCanvas::build'
+    _title_callback: '\Drupal\daedalus_layout\Controller\FrameCanvas::title'
   options:
     parameters:
-      entity:
-        type: entity:entity_view_display
+      daedalus_frame:
+        type: entity:daedalus_frame
   requirements:
-    _permission: 'promote daedalus layout blocks'
-
-# The Save as stencil verb's dialog (inert markup; js/verbs/stencil.js owns
-# the interaction and submits a save_material/update_material operation
-# (kind stencil) through Blueprint.mutate). Same permission the operation itself enforces: the
-# dialog is chrome for a gesture the user must be allowed to complete.
-daedalus_layout.stencil_save_dialog:
-  path: '/daedalus-layout/stencil-save-dialog'
-  defaults:
-    _title: 'Save as stencil'
-    _controller: '\Drupal\daedalus_layout\Controller\StencilSaveDialog::build'
-  requirements:
-    _permission: 'save stencils'
-
-# The Update stencil verb's dialog (same inert-markup pattern): the confirm
-# step plus adoption parity with save — the capture's unowned variants render
-# as the same checked adopt checkboxes, and js/verbs/stencil.js folds the
-# picks into the update_material op's adopt_variants.
-daedalus_layout.stencil_update_dialog:
-  path: '/daedalus-layout/stencil-update-dialog'
-  defaults:
-    _title: 'Update stencil'
-    _controller: '\Drupal\daedalus_layout\Controller\StencilSaveDialog::update'
-  requirements:
-    _permission: 'save stencils'
-
-# The Add panel stencil menu's Edit details… dialog (same inert-markup
-# pattern, same fields): js/add-panel/stencil-items.js prefills the current
-# label/description from the stencil's record and POSTs to
-# daedalus_blueprint_stencil's CSRF-protected details route; nothing mutates
-# here. The query's `stencil` reference is
-# read-only chrome too: it prefills the icon picker with the stored icon.
-daedalus_layout.stencil_details_dialog:
-  path: '/daedalus-layout/stencil-details-dialog'
-  defaults:
-    _title: 'Edit stencil details'
-    _controller: '\Drupal\daedalus_layout\Controller\StencilSaveDialog::details'
-  requirements:
-    _permission: 'save stencils'
+    _entity_access: 'daedalus_frame.update'

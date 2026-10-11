@@ -17,11 +17,11 @@ use Drupal\media\MediaInterface;
  *
  * THE ICON VALUE GRAMMAR. Everything page-builder chrome stores as "an
  * icon" (block-type icons in `block_content.type.*.third_party.daedalus_layout.icon`,
- * stencil icons on the stencil entity and in the stencil catalog) is one
+ * blueprint icons on the blueprint entity and in the blueprint catalog) is one
  * string in exactly one of two spellings, and every consumer resolves it
  * here so the spellings can never fork per surface. It lives on the spine
- * because the spine both produces the grammar (stencil discovery spells
- * content icons as media references) and projects it (a stencil material
+ * because the spine both produces the grammar (blueprint discovery spells
+ * content icons as media references) and projects it (a blueprint material
  * record carries its icon RESOLVED, the client palette paints from it):
  *
  * - `media:<uuid>`: a media entity reference by UUID (lowercase `media:`
@@ -33,7 +33,7 @@ use Drupal\media\MediaInterface;
  * - anything else: a root-relative URL path (e.g.
  *   `/modules/contrib/daedalus/modules/daedalus_layout/assets/image.svg`). The shipped lane: values
  *   from configs and recipes, returned verbatim. Producers that accept
- *   friendlier spellings (the stencil YAML lane's module-relative `icon`
+ *   friendlier spellings (the blueprint YAML lane's module-relative `icon`
  *   key) resolve them to root-relative BEFORE storage; the resolver never
  *   sees a relative path.
  *
@@ -110,7 +110,7 @@ class IconResolver {
    * Resolves a media entity to the file its source field references.
    *
    * The media-to-file step of resolve(), public on its own because the
-   * stencil ship lane needs the FILE (to copy it into a module's assets)
+   * blueprint ship lane needs the FILE (to copy it into a module's assets)
    * where rendering needs its URL; both go through this one step so the
    * capability gate above (any media whose source field references a file)
    * can never fork. Contributes no cache tags: the caller decides whether

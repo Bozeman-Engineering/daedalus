@@ -1,0 +1,16 @@
+name: Daedalus Blueprint Library
+type: module
+description: Saved blueprints (reusable page material that is a page of its own) as module-shipped YAML files and user-saved content, offered in the Add panel and to the AI.
+core_version_requirement: '>=11.3 <11.5'
+package: Daedalus
+dependencies:
+  # A blueprint's document is core's Layout Builder override field on the
+  # blueprint entity (the type's full display ships Layout Builder enabled).
+  - drupal:layout_builder
+  # The blueprint's scope is a list_string field.
+  - drupal:options
+  # The blueprint entity's icon field is a media reference (the icon value
+  # grammar's user lane).
+  - drupal:media
+  - drupal:user
+  - daedalus:daedalus_blueprint

@@ -92,13 +92,13 @@ class EntityStorageAndBundleListTest extends BlueprintKernelTestBase {
     $newEntity = $this->entityTypeManager->getStorage('entity_test')->create([
       'name' => 'New entity',
     ]);
-    $handler->persist($newEntity, is_new: TRUE, element_uuids: ['uuid-new']);
+    $handler->persist($this->host($newEntity), is_new: TRUE, element_uuids: ['uuid-new']);
     $this->assertNotNull($newEntity->id(), 'New entity received an ID, so it was saved to the database.');
 
     // force_save=TRUE on an existing entity bypasses any tempstore and commits.
     $existing = $this->createTestEntity(['field_subtitle' => 'before']);
     $existing->set('field_subtitle', 'after');
-    $handler->persist($existing, force_save: TRUE, element_uuids: ['uuid-a', 'uuid-b']);
+    $handler->persist($this->host($existing), force_save: TRUE, element_uuids: ['uuid-a', 'uuid-b']);
     $reloaded = $this->entityTypeManager
       ->getStorage('entity_test')
       ->loadUnchanged($existing->id());
@@ -109,7 +109,7 @@ class EntityStorageAndBundleListTest extends BlueprintKernelTestBase {
     // falls through to a database save and reports saved=TRUE.
     $editOnly = $this->createTestEntity(['field_subtitle' => 'one']);
     $editOnly->set('field_subtitle', 'two');
-    $handler->persist($editOnly, element_uuids: []);
+    $handler->persist($this->host($editOnly), element_uuids: []);
     $reloadedEdit = $this->entityTypeManager
       ->getStorage('entity_test')
       ->loadUnchanged($editOnly->id());

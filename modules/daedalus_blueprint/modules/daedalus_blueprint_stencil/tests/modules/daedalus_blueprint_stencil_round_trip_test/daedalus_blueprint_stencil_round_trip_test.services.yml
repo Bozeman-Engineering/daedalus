@@ -1,7 +1,0 @@
-services:
-  daedalus_blueprint_stencil_round_trip_test.discovery:
-    class: Drupal\daedalus_blueprint_stencil_round_trip_test\StateStencilDiscovery
-    decorates: daedalus_blueprint_stencil.discovery
-    arguments:
-      - '@daedalus_blueprint_stencil_round_trip_test.discovery.inner'
-      - '@state'

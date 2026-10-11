@@ -263,6 +263,66 @@ daedalus_stylish.animation_restore:
     _csrf_request_header_token: 'TRUE'
     revision_id: '\d+'
 
+# The font file door: what the material ops cannot carry is bytes, so the
+# Fonts tab uploads each face's file here (the font store over the
+# daedalus_ui file lane, woff2 and woff, permanent) and mints with the
+# uuids the responses name (save_material, kind font).
+daedalus_stylish.font_upload:
+  path: '/daedalus_stylish/fonts/files'
+  methods: [POST]
+  defaults:
+    _controller: 'Drupal\daedalus_stylish\Controller\FontApiController::upload'
+    _title: 'Upload a font file'
+  options:
+    no_cache: 'TRUE'
+  requirements:
+    _permission: 'create fonts+administer fonts'
+    _csrf_request_header_token: 'TRUE'
+
+# The delivered @font-face text: the canvas's landing after a font write
+# (the compiled file the page loaded predates any font minted this
+# session, and a face's url() is the server's to print). Every font
+# grade, since the read exists for the writes' landing.
+daedalus_stylish.font_stylesheet:
+  path: '/daedalus_stylish/fonts/stylesheet'
+  methods: [GET]
+  defaults:
+    _controller: 'Drupal\daedalus_stylish\Controller\FontApiController::stylesheet'
+    _title: 'The delivered fonts stylesheet'
+  options:
+    no_cache: 'TRUE'
+  requirements:
+    _permission: 'create fonts+update fonts+delete fonts+delete fonts in use+administer fonts'
+
+# The font card's management read: the live reference count beside the
+# shipped facts, the animation usage endpoint's twin.
+daedalus_stylish.font_usage:
+  path: '/daedalus_stylish/fonts/{reference}/usage'
+  methods: [GET]
+  defaults:
+    _controller: 'Drupal\daedalus_stylish\Controller\FontApiController::usage'
+    _title: 'Font usage'
+  options:
+    no_cache: 'TRUE'
+  requirements:
+    _permission: 'update fonts+delete fonts+delete fonts in use+administer fonts'
+
+# Delete: two grades share the route like animations. The route admits
+# either grade; the contextual gate lives in FontManager::deleteFont(): a
+# NAMED font needs "delete fonts in use", because deleting it runs the
+# remove-the-family rewrite batch over the usage table's work list.
+daedalus_stylish.font_delete:
+  path: '/daedalus_stylish/fonts/{reference}'
+  methods: [DELETE]
+  defaults:
+    _controller: 'Drupal\daedalus_stylish\Controller\FontApiController::delete'
+    _title: 'Delete a font'
+  options:
+    no_cache: 'TRUE'
+  requirements:
+    _permission: 'delete fonts+delete fonts in use+administer fonts'
+    _csrf_request_header_token: 'TRUE'
+
 # Revert-to-shipped-defaults: an ordinary revisioned save whose steps come
 # from the provider's disk file.
 daedalus_stylish.animation_revert:
@@ -292,3 +352,182 @@ daedalus_stylish.animation_delete:
   requirements:
     _permission: 'delete animations+delete animations in use+administer animations'
     _csrf_request_header_token: 'TRUE'
+
+# The token lifecycle routes: the swatch route template for the material
+# that lives on the skin. Minting and the value, description and offered
+# editors are the save_material / update_material ops (kind token); the
+# routes that remain adapt onto the token manager. A token id is
+# "{scale}/{name}" (the roster's), spelled as two path parameters: the
+# route provider matches by pattern outline (one % per parameter), so a
+# single {reference} holding the slash would only ever match as a path's
+# LAST segment and the /usage, /rename and /revert routes would be 404.
+# The live reference count behind the palette row's loud prompts, beside
+# the row's management facts (layer, provider, shipped state).
+daedalus_stylish.token_usage:
+  path: '/daedalus_stylish/tokens/{scale}/{name}/usage'
+  methods: [GET]
+  defaults:
+    _controller: 'Drupal\daedalus_stylish\Controller\TokenApiController::usage'
+    _title: 'Token usage'
+  options:
+    no_cache: 'TRUE'
+  requirements:
+    _permission: 'update tokens+delete tokens+delete tokens in use+administer skins'
+
+# Rename: the name IS the custom property's tail, so a referenced token's
+# rename stages the rewrite-then-rename batch (every var() respelled, then
+# the record moves); a package token refuses on a consuming site.
+daedalus_stylish.token_rename:
+  path: '/daedalus_stylish/tokens/{scale}/{name}/rename'
+  methods: [POST]
+  defaults:
+    _controller: 'Drupal\daedalus_stylish\Controller\TokenApiController::rename'
+    _title: 'Rename a token'
+  options:
+    no_cache: 'TRUE'
+  requirements:
+    _permission: 'update tokens+administer skins'
+    _csrf_request_header_token: 'TRUE'
+
+# Revert-to-shipped: an ordinary revisioned save converging the token
+# toward the provider's disk file (the site's record over it dropped).
+daedalus_stylish.token_revert:
+  path: '/daedalus_stylish/tokens/{scale}/{name}/revert'
+  methods: [POST]
+  defaults:
+    _controller: 'Drupal\daedalus_stylish\Controller\TokenApiController::revert'
+    _title: 'Revert a token to its shipped record'
+  options:
+    no_cache: 'TRUE'
+  requirements:
+    _permission: 'update tokens+administer skins'
+    _csrf_request_header_token: 'TRUE'
+
+# Delete: two grades share the route like swatches. The route admits either
+# grade; the contextual gate lives in TokenManager::deleteToken(): a
+# REFERENCED token whose removal would delete it needs "delete tokens in
+# use", because deleting it runs the var()-to-literal rewrite batch over
+# the usage table's work list. A site override dropped (the package's
+# token revealed) touches no reference and needs no grade beyond delete.
+daedalus_stylish.token_delete:
+  path: '/daedalus_stylish/tokens/{scale}/{name}'
+  methods: [DELETE]
+  defaults:
+    _controller: 'Drupal\daedalus_stylish\Controller\TokenApiController::delete'
+    _title: 'Delete a token'
+  options:
+    no_cache: 'TRUE'
+  requirements:
+    _permission: 'delete tokens+delete tokens in use+administer skins'
+    _csrf_request_header_token: 'TRUE'
+
+# The skin lifecycle routes: the skin card's gestures with no page batch
+# to ride, adapters over SkinManager (which owns the gestures) answering
+# the materials delta. The administer grade alone on every write:
+# choosing, copying, restoring and reverting restyle the whole site,
+# the same act as activating a design system. The card's READ admits
+# every grade that touches the skin, so whoever edits its tokens or
+# defaults sees which skin they edit.
+daedalus_stylish.skins:
+  path: '/daedalus_stylish/skins'
+  methods: [GET]
+  defaults:
+    _controller: 'Drupal\daedalus_stylish\Controller\SkinApiController::skins'
+    _title: 'The skins the active design system may wear'
+  options:
+    no_cache: 'TRUE'
+  requirements:
+    _permission: 'create tokens+update tokens+delete tokens+delete tokens in use+edit skin defaults+administer skins'
+
+# Choose: which member skin the active design system wears on this site,
+# a site setting beside the activation (daedalus_stylish.settings
+# skin_choice), never a write to the unit the package ships.
+daedalus_stylish.skin_choose:
+  path: '/daedalus_stylish/skins/{reference}/choose'
+  methods: [POST]
+  defaults:
+    _controller: 'Drupal\daedalus_stylish\Controller\SkinApiController::choose'
+    _title: 'Choose the skin the site wears'
+  options:
+    no_cache: 'TRUE'
+  requirements:
+    _permission: 'administer skins'
+    _csrf_request_header_token: 'TRUE'
+
+# Copy-as-my-skin: the distro lock's fork gesture for the look. A CREATE,
+# not an update: the source is read, never touched; the copy has no
+# provider, so the site owns every gesture on it.
+daedalus_stylish.skin_copy:
+  path: '/daedalus_stylish/skins/{reference}/copy'
+  methods: [POST]
+  defaults:
+    _controller: 'Drupal\daedalus_stylish\Controller\SkinApiController::copy'
+    _title: 'Copy a skin as a site skin'
+  options:
+    no_cache: 'TRUE'
+  requirements:
+    _permission: 'administer skins'
+    _csrf_request_header_token: 'TRUE'
+
+# The revision history behind the skin card's restore gesture.
+daedalus_stylish.skin_revisions:
+  path: '/daedalus_stylish/skins/{reference}/revisions'
+  methods: [GET]
+  defaults:
+    _controller: 'Drupal\daedalus_stylish\Controller\SkinApiController::revisions'
+    _title: 'Skin revisions'
+  options:
+    no_cache: 'TRUE'
+  requirements:
+    _permission: 'administer skins'
+
+# Restore: an update gesture, a NEW default revision carrying an old
+# revision's content (the site layer alone on a consuming site, where the
+# package layer is the disk's), so a restore is itself one restore away
+# from undo.
+daedalus_stylish.skin_restore:
+  path: '/daedalus_stylish/skins/{reference}/revisions/{revision_id}/restore'
+  methods: [POST]
+  defaults:
+    _controller: 'Drupal\daedalus_stylish\Controller\SkinApiController::restore'
+    _title: 'Restore a skin revision'
+  options:
+    no_cache: 'TRUE'
+  requirements:
+    _permission: 'administer skins'
+    _csrf_request_header_token: 'TRUE'
+    revision_id: '\d+'
+
+# Revert the site layer: an ordinary revisioned save emptying the site's
+# tokens and defaults over the package's, so the skin wears what its
+# module ships, whole.
+daedalus_stylish.skin_revert:
+  path: '/daedalus_stylish/skins/{reference}/revert'
+  methods: [POST]
+  defaults:
+    _controller: 'Drupal\daedalus_stylish\Controller\SkinApiController::revert'
+    _title: 'Revert a skin to what its module ships'
+  options:
+    no_cache: 'TRUE'
+  requirements:
+    _permission: 'administer skins'
+    _csrf_request_header_token: 'TRUE'
+
+# The skin's delivery read: the active published skin's defaults as the
+# inspector's guide payload carries them (ClientStyleGuide skinDefaults)
+# beside the defaults stylesheet's current CSS text. The skin session's
+# landing (push-bar.js commitSession, leader-source.js refreshDefaults):
+# after a push of update_default ops the panel re-reads the skin's
+# document and the canvas stamps the recompiled CSS, so the pushed look
+# lands without a reload. The same grade as the op, since the read
+# exists for its landing.
+daedalus_stylish.defaults:
+  path: '/daedalus_stylish/defaults'
+  methods: [GET]
+  defaults:
+    _controller: 'Drupal\daedalus_stylish\Controller\SkinApiController::defaults'
+    _title: 'The active skin defaults'
+  options:
+    no_cache: 'TRUE'
+  requirements:
+    _permission: 'edit skin defaults+administer skins'

@@ -216,13 +216,20 @@ import './widgets/index.js';
  * mode switch.
  *
  * `writeAddress` is the panel's write address (`{key, selector}`, the
- * styling target when it sits above the selection: an ancestor rule
- * from the element's address set, write-address.js; null for the own
- * key): the rows stay the selected element's and each
- * property writes at its REBASED key (controls.js controlModels), so
- * the routing below needs no change: `model.keys[property]` already
- * names the address. A property the address withholds arrives in
- * `model.withheld` and its widget renders it disabled with the reason.
+ * spine's address fact: a rule on an ancestor or on the selected key
+ * itself, picked from the subject line's chip; null for the own key):
+ * the rows stay the subject's and each property writes at its REBASED
+ * key (controls.js controlModels), so the routing below needs no
+ * change: `model.keys[property]` already names the address. A property
+ * the address withholds arrives in `model.withheld` and its widget
+ * renders it disabled with the reason.
+ *
+ * The empty state names the authoring gap it is: basic mode's surface
+ * is the `controls:` someone declared for the landing node, and base
+ * tags, generated boxes and `children` have none, so "no style options"
+ * there says nothing about the vocabulary (advanced and code read the
+ * property groups and style the same landing); the sentence points
+ * there.
  */
 export const BasicControls = ({
   source,
@@ -253,7 +260,6 @@ export const BasicControls = ({
     styleMap,
     source.getSectionLayouts(),
     variants,
-    source.getLayout?.() ?? [],
     condition,
     layout,
     targetSelector,
@@ -284,8 +290,12 @@ export const BasicControls = ({
         {box
           ? Drupal.t('Generated boxes are styled in Advanced or code mode.')
           : rule
-            ? Drupal.t('This rule has no style options.')
-            : Drupal.t('This element has no style options.')}
+            ? Drupal.t(
+                'No basic controls are declared for this rule. Style it in Advanced or code mode.',
+              )
+            : Drupal.t(
+                'No basic controls are declared for this element. Style it in Advanced or code mode.',
+              )}
       </div>
     );
   }
@@ -351,8 +361,8 @@ export const BasicControls = ({
           )
         }
         onCommit={(properties) => {
-          const undoLabel = Drupal.t('Styled @control', {
-            '@control': model.label,
+          const undoLabel = Drupal.t('Styled !control', {
+            '!control': model.label,
           });
           // Every change lands at the editing compound: the widget's
           // own, one per routed key.
@@ -388,7 +398,7 @@ export const BasicControls = ({
             property,
             label:
               label ??
-              Drupal.t('Styled @control', { '@control': model.label }),
+              Drupal.t('Styled !control', { '!control': model.label }),
             changes: route({
               [property]: MEDIA_PICK_PLACEHOLDER,
               ...companions,

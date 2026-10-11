@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Drupal\daedalus_stylish;
 
 use Drupal\Core\StringTranslation\TranslatableMarkup;
-use Drupal\daedalus_stylish\Entity\MachineNameInterface;
 
 /**
  * The rewrite-then-delete Batch API job behind animation deletion.
@@ -50,7 +49,8 @@ final class AnimationDeleteBatch extends ValueDeleteBatchBase {
   /**
    * {@inheritdoc}
    */
-  protected static function rewriter(MachineNameInterface $material): \Closure {
+  protected static function rewriter(object $material): \Closure {
+    assert($material instanceof DaedalusStylishAnimationInterface);
     $name = $material->getMachineName();
     return static fn (string $property, string $value): string => AnimationUsage::rewriteValue($property, $value, $name);
   }

@@ -5,8 +5,10 @@
  * leaves no room, pull back from the right rail only), the
  * editing dress (frameEditing: the dash follows the store's reactive
  * editingKey — the LIVE edit, never a prediction), and the chip face
- * (the set-order number, and the tab-flag partition of the primary's
- * verbs). The face never hides for an open edit: it renders whatever
+ * (the set-order number, the tab-flag partition of the primary's
+ * verbs, and the group fold of what stays on the face: faceVerbs is a
+ * list of entries, `{verb}` or `{group, primary, rest}`, the overflow
+ * the flat verbs). The face never hides for an open edit: it renders whatever
  * verbs the registry's applies gate scoped to the live edit state
  * (selection verbs while no edit lands on the key, edit-scoped verbs
  * while editingKey IS it), so mid-edit the face IS the applicable
@@ -63,11 +65,15 @@ test('the left edge stays on the stroke even against a left rail', () => {
   assert.equal(placed.left, 248);
 });
 
-const edit = { id: 'edit', tab: true };
-const duplicate = { id: 'duplicate', tab: true };
-const insert = { id: 'insert', tab: false };
-const rename = { id: 'rename', tab: false };
+const edit = { id: 'edit', tab: true, group: null };
+const duplicate = { id: 'duplicate', tab: true, group: null };
+const insert = { id: 'insert', tab: false, group: null };
+const rename = { id: 'rename', tab: false, group: null };
 const verbs = [edit, insert, duplicate, rename];
+// faceVerbs is a list of entries (verb-groups.js): an ungrouped verb is
+// a plain `{verb}` entry, so a face of plain verbs reads as the verbs
+// wrapped one by one.
+const entries = (list) => list.map((verb) => ({ verb }));
 
 test('a single selection has no number; a set numbers members by selection order', () => {
   assert.equal(chipFace({ key: 'A', keys: ['A'], primary: 'A' }).number, null);
@@ -79,10 +85,43 @@ test('a single selection has no number; a set numbers members by selection order
 
 test('clean density partitions verbs by the tab flag, preserving menu order; nothing appears in both', () => {
   const face = chipFace({ key: 'A', keys: ['A'], primary: 'A', verbs, density: 'clean' });
-  assert.deepEqual(face.faceVerbs, [edit, duplicate]);
+  assert.deepEqual(face.faceVerbs, entries([edit, duplicate]));
   assert.deepEqual(face.overflow, [insert, rename]);
   assert.equal(face.labels, false);
   assert.equal(face.primary, true);
+});
+
+test('a group on the face folds into one entry at its lightest member; the overflow stays flat', () => {
+  // The blueprint control: Update (lightest) leads, Open and Save as
+  // follow in menu order. At full density the whole group is on the
+  // face as ONE entry sitting where Update sits.
+  const update = { id: 'update', tab: false, group: 'blueprint' };
+  const open = { id: 'open', tab: false, group: 'blueprint' };
+  const saveAs = { id: 'save_as', tab: false, group: 'blueprint' };
+  const face = chipFace({
+    key: 'A', keys: ['A'], primary: 'A', verbs: [edit, update, open, saveAs, rename], density: 'full',
+  });
+  assert.deepEqual(face.faceVerbs, [
+    { verb: edit },
+    { group: 'blueprint', primary: update, rest: [open, saveAs] },
+    { verb: rename },
+  ]);
+  assert.deepEqual(face.overflow, []);
+});
+
+test('at clean density the tab partition runs before the fold: a group\'s untabbed members go to overflow flat and its tabbed member stays a plain entry', () => {
+  // Only Update opted onto the face with `tab`; Open and Save as wait
+  // behind the chevron as flat items beside the ungrouped Rename (the
+  // menu never groups), and the one member left on the face is the
+  // plain button it would be alone.
+  const update = { id: 'update', tab: true, group: 'blueprint' };
+  const open = { id: 'open', tab: false, group: 'blueprint' };
+  const saveAs = { id: 'save_as', tab: false, group: 'blueprint' };
+  const face = chipFace({
+    key: 'A', keys: ['A'], primary: 'A', verbs: [edit, update, open, saveAs, rename], density: 'clean',
+  });
+  assert.deepEqual(face.faceVerbs, [{ verb: edit }, { verb: update }]);
+  assert.deepEqual(face.overflow, [open, saveAs, rename]);
 });
 
 test('secondary members carry no verbs at all', () => {
@@ -94,18 +133,18 @@ test('secondary members carry no verbs at all', () => {
 
 test('full density (the default) puts every labeled verb on the face in menu order, no chevron', () => {
   const face = chipFace({ key: 'A', keys: ['A'], primary: 'A', verbs, density: 'full' });
-  assert.deepEqual(face.faceVerbs, verbs);
+  assert.deepEqual(face.faceVerbs, entries(verbs));
   assert.deepEqual(face.overflow, []);
   assert.equal(face.labels, true);
   // Absent reads as full, like the html attribute.
   const absent = chipFace({ key: 'A', keys: ['A'], primary: 'A', verbs });
-  assert.deepEqual(absent.faceVerbs, verbs);
+  assert.deepEqual(absent.faceVerbs, entries(verbs));
   assert.equal(absent.labels, true);
 });
 
 test('minimal density is the full face with the labels dropped: every verb, icons only, no chevron', () => {
   const face = chipFace({ key: 'A', keys: ['A'], primary: 'A', verbs, density: 'minimal' });
-  assert.deepEqual(face.faceVerbs, verbs);
+  assert.deepEqual(face.faceVerbs, entries(verbs));
   assert.deepEqual(face.overflow, []);
   assert.equal(face.labels, false);
 });
@@ -115,14 +154,14 @@ test('the face while editing = the applicable verbs: chipFace has no editing gat
   // state (edit-scoped verbs while editingKey IS the key); the face
   // renders them exactly as it renders selection verbs, density ladder
   // and all — the dash is the frame's only editing dress.
-  const tag = { id: 'tag', tab: true };
-  const link = { id: 'link', tab: false };
+  const tag = { id: 'tag', tab: true, group: null };
+  const link = { id: 'link', tab: false, group: null };
   const editVerbs = [tag, link];
   const full = chipFace({ key: 'A', keys: ['A'], primary: 'A', verbs: editVerbs, density: 'full' });
-  assert.deepEqual(full.faceVerbs, editVerbs);
+  assert.deepEqual(full.faceVerbs, entries(editVerbs));
   assert.deepEqual(full.overflow, []);
   const clean = chipFace({ key: 'A', keys: ['A'], primary: 'A', verbs: editVerbs, density: 'clean' });
-  assert.deepEqual(clean.faceVerbs, [tag]);
+  assert.deepEqual(clean.faceVerbs, entries([tag]));
   assert.deepEqual(clean.overflow, [link]);
 });
 
@@ -130,7 +169,7 @@ test('a primary with no live edit keeps the face: nothing but a live edit change
   // A selected container, or an editable leaf whose edit ended, is a
   // plain selection, verbs and all.
   const face = chipFace({ key: 'A', keys: ['A'], primary: 'A', verbs, density: 'clean' });
-  assert.deepEqual(face.faceVerbs, [edit, duplicate]);
+  assert.deepEqual(face.faceVerbs, entries([edit, duplicate]));
   assert.deepEqual(face.overflow, [insert, rename]);
 });
 
@@ -152,5 +191,5 @@ test('the dash and the face are independent readings: an open edit dresses the s
   // applicable verbs; frameEditing only decides the dash.
   assert.equal(frameEditing({ editingKey: 'A', primary: 'A' }), true);
   const face = chipFace({ key: 'A', keys: ['A'], primary: 'A', verbs });
-  assert.deepEqual(face.faceVerbs, verbs);
+  assert.deepEqual(face.faceVerbs, entries(verbs));
 });

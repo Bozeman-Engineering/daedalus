@@ -155,7 +155,7 @@ class NestedSectionDeliveryTest extends NestedStorageKernelTestBase {
     $map = ['block:11111111-1111-1111-1111-111111111111' => ['narrow' => ['padding' => '1rem']]];
     [$entity, $root_uuid, $nested_uuid] = $this->styledEntityWithNestedSection($map);
 
-    $build = $this->container->get('daedalus_stylish.style_backend')->build($entity, $map);
+    $build = $this->container->get('daedalus_stylish.style_backend')->build($this->host($entity), $map);
     $css = (string) $build['#value'];
 
     $this->assertStringContainsString(CssPrinter::PAGE_CONTAINER_RULE, $css);

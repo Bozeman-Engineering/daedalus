@@ -67,6 +67,16 @@ dialog-skin:
   dependencies:
     - daedalus_ui/variables
 
+# The bundle form's Page builder vertical tab: its summary line, read from
+# the section's controls (BundleEditFormAlter attaches it on the section).
+bundle_form:
+  js:
+    js/bundle-form.js: {}
+  dependencies:
+    - core/jquery
+    - core/drupal
+    - core/drupal.form
+
 # Per-module debug logging (Drupal.Daedalus.logger). Standalone on
 # purpose: consumers include libraries that load outside edit mode, and a
 # declared dependency on this gives them load ordering for free.
@@ -264,7 +274,6 @@ media_library:
 modes:
   js:
     js/daedalus-ui.js: { attributes: { type: 'module' }}
-    js/behaviors/split-button.js: {}
   css:
     theme:
       css/navigation.css: {}

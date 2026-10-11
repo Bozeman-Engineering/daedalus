@@ -101,8 +101,15 @@ class DressedDomOperationsTest extends BlueprintKernelTestBase {
     // every build, and every compile and validation builds it.
     $this->installEntitySchema('daedalus_swatch');
     $this->installEntitySchema('daedalus_animation');
+    $this->installEntitySchema('daedalus_font');
     $this->installEntitySchema('daedalus_skin');
-    $this->installSchema('daedalus_stylish', ['daedalus_variant_usage', 'daedalus_swatch_usage', 'daedalus_animation_usage']);
+    $this->installSchema('daedalus_stylish', [
+      'daedalus_variant_usage',
+      'daedalus_swatch_usage',
+      'daedalus_animation_usage',
+      'daedalus_token_usage',
+      'daedalus_font_usage',
+    ]);
     $this->installConfig(['daedalus_stylish']);
     $this->container->get('daedalus_stylish.field_manager')->enable('entity_test', 'entity_test');
     $this->entityTypeManager = $this->container->get('entity_type.manager');
@@ -177,7 +184,7 @@ class DressedDomOperationsTest extends BlueprintKernelTestBase {
    * A page_edit insert wears exactly what it states; the op door is born.
    */
   public function testInsertedElementsWearExactlyWhatTheyState(): void {
-    $result = $this->operations->batchOperations($this->entity, [
+    $result = $this->operations->batchOperations($this->host($this->entity), [
       [
         'op' => 'insert',
         'html' => '<pb-container id="bare"><pb-block id="quote" type="testimonial" /></pb-container><pb-container id="band" width="site"></pb-container>',
@@ -201,7 +208,7 @@ class DressedDomOperationsTest extends BlueprintKernelTestBase {
     // declared defaults, so the fixtures would have stamped.
     $plain_section = (new PhpUuid())->generate();
     $plain_block = (new PhpUuid())->generate();
-    $result = $this->operations->batchOperations($this->entity, [
+    $result = $this->operations->batchOperations($this->host($this->entity), [
       [
         'op' => 'add_section',
         'uuid' => $plain_section,
@@ -239,7 +246,7 @@ class DressedDomOperationsTest extends BlueprintKernelTestBase {
     ]);
     $entity->save();
 
-    $result = $this->dom->applyDocument($entity, '<pb-container id="bare"><pb-block id="quote" type="testimonial" /></pb-container><pb-container id="band" width="site"></pb-container>', $this->options);
+    $result = $this->dom->applyDocument($this->host($entity), '<pb-container id="bare"><pb-block id="quote" type="testimonial" /></pb-container><pb-container id="band" width="site"></pb-container>', $this->options);
     $this->assertTrue($result->isSuccess(), print_r($result->toArray()['errors'] ?? [], TRUE));
     $aliases = $result->getAliases();
     $this->assertSame(['bare', 'quote', 'band'], array_keys($aliases));

@@ -102,11 +102,11 @@ class BlueprintOperationsDuplicateTest extends BlueprintKernelTestBase {
     $this->container->get('event_dispatcher')->addListener(
       ElementDuplicatedEvent::class,
       static function (ElementDuplicatedEvent $event): void {
-        $event->addTarget($event->getEntity()->uuid(), 'field_listener');
+        $event->addTarget($event->getHost()->uuid(), 'field_listener');
       },
     );
 
-    $result = $this->operations->duplicateElement($entity, '6ec8ab53-89ae-974c-2315-a0f710ad9ff3');
+    $result = $this->operations->duplicateElement($this->host($entity), '6ec8ab53-89ae-974c-2315-a0f710ad9ff3');
 
     $this->assertTrue($result->isSuccess());
     $this->assertSame($entity, $result->getEntity());
@@ -155,7 +155,7 @@ class BlueprintOperationsDuplicateTest extends BlueprintKernelTestBase {
   public function testDuplicateSavedInlineBlock(): void {
     $entity = $this->createEntityWithInlineBlock(TRUE);
 
-    $result = $this->operations->duplicateElement($entity, '6ec8ab53-89ae-974c-2315-a0f710ad9ff3');
+    $result = $this->operations->duplicateElement($this->host($entity), '6ec8ab53-89ae-974c-2315-a0f710ad9ff3');
     $this->assertTrue($result->isSuccess());
 
     $section = $entity->get('layout_builder__layout')->first()->section;
@@ -179,7 +179,7 @@ class BlueprintOperationsDuplicateTest extends BlueprintKernelTestBase {
   public function testDuplicatePlainBlock(): void {
     $entity = $this->createEntityWithInlineBlock();
 
-    $result = $this->operations->duplicateElement($entity, '4607044b-72e5-cd3f-19a0-a19786c4f48e');
+    $result = $this->operations->duplicateElement($this->host($entity), '4607044b-72e5-cd3f-19a0-a19786c4f48e');
     $this->assertTrue($result->isSuccess());
 
     $section = $entity->get('layout_builder__layout')->first()->section;
@@ -196,7 +196,7 @@ class BlueprintOperationsDuplicateTest extends BlueprintKernelTestBase {
   public function testDuplicateWithClientUuid(): void {
     $entity = $this->createEntityWithInlineBlock();
 
-    $result = $this->operations->duplicateElement($entity, '6ec8ab53-89ae-974c-2315-a0f710ad9ff3', 'c31b92db-9558-b11d-d41b-a911875246e9');
+    $result = $this->operations->duplicateElement($this->host($entity), '6ec8ab53-89ae-974c-2315-a0f710ad9ff3', 'c31b92db-9558-b11d-d41b-a911875246e9');
 
     $this->assertTrue($result->isSuccess());
     $this->assertSame('c31b92db-9558-b11d-d41b-a911875246e9', $result->getTargets()[0]['uuid']);
@@ -210,7 +210,7 @@ class BlueprintOperationsDuplicateTest extends BlueprintKernelTestBase {
   public function testDuplicateNotFound(): void {
     $entity = $this->createEntityWithInlineBlock();
 
-    $result = $this->operations->duplicateElement($entity, '266985a2-5059-ae4c-d8ac-2dd69846853e');
+    $result = $this->operations->duplicateElement($this->host($entity), '266985a2-5059-ae4c-d8ac-2dd69846853e');
 
     $this->assertFalse($result->isSuccess());
     $this->assertSame('ELEMENT_NOT_FOUND', $result->getErrors()[0]->getCode());
@@ -238,7 +238,7 @@ class BlueprintOperationsDuplicateTest extends BlueprintKernelTestBase {
       'field_paragraphs' => [['entity' => $paragraph]],
     ]);
 
-    $result = $this->operations->duplicateElement($entity, $paragraph->uuid());
+    $result = $this->operations->duplicateElement($this->host($entity), $paragraph->uuid());
 
     $this->assertFalse($result->isSuccess());
     $this->assertSame('NOT_DUPLICABLE', $result->getErrors()[0]->getCode());
@@ -337,11 +337,11 @@ class BlueprintOperationsDuplicateTest extends BlueprintKernelTestBase {
       ElementDuplicatedEvent::class,
       static function (ElementDuplicatedEvent $event) use (&$received): void {
         $received[] = $event;
-        $event->addTarget($event->getEntity()->uuid(), 'field_listener');
+        $event->addTarget($event->getHost()->uuid(), 'field_listener');
       },
     );
 
-    $result = $this->operations->duplicateElement($entity, $fixture['nested']);
+    $result = $this->operations->duplicateElement($this->host($entity), $fixture['nested']);
     $this->assertTrue($result->isSuccess(), print_r($result->toArray()['errors'] ?? [], TRUE));
     $clone_uuid = $result->getTargets()[0]['uuid'];
     $this->assertSame(TargetType::ADDED, $result->getTargets()[0]['field_name']);
@@ -360,7 +360,7 @@ class BlueprintOperationsDuplicateTest extends BlueprintKernelTestBase {
 
     $this->assertCount(1, $received);
     $event = $received[0];
-    $this->assertSame($entity, $event->getEntity());
+    $this->assertSame($entity, $event->getHost()->entity());
     $this->assertSame($fixture['nested'], $event->getSourceUuid());
     $this->assertNull($event->getClone());
 
@@ -399,7 +399,7 @@ class BlueprintOperationsDuplicateTest extends BlueprintKernelTestBase {
     $fixture = $this->createEntityWithNestedSection();
     $entity = $fixture['entity'];
 
-    $result = $this->operations->duplicateElement($entity, $fixture['root']);
+    $result = $this->operations->duplicateElement($this->host($entity), $fixture['root']);
     $this->assertTrue($result->isSuccess(), print_r($result->toArray()['errors'] ?? [], TRUE));
     $clone_uuid = $result->getTargets()[0]['uuid'];
     $this->assertNotSame($fixture['root'], $clone_uuid);
@@ -427,7 +427,7 @@ class BlueprintOperationsDuplicateTest extends BlueprintKernelTestBase {
   public function testBatchDuplicateElement(): void {
     $entity = $this->createEntityWithInlineBlock();
 
-    $result = $this->operations->batchOperations($entity, [
+    $result = $this->operations->batchOperations($this->host($entity), [
       [
         'op' => 'duplicate_element',
         'element' => '6ec8ab53-89ae-974c-2315-a0f710ad9ff3',

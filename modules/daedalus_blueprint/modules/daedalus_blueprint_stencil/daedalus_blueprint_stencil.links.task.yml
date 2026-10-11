@@ -1,4 +1,0 @@
-entity.stencil.collection:
-  title: 'Stencils'
-  route_name: entity.stencil.collection
-  base_route: system.admin_content

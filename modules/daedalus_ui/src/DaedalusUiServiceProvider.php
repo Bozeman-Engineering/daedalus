@@ -27,7 +27,10 @@ class DaedalusUiServiceProvider extends ServiceProviderBase {
         ->addArgument(new Reference('current_user'))
         ->addArgument(new Reference('entity_type.manager'))
         ->addArgument(new Reference('daedalus_ui.live_attribution_demand'))
-        ->addArgument(new Reference('daedalus_ui.element_model'));
+        ->addArgument(new Reference('daedalus_ui.element_model'))
+        ->addArgument(new Reference('daedalus_ui.ui'))
+        ->addArgument(new Reference('daedalus_blueprint.verdict_stamper'))
+        ->addArgument(new Reference('daedalus_blueprint.host_resolver'));
       $container->register('daedalus_ui.event_subscriber.composed_block_render', ComposedBlockRender::class)
         ->addTag('event_subscriber')
         ->addArgument(new Reference('daedalus_ui.element_model'));

@@ -54,10 +54,15 @@ const { MARKUP_VIEW_ID } = await import(
 /**
  * One index entry in projection-index.js's shape.
  */
+// Every entry carries an open verdict: reach (daedalus_ui's reach.js) is
+// gated on the actor too, and a row whose verdict allows nothing is drawn
+// but never reachable, so a plane never stands on it.
+const OPEN = { content: true, configure: true, style: true, arrange: true, insert: true };
 const entry = (fields) => ({
   bundle: null,
   children: [],
   rows: [],
+  can: OPEN,
   ...fields,
 });
 

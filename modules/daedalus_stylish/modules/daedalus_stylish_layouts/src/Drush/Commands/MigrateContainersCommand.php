@@ -19,13 +19,13 @@ use Symfony\Component\DependencyInjection\Attribute\Autowire;
  * The same sequence the migrate_000N post_update hooks run, for
  * development environments and re-imported data sets: sync the generic
  * variant families, walk every layout store (hosts, then display
- * defaults) through the transform spine, then migrate variant entities
- * and stored stencils. Every notable rewrite prints; the post_update path
+ * defaults) through the transform spine, then migrate variant entities.
+ * Every notable rewrite prints; the post_update path
  * logs the same lines to the daedalus_stylish_layouts channel instead.
  */
 #[AsCommand(
   name: 'daedalus_stylish_layouts:migrate-containers',
-  description: 'Converts multi-region sections, style maps, variants, and stencils to the container model.',
+  description: 'Converts multi-region sections, style maps and variants to the container model.',
 )]
 final class MigrateContainersCommand extends Command {
 
@@ -78,11 +78,6 @@ final class MigrateContainersCommand extends Command {
 
     $output->writeln('Migrating style variant entities...');
     foreach ($this->migration->migrateVariants() as $line) {
-      $output->writeln('  ' . $line);
-    }
-
-    $output->writeln('Migrating stored stencils...');
-    foreach ($this->migration->migrateStencils() as $line) {
       $output->writeln('  ' . $line);
     }
 

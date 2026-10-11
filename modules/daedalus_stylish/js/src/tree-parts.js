@@ -324,7 +324,7 @@ export const createPartBehavior = ({ source, guide }) => {
     const sectionLayouts = source.getSectionLayouts();
     const map = source.getStyleMap();
     const variants = source.getMaterials().ofKind('variant');
-    const axes = axisVocabulary(guide, key, blockTypes, sectionLayouts, source.getLayout());
+    const axes = axisVocabulary(guide, key, blockTypes, sectionLayouts, source.getTree?.() ?? []);
     const tree = source.getTree();
     return PSEUDOS.filter((pseudo) =>
       deliversBox(

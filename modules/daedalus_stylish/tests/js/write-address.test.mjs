@@ -19,7 +19,6 @@ import {
   addressSet,
   boxAddresses,
   boxLabel,
-  facetOf,
   isAddress,
   ownerName,
   sameAddress,
@@ -375,15 +374,6 @@ test('an instance part facet: this paragraph, every paragraph here, then the anc
     'Every paragraph here › After',
     'Every paragraph in Welcome › After',
   ]);
-  // A tag rule chosen from the set lands on the block's `p` TAG TIER,
-  // never on the first minted paragraph: "every paragraph" is the tier,
-  // the instance one member of it. A hand-typed identity-class chain
-  // still lands on its instance, the one facet a class rule reaches.
-  assert.deepEqual(facetOf({ tree: TREE, key: FORMATTED, target: { key: HERO, selector: 'p' } }), { key: FORMATTED, selector: 'p' });
-  assert.deepEqual(facetOf({ tree: TREE, key: FORMATTED, target: { key: HERO, selector: '> pb-formatted-text p' } }), { key: FORMATTED, selector: 'p' });
-  assert.deepEqual(facetOf({ tree: TREE, key: FORMATTED, target: { key: HERO, selector: 'p::after' } }), { key: FORMATTED, selector: 'p::after' });
-  assert.deepEqual(facetOf({ tree: TREE, key: FORMATTED, target: { key: HERO, selector: 'h2' } }), { key: FORMATTED, selector: 'h2' });
-  assert.deepEqual(facetOf({ tree: TREE, key: FORMATTED, target: { key: HERO, selector: '> pb-formatted-text .s-p1' } }), { key: FORMATTED, selector: '.s-p1' });
   // A declared part keeps its shapes: the class is the class of things,
   // and no own tag tier is offered (one link per element by design).
   const declared = set(STRICT, LINKED, LINK);
@@ -396,34 +386,6 @@ test('an instance part facet: this paragraph, every paragraph here, then the anc
     `${PAGE}::pb-text ${LINK}`,
   ]);
   assert.equal(declared.some((address) => address.key === LINKED && address.selector === 'a'), false);
-});
-
-test('facetOf names the facet a target reaches on the selected element: its own selector below, the reached root, part or tag tier above, null for no reach', () => {
-  // No target, or one on the element itself: the own facet as given.
-  assert.deepEqual(facetOf({ tree: TREE, key: LINKED, target: null }), { key: LINKED, selector: null });
-  assert.deepEqual(facetOf({ tree: TREE, key: LINKED, target: { key: LINKED, selector: LINK } }), { key: LINKED, selector: LINK });
-  assert.deepEqual(facetOf({ tree: TREE, key: LINKED, target: { key: LINKED, selector: '> pb-text' } }), { key: LINKED, selector: '> pb-text' });
-  // An ancestor rule: the root when the rule matches the element
-  // itself, so the switcher's set is the root's and the rows the root's.
-  assert.deepEqual(facetOf({ tree: TREE, key: LINKED, target: { key: HERO, selector: '> pb-text' } }), { key: LINKED, selector: null });
-  assert.deepEqual(facetOf({ tree: TREE, key: LINKED, target: { key: PAGE, selector: 'p' } }), { key: LINKED, selector: null });
-  assert.deepEqual(facetOf({ tree: TREE, key: LINKED, target: { key: HERO, selector: '> *' } }), { key: LINKED, selector: null });
-  // "Every link in Welcome" chosen from the link part: the part whose
-  // tag the rule names, so the rows stay the link's (the done-when).
-  assert.deepEqual(facetOf({ tree: TREE, key: LINKED, target: { key: HERO, selector: 'a' } }), { key: LINKED, selector: LINK });
-  assert.deepEqual(facetOf({ tree: TREE, key: LINKED, target: { key: HERO, selector: `> pb-text ${LINK}` } }), { key: LINKED, selector: LINK });
-  assert.deepEqual(facetOf({ tree: TREE, key: LINKED, target: { key: PAGE, selector: `pb-text ${LINK}` } }), { key: LINKED, selector: LINK });
-  // A tag tier the annotation's bag carries, behind no part.
-  assert.deepEqual(facetOf({ tree: TREE, key: LINKED, target: { key: HERO, selector: 'em' } }), { key: LINKED, selector: 'em' });
-  // A rule reaching nothing of the element, an image rule on a text
-  // block, an owner the tree lacks, no tree: null, the drop signal.
-  assert.equal(facetOf({ tree: TREE, key: LINKED, target: { key: HERO, selector: '> pb-image' } }), null);
-  assert.equal(facetOf({ tree: TREE, key: HEADING, target: { key: HERO, selector: 'a' } }), null);
-  assert.equal(facetOf({ tree: TREE, key: LINKED, target: { key: 'container:00000000-0000-4000-8000-000000000000', selector: '> *' } }), null);
-  assert.equal(facetOf({ tree: null, key: LINKED, target: { key: HERO, selector: '> *' } }), null);
-  // An ancestor rule on a facet the set does not list still names its
-  // facet here: membership is the set's judgement, reach is this one's.
-  assert.deepEqual(facetOf({ tree: TREE, key: PARA, target: { key: HERO, selector: '> *' } }), { key: PARA, selector: null });
 });
 
 test('a tag facet: every such tag here, then the ancestors\' tag rule and the type-then-tag chains', () => {
@@ -584,16 +546,7 @@ test('a box facet: the box word, the ancestors\' rules ending in the same box th
   ]);
 });
 
-test('facetOf lands an ancestor box rule on the host facet\'s box; boxAddresses lists the doorways of a root or part facet', () => {
-  assert.deepEqual(facetOf({ tree: TREE, key: LINKED, target: { key: HERO, selector: '> pb-text::before' } }), { key: LINKED, selector: '&::before' });
-  assert.deepEqual(facetOf({ tree: TREE, key: LINKED, target: { key: HERO, selector: '> *::after' } }), { key: LINKED, selector: '&::after' });
-  assert.deepEqual(facetOf({ tree: TREE, key: LINKED, target: { key: HERO, selector: 'a::after' } }), { key: LINKED, selector: `${LINK}::after` });
-  assert.deepEqual(facetOf({ tree: TREE, key: LINKED, target: { key: PAGE, selector: `pb-text ${LINK}::before` } }), { key: LINKED, selector: `${LINK}::before` });
-  assert.deepEqual(facetOf({ tree: TREE, key: LINKED, target: { key: HERO, selector: 'em::before' } }), { key: LINKED, selector: 'em::before' });
-  assert.deepEqual(facetOf({ tree: TREE, key: LINKED, target: { key: LINKED, selector: '&::after' } }), { key: LINKED, selector: '&::after' });
-  // A box rule that reaches no host of the element: the drop signal.
-  assert.equal(facetOf({ tree: TREE, key: LINKED, target: { key: HERO, selector: '> pb-image::before' } }), null);
-  assert.equal(facetOf({ tree: TREE, key: HEADING, target: { key: HERO, selector: 'a::before' } }), null);
+test('boxAddresses lists the doorways of a root or part facet', () => {
   // The doorways: the root's anchor boxes, a part's boxes; none for a
   // tag tier, a chain, or a box (a pseudo is terminal).
   const doors = (guide, key, selector) =>

@@ -20,7 +20,7 @@ use Symfony\Component\Console\Tester\CommandTester;
  *
  * ShippedDefinitionsImporter merges a module's hand-authored single file
  * (MODULE.daedalus_stylish.variants.yml) with every per-id file beside it
- * (MODULE.daedalus_stylish.variants.ID.yml), the machine-written form a stencil's
+ * (MODULE.daedalus_stylish.variants.ID.yml), the machine-written form a blueprint's
  * variants ship in. daedalus_stylish_variants_files_test ships one variant in each
  * form; daedalus_stylish_variants_files_test_invalid ships the same machine name in
  * both, which discovery must refuse before anything imports. Exercised
@@ -62,6 +62,7 @@ class ShippedDefinitionsDiscoveryTest extends KernelTestBase {
     $this->installEntitySchema('daedalus_variant');
     $this->installEntitySchema('daedalus_swatch');
     $this->installEntitySchema('daedalus_animation');
+    $this->installEntitySchema('daedalus_font');
     $this->installEntitySchema('daedalus_skin');
     $this->installSchema('daedalus_stylish', ['daedalus_animation_usage']);
     $this->installConfig(['daedalus_stylish']);
@@ -191,7 +192,7 @@ class ShippedDefinitionsDiscoveryTest extends KernelTestBase {
 
     // A module shipping nothing is told which files it could ship.
     $this->assertSame(Command::SUCCESS, $tester->execute(['module' => 'system']));
-    $this->assertStringContainsString('system is not enabled or ships no daedalus_stylish definitions: no system.daedalus_stylish.animations.yml, system.daedalus_stylish.swatches.yml, system.daedalus_stylish.skins.yml, system.daedalus_stylish.variants.yml or a per-id file beside one (e.g. system.daedalus_stylish.variants.*.yml).', $tester->getDisplay());
+    $this->assertStringContainsString('system is not enabled or ships no daedalus_stylish definitions: no system.daedalus_stylish.fonts.yml, system.daedalus_stylish.animations.yml, system.daedalus_stylish.swatches.yml, system.daedalus_stylish.skins.yml, system.daedalus_stylish.variants.yml or a per-id file beside one (e.g. system.daedalus_stylish.variants.*.yml).', $tester->getDisplay());
 
     $this->enableModules(['daedalus_stylish_variants_files_test_invalid']);
     $command = SyncCommand::create($this->container);

@@ -2,13 +2,8 @@
 
 namespace Drupal\daedalus_ui\Hook;
 
-use Drupal\block\BlockInterface;
-use Drupal\block\Entity\Block;
-use Drupal\Core\Access\AccessResult;
-use Drupal\Core\Access\AccessResultInterface;
 use Drupal\Core\Entity\Display\EntityViewDisplayInterface;
 use Drupal\Core\Entity\EntityInterface;
-use Drupal\Core\Render\BubbleableMetadata;
 use Drupal\Core\Hook\Order\Order;
 use Drupal\Core\Hook\Attribute\Hook;
 use Drupal\Core\Session\AccountInterface;
@@ -58,9 +53,10 @@ class DaedalusUiHooks {
    * parses the URL; the editing page delivers the same identity as
    * daedalusUi.editSession.scope. A hand-typed pop-out URL without a scope
    * carries null: no edit session to pair with, so the document renders
-   * static. Preview mode is a site page with the editor gone and gets
-   * neither; the chromeless drop itself stays in preprocessHtml (this seam
-   * only adds to a page; Chromeless says why the drop lives there).
+   * static. Preview mode (a site page with the editor gone) and a bare
+   * route (site content rendered alone in the skin) get neither; the
+   * chromeless drop itself stays in preprocessHtml (this seam only adds
+   * to a page; Chromeless says why the drop lives there).
    */
   #[Hook('page_attachments')]
   public function pageAttachments(array &$attachments): void {
@@ -102,7 +98,8 @@ class DaedalusUiHooks {
    * panel carries that context), so the stamp adds no new cache variation.
    *
    * The chromeless drop: a chromeless document (Chromeless: a pop-out
-   * route, a preview-mode page) prints no page_top and no page_bottom.
+   * route, a bare route, a preview-mode page) prints no page_top and no
+   * page_bottom.
    * Core's ThemePreprocess::preprocessHtml hands both regions to the
    * template as unrendered arrays and Twig renders them at print, so
    * nulling them here keeps the markup AND its #attached (bundles, the AI
@@ -116,7 +113,10 @@ class DaedalusUiHooks {
    * theme's wrappers between body and mount inherit, its header and footer
    * stay out). The class is a template variable, so it is stamped here;
    * everything else a pop-out document carries rides pageAttachments.
-   * Preview mode gets none of it: it IS a site page with the editor gone.
+   * Preview mode and a bare document get none of it: the first IS a site
+   * page with the editor gone, the second is site content rendered alone
+   * in the skin, and the pop-out chrome would neutralize the very theme
+   * both show.
    */
   #[Hook('preprocess_html')]
   public function preprocessHtml(array &$variables): void {
@@ -290,34 +290,21 @@ class DaedalusUiHooks {
    * - data-main-entity + data-entity-uuid: marks the route's main entity,
    *   the stage for the editing UI.
    *
-   * Content blocks are normally attributed at their Layout Builder placement
-   * instead (LayoutBuilderBlockAttributes): their canonical selection identity
-   * is the placement (block:{component_uuid}) and their markup root is the
-   * block template. The exception is a block_content that IS the route's
-   * entity: on its standalone editing surface (the
-   * daedalus_ui.block_content.edit route) the entity is the page builder
-   * ROOT, its selection identity is the entity itself, and it carries the
-   * full attribute set. Core renders block_content without an entity template
-   * (BlockContentViewBuilder unsets #theme; the block template that would
-   * normally wrap it is absent when the entity view is the canvas), so a
-   * container wrapper is added as the attribute carrier for that one
-   * template-less root shape.
+   * Content blocks carry none of this: a block_content is attributed at its
+   * Layout Builder placement instead (LayoutBuilderBlockAttributes), where
+   * its canonical selection identity is the placement (block:{component_uuid})
+   * and its markup root is the block template. A block_content is never a
+   * canvas root of its own: a shared composition is a blueprint, edited on
+   * the blueprint's canonical route, and shown elsewhere by a linked
+   * placement whose block root wears the portal to that canvas.
    *
    * Delivery depends on the template printing {{ attributes }} on its
    * outermost element; EntityUiWrapper verifies that after render and wraps
    * as a fallback when a template fails to.
-   *
-   * A block_content that is NOT the route's entity (a footer placed in a
-   * theme region, rendered on a node page) gets none of that: it stays out
-   * of the page's selection universe and edits at its own root. What it gets
-   * instead is the portal stamp: the placement carries the label and URL of
-   * that root so the canvas can offer the way there (the portal chip).
    */
   #[Hook('entity_view')]
   public function entityView(array &$build, EntityInterface $entity, EntityViewDisplayInterface $display, string $view_mode): void {
-    $is_block_content = $entity->getEntityTypeId() === 'block_content';
-    if ($is_block_content && !$this->isRouteEntity($entity)) {
-      $this->stampPortal($build, $entity);
+    if ($entity->getEntityTypeId() === 'block_content') {
       return;
     }
     $build['#attributes'][ElementAddress::ATTRIBUTE] = ElementAddress::ENTITY;
@@ -341,50 +328,6 @@ class DaedalusUiHooks {
       $build['#attributes']['data-main-entity'] = 'true';
       $build['#attributes']['data-entity-uuid'] = $entity->uuid();
     }
-
-    if ($is_block_content) {
-      // The template-less root: nothing merges this build's #attributes into
-      // markup (no entity template, no wrapping block template), so the build
-      // itself must supply the element they ride. The container is the canvas
-      // root the mutation-response contract swaps at, and it renders
-      // identically in the page render and SubtreeRenderer's re-render (both
-      // are the entity view through this same hook), so root-scoped swap
-      // markup always matches an element on the page.
-      $build['#theme_wrappers'][] = 'container';
-    }
-  }
-
-  /**
-   * Stamps the portal attributes on a foreign block_content's build.
-   *
-   * A portal is a placed entity that is inert on this page and edited at its
-   * own root. The stamp names that root: data-daedalus-ui-portal-url is
-   * the one editing-surface derivation (DaedalusUi::getEditingUrl())
-   * and data-daedalus-ui-portal-label is the entity's own label (the
-   * block description: "Header", "Footer"). The build's #attributes reach the
-   * theme placement's block template root (BlockViewBuilder::preRender()
-   * hoists the content's #attributes onto the block build), the same seam
-   * Daedalus Stylish's entity root key rides; no wrapper is added because the block
-   * template already supplies the element.
-   *
-   * Gated on the edit-mode permission, not the mode, the way daedalus_layout stamps
-   * section keys: the attributes are bytes that ride for editors in every
-   * mode, so a cached theme block varies only by user.permissions (plus the
-   * update-access result's own cacheability), never by mode. A user without
-   * the permission or update access gets the plain render.
-   */
-  private function stampPortal(array &$build, EntityInterface $entity): void {
-    $access = $this->ui->pageBuilderBlockContentAccess($entity);
-    $cacheability = BubbleableMetadata::createFromRenderArray($build)
-      ->addCacheContexts(['user.permissions'])
-      ->addCacheableDependency($access);
-    if ($access->isAllowed() && $this->currentUser->hasPermission('use daedalus ui edit mode')) {
-      $url = $this->ui->getEditingUrl($entity)->toString(TRUE);
-      $cacheability->addCacheableDependency($url);
-      $build['#attributes']['data-daedalus-ui-portal-url'] = $url->getGeneratedUrl();
-      $build['#attributes']['data-daedalus-ui-portal-label'] = (string) $entity->label();
-    }
-    $cacheability->applyTo($build);
   }
 
   /**
@@ -397,79 +340,13 @@ class DaedalusUiHooks {
    *   TRUE when the route's derived entity is this entity.
    */
   private function isRouteEntity(EntityInterface $entity): bool {
-    $route_entity = $this->ui->deriveEntityFromRoute();
-    return !empty($route_entity) &&
+    $route_entity = $this->ui->deriveHostFromRoute()?->entity();
+    return $route_entity !== NULL &&
       $entity->getEntityTypeId() === $route_entity->getEntityTypeId() &&
       (
         daedalus_ui_entity_identifier($entity) === $route_entity->id() ||
         daedalus_ui_entity_identifier($entity) === $route_entity->uuid()
       );
-  }
-
-  /**
-   * Implements hook_entity_operation().
-   *
-   * The block layout listing (/admin/structure/block) is where a theme-region
-   * block placement lives, so it is also the entry point to the standalone
-   * editing surface of the block_content the placement wraps: an "Edit
-   * layout" operation on placements whose plugin wraps a Layout
-   * Builder-enabled block_content the user may update (the one predicate,
-   * DaedalusUi::pageBuilderBlockContentAccess(), shared with the
-   * portal stamp). The URL comes from the one editing-surface derivation
-   * (DaedalusUi::getEditingUrl()); access mirrors the editing route's
-   * gate (block_content update).
-   */
-  #[Hook('entity_operation')]
-  public function entityOperation(EntityInterface $entity): array {
-    if (!$entity instanceof Block) {
-      return [];
-    }
-    if (!str_starts_with($entity->getPluginId(), 'block_content:')) {
-      return [];
-    }
-    $block_content = $this->ui->getBlockPluginEntity($entity);
-    if (!$block_content || !$this->ui->pageBuilderBlockContentAccess($block_content)->isAllowed()) {
-      return [];
-    }
-    return [
-      'edit-layout' => [
-        'title' => $this->t('Edit layout'),
-        'url' => $this->ui->getEditingUrl($block_content),
-        'weight' => 15,
-      ],
-    ];
-  }
-
-  /**
-   * Implements hook_block_access().
-   *
-   * A block_content's standalone editing surface renders the entity itself as
-   * the canvas. When that same entity is also placed in a theme region (the
-   * whole point of a footer block), the placement would render a second copy
-   * of the entity on its own editing page: in edit mode a second Layout
-   * Builder + canvas and a duplicate data-main-entity root, breaking every
-   * first-match main-entity lookup and mutation-response swap target. The
-   * placement is hidden while its content entity is the route's entity; it
-   * renders normally everywhere else. The outcome varies by route, so the
-   * route cache context rides every result this hook forms an opinion on
-   * (block_content placements), keeping a cached allowed render from leaking
-   * onto the editing surface.
-   */
-  #[Hook('block_access')]
-  public function blockAccess(BlockInterface $block, string $operation, AccountInterface $account): AccessResultInterface {
-    if ($operation !== 'view') {
-      return AccessResult::neutral();
-    }
-    $plugin_id = $block->getPluginId();
-    if (!str_starts_with($plugin_id, 'block_content:')) {
-      return AccessResult::neutral();
-    }
-    $route_entity = $this->ui->deriveEntityFromRoute();
-    $wraps_route_entity = $route_entity instanceof EntityInterface
-      && $route_entity->getEntityTypeId() === 'block_content'
-      && $plugin_id === 'block_content:' . $route_entity->uuid();
-    return AccessResult::forbiddenIf($wraps_route_entity, "The placed block's content entity is this route's editing canvas.")
-      ->addCacheContexts(['route']);
   }
 
 }

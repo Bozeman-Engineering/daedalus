@@ -105,7 +105,6 @@ final class RenamerTest extends KernelTestBase {
       'columns',
       'key_value',
       'sections',
-      'stencil migration',
       'caches',
     ], array_keys($report->steps));
     $this->assertSame(Renamer::FOUNDATION, $report->steps['foundation']['items']);
@@ -120,8 +119,7 @@ final class RenamerTest extends KernelTestBase {
     $this->assertSame(['users_field_data.navigation_plus_settings to daedalus_ui_settings'], $report->steps['columns']['items']);
     $this->assertSame('3 rows rewritten', $report->steps['sections']['line']);
     $this->assertSame(['node__layout_builder__layout 2', 'node_revision__layout_builder__layout 1'], $report->steps['sections']['items']);
-    $this->assertSame([Renamer::STENCIL_MIGRATION], $report->steps['stencil migration']['items']);
-    $this->assertStringStartsWith('rename: foundation: 4 modules installed; core.extension: 4 extensions renamed, 1 removed; system.schema: 4 keys renamed, 1 removed; post_update: 1 names renamed, 1 removed; config: ', $report->summary());
+    $this->assertStringStartsWith('rename: foundation: 3 modules installed; core.extension: 4 extensions renamed, 1 removed; system.schema: 4 keys renamed, 1 removed; post_update: 1 names renamed, 1 removed; config: ', $report->summary());
     $this->assertStringContainsString("  lb_plus.settings to daedalus_layout.settings\n", $report->render());
 
     // KernelTestBase re-points $this->container at every rebuilt container;
@@ -153,21 +151,17 @@ final class RenamerTest extends KernelTestBase {
     $this->assertSame(10400, $schema['daedalus_ui']);
     $this->assertSame(10001, $schema['daedalus_edit']);
     $this->assertSame(11001, $schema['daedalus_tempstore']);
-    $this->assertArrayHasKey('daedalus_blueprint_stencil', $schema);
     foreach (['lb_plus', 'lb_plus_section_library', 'navigation_plus', 'edit_plus', 'tempstore_plus'] as $module) {
       $this->assertArrayNotHasKey($module, $schema);
     }
 
-    // post_update: the old names translated, the install's marks kept but
-    // for the section-library migration.
+    // post_update: the old names translated, the install's marks kept.
     $existing = $this->registry->get('post_update')->get('existing_updates');
     $this->assertContains('system_post_update_remove_path_key', $existing);
     $this->assertNotContains('lb_plus_section_library_post_update_gone', $existing);
     $this->assertNotContains('daedalus_layout_section_library_post_update_gone', $existing);
     $this->assertContains('daedalus_tempstore_post_update_prune_history', $existing);
     $this->assertNotContains('tempstore_plus_post_update_prune_history', $existing);
-    $this->assertContains('daedalus_blueprint_stencil_post_update_migrate_layout_block_nodes', $existing);
-    $this->assertNotContains(Renamer::STENCIL_MIGRATION, $existing);
     // The renamed modules' own migrations are pending for drush updb: the
     // rename never marks a post_update of theirs, and their hook_update_N
     // above the recorded versions are due.
@@ -175,12 +169,10 @@ final class RenamerTest extends KernelTestBase {
     $pending = $container->get('update.post_update_registry')->getPendingUpdateFunctions();
     $this->assertContains('daedalus_layout_post_update_0001_migrate_layout_blocks_hosts', $pending);
     $this->assertContains('daedalus_layout_post_update_0005_block_icons_to_block_types', $pending);
-    $this->assertContains(Renamer::STENCIL_MIGRATION, $pending);
-    $this->assertNotContains('daedalus_blueprint_stencil_post_update_migrate_layout_block_nodes', $pending);
     $container->get('module_handler')->loadInclude('daedalus_ui', 'install');
     $hook_registry = $container->get('update.update_hook_registry');
     $this->assertSame(10400, $hook_registry->getInstalledVersion('daedalus_ui'));
-    $this->assertSame([10401, 10402, 10404], array_values(array_filter($hook_registry->getAvailableUpdates('daedalus_ui'), static fn(int $number): bool => $number > 10400)));
+    $this->assertSame([10401, 10402], array_values(array_filter($hook_registry->getAvailableUpdates('daedalus_ui'), static fn(int $number): bool => $number > 10400)));
 
     // Config: names and data.
     $storage = $container->get('config.storage');
@@ -258,7 +250,7 @@ final class RenamerTest extends KernelTestBase {
     $again = (new Renamer(Mapping::fromFile(), \Drupal::getContainer()))->run();
     $this->assertTrue($again->ok(), $again->summary());
     $this->assertSame(
-      'rename: foundation: already installed; core.extension: nothing to rename; system.schema: nothing to rename; post_update: nothing to rename; config: nothing to rewrite; columns: nothing to rename; key_value: nothing to rewrite; sections: nothing to rewrite; stencil migration: not marked, nothing to do; caches: flushed, container rebuilt with the renamed modules.',
+      'rename: foundation: already installed; core.extension: nothing to rename; system.schema: nothing to rename; post_update: nothing to rename; config: nothing to rewrite; columns: nothing to rename; key_value: nothing to rewrite; sections: nothing to rewrite; caches: flushed, container rebuilt with the renamed modules.',
       $again->summary(),
     );
     $this->assertSame($before, $this->snapshot());

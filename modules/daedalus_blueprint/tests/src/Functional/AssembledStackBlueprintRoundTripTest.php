@@ -127,7 +127,7 @@ class AssembledStackBlueprintRoundTripTest extends BrowserTestBase {
    *   tool would be inert.
    * - Serialize (eb_read_entity): the backend serializes the saved page
    *   and the blueprint round-trips -- entity_type=node, bundle=page, the
-   *   _root_entity pointer back to the saved node, and a layout_builder__layout
+   *   _root_entity pointer back to the saved node, and a layout
    *   key reflecting the Layout Builder section the recipe's default display
    *   seeds (daedalus_layout stamps it with a section UUID). That layout key is the
    *   load-bearing proof the LB serialization survives on the real display, not
@@ -202,12 +202,12 @@ class AssembledStackBlueprintRoundTripTest extends BrowserTestBase {
     // a section, so the serialized layout has at least one section, and daedalus_layout
     // stamps it with a section UUID the AI can target in later operations.
     $this->assertArrayHasKey(
-      'layout_builder__layout',
+      'layout',
       $blueprint,
       'The page serializes its Layout Builder layout (the LB round-trip on the real display).',
     );
-    $this->assertNotEmpty($blueprint['layout_builder__layout'], 'The serialized layout has at least one section.');
-    $first_section = $blueprint['layout_builder__layout'][0];
+    $this->assertNotEmpty($blueprint['layout'], 'The serialized layout has at least one section.');
+    $first_section = $blueprint['layout'][0];
     $this->assertArrayHasKey('layout_id', $first_section, 'The serialized section names its layout plugin.');
     $this->assertArrayHasKey(
       'uuid',
@@ -220,20 +220,22 @@ class AssembledStackBlueprintRoundTripTest extends BrowserTestBase {
     // pre-existing display seeds a layout_onecol section carrying the
     // display's field blocks. That is the real default-section shape a
     // takeover apply produces (every 11.3 standard site, every upgrade), and a
-    // multi-region section serializes a regions map (containers -- exercised
-    // by the add_section op below -- serialize an ordered children list
-    // instead; the shipped blank-placeholder display only reaches sites where
-    // the import created the bundle).
+    // multi-region section's slots serialize as region nodes under the
+    // container (containers -- exercised by the add_section op below --
+    // hold their ordered children directly; the shipped blank-placeholder
+    // display only reaches sites where the import created the bundle).
+    $this->assertSame('container', $first_section['kind']);
     $this->assertSame('layout_onecol', $first_section['layout_id'], 'The takeover display seeds core\'s one-column section.');
-    $this->assertArrayHasKey('regions', $first_section, 'A multi-region section serializes its regions map.');
-    $this->assertArrayNotHasKey('children', $first_section, 'A non-container section never serializes a children list.');
+    $this->assertArrayNotHasKey('regions', $first_section, 'The tree has one child axis, never a regions map.');
+    $this->assertSame('region', $first_section['children'][0]['kind'], 'A multi-region section holds its slots as region nodes.');
+    $this->assertSame('content', $first_section['children'][0]['region']);
 
     // eb_read_schema: the backend advertises the block types the AI may place
     // into this display. Discover a real block type and a text field FROM THE
     // SCHEMA instead of hardcoding recipe internals -- the AI's own learn-then-
     // act flow, and what keeps this test robust to block-type drift.
     $schema = $backend->getSchema('node', 'page', 'full');
-    $available = $schema['layout_builder__layout']['available_block_types'] ?? [];
+    $available = $schema['layout']['available_block_types'] ?? [];
     $this->assertNotEmpty(
       $available,
       'The schema advertises inline block types for the page display (eb_read_schema surface).',
@@ -253,9 +255,10 @@ class AssembledStackBlueprintRoundTripTest extends BrowserTestBase {
     // its own section rather than anchoring transient default identity.)
     $marker = 'Blueprint round-trip marker text';
     $operations = $backend->getOperations();
+    $host = \Drupal::service('daedalus_blueprint.host_resolver')->fromEntity($node);
     $section_uuid = \Drupal::service('uuid')->generate();
     $new_uuid = \Drupal::service('uuid')->generate();
-    $result = $operations->batchOperations($node, [
+    $result = $operations->batchOperations($host, [
       [
         'op' => 'add_section',
         'uuid' => $section_uuid,
@@ -290,7 +293,7 @@ class AssembledStackBlueprintRoundTripTest extends BrowserTestBase {
 
     // The new block is in the entity's in-memory layout...
     $this->assertNotNull(
-      $operations->getElement($node, $new_uuid),
+      $operations->getElement($host, $new_uuid),
       'The added component is locatable in the entity layout before persistence.',
     );
 
@@ -306,7 +309,7 @@ class AssembledStackBlueprintRoundTripTest extends BrowserTestBase {
     // The AI-tool commit path: force_save writes straight to the database,
     // bypassing the LB tempstore an unforced edit would route to.
     $storage_handler = $backend->getStorageHandler();
-    $storage_handler->persist($node, FALSE, TRUE, $element_uuids);
+    $storage_handler->persist($host, FALSE, TRUE, $element_uuids);
 
     // A node reloaded fresh from storage now carries the added component in its
     // layout override -- the AI-style operation reached durable storage.

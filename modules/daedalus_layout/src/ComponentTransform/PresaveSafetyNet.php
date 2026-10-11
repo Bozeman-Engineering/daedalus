@@ -16,10 +16,10 @@ use Drupal\layout_builder\Entity\LayoutEntityDisplayInterface;
  * store, but an editing session staged in tempstore before the update ran
  * still holds deprecated components and would write them back verbatim on
  * save. Rather than walking tempstore's per-user serialized envelopes, every
- * entity save passes through this net (daedalus_layout_entity_presave()): while any
+ * entity save passes through this net (EntityPresave::entityPresave()): while any
  * transform is registered, the layout sections of the entity being saved are
  * converged in place. One save-path chokepoint catches stale sessions,
- * forgotten drafts, replayed daedalus_blueprint stencils, and anything else
+ * forgotten drafts, replayed blueprint placements, and anything else
  * that slips past the walkers, and it costs a single hasTransforms() check
  * once a deprecation window closes and its transform is unregistered.
  *
@@ -33,7 +33,7 @@ use Drupal\layout_builder\Entity\LayoutEntityDisplayInterface;
  * its first edit-mode render instead of crashing it.
  *
  * The net runs before layout_builder's inline block presave machinery (see
- * the call order in daedalus_layout_entity_presave()) so a block_serialized
+ * the call order in EntityPresave::entityPresave()) so a block_serialized
  * replacement written by a transform is saved and usage-tracked within the
  * same host save, per the block_serialized contract on
  * ComponentTransformInterface.
@@ -87,7 +87,7 @@ class PresaveSafetyNet {
       }
     }
     elseif ($entity instanceof LayoutEntityDisplayInterface && $entity->isLayoutBuilderEnabled()) {
-      return $this->transforms->transformSectionList($entity, $entity);
+      return $this->transforms->transformDisplay($entity);
     }
     return FALSE;
   }

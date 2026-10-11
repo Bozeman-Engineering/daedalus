@@ -1,0 +1,7 @@
+name: 'Daedalus UI Bare Test'
+type: module
+description: 'A bare route (the _daedalus_ui.bare option) rendering a node alone, for the chromeless document tests.'
+package: Testing
+dependencies:
+  - daedalus:daedalus_ui
+  - drupal:node

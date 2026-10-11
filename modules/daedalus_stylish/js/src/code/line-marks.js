@@ -64,7 +64,7 @@ const variantLabel = (library, reference) =>
  */
 const scopeWords = (scope) => {
   if (typeof scope === 'string' && scope.startsWith('base:')) {
-    return Drupal.t('@tag elements', { '@tag': scope.slice('base:'.length) });
+    return Drupal.t('!tag elements', { '!tag': scope.slice('base:'.length) });
   }
   return declarationLabel(scope) ?? scope;
 };
@@ -82,34 +82,34 @@ const scopeWords = (scope) => {
 const supplierTitle = (layer, line, library) => {
   const tier = layerTier(layer);
   if (tier === TIER_SKIN) {
-    return Drupal.t('Supplied by the active skin (@scope).', {
-      '@scope': layerScope(layer),
+    return Drupal.t('Supplied by the active skin (!scope).', {
+      '!scope': layerScope(layer),
     });
   }
   if (tier === TIER_DECLARED) {
-    return Drupal.t("Supplied by the declaration's defaults (@scope).", {
-      '@scope': layerScope(layer),
+    return Drupal.t("Supplied by the declaration's defaults (!scope).", {
+      '!scope': layerScope(layer),
     });
   }
   const rule = ancestorRule(layer);
   if (rule) {
     const worn = ancestorVariant(layer);
     return worn === null
-      ? Drupal.t('Inherited from the rule "@selector" on @owner.', {
-          '@selector': rule.selector,
-          '@owner': rule.key,
+      ? Drupal.t('Inherited from the rule "!selector" on !owner.', {
+          '!selector': rule.selector,
+          '!owner': rule.key,
         })
       : Drupal.t(
-          'Supplied by the variant "@label" through the rule "@selector" on @owner.',
+          'Supplied by the variant "!label" through the rule "!selector" on !owner.',
           {
-            '@label': variantLabel(library, worn),
-            '@selector': rule.selector,
-            '@owner': rule.key,
+            '!label': variantLabel(library, worn),
+            '!selector': rule.selector,
+            '!owner': rule.key,
           },
         );
   }
-  return Drupal.t('Supplied by the variant "@label".', {
-    '@label': variantLabel(library, line.variant),
+  return Drupal.t('Supplied by the variant "!label".', {
+    '!label': variantLabel(library, line.variant),
   });
 };
 
@@ -132,11 +132,11 @@ const runLabel = (layer, line, { library, own }) => {
   }
   const tier = layerTier(layer);
   if (tier === TIER_SKIN) {
-    return Drupal.t('skin, @scope', { '@scope': scopeWords(layerScope(layer)) });
+    return Drupal.t('skin, !scope', { '!scope': scopeWords(layerScope(layer)) });
   }
   if (tier === TIER_DECLARED) {
-    return Drupal.t('declared, @scope', {
-      '@scope': scopeWords(layerScope(layer)),
+    return Drupal.t('declared, !scope', {
+      '!scope': scopeWords(layerScope(layer)),
     });
   }
   return variantLabel(library, line.variant);
@@ -163,11 +163,11 @@ const winnerLabel = (winnerId, winner, library) => {
   if (rule) {
     const worn = ancestorVariant(winnerId);
     return worn === null
-      ? Drupal.t('an ancestor\'s "@selector" rule', {
-          '@selector': rule.selector,
+      ? Drupal.t('an ancestor\'s "!selector" rule', {
+          '!selector': rule.selector,
         })
-      : Drupal.t('"@label" through an ancestor\'s rule', {
-          '@label': variantLabel(library, worn),
+      : Drupal.t('"!label" through an ancestor\'s rule', {
+          '!label': variantLabel(library, worn),
         });
   }
   return variantLabel(library, winner.variant);

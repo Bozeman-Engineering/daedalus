@@ -46,13 +46,14 @@
  *   root envelope and the delivered blueprint mirror. Returns the view
  *   tree's root node. Nodes are
  *   either MODEL nodes — the built-in projection's shape ({key, kind,
- *   label, presentation, children, editTarget?, formOnly?}, key null for
- *   unselectable rows, plus an optional `sublabel` rendered as muted
- *   secondary text after the label — a view's extra identity for the
- *   row, e.g. the markup class a field row's element wears) rendered as
- *   real tree rows on the selection spine —
+ *   label, elementType?, icon?, presentation, children, editTarget?,
+ *   formOnly?}, key null for unselectable rows; the row draws `icon`
+ *   (a URL) in its icon zone, `label` as its name and an optional `tag`
+ *   (the element tag the row rendered as) as a fact at its end) rendered
+ *   as real tree rows on the selection spine —
  *   or PSEUDO nodes ({pseudo: true, id, parentKey, label, source,
- *   children}) rendered as pseudo-selection rows: id is provider-scoped,
+ *   children, elementType?, icon?, tag?}) rendered as pseudo-selection
+ *   rows with the same zones: id is provider-scoped,
  *   parentKey the owning MODEL key (at any depth — a pseudo row need not
  *   sit under its owner's row), source the row's origin for reach
  *   ('instance' for content, otherwise the provider's own displayToggle

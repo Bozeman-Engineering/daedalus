@@ -65,19 +65,13 @@ const section = named('Section');
  * setting): no absorption, every identity keeps its own row. Open, the
  * annotator names the block by its unrendered label, not its content.
  */
-const withOpenBlock = (source) => ({
-  ...source,
-  layout_builder__layout: source.layout_builder__layout.map((section) => ({
-    ...section,
-    regions: Object.fromEntries(Object.entries(section.regions).map(([region, components]) => [
-      region,
-      components.map((component) => ({
-        ...component,
-        _element: { ...component._element, name: component.label, presentation: { mode: 'open' } },
-      })),
-    ])),
-  })),
-});
+const withOpenBlock = (source) => {
+  const open = (node) =>
+    node.kind === 'block'
+      ? { ...node, _element: { ...node._element, name: node.label, presentation: { mode: 'open' } } }
+      : { ...node, children: (node.children ?? []).map(open) };
+  return { ...source, layout: source.layout.map(open) };
+};
 
 // The test-block example from the design, verbatim: a one-field "test"
 // block with merged presentation, its shells declared in the same grammar
@@ -96,20 +90,23 @@ const blueprint = {
   bundle: 'page',
   fields: {},
   _element: page,
-  layout_builder__layout: [{
+  layout: [{
+    kind: 'container',
     uuid: SECTION,
     layout_id: 'daedalus_stylish_onecol',
     _element: section,
-    regions: {
-      content: [{
+    children: [{
+      kind: 'region',
+      region: 'content',
+      children: [{
+        kind: 'block',
         uuid: BLOCK,
         block_type: 'test',
         label: 'Test',
-        label_display: '0',
         block_fields: { field_hieah: 'Secundum' },
         _element: { ...named('Secundum', 'Test'), presentation: { mode: 'merged', label: 'Hieah', edit_target: 'field_hieah' } },
       }],
-    },
+    }],
   }],
 };
 
@@ -126,6 +123,9 @@ test('targets OFF, merged: Section > Secundum (the data tree)', () => {
   assert.equal(merged.key, `block:${BLOCK}`);
   assert.equal(merged.presentation, 'merged');
   assert.equal(merged.editTarget, 'field_hieah');
+  // The merged row names itself by its content; its STORED label (the
+  // lean node's) rides beside as the rename seed (rename-commit.js).
+  assert.equal(merged.customLabel, 'Test');
   // Every model row wears the annotation's two words: the merged row says
   // its content and IS its block type; the section and the root likewise.
   assert.equal(merged.elementType, 'Test');
@@ -136,6 +136,7 @@ test('targets OFF, merged: Section > Secundum (the data tree)', () => {
 test('targets OFF, open: Section > Test > Hieah (the data tree)', () => {
   const tree = compose(openBlueprint, anatomy, { root });
   assert.deepEqual(spine(tree), ['Page', 'Section', 'Test', 'Hieah']);
+  assert.equal(find(tree, (node) => node.key === `block:${BLOCK}`).customLabel, 'Test');
   const field = find(tree, (node) => node.label === 'Hieah');
   assert.equal(field.key, `block:${BLOCK}:field_hieah`);
   // The data tree carries no markup identities.
@@ -207,20 +208,24 @@ test('specific claims bind named children; generic buckets take the residual; un
   const cardBlueprint = {
     bundle: 'page',
     _element: page,
-    layout_builder__layout: [{
+    layout: [{
+      kind: 'container',
       uuid: SECTION,
       layout_id: 'daedalus_stylish_onecol',
       _element: section,
-      regions: {
-        content: [{
+      children: [{
+        kind: 'region',
+        region: 'content',
+        children: [{
+          kind: 'block',
           uuid: BLOCK,
           block_type: 'card',
           label: 'Card',
-          label_display: 'visible',
+          label_rendered: true,
           block_fields: { field_title: 'Title', field_summary: 'Summary' },
           _element: named('Card'),
         }],
-      },
+      }],
     }],
   };
   const tree = compose(cardBlueprint, cardAnatomy, { root, targets: true });
@@ -299,16 +304,19 @@ test('an entity-valued merge target has no value element: the merged row takes t
   const merged = {
     bundle: 'page',
     _element: page,
-    layout_builder__layout: [{
+    layout: [{
+      kind: 'container',
       uuid: SECTION,
       layout_id: 'daedalus_stylish_onecol',
       _element: section,
-      regions: {
-        content: [{
+      children: [{
+        kind: 'region',
+        region: 'content',
+        children: [{
+          kind: 'block',
           uuid: BLOCK_2,
           block_type: 'test',
           label: 'Slideshow',
-          label_display: '0',
           block_fields: {
             field_slides: [{ uuid: PARA, type: 'slide', label: 'Slide', fields: {} }],
           },
@@ -316,7 +324,7 @@ test('an entity-valued merge target has no value element: the merged row takes t
           // block by the presentation's label (the absorbed field's).
           _element: { ...named('Slides', 'Test'), presentation: { mode: 'merged', label: 'Slides', edit_target: 'field_slides' } },
         }],
-      },
+      }],
     }],
   };
   const tree = compose(merged, anatomy, { root, targets: true });
@@ -339,23 +347,26 @@ test('a merge absorbs the target\'s sibling identities: class rows with a wrappe
   const withSibling = (extra) => ({
     bundle: 'page',
     _element: page,
-    layout_builder__layout: [{
+    layout: [{
+      kind: 'container',
       uuid: SECTION,
       layout_id: 'daedalus_stylish_onecol',
       _element: section,
-      regions: {
-        content: [{
+      children: [{
+        kind: 'region',
+        region: 'content',
+        children: [{
+          kind: 'block',
           uuid: BLOCK,
           block_type: 'test',
           label: 'Test',
-          label_display: '0',
           block_fields: {
             field_hieah: 'Secundum',
             field_extra: [{ uuid: PARA, type: 'extra', label: 'Extra para', fields: { field_note: 'Note' } }],
           },
           _element: { ...named('Secundum', 'Test'), presentation: { mode: 'merged', label: 'Hieah', edit_target: 'field_hieah' }, ...extra },
         }],
-      },
+      }],
     }],
   });
   const tree = compose(withSibling({}), anatomy, { root, targets: true });
@@ -383,16 +394,19 @@ test('a merge absorbs the target\'s sibling identities: class rows with a wrappe
 const collapsedComponent = (presentation = { mode: 'merged', label: 'Text', edit_target: 'field_text' }) => ({
   bundle: 'page',
   _element: page,
-  layout_builder__layout: [{
+  layout: [{
+    kind: 'container',
     uuid: SECTION,
     layout_id: 'daedalus_stylish_onecol',
     _element: section,
-    regions: {
-      content: [{
+    children: [{
+      kind: 'region',
+      region: 'content',
+      children: [{
+        kind: 'block',
         uuid: BLOCK,
         block_type: 'plain',
         label: 'Plain',
-        label_display: '0',
         block_fields: { field_text: 'Hi' },
         _element: {
           ...named(presentation.mode === 'merged' ? 'Hi' : 'Plain', 'Plain'),
@@ -400,7 +414,7 @@ const collapsedComponent = (presentation = { mode: 'merged', label: 'Text', edit
           composed: true,
         },
       }],
-    },
+    }],
   }],
 });
 
@@ -546,19 +560,22 @@ test('a plugin block resolves its anatomy by base plugin id', () => {
     bundle: 'page',
     fields: {},
     _element: page,
-    layout_builder__layout: [{
+    layout: [{
+      kind: 'container',
       uuid: SECTION,
       layout_id: 'daedalus_stylish_onecol',
       _element: section,
-      regions: {
-        content: [{
+      children: [{
+        kind: 'region',
+        region: 'content',
+        children: [{
+          kind: 'block',
           uuid: BLOCK,
           plugin_id: 'system_menu_block:main',
           label: 'Main navigation',
-          label_display: '0',
           _element: named('Main navigation'),
         }],
-      },
+      }],
     }],
   };
   const pluginAnatomy = {
@@ -581,31 +598,75 @@ test('a plugin block resolves its anatomy by base plugin id', () => {
   assert.equal(block.presentation, 'open');
 });
 
-test('a nested section composes as a section row with its region rows', () => {
-  // A region entry carrying the section node shape IS a nested section —
-  // sections all the way down; the markup view presents it exactly like a
-  // top-level section, its own regions as its children, in every view.
-  const nested = {
+test('a field node resolves its anatomy as the field_block plugin without a bundle', () => {
+  // A field node names the page's field, never a per-bundle plugin id;
+  // the client derives the base plugin (field_block) from the node alone,
+  // so anatomy.blockPlugins.field_block covers every field of every bundle.
+  const fieldBlueprint = {
     bundle: 'page',
+    fields: {},
     _element: page,
-    layout_builder__layout: [{
+    layout: [{
+      kind: 'container',
       uuid: SECTION,
       layout_id: 'daedalus_stylish_onecol',
       _element: section,
-      regions: {
-        content: [{
+      children: [{
+        kind: 'region',
+        region: 'content',
+        children: [{
+          kind: 'block',
+          uuid: BLOCK,
+          field: 'body',
+          _element: named('Body'),
+        }],
+      }],
+    }],
+  };
+  const fieldAnatomy = {
+    ...anatomy,
+    kinds: { ...anatomy.kinds, block: { elements: { '.block__inner': {} } } },
+    blockPlugins: { field_block: { elements: { '.field__label': { label: 'Field label' } } } },
+  };
+  const tree = compose(fieldBlueprint, fieldAnatomy, { root, targets: true });
+  const shell = find(tree, (node) => node.selector === '.field__label');
+  assert.ok(shell, 'the field node resolved the field_block blockPlugins tree');
+  assert.equal(shell.parentKey, `block:${BLOCK}`);
+  const block = find(tree, (node) => node.key === `block:${BLOCK}`);
+  assert.equal(block.label, 'Body');
+  assert.equal(block.presentation, 'open');
+});
+
+test('a nested section composes as a section row with its region rows', () => {
+  // A container node inside a region IS a nested section — sections all
+  // the way down; the markup view presents it exactly like a top-level
+  // section, its own region nodes as its children, in every view.
+  const nested = {
+    bundle: 'page',
+    _element: page,
+    layout: [{
+      kind: 'container',
+      uuid: SECTION,
+      layout_id: 'daedalus_stylish_onecol',
+      _element: section,
+      children: [{
+        kind: 'region',
+        region: 'content',
+        children: [{
+          kind: 'block',
+          kind: 'container',
           uuid: BLOCK_2,
           layout_id: 'daedalus_stylish_twocol',
           label: 'Columns',
           // Renamed and nested: the custom label is its name, Container
           // its type (the annotator's depth rule).
           _element: named('Columns', 'Container'),
-          regions: {
-            first: [],
-            second: [],
-          },
+          children: [
+            { kind: 'region', region: 'first', children: [] },
+            { kind: 'region', region: 'second', children: [] },
+          ],
         }],
-      },
+      }],
     }],
   };
   const tree = compose(nested, anatomy, { root, targets: true });
@@ -621,20 +682,23 @@ test('nonexistent fields (element: false) fold in every view', () => {
   const ghost = {
     bundle: 'page',
     _element: page,
-    layout_builder__layout: [{
+    layout: [{
+      kind: 'container',
       uuid: SECTION,
       layout_id: 'daedalus_stylish_onecol',
       _element: section,
-      regions: {
-        content: [{
+      children: [{
+        kind: 'region',
+        region: 'content',
+        children: [{
+          kind: 'block',
           uuid: BLOCK,
           block_type: 'test',
           label: 'Test',
-          label_display: '0',
           block_fields: { field_hieah: 'Secundum', field_url: { uri: 'https://example.com' } },
           _element: { ...named('Test'), fields: { field_url: { element: false } } },
         }],
-      },
+      }],
     }],
   };
   // A nonexistent field never renders as an attributed element, so no
@@ -715,11 +779,15 @@ test('a layout shell\'s regions slot claims region rows — and a one-region sec
   const twoCol = {
     bundle: 'page',
     _element: page,
-    layout_builder__layout: [{
+    layout: [{
+      kind: 'container',
       uuid: SECTION,
       layout_id: 'daedalus_stylish_twocol',
       _element: section,
-      regions: { first: [], second: [] },
+      children: [
+        { kind: 'region', region: 'first', children: [] },
+        { kind: 'region', region: 'second', children: [] },
+      ],
     }],
   };
   const tree = compose(twoCol, layoutAnatomy, { root, targets: true });
@@ -737,11 +805,11 @@ test('a layout shell\'s regions slot claims region rows — and a one-region sec
 });
 
 test('a container section\'s children list mounts into the regions slot with no region rows', () => {
-  // A container section carries `children: []` (ordered) in place of
-  // `regions: {}` — the serializer's container shape. Its entries occupy
-  // the region position, so a layout shell's generic `regions` bucket
-  // still claims them into the container part, and nested containers
-  // recurse as sections.
+  // A container layout holds its element nodes directly (no region
+  // nodes), the tree's one-flow shape. Its entries occupy the region
+  // position, so a layout shell's generic `regions` bucket still claims
+  // them into the container part, and nested containers recurse as
+  // sections.
   const layoutAnatomy = {
     layouts: {
       daedalus_stylish_container: {
@@ -752,20 +820,22 @@ test('a container section\'s children list mounts into the regions slot with no 
   const containerSection = {
     bundle: 'page',
     _element: page,
-    layout_builder__layout: [{
+    layout: [{
+      kind: 'container',
       uuid: SECTION,
       layout_id: 'daedalus_stylish_container',
       _element: section,
       children: [
         {
+          kind: 'block',
           uuid: BLOCK,
           block_type: 'test',
           label: 'Test',
-          label_display: '0',
           block_fields: {},
           _element: named('Test'),
         },
         {
+          kind: 'container',
           uuid: BLOCK_2,
           layout_id: 'daedalus_stylish_container',
           label: 'Inner',
@@ -801,9 +871,9 @@ const bandedBlueprint = {
   bundle: 'page',
   fields: { body: 'Copy' },
   _element: page,
-  layout_builder__layout: [
-    { uuid: SECTION, layout_id: 'daedalus_stylish_onecol', _element: section, regions: { content: [] } },
-    { uuid: SECTION_2, layout_id: 'daedalus_stylish_onecol', _element: section, regions: { content: [] } },
+  layout: [
+    { kind: 'container', uuid: SECTION, layout_id: 'daedalus_stylish_onecol', _element: section, children: [{ kind: 'region', region: 'content', children: [] }] },
+    { kind: 'container', uuid: SECTION_2, layout_id: 'daedalus_stylish_onecol', _element: section, children: [{ kind: 'region', region: 'content', children: [] }] },
   ],
 };
 const layoutRootAnatomy = {
@@ -936,11 +1006,11 @@ test('toViewTree maps the composed vocabulary onto the tree view seam', () => {
   assert.equal(content.pseudo, true);
   assert.equal(content.parentKey, `block:${BLOCK}`);
   assert.equal(content.label, 'block__content');
-  // A non-absorbed field row surfaces its markup identity as the seam's
-  // sublabel (the row reads "Hieah · field--name-field-hieah").
+  // A non-absorbed field row keeps its markup identity as compose's own
+  // fact and reads by its one name; the seam carries no second word.
   const field = find(view, (node) => node.key === `block:${BLOCK}:field_hieah`);
   assert.equal(field.markupClass, 'field--name-field-hieah');
-  assert.equal(field.sublabel, 'field--name-field-hieah');
+  assert.equal(field.label, 'Hieah');
   const item = find(view, (node) => node.id === '.field__item');
   assert.equal(item.parentKey, `block:${BLOCK}:field_hieah`);
   // Value rows become keyless model rows — display-only, never selectable.
@@ -972,11 +1042,9 @@ test('toViewTree keeps the merged spine intact (targets ON, merged)', () => {
   const merged = find(view, (candidate) => candidate.label === 'Secundum');
   assert.equal(merged.key, `block:${BLOCK}`);
   assert.equal(merged.editTarget, 'field_hieah');
-  // An absorbed row already presents AS its markup class — a sublabel
-  // would just repeat the label.
+  // An absorbed row already presents AS its markup class.
   const absorbed = find(view, (candidate) => candidate.label === 'field--name-field-hieah');
   assert.equal(absorbed.absorbed, true);
-  assert.equal(absorbed.sublabel, undefined);
 });
 
 test('toViewTree appends the instance rows to their owning model row', () => {
@@ -986,26 +1054,26 @@ test('toViewTree appends the instance rows to their owning model row', () => {
   // Every other key owns nothing, the source is a function of the key,
   // so exactly one model row claims each carrier.
   const instances = (key) => (key === `block:${BLOCK}` ? [
-    { selector: '.s-a1', label: 'Paragraph', sublabel: 'First words', children: [] },
+    { selector: '.s-a1', label: 'First words', elementType: 'Paragraph', children: [] },
     {
       selector: '.s-b2',
-      label: 'Block quote',
-      sublabel: 'Quoted words',
-      children: [{ selector: '.s-c3', label: 'Paragraph', sublabel: 'Quoted words', children: [] }],
+      label: 'Quoted words',
+      elementType: 'Block quote',
+      children: [{ selector: '.s-c3', label: 'Quoted words', elementType: 'Paragraph', children: [] }],
     },
   ] : []);
   const view = toViewTree(compose(blueprint, anatomy, { root, targets: true }), instances);
   const merged = find(view, (node) => node.key === `block:${BLOCK}`);
   const live = merged.children.filter((node) => node.pseudo);
   // Instance rows are seam pseudo rows: id is the identity-class selector,
-  // parentKey the owning model key, label the semantic tag, sublabel the
-  // excerpt — declared shell rows' shape exactly, with the annotation as
-  // the source instead of anatomy.
+  // parentKey the owning model key, label the excerpt (the row's name),
+  // elementType the semantic word — declared shell rows' shape exactly,
+  // with the annotation as the source instead of anatomy.
   assert.deepEqual(live.map((node) => node.id), ['.s-a1', '.s-b2']);
   assert.equal(live[0].pseudo, true);
   assert.equal(live[0].parentKey, `block:${BLOCK}`);
-  assert.equal(live[0].label, 'Paragraph');
-  assert.equal(live[0].sublabel, 'First words');
+  assert.equal(live[0].label, 'First words');
+  assert.equal(live[0].elementType, 'Paragraph');
   // Nested carriers nest as row children, same owner.
   assert.deepEqual(live[1].children.map((node) => node.id), ['.s-c3']);
   assert.equal(live[1].children[0].parentKey, `block:${BLOCK}`);
@@ -1183,12 +1251,13 @@ test('withInstanceRows appends chip-less instance rows to the model projection',
   // off — daedalus_stylish's basic mode) carries them too: every keyed model row
   // asks the same source the markup view asks.
   const instances = (key) => (key === `block:${BLOCK}` ? [
-    { selector: '.s-a1', label: 'Paragraph', tag: 'p', sublabel: 'First words', children: [] },
+    { selector: '.s-a1', label: 'First words', elementType: 'Paragraph', tag: 'p', children: [] },
     {
       selector: '.s-b2',
       label: 'Block quote',
+      elementType: 'Block quote',
       tag: 'blockquote',
-      children: [{ selector: '.s-c3', label: 'Paragraph', tag: 'p', sublabel: 'Quoted words', children: [] }],
+      children: [{ selector: '.s-c3', label: 'Quoted words', elementType: 'Paragraph', tag: 'p', children: [] }],
     },
   ] : []);
   const model = {
@@ -1218,12 +1287,12 @@ test('withInstanceRows appends chip-less instance rows to the model projection',
   const live = block.children.filter((node) => node.pseudo);
   assert.deepEqual(live.map((node) => node.id), ['.s-a1', '.s-b2']);
   assert.equal(live[0].parentKey, `block:${BLOCK}`);
-  assert.equal(live[0].label, 'Paragraph');
-  assert.equal(live[0].sublabel, 'First words');
+  assert.equal(live[0].label, 'First words');
+  assert.equal(live[0].elementType, 'Paragraph');
   // Nested carriers nest as row children, same owner.
   assert.deepEqual(live[1].children.map((node) => node.id), ['.s-c3']);
   assert.equal(live[1].children[0].parentKey, `block:${BLOCK}`);
-  // Content, never markup vocabulary: NO tag chips outside the markup
+  // Content, never markup vocabulary: NO tag facts outside the markup
   // view, at any depth.
   assert.equal(live[0].tag, undefined);
   assert.equal(live[1].tag, undefined);
@@ -1256,23 +1325,24 @@ test('list carriers nest at depth with flat ownership in both projections', () =
       children: [
         {
           selector: '.s-i1',
-          label: 'List item',
+          label: 'First item',
+          elementType: 'List item',
           tag: 'li',
-          sublabel: 'First item',
           children: [
-            { selector: '.s-p1', label: 'Paragraph', tag: 'p', sublabel: 'First item', children: [] },
+            { selector: '.s-p1', label: 'First item', elementType: 'Paragraph', tag: 'p', children: [] },
             {
               selector: '.s-l2',
               label: 'List',
+              elementType: 'List',
               tag: 'ul',
               children: [
                 {
                   selector: '.s-i2',
-                  label: 'List item',
+                  label: 'Nested item',
+                  elementType: 'List item',
                   tag: 'li',
-                  sublabel: 'Nested item',
                   children: [
-                    { selector: '.s-p2', label: 'Paragraph', tag: 'p', sublabel: 'Nested item', children: [] },
+                    { selector: '.s-p2', label: 'Nested item', elementType: 'Paragraph', tag: 'p', children: [] },
                   ],
                 },
               ],
@@ -1298,10 +1368,13 @@ test('list carriers nest at depth with flat ownership in both projections', () =
     const nestedItem = item.children[1].children[0];
     assert.equal(nestedItem.id, '.s-i2');
     assert.deepEqual(nestedItem.children.map((node) => node.id), ['.s-p2']);
-    // Labels ride the annotation (the declared tags map) at every depth.
-    assert.equal(item.label, 'List item');
-    assert.equal(nestedItem.label, 'List item');
-    assert.equal(nestedItem.children[0].label, 'Paragraph');
+    // The words ride the source at every depth: the excerpt as the name,
+    // the annotation's word (the declared tags map) as the type.
+    assert.equal(item.label, 'First item');
+    assert.equal(item.elementType, 'List item');
+    assert.equal(nestedItem.label, 'Nested item');
+    assert.equal(nestedItem.elementType, 'List item');
+    assert.equal(nestedItem.children[0].elementType, 'Paragraph');
     // Flat ownership at every depth: never the parent row's id. (Shell
     // rows are excluded: declared anatomy owns per its own composition.)
     const walk = (node) => {
@@ -1320,7 +1393,7 @@ test('list carriers nest at depth with flat ownership in both projections', () =
   const inModel = find(model, (node) => node.pseudo && node.id === '.s-p2');
   assert.equal(inModel.id, inMarkup.id);
   assert.equal(inModel.parentKey, inMarkup.parentKey);
-  // Chips stay advanced-only at depth: the markup view wears them on
+  // Tag facts stay advanced-only at depth: the markup view wears them on
   // every level, the model projection on none.
   assert.equal(inMarkup.tag, 'p');
   assert.equal(find(markup, (node) => node.pseudo && node.id === '.s-i2').tag, 'li');
@@ -1352,4 +1425,157 @@ test('instance rows keep one identity across both projections (selection sync)',
   // The markup view alone wears the chip.
   assert.equal(inMarkup.tag, 'p');
   assert.equal(inModel.tag, undefined);
+});
+
+// ---- A locked page's slot fills (slot-fills.js). --------------------------
+
+const DOOR = '11111111-5107-4000-8000-444444444444';
+const FILL = '22222222-5107-4000-8000-444444444444';
+const FILL_BLOCK = '33333333-5107-4000-8000-444444444444';
+const STRAY_FILL = '44444444-5107-4000-8000-444444444444';
+const door = (slot) => ({
+  kind: 'block',
+  uuid: DOOR,
+  plugin_id: `daedalus_slot:${slot}`,
+  label: 'Hero',
+  slot,
+  _element: { ...named('Hero', 'Slot'), presentation: { mode: 'open' } },
+});
+const fill = (uuid, slot) => ({
+  kind: 'container',
+  uuid,
+  slot,
+  layout_id: 'daedalus_stylish_onecol',
+  _element: section,
+  children: [{
+    kind: 'region',
+    region: 'content',
+    children: [{
+      kind: 'block',
+      uuid: FILL_BLOCK,
+      block_type: 'test',
+      label: 'Fill text',
+      block_fields: {},
+      _element: { ...named('Fill text', 'Test'), presentation: { mode: 'open' } },
+    }],
+  }],
+});
+/**
+ * The lean tree of a locked page, as delivered: the template's section
+ * holding the door, then the page's own fill tagged with the slot.
+ */
+const lockedBlueprint = (slot = 'hero', fills = [fill(FILL, 'hero')]) => ({
+  bundle: 'locked',
+  fields: {},
+  _element: page,
+  layout: [
+    { kind: 'container', uuid: SECTION, layout_id: 'daedalus_stylish_onecol', _element: section, children: [{ kind: 'region', region: 'content', children: [door(slot)] }] },
+    ...fills,
+  ],
+});
+const doorAnatomy = {
+  blockPlugins: {
+    daedalus_slot: { elements: { '.slot__frame': { label: 'Frame', contains: 'fields' } } },
+  },
+};
+
+test('a slot fill nests under its door in the data tree, leaving the root list', () => {
+  const tree = compose(lockedBlueprint(), doorAnatomy, { root });
+  // One root section (the template's), the fill under the door inside it.
+  assert.deepEqual(spine(tree), ['Page', 'Section', 'Hero', 'Section', 'Fill text']);
+  const doorRow = find(tree, (node) => node.key === `block:${DOOR}`);
+  assert.equal(doorRow.kind, 'block');
+  // The fill keeps its own identity and shape: a container row, its key
+  // unchanged, its subtree composed as any section's.
+  assert.deepEqual(doorRow.children.map((node) => [node.kind, node.key]), [['container', `container:${FILL}`]]);
+  assert.equal(find(doorRow, (node) => node.key === `block:${FILL_BLOCK}`).label, 'Fill text');
+});
+
+test('targets ON: the fill mounts at the door\'s root after its shells', () => {
+  const tree = compose(lockedBlueprint(), doorAnatomy, { root, targets: true });
+  const doorRow = find(tree, (node) => node.key === `block:${DOOR}`);
+  // A `section` entry no block declaration claims: the door's declared
+  // shell first, then the fill, as unclaimed rows mount.
+  assert.deepEqual(rowNames(doorRow.children), ['.slot__frame', 'container:Section']);
+  assert.equal(doorRow.children[1].key, `container:${FILL}`);
+  assert.equal(doorRow.children[0].parentKey, `block:${DOOR}`);
+});
+
+test('an empty door is a leaf; a fill no door declares stays at the root', () => {
+  const tree = compose(lockedBlueprint('hero', [fill(STRAY_FILL, 'aside')]), doorAnatomy, { root });
+  const doorRow = find(tree, (node) => node.key === `block:${DOOR}`);
+  assert.deepEqual(doorRow.children, []);
+  // The stray fill is a root row after the template's section, in the
+  // lean tree's order, as before the pairing.
+  assert.deepEqual(tree.children.map((node) => node.key), [`container:${SECTION}`, `container:${STRAY_FILL}`]);
+});
+
+// ---- The shown document under a door (shown-rows.js). ----------------------
+
+/**
+ * A door showing a default: the spine's `_element.showing` as the
+ * annotator delivers it, beside the T3 words.
+ */
+const showingDoor = (shows = 'default') => ({
+  ...door('hero'),
+  _element: {
+    ...named('Header slot', 'Slot'),
+    showing: {
+      shows,
+      document: shows === 'default' ? { entity_type: 'blueprint', id: '1', label: 'Header' } : null,
+      blueprint: shows === 'default' ? 'header' : null,
+      portal: shows === 'default' ? { entity_type: 'blueprint', entity_id: '1', label: 'Header', url: '/blueprint/1' } : null,
+      claimable: shows === 'default',
+    },
+  },
+});
+const withShowingDoor = (doorNode, fills = []) => ({
+  ...lockedBlueprint('hero', fills),
+  layout: [
+    { kind: 'container', uuid: SECTION, layout_id: 'daedalus_stylish_onecol', _element: section, children: [{ kind: 'region', region: 'content', children: [doorNode] }] },
+    ...fills,
+  ],
+});
+
+test('a door showing its default composes a shown row after its fills, in both views', () => {
+  // The data tree: the door's one child is the shown document, a row of
+  // its own composed type (no key, no slot kind to claim it).
+  const data = compose(withShowingDoor(showingDoor()), doorAnatomy, { root });
+  assert.deepEqual(spine(data), ['Page', 'Section', 'Header slot', 'Header']);
+  const shown = find(data, (node) => node.type === 'shown');
+  assert.equal(shown.shown, true);
+  assert.equal(shown.key, undefined);
+  assert.equal(shown.label, 'Header');
+  assert.equal(shown.elementType, 'Blueprint, by reference');
+  assert.equal(shown.parentKey, `block:${DOOR}`);
+  assert.equal(shown.showing.shows, 'default');
+  // Shells on: the door's declared shell first, then the shown row at the
+  // door's root as an unclaimed child mounts, after a fill when one is
+  // composed too (synthetic: the spine shows FILL on a filled door).
+  const shells = compose(withShowingDoor(showingDoor(), [fill(FILL, 'hero')]), doorAnatomy, { root, targets: true });
+  const doorRow = find(shells, (node) => node.key === `block:${DOOR}`);
+  assert.deepEqual(
+    doorRow.children.map((node) => node.type === 'shell' ? node.selector : node.type === 'shown' ? 'shown' : node.key),
+    ['.slot__frame', `container:${FILL}`, 'shown'],
+  );
+  // Nothing but a default grows the row.
+  for (const shows of ['fill', 'route', 'nothing']) {
+    assert.equal(find(compose(withShowingDoor(showingDoor(shows)), doorAnatomy, { root }), (node) => node.type === 'shown'), null, shows);
+  }
+});
+
+test('toViewTree carries the shown row into the seam minus the composed type', () => {
+  const view = toViewTree(compose(withShowingDoor(showingDoor()), doorAnatomy, { root, targets: true }));
+  const doorRow = find(view, (node) => node.key === `block:${DOOR}`);
+  const shown = doorRow.children.find((node) => node.shown);
+  assert.ok(shown, 'the shown row survives the seam');
+  assert.equal(shown.type, undefined);
+  assert.equal(shown.pseudo, undefined);
+  assert.equal(shown.key, undefined);
+  assert.equal(shown.label, 'Header');
+  assert.equal(shown.elementType, 'Blueprint, by reference');
+  assert.equal(shown.parentKey, `block:${DOOR}`);
+  assert.deepEqual(shown.children, []);
+  // It sits after the door's shell row, as composed.
+  assert.deepEqual(doorRow.children.map((node) => node.pseudo ? node.id : 'shown'), ['.slot__frame', 'shown']);
 });

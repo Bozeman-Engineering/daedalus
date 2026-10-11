@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Drupal\daedalus_stylish\EventSubscriber;
 
-use Drupal\Core\Entity\FieldableEntityInterface;
+use Drupal\daedalus_blueprint\Host\HostInterface;
 use Drupal\Core\Extension\ThemeHandlerInterface;
 use Drupal\daedalus_blueprint\ElementLocator;
 use Drupal\daedalus_blueprint\Event\ElementCreatedEvent;
@@ -14,16 +14,14 @@ use Drupal\daedalus_blueprint\Event\LifecycleEventBase;
 use Drupal\daedalus_blueprint\Event\SectionCreatedEvent;
 use Drupal\daedalus_blueprint\Materials\MaterialKind;
 use Drupal\daedalus_blueprint\Materials\MaterialsRosterBuilder;
-use Drupal\daedalus_stylish\Plugin\Field\FieldType\StyleMapItem;
 use Drupal\daedalus_stylish\StyleGuide;
 use Drupal\daedalus_stylish\StyleMapValidator;
-use Drupal\daedalus_stylish\DaedalusStylishFieldManager;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 
 /**
  * Carries styles through placement, section lifecycle, duplication and moves.
  *
- * Four jobs, all on the host entity's style map:
+ * Four jobs, all on the host's style map:
  * - DEFAULT VARIANTS ON PLACE: when a block type's style guide declaration
  *   names default_variants (a map of axis => variant machine name), an
  *   undressed add_element writes one variant REFERENCE per resolvable
@@ -71,7 +69,7 @@ use Symfony\Component\EventDispatcher\EventSubscriberInterface;
  * add_section/add_element from the AI or a script). The batch declares it
  * (BlueprintOperationsInterface::batchOperations()'s `dressed` option) and
  * every created event carries it (LifecycleEventBase::dressed()), so this
- * subscriber reads one fact and never guesses from the door: a stencil
+ * subscriber reads one fact and never guesses from the door: a blueprint
  * expansion and a document dialect are total statements (the element
  * wears exactly what the definition or document says, and the style map
  * grammar is declarative: an absent reference means wears NONE), and
@@ -85,13 +83,13 @@ use Symfony\Component\EventDispatcher\EventSubscriberInterface;
  * with the stamp-on-add fact onto its available_layouts entry).
  *
  * Seam choice: the daedalus_blueprint lifecycle events. They are the
- * only placement seams that carry both the host entity and the identity
+ * only placement seams that carry both the host and the identity
  * the map key needs — daedalus_layout's PlaceBlockEvent sees only the block
  * plugin, and the field handler never sees layout operations.
  * ElementCreatedEvent fires for every block add; `populate: 'sample'` on
  * an add means field sampling only and says nothing about styling.
- * Every map write here is declared as a target on the event (the root
- * entity's style map field): the mutation response re-renders only the
+ * Every map write here is declared as a target on the event (the host's
+ * style store, named by its definition): the mutation response re-renders only the
  * targets the result names, and the entity-level style tag that carries
  * the written CSS rides a whole-entity swap only, so an undeclared write
  * would land in the saved entity and reach the page on reload alone.
@@ -118,8 +116,8 @@ class ElementStylesSubscriber implements EventSubscriberInterface {
     if ($event->dressed()) {
       return;
     }
-    $entity = $event->getEntity();
-    if (!$entity->hasField(DaedalusStylishFieldManager::FIELD_NAME)) {
+    $host = $event->getHost();
+    if (!$host->hasStyleStore()) {
       return;
     }
     // Only inline blocks have a block type to declare default variants.
@@ -142,7 +140,7 @@ class ElementStylesSubscriber implements EventSubscriberInterface {
     }
 
     $key = 'block:' . $event->getComponent()->getUuid();
-    $map = $this->getStyleMap($entity);
+    $map = $host->styleMap();
     // Never override styles the placement already carries (explicit UUIDs
     // can re-place over existing entries).
     if ($this->hasEntryFor($map, $key)) {
@@ -160,8 +158,8 @@ class ElementStylesSubscriber implements EventSubscriberInterface {
     if ($event->dressed()) {
       return;
     }
-    $entity = $event->getEntity();
-    if (!$entity->hasField(DaedalusStylishFieldManager::FIELD_NAME)) {
+    $host = $event->getHost();
+    if (!$host->hasStyleStore()) {
       return;
     }
     // Style map keys address sections by their daedalus_layout UUID; without one
@@ -172,14 +170,14 @@ class ElementStylesSubscriber implements EventSubscriberInterface {
     }
     $references = $this->layoutDefaultVariants(
       $event->getSection()->getLayoutId(),
-      $this->elementLocator->isNestedSection($entity, $section_uuid),
+      $this->elementLocator->isNestedSection($host, $section_uuid),
     );
     if ($references === []) {
       return;
     }
 
     $key = "container:$section_uuid";
-    $map = $this->getStyleMap($entity);
+    $map = $host->styleMap();
     // Never override styles the section already carries (explicit UUIDs
     // can re-add over existing entries).
     if ($this->hasEntryFor($map, $key)) {
@@ -193,11 +191,11 @@ class ElementStylesSubscriber implements EventSubscriberInterface {
    * Copies style entries to a duplicated element's rewritten keys.
    */
   public function onElementDuplicated(ElementDuplicatedEvent $event): void {
-    $entity = $event->getEntity();
-    if (!$entity->hasField(DaedalusStylishFieldManager::FIELD_NAME)) {
+    $host = $event->getHost();
+    if (!$host->hasStyleStore()) {
       return;
     }
-    $map = $this->getStyleMap($entity);
+    $map = $host->styleMap();
     if ($map === []) {
       return;
     }
@@ -237,15 +235,15 @@ class ElementStylesSubscriber implements EventSubscriberInterface {
     if (!$event->wasNested() && !$event->isNested()) {
       return;
     }
-    $entity = $event->getEntity();
-    if (!$entity->hasField(DaedalusStylishFieldManager::FIELD_NAME)) {
+    $host = $event->getHost();
+    if (!$host->hasStyleStore()) {
       return;
     }
     $key = 'container:' . $event->getUuid();
-    $map = $this->getStyleMap($entity);
+    $map = $host->styleMap();
     $map = $event->isNested()
       ? $this->stripRootOnlyWear($map, $key)
-      : $this->redressAtRoot($map, $key, $entity, $event->getUuid());
+      : $this->redressAtRoot($map, $key, $host, $event->getUuid());
     if ($map !== NULL) {
       $this->setStyleMap($event, $map);
     }
@@ -307,8 +305,8 @@ class ElementStylesSubscriber implements EventSubscriberInterface {
    *   The rewritten map, or NULL when every defaulted axis was already
    *   worn (or the layout declares no usable default).
    */
-  protected function redressAtRoot(array $map, string $key, FieldableEntityInterface $entity, string $uuid): ?array {
-    $context = $this->elementLocator->locateSection($entity, $uuid);
+  protected function redressAtRoot(array $map, string $key, HostInterface $host, string $uuid): ?array {
+    $context = $this->elementLocator->locateSection($host, $uuid);
     if ($context === NULL) {
       return NULL;
     }
@@ -496,26 +494,16 @@ class ElementStylesSubscriber implements EventSubscriberInterface {
   }
 
   /**
-   * Reads the entity's style map.
-   */
-  protected function getStyleMap(FieldableEntityInterface $entity): array {
-    $item = $entity->get(DaedalusStylishFieldManager::FIELD_NAME)->first();
-    return $item instanceof StyleMapItem ? $item->getStyleMap() : [];
-  }
-
-  /**
-   * Writes the style map back onto the event's entity and declares it.
+   * Writes the style map back onto the event's host and declares it.
    *
    * Write and declaration are one call: the event's target is what makes
    * the mutation response re-render the entity-level style tag, so no
    * handler can write the map without declaring the change.
    */
   protected function setStyleMap(LifecycleEventBase $event, array $map): void {
-    $entity = $event->getEntity();
-    $items = $entity->get(DaedalusStylishFieldManager::FIELD_NAME);
-    $item = $items->first() ?? $items->appendItem();
-    $item->setStyleMap($map);
-    $event->addTarget($entity->uuid(), DaedalusStylishFieldManager::FIELD_NAME);
+    $host = $event->getHost();
+    $host->setStyleMap($map);
+    $event->addTarget($host->uuid(), $host->styleMapDefinition()->getName());
   }
 
   /**

@@ -20,7 +20,7 @@ use Masterminds\HTML5\Parser\Scanner;
  *
  * Deliberate deltas from the HTML5 tree-construction algorithm, per spec
  * v0.2 section 2:
- * - The childless kinds (pb-image, pb-stencil) are void: they never open,
+ * - The childless kinds (pb-image, pb-blueprint) are void: they never open,
  *   so the ignored-self-closing-slash quirk cannot make them adopt their
  *   siblings (the spec's self-closing normalization, implemented at the
  *   builder where the slash is still visible).
@@ -46,7 +46,7 @@ final class DialectTreeBuilder implements EventHandler {
   /**
    * Dialect tags that never take content and parse as void.
    */
-  private const VOID_DIALECT_TAGS = ['pb-image', 'pb-stencil'];
+  private const VOID_DIALECT_TAGS = ['pb-image', 'pb-blueprint'];
 
   /**
    * The synthetic root element the parsed tree hangs from.

@@ -20,9 +20,10 @@ class DaedalusLayoutServiceProvider implements ServiceModifierInterface {
   public function alter(ContainerBuilder $container) {
 
     // The media library opener for icon pickers. media_library is not a
-    // dependency of daedalus_layout, so the opener only registers when the seam it
-    // plugs into exists (the daedalus_stylish/daedalus_edit opener precedent); without
-    // it the daedalus_layout_icon_picker element degrades to a textfield.
+    // dependency of daedalus_layout, so the opener only registers when the
+    // seam it plugs into exists (the daedalus_stylish/daedalus_edit opener
+    // precedent); without it the daedalus_layout_icon_picker element
+    // degrades to a textfield.
     $modules = $container->getParameter('container.modules');
     if (isset($modules['media_library'])) {
       $container->register(IconPickerOpener::SERVICE_ID, IconPickerOpener::class)
@@ -33,9 +34,12 @@ class DaedalusLayoutServiceProvider implements ServiceModifierInterface {
         ->addTag('media_library.opener');
     }
 
+    // The access verifier reads ownership through the host, so core's
+    // definition gains the resolver after its own four arguments.
     if ($container->hasDefinition('layout_builder.get_block_dependency_subscriber')) {
       $definition = $container->getDefinition('layout_builder.get_block_dependency_subscriber');
       $definition->setClass(SetInlineBlockDependency::class);
+      $definition->addArgument(new Reference('daedalus_blueprint.host_resolver'));
       $container->setDefinition('layout_builder.get_block_dependency_subscriber', $definition);
     }
 
@@ -77,6 +81,7 @@ class DaedalusLayoutServiceProvider implements ServiceModifierInterface {
         $collect('daedalus_layout.component_transform'),
         $collect('daedalus_layout.section_transform'),
         $collect('daedalus_layout.host_transform'),
+        new Reference('daedalus_blueprint.host_resolver'),
       ]);
 
   }

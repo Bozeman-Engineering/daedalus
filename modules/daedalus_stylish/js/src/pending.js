@@ -1,4 +1,5 @@
 import { ROOT_KINDS, compareSegments, parseSlotKey } from './slot-key.js';
+import { skinDocument } from './code/layers.js';
 
 /**
  * The pending/push engine's model (pure; the push bar renders and commits
@@ -22,6 +23,16 @@ import { ROOT_KINDS, compareSegments, parseSlotKey } from './slot-key.js';
  *   live map on every read, so edits made while the session is open stay
  *   captured — plus the dismissals (the draft document's excluded rows)
  *   that prune rows out of what Push commits.
+ * - A SKIN session is the update session's site-scope twin: the pending
+ *   edit store of the active skin's document at one declaring scope
+ *   (`base:h2`, `block_type:text`, `kind:container`), the same staged
+ *   lines over the same relative keys ('' the scope's element, '::' plus
+ *   a selector under it), staged and dismissed through the same
+ *   functions (stagesLines), and pushed as update_default ops, one per
+ *   (key, condition) the lines touch (push-bar.js). Its reference is the
+ *   skin document's (code/layers.js skinDocument), so every reader that
+ *   keys on `session.reference` (the synced editing field, the stack's
+ *   overlay, the leave-prompt) treats the two alike.
  *
  * Everything here is data-in/data-out for node-test backpressure; the
  * session object itself (label, axis, staged lines, dismissals) is view
@@ -243,7 +254,7 @@ export const payloadSummary = (styles, dismissed) => {
  * the draft is off.
  *
  * `linked` is the mint-time ownership consent: a variant minted inside a
- * stencil placement is born as that stencil's own look (the anchor's
+ * blueprint placement is born as that blueprint's own look (the anchor's
  * placement provenance rides the save), and the session starts linked.
  * The header's consent chip says so and its unlink flips the flag, so
  * the commit sends no owner. The provenance itself is a layout fact
@@ -281,6 +292,43 @@ export const updateSession = (reference, anchor) => ({
 });
 
 /**
+ * A fresh skin session against the active skin's document at a scope.
+ *
+ * The update session's site-scope twin: `reference` is the skin
+ * document's (code/layers.js skinDocument, the scope's skin layer id),
+ * so the synced editing field, the stack overlay and the one-session-
+ * per-document reads key on it exactly as on a variant's; `scope` is the
+ * declaring scope the lines patch (update_default's `scope`); `anchor`
+ * the element the session was entered from, whose stack previews the
+ * document (an element of the scope: the h2 whose Size row offered the
+ * doorway, the section whose kind block delivers). The lines' relative
+ * keys are the scope's defaults keys ('' and '::' plus a selector).
+ *
+ * @param {string} scope
+ *   The declaring scope ("base:h2", "block_type:text", "kind:container").
+ * @param {string} anchor
+ *   The anchoring wear key.
+ */
+export const skinSession = (scope, anchor) => ({
+  kind: 'skin',
+  reference: skinDocument(scope),
+  scope,
+  anchor,
+  lines: [],
+});
+
+/**
+ * Whether a session stages lines: an update session or a skin session
+ * (a save session's pending set is its live capture).
+ *
+ * The one read every staging function and every reader of
+ * `session.lines` gates on, so the skin session rides the update
+ * session's machinery whole and a third kind never forks it.
+ */
+export const stagesLines = (session) =>
+  session?.kind === 'update' || session?.kind === 'skin';
+
+/**
  * Stages one pending edit into an update session (upsert by row id).
  *
  * A string value is a pending set, null a pending unset (removal from the
@@ -294,7 +342,7 @@ export const stageLine = (
   session,
   { relative, condition, property, value },
 ) => {
-  if (session?.kind !== 'update') {
+  if (!stagesLines(session)) {
     return session;
   }
   const id = pendingLineId(relative, condition, property);
@@ -324,7 +372,7 @@ export const stageLine = (
  *   pass through untouched.
  */
 export const stageIslandLines = (session, relative, condition, lines) => {
-  if (session?.kind !== 'update') {
+  if (!stagesLines(session)) {
     return session;
   }
   const staged = (Array.isArray(lines) ? lines : []).map(
@@ -375,8 +423,9 @@ export const stageIslandLines = (session, relative, condition, lines) => {
  *
  * @param {object} session
  *   The open update session.
- * @param {?object} variantStyles
- *   The edited variant's element-relative styles (the diff baseline).
+ * @param {?object} documentStyles
+ *   The edited document's stored styles (a variant's element-relative
+ *   styles, a skin scope's defaults): the diff baseline.
  * @param {string} slot
  *   The written slot in the variant's key space (wearing fragment + the
  *   target's element-relative key).
@@ -391,16 +440,16 @@ export const stageIslandLines = (session, relative, condition, lines) => {
  */
 export const stageValue = (
   session,
-  variantStyles,
+  documentStyles,
   slot,
   condition,
   property,
   value,
 ) => {
-  if (session?.kind !== 'update') {
+  if (!stagesLines(session)) {
     return session;
   }
-  const stored = variantStyles?.[slot]?.[condition]?.[property];
+  const stored = documentStyles?.[slot]?.[condition]?.[property];
   const baseline =
     stored === undefined || stored === null ? null : String(stored).trim();
   const next =
@@ -426,7 +475,7 @@ export const stageValue = (
  *   A fresh session; the input is never mutated.
  */
 export const dismissLine = (session, id) => {
-  if (session.kind === 'update') {
+  if (stagesLines(session)) {
     return {
       ...session,
       lines: session.lines.filter((line) => line.id !== id),
@@ -466,7 +515,7 @@ export const restoreLine = (session, id) =>
  * @return {number}
  */
 export const sessionCount = (session, capture = null) =>
-  session.kind === 'update'
+  stagesLines(session)
     ? session.lines.length
     : payloadSummary(capture ?? {}, session.dismissed).included;
 
@@ -480,24 +529,29 @@ export const sessionCount = (session, capture = null) =>
  * [relative][condition][property], null unsets remove (emptied conditions
  * and entries dropping with them, never hollow shells), and everything
  * untouched — other properties, other conditions, nested "variants"
- * lists — rides verbatim, so wearers only see the pushed changes.
+ * lists — rides verbatim, so wearers only see the pushed changes. A skin
+ * session merges the same way over the scope's stored defaults: the
+ * document the scope wears after Push (the push bar spells the lines
+ * themselves as update_default patches; this merge is what the panel
+ * reads as the post-Push truth).
  *
  * @param {object} session
  * @param {object} context
  *   - capture: a save session's live capture payload.
- *   - variantStyles: an update session's target variant styles
- *     (variant.styles), never mutated.
+ *   - documentStyles: an update session's target variant styles
+ *     (variant.styles) or a skin session's scope defaults
+ *     (guide.skinDefaults[scope]), never mutated.
  *
  * @return {object}
  */
 export const sessionStyles = (
   session,
-  { capture = null, variantStyles = null } = {},
+  { capture = null, documentStyles = null } = {},
 ) => {
   if (session.kind === 'save') {
     return prunedPayload(capture ?? {}, session.dismissed);
   }
-  const styles = { ...(variantStyles ?? {}) };
+  const styles = { ...(documentStyles ?? {}) };
   session.lines.forEach(({ relative, condition, property, value }) => {
     const entry = isEntryObject(styles[relative])
       ? { ...styles[relative] }
@@ -522,4 +576,42 @@ export const sessionStyles = (
     }
   });
   return styles;
+};
+
+/**
+ * What Push commits for a skin session: one update_default per (key,
+ * condition) the staged lines touch.
+ *
+ * update_default is a PATCH against one scope at one key and condition
+ * (DaedalusStylishOperationHandler: `properties` values set, null values
+ * unset), so the staged lines group by their relative key and condition,
+ * in the order the first line of each group was staged, and every group
+ * is one op in one batch: the batch lands atomically, so the pushed
+ * document is exactly sessionStyles' merge or nothing.
+ *
+ * @param {object} session
+ *   The skin session.
+ *
+ * @return {Array<{op: string, scope: string, key: string, condition:
+ *   string, properties: object}>}
+ */
+export const skinPushOperations = (session) => {
+  if (session?.kind !== 'skin') {
+    return [];
+  }
+  const groups = new Map();
+  session.lines.forEach(({ relative, condition, property, value }) => {
+    const id = `${relative}|${condition}`;
+    if (!groups.has(id)) {
+      groups.set(id, {
+        op: 'update_default',
+        scope: session.scope,
+        key: relative,
+        condition,
+        properties: {},
+      });
+    }
+    groups.get(id).properties[property] = value;
+  });
+  return [...groups.values()];
 };

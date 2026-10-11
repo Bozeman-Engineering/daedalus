@@ -73,7 +73,7 @@ class BlueprintOperationsUpdateTest extends BlueprintKernelTestBase {
     ]);
     $entity->save();
 
-    $result = $this->operations->updateElement($entity, 'faf95c53-35e7-74e1-184e-041152031df4', [
+    $result = $this->operations->updateElement($this->host($entity), 'faf95c53-35e7-74e1-184e-041152031df4', [
       'field_heading' => 'Updated Heading',
       'field_body' => ['value' => '<p>Updated</p>', 'format' => 'plain_text'],
     ]);
@@ -134,7 +134,7 @@ class BlueprintOperationsUpdateTest extends BlueprintKernelTestBase {
     $entity->save();
 
     // Update only comp-1.
-    $result = $this->operations->updateElement($entity, 'faf95c53-35e7-74e1-184e-041152031df4', [
+    $result = $this->operations->updateElement($this->host($entity), 'faf95c53-35e7-74e1-184e-041152031df4', [
       'field_heading' => 'Updated Block 1',
     ]);
 
@@ -158,7 +158,7 @@ class BlueprintOperationsUpdateTest extends BlueprintKernelTestBase {
   public function testUpdateElementNotFound(): void {
     $entity = $this->createTestEntity(['name' => 'Test']);
 
-    $result = $this->operations->updateElement($entity, 'c68c9561-d36d-b4fc-77ac-50039f354800', [
+    $result = $this->operations->updateElement($this->host($entity), 'c68c9561-d36d-b4fc-77ac-50039f354800', [
       'field_heading' => 'Test',
     ]);
 
@@ -199,7 +199,7 @@ class BlueprintOperationsUpdateTest extends BlueprintKernelTestBase {
     ]);
     $entity->save();
 
-    $result = $this->operations->updateElement($entity, 'faf95c53-35e7-74e1-184e-041152031df4', [
+    $result = $this->operations->updateElement($this->host($entity), 'faf95c53-35e7-74e1-184e-041152031df4', [
       'field_nonexistent' => 'value',
     ]);
 
@@ -242,7 +242,7 @@ class BlueprintOperationsUpdateTest extends BlueprintKernelTestBase {
     ]);
     $entity->save();
 
-    $result = $this->operations->updateElement($entity, 'faf95c53-35e7-74e1-184e-041152031df4', [
+    $result = $this->operations->updateElement($this->host($entity), 'faf95c53-35e7-74e1-184e-041152031df4', [
       'label' => 'New Label',
       'field_heading' => 'Hello',
     ]);
@@ -292,7 +292,7 @@ class BlueprintOperationsUpdateTest extends BlueprintKernelTestBase {
     ]);
     $entity->save();
 
-    $result = $this->operations->updateElement($entity, 'faf95c53-35e7-74e1-184e-041152031df4', [
+    $result = $this->operations->updateElement($this->host($entity), 'faf95c53-35e7-74e1-184e-041152031df4', [
       'label_display' => '0',
       'view_mode' => 'default',
     ]);
@@ -340,7 +340,7 @@ class BlueprintOperationsUpdateTest extends BlueprintKernelTestBase {
     $para_entity = $entity->get('field_paragraphs')->first()->entity;
     $para_uuid = $para_entity->uuid();
 
-    $result = $this->operations->updateElement($entity, $para_uuid, [
+    $result = $this->operations->updateElement($this->host($entity), $para_uuid, [
       'field_heading' => 'Updated Heading',
       'field_text' => ['value' => '<p>Updated text</p>', 'format' => 'plain_text'],
     ]);
@@ -388,7 +388,7 @@ class BlueprintOperationsUpdateTest extends BlueprintKernelTestBase {
     $para1_uuid = $entity->get('field_paragraphs')->get(0)->entity->uuid();
 
     // Update only para 1.
-    $result = $this->operations->updateElement($entity, $para1_uuid, [
+    $result = $this->operations->updateElement($this->host($entity), $para1_uuid, [
       'field_heading' => 'Updated 1',
     ]);
 
@@ -436,7 +436,7 @@ class BlueprintOperationsUpdateTest extends BlueprintKernelTestBase {
     $child_entity = $parent_entity->get('field_items')->first()->entity;
     $child_uuid = $child_entity->uuid();
 
-    $result = $this->operations->updateElement($entity, $child_uuid, [
+    $result = $this->operations->updateElement($this->host($entity), $child_uuid, [
       'field_heading' => 'Updated Child',
     ]);
 
@@ -470,7 +470,7 @@ class BlueprintOperationsUpdateTest extends BlueprintKernelTestBase {
     $entity = $this->entityTypeManager->getStorage('entity_test')->load($entity->id());
     $para_uuid = $entity->get('field_paragraphs')->first()->entity->uuid();
 
-    $result = $this->operations->updateElement($entity, $para_uuid, [
+    $result = $this->operations->updateElement($this->host($entity), $para_uuid, [
       'field_nonexistent' => 'value',
     ]);
 
@@ -512,7 +512,7 @@ class BlueprintOperationsUpdateTest extends BlueprintKernelTestBase {
     ]);
     $entity->save();
 
-    $result = $this->operations->updateElement($entity, 'faf95c53-35e7-74e1-184e-041152031df4', [
+    $result = $this->operations->updateElement($this->host($entity), 'faf95c53-35e7-74e1-184e-041152031df4', [
       'field_heading' => 'Updated',
     ]);
 
@@ -542,7 +542,7 @@ class BlueprintOperationsUpdateTest extends BlueprintKernelTestBase {
       'field_count' => 10,
     ]);
 
-    $result = $this->operations->updateFields($entity, [
+    $result = $this->operations->updateFields($this->host($entity), [
       'name' => 'Updated',
       'field_subtitle' => 'Updated Sub',
     ]);
@@ -561,7 +561,7 @@ class BlueprintOperationsUpdateTest extends BlueprintKernelTestBase {
   public function testUpdateFieldsUnknownField(): void {
     $entity = $this->createTestEntity(['name' => 'Test']);
 
-    $result = $this->operations->updateFields($entity, [
+    $result = $this->operations->updateFields($this->host($entity), [
       'field_nonexistent' => 'value',
     ]);
 
@@ -587,7 +587,7 @@ class BlueprintOperationsUpdateTest extends BlueprintKernelTestBase {
 
     $entity = $this->createTestEntity(['name' => 'Test']);
 
-    $result = $this->operations->updateFields($entity, [
+    $result = $this->operations->updateFields($this->host($entity), [
       'field_paragraphs' => [['type' => 'entity_test_rev']],
     ]);
 
@@ -611,7 +611,7 @@ class BlueprintOperationsUpdateTest extends BlueprintKernelTestBase {
     ]);
     $entity->save();
 
-    $result = $this->operations->updateFields($entity, [
+    $result = $this->operations->updateFields($this->host($entity), [
       'layout_builder__layout' => [],
     ]);
 
@@ -632,7 +632,7 @@ class BlueprintOperationsUpdateTest extends BlueprintKernelTestBase {
       'field_subtitle' => 'Original Sub',
     ]);
 
-    $result = $this->operations->updateFields($entity, [
+    $result = $this->operations->updateFields($this->host($entity), [
       'field_subtitle' => 'Updated Sub',
     ]);
 
@@ -644,7 +644,7 @@ class BlueprintOperationsUpdateTest extends BlueprintKernelTestBase {
   }
 
   /**
-   * Tests updateElement on non-inline block returns error.
+   * Tests updateElement on a plugin block refuses a key its schema lacks.
    */
   public function testUpdateElementNonInlineBlock(): void {
     $this->enableLayoutBuilder();
@@ -669,14 +669,15 @@ class BlueprintOperationsUpdateTest extends BlueprintKernelTestBase {
     ]);
     $entity->save();
 
-    $result = $this->operations->updateElement($entity, 'ed939717-cc05-fbd1-619e-ec86816e3045', [
+    $result = $this->operations->updateElement($this->host($entity), 'ed939717-cc05-fbd1-619e-ec86816e3045', [
       'field_heading' => 'Test',
     ]);
 
     $this->assertFalse($result->isSuccess());
     $this->assertEquals('structural', $result->getPhase());
     $errors = $result->getErrors();
-    $this->assertEquals('NOT_INLINE_BLOCK', $errors[0]->getCode());
+    $this->assertEquals('UNKNOWN_PROPERTY', $errors[0]->getCode());
+    $this->assertSame(['label', 'label_display', 'use_site_logo', 'use_site_name', 'use_site_slogan'], $errors[0]->getContext()['available']);
   }
 
   /**
@@ -718,7 +719,7 @@ class BlueprintOperationsUpdateTest extends BlueprintKernelTestBase {
     $initial_config = $initial_comp->get('configuration');
     $this->assertArrayHasKey('block_revision_id', $initial_config);
 
-    $result = $this->operations->updateElement($entity, 'faf95c53-35e7-74e1-184e-041152031df4', [
+    $result = $this->operations->updateElement($this->host($entity), 'faf95c53-35e7-74e1-184e-041152031df4', [
       'field_heading' => 'Updated',
     ]);
 

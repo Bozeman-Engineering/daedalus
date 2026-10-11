@@ -255,6 +255,23 @@ const engine = {
     });
   },
 
+  /**
+   * Whether the current edit can end now: the selection write door's
+   * synchronous question before it moves the selection off the edit. The
+   * one refusal is a form-path edit whose widget is invalid (a wrapper
+   * carrying an error class, an input failing checkValidity); the same
+   * warning beginEdit and the sidebar show is shown here, since the user
+   * must fix that widget before anything else edits or selects. A
+   * blueprint-edited leaf has no widget to be invalid, so it always ends.
+   */
+  canEndEdit: () => {
+    if (Drupal.Daedalus.Edit.hasInvalidFormItem()) {
+      Drupal.Daedalus.Edit.warnAboutInvalidFormItem();
+      return false;
+    }
+    return true;
+  },
+
   isEditing: () => !!Drupal.Daedalus.Edit.CurrentlyEditingElement,
 
   /**

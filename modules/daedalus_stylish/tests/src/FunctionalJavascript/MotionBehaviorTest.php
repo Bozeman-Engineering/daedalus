@@ -269,7 +269,7 @@ class MotionBehaviorTest extends WebDriverTestBase {
    * A JS expression for a key's entry in the blueprint mirror's style map.
    */
   private function mapJs(string $key): string {
-    return '(Drupal.Daedalus.Blueprint.getBlueprint()?.fields?.daedalus_stylish_styles ?? {})[' . json_encode($key) . ']';
+    return $this->styleMapJs() . '[' . json_encode($key) . ']';
   }
 
   /**

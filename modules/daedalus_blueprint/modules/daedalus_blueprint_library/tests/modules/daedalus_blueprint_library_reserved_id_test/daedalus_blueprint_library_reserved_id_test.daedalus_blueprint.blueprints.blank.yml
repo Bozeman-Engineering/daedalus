@@ -1,0 +1,8 @@
+label: 'Blank'
+description: 'An otherwise valid page blueprint shipped under the reserved id blank.'
+scope: page
+subject: 'entity_test:entity_test'
+layout:
+  - kind: container
+    layout_id: layout_onecol
+    children: []

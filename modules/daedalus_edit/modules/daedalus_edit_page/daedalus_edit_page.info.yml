@@ -10,6 +10,8 @@ dependencies:
   - daedalus:daedalus_ui
   - daedalus:daedalus_layout
   - daedalus:daedalus_edit
-  # The shipped display's default section and the AI layout guidance both
-  # name daedalus_stylish layouts (the page builder offers only daedalus_stylish layouts).
+  # The shipped display (core.entity_view_display.node.page.default) holds
+  # one blank layout_builder_blank section; the layouts a page places are
+  # daedalus_stylish layouts (the page builder
+  # offers only those, and the AI layout guidance names them).
   - daedalus:daedalus_stylish_layouts

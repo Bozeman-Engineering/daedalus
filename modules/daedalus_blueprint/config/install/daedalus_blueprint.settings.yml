@@ -1,1 +1,14 @@
+# The slot labels are translatable, so the object carries its language
+# the way every such config object does (core requires it when the object
+# is validated: a recipe's config action on it, a config form).
+langcode: en
 active_design_system: null
+# The site's slot roster (id to label and tier), one namespace per site: a
+# slot block derives per entry and the tier names the one document of the
+# render stack that places it, the site frame (`frame`) or a template
+# (`template`). `main` is the frame's slot for the route's output
+# (FrameHost::MAIN_SLOT).
+slots:
+  main:
+    label: Main
+    tier: frame

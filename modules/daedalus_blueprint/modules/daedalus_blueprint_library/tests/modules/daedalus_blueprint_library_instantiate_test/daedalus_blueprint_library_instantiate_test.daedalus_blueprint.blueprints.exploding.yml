@@ -1,0 +1,20 @@
+label: Exploding
+description: 'References the spy-detonating variant to prove rollback.'
+scope: block
+subject: 'entity_test:entity_test'
+layout:
+  -
+    kind: container
+    layout_id: layout_onecol
+    children:
+      -
+        kind: region
+        region: content
+        children:
+          -
+            kind: block
+            block_type: basic
+            styles:
+              '':
+                variants:
+                  - explode

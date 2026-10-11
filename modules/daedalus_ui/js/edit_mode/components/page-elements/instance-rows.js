@@ -16,10 +16,19 @@
  * stamped `source: 'instance'` (markup-view.js toInstanceRow), and
  * reach (reach.js depicted) draws and reaches an instance source in
  * every view: the default model projection appends them too
- * (withInstanceRows), chip-less, and the tree's draw filter keeps them
+ * (withInstanceRows), tag-less, and the tree's draw filter keeps them
  * whatever the Show menu says. Only shell rows, generated-box rows and
- * tag chips — developer-declared anatomy and the cascade — carry the
+ * tag facts — developer-declared anatomy and the cascade — carry the
  * markup view's source and ride its toggle.
+ *
+ * A carrier's row reads like an element's: an icon (what it is, from the
+ * tag it rendered as: row-glyphs.js), then a name (what it says: its
+ * content excerpt, the first-line/80-char rule every content label in the
+ * tree follows). Its vocabulary word ("Paragraph", "List item", stamped by
+ * the annotator) is its `elementType`, the row's tooltip, and names the
+ * row outright where the excerpt would only repeat its rows: a list's
+ * text is its items' text, which the item rows already say, so a list
+ * reads as its word; an empty carrier reads as its word too.
  *
  * Ownership mirrors the DOM by construction: a composed block's carriers
  * ride the block's own markup (its render is one element), an open
@@ -35,29 +44,35 @@
 
 import { markupForKey } from '../../blueprint/markup-index';
 import { textExcerpt } from './compose';
+import { tagGlyph } from './row-glyphs';
+
+/**
+ * The carriers whose text is only their rows' text: a list wrapper reads
+ * as its word, never as the run-on of every item.
+ */
+const WRAPPER_TAGS = new Set(['ul', 'ol', 'dl']);
 
 /**
  * One annotation instance as a markup-view row.
- *
- * The excerpt follows the same first-line/80-char convention every content
- * label in the tree follows; empty elements read as bare tags.
  */
 const toRow = (instance) => {
+  const word = instance.label ?? instance.tag ?? instance.class;
+  const excerpt = WRAPPER_TAGS.has(instance.tag)
+    ? null
+    : textExcerpt(instance.text ?? '');
   const row = {
     selector: `.${instance.class}`,
-    label: instance.label ?? instance.tag ?? instance.class,
+    label: excerpt ?? word,
+    elementType: word,
+    icon: tagGlyph(instance.tag ?? null),
     children: (Array.isArray(instance.children) ? instance.children : []).map(
       toRow,
     ),
   };
   if (instance.tag) {
-    // The carrier's tag chip: the annotation resolved it server-side, so
+    // The carrier's tag fact: the annotation resolved it server-side, so
     // no client accessor is asked (unlike shell rows).
     row.tag = instance.tag;
-  }
-  const excerpt = textExcerpt(instance.text ?? '');
-  if (excerpt !== null) {
-    row.sublabel = excerpt;
   }
   return row;
 };
@@ -72,8 +87,8 @@ const toRow = (instance) => {
  * @param {?string} key
  *   The selectable key.
  *
- * @return {Array<{selector: string, label: string, tag?: string,
- *   sublabel?: string, children: Array}>}
+ * @return {Array<{selector: string, label: string, elementType: string,
+ *   icon: string, tag?: string, children: Array}>}
  */
 export const instanceRows = (key) => {
   const instances = markupForKey(key)?.instances;

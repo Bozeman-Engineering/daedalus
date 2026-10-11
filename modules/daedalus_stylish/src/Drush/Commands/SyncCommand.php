@@ -17,8 +17,8 @@ use Symfony\Component\DependencyInjection\Attribute\Autowire;
 /**
  * The CLI adapter of the shipped-definitions activation lane.
  *
- * Every enabled module's shipped animations, swatches, skins, and variants
- * already activate on a cache rebuild and on install (see ShippedSync);
+ * Every enabled module's shipped fonts, animations, swatches, skins, and
+ * variants already activate on a cache rebuild and on install (see ShippedSync);
  * this command runs the same orchestrated sync by hand, so an operator can
  * activate one module's package and read every outcome on the terminal
  * instead of in the log. One line per definition in sync order
@@ -30,7 +30,7 @@ use Symfony\Component\DependencyInjection\Attribute\Autowire;
  */
 #[AsCommand(
   name: 'daedalus_stylish:sync',
-  description: 'Activates module-shipped daedalus_stylish definitions (animations, swatches, skins, variants) and reports every outcome; the same sync a cache rebuild runs.',
+  description: 'Activates module-shipped daedalus_stylish definitions (fonts, animations, swatches, skins, variants) and reports every outcome; the same sync a cache rebuild runs.',
 )]
 final class SyncCommand extends Command {
 

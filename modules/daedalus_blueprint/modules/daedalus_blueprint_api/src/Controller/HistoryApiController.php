@@ -6,7 +6,8 @@ namespace Drupal\daedalus_blueprint_api\Controller;
 
 use Drupal\Core\Controller\ControllerBase;
 use Drupal\Core\Entity\EntityInterface;
-use Drupal\daedalus_blueprint\Dispatch\BlueprintBackendResolver;
+use Drupal\daedalus_blueprint\EntityStorageHandler;
+use Drupal\daedalus_blueprint\Host\HostInterface;
 use Drupal\daedalus_blueprint_api\MutationResponseBuilder;
 use Drupal\daedalus_blueprint\Result\BlueprintResult;
 use Drupal\daedalus_tempstore\History\HistoryManager;
@@ -34,7 +35,7 @@ final class HistoryApiController extends ControllerBase {
   use AjaxPageStateRequestTrait;
 
   public function __construct(
-    protected readonly BlueprintBackendResolver $backendResolver,
+    protected readonly EntityStorageHandler $storageHandler,
     protected readonly MutationResponseBuilder $responseBuilder,
     protected readonly ?HistoryManager $historyManager,
   ) {}
@@ -44,7 +45,7 @@ final class HistoryApiController extends ControllerBase {
    */
   public static function create(ContainerInterface $container): static {
     return new static(
-      $container->get('daedalus_blueprint.backend_resolver'),
+      $container->get('daedalus_blueprint.storage_handler'),
       $container->get('daedalus_blueprint_api.mutation_response_builder'),
       $container->has('daedalus_tempstore.history_manager')
         ? $container->get('daedalus_tempstore.history_manager')
@@ -65,7 +66,7 @@ final class HistoryApiController extends ControllerBase {
    *   'entries'].
    */
   public function timeline(string $entity_type, EntityInterface $entity): JsonResponse {
-    $working = $this->workingEntity($entity_type, $entity);
+    $working = $this->workingHost($entity_type, $entity);
     if ($working instanceof JsonResponse) {
       return $working;
     }
@@ -95,7 +96,7 @@ final class HistoryApiController extends ControllerBase {
    *   timeline) and 'restored_label'.
    */
   public function restore(Request $request, string $entity_type, EntityInterface $entity): JsonResponse {
-    $working = $this->workingEntity($entity_type, $entity);
+    $working = $this->workingHost($entity_type, $entity);
     if ($working instanceof JsonResponse) {
       return $working;
     }
@@ -127,6 +128,7 @@ final class HistoryApiController extends ControllerBase {
         'INVALID_RESTORE_TARGET',
         'The request body must contain "direction": "undo"|"redo" or an integer "to".',
         400,
+        canvas: $working,
       );
     }
 
@@ -135,6 +137,7 @@ final class HistoryApiController extends ControllerBase {
         'NOTHING_TO_RESTORE',
         'There is no history entry in that direction.',
         409,
+        canvas: $working,
       );
     }
 
@@ -147,9 +150,9 @@ final class HistoryApiController extends ControllerBase {
       // The staged state changed outside EntityStorageHandler::persist — fire
       // the persist hook it would have fired, so listeners (daedalus_edit's cache
       // tag invalidation) see the restore like any other staged write.
-      foreach ($restored['entities'] as $restored_entity) {
+      foreach ($restored['hosts'] as $restored_host) {
         $this->moduleHandler()->invokeAll('daedalus_blueprint_entity_persisted', [
-          $restored_entity,
+          $restored_host,
           FALSE,
           array_values(array_unique(array_column($restored['targets'], 'uuid'))),
         ]);
@@ -158,25 +161,25 @@ final class HistoryApiController extends ControllerBase {
       // Reload so the response reflects the restored staged state, and answer
       // with the standard contract: the union of the traversed entries'
       // targets identifies the subtrees that differ between the two states.
-      $backend = $this->backendResolver->resolve($entity_type);
-      $reloaded = $backend->load($entity_type, $entity->id());
+      // The client restores the page it is on, so the host is the canvas.
+      $reloaded = $this->storageHandler->load($entity_type, $entity->id());
       $result = BlueprintResult::success($reloaded)->withTargets($restored['targets']);
 
       return $this->responseBuilder->build($request, $entity, $result, $langcode, [
         'persisted' => 'tempstore',
         'restored_label' => $restored['label'],
         'history' => $this->historyManager->metadata($reloaded),
-      ], $view_mode);
+      ], $view_mode, $reloaded);
     });
   }
 
   /**
-   * Loads the staged working entity, or an error response.
+   * Loads the staged working host, or an error response.
    *
-   * @return \Drupal\Core\Entity\FieldableEntityInterface|\Symfony\Component\HttpFoundation\JsonResponse
-   *   The working entity, or the error to return.
+   * @return \Drupal\daedalus_blueprint\Host\HostInterface|\Symfony\Component\HttpFoundation\JsonResponse
+   *   The working host, or the error to return.
    */
-  protected function workingEntity(string $entity_type, EntityInterface $entity): mixed {
+  protected function workingHost(string $entity_type, EntityInterface $entity): HostInterface|JsonResponse {
     if ($this->historyManager === NULL) {
       return $this->responseBuilder->error(
         'HISTORY_UNAVAILABLE',
@@ -184,8 +187,7 @@ final class HistoryApiController extends ControllerBase {
         501,
       );
     }
-    $backend = $this->backendResolver->resolve($entity_type);
-    $working = $backend?->load($entity_type, $entity->id());
+    $working = $this->storageHandler->load($entity_type, $entity->id());
     if ($working === NULL) {
       return $this->responseBuilder->error(
         'ENTITY_NOT_FOUND',

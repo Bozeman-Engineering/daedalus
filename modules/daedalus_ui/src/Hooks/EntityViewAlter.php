@@ -4,6 +4,7 @@ namespace Drupal\daedalus_ui\Hooks;
 
 use Drupal\Core\Render\Element;
 use Drupal\Core\Entity\EntityInterface;
+use Drupal\daedalus_blueprint\Host\HostResolver;
 use Drupal\daedalus_ui\BlueprintMirror;
 use Drupal\Core\Session\AccountProxyInterface;
 use Drupal\daedalus_tempstore\ParamConverter\EntityConverter;
@@ -30,6 +31,7 @@ class EntityViewAlter {
     private readonly BlueprintMirror $blueprintMirror,
     private readonly AccountProxyInterface $currentUser,
     private readonly EntityConverter $entityConverter,
+    private readonly HostResolver $hostResolver,
   ) {}
 
   /**
@@ -78,9 +80,8 @@ class EntityViewAlter {
 
     $violation = $this->ensureWorkspace($entity);
     if ($violation) {
-      // #theme_wrappers included: a root block_content build carries a
-      // container wrapper with the full entity UI attribute set
-      // (DaedalusUiHooks::entityView()); left in place it would render
+      // #theme_wrappers included: a wrapper carrying the entity UI attribute
+      // set (DaedalusUiHooks::entityView()) left in place would render
       // around the violation's own main-entity wrapper as a duplicate
       // data-main-entity root.
       unset($build['#theme'], $build['#theme_wrappers'], $build['#pre_render'], $build['_layout_builder']);
@@ -106,8 +107,8 @@ class EntityViewAlter {
    * edit and preview paths only act on the requested one.
    */
   private function isRouteEntityBuild(array $build): bool {
-    $route_entity = $this->daedalusUi->deriveEntityFromRoute();
-    if (empty($route_entity)) {
+    $route_entity = $this->daedalusUi->deriveHostFromRoute()?->entity();
+    if ($route_entity === NULL) {
       return FALSE;
     }
     $entity_type_id = $route_entity->getEntityTypeId();
@@ -123,19 +124,20 @@ class EntityViewAlter {
   public function buildEditModeUi(string $mode, EntityInterface $entity, array &$build, EntityViewDisplayInterface $display) {
 
     $entity = $this->entityConverter()->loadEntityFromTempstore($entity);
+    $host = $this->hostResolver->fromEntity($entity);
 
     // The editable elements need attributes and wrappers to let the JS know
     // what is editable. When this entity is rendered via a page request or
     // LoadEditablePage, dispatch a builder event and let Daedalus Layout
     // replace the page with its UI. We don't need to worry about Daedalus Edit because
     // it adds its field attributes based on whether we are in Edit mode.
-    $event = $this->eventDispatcher->dispatch(new EditableUiBuilder($build, $mode, $entity, $build['#view_mode']), EditableUiBuilder::class);
+    $event = $this->eventDispatcher->dispatch(new EditableUiBuilder($build, $mode, $host, $build['#view_mode']), EditableUiBuilder::class);
     $build = $event->getBuild();
 
     // The boot delivery of the client blueprint mirror; BlueprintMirror
     // documents the full seam family (boot, form pipeline, spine responses)
     // and stands down for the blueprint half inside a spine mutation render.
-    $this->blueprintMirror->attach($build, $entity, $build['#view_mode']);
+    $this->blueprintMirror->attach($build, $host, $build['#view_mode']);
   }
 
   /**

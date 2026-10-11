@@ -67,6 +67,7 @@ class LiveAttributionTest extends KernelTestBase {
     $this->installEntitySchema('daedalus_variant');
     $this->installEntitySchema('daedalus_swatch');
     $this->installEntitySchema('daedalus_animation');
+    $this->installEntitySchema('daedalus_font');
     $this->installEntitySchema('daedalus_skin');
     $this->installEntitySchema('user');
     $this->installEntitySchema('entity_test');
@@ -226,9 +227,9 @@ class LiveAttributionTest extends KernelTestBase {
     $host = $this->styledEntity([
       "block:$component_uuid:field_body",
     ]);
-    $bundle = BlockContentType::create(['id' => 'layout_block', 'label' => 'Layout block']);
+    $bundle = BlockContentType::create(['id' => 'nested', 'label' => 'Nested']);
     $bundle->save();
-    $block_content = BlockContent::create(['type' => 'layout_block', 'info' => 'nested']);
+    $block_content = BlockContent::create(['type' => 'nested', 'info' => 'nested']);
     $block_content->save();
     $this->container->get('daedalus_layout.root_entity_registry')->setRoot($block_content->uuid(), $host);
     $provider = $this->container->get('daedalus_stylish.live_attribution');
@@ -335,9 +336,9 @@ class LiveAttributionTest extends KernelTestBase {
    */
   public function testNestedFragmentRootTags(): void {
     $host = $this->styledEntity(['entity:{uuid}']);
-    $bundle = BlockContentType::create(['id' => 'layout_block', 'label' => 'Layout block']);
+    $bundle = BlockContentType::create(['id' => 'nested', 'label' => 'Nested']);
     $bundle->save();
-    $block_content = BlockContent::create(['type' => 'layout_block', 'info' => 'nested']);
+    $block_content = BlockContent::create(['type' => 'nested', 'info' => 'nested']);
     $block_content->save();
     $this->container->get('daedalus_layout.root_entity_registry')->setRoot($block_content->uuid(), $host);
     $display = EntityViewDisplay::collectRenderDisplay($block_content, 'full');

@@ -71,7 +71,14 @@ class DesignSystemSwitchSubscriberTest extends KernelTestBase {
     $this->installEntitySchema('daedalus_variant');
     $this->installEntitySchema('daedalus_swatch');
     $this->installEntitySchema('daedalus_animation');
-    $this->installSchema('daedalus_stylish', ['daedalus_variant_usage', 'daedalus_swatch_usage', 'daedalus_animation_usage']);
+    $this->installEntitySchema('daedalus_font');
+    $this->installSchema('daedalus_stylish', [
+      'daedalus_variant_usage',
+      'daedalus_swatch_usage',
+      'daedalus_animation_usage',
+      'daedalus_token_usage',
+      'daedalus_font_usage',
+    ]);
     $this->installConfig(['daedalus_blueprint', 'daedalus_stylish']);
     // The importers switch to an administrative account: give them one.
     $this->setUpCurrentUser([], [], TRUE);
@@ -97,7 +104,7 @@ class DesignSystemSwitchSubscriberTest extends KernelTestBase {
   protected function createSystem(string $id, string $token): void {
     DesignSystem::create(['id' => $id, 'label' => ucfirst($id), 'default_skin' => $id])->save();
     $skin = DaedalusStylishSkin::create(['label' => ucfirst($id), 'machine_name' => $id, 'design_system' => $id]);
-    $skin->setTokens(['space' => [$token => '1rem']])->save();
+    $skin->setPackageTokens(['space' => [$token => '1rem']])->save();
     $variant = DaedalusStylishVariant::create([
       'label' => ucfirst($id) . ' band',
       'machine_name' => $id . '_band',
@@ -266,6 +273,64 @@ class DesignSystemSwitchSubscriberTest extends KernelTestBase {
     $this->assertStringNotContainsString('.daedalus-stylish-variant--aurora_band', $variants);
     $this->assertStringNotContainsString('.daedalus-stylish-variant--aurora_rhythm', $variants);
     $this->assertSame(['upsert' => [], 'remove' => $members], $this->deltaIds($change_set->flush()));
+  }
+
+  /**
+   * The skin a system wears follows the site's choice, on every switch.
+   *
+   * A choice (daedalus_stylish.settings skin_choice.{system}) swaps the
+   * active skin's tokens the way a switch swaps a system's members: the
+   * defaults file recompiles to the chosen skin and both skins' token
+   * ids ride the delta (DefaultsSettingsSubscriber). A switch away and
+   * back touches the CHOSEN skin's ids, never the default's, and a
+   * choice recorded for an inactive system changes nothing worn.
+   */
+  public function testChoiceFollowsTheSystem(): void {
+    $this->createSystem('aurora', 'gutter');
+    $this->createSystem('borealis', 'band');
+    $dusk = DaedalusStylishSkin::create(['label' => 'Dusk', 'machine_name' => 'dusk', 'design_system' => 'aurora']);
+    $dusk->setPackageTokens(['space' => ['dusk' => '2rem']])->save();
+    $change_set = $this->container->get('daedalus_blueprint.materials_change_set');
+    assert($change_set instanceof MaterialsChangeSet);
+    $active = $this->container->get(ActiveDesignSystem::SERVICE_ID);
+    $manager = $this->container->get('daedalus_stylish.skin_manager');
+
+    $active->activate('aurora');
+    $this->assertStringContainsString('--space-gutter: 1rem;', $this->css(DefaultsStylesheet::STATE_KEY));
+    $change_set->flush();
+    $manager->choose('dusk');
+    $this->assertSame('dusk', $manager->activeSkinName());
+    $css = $this->css(DefaultsStylesheet::STATE_KEY);
+    $this->assertStringContainsString('--space-dusk: 2rem;', $css);
+    $this->assertStringNotContainsString('--space-gutter', $css);
+    $this->assertSame([
+      'upsert' => ['token:space/dusk'],
+      'remove' => ['token:space/gutter'],
+    ], $this->deltaIds($change_set->flush()));
+
+    // Away: the chosen skin's tokens leave with aurora's members.
+    $active->activate('borealis');
+    $this->assertStringContainsString('--space-band: 1rem;', $this->css(DefaultsStylesheet::STATE_KEY));
+    $this->assertSame([
+      'upsert' => ['swatch:borealis_accent', 'token:space/band', 'variant:borealis_band'],
+      'remove' => ['swatch:aurora_accent', 'token:space/dusk', 'variant:aurora_band'],
+    ], $this->deltaIds($change_set->flush()));
+
+    // Back: the choice holds, and it is the chosen skin that arrives.
+    $active->activate('aurora');
+    $css = $this->css(DefaultsStylesheet::STATE_KEY);
+    $this->assertStringContainsString('--space-dusk: 2rem;', $css);
+    $this->assertStringNotContainsString('--space-gutter', $css);
+    $this->assertSame([
+      'upsert' => ['swatch:aurora_accent', 'token:space/dusk', 'variant:aurora_band'],
+      'remove' => ['swatch:borealis_accent', 'token:space/band', 'variant:borealis_band'],
+    ], $this->deltaIds($change_set->flush()));
+
+    // A choice for the inactive system: nothing worn changes, nothing
+    // rides the delta, the file is byte-identical.
+    $this->config('daedalus_stylish.settings')->set('skin_choice.borealis', 'borealis')->save();
+    $this->assertTrue($change_set->isEmpty());
+    $this->assertStringContainsString('--space-dusk: 2rem;', $this->css(DefaultsStylesheet::STATE_KEY));
   }
 
 }

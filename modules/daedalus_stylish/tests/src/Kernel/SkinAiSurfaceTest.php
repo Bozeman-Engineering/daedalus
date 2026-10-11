@@ -22,10 +22,11 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  * bundle-list exposure (which the daedalus_blueprint_ai tools enforce, so
  * listed means operable) and the skins skill follow the acting account's
  * 'administer skins' permission. The materials guidance is roster-facts
- * only and account-invariant; the skin authoring mechanics and their
+ * only and account-invariant; the skin authoring mechanics (the token
+ * gestures with kind token, update_default, the create door) and their
  * permission posture ride the skins skill, and a skin is a design system
- * member whose activation is the system's default_skin (the skill's
- * catalog and the skin context both say so).
+ * member the site wears by choice or as the system's default_skin (the
+ * skill's catalog and the skin context both say so).
  */
 #[Group('daedalus_stylish')]
 #[RunTestsInSeparateProcesses]
@@ -38,6 +39,11 @@ class SkinAiSurfaceTest extends KernelTestBase {
    * Any theme name works: an unknown theme simply has no theme layers.
    */
   protected const THEME = 'stark';
+
+  /**
+   * The gutter token's description: the reasoning the schema carries whole.
+   */
+  protected const GUTTER_DESCRIPTION = 'The band gutter. Reach for it between a band and its neighbours, never inside a card.';
 
   /**
    * {@inheritdoc}
@@ -70,13 +76,20 @@ class SkinAiSurfaceTest extends KernelTestBase {
     // storages unconditionally on the same alter.
     $this->installEntitySchema('daedalus_swatch');
     $this->installEntitySchema('daedalus_animation');
+    $this->installEntitySchema('daedalus_font');
     $this->installEntitySchema('daedalus_variant');
     $this->installConfig(['daedalus_stylish']);
     // Activating a design system syncs every enabled module's shipped
     // definitions (ShippedSync::onDesignSystemActivated()): the importers
     // mirror motion-* and --swatch-* references into the usage tables and
     // switch to an administrative account, so the fixture carries both.
-    $this->installSchema('daedalus_stylish', ['daedalus_variant_usage', 'daedalus_swatch_usage', 'daedalus_animation_usage']);
+    $this->installSchema('daedalus_stylish', [
+      'daedalus_variant_usage',
+      'daedalus_swatch_usage',
+      'daedalus_animation_usage',
+      'daedalus_token_usage',
+      'daedalus_font_usage',
+    ]);
     $this->container->get('state')->set('daedalus_stylish_control_test.site', [
       'token_scales' => [
         'space' => ['label' => 'Space', 'shape' => 'dimension'],
@@ -90,8 +103,8 @@ class SkinAiSurfaceTest extends KernelTestBase {
     $this->createUser();
 
     $skin = DaedalusStylishSkin::create(['label' => 'Aurora']);
-    $skin->setTokens([
-      'space' => ['gutter' => '1.5rem'],
+    $skin->setPackageTokens([
+      'space' => ['gutter' => ['value' => '1.5rem', 'description' => self::GUTTER_DESCRIPTION]],
       'color' => ['accent' => ['default' => '#1a1a2e', 'dark' => '#e8e8f0']],
     ])->save();
     $this->activateSkin($skin);
@@ -107,8 +120,8 @@ class SkinAiSurfaceTest extends KernelTestBase {
     $schema = [
       'fields' => [
         'name' => ['type' => 'string'],
-        'daedalus_stylish_styles' => ['type' => 'daedalus_stylish_styles', 'style_guide' => ['guidance' => 'x']],
       ],
+      'styles' => ['type' => 'daedalus_stylish_styles', 'style_guide' => ['guidance' => 'x']],
     ];
     $context = ['entity_type' => 'entity_test', 'bundle' => 'entity_test', 'view_mode' => 'full', 'cache_tags' => []];
     $this->container->get('module_handler')->alter('daedalus_blueprint_schema', $schema, $context);
@@ -127,17 +140,20 @@ class SkinAiSurfaceTest extends KernelTestBase {
 
     // The named values: the active skin's minted tokens, grouped by scale
     // id, each entry keyed by the RESOLVED variable (the application
-    // handle), values as stored. Scale metadata (shape, label, prefix
-    // template) is mint-time vocabulary and lives in the skins skill; the
-    // active-skin pointer is the skin lane's business too.
-    $this->assertSame('1.5rem', $materials['tokens']['space']['--space-gutter']);
-    $this->assertSame(['default' => '#1a1a2e', 'dark' => '#e8e8f0'], $materials['tokens']['color']['--color-accent']);
+    // handle), the value as stored beside the token's whole description
+    // when its author wrote one (the schema is the surface that carries
+    // every material in full; the brief prints the first sentence).
+    // Scale metadata (shape, label, prefix template) is mint-time
+    // vocabulary and lives in the skins skill; the worn-skin pointer is
+    // the skin lane's business too.
+    $this->assertSame(['value' => '1.5rem', 'description' => self::GUTTER_DESCRIPTION], $materials['tokens']['space']['--space-gutter']);
+    $this->assertSame(['value' => ['default' => '#1a1a2e', 'dark' => '#e8e8f0']], $materials['tokens']['color']['--color-accent']);
     $this->assertArrayNotHasKey('scales', $materials);
     $this->assertContains('daedalus_skin_list', $context['cache_tags']);
     $this->assertContains('config:daedalus_stylish.settings', $context['cache_tags']);
     // The materials are the schema's own key (core renders them from the
     // roster); the field's style guide is untouched.
-    $this->assertSame(['guidance'], array_keys($schema['fields']['daedalus_stylish_styles']['style_guide']));
+    $this->assertSame(['guidance'], array_keys($schema['styles']['style_guide']));
     // Non-styling fields are untouched.
     $this->assertArrayNotHasKey('style_guide', $schema['fields']['name']);
 
@@ -195,16 +211,39 @@ class SkinAiSurfaceTest extends KernelTestBase {
     $this->assertStringContainsString('machine_name aurora, "Aurora"', $composed);
     $this->assertStringContainsString('ACTIVE', $composed);
     // The catalog teaches membership and what ACTIVE means: a skin is a
-    // member of the system its design_system field names, and the active
-    // skin is the active design system's default_skin; the recipes say
-    // activation is a design-system act, never a skin write.
-    $this->assertStringContainsString('ACTIVE marks the active design system\'s default_skin', $composed);
+    // member of the system its design_system field names, and the worn
+    // skin is the site's choice for the active design system, else its
+    // default_skin; the operations say wearing a skin is a person's
+    // gesture, never an op.
+    $this->assertStringContainsString('ACTIVE marks the skin the site wears: its choice for the active design system while that names a published, conforming member, else the system\'s default_skin', $composed);
     $this->assertMatchesRegularExpression('/machine_name aurora, "Aurora": ACTIVE, member of aurora, /', $composed);
-    $this->assertStringContainsString('Activation is a design-system act', $composed);
+    $this->assertStringContainsString('Wearing a skin is an administer gesture with no operation', $composed);
     $this->assertStringNotContainsString('styling skill', $composed);
     $this->assertStringContainsString("## Designing a skin's identity", $composed);
     $this->assertStringContainsString('characterful display face', $composed);
-    $this->assertStringContainsString('## Recipes (generic entity ops on daedalus_skin)', $composed);
+    // The skill speaks the operations: tokens are materials of the worn
+    // skin (kind token on the material gesture family), defaults go
+    // through update_default one scope at a time, a skin is created
+    // through the entity door with token records; the read-merge-write
+    // recipes over whole fields are gone with the whole-field write.
+    $this->assertStringContainsString('## Operations (page_edit ops; they write the worn skin, not the page)', $composed);
+    $this->assertStringContainsString('save_material {kind: token, group: <scale>, label:', $composed);
+    $this->assertStringContainsString('update_material {kind: token, id: "space/4", value?,', $composed);
+    $this->assertStringContainsString('remove_material {kind: token, id}', $composed);
+    $this->assertStringContainsString('update_default {scope, key?,', $composed);
+    $this->assertStringContainsString('{scale: {name: {value, description, offered}}}', $composed);
+    $this->assertStringContainsString('two LAYERS on one entity', $composed);
+    $this->assertStringContainsString('eb_create_entity daedalus_skin with label, tokens', $composed);
+    $retired_teaching = [
+      'read-merge-write',
+      'FULL map',
+      'Activation is a design-system act',
+      'Recipes (generic entity ops',
+      '{scale: {name: value}}',
+    ];
+    foreach ($retired_teaching as $retired) {
+      $this->assertStringNotContainsString($retired, $composed, "The retired teaching \"$retired\" left the skill.");
+    }
     // The palette boundary: tokens vs swatches routing, the reserved
     // namespace, and the skin-switch persistence contrast.
     $this->assertStringContainsString('## Tokens vs the palette', $composed);
@@ -229,11 +268,17 @@ class SkinAiSurfaceTest extends KernelTestBase {
     // schema (the tools enforce visibility) ever read it.
     $skin_context = $this->container->get('daedalus_blueprint.context_resolver')->getContext('daedalus_skin', 'daedalus_skin');
     $this->assertStringContainsString('skins skill', $skin_context['guidance']);
-    // The context teaches the same two facts the catalog does: membership
-    // and the active skin as the active system's default_skin.
+    // The context teaches the same facts the catalog does (membership,
+    // the worn skin as the site's choice else the system's default_skin,
+    // the two layers) and routes to the operations the skill teaches.
     $this->assertStringContainsString('member of a design system', $skin_context['guidance']);
-    $this->assertStringContainsString("active design system's default_skin", $skin_context['guidance']);
-    $this->assertStringContainsString('Activation is a design-system act', $skin_context['guidance']);
+    $this->assertStringContainsString("else the system's default_skin", $skin_context['guidance']);
+    $this->assertStringContainsString('{scale: {name: {value, description, offered}}}', $skin_context['guidance']);
+    $this->assertStringContainsString('save_material, update_material and remove_material with kind token, defaults through update_default, never a whole-field write', $skin_context['guidance']);
+    $this->assertStringContainsString('no operation switches it', $skin_context['guidance']);
+    foreach (['read-merge-write', 'Activation is a design-system act', '{scale: {name: value}}'] as $retired) {
+      $this->assertStringNotContainsString($retired, $skin_context['guidance'], "The retired teaching \"$retired\" left the context.");
+    }
   }
 
 }

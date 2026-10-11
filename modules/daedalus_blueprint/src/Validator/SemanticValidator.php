@@ -5,16 +5,22 @@ declare(strict_types=1);
 namespace Drupal\daedalus_blueprint\Validator;
 
 use Drupal\Core\Entity\FieldableEntityInterface;
+use Drupal\Core\TypedData\ComplexDataInterface;
+use Drupal\Core\TypedData\ListInterface;
+use Drupal\Core\TypedData\OptionsProviderInterface;
+use Drupal\Core\Validation\Plugin\Validation\Constraint\AllowedValuesConstraint;
 use Drupal\daedalus_blueprint\Access\BlueprintAccessChecker;
 use Drupal\daedalus_blueprint\Result\BlueprintError;
+use Symfony\Component\Validator\ConstraintViolationInterface;
 
 /**
  * Phase B semantic validator for entity blueprints.
  *
- * Handles permission checks (entity-level and field-level access) and
- * constraint validation with scoping to submitted fields. Used by the
- * BlueprintDeserializer after structural validation passes and the entity
- * is loaded or created.
+ * Handles field-level access checks and constraint validation with scoping
+ * to submitted fields. Used by the BlueprintDeserializer after structural
+ * validation passes and the entity is loaded or created; host-level
+ * access is the capability resolver's (its host access policy), asked at
+ * the root by every op door.
  */
 class SemanticValidator {
 
@@ -27,37 +33,6 @@ class SemanticValidator {
   public function __construct(
     protected BlueprintAccessChecker $accessChecker,
   ) {}
-
-  /**
-   * Validates entity-level create or edit access.
-   *
-   * Checks whether the acting user can create (for new entities) or update
-   * (for existing entities) the given entity.
-   *
-   * @param \Drupal\Core\Entity\FieldableEntityInterface $entity
-   *   The entity to check access on.
-   *
-   * @return \Drupal\daedalus_blueprint\Result\BlueprintError[]
-   *   Entity access errors. Empty if access is granted.
-   */
-  public function validateEntityAccess(FieldableEntityInterface $entity): array {
-    $operation = $entity->isNew() ? 'create' : 'update';
-
-    if (!$this->accessChecker->entityAccess($entity, $operation)) {
-      $entity_type = $entity->getEntityTypeId();
-      $bundle = $entity->bundle();
-      return [
-        new BlueprintError(
-          path: 'entity_type',
-          code: 'ACCESS_DENIED_ENTITY',
-          message: "Access denied: cannot $operation $entity_type:$bundle.",
-          hint: 'The current user lacks the required permission.',
-        ),
-      ];
-    }
-
-    return [];
-  }
 
   /**
    * Validates field-level edit access for submitted fields.
@@ -109,6 +84,9 @@ class SemanticValidator {
    * @param bool $is_full_create
    *   TRUE for full blueprint create (report all violations), FALSE for
    *   scoped updates (only report violations on submitted fields).
+   * @param bool $system
+   *   TRUE under the system posture: a violation that only judges the
+   *   current user (see judgesActor()) is not reported.
    *
    * @return \Drupal\daedalus_blueprint\Result\BlueprintError[]
    *   Constraint violation errors.
@@ -118,6 +96,7 @@ class SemanticValidator {
     array $submitted_field_names,
     array $error_field_names,
     bool $is_full_create = FALSE,
+    bool $system = FALSE,
   ): array {
     $errors = [];
     $violations = $entity->validate();
@@ -136,6 +115,10 @@ class SemanticValidator {
         continue;
       }
 
+      if ($system && $this->judgesActor($entity, $violation)) {
+        continue;
+      }
+
       $entity_label = $entity->getEntityTypeId() . ':' . $entity->bundle() . ':' . $entity->uuid();
       $errors[] = new BlueprintError(
         path: "fields.$property_path",
@@ -145,6 +128,43 @@ class SemanticValidator {
     }
 
     return $errors;
+  }
+
+  /**
+   * Whether a violation only says the current user may not set the value.
+   *
+   * Core's allowed-values constraint judges an options provider (a text
+   * format, most visibly) against what the CURRENT USER may set. Under the
+   * system posture there is no actor, so the value is held to what the
+   * provider says is possible at all: a text format that exists passes, one
+   * that does not is still a violation.
+   *
+   * @param \Drupal\Core\Entity\FieldableEntityInterface $entity
+   *   The validated entity.
+   * @param \Symfony\Component\Validator\ConstraintViolationInterface $violation
+   *   The violation.
+   *
+   * @return bool
+   *   TRUE when the value is possible and only the actor's reach refused it.
+   */
+  protected function judgesActor(FieldableEntityInterface $entity, ConstraintViolationInterface $violation): bool {
+    if (!$violation->getConstraint() instanceof AllowedValuesConstraint) {
+      return FALSE;
+    }
+    $data = $entity->getTypedData();
+    foreach (explode('.', $violation->getPropertyPath()) as $segment) {
+      if ($data instanceof ListInterface && ctype_digit($segment)) {
+        $data = $data->get((int) $segment);
+      }
+      elseif ($data instanceof ComplexDataInterface) {
+        $data = $data->get($segment);
+      }
+      else {
+        return FALSE;
+      }
+    }
+    return $data instanceof OptionsProviderInterface
+      && in_array($data->getValue(), $data->getPossibleValues());
   }
 
 }

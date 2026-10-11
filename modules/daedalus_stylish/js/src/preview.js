@@ -1,5 +1,7 @@
-import { printMap, containerRootsCss } from './printer.js';
+import { printEntry, printMap, containerRootsCss } from './printer.js';
 import { resolveMapMedia, resolveMediaValue } from './media-token.js';
+import { customProperty } from './materials.js';
+import { isPlainObject } from './style-guide.js';
 
 /**
  * The live preview: shape declared in a <style> tag, values carried inline.
@@ -63,9 +65,69 @@ import { resolveMapMedia, resolveMediaValue } from './media-token.js';
  * is replicated (see containerRootsCss), so the first client-side "narrow"
  * tick previews against a real query container instead of silently doing
  * nothing until the op settles.
+ *
+ * The token scope lane is the same two tiers for a MATERIAL's custom
+ * property (a token's or a swatch's, the values the compiled skin and
+ * swatch files deliver on the token scope element, DefaultsStylesheet's
+ * SCOPE_CLASS): stageScoped(property, value) prints the property's shape
+ * into the same preview tag as an @scope block on the token scope element,
+ * every condition of a condition-keyed value under its own wrapper exactly
+ * as the compiled file prints it (printEntry, the same printer), each
+ * entry reading `var(--daedalus-stylish-live-N)`, and writes the literals
+ * inline on the token scope element. The block sits later in the document
+ * than the compiled file's, so at equal specificity the preview wins
+ * without an inline write of the property itself (which would override
+ * every condition at once and lie under the other scheme). A palette
+ * drag stages per tick; the materials delivery (createMaterialDelivery)
+ * stages every committed value the compiled files predate, so a mint or
+ * an edit restyles the canvas without a reload, in both windows' one
+ * canvas.
+ *
+ * The defaults delivery is the same hand-off for the skin's DEFAULTS
+ * (the element blocks the compiled defaults file prints beneath the
+ * tokens): deliverDefaults(css) stamps the defaults stylesheet's current
+ * text, as the server prints it, into its own <style> tag kept just
+ * before the preview tag, so a pushed skin default (the skin session's
+ * Push, push-bar.js) restyles every element of its scope at once while
+ * the compiled <link> in the head still serves the old file, and the
+ * preview tag's staged shapes keep winning by document order. The
+ * server prints it (skins-api.js fetchDefaults) because the bare
+ * defaults lane (CssPrinter::printBareEntry, the address selectors) has
+ * no client twin, and the delivered text is exactly what a reload would
+ * load.
  */
 
 const SLOT_PREFIX = '--daedalus-stylish-live-';
+
+/**
+ * The token scope element's class: the one element the compiled skin and
+ * swatch files deliver custom properties on (DefaultsStylesheet::SCOPE_CLASS
+ * mirror; the texts must stay byte-identical).
+ */
+export const TOKEN_SCOPE_CLASS = 'daedalus-stylish-token-scope';
+
+/**
+ * A material value's live entries per condition.
+ *
+ * A plain string is its 'default' entry; a condition-keyed map is its
+ * entries as written. Blank and null entries are dropped (the printer's
+ * emit gate: they would print nothing), so a value with no live entry
+ * answers {} and stages nothing.
+ *
+ * @param {*} value
+ *   A token or swatch value: a string or a condition-keyed map.
+ *
+ * @return {Object<string, string>}
+ *   condition -> the literal, trimmed.
+ */
+export const scopedEntries = (value) => {
+  const entries = isPlainObject(value) ? value : { default: value };
+  return Object.fromEntries(
+    Object.entries(entries)
+      .filter(([, entry]) => isLive(entry))
+      .map(([condition, entry]) => [condition, String(entry).trim()]),
+  );
+};
 
 /**
  * Whether a staged value is live (carried inline through a slot).
@@ -98,12 +160,17 @@ const rootKeyOf = (key) => {
  * @param {function(string): ?Element} [options.resolveRoot]
  *   The scope-root lookup for a root key (computed-read's resolveRoot).
  *   Absent or answering null: the shape still prints, no inline write.
+ * @param {function(): ?Element} [options.resolveScope]
+ *   The token scope element lookup (the leader's document query). Absent
+ *   or answering null: the scope lane's shape still prints, no inline
+ *   write.
  */
 export const createPreview = ({
   guide,
   getBaseMap,
   getMediaUrls,
   resolveRoot,
+  resolveScope,
 }) => {
   // key -> condition -> property -> literal value (null = unset in preview).
   const staged = {};
@@ -116,11 +183,17 @@ export const createPreview = ({
   // each staged value rides. Minted the first time a triple is staged with
   // a live value, dropped when the triple is released or staged null.
   const slots = {};
+  // The token scope lane: custom property -> condition -> literal, and
+  // the slot each rides (property -> condition -> slot name).
+  const scoped = {};
+  const scopeSlots = {};
   let nextSlot = 1;
   let tag = null;
 
   const hasStaged = () =>
-    Object.keys(staged).length > 0 || Object.keys(stagedEntries).length > 0;
+    Object.keys(staged).length > 0 ||
+    Object.keys(stagedEntries).length > 0 ||
+    Object.keys(scoped).length > 0;
 
   const ensureTag = () => {
     if (!tag || !tag.isConnected) {
@@ -129,6 +202,38 @@ export const createPreview = ({
       document.body.appendChild(tag);
     }
     return tag;
+  };
+
+  // The defaults delivery tag (deliverDefaults): before the preview tag
+  // when that exists, so a staged shape still beats a delivered default
+  // at equal specificity; at the body's end otherwise, where the
+  // preview tag's later creation appends behind it.
+  let defaultsTag = null;
+  const ensureDefaultsTag = () => {
+    if (!defaultsTag || !defaultsTag.isConnected) {
+      defaultsTag = document.createElement('style');
+      defaultsTag.setAttribute('data-daedalus-stylish-defaults-delivery', '');
+      if (tag && tag.isConnected) {
+        document.body.insertBefore(defaultsTag, tag);
+      } else {
+        document.body.appendChild(defaultsTag);
+      }
+    }
+    return defaultsTag;
+  };
+
+  // The font delivery tag (deliverFonts): @font-face at-rules resolve by
+  // family, not by cascade position, so the tag goes wherever the body's
+  // end is; a later same-descriptor block simply wins over the compiled
+  // file's, which is the hand-off wanted.
+  let fontsTag = null;
+  const ensureFontsTag = () => {
+    if (!fontsTag || !fontsTag.isConnected) {
+      fontsTag = document.createElement('style');
+      fontsTag.setAttribute('data-daedalus-stylish-font-delivery', '');
+      document.body.appendChild(fontsTag);
+    }
+    return fontsTag;
   };
 
   const rootOf = (key) =>
@@ -192,6 +297,65 @@ export const createPreview = ({
         );
       });
     });
+  };
+
+  const scopeOf = () =>
+    (typeof resolveScope === 'function' ? resolveScope() : null) ?? null;
+
+  /**
+   * Writes a scope slot's literal inline on the token scope element.
+   */
+  const applyScoped = (property, condition) => {
+    scopeOf()?.style.setProperty(
+      scopeSlots[property][condition],
+      scoped[property][condition],
+    );
+  };
+
+  const mintScopeSlot = (property, condition) => {
+    (scopeSlots[property] ??= {})[condition] = `${SLOT_PREFIX}${nextSlot}`;
+    nextSlot += 1;
+  };
+
+  /**
+   * Drops a scope slot, removing its inline property from the element.
+   *
+   * @return {boolean}
+   *   Whether a slot existed (a membership change for the sheet).
+   */
+  const dropScopeSlot = (property, condition) => {
+    const name = scopeSlots[property]?.[condition];
+    if (!name) {
+      return false;
+    }
+    scopeOf()?.style.removeProperty(name);
+    delete scopeSlots[property][condition];
+    if (!Object.keys(scopeSlots[property]).length) {
+      delete scopeSlots[property];
+    }
+    return true;
+  };
+
+  const eachScopeSlot = (visit) => {
+    Object.entries(scopeSlots).forEach(([property, conditions]) => {
+      Object.keys(conditions).forEach((condition) =>
+        visit(property, condition),
+      );
+    });
+  };
+
+  /**
+   * The scope lane as one style entry on the token scope element: every
+   * staged property under every condition it carries, each reading its
+   * slot's var().
+   */
+  const scopedEntry = () => {
+    const entry = {};
+    eachScopeSlot((property, condition) => {
+      (entry[condition] ??= {})[property] =
+        `var(${scopeSlots[property][condition]})`;
+    });
+    return entry;
   };
 
   /**
@@ -269,7 +433,22 @@ export const createPreview = ({
     // so a pick can extend it and re-stage.
     const merged = resolveMapMedia(mergedMap(), getMediaUrls?.() ?? {});
     let css = printMap(merged, guide?.conditions);
-    const roots = containerRootsCss(merged, guide);
+    // The token scope lane's block, as the compiled skin and swatch files
+    // print theirs (the same printer over the same selector).
+    const entry = scopedEntry();
+    if (Object.keys(entry).length) {
+      const block = printEntry(
+        `.${TOKEN_SCOPE_CLASS}`,
+        null,
+        entry,
+        guide?.conditions,
+      );
+      css = css === '' ? block : `${css}\n${block}`;
+    }
+    const roots = containerRootsCss(
+      { ...merged, [`.${TOKEN_SCOPE_CLASS}`]: entry },
+      guide,
+    );
     if (roots !== '') {
       css = css === '' ? roots : `${css}\n${roots}`;
     }
@@ -386,16 +565,179 @@ export const createPreview = ({
     },
 
     /**
+     * Stages a material's custom property on the token scope element.
+     *
+     * The value is the record's whole shape (a string or a condition-keyed
+     * map): every live entry rides its own slot under its condition's
+     * wrapper, so the other scheme keeps its own value while one entry is
+     * dragged. A value change on an already-slotted entry is one inline
+     * write; an entry first staged or dropped (a value without it, a blank
+     * entry) is a membership change and re-renders. A value with no live
+     * entry releases the property.
+     *
+     * @param {string} property
+     *   The custom property ('--color-accent', '--swatch-brand_red').
+     * @param {*} value
+     *   The token or swatch value.
+     */
+    stageScoped: (property, value) => {
+      const entries = scopedEntries(value);
+      let membership = false;
+      Object.keys(scopeSlots[property] ?? {}).forEach((condition) => {
+        if (!(condition in entries)) {
+          membership = dropScopeSlot(property, condition) || membership;
+        }
+      });
+      if (!Object.keys(entries).length) {
+        delete scoped[property];
+      } else {
+        scoped[property] = entries;
+        Object.keys(entries).forEach((condition) => {
+          if (!scopeSlots[property]?.[condition]) {
+            mintScopeSlot(property, condition);
+            membership = true;
+          }
+          applyScoped(property, condition);
+        });
+      }
+      if (membership) {
+        renderSheet();
+      }
+    },
+
+    /**
+     * Releases a material's custom property: its slots go and the
+     * compiled files' value shows again.
+     */
+    releaseScoped: (property) => {
+      let released = false;
+      Object.keys(scopeSlots[property] ?? {}).forEach((condition) => {
+        released = dropScopeSlot(property, condition) || released;
+      });
+      delete scoped[property];
+      if (released) {
+        renderSheet();
+      }
+    },
+
+    /**
      * Re-projects the overlay after the base map changed (mirror replaced):
      * every slot's value is written again (the markup swap dropped the
      * roots' inline state) and the sheet re-renders over the new base.
+     * The token scope element outlives a markup swap, but its slots are
+     * rewritten too: one write each, and the sheet re-renders anyway.
      */
     baseChanged: () => {
       if (!hasStaged()) {
         return;
       }
       eachSlot(applyValue);
+      eachScopeSlot(applyScoped);
       renderSheet();
+    },
+
+    /**
+     * Delivers the defaults stylesheet's current text on the page.
+     *
+     * The committed skin defaults' hand-off (see the file docblock): the
+     * text replaces whatever the tag held, so each delivery is the whole
+     * current file, never an accumulation; '' empties the tag.
+     *
+     * @param {string} css
+     *   The defaults stylesheet's CSS text (skins-api.js fetchDefaults).
+     */
+    deliverDefaults: (css) => {
+      ensureDefaultsTag().textContent = css === '' ? '' : `\n${css}\n`;
+    },
+
+    /**
+     * The committed fonts' hand-off: the fonts stylesheet's current
+     * @font-face text (fonts-api.js fetchFontStylesheet), stamped whole
+     * after a font joined, left or changed (leader-source.js), so a
+     * minted family loads before any reload. '' empties the tag.
+     *
+     * @param {string} css
+     */
+    deliverFonts: (css) => {
+      ensureFontsTag().textContent = css === '' ? '' : `\n${css}\n`;
+    },
+  };
+};
+
+/**
+ * The committed materials' delivery over the token scope lane.
+ *
+ * The compiled skin and swatch files this page loaded print the values
+ * the roster held at boot; every value the store learns afterwards (a
+ * mint, an edit, a rename, the paired window's or the AI's) is stamped
+ * through the preview's scope lane so the canvas restyles before any
+ * reload, with the same condition honesty the files have. Each store
+ * change delivers the whole roster: a record whose value differs from
+ * its boot value is staged, one that returned to it (a revert, an undo)
+ * or left the roster (a delete: its rewrite gave every use the literal
+ * look, so the file's stale property changes nothing) is released. A
+ * record the files never printed (minted this session) differs from its
+ * absent boot value and is staged too. Idempotent per record (an
+ * unchanged staged value is one inline write, no sheet change), so the
+ * delivery needs no diff of its own; the boot snapshot is the one fact it
+ * keeps.
+ *
+ * @param {object} preview
+ *   The createPreview() instance (its scope lane).
+ * @param {object} roster
+ *   The materials roster at boot (the values the compiled files print).
+ *
+ * @return {{apply: function(object): void, restore: function(object): void}}
+ *   apply(roster) delivers the roster's committed values; restore(record)
+ *   re-delivers one record after a draft released it (the record's own
+ *   value, staged when it differs from boot, released otherwise).
+ */
+export const createMaterialDelivery = (preview, roster) => {
+  const keyOf = (record) => `${record.kind}:${record.id}`;
+  const spelled = (value) => JSON.stringify(value ?? null);
+  const delivered = (roster) =>
+    ['token', 'swatch']
+      .flatMap((kind) => roster.ofKind(kind))
+      .filter((record) => customProperty(record) !== null);
+  const boot = new Map(
+    delivered(roster).map((record) => [keyOf(record), spelled(record.value)]),
+  );
+  // The properties staged by delivery right now, by record key.
+  const staged = new Map();
+
+  const deliver = (record) => {
+    const property = customProperty(record);
+    if (property === null) {
+      return;
+    }
+    if (boot.get(keyOf(record)) === spelled(record.value)) {
+      if (staged.delete(keyOf(record))) {
+        preview.releaseScoped(property);
+      }
+      return;
+    }
+    staged.set(keyOf(record), property);
+    preview.stageScoped(property, record.value);
+  };
+
+  return {
+    apply: (roster) => {
+      const records = delivered(roster);
+      const present = new Set(records.map(keyOf));
+      [...staged.entries()].forEach(([key, property]) => {
+        if (!present.has(key)) {
+          staged.delete(key);
+          preview.releaseScoped(property);
+        }
+      });
+      records.forEach(deliver);
+    },
+    restore: (record) => {
+      const property = customProperty(record);
+      if (property !== null && !staged.has(keyOf(record))) {
+        preview.releaseScoped(property);
+      }
+      deliver(record);
     },
   };
 };

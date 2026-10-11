@@ -62,6 +62,7 @@ class ComposedBlockSchemaTest extends KernelTestBase {
     // consumer needs the swatch entity schema.
     $this->installEntitySchema('daedalus_swatch');
     $this->installEntitySchema('daedalus_animation');
+    $this->installEntitySchema('daedalus_font');
     // Material references resolve through the materials roster, whose
     // daedalus_stylish provider reads all four storages on every build.
     $this->installEntitySchema('daedalus_variant');
@@ -73,7 +74,13 @@ class ComposedBlockSchemaTest extends KernelTestBase {
     // definitions (ShippedSync::onDesignSystemActivated()): the importers
     // mirror motion-* and --swatch-* references into the usage tables and
     // switch to an administrative account, so the fixture carries both.
-    $this->installSchema('daedalus_stylish', ['daedalus_variant_usage', 'daedalus_swatch_usage', 'daedalus_animation_usage']);
+    $this->installSchema('daedalus_stylish', [
+      'daedalus_variant_usage',
+      'daedalus_swatch_usage',
+      'daedalus_animation_usage',
+      'daedalus_token_usage',
+      'daedalus_font_usage',
+    ]);
     $this->setUpCurrentUser([], [], TRUE);
   }
 

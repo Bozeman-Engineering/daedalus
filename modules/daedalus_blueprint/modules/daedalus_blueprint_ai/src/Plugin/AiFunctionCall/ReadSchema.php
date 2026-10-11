@@ -9,10 +9,11 @@ use Drupal\Core\StringTranslation\TranslatableMarkup;
 use Drupal\ai\Attribute\FunctionCall;
 use Drupal\ai\Service\FunctionCalling\FunctionCallInterface;
 use Drupal\ai\OperationType\Chat\Tools\ToolsFunctionInput;
-use Drupal\daedalus_blueprint\Dialect\DialectCatalogBuilder;
+use Drupal\daedalus_blueprint\Dialect\DialectCatalog;
 use Drupal\daedalus_blueprint\Dialect\DialectSchemaProjector;
 use Drupal\daedalus_blueprint\Materials\MaterialKind;
 use Drupal\daedalus_blueprint\Materials\MaterialsProse;
+use Drupal\daedalus_blueprint\Materials\MaterialsSchema;
 use Drupal\daedalus_blueprint_ai\DaedalusBlueprintToolBase;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 
@@ -25,6 +26,13 @@ use Symfony\Component\DependencyInjection\ContainerInterface;
  * full text), and none of the JSON layout grammar the cached catalog would
  * contradict. Every other bundle answers with the JSON blueprint schema,
  * the grammar eb_create_entity and eb_edit take.
+ *
+ * The materials' blueprints are the site favorites in full, with the
+ * group index beside them (MaterialsSchema); `group` names one group (a
+ * declared id, or DialectCatalog::UNGROUPED) to list in full instead,
+ * narrowed AFTER the cached schema is read (MaterialsSchema::narrow(): the
+ * schema cache key never carries it). An unknown group answers a
+ * corrective naming the ids.
  */
 #[FunctionCall(
   id: 'daedalus_blueprint:read_schema',
@@ -51,14 +59,15 @@ use Symfony\Component\DependencyInjection\ContainerInterface;
       required: FALSE,
       description: new TranslatableMarkup('The Layout Builder view mode to filter available block types by restrictions. Defaults to "full" when not specified.'),
     ),
+    'group' => new ContextDefinition(
+      data_type: 'string',
+      label: new TranslatableMarkup('Group'),
+      required: FALSE,
+      description: new TranslatableMarkup('A group id from the schema\'s materials.groups, or ungrouped: materials.blueprints then lists that group\'s blueprints in full instead of the site favorites.'),
+    ),
   ],
 )]
 class ReadSchema extends DaedalusBlueprintToolBase {
-
-  /**
-   * The dialect catalog builder.
-   */
-  protected DialectCatalogBuilder $catalogBuilder;
 
   /**
    * The dialect schema projector.
@@ -66,12 +75,17 @@ class ReadSchema extends DaedalusBlueprintToolBase {
   protected DialectSchemaProjector $schemaProjector;
 
   /**
+   * The materials fragment, for the group narrowing after the cache.
+   */
+  protected MaterialsSchema $materialsSchema;
+
+  /**
    * {@inheritdoc}
    */
   public static function create(ContainerInterface $container, array $configuration, $plugin_id, $plugin_definition): FunctionCallInterface|static {
     $instance = parent::create($container, $configuration, $plugin_id, $plugin_definition);
-    $instance->catalogBuilder = $container->get('daedalus_blueprint.dialect_catalog_builder');
     $instance->schemaProjector = $container->get('daedalus_blueprint.dialect_schema_projector');
+    $instance->materialsSchema = $container->get('daedalus_blueprint.materials_schema');
     return $instance;
   }
 
@@ -99,7 +113,7 @@ class ReadSchema extends DaedalusBlueprintToolBase {
   public function execute() {
     $entity_type = $this->getContextValue('entity_type');
 
-    if (!$this->requireContentEntityType($entity_type)) {
+    if (!$this->requireDocumentHostType($entity_type) || !$this->requireFieldableType($entity_type)) {
       return;
     }
 
@@ -112,9 +126,31 @@ class ReadSchema extends DaedalusBlueprintToolBase {
       return;
     }
     $view_mode = $this->getContextValue('view_mode') ?: NULL;
+    $group = trim((string) $this->getContextValue('group'));
 
     try {
       $schema = $this->schemaBuilder->getSchema($entity_type, $bundle ?: $entity_type, $view_mode);
+      // One group in full, in place of the favorites: narrowed here, after
+      // the cached schema is read, so the cache key carries no group.
+      if ($group !== '') {
+        if (!isset($schema[DialectSchemaProjector::MATERIALS])) {
+          $this->output = sprintf('Error: group narrows materials.blueprints, and the schema of %s/%s carries no materials.', $entity_type, $bundle ?: $entity_type);
+          return;
+        }
+        $ids = $this->materialsSchema->groupIds();
+        if (!in_array($group, $ids, TRUE)) {
+          $declared = array_diff($ids, [DialectCatalog::UNGROUPED]);
+          $this->output = sprintf(
+            'Error: unknown group "%s". %s; %s lists the blueprints in no group. Pass one of them, or omit group for the site favorites.',
+            $group,
+            $declared === [] ? 'This site declares no groups' : 'The groups are ' . implode(', ', $declared) . ' (materials.groups in the schema read)',
+            DialectCatalog::UNGROUPED,
+          );
+          return;
+        }
+        $host = $this->pageHosts->bundleHost($entity_type, $bundle ?: $entity_type);
+        $schema[DialectSchemaProjector::MATERIALS] = $this->materialsSchema->narrow($schema[DialectSchemaProjector::MATERIALS], $host, $group);
+      }
       // The projection teaches, so it reads the catalog's offered view: an
       // element's axis values and class roster name only the materials
       // their authors share with the AI (the materials fragment beneath

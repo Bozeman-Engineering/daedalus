@@ -87,15 +87,17 @@ const KEY_BLOCK = `block:${BLOCK}`;
 /** A band holding a nested container (with a block), an empty container,
  *  and a block as a DIRECT child — all three column flavors. */
 const layout = [{
+  kind: 'container',
   uuid: BAND,
   layout_id: 'daedalus_stylish_container',
   children: [
     {
+      kind: 'container',
       uuid: CHILD_A,
       layout_id: 'daedalus_stylish_container',
-      children: [{ uuid: BLOCK, block_type: 'text' }],
+      children: [{ kind: 'block', uuid: BLOCK, block_type: 'text' }],
     },
-    { uuid: CHILD_B, layout_id: 'daedalus_stylish_container', children: [] },
+    { kind: 'container', uuid: CHILD_B, layout_id: 'daedalus_stylish_container', children: [] },
   ],
 }];
 
@@ -171,8 +173,8 @@ const scaledGuide = {
 // --- layout-tree reads --------------------------------------------------
 
 test('containerChildren lists all three column flavors in order', () => {
-  const blockChild = { uuid: BLOCK, block_type: 'text' };
-  const tree = [{ uuid: BAND, layout_id: 'daedalus_stylish_container', children: [...layout[0].children, blockChild] }];
+  const blockChild = { kind: 'block', uuid: BLOCK, block_type: 'text' };
+  const tree = [{ kind: 'container', uuid: BAND, layout_id: 'daedalus_stylish_container', children: [...layout[0].children, blockChild] }];
   assert.deepEqual(containerChildren(tree, BAND), [
     { key: KEY_A, uuid: CHILD_A, kind: 'container', empty: false },
     { key: KEY_B, uuid: CHILD_B, kind: 'container', empty: true },
@@ -185,7 +187,14 @@ test('containerChildren finds nested containers and refuses non-flows', () => {
     { key: KEY_BLOCK, uuid: BLOCK, kind: 'block', empty: false },
   ]);
   assert.equal(containerChildren(layout, 'missing'), null);
-  const multiRegion = [{ uuid: BAND, layout_id: 'two_col', regions: { first: [], second: [] } }];
+  // A multi-region container holds region nodes (every region, empty
+  // ones included), named slots the positional grammar cannot address.
+  const multiRegion = [{
+    kind: 'container',
+    uuid: BAND,
+    layout_id: 'two_col',
+    children: [{ kind: 'region', region: 'first', children: [] }, { kind: 'region', region: 'second', children: [] }],
+  }];
   assert.equal(containerChildren(multiRegion, BAND), null);
 });
 

@@ -14,7 +14,7 @@ import {
 /**
  * THE selection index over the panel's projected tree, BOTH tiers:
  * address → {label, elementType?, kind, bundle, parent, rowParent,
- * children, rows, tier, source, owner?, tag?}, memoized on what it reads
+ * children, rows, tier, source, can, tag?}, memoized on what it reads
  * by reference: the
  * mirror (replaced wholesale by every mutation response), the materials
  * record set (replaced by every delta) and the registered part behavior,
@@ -38,13 +38,17 @@ import {
  * element, a minted instance carrier, or a generated box `&::before` /
  * `&::after` the part behavior's cascade delivers, generated-rows.js),
  * the grammar style-map keys already speak (`{root}::{relative
- * selector}`). The store's selection plus its styling target IS an
- * address split into (owner, selector); the string form is used only as
- * this map's key (selectorAddress). Rows exist only for placed shell
- * parts, instance carriers and delivered boxes: a target the index does
- * not place (the children '> *', a type '> pb-text', an ancestor rule, a
- * box nothing delivers) seats on the selected element, as does a placed
- * row the panel is not currently drawing (reach.js seatAddress).
+ * selector}`). The store's selection plus its styling subject facet (the
+ * target, keyed by the selected element) IS an address split into
+ * (owner, selector); the string form is used only as this map's key
+ * (selectorAddress). Rows exist only for placed shell parts, instance
+ * carriers and delivered boxes: a facet the index does not place (the
+ * children '> *', a type '> pb-text', a tag tier, a box nothing
+ * delivers) seats on the selected element, as does a placed row the
+ * panel is not currently drawing (reach.js seatAddress). The write
+ * address (a rule on an ancestor, the slice's `address`) is no row and
+ * never seats; its ancestry is judged over this index's `parent`
+ * pointers by the selection facade.
  *
  * One projection, one index, many readers: the selection facade's
  * labelForKey and typeForKey, keyboard traversal, the breadcrumb's
@@ -193,6 +197,8 @@ const buildIndex = (state) => {
           tier: 'part',
           source: node.source,
           owner: node.parentKey,
+          // A part answers its owning element's verdict.
+          can: map.get(node.parentKey)?.can ?? null,
           tag: node.tag ?? null,
         }
       : {
@@ -206,6 +212,11 @@ const buildIndex = (state) => {
           rows: [],
           tier: 'element',
           source: 'element',
+          // The spine's verdict (`can` on the model row, compose.js): a
+          // row the annotator did not stamp (a field, an inline entity, a
+          // label row) inherits its element parent's, so every address
+          // the gate is asked about answers from one published fact.
+          can: node.can ?? map.get(elementParent)?.can ?? null,
         };
     map.set(address, entry);
     const nextElementParent = node.pseudo ? elementParent : address;
@@ -226,7 +237,7 @@ const buildIndex = (state) => {
 /**
  * The memoized projection index, or null before the mirror boots.
  *
- * @return {?Map<string, {label: string, elementType?: ?string, kind: string, bundle: ?string, parent: ?string, rowParent: ?string, children: string[], rows: string[], tier: 'element'|'part', source: string, owner?: string, tag?: ?string}>}
+ * @return {?Map<string, {label: string, elementType?: ?string, kind: string, bundle: ?string, parent: ?string, rowParent: ?string, children: string[], rows: string[], tier: 'element'|'part', source: string, can: ?Object<string, boolean>, owner?: string, tag?: ?string}>}
  */
 export const projectionIndex = () => {
   const state = store.getState();

@@ -50,7 +50,7 @@ class MaterialGestureOpsTest extends BlueprintKernelTestBase {
    * Runs one op through the real batch door.
    */
   protected function batch(object $entity, array $operation, array $options = []): BlueprintResult {
-    return $this->container->get('daedalus_blueprint.operations')->batchOperations($entity, [$operation], $options);
+    return $this->container->get('daedalus_blueprint.operations')->batchOperations($this->host($entity), [$operation], $options);
   }
 
   /**
@@ -76,7 +76,7 @@ class MaterialGestureOpsTest extends BlueprintKernelTestBase {
     }
     $guidance = $registry->getGuidance();
     $this->assertStringContainsString('never mint a material unless the user asks, and a mint is published site-wide at once', $guidance['save_material'], 'The router line states the mint gate from MaterialsProse.');
-    $this->assertStringContainsString('"kind" (swatch|stencil)', $guidance['save_material'], 'The kinds are the ones the providers teach a gesture for.');
+    $this->assertStringContainsString('"kind" (swatch|blueprint)', $guidance['save_material'], 'The kinds are the ones the providers teach a gesture for.');
     $this->assertStringContainsString('"kind"', $guidance['update_material']);
     $this->assertStringContainsString('"kind"', $guidance['remove_material']);
 
@@ -114,14 +114,14 @@ class MaterialGestureOpsTest extends BlueprintKernelTestBase {
     // The AI tools' option stamps ai; the provider receives it verbatim.
     $result = $this->batch($entity, [
       'op' => 'save_material',
-      'kind' => 'stencil',
+      'kind' => 'blueprint',
       'element' => $entity->uuid(),
       'label' => 'Hero',
     ], [
       MaterialGestureOperationHandler::ORIGIN_OPTION => MaterialRecord::ORIGIN_AI,
     ]);
     $this->assertTrue($result->isSuccess());
-    $this->assertSame('stencil', TestMaterialsProvider::$gestures[1]['kind']);
+    $this->assertSame('blueprint', TestMaterialsProvider::$gestures[1]['kind']);
     $this->assertSame(MaterialRecord::ORIGIN_AI, TestMaterialsProvider::$gestures[1]['options'][MaterialGestureOperationHandler::ORIGIN_OPTION]);
 
     // A provider's refusal is the batch's semantic failure, errors verbatim.
@@ -143,12 +143,12 @@ class MaterialGestureOpsTest extends BlueprintKernelTestBase {
     $codes = $this->errorCodes($this->batch($entity, ['op' => 'save_material', 'kind' => 'sticker', 'label' => 'X']));
     $this->assertSame(['MISSING_PARAMETER'], $codes['kind']);
 
-    // The test provider teaches swatch and stencil gestures only: a
+    // The test provider teaches swatch and blueprint gestures only: a
     // variant (a rostered kind) has no gesture here, and the refusal names
     // the kinds that do.
     $result = $this->batch($entity, ['op' => 'save_material', 'kind' => 'variant', 'label' => 'X']);
     $this->assertSame(['kind' => ['NO_GESTURE']], $this->errorCodes($result));
-    $this->assertSame(['swatch', 'stencil'], $result->getErrors()[0]->getContext()['kinds']);
+    $this->assertSame(['swatch', 'blueprint'], $result->getErrors()[0]->getContext()['kinds']);
     $this->assertSame([], TestMaterialsProvider::$gestures, 'Nothing reached the provider.');
 
     foreach (['update_material', 'remove_material'] as $op) {
@@ -179,10 +179,10 @@ class MaterialGestureOpsTest extends BlueprintKernelTestBase {
     $this->assertSame(['update', 'swatch', 'lime_green'], [$gesture['verb'], $gesture['kind'], $gesture['id']]);
     $this->assertSame(['label' => 'Lime', 'value' => '#4dff8d'], $gesture['operation']);
 
-    $result = $this->batch($entity, ['op' => 'remove_material', 'kind' => 'stencil', 'id' => 'hero']);
+    $result = $this->batch($entity, ['op' => 'remove_material', 'kind' => 'blueprint', 'id' => 'hero']);
     $this->assertTrue($result->isSuccess());
     $gesture = TestMaterialsProvider::$gestures[1];
-    $this->assertSame(['remove', 'stencil', 'hero'], [$gesture['verb'], $gesture['kind'], $gesture['id']]);
+    $this->assertSame(['remove', 'blueprint', 'hero'], [$gesture['verb'], $gesture['kind'], $gesture['id']]);
     // The op spine never drives a Batch API job: the provider is told so.
     $this->assertArrayNotHasKey(MaterialGestureOperationHandler::BATCH_OPTION, $gesture['options']);
   }
@@ -193,11 +193,11 @@ class MaterialGestureOpsTest extends BlueprintKernelTestBase {
   public function testElementResolvesAliases(): void {
     $entity = $this->createTestEntity();
     $target = $this->container->get('uuid')->generate();
-    $this->container->get('daedalus_blueprint.dialect_alias_map')->record($entity, 'conv-1', 'hero', $target);
+    $this->container->get('daedalus_blueprint.dialect_alias_map')->record($this->host($entity), 'conv-1', 'hero', $target);
 
     $result = $this->batch($entity, [
       'op' => 'save_material',
-      'kind' => 'stencil',
+      'kind' => 'blueprint',
       'element' => 'hero',
       'label' => 'Hero',
     ], [
@@ -210,7 +210,7 @@ class MaterialGestureOpsTest extends BlueprintKernelTestBase {
     // empty element refuses before any lookup.
     $result = $this->batch($entity, [
       'op' => 'update_material',
-      'kind' => 'stencil',
+      'kind' => 'blueprint',
       'id' => 'hero',
       'element' => $target,
     ], [
@@ -220,7 +220,7 @@ class MaterialGestureOpsTest extends BlueprintKernelTestBase {
     $this->assertSame($target, TestMaterialsProvider::$gestures[1]['operation']['element']);
     $codes = $this->errorCodes($this->batch($entity, [
       'op' => 'save_material',
-      'kind' => 'stencil',
+      'kind' => 'blueprint',
       'element' => 'ghost',
       'label' => 'Ghost',
     ], [
@@ -229,7 +229,7 @@ class MaterialGestureOpsTest extends BlueprintKernelTestBase {
     $this->assertSame(['UNKNOWN_REF'], $codes['element']);
     $codes = $this->errorCodes($this->batch($entity, [
       'op' => 'save_material',
-      'kind' => 'stencil',
+      'kind' => 'blueprint',
       'element' => '',
       'label' => 'Ghost',
     ]));
@@ -244,7 +244,7 @@ class MaterialGestureOpsTest extends BlueprintKernelTestBase {
     $entity = $this->createTestEntity();
     $result = $this->batch($entity, [
       'op' => 'save_material',
-      'kind' => 'stencil',
+      'kind' => 'blueprint',
       'element' => $entity->uuid(),
       'label' => 'Hero',
       'warn' => ['Dropped a style key.'],

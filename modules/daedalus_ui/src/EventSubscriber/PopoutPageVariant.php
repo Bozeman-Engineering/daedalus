@@ -10,7 +10,7 @@ use Drupal\daedalus_ui\Chromeless;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 
 /**
- * Renders pop-out windows as pop-out documents.
+ * Selects the display variant of a pop-out and of a bare site document.
  *
  * A pop-out is a window the editing page opens beside itself (the
  * responsive preview, daedalus_stylish's inspector). It should read as a
@@ -20,9 +20,16 @@ use Symfony\Component\EventDispatcher\EventSubscriberInterface;
  * page title, since a pop-out renders its own heading. A route opts in with
  * the Chromeless::ROUTE_OPTION option line (see Chromeless).
  *
+ * A bare site document (Chromeless::BARE_ROUTE_OPTION) is one piece of
+ * site content rendered alone in the skin: it takes core's own simple_page
+ * variant, which is "messages and the main content, no block placement",
+ * so none of the theme's regions render around the content, and the
+ * route's title (when it declares one) stays core's page title.
+ *
  * Only the variant is handled here: page_top/page_bottom chrome renders
  * regardless of the variant and is dropped for every chromeless document
- * (pop-outs and preview mode alike) in DaedalusUiHooks::preprocessHtml.
+ * (pop-outs, bare documents and preview mode alike) in
+ * DaedalusUiHooks::preprocessHtml.
  */
 final class PopoutPageVariant implements EventSubscriberInterface {
 
@@ -32,11 +39,20 @@ final class PopoutPageVariant implements EventSubscriberInterface {
   public const VARIANT = 'daedalus_ui_popout';
 
   /**
-   * Selects the pop-out display variant for routes declared as pop-outs.
+   * The bare site document's display variant: core's simple page.
+   */
+  public const BARE_VARIANT = 'simple_page';
+
+  /**
+   * Selects the variant for routes declared as pop-outs or bare documents.
    */
   public function onSelectPageDisplayVariant(PageDisplayVariantSelectionEvent $event): void {
-    if ($event->getRouteMatch()->getRouteObject()?->getOption(Chromeless::ROUTE_OPTION)) {
+    $route = $event->getRouteMatch()->getRouteObject();
+    if ($route?->getOption(Chromeless::ROUTE_OPTION)) {
       $event->setPluginId(self::VARIANT);
+    }
+    elseif ($route?->getOption(Chromeless::BARE_ROUTE_OPTION)) {
+      $event->setPluginId(self::BARE_VARIANT);
     }
   }
 

@@ -12,9 +12,10 @@ use Symfony\Component\DependencyInjection\ContainerInterface;
 /**
  * The skin list: /admin/appearance/skins.
  *
- * Shows which skin the site wears (the active pointer) beside the library
- * of looks it could wear; activation itself is a checkbox on the skin form,
- * an ordinary admin gesture like setting the default theme.
+ * Shows which skin the site wears beside the library of looks it could
+ * wear. The list is read-only apart from delete: a skin is authored and
+ * chosen on the canvas (the Palette's skin section and its skin card),
+ * never through an admin form.
  */
 class DaedalusStylishSkinListBuilder extends EntityListBuilder {
 

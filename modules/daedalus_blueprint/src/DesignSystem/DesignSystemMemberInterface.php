@@ -8,7 +8,7 @@ namespace Drupal\daedalus_blueprint\DesignSystem;
  * An entity that is a member of a design system, or global.
  *
  * Every member kind (daedalus_stylish's skins, variants, swatches and animations;
- * the stencil) carries one membership: the id of the design system it
+ * the blueprint) carries one membership: the id of the design system it
  * belongs to, or NULL for a global member, one that belongs to no system
  * and is offered under every one. Membership is identity, not a
  * revisioned fact (a revert never moves a member between systems), and it

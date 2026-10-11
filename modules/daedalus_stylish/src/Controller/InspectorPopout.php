@@ -78,11 +78,14 @@ final class InspectorPopout extends ControllerBase {
             'guide' => $this->clientStyleGuide->build(),
             // The same gesture gates the in-page host attaches
             // (InspectorGates): the satellite renders the same variant,
-            // swatch and animation controls (fetches ride its own session;
-            // spine ops relay to the leader as intents).
+            // swatch, token, animation and skin controls (fetches ride its
+            // own session; spine ops relay to the leader as intents).
             'variants' => $this->gates->variants(),
             'swatches' => $this->gates->swatches(),
+            'tokens' => $this->gates->tokens(),
             'animations' => $this->gates->animations(),
+            'fonts' => $this->gates->fonts(),
+            'skin' => $this->gates->skin(),
           ],
           'daedalusUi' => [
             'materials' => $this->materialsDelivery->envelope(),

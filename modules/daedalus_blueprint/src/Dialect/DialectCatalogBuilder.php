@@ -50,7 +50,7 @@ use Symfony\Contracts\EventDispatcher\EventDispatcherInterface;
  * - The container layout id: the first placement-allowed layout that is a
  *   container.
  *
- * The site's MATERIALS (tokens, swatches, variants, stencils, animations) come
+ * The site's MATERIALS (tokens, swatches, variants, blueprints, animations) come
  * from the materials roster (MaterialsRosterBuilder over the tagged providers),
  * the one published set every material surface projects; the styling
  * DECLARATIONS the roster does not carry (each scope's axis order with the
@@ -58,7 +58,10 @@ use Symfony\Contracts\EventDispatcher\EventDispatcherInterface;
  * instance namespaces, closed stylable rosters, birth defaults, the skin's
  * dressed tags) are contributed by DialectCatalogBuildEvent subscribers
  * (daedalus_stylish's DialectVocabularySubscriber on a Daedalus site), keeping the
- * spine styling-agnostic.
+ * spine styling-agnostic. The site's group vocabulary (the filter
+ * categories blueprints and block types are filed under) reaches the
+ * catalog the same way, contributed by the layer that parses its
+ * declaration (daedalus_layout's SiteGroups).
  */
 class DialectCatalogBuilder {
 
@@ -110,6 +113,7 @@ class DialectCatalogBuilder {
       birthDefaults: $event->getBirthDefaults(),
       dressedTags: $event->getDressedTags(),
       skin: $event->getSkin(),
+      groups: $event->getGroups(),
     );
     return $this->catalog;
   }

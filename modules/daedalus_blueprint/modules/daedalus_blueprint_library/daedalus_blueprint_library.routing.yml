@@ -1,0 +1,62 @@
+# Details and delete are ADAPTERS over the blueprint kind of the material
+# gesture family (BlueprintMaterialsProvider::update() / remove(), the same
+# methods update_material / remove_material dispatch to): the Add panel's
+# blueprint menu manages the vocabulary from wherever it is open, with no
+# page batch to ride, so it speaks to the provider through these routes and
+# receives the same materials delta the op lane answers with. The route
+# gate is the any-type question (BlueprintTypeAccess: may the actor do
+# this to blueprints of SOME type); the provider then asks the blueprint
+# the reference resolves to, whose type decides.
+daedalus_blueprint_library.update_details:
+  path: '/daedalus-blueprint/blueprint/{reference}/details'
+  methods: [POST]
+  defaults:
+    _controller: 'Drupal\daedalus_blueprint_library\Controller\BlueprintApiController::updateDetails'
+    _title: 'Update blueprint details'
+  options:
+    no_cache: 'TRUE'
+  requirements:
+    _blueprint_type_access: 'update'
+    _csrf_request_header_token: 'TRUE'
+
+daedalus_blueprint_library.delete:
+  path: '/daedalus-blueprint/blueprint/{reference}/delete'
+  methods: [POST]
+  defaults:
+    _controller: 'Drupal\daedalus_blueprint_library\Controller\BlueprintApiController::delete'
+    _title: 'Delete blueprint'
+  options:
+    no_cache: 'TRUE'
+  requirements:
+    _blueprint_type_access: 'delete'
+    _csrf_request_header_token: 'TRUE'
+
+# The variant-ownership lifecycle gestures. Adopt rides the op lane
+# (save_material / update_material adopt_variants, additive, AI parity is a
+# feature); release and transfer are non-additive mutations of
+# non-revisionable identity fields on site-wide content, not one of the
+# family's three verbs, so they stay curator gestures on routes (editing a
+# blueprint of some type): deliberately out of the AI's structural reach.
+daedalus_blueprint_library.release_variant:
+  path: '/daedalus-blueprint/blueprint-variant/{reference}/release'
+  methods: [POST]
+  defaults:
+    _controller: 'Drupal\daedalus_blueprint_library\Controller\BlueprintApiController::releaseVariant'
+    _title: 'Release an owned variant'
+  options:
+    no_cache: 'TRUE'
+  requirements:
+    _blueprint_type_access: 'update'
+    _csrf_request_header_token: 'TRUE'
+
+daedalus_blueprint_library.transfer_variant:
+  path: '/daedalus-blueprint/blueprint-variant/{reference}/transfer'
+  methods: [POST]
+  defaults:
+    _controller: 'Drupal\daedalus_blueprint_library\Controller\BlueprintApiController::transferVariant'
+    _title: 'Transfer an owned variant'
+  options:
+    no_cache: 'TRUE'
+  requirements:
+    _blueprint_type_access: 'update'
+    _csrf_request_header_token: 'TRUE'

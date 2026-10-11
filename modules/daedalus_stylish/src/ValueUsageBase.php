@@ -9,22 +9,23 @@ use Drupal\Core\Database\Statement\FetchAs;
 use Drupal\Core\Entity\EntityFieldManagerInterface;
 use Drupal\Core\Entity\EntityInterface;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
-use Drupal\Core\Entity\FieldableEntityInterface;
 use Drupal\Core\Entity\RevisionableInterface;
+use Drupal\daedalus_blueprint\Entity\FrameInterface;
+use Drupal\daedalus_blueprint\Host\HostResolver;
 use Drupal\daedalus_stylish\Entity\MachineNameInterface;
-use Drupal\daedalus_stylish\Plugin\Field\FieldType\StyleMapItem;
 
 /**
  * A value-usage table: which source entities reference which materials.
  *
- * A VALUE material (a swatch, an animation) is referenced INSIDE CSS
- * VALUES, not by a structured list (a map entry's "variants" list, which
+ * A VALUE material (a swatch, an animation, a token) is referenced INSIDE
+ * CSS VALUES, not by a structured list (a map entry's "variants" list, which
  * VariantUsage mirrors on its own narrower shape: map hosts only, two
  * lookup forms, no source column). CSS values live in THREE stores, so a
  * value-usage table carries a source-kind column and its save chokepoint
  * listens on three entity families:
- * - 'map': host entities' saved style maps (the auto-managed map field,
- *   the same host universe VariantUsage tracks).
+ * - 'map': hosts' saved style maps (a content host's auto-managed map
+ *   field, a display host's template map: the same host universe
+ *   VariantUsage tracks, HostResolver's).
  * - 'variant': daedalus_variant styles (a variant's property values may
  *   reference the material).
  * - 'skin': daedalus_skin site defaults, plus its tokens for a material
@@ -52,7 +53,10 @@ use Drupal\daedalus_stylish\Plugin\Field\FieldType\StyleMapItem;
  * column), read here by late static binding, and implements scanValue():
  * the read of ONE value's references in the twin's reference form. The
  * skeleton (chokepoint, resync, counts, rebuild, the three-store walk) is
- * shared, so the two tables can never disagree on what a source is.
+ * shared, so the tables can never disagree on what a source is. Counts and
+ * work lists are keyed by the column's value (countReferencesTo(),
+ * referencesTo()); the entity twins read them through the entity's machine
+ * name, the token twin through the token's custom property.
  */
 abstract class ValueUsageBase {
 
@@ -63,10 +67,21 @@ abstract class ValueUsageBase {
   public const SOURCE_VARIANT = 'variant';
   public const SOURCE_SKIN = 'skin';
 
+  /**
+   * The var() reference scan the custom-property twins share.
+   *
+   * The ONE value-level grammar (the validator's reference checks spell
+   * the same expression): every custom property a var() opens with,
+   * fallbacks and whitespace tolerated. A twin's scan reads references
+   * out of a value through it; rewriteVariable() writes them away.
+   */
+  protected const VAR_PATTERN = '/var\(\s*(--[A-Za-z0-9_-]+)/';
+
   public function __construct(
     protected Connection $database,
     protected EntityTypeManagerInterface $entityTypeManager,
     protected EntityFieldManagerInterface $entityFieldManager,
+    protected HostResolver $hostResolver,
   ) {}
 
   /**
@@ -192,33 +207,58 @@ abstract class ValueUsageBase {
   }
 
   /**
-   * Counts a material's referencing source entities.
+   * Counts a material entity's referencing source entities.
+   *
+   * The count keyed by the entity's machine name, the name the entity
+   * twins' reference forms spell (countReferencesTo()).
+   */
+  public function countReferences(MachineNameInterface $material): int {
+    return $this->countReferencesTo($material->getMachineName());
+  }
+
+  /**
+   * Counts the source entities referencing a name.
    *
    * DISTINCT over (entity_type, entity_id): a source naming the material in
    * two places (a skin's token and default, two entries) counts once (one
    * entity to rewrite), and there is only one reference form, so no
    * cross-form collapse is needed.
+   *
+   * @param string $name
+   *   The material column's value: the name as the reference spells it.
    */
-  public function countReferences(MachineNameInterface $material): int {
+  public function countReferencesTo(string $name): int {
     $query = $this->database->select(static::TABLE, 'u')
       ->fields('u', ['entity_type', 'entity_id'])
       ->distinct()
-      ->condition('u.' . static::COLUMN, $material->getMachineName());
+      ->condition('u.' . static::COLUMN, $name);
     return (int) $query->countQuery()->execute()->fetchField();
   }
 
   /**
-   * Lists a material's referencing sources, the rewrite batch's work list.
+   * Lists a material entity's referencing sources.
+   *
+   * The work list keyed by the entity's machine name (referencesTo()).
+   */
+  public function references(MachineNameInterface $material): array {
+    return $this->referencesTo($material->getMachineName());
+  }
+
+  /**
+   * Lists the sources referencing a name, the rewrite batch's work list.
+   *
+   * @param string $name
+   *   The material column's value: the name as the reference spells it.
    *
    * @return array[]
    *   ['source' => string, 'entity_type' => string, 'entity_id' => string]
    *   per referencing source entity, ordered for stable batches. The
    *   source kind tells the rewrite WHICH store to rewrite in the entity.
    */
-  public function references(MachineNameInterface $material): array {
+  public function referencesTo(string $name): array {
     return $this->database->select(static::TABLE, 'u')
       ->fields('u', ['source', 'entity_type', 'entity_id'])
-      ->condition('u.' . static::COLUMN, $material->getMachineName())
+      ->condition('u.' . static::COLUMN, $name)
       ->orderBy('u.source')
       ->orderBy('u.entity_type')
       ->orderBy('u.entity_id')
@@ -227,12 +267,69 @@ abstract class ValueUsageBase {
   }
 
   /**
+   * Replaces one custom property's var() expressions in a CSS value.
+   *
+   * The write direction of the var() grammar the two var() twins share
+   * (swatches and tokens both deliver as custom properties), the
+   * delete-in-use batch's one substitution rule: every var() whose custom
+   * property is the given variable is replaced WHOLE (fallback included,
+   * since the reference is gone, not unresolved) by the literal, and
+   * var() expressions referencing anything else are preserved
+   * byte-for-byte, their fallbacks rewritten recursively (a fallback may
+   * itself reference the variable). Unbalanced parentheses end the scan
+   * and the remainder passes through verbatim: a malformed value is the
+   * author's, never silently reshaped.
+   *
+   * @param string $value
+   *   The CSS value.
+   * @param string $variable
+   *   The custom property, leading dashes included ("--swatch-hero").
+   * @param string $literal
+   *   What each var() of it becomes.
+   */
+  public static function rewriteVariable(string $value, string $variable, string $literal): string {
+    if (!str_contains($value, 'var(')) {
+      return $value;
+    }
+    $result = '';
+    $offset = 0;
+    $length = strlen($value);
+    while (($position = strpos($value, 'var(', $offset)) !== FALSE) {
+      $depth = 0;
+      $close = NULL;
+      for ($i = $position + 3; $i < $length; $i++) {
+        if ($value[$i] === '(') {
+          $depth++;
+        }
+        elseif ($value[$i] === ')' && --$depth === 0) {
+          $close = $i;
+          break;
+        }
+      }
+      if ($close === NULL) {
+        break;
+      }
+      $inner = substr($value, $position + 4, $close - $position - 4);
+      $result .= substr($value, $offset, $position - $offset);
+      $head = trim(explode(',', $inner, 2)[0]);
+      $result .= $head === $variable
+        ? $literal
+        : 'var(' . self::rewriteVariable($inner, $variable, $literal) . ')';
+      $offset = $close + 1;
+    }
+    return $result . substr($value, $offset);
+  }
+
+  /**
    * Rebuilds the whole table from the saved default-revision values.
    *
    * The repair path (the drush usage rebuild commands) for the staleness
    * edges the class docblock names, and the seed for sites updating into
-   * the table. Runs in a transaction so readers never see a half-built
-   * table (delete, not truncate: truncate commits implicitly on MySQL).
+   * the table. Every map host store is enumerated (the entity types
+   * carrying the auto-managed map field, then every Layout Builder enabled
+   * display), then the variants and the skins. Runs in a transaction so
+   * readers never see a half-built table (delete, not truncate: truncate
+   * commits implicitly on MySQL).
    *
    * @return int
    *   The number of reference-carrying source entities tracked.
@@ -257,6 +354,8 @@ abstract class ValueUsageBase {
         ->execute();
       $tracked += $this->rebuildChunked($entity_type_id, $ids);
     }
+    $tracked += $this->rebuildChunked('entity_view_display', VariantUsage::templateDisplayIds($this->entityTypeManager));
+    $tracked += $this->rebuildChunked(FrameInterface::ENTITY_TYPE_ID, VariantUsage::frameIds($this->entityTypeManager));
     foreach (['daedalus_variant', 'daedalus_skin'] as $entity_type_id) {
       $ids = $this->entityTypeManager->getStorage($entity_type_id)->getQuery()
         ->accessCheck(FALSE)
@@ -296,7 +395,7 @@ abstract class ValueUsageBase {
    * The source kind of an entity, or NULL for non-source entities.
    *
    * The one dispatch rule behind the three-store chokepoint: variants and
-   * skins by interface, map hosts by carrying the auto-managed map field.
+   * skins by interface, map hosts by keeping a style store (HostResolver).
    * _daedalus_stylish_value_usage_source() mirrors it as the cheap pre-service gate.
    */
   protected function sourceKind(EntityInterface $entity): ?string {
@@ -306,7 +405,7 @@ abstract class ValueUsageBase {
     if ($entity instanceof DaedalusStylishSkinInterface) {
       return self::SOURCE_SKIN;
     }
-    if ($entity instanceof FieldableEntityInterface && $entity->hasField(DaedalusStylishFieldManager::FIELD_NAME)) {
+    if ($this->hostResolver->hosts($entity) && $this->hostResolver->fromEntity($entity)->hasStyleStore()) {
       return self::SOURCE_MAP;
     }
     return NULL;
@@ -316,6 +415,10 @@ abstract class ValueUsageBase {
    * The distinct material names a source entity's values reference, sorted.
    *
    * Sorted so track()'s changed-or-not comparison is order-insensitive.
+   * A skin is scanned per LAYER as stored, package and site both: a
+   * package value a site override hides is still a reference the delete
+   * batch must rewrite, or unsetting the override would reveal a
+   * dangling one.
    *
    * @return string[]
    *   The material names, sorted.
@@ -324,11 +427,10 @@ abstract class ValueUsageBase {
     $names = match ($this->sourceKind($entity)) {
       self::SOURCE_VARIANT => $this->scanEntries($entity->getStyles()),
       self::SOURCE_SKIN => [
-        ...$this->scanTokens($entity->getTokens()),
-        ...array_merge([], ...array_map(
-          fn (mixed $styles): array => is_array($styles) ? $this->scanEntries($styles) : [],
-          array_values($entity->getDefaults()),
-        )),
+        ...$this->scanTokens($entity->packageTokens()),
+        ...$this->scanTokens($entity->siteTokens()),
+        ...$this->scanDefaults($entity->packageDefaults()),
+        ...$this->scanDefaults($entity->siteDefaults()),
       ],
       self::SOURCE_MAP => $this->scanEntries($this->hostMap($entity)),
       default => [],
@@ -339,11 +441,28 @@ abstract class ValueUsageBase {
   }
 
   /**
-   * A map host's saved style map (the auto-managed field only).
+   * The material names one defaults layer's entries reference.
    */
-  protected function hostMap(FieldableEntityInterface $entity): array {
-    $item = $entity->get(DaedalusStylishFieldManager::FIELD_NAME)->first();
-    return $item instanceof StyleMapItem ? $item->getStyleMap() : [];
+  protected function scanDefaults(array $defaults): array {
+    return array_merge([], ...array_map(
+      fn (mixed $styles): array => is_array($styles) ? $this->scanEntries($styles) : [],
+      array_values($defaults),
+    ));
+  }
+
+  /**
+   * A map host's saved style map, wherever the host keeps it.
+   *
+   * The map as SAVED: usage counts what a host stores, so the read
+   * declines the template seed a content host runs on the first read of
+   * either document door (a never-edited page would otherwise count as
+   * wearing its template's references, and the seed would sit on the
+   * just-saved entity in memory).
+   */
+  protected function hostMap(EntityInterface $entity): array {
+    $host = $this->hostResolver->fromEntity($entity);
+    $host->declineSeed();
+    return $host->styleMap();
   }
 
   /**

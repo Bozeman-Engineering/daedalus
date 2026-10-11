@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Drupal\daedalus_blueprint\FieldHandler;
 
 use Drupal\Core\Entity\ContentEntityTypeInterface;
+use Drupal\daedalus_blueprint\Host\ContentHost;
 use Drupal\Core\Entity\EntityTypeInterface;
 use Drupal\Core\Entity\FieldableEntityInterface;
 use Drupal\Core\Extension\ModuleHandlerInterface;
@@ -18,6 +19,22 @@ use Drupal\Core\Field\FieldStorageDefinitionInterface;
  * StructuralValidator, BlueprintSchemaBuilder, and DefaultFieldHandler.
  */
 class FieldHandlerManager {
+
+  /**
+   * Field types that are the document, never fields.
+   *
+   * The layout (core's layout_section) and the style map (the styling
+   * module's type, by string so this module stays agnostic) are read and
+   * written through the host and ride the blueprint at the top level as
+   * `layout` and `styles`; neither is ever a processable field, on the
+   * root or on a block.
+   *
+   * @var string[]
+   */
+  protected const DOCUMENT_FIELD_TYPES = [
+    'layout_section',
+    ContentHost::STYLE_MAP_FIELD_TYPE,
+  ];
 
   /**
    * Base field names to always exclude from serialization and schema output.
@@ -122,9 +139,11 @@ class FieldHandlerManager {
   }
 
   /**
-   * Checks whether a specific field type should be skipped.
+   * Checks whether a field type is the document, skipped as a field.
    *
-   * The layout_section field type is handled separately by LayoutSerializer.
+   * The document field types (DOCUMENT_FIELD_TYPES) are read and written
+   * through the host: the layout serializers and the blueprint's `styles`
+   * key, never a field handler.
    *
    * @param string $field_type
    *   The field type machine name.
@@ -133,7 +152,7 @@ class FieldHandlerManager {
    *   TRUE if the field type should be skipped.
    */
   public function isSkippedFieldType(string $field_type): bool {
-    return $field_type === 'layout_section';
+    return in_array($field_type, static::DOCUMENT_FIELD_TYPES, TRUE);
   }
 
   /**

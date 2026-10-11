@@ -233,7 +233,7 @@ export const GradientBuilder = ({
         group: 'gradient',
         value: serializeGradient(state.gradient),
       },
-      Drupal.t('Added the swatch @label', { '@label': mintLabel.trim() }),
+      Drupal.t('Added the swatch !label', { '!label': mintLabel.trim() }),
     )
       .then((minted) => {
         // The minted record is already on the store; its style spelling is
@@ -402,8 +402,8 @@ export const GradientBuilder = ({
           {session.conditions.length > 0 && (
             <span className="daedalus-stylish-gradient__session-conditions">
               {Drupal.t(
-                'Editing the default value; the @conditions entries are kept as they are.',
-                { '@conditions': session.conditions.join(', ') },
+                'Editing the default value; the !conditions entries are kept as they are.',
+                { '!conditions': session.conditions.join(', ') },
               )}
             </span>
           )}
@@ -645,8 +645,8 @@ export const GradientBuilder = ({
                       type="button"
                       className="daedalus-stylish-gradient__stop-face"
                       style={{ background: paint }}
-                      title={Drupal.t('@color · pick a palette color', {
-                        '@color': stop.color,
+                      title={Drupal.t('!color · pick a palette color', {
+                        '!color': stop.color,
                       })}
                     />
                   ) : (
@@ -720,8 +720,8 @@ export const GradientBuilder = ({
                     title={
                       stop.position === null
                         ? Drupal.t('Stop position (%)')
-                        : Drupal.t('Stop position (@position)', {
-                            '@position': stop.position,
+                        : Drupal.t('Stop position (!position)', {
+                            '!position': stop.position,
                           })
                     }
                     onInput={(event) => {
@@ -822,13 +822,14 @@ export const GradientBuilder = ({
  * satellite), so every use on the canvas and every face in both windows
  * restyles without a reload.
  *
- * Live preview rides the source's previewSwatch seam per input event: the
- * draft lands on the token scope element's inline custom property (the
- * canvas answers while the user drags; the store keeps the committed
- * value, so panel faces stay on it until Update). Discard, close, or
- * unmount releases the preview (previewSwatch with null restores the
- * store's value). Pure client over the source seam, so the satellite
- * renders it unchanged: the relay carries the seam.
+ * Live preview rides the source's previewMaterial seam per input event:
+ * the draft, remerged over the swatch's other condition entries, lands on
+ * the token scope lane (the canvas answers while the user drags; the
+ * store keeps the committed value, so panel faces stay on it until
+ * Update). Discard, close, or unmount releases the preview
+ * (previewMaterial with null restores the store's value). Pure client
+ * over the source seam, so the satellite renders it unchanged: the relay
+ * carries the seam.
  *
  * @param {object} props
  * @param {object} props.swatch
@@ -841,7 +842,7 @@ export const GradientBuilder = ({
  * @param {?object} [props.constraints]
  *   The bound property's guide constraints (the stop vocabulary).
  * @param {object} props.source
- *   The state source (commitBatch and the previewSwatch seam).
+ *   The state source (commitBatch and the previewMaterial seam).
  * @param {?Function} [props.onClose]
  *   Closes the builder (the chip's toggle).
  */
@@ -882,7 +883,7 @@ export const GradientSwatchSession = ({
   const restore = () => {
     if (previewed.current) {
       previewed.current = false;
-      source.previewSwatch(original.record, null);
+      source.previewMaterial(original.record, null);
     }
   };
   // Unmount IS close (the chip toggled, the row's value changed from
@@ -892,7 +893,10 @@ export const GradientSwatchSession = ({
   const preview = (value) => {
     setDraft(value);
     previewed.current = true;
-    source.previewSwatch(original.record, value);
+    source.previewMaterial(
+      original.record,
+      mergedValue(original.record.value, value),
+    );
   };
 
   const update = () => {
@@ -904,7 +908,7 @@ export const GradientSwatchSession = ({
         id: original.name,
         value: mergedValue(original.record.value, draft),
       },
-      Drupal.t('Updated the swatch @label', { '@label': original.label }),
+      Drupal.t('Updated the swatch !label', { '!label': original.label }),
     )
       .then(() => {
         // The committed record supersedes the preview: nothing to restore,

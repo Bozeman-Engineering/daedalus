@@ -17,6 +17,7 @@ use Drupal\Tests\user\Traits\UserCreationTrait;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 use Symfony\Component\HttpFoundation\Request;
+use Drupal\Tests\daedalus_stylish\Traits\HostTrait;
 
 /**
  * Tests the variant lifecycle gestures: delete, details, revision restore.
@@ -35,6 +36,7 @@ use Symfony\Component\HttpFoundation\Request;
 #[RunTestsInSeparateProcesses]
 class VariantLifecycleTest extends KernelTestBase {
 
+  use HostTrait;
   use UserCreationTrait;
 
   /**
@@ -74,6 +76,7 @@ class VariantLifecycleTest extends KernelTestBase {
     // daedalus_stylish provider reads all four storages on every build.
     $this->installEntitySchema('daedalus_swatch');
     $this->installEntitySchema('daedalus_animation');
+    $this->installEntitySchema('daedalus_font');
     $this->installEntitySchema('daedalus_skin');
     $this->installSchema('daedalus_stylish', ['daedalus_variant_usage']);
     $this->installConfig(['daedalus_stylish']);
@@ -250,7 +253,7 @@ class VariantLifecycleTest extends KernelTestBase {
 
     $handler = $this->container->get('daedalus_stylish.operation_handler');
     $entity = $this->container->get('entity_type.manager')->getStorage('entity_test')->load($wearer->id());
-    $this->assertTrue($handler->detachVariantEverywhere($entity, $variant));
+    $this->assertTrue($handler->detachVariantEverywhere($this->host($entity), $variant));
     $entity->save();
 
     $this->assertSame([
@@ -262,7 +265,7 @@ class VariantLifecycleTest extends KernelTestBase {
 
     // Detached means detached: nothing left to do, and the usage table's
     // chokepoint dropped the wearer on save.
-    $this->assertFalse($handler->detachVariantEverywhere($entity, $variant));
+    $this->assertFalse($handler->detachVariantEverywhere($this->host($entity), $variant));
     $this->assertSame(0, $this->manager()->usages($variant));
   }
 

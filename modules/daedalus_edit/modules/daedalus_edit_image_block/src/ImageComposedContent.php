@@ -159,7 +159,7 @@ final class ImageComposedContent implements ComposedBlockContentInterface {
       // to — which is the route's main entity here: this render only
       // happens while that entity renders (initial page or its mutation
       // re-render), the same derivation that stamps data-main-entity.
-      $host = $this->daedalusUi->deriveEntityFromRoute();
+      $host = $this->daedalusUi->deriveHostFromRoute()?->entity();
       $media_library_url = $host ? $this->mediaLibraryOpener->buildUrl(
         $host,
         $block_content->get('field_image')->getFieldDefinition(),

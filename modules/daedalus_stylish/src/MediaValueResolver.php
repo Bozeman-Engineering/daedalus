@@ -9,7 +9,7 @@ use Drupal\Core\Cache\Cache;
 use Drupal\Core\Config\ConfigFactoryInterface;
 use Drupal\Core\Entity\EntityRepositoryInterface;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
-use Drupal\Core\Entity\FieldableEntityInterface;
+use Drupal\daedalus_blueprint\Host\HostInterface;
 use Drupal\Core\Extension\ThemeHandlerInterface;
 use Drupal\Core\File\FileUrlGeneratorInterface;
 use Drupal\file\FileInterface;
@@ -89,18 +89,18 @@ class MediaValueResolver {
    *   The decoded style map.
    * @param array $cache_tags
    *   Accumulator the resolved media's (and image styles') tags merge into.
-   * @param \Drupal\Core\Entity\FieldableEntityInterface|null $entity
-   *   The map's host entity, when available: enables per-block-type and
+   * @param \Drupal\daedalus_blueprint\Host\HostInterface|null $host
+   *   The map's host, when available: enables per-block-type and
    *   per-layout constraint resolution for block:/container: keys, exactly as
    *   validation resolves them.
    *
    * @return array
    *   The map with every token replaced by url("<file url>") or "none".
    */
-  public function resolveMap(array $map, array &$cache_tags, ?FieldableEntityInterface $entity = NULL): array {
+  public function resolveMap(array $map, array &$cache_tags, ?HostInterface $host = NULL): array {
     // A full closure, not an arrow fn: arrow fns capture by VALUE, and the
     // tag accumulator must flow back to the caller by reference.
-    return $this->transformMapTokens($map, $entity, function (string $value, string $property, ?VocabularyRoster $roster) use (&$cache_tags): string {
+    return $this->transformMapTokens($map, $host, function (string $value, string $property, ?VocabularyRoster $roster) use (&$cache_tags): string {
       return $this->resolveValue($value, $property, $roster, $cache_tags);
     });
   }
@@ -129,15 +129,15 @@ class MediaValueResolver {
    * @param array $cache_tags
    *   Accumulator the resolved media's (and image styles') tags merge into;
    *   attach these wherever the table is attached.
-   * @param \Drupal\Core\Entity\FieldableEntityInterface|null $entity
-   *   The map's host entity, for constraint resolution (see resolveMap()).
+   * @param \Drupal\daedalus_blueprint\Host\HostInterface|null $host
+   *   The map's host, for constraint resolution (see resolveMap()).
    *
    * @return array
    *   Lowercased media uuid => root-relative URL, resolvable tokens only.
    */
-  public function clientUrlTable(array $map, array &$cache_tags, ?FieldableEntityInterface $entity = NULL): array {
+  public function clientUrlTable(array $map, array &$cache_tags, ?HostInterface $host = NULL): array {
     $table = [];
-    $this->transformMapTokens($map, $entity, function (string $value, string $property, ?VocabularyRoster $roster) use (&$table, &$cache_tags): string {
+    $this->transformMapTokens($map, $host, function (string $value, string $property, ?VocabularyRoster $roster) use (&$table, &$cache_tags): string {
       $image_style = $this->imageStyleFor($property, $roster);
       foreach (MediaToken::extract($value) as $payload) {
         $uuid = strtolower($payload);
@@ -162,8 +162,8 @@ class MediaValueResolver {
    *
    * @param array $map
    *   The decoded style map.
-   * @param \Drupal\Core\Entity\FieldableEntityInterface|null $entity
-   *   The map's host entity, for constraint resolution.
+   * @param \Drupal\daedalus_blueprint\Host\HostInterface|null $host
+   *   The map's host, for constraint resolution.
    * @param callable $transform
    *   fn (string $value, string $property, ?VocabularyRoster $roster):
    *   string. Receives each token-bearing value with the roster of its
@@ -173,7 +173,7 @@ class MediaValueResolver {
    * @return array
    *   The map with every token-bearing value transformed.
    */
-  protected function transformMapTokens(array $map, ?FieldableEntityInterface $entity, callable $transform): array {
+  protected function transformMapTokens(array $map, ?HostInterface $host, callable $transform): array {
     foreach ($map as $key => $entry) {
       if (!is_array($entry)) {
         continue;
@@ -191,7 +191,7 @@ class MediaValueResolver {
             continue;
           }
           if (!$resolved) {
-            $roster = $this->keyRoster((string) $key, $entity);
+            $roster = $this->keyRoster((string) $key, $host);
             $resolved = TRUE;
           }
           $map[$key][$condition][$property] = $transform((string) $value, (string) $property, $roster);
@@ -348,12 +348,12 @@ class MediaValueResolver {
    * The vocabulary roster a map key's constraints live on.
    *
    * Exactly validation's resolution: the key's address (captured per
-   * bundle / per layout with the host entity in context, universal kind
+   * bundle / per layout with the host in context, universal kind
    * degradation without) with its relative selector, built by the one
    * roster derivation. NULL when the key does not parse.
    */
-  protected function keyRoster(string $key, ?FieldableEntityInterface $entity): ?VocabularyRoster {
-    $address = $this->validator->keyAddress($key, $entity === NULL ? [] : ['entity' => $entity]);
+  protected function keyRoster(string $key, ?HostInterface $host): ?VocabularyRoster {
+    $address = $this->validator->keyAddress($key, $host === NULL ? [] : ['host' => $host]);
     return $address === NULL ? NULL : $this->vocabulary->build($address, $this->defaultTheme());
   }
 

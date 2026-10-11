@@ -4,12 +4,18 @@ declare(strict_types=1);
 
 namespace Drupal\daedalus_edit\Controller;
 
+use Drupal\Core\Access\AccessResult;
+use Drupal\Core\Access\AccessResultInterface;
 use Drupal\Core\Ajax\AjaxResponse;
 use Drupal\Core\Ajax\AppendCommand;
 use Drupal\Core\Controller\ControllerBase;
+use Drupal\Core\Session\AccountInterface;
+use Drupal\daedalus_blueprint\Access\BlueprintAccessChecker;
+use Drupal\daedalus_blueprint\Host\HostResolver;
 use Drupal\daedalus_edit\Form\PanelUpdateBlockForm;
 use Drupal\daedalus_edit\Plugin\Sidebar\EntityFormSidebar;
 use Drupal\layout_builder\SectionStorageInterface;
+use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
@@ -31,6 +37,40 @@ use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
  * Registered via DaedalusLayoutRouteSubscriber only when daedalus_layout is available.
  */
 final class BlockFormController extends ControllerBase {
+
+  public function __construct(
+    private readonly HostResolver $hostResolver,
+    private readonly BlueprintAccessChecker $accessChecker,
+  ) {}
+
+  /**
+   * {@inheritdoc}
+   */
+  public static function create(ContainerInterface $container): static {
+    return new static(
+      $container->get('daedalus_blueprint.host_resolver'),
+      $container->get('daedalus_blueprint.access_checker'),
+    );
+  }
+
+  /**
+   * The coarse door: update access on the storage's host.
+   *
+   * The same door as the entity form endpoint's `_entity_access:
+   * entity.update`, which a section storage parameter cannot name: the
+   * form is a widget host over the placement's staged values, so fetching
+   * it is an update-shaped read of the host. A storage no host owns
+   * (core's navigation layout) has no form here.
+   */
+  public function access(SectionStorageInterface $section_storage, AccountInterface $account): AccessResultInterface {
+    $host = $this->hostResolver->fromSectionStorage($section_storage);
+    if ($host === NULL) {
+      return AccessResult::forbidden('The section storage has no host.');
+    }
+    return AccessResult::allowedIf($this->accessChecker->hostAccess($host, 'update', $account))
+      ->addCacheableDependency($host->entity())
+      ->cachePerUser();
+  }
 
   /**
    * Builds the response.

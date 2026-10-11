@@ -91,7 +91,7 @@ class DialectCatalogPromptTest extends KernelTestBase {
       }
 
       /**
-       * The block element line, the stencil sentence beside it.
+       * The block element line, the blueprint sentence beside it.
        */
       public function block(DialectCatalog $catalog): string {
         return $this->blockLine($catalog);
@@ -108,7 +108,7 @@ class DialectCatalogPromptTest extends KernelTestBase {
   }
 
   /**
-   * A catalog over a hand-built roster of variant and stencil records.
+   * A catalog over a hand-built roster of variant and blueprint records.
    *
    * @param \Drupal\daedalus_blueprint\Materials\MaterialRecord[] $records
    *   The roster's records.
@@ -330,42 +330,61 @@ class DialectCatalogPromptTest extends KernelTestBase {
   }
 
   /**
-   * The cached stencil sentence carries the stencil contract, grows by data.
+   * The cached blueprint sentence carries the blueprint contract, grows by data.
    *
-   * With no stencil in the roster the block line says nothing about
-   * stencils; with one it states the two placement shapes (the reference
-   * for a copy as is, the printed fragment with the author's content
-   * under stencil="id"), where a placement lands (a page band at the top
-   * level only, anything else wherever a container or block sits), that
-   * the reference tag takes no style or class, that owned looks are
-   * wearable inside a placement and address children by position, and
-   * that stencils are blocks and examples, never a boundary. The
-   * stencils skill that carried these is gone; this line is their one
-   * home, and the old "never add it by hand" is gone with the contract
-   * that forbade authoring the label.
+   * With no blueprint in the roster the block line says nothing about
+   * blueprints; with one it states the two placement shapes (the
+   * reference for a copy as is, the printed fragment with the author's
+   * content under blueprint="id"), where a placement lands (a page band
+   * at the top level only, anything else wherever a container or block
+   * sits), that the reference tag takes no style or class, that owned
+   * looks are wearable inside a placement and address children by
+   * position, that a saved blueprint is a page of its own read and edited
+   * through the page tools as entity_type blueprint, and that blueprints
+   * are blocks and examples, never a boundary. The blueprints skill that
+   * carried these is gone; this line is their one home, and the old
+   * "never add it by hand" is gone with the contract that forbade
+   * authoring the label.
    */
-  public function testBlockLineCarriesStencilPlacement(): void {
+  public function testBlockLineCarriesBlueprintPlacement(): void {
     $bare = $this->prompt()->block($this->rosterCatalog([]));
-    $this->assertStringStartsWith('- <pb-block plugin="plugin_id"/> renders an existing plugin block.', $bare);
-    $this->assertStringNotContainsString('pb-stencil', $bare);
+    $this->assertStringStartsWith('- <pb-block field="name"/> renders one of the page\'s own fields', $bare);
+    $this->assertStringContainsString('<pb-block plugin="plugin_id"/> renders an existing plugin block.', $bare);
+    $this->assertStringNotContainsString('pb-blueprint', $bare);
 
     $line = $this->prompt()->block($this->rosterCatalog([
       new MaterialRecord(
-        kind: MaterialKind::Stencil,
+        kind: MaterialKind::Blueprint,
         id: 'hero',
         label: 'Hero',
         description: 'A hero band.',
-        spellings: [MaterialRecord::SLOT_STENCIL => 'hero'],
-        rootKind: MaterialRecord::ROOT_SECTION,
+        spellings: [MaterialRecord::SLOT_BLUEPRINT => 'hero'],
+        blueprintScope: MaterialRecord::SCOPE_BLOCK,
       ),
     ]));
     $this->assertStringStartsWith($bare, $line);
-    $this->assertStringContainsString('<pb-stencil name="stencil_id"/> places a saved stencil (the design system\'s STENCILS below) as is', $line);
-    $this->assertStringContainsString('a page band (top-level only) at the document\'s top level, never inside a container; any other stencil wherever a container or block may sit; the reference tag itself takes no style or class', $line);
-    $this->assertStringContainsString('To place one with your own content, write its printed fragment (the schema shows each in full) with your content and stencil="stencil_id" on the root: that label is what makes the element a placement, so keep it when you rewrite one', $line);
-    $this->assertStringContainsString('Inside a placement the stencil\'s owned looks (listed under it) are wearable; they address the placement\'s children by position, so keep the shape where you keep the look', $line);
-    $this->assertStringContainsString('Stencils are pre-approved blocks and examples to build with or beside, never a boundary', $line);
+    $this->assertStringContainsString('<pb-blueprint name="blueprint_id"/> places a saved blueprint (the design system\'s BLUEPRINTS below) as is', $line);
+    $this->assertStringContainsString('a page band (top-level only) at the document\'s top level, never inside a container; any other blueprint wherever a container or block may sit; the reference tag itself takes no style or class', $line);
+    $this->assertStringContainsString('To place one with your own content, write its printed fragment (the schema prints the favorites in full, a group with its group parameter) with your content and blueprint="blueprint_id" on the root: that label is what makes the element a placement, so keep it when you rewrite one', $line);
+    $this->assertStringContainsString('Inside a placement the blueprint\'s owned looks (listed under it) are wearable; they address the placement\'s children by position, so keep the shape where you keep the look', $line);
+    $this->assertStringContainsString('A blueprint saved on this site is a page of its own: page_read (entity_type blueprint, its entity_id) prints its body with ids and page_edit changes it for every later placement; a shipped one is read-only.', $line);
+    $this->assertStringContainsString('Blueprints are pre-approved blocks and examples to build with or beside, never a boundary', $line);
     $this->assertStringNotContainsString('by hand', $line);
+
+    // A page blueprint is a start, never a placement: a roster holding
+    // only page scope leaves the block line bare, since there is nothing
+    // <pb-blueprint> could place and no BLUEPRINTS block below.
+    $page_only = $this->prompt()->block($this->rosterCatalog([
+      new MaterialRecord(
+        kind: MaterialKind::Blueprint,
+        id: 'landing',
+        label: 'Landing',
+        description: 'A whole landing page.',
+        spellings: [MaterialRecord::SLOT_BLUEPRINT => 'landing'],
+        blueprintScope: MaterialRecord::SCOPE_PAGE,
+      ),
+    ]));
+    $this->assertSame($bare, $page_only);
   }
 
   /**

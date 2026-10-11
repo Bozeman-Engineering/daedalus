@@ -18,10 +18,37 @@
  * anchor reset is a component key in the adapter, not a model function,
  * so its stale-anchor cases have no port.
  *
+ * The page elements tree's adapter (page-elements/tree-outline.js) is
+ * covered at the end: its default postures over a rendered tree (the
+ * root never folds, a unit row and a leafless row start collapsed, rich
+ * text starts collapsed: a block over instance rows and an instance row
+ * with rows of its own), the direct row count a collapsed rich-text row
+ * shows, a manual posture surviving a re-projection, the all-gestures
+ * and the selection reveal reaching the rich-text rows like any row, and
+ * the row the selection rule reveals (revealId: the seated part's row
+ * when the outline draws it, else the selected key, null unselected) with
+ * the path change a seat under an already selected block makes. The
+ * adapter uses webpack-style extensionless imports, so the suite
+ * registers the extension-adding resolve hook before importing it.
+ *
  * Run with `node --test tests/js/*.test.mjs` from the module root.
  */
 import { strict as assert } from 'node:assert';
 import { test } from 'node:test';
+import { registerHooks } from 'node:module';
+
+registerHooks({
+  resolve(specifier, context, nextResolve) {
+    try {
+      return nextResolve(specifier, context);
+    } catch (error) {
+      if (specifier.startsWith('.') || specifier.startsWith('/')) {
+        return nextResolve(`${specifier}.js`, context);
+      }
+      throw error;
+    }
+  },
+});
 
 const {
   allCollapsed,
@@ -368,4 +395,257 @@ test('an outline without a foldable row is both all collapsed and all expanded: 
   assert.equal(allExpanded(none, leaves), true);
   assert.equal(collapseAll(none, leaves), none, 'nothing to touch returns the same object');
   assert.equal(expandAll(none, leaves), none);
+});
+
+// --- The page elements tree's adapter: its default postures -----------------
+
+const {
+  foldedRowCount,
+  modelRow,
+  outlineOf,
+  pathTo,
+  pseudoRow,
+  revealId,
+  richTextRow,
+} = await import(
+  '../../js/edit_mode/components/page-elements/tree-outline.js'
+);
+
+/**
+ * A rendered tree the way the panel composes it (projection.js nodes with
+ * markup-view.js pseudo rows appended): the root over a section holding
+ * a merged text block (a paragraph and a list of two items, each item
+ * over its paragraph), an open block whose body field carries the
+ * carriers, a unit block, an empty block, and a generated box under the
+ * section (a Markup-view pseudo row that is not rich text).
+ */
+const TEXT = 'block:text';
+const OPEN = 'block:open';
+const BODY = 'field:open:body';
+const UNIT = 'block:unit';
+const EMPTY = 'block:empty';
+const pid = (owner, id) => `pseudo:${owner}:${id}`;
+
+const instance = (owner, id, children = []) => ({
+  pseudo: true,
+  id,
+  parentKey: owner,
+  label: id,
+  source: 'instance',
+  children,
+});
+const shell = (owner, id, children = []) => ({
+  pseudo: true,
+  id,
+  parentKey: owner,
+  label: id,
+  source: 'markup',
+  children,
+});
+const model = (key, kind, children = [], presentation = 'open') => ({
+  key,
+  kind,
+  label: key,
+  presentation,
+  children,
+});
+
+const richList = (owner) =>
+  instance(owner, '.ul', [
+    instance(owner, '.li1', [instance(owner, '.li1-p')]),
+    instance(owner, '.li2', [instance(owner, '.li2-p')]),
+  ]);
+
+const renderedTree = (textChildren = [instance(TEXT, '.p'), richList(TEXT)]) =>
+  model('entity:page', 'entity', [
+    model(S1, 'container', [
+      model(TEXT, 'block', textChildren),
+      model(OPEN, 'block', [model(BODY, 'field', [instance(BODY, '.p')])]),
+      model(UNIT, 'block', [model('field:unit:body', 'field')], 'unit'),
+      model(EMPTY, 'block'),
+      shell(S1, '::before'),
+    ]),
+  ]);
+
+test('the tree\'s defaults: the root never folds, a unit row and a leafless row start collapsed, the rest open', () => {
+  const tree = renderedTree();
+  const outline = outlineOf(tree);
+  const root = find(outline, 'entity:page');
+  assert.deepEqual({ foldable: root.foldable, folded: root.folded }, { foldable: false, folded: false });
+  assert.equal(isCollapsed(null, find(outline, S1)), false, 'a section opens');
+  assert.equal(isCollapsed(null, find(outline, UNIT)), true, 'a unit row starts collapsed');
+  assert.equal(find(outline, UNIT).foldable, true);
+  assert.equal(isCollapsed(null, find(outline, EMPTY)), true, 'a leafless row reads collapsed');
+  assert.equal(find(outline, EMPTY).foldable, false, 'but is not foldable');
+  assert.equal(isCollapsed(null, find(outline, OPEN)), false, 'an open block over a field row opens');
+  assert.equal(isCollapsed(null, find(outline, pid(S1, '::before'))), false, 'a generated box opens');
+  // The ids: a model row by its key, a pseudo row by its owner and part.
+  assert.deepEqual(modelRow(model(TEXT, 'block'), false).id, TEXT);
+  assert.deepEqual(modelRow({ key: null, label: 'Region', children: [] }, false).id, 'Region');
+  assert.deepEqual(pseudoRow(instance(TEXT, '.p')).id, pid(TEXT, '.p'));
+});
+
+test('rich text starts collapsed: a block over instance rows and an instance row with rows of its own', () => {
+  const tree = renderedTree();
+  const outline = outlineOf(tree);
+  // The merged text block, over a paragraph and a list.
+  assert.equal(richTextRow(tree.children[0].children[0]), true);
+  assert.equal(isCollapsed(null, find(outline, TEXT)), true, 'the text block starts collapsed');
+  assert.equal(find(outline, TEXT).foldable, true, 'and is foldable');
+  // The open block's field row carries the carriers: it folds, the block does not.
+  assert.equal(isCollapsed(null, find(outline, BODY)), true, 'the body field over carriers starts collapsed');
+  assert.equal(isCollapsed(null, find(outline, OPEN)), false);
+  // The list and each item (over its paragraph) start collapsed; a
+  // paragraph has no rows and is not foldable.
+  assert.equal(isCollapsed(null, find(outline, pid(TEXT, '.ul'))), true, 'a list starts collapsed');
+  assert.equal(isCollapsed(null, find(outline, pid(TEXT, '.li1'))), true, 'a list item over its paragraph starts collapsed');
+  assert.equal(isCollapsed(null, find(outline, pid(TEXT, '.p'))), false, 'a bare paragraph is open');
+  assert.equal(find(outline, pid(TEXT, '.p')).foldable, false);
+  assert.equal(find(outline, pid(TEXT, '.li1-p')).foldable, false);
+  // A shell chain is structure, not rich text: it starts open even with
+  // rows under it, as does a block over shells alone.
+  const chain = shell(TEXT, '.wrap', [shell(TEXT, '.inner')]);
+  assert.equal(richTextRow(chain), false);
+  assert.equal(isCollapsed(null, pseudoRow(chain)), false);
+  assert.equal(isCollapsed(null, modelRow(model(TEXT, 'block', [chain]), false)), false);
+  // The Markup view lists a text block's shells beside its carriers: the
+  // block still starts collapsed.
+  const markupView = model(TEXT, 'block', [chain, instance(TEXT, '.p')]);
+  assert.equal(isCollapsed(null, modelRow(markupView, false)), true);
+});
+
+test('a collapsed rich-text row counts its direct rows; an open row and every other row count nothing', () => {
+  const tree = renderedTree();
+  const section = tree.children[0];
+  const text = section.children[0];
+  const list = text.children[1];
+  assert.equal(foldedRowCount(text, true), 2, 'the paragraph and the list');
+  assert.equal(foldedRowCount(text, false), null, 'open: the rows tell the story');
+  assert.equal(foldedRowCount(list, true), 2, 'a list counts its items');
+  assert.equal(foldedRowCount(list.children[0], true), 1, 'an item counts its paragraph');
+  assert.equal(foldedRowCount(list.children[0].children[0], true), null, 'a paragraph has no rows');
+  // The body field over carriers counts them; the open block above it
+  // and the unit, empty and section rows say nothing even when collapsed.
+  assert.equal(foldedRowCount(section.children[1].children[0], true), 1);
+  assert.equal(foldedRowCount(section.children[1], true), null);
+  assert.equal(foldedRowCount(section.children[2], true), null, 'a unit row');
+  assert.equal(foldedRowCount(section.children[3], true), null, 'a leafless row');
+  assert.equal(foldedRowCount(section, true), null, 'a section collapsed by hand');
+  assert.equal(foldedRowCount(section.children[4], true), null, 'a generated box');
+  // In the Markup view the shells count among the block's direct rows.
+  const markupView = model(TEXT, 'block', [shell(TEXT, '.wrap'), instance(TEXT, '.p')]);
+  assert.equal(foldedRowCount(markupView, true), 2);
+});
+
+test('a manual posture on a rich-text row survives a re-projection of the same rows', () => {
+  let outline = outlineOf(renderedTree());
+  // The user opens the text block and its list: words keyed by row id.
+  let folds = toggle(null, find(outline, TEXT));
+  folds = toggle(folds, find(outline, pid(TEXT, '.ul')));
+  assert.deepEqual(folds, { [TEXT]: false, [pid(TEXT, '.ul')]: false });
+  // A mutation re-projects the tree: new node objects, one more
+  // paragraph under the block. The words stand, the default does not
+  // reassert itself, and the open row shows no count.
+  const reprojected = renderedTree([instance(TEXT, '.p'), instance(TEXT, '.p2'), richList(TEXT)]);
+  outline = outlineOf(reprojected);
+  assert.equal(isCollapsed(folds, find(outline, TEXT)), false, 'the block stays open');
+  assert.equal(isCollapsed(folds, find(outline, pid(TEXT, '.ul'))), false, 'the list stays open');
+  assert.equal(isCollapsed(folds, find(outline, pid(TEXT, '.li1'))), true, 'an untouched item keeps its default');
+  assert.equal(foldedRowCount(reprojected.children[0].children[0], isCollapsed(folds, find(outline, TEXT))), null);
+  // Closed again by hand, the block shows its new count.
+  folds = toggle(folds, find(outline, TEXT));
+  assert.equal(isCollapsed(folds, find(outline, TEXT)), true);
+  assert.equal(foldedRowCount(reprojected.children[0].children[0], true), 3);
+});
+
+test('expand all opens the rich-text rows, collapse all needs no word for them, and the reveal opens the chain to a paragraph', () => {
+  const outline = outlineOf(renderedTree());
+  // Expand all writes a word for every row collapsed by default: the
+  // text block, the body field, the unit row, the list and its items.
+  assert.deepEqual(expandAll(null, outline), {
+    [TEXT]: false,
+    [pid(TEXT, '.ul')]: false,
+    [pid(TEXT, '.li1')]: false,
+    [pid(TEXT, '.li2')]: false,
+    [BODY]: false,
+    [UNIT]: false,
+  });
+  assert.equal(allExpanded(expandAll(null, outline), outline), true);
+  // Collapse all touches only the foldable rows open by default; the
+  // rich-text rows are already collapsed and get no word, and the
+  // generated box, a leaf, is not foldable.
+  assert.deepEqual(collapseAll(null, outline), {
+    [S1]: true,
+    [OPEN]: true,
+  });
+  assert.equal(allCollapsed(collapseAll(null, outline), outline), true);
+  // Neither predicate holds at the defaults: the root row's pair is live.
+  assert.equal(allExpanded(null, outline), false);
+  assert.equal(allCollapsed(null, outline), false);
+  // The selection rule: a paragraph under a list item under the list
+  // under the block reveals through every collapsed default above it.
+  assert.deepEqual(reveal(null, outline, pid(TEXT, '.li2-p')), {
+    [TEXT]: false,
+    [pid(TEXT, '.ul')]: false,
+    [pid(TEXT, '.li2')]: false,
+  });
+  // The block's own posture is the selection's: selecting the block
+  // itself opens nothing (its section is open), as a unit row stays a unit.
+  const none = {};
+  assert.equal(reveal(none, outline, TEXT), none);
+});
+
+test('revealId: the seated part\'s row when the outline draws it, else the selected key, null unselected', () => {
+  const outline = outlineOf(renderedTree());
+  // A key alone: the selected element's row, as before the target joined.
+  assert.equal(revealId(outline, { selectedKey: TEXT, target: null }), TEXT);
+  assert.equal(revealId(outline, { selectedKey: S1, target: undefined }), S1);
+  // A seated part on a folded block: the part row's id, the one pseudoRow
+  // mints, so the reveal opens the block's closed default down to the
+  // leaf, and the leaf's own posture is left alone (a seated list item
+  // with rows of its own stays folded).
+  const seated = { key: TEXT, selector: '.li2-p' };
+  assert.equal(revealId(outline, { selectedKey: TEXT, target: seated }), pid(TEXT, '.li2-p'));
+  assert.deepEqual(reveal(null, outline, revealId(outline, { selectedKey: TEXT, target: seated })), {
+    [TEXT]: false,
+    [pid(TEXT, '.ul')]: false,
+    [pid(TEXT, '.li2')]: false,
+  });
+  const item = { key: TEXT, selector: '.li2' };
+  const opened = reveal(null, outline, revealId(outline, { selectedKey: TEXT, target: item }));
+  assert.deepEqual(opened, { [TEXT]: false, [pid(TEXT, '.ul')]: false });
+  assert.equal(isCollapsed(opened, find(outline, pid(TEXT, '.li2'))), true, 'the seated item keeps its own fold');
+  // A seat under the already selected block CHANGES the path (the rule
+  // is keyed to the path's change), where the key alone would not.
+  assert.notEqual(
+    pathTo(outline, revealId(outline, { selectedKey: TEXT, target: seated })),
+    pathTo(outline, revealId(outline, { selectedKey: TEXT, target: null })),
+  );
+  assert.equal(
+    pathTo(outline, revealId(outline, { selectedKey: TEXT, target: seated })),
+    [ROOT, S1, TEXT, pid(TEXT, '.ul'), pid(TEXT, '.li2'), pid(TEXT, '.li2-p')].join('\n'),
+  );
+  // A target whose key is not in the outline falls back to the key: the
+  // selected element is revealed rather than nothing.
+  assert.equal(
+    revealId(outline, { selectedKey: TEXT, target: { key: 'block:gone', selector: '.p' } }),
+    TEXT,
+  );
+  // A pair keyed above the selection (the slice never carries one as a
+  // target now that a rule on an ancestor is the write address, but the
+  // rule is pure over what it is handed) names no drawn row either: the
+  // key again.
+  assert.equal(
+    revealId(outline, { selectedKey: TEXT, target: { key: S1, selector: 'p' } }),
+    TEXT,
+  );
+  // A part the tree is not drawing under a drawn key: the key.
+  assert.equal(
+    revealId(outline, { selectedKey: TEXT, target: { key: TEXT, selector: '.undrawn' } }),
+    TEXT,
+  );
+  // Nothing selected: null, and the path is empty, so the effect's
+  // dependency holds through a clear.
+  assert.equal(revealId(outline, { selectedKey: null, target: null }), null);
+  assert.equal(pathTo(outline, revealId(outline, { selectedKey: null, target: null })), '');
 });

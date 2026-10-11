@@ -2,13 +2,11 @@ import store from '../store/store';
 import {
   setHover,
   setHoverSelector,
-  setSelected,
   setTarget,
-  toggleSelected,
   setDrill,
   setPickerArmed,
-  clearSelection,
 } from '../store/slices/selection-slice';
+import { selectKey, toggleKey, clearKeys } from './select-door';
 import { commitAddress } from './commit-address';
 import {
   resolve,
@@ -17,6 +15,7 @@ import {
   elementForKey,
 } from './resolver';
 import { isDeep, policyFor } from './depth-policy';
+import { isDoubleClick } from './double-click';
 import { togglePicker } from './picker';
 import { releasePanelFocus } from './panel-focus';
 import { getPartBehavior } from '../components/page-elements/view-registry';
@@ -71,21 +70,28 @@ import { openEditor } from '../edit_session/edit-session';
  *   toggle, the keyless clear) disarms it; so do Escape (the ladder's
  *   first rung) and leaving Edit Mode. Clicks outside the canvas
  *   leave it armed.
- * - double-click: drill one level into the current selection and select
- *   what is under the cursor there, a projection step, not a raw DOM step;
- *   at a LEAF (nothing deeper under the cursor) the double-click EDITS it
- *   through the editor door (edit-session.js openEditor), the drill's
- *   shape at the bottom of the tree. Cmd (or the armed picker) on the click
- *   halves deep-selects first, so a nested leaf is one gesture; the
- *   resolver's deepen rule keeps the leaf selected through the second
- *   click. Climbing back out is ArrowLeft's or the breadcrumb's; Escape
- *   never traverses.
+ * - double-click: the EVEN click. There is no `dblclick` listener: the
+ *   browser fires `dblclick` only at OS click count 2, and macOS keeps
+ *   counting fast stationary clicks past it (3, 4, 5...), so a second
+ *   double-click at one spot would never arrive. Every click carries the
+ *   count as `detail`, and the one click listener reads the pair off it
+ *   (double-click.js isDoubleClick: an even count of 2 or more; an odd
+ *   count, 0 or no count is a single click). The odd click commits as
+ *   above; the even click drills one level into the current selection and
+ *   selects what is under the cursor there, a projection step, not a raw
+ *   DOM step; at a LEAF (nothing deeper under the cursor) the even click
+ *   EDITS it through the editor door (edit-session.js openEditor), the
+ *   drill's shape at the bottom of the tree. Cmd (or the armed picker) on
+ *   the odd click deep-selects first, so a nested leaf is one gesture; the
+ *   resolver's deepen rule keeps the leaf selected through the even click.
+ *   Climbing back out is ArrowLeft's or the breadcrumb's; Escape never
+ *   traverses.
  * - Escape: the way out, never a move. An open edit cancels first
  *   (edit-session.js, the editing rung of the same ladder, outranking this
- *   one by context); then an armed picker drops; then a standing styling
- *   target (back to the bare element, the selection kept); then the
- *   selection clears, whatever drill context stands with it
- *   (clearSelection nulls the context too).
+ *   one by context); then an armed picker drops; then standing styling
+ *   (the subject facet and the write address together, back to the bare
+ *   element, the selection kept); then the selection clears, whatever
+ *   drill context stands with it (clearSelection nulls the context too).
  */
 
 const editModeActive = () => store.getState().mode.mode === 'edit';
@@ -182,6 +188,43 @@ const onClick = (event) => {
     return;
   }
   const state = store.getState().selection;
+
+  if (isDoubleClick(event)) {
+    // The even click closes a double-click pair (double-click.js): drill
+    // or edit, never commit. The odd click before it already committed
+    // the selection this reads.
+    if (!state.selectedKey) {
+      return;
+    }
+    const keys = representedChainKeys(event.target);
+    const index = keys.indexOf(state.selectedKey);
+    if (index > 0) {
+      // There is something deeper under the cursor inside the selection:
+      // enter the selection and select it. The select goes through the
+      // selection door first, and the drill context follows only a select
+      // that landed: a refused leave (an invalid widget's edit) drills
+      // nowhere, since the selection it would drill into never moved.
+      event.preventDefault();
+      event.stopPropagation();
+      if (selectKey(keys[index - 1])) {
+        store.dispatch(setDrill(state.selectedKey));
+      }
+      return;
+    }
+    if (index === 0 && openEditor(state.selectedKey, event.target) !== null) {
+      // A leaf: nothing deeper to drill into, so the double-click edits it,
+      // the leaf under the pointer first (the theme's H1 commits the root
+      // row's key from outside the entity wrapper, where no key search
+      // finds it). The door decides whether the key has an editor (a
+      // section has none); with no engine registered the gesture is nobody's.
+      event.preventDefault();
+      event.stopPropagation();
+    }
+    // index === -1: unrelated target; the odd click of the gesture already
+    // handled it.
+    return;
+  }
+
   const key = resolve(event.target, {
     policy: policyFor(event, state.pickerArmed),
     drillKey: state.drillKey,
@@ -204,8 +247,10 @@ const onClick = (event) => {
     if (event.shiftKey) {
       // Shift builds the multi-select set: toggle the key's membership
       // (adding makes it the primary). Works from empty too — the set of
-      // one it produces is indistinguishable from a plain click.
-      store.dispatch(toggleSelected(key));
+      // one it produces is indistinguishable from a plain click. Through
+      // the selection door, as every selection write: no edit rides a
+      // set, so a toggle that builds one commits an open edit first.
+      toggleKey(key);
       return;
     }
     // Cmd-click on a part targets it: the owner selected, the part's
@@ -234,7 +279,11 @@ const onClick = (event) => {
   // is a no-op instead: a missed toggle must not destroy the set being
   // built. The keyless clear is a handled canvas click too, so it
   // consumes the armed picker (clearSelection itself leaves the flag
-  // alone: disarming is the gesture's, not the selection's).
+  // alone: disarming is the gesture's, not the selection's). The clear
+  // goes through the selection door: the press decision has already
+  // committed an open edit by the time this handler runs, so the door
+  // finds nothing to leave; it is the door that keeps every writer on
+  // one road.
   if (
     !event.shiftKey &&
     event.target instanceof Element &&
@@ -242,48 +291,19 @@ const onClick = (event) => {
     !event.target.closest('[data-canvas-chrome]')
   ) {
     disarmPicker();
-    store.dispatch(clearSelection());
+    clearKeys();
   }
-};
-
-const onDoubleClick = (event) => {
-  if (!editModeActive()) {
-    return;
-  }
-  const state = store.getState().selection;
-  if (!state.selectedKey) {
-    return;
-  }
-  const keys = representedChainKeys(event.target);
-  const index = keys.indexOf(state.selectedKey);
-  if (index > 0) {
-    // There is something deeper under the cursor inside the selection:
-    // enter the selection and select it.
-    event.preventDefault();
-    event.stopPropagation();
-    store.dispatch(setDrill(state.selectedKey));
-    store.dispatch(setSelected(keys[index - 1]));
-    return;
-  }
-  if (index === 0 && openEditor(state.selectedKey, event.target) !== null) {
-    // A leaf: nothing deeper to drill into, so the double-click edits it,
-    // the leaf under the pointer first (the theme's H1 commits the root
-    // row's key from outside the entity wrapper, where no key search
-    // finds it). The door decides whether the key has an editor (a
-    // section has none); with no engine registered the gesture is nobody's.
-    event.preventDefault();
-    event.stopPropagation();
-  }
-  // index === -1: unrelated target; the click half of the gesture already
-  // handled it.
 };
 
 /**
  * Escape deselects; it never traverses. An armed picker drops first (the
- * selection and its target stay: DevTools' Escape leaves the picker
- * without touching what is selected); then a standing styling target
- * (the selection stays, back to the bare element: the same drop ArrowLeft
- * makes from an unplaced target); then the selection clears in one press,
+ * selection and its styling stay: DevTools' Escape leaves the picker
+ * without touching what is selected); then standing styling, the subject
+ * facet and the write address as ONE rung (the selection stays, back to
+ * the bare element: the same drop ArrowLeft makes from an unplaced
+ * facet; setTarget(null) clears the address with the facet, and two rungs
+ * would make the chip's address a keyboard stop nobody can see); then
+ * the selection clears in one press,
  * whatever drill context the arrows, a double-click or a crumb click left
  * standing (clearSelection nulls it too), so a context is never a rung
  * the user has to climb through. A stray context with nothing selected
@@ -300,11 +320,15 @@ const onEscape = () => {
   const state = store.getState().selection;
   if (state.pickerArmed) {
     store.dispatch(setPickerArmed(false));
-  } else if (state.target) {
+  } else if (state.target || state.address) {
     store.dispatch(setTarget(null));
   } else if (state.selectedKey || state.drillKey) {
-    store.dispatch(clearSelection());
-    releasePanelFocus();
+    // Through the selection door: the open edit's own Escape outranks
+    // this rung by context, so the door normally finds nothing to leave;
+    // a refused leave keeps the selection and its panel focus with it.
+    if (clearKeys()) {
+      releasePanelFocus();
+    }
   } else {
     // Nothing to drop: not ours; let Escape propagate.
     return false;
@@ -327,8 +351,9 @@ const onMouseLeave = () => {
 export const initSelectorEvents = () => {
   document.addEventListener('mousemove', onMouseMove, { passive: true });
   // Capture phase so a selection click wins before page handlers see it.
+  // Odd and even clicks alike: the double-click is read off the click's
+  // OS count, so this one listener is the whole pointer grammar.
   document.addEventListener('click', onClick, true);
-  document.addEventListener('dblclick', onDoubleClick, true);
   document.documentElement.addEventListener('mouseleave', onMouseLeave);
 
   register({

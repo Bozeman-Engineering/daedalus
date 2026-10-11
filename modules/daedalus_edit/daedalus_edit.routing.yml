@@ -9,19 +9,38 @@ daedalus_edit.entity_form:
         type: entity:{entity_type}
   requirements:
     _permission: 'access inline editing'
+    # The form is a widget host over the entity's staged values: fetching it
+    # is an update-shaped read, so the entity's own update access gates it
+    # beside the surface permission.
+    _entity_access: 'entity.update'
 
+# Save and Discard address ONE host as {entity_type}/{entity}: a content
+# entity or a Layout Builder display (whose dotted id a `type.id` pair could
+# not carry). The generic converter upcasts either, and the host's own
+# update access gates the commit and the discard beside the surface
+# permission.
 daedalus_edit.tempstore.save:
-  path: '/daedalus-edit/tempstore/save/{entities}'
+  path: '/daedalus-edit/tempstore/save/{entity_type}/{entity}'
   defaults:
     _title: 'Tempstore Save'
     _controller: '\Drupal\daedalus_edit\Controller\Tempstore::save'
+  options:
+    parameters:
+      entity:
+        type: entity:{entity_type}
   requirements:
     _permission: 'access inline editing'
+    _entity_access: 'entity.update'
 
 daedalus_edit.delete_confirmation_form:
-  path: '/daedalus-edit/tempstore/delete-confirm/{entities}'
+  path: '/daedalus-edit/tempstore/delete-confirm/{entity_type}/{entity}'
   defaults:
     _form: '\Drupal\daedalus_edit\Form\ConfirmDiscardChangesForm'
     _title: 'Discard changes?'
+  options:
+    parameters:
+      entity:
+        type: entity:{entity_type}
   requirements:
     _permission: 'access inline editing'
+    _entity_access: 'entity.update'

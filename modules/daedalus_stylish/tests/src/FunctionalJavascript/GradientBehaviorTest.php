@@ -390,10 +390,10 @@ class GradientBehaviorTest extends WebDriverTestBase {
     // split): three tokens, delivered as --space-{name} custom properties
     // on the token scope by the compiled skin file, which is what the
     // padding step's committed var() must resolve through.
-    $skin->setTokens([
+    $skin->setPackageTokens([
       'space' => ['2' => '0.5rem', '4' => '1rem', '8' => '2rem'],
     ]);
-    $skin->setDefaults([
+    $skin->setPackageDefaults([
       'base:a' => ['' => ['default' => ['color' => '#881144']]],
     ])->save();
     // The skin's system is the test's own (built in code around the
@@ -554,10 +554,11 @@ class GradientBehaviorTest extends WebDriverTestBase {
       'The Text color widget offers the gradient swatch as a stop in its palette popover.',
     );
 
-    // The map read every step below asserts against: the daedalus_stylish_styles
-    // field of the root entity's blueprint mirror — the same authority the
-    // canvas re-renders from, replaced by every mutation response.
-    $entry = "(Drupal.Daedalus.Blueprint.getBlueprint()?.fields?.daedalus_stylish_styles ?? {})[" . json_encode($block_key) . "]";
+    // The map read every step below asserts against: the root entity's
+    // blueprint mirror's flat style map (derived from the tree's node styles,
+    // see styleMapJs()), the same authority the canvas re-renders from,
+    // replaced by every mutation response.
+    $entry = $this->styleMapJs() . "[" . json_encode($block_key) . "]";
 
     // ——— Gradient stop pick on Background: the full round trip. ———
     // A real click on the stop commits var(--swatch-hero_fade) to
@@ -765,7 +766,7 @@ class GradientBehaviorTest extends WebDriverTestBase {
       20000,
       'The field-root selection rendered Text color (field kind) and no Background widget.',
     );
-    $field_entry = "(Drupal.Daedalus.Blueprint.getBlueprint()?.fields?.daedalus_stylish_styles ?? {})[" . json_encode($field_key) . "]";
+    $field_entry = $this->styleMapJs() . "[" . json_encode($field_key) . "]";
     $this->openWell($text);
     $this->clickPanel("$chips $stop");
     $this->assertJsCondition(
@@ -972,7 +973,7 @@ class GradientBehaviorTest extends WebDriverTestBase {
     $this->assertNull($second_error, 'Second block placement failed: ' . ($second_error ?? ''));
     $second_key = "block:$second_uuid";
     $second_canvas = "[data-selectable='$second_key']";
-    $second_entry = "(Drupal.Daedalus.Blueprint.getBlueprint()?.fields?.daedalus_stylish_styles ?? {})[" . json_encode($second_key) . "]";
+    $second_entry = $this->styleMapJs() . "[" . json_encode($second_key) . "]";
     $this->assertNotNull(
       $assert_session->waitForElement('css', $second_canvas),
       'The second block rendered on the canvas.',
@@ -1404,7 +1405,7 @@ class GradientBehaviorTest extends WebDriverTestBase {
     $this->assertNull($text_error, 'Linked text block placement failed: ' . ($text_error ?? ''));
     $text_key = "block:$text_uuid";
     $text_canvas = "[data-selectable='$text_key']";
-    $text_entry = "(Drupal.Daedalus.Blueprint.getBlueprint()?.fields?.daedalus_stylish_styles ?? {})[" . json_encode($text_key) . "]";
+    $text_entry = $this->styleMapJs() . "[" . json_encode($text_key) . "]";
 
     // The resolver's stamp reached real canvas markup: the conditional
     // link part claims field:field_text_text, so its anchor carries the

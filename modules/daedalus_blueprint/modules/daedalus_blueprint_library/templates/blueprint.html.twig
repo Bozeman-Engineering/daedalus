@@ -1,0 +1,22 @@
+{#
+/**
+ * @file
+ * Default theme implementation to display a saved blueprint.
+ *
+ * A blueprint is a page of its own: its document (core's Layout Builder
+ * field) is the content, and the element printing {{ attributes }} is the
+ * page builder's canvas root (the entity wrapper, selection identity and
+ * main-entity marks daedalus_ui stamps on the route entity's build).
+ *
+ * Available variables:
+ * - blueprint: The blueprint entity.
+ * - content: The blueprint's rendered fields: its document.
+ * - view_mode: The view mode.
+ * - attributes: HTML attributes for the containing element.
+ *
+ * @ingroup themeable
+ */
+#}
+<div{{ attributes }}>
+  {{ content }}
+</div>

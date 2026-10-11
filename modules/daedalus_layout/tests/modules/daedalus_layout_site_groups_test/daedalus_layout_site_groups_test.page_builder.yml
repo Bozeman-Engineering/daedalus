@@ -1,0 +1,12 @@
+# The group vocabulary a package or site declares: a map of group id to
+# label and optional description under the reserved site key, the way
+# variant axes are declared. SiteGroups (daedalus_layout) reads and
+# validates it and contributes it to the spine's dialect catalog; a
+# blueprint or a block type names the ids in its groups list.
+site:
+  groups:
+    heroes:
+      label: Heroes
+      description: 'Full-width openers for the top of a page.'
+    bands:
+      label: Bands

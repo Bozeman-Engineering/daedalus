@@ -1,0 +1,8 @@
+shipped_owned_look:
+  label: 'Shipped owned look'
+  scope: 'kind:container'
+  blueprint: 'cta_card'
+  styles:
+    '':
+      default:
+        background-color: 'aliceblue'

@@ -5,10 +5,9 @@ declare(strict_types=1);
 namespace Drupal\daedalus_stylish;
 
 use Drupal\Core\Entity\EntityTypeBundleInfoInterface;
-use Drupal\Core\Logger\LoggerChannelFactoryInterface;
 use Drupal\daedalus_blueprint\Materials\Address;
 use Drupal\daedalus_blueprint\Materials\RelativeSelector;
-use Drupal\daedalus_blueprint\Materials\MaterialsRosterBuilder;
+use Drupal\daedalus_ui\ElementModel\DeclarationOrigin;
 use Drupal\daedalus_ui\ElementModel\PageBuilderDeclarations;
 use Drupal\daedalus_stylish\Vocabulary\VocabularyRosterBuilder;
 
@@ -47,7 +46,7 @@ use Drupal\daedalus_stylish\Vocabulary\VocabularyRosterBuilder;
  * of its own.
  *
  * Declarations only: the site's MATERIALS (the active skin's tokens, the
- * published swatches, the variants, the stencils) are not guide data and
+ * published swatches, the variants, the blueprints) are not guide data and
  * do not ride here. They ride the materials delivery payload beside the
  * blueprint mirror on the same render (daedalus_blueprint's
  * MaterialsDelivery, attached by daedalus_ui's BlueprintMirror) and
@@ -72,8 +71,6 @@ class ClientStyleGuide {
     protected ControlWidgetPluginManager $controlWidgets,
     protected SkinManager $skinManager,
     protected SwatchKindPluginManager $swatchKinds,
-    protected MaterialsRosterBuilder $materialsRosterBuilder,
-    protected LoggerChannelFactoryInterface $loggerFactory,
     protected VariantConformance $variantConformance,
     protected VocabularyRosterBuilder $rosterBuilder,
     protected EntityTypeBundleInfoInterface $bundleInfo,
@@ -253,8 +250,10 @@ class ClientStyleGuide {
    *   - constraintDefaults: the site-wide constraint defaults
    *     (StyleGuide::constraintDefaults(): the authored
    *     constraint_defaults map and nothing derived into it), CSS
-   *     property => constraint block ({scale, stops, allowed, min, max,
-   *     units}). The offer vocabulary's site-wide layer: the client guide
+   *     property => constraint block ({scale, allowed, min, max, units};
+   *     never stops, which are per element: a site-wide row leads with
+   *     the scale's offered tokens, the `offered` flag each token record
+   *     carries). The offer vocabulary's site-wide layer: the client guide
    *     model resolves a node's own value space first (valueSpaces, the
    *     roster's per-address answer), else this map, so a site-level
    *     binding (font-size -> the type scale) shapes stop rows everywhere
@@ -283,15 +282,12 @@ class ClientStyleGuide {
    *     {scope: {relative key: entry}} as stored — the inspector's
    *     provenance source: an element resolves its scope's entries
    *     (kind first, refinement over it, mirroring delivery rank order)
-   *     to show "from skin" values and shadow badges. Base:{tag} scopes
+   *     to show "from skin" values and shadow badges, and its "Edit
+   *     skin…" doorway opens the skin session on the delivering scope
+   *     (the same map, refreshed after a push through the defaults route,
+   *     SkinApiController::defaults()). Base:{tag} scopes
    *     ride along but no selectable element ever captures them ({} when
    *     no skin is active or it holds no defaults).
-   *   - skinEditUrl: the ACTIVE skin's edit-form URL (the DaedalusStylishSkin
-   *     `edit-form` link, /admin/appearance/skins/{daedalus_skin}), the
-   *     inspector's "Edit skin…" doorway for a skin-supplied value. NULL
-   *     when no skin is active or the active one is unpublished: the same
-   *     gate as skinDefaults, so the doorway exists exactly when a skin
-   *     value can show.
    *   - withheld: the published variants the site's CURRENT law refuses
    *     (VariantConformance::refusals()), variant machine name => the
    *     refusals as {path, code, message} triples, paths relative to the
@@ -305,6 +301,63 @@ class ClientStyleGuide {
    *     ride the STYLE_VARIANT_NONCONFORMING refusal's `refused` context
    *     when a new wearing is attempted. {} when every offered variant
    *     conforms.
+   *   - law: the LAW projection, what the style guide declares with the
+   *     origin of every declared fact, read under the active design
+   *     system's enforcement mode (the Materials place's Law tab, a
+   *     read-only view: the guide is authored in files and shown here).
+   *     Self-contained: the tab reads this key alone, so its rosters
+   *     restate the served nodes' answers (the same roster reads, never a
+   *     second derivation) beside facts no served node carries (origins,
+   *     birth defaults, the contract). `enforcement` the mode word,
+   *     `properties` 'closed' (strict: only granted properties may be
+   *     styled) or 'open', `constraints` 'law' (guarded or strict) or
+   *     'offer' (open: an authored constraint shapes the rows' offer and
+   *     binds nothing). `scales`: scale => {label, shape, prefix,
+   *     contract (the names the site's token_contract promises, [] when
+   *     none), origins: {scale (the distinct origins of the scale's
+   *     facts, the grants rule below: a declaration several layers may
+   *     restate), contract (the list's one origin, NULL when none is
+   *     declared)}}. `bindings`: the site's
+   *     constraint_defaults (constraintDefaults above) as property =>
+   *     {block, origins: {fact: origin}}, the origins expanded over the
+   *     shorthand families exactly as the blocks are. `nodes`: address
+   *     => node for every served kind, block type, block plugin and
+   *     layout ("kind:container", "block_type:text", "block_plugin:
+   *     system_menu_block", "layout:layout_onecol", the declaring-scope
+   *     grammar the stack's floor layers and the skin's scopes speak), a
+   *     root node carrying `grants` (the roster's, group => names),
+   *     `constraints` (the roster's value spaces, property => the
+   *     effective block, curated `stops` inside), `axes` (the roster's,
+   *     the built-in style axis first), `birth` (the default variants
+   *     an element of the type is born wearing, StyleGuide::
+   *     defaultVariants(): axis => {variant, depth} with depth 'root'
+   *     for an entry qualified to top-level sections, else NULL),
+   *     `defaults` (the declaration's own declared defaults, the
+   *     declaredDefaults entry at the node's scope, as authored: the
+   *     kind's are the kind node's, never merged beneath a refinement's,
+   *     because the stack layers them apart), `label` where the
+   *     declaration or the bundle carries one, and `origins`, a mirror
+   *     naming where each fact came from: `grants` group => the distinct
+   *     origins of every authored fact under the group (a grant is a
+   *     key several layers may restate, so it names every layer whose
+   *     facts survive under it; one entry for a bare `{}` grant), `
+   *     constraints` property => {source: 'node' (the node's own block
+   *     wins whole) | 'site' (the site's binding), facts: {fact: origin}},
+   *     `axes` the variant_axes list's one origin (NULL for a node
+   *     declaring none: the style axis is built in), `birth` axis =>
+   *     origin, `defaults` key => condition => property => origin. An
+   *     origin is {provider, file} (a module or theme and the file's
+   *     basename), {provider: NULL, file: NULL} for a value
+   *     hook_page_builder_declarations_alter() wrote, NULL where no
+   *     layer wrote the fact (a derived or built-in one). Effective
+   *     origins compose as effective declarations do (PageBuilder
+   *     Declarations::merge() of the universal kind's tree under the
+   *     refinement's). Parts ride as `elements` (selector => node, the
+   *     tree as authored), a children section as `children`, a declared
+   *     generated box as `pseudo.before` / `pseudo.after`; a part node
+   *     carries grants, constraints, origins and label alone (axes,
+   *     birth and defaults are the root's). Base tags and instance
+   *     namespaces are anatomy the tab does not show.
    */
   public function build(?string $theme = NULL): array {
     $theme ??= $this->declarations->siteTheme();
@@ -409,34 +462,10 @@ class ClientStyleGuide {
     // provenance source. Its tokens are materials: the roster's, delivered
     // beside the blueprint mirror, not the guide's.
     $skin_defaults = [];
-    $skin_edit_url = NULL;
     $skin = $this->skinManager->loadActiveSkin();
     if ($skin !== NULL && $skin->isPublished()) {
-      $skin_defaults = array_filter($skin->getDefaults(), 'is_array');
-      $skin_edit_url = $skin->toUrl('edit-form')->toString();
+      $skin_defaults = array_filter($skin->defaults(), 'is_array');
     }
-
-    // Curated stops meet the minted corpus here for the first time (stops
-    // entries are token NAMES — guide code naming skin data — and the guide
-    // build deliberately checks only their grammar, so a skin switch can
-    // never brick the guide). The client drops un-minted names from the
-    // offer; this is the developer-facing half of that honesty, logged once
-    // per payload rebuild (the payload caches on skin and declaration tags,
-    // so drift-inducing events are exactly what rebuilds it). The minted
-    // corpus is the roster's token universe regrouped by scale, the same
-    // universe the validator checks references against.
-    $tokens = [];
-    foreach ($this->materialsRosterBuilder->build()->tokens() as $record) {
-      $tokens[$record->group][$record->label] = $record->value;
-    }
-    $this->warnUnmintedStops([
-      'kind' => $kinds,
-      'block type' => $block_types,
-      'block plugin' => $block_plugins,
-      'layout' => $layouts,
-      'instance namespace' => $instances,
-      'base element' => $base,
-    ], $tokens, $theme);
 
     // The kind vocabulary the palette groups swatches under (the swatches
     // themselves ride the materials delivery payload).
@@ -478,10 +507,290 @@ class ClientStyleGuide {
       'swatchKinds' => $swatch_kinds,
       'declaredDefaults' => $this->styleGuide->declaredDefaults($theme),
       'skinDefaults' => $skin_defaults,
-      'skinEditUrl' => $skin_edit_url,
       'axisLabels' => $axis_labels,
       'withheld' => $this->variantConformance->refusals(),
+      'law' => $this->serveLaw($theme, $bundle_labels),
     ];
+  }
+
+  /**
+   * Serves the law projection (see build(): `law`).
+   *
+   * @param string|null $theme
+   *   The theme the guide resolves for.
+   * @param array $bundle_labels
+   *   The block_content bundle info, for the block type nodes' labels.
+   */
+  protected function serveLaw(?string $theme, array $bundle_labels): array {
+    $origins = $this->declarations->getOrigins($theme);
+    $site_origins = is_array($origins['site'] ?? NULL) ? $origins['site'] : [];
+
+    $contract = $this->styleGuide->getTokenContract($theme);
+    $scales = [];
+    foreach ($this->styleGuide->getTokenScales($theme) as $scale => $declaration) {
+      $scale = (string) $scale;
+      $scales[$scale] = [
+        'label' => (string) $declaration['label'],
+        'shape' => $declaration['shape'],
+        'prefix' => StyleGuide::tokenPrefix($scale, $declaration),
+        'contract' => $contract[$scale] ?? [],
+        'origins' => [
+          'scale' => static::originsUnder($site_origins['token_scales'][$scale] ?? NULL),
+          'contract' => isset($contract[$scale]) ? static::originAt($site_origins, ['token_contract', $scale]) : NULL,
+        ],
+      ];
+    }
+
+    // The site's bindings and their origins expand over the shorthand
+    // families together: the origin tree under constraint_defaults
+    // mirrors the blocks (property => fact => origin), so the guide's
+    // one expansion copies a shorthand's origins to its unauthored
+    // longhands exactly as it copies the block.
+    $binding_origins = $this->styleGuide->expandConstraintFamilies(static::originsMap($site_origins['constraint_defaults'] ?? NULL));
+    $bindings = [];
+    foreach ($this->styleGuide->constraintDefaults($theme) as $property => $block) {
+      $bindings[$property] = [
+        'block' => $block,
+        'origins' => static::factOrigins($block, $binding_origins[$property] ?? NULL),
+      ];
+    }
+
+    $declared_defaults = $this->styleGuide->declaredDefaults($theme);
+    $nodes = [];
+    foreach (PageBuilderDeclarations::KINDS as $kind) {
+      if ($declaration = $this->styleGuide->getKind($kind, $theme)) {
+        $nodes["kind:$kind"] = $this->lawRoot(Address::kind($kind), $declaration, $origins['kinds'][$kind] ?? [], $origins['kinds'][$kind] ?? [], $declared_defaults, $binding_origins, $theme);
+      }
+    }
+    $block_origins = $origins['kinds']['block'] ?? [];
+    foreach ($this->styleGuide->getBlockTypes($theme) as $bundle) {
+      $own = $origins['block_types'][$bundle] ?? [];
+      $node = $this->lawRoot(Address::blockType($bundle), $this->styleGuide->getBlockType($bundle, $theme), PageBuilderDeclarations::merge($block_origins, $own), $own, $declared_defaults, $binding_origins, $theme);
+      if (isset($bundle_labels[$bundle]['label'])) {
+        $node['label'] = (string) $bundle_labels[$bundle]['label'];
+      }
+      $nodes["block_type:$bundle"] = $node;
+    }
+    foreach ($this->styleGuide->getBlockPlugins($theme) as $plugin_id) {
+      $own = $origins['block_plugins'][$plugin_id] ?? [];
+      $nodes["block_plugin:$plugin_id"] = $this->lawRoot(Address::blockPlugin($plugin_id), $this->styleGuide->getBlockPlugin($plugin_id, $theme), PageBuilderDeclarations::merge($block_origins, $own), $own, $declared_defaults, $binding_origins, $theme);
+    }
+    $container_origins = $origins['kinds']['container'] ?? [];
+    foreach ($this->styleGuide->getLayouts($theme) as $layout_id) {
+      $own = $origins['layouts'][$layout_id] ?? [];
+      $nodes["layout:$layout_id"] = $this->lawRoot(Address::layout($layout_id), $this->styleGuide->getLayout($layout_id, $theme), PageBuilderDeclarations::merge($container_origins, $own), $own, $declared_defaults, $binding_origins, $theme);
+    }
+
+    return [
+      'enforcement' => $this->styleGuide->enforcement(),
+      'properties' => $this->styleGuide->propertiesClosed() ? 'closed' : 'open',
+      'constraints' => $this->styleGuide->constraintsAreLaw() ? 'law' : 'offer',
+      'scales' => $scales,
+      'bindings' => $bindings,
+      'nodes' => $nodes,
+    ];
+  }
+
+  /**
+   * Serves one root declaration's law node.
+   *
+   * @param \Drupal\daedalus_blueprint\Materials\Address $address
+   *   The root address.
+   * @param array $declaration
+   *   The effective declaration.
+   * @param array $origins
+   *   The effective origin tree (the universal kind's merged under the
+   *   refinement's).
+   * @param array $own_origins
+   *   The declaration's own origin tree, as authored: the declared
+   *   defaults are the node's own scope layer, never the kind's merged
+   *   beneath, so their origins read here.
+   * @param array $declared_defaults
+   *   StyleGuide::declaredDefaults(): scope => the declared entries.
+   * @param array $binding_origins
+   *   The site bindings' origin map, expanded over the families.
+   * @param string|null $theme
+   *   The theme.
+   */
+  protected function lawRoot(Address $address, array $declaration, array $origins, array $own_origins, array $declared_defaults, array $binding_origins, ?string $theme): array {
+    $node = $this->lawNode($declaration, $origins, $binding_origins, $theme);
+    $roster = $this->rosterBuilder->build($address, $theme);
+    // Depth through the one reader of the entry grammar: an entry the
+    // nested read drops is qualified to the root.
+    $birth = [];
+    $birth_origins = [];
+    $nested = StyleGuide::defaultVariants($declaration, TRUE);
+    foreach (StyleGuide::defaultVariants($declaration) as $axis => $variant) {
+      $birth[$axis] = ['variant' => $variant, 'depth' => isset($nested[$axis]) ? NULL : StyleGuide::DEPTH_ROOT];
+      $birth_origins[$axis] = static::originAt($origins, ['default_variants', $axis, 'variant']);
+    }
+    $scope = (string) $address;
+    $defaults = $declared_defaults[$scope] ?? [];
+    $default_origins = [];
+    foreach ($defaults as $key => $entry) {
+      foreach (is_array($entry) ? $entry : [] as $condition => $properties) {
+        foreach (is_array($properties) ? $properties : [] as $property => $value) {
+          $default_origins[$key][$condition][$property] = static::originAt(
+            $own_origins,
+            ['defaults', $key, $condition, $property],
+          );
+        }
+      }
+    }
+    $node['axes'] = $roster->axes();
+    $node['birth'] = $birth;
+    $node['defaults'] = $defaults;
+    $node['origins'] += [
+      'axes' => static::originAt($origins, ['variant_axes']),
+      'birth' => $birth_origins,
+      'defaults' => $default_origins,
+    ];
+    return $node;
+  }
+
+  /**
+   * Serves one declaration node's law: its rosters with their origins.
+   *
+   * The grants and value spaces are the roster builder's one derivation
+   * (VocabularyRosterBuilder::vocabulary(), what the roster at the
+   * node's address answers); the origins follow the same walk: a
+   * property's block is the node's own when the group's authored
+   * constraints (expanded over the families) carry the property, else
+   * the site's binding, and each fact's origin reads from the matching
+   * origin tree.
+   *
+   * @param array $node
+   *   The declaration node (a root, a part, a children section, a
+   *   declared generated box).
+   * @param array $origins
+   *   The node's origin tree.
+   * @param array $binding_origins
+   *   The site bindings' origin map, expanded over the families.
+   * @param string|null $theme
+   *   The theme.
+   */
+  protected function lawNode(array $node, array $origins, array $binding_origins, ?string $theme): array {
+    ['grants' => $grants, 'valueSpaces' => $spaces] = $this->rosterBuilder->vocabulary($node, $theme);
+    $grant_origins = [];
+    $own_blocks = [];
+    $own_origins = [];
+    $groups = is_array($node['property_groups'] ?? NULL) ? $node['property_groups'] : [];
+    $group_origins = is_array($origins['property_groups'] ?? NULL) ? $origins['property_groups'] : [];
+    foreach ($grants as $group => $properties) {
+      $grant_origins[$group] = static::originsUnder($group_origins[$group] ?? NULL);
+      $declared = $groups[$group] ?? NULL;
+      $constraints = is_array($declared) && is_array($declared['constraints'] ?? NULL) ? $declared['constraints'] : [];
+      $expanded = $this->styleGuide->expandConstraintFamilies($constraints);
+      $origin_tree = is_array($group_origins[$group] ?? NULL) ? $group_origins[$group] : [];
+      $expanded_origins = $this->styleGuide->expandConstraintFamilies(static::originsMap($origin_tree['constraints'] ?? NULL));
+      foreach ($properties as $property) {
+        if (array_key_exists($property, $expanded)) {
+          $own_blocks[$property] = TRUE;
+          $own_origins[$property] = $expanded_origins[$property] ?? NULL;
+        }
+      }
+    }
+    $constraint_origins = [];
+    foreach ($spaces as $property => $block) {
+      $own = isset($own_blocks[$property]);
+      $constraint_origins[$property] = [
+        'source' => $own ? 'node' : 'site',
+        'facts' => static::factOrigins($block, $own ? $own_origins[$property] : ($binding_origins[$property] ?? NULL)),
+      ];
+    }
+    $served = [
+      'grants' => $grants,
+      'constraints' => $spaces,
+      'origins' => ['grants' => $grant_origins, 'constraints' => $constraint_origins],
+    ];
+    if (is_string($node['label'] ?? NULL)) {
+      $served['label'] = $node['label'];
+    }
+    foreach (StyleGuide::pseudoNodes($node) as $pseudo => $box) {
+      $box_origins = is_array($origins['pseudo'][$pseudo] ?? NULL) ? $origins['pseudo'][$pseudo] : [];
+      $served['pseudo'][$pseudo] = $this->lawNode($this->rosterBuilder->pseudoNode($node, $pseudo), $box_origins, $binding_origins, $theme);
+    }
+    if (is_array($node['children'] ?? NULL)) {
+      $served['children'] = $this->lawNode($node['children'], is_array($origins['children'] ?? NULL) ? $origins['children'] : [], $binding_origins, $theme);
+    }
+    if (is_array($node['elements'] ?? NULL)) {
+      $served['elements'] = [];
+      foreach ($node['elements'] as $selector => $part) {
+        if (is_array($part)) {
+          $served['elements'][(string) $selector] = $this->lawNode($part, is_array($origins['elements'][$selector] ?? NULL) ? $origins['elements'][$selector] : [], $binding_origins, $theme);
+        }
+      }
+    }
+    return $served;
+  }
+
+  /**
+   * The origin at a path of an origin tree, as a plain map.
+   *
+   * A leaf met before the path ends covers everything beneath it (a
+   * list's entries carry the list's origin; a scalar entry is its own
+   * leaf whatever the path expects under it).
+   *
+   * @return array{provider: string|null, file: string|null}|null
+   *   The origin, or NULL when no leaf is recorded there.
+   */
+  protected static function originAt(mixed $tree, array $path): ?array {
+    foreach ($path as $step) {
+      if ($tree instanceof DeclarationOrigin) {
+        return $tree->toArray();
+      }
+      if (!is_array($tree) || !array_key_exists($step, $tree)) {
+        return NULL;
+      }
+      $tree = $tree[$step];
+    }
+    return $tree instanceof DeclarationOrigin ? $tree->toArray() : NULL;
+  }
+
+  /**
+   * The distinct origins recorded at or beneath a point of an origin tree.
+   *
+   * @return list<array{provider: string|null, file: string|null}>
+   *   In walk order; [] when none is recorded.
+   */
+  protected static function originsUnder(mixed $tree): array {
+    if ($tree instanceof DeclarationOrigin) {
+      return [$tree->toArray()];
+    }
+    $found = [];
+    foreach (is_array($tree) ? $tree : [] as $child) {
+      foreach (static::originsUnder($child) as $origin) {
+        $found[json_encode($origin)] = $origin;
+      }
+    }
+    return array_values($found);
+  }
+
+  /**
+   * An origin subtree as a map the family expansion can walk, [] when a leaf.
+   */
+  protected static function originsMap(mixed $tree): array {
+    return is_array($tree) ? $tree : [];
+  }
+
+  /**
+   * The origin of each fact of a constraint block.
+   *
+   * @param array $block
+   *   The effective block.
+   * @param mixed $tree
+   *   The block's origin tree (fact => origin), or the one origin of a
+   *   block written as a leaf, or NULL.
+   *
+   * @return array<string, array|null>
+   *   Fact => origin, in the block's order.
+   */
+  protected static function factOrigins(array $block, mixed $tree): array {
+    $origins = [];
+    foreach (array_keys($block) as $fact) {
+      $origins[$fact] = static::originAt($tree, [$fact]);
+    }
+    return $origins;
   }
 
   /**
@@ -579,84 +888,6 @@ class ClientStyleGuide {
       }
     }
     return $vocabulary + $node;
-  }
-
-  /**
-   * Logs curated stops the active skin does not mint.
-   *
-   * The site's authored constraint_defaults are walked once under their
-   * own name; a node whose value space for a property IS that authored
-   * default (the roster folds the site layer into every granted
-   * property's value space) is not named again for it.
-   *
-   * @param array $dimensions
-   *   The served node maps, keyed by the noun naming their dimension
-   *   ('kind' => $kinds, ...).
-   * @param array $tokens
-   *   The active skin's minted tokens, {scale: {name: value}}.
-   * @param string|null $theme
-   *   The theme whose authored constraint defaults are the site layer.
-   */
-  protected function warnUnmintedStops(array $dimensions, array $tokens, ?string $theme): void {
-    $drift = [];
-    $defaults = $this->styleGuide->getConstraintDefaults($theme);
-    $this->collectUnmintedStops(['valueSpaces' => $defaults], "the site's constraint_defaults", $tokens, [], $drift);
-    foreach ($dimensions as $noun => $nodes) {
-      foreach ($nodes as $name => $node) {
-        $this->collectUnmintedStops($node, sprintf('%s "%s"', $noun, $name), $tokens, $defaults, $drift);
-      }
-    }
-    if ($drift !== []) {
-      $this->loggerFactory->get('daedalus_stylish')->warning(
-        'The style guide curates stops the active skin does not mint; they will not be offered until the skin mints them or the guide stops naming them: @drift.',
-        ['@drift' => implode('; ', $drift)],
-      );
-    }
-  }
-
-  /**
-   * Collects one served node's un-minted stops, recursing into its parts.
-   *
-   * Walks the `valueSpaces` map of a served node (the root, each part of
-   * its elements tree, each children pseudo-part section, each declared
-   * generated box) for {scale,
-   * stops} blocks whose stop names the minted corpus lacks, skipping a
-   * block equal to the site's authored default for the property (named
-   * once by the caller). Grammar problems are not this walk's business:
-   * the guide build already threw on those, so anything non-list-shaped
-   * is skipped.
-   */
-  protected function collectUnmintedStops(array $node, string $where, array $tokens, array $defaults, array &$drift): void {
-    $spaces = $node['valueSpaces'] ?? [];
-    foreach (is_array($spaces) ? $spaces : [] as $property => $block) {
-      if (!is_array($block) || !is_string($block['scale'] ?? NULL) || !is_array($block['stops'] ?? NULL)) {
-        continue;
-      }
-      if (isset($defaults[$property]) && $defaults[$property] === $block) {
-        continue;
-      }
-      $minted = array_map('strval', array_keys($tokens[$block['scale']] ?? []));
-      $unminted = array_filter(
-        array_map('strval', array_filter($block['stops'], 'is_scalar')),
-        static fn (string $name) => !in_array($name, $minted, TRUE),
-      );
-      if ($unminted !== []) {
-        $drift[] = sprintf('%s of %s ("%s" scale: %s)', $property, $where, $block['scale'], implode(', ', $unminted));
-      }
-    }
-    if (is_array($node['children'] ?? NULL)) {
-      $this->collectUnmintedStops($node['children'], sprintf('the children of %s', $where), $tokens, $defaults, $drift);
-    }
-    foreach (is_array($node['pseudo'] ?? NULL) ? $node['pseudo'] : [] as $pseudo => $box) {
-      if (is_array($box)) {
-        $this->collectUnmintedStops($box, sprintf('the ::%s box of %s', $pseudo, $where), $tokens, $defaults, $drift);
-      }
-    }
-    foreach (is_array($node['elements'] ?? NULL) ? $node['elements'] : [] as $selector => $part) {
-      if (is_array($part)) {
-        $this->collectUnmintedStops($part, sprintf('part "%s" of %s', $selector, $where), $tokens, $defaults, $drift);
-      }
-    }
   }
 
 }

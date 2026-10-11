@@ -7,6 +7,7 @@ namespace Drupal\Tests\daedalus_stylish\Kernel;
 // cspell:ignore blorp
 use Drupal\daedalus_blueprint\Materials\Address;
 use Drupal\daedalus_blueprint\Result\BlueprintError;
+use Drupal\daedalus_stylish\Plugin\Field\FieldType\SkinTokensItem;
 use Drupal\KernelTests\KernelTestBase;
 use Drupal\daedalus_stylish\ClientStyleGuide;
 use Drupal\daedalus_stylish\Entity\DaedalusStylishSkin;
@@ -76,6 +77,7 @@ class TokenConsumptionTest extends KernelTestBase {
     // consumer needs the swatch entity schema.
     $this->installEntitySchema('daedalus_swatch');
     $this->installEntitySchema('daedalus_animation');
+    $this->installEntitySchema('daedalus_font');
     $this->installEntitySchema('user');
     $this->installEntitySchema('daedalus_skin');
     // Material references resolve through the materials roster, whose
@@ -86,7 +88,13 @@ class TokenConsumptionTest extends KernelTestBase {
     // definitions (ShippedSync::onDesignSystemActivated()): the importers
     // mirror motion-* and --swatch-* references into the usage tables and
     // switch to an administrative account, so the fixture carries both.
-    $this->installSchema('daedalus_stylish', ['daedalus_variant_usage', 'daedalus_swatch_usage', 'daedalus_animation_usage']);
+    $this->installSchema('daedalus_stylish', [
+      'daedalus_variant_usage',
+      'daedalus_swatch_usage',
+      'daedalus_animation_usage',
+      'daedalus_token_usage',
+      'daedalus_font_usage',
+    ]);
     $this->setUpCurrentUser([], [], TRUE);
     $this->container->get('state')->set('daedalus_stylish_control_test.site', [
       'token_scales' => [
@@ -112,7 +120,7 @@ class TokenConsumptionTest extends KernelTestBase {
     $this->container->get('daedalus_stylish.style_guide')->resetCache();
 
     $skin = DaedalusStylishSkin::create(['label' => 'Aurora']);
-    $skin->setTokens([
+    $skin->setPackageTokens([
       'space' => ['4' => '1rem', 'gutter' => '2.5rem'],
       'color' => ['accent' => ['default' => '#1a1a2e', 'dark' => '#e8e8f0']],
     ])->save();
@@ -255,7 +263,7 @@ class TokenConsumptionTest extends KernelTestBase {
     // Minting the token and revalidating in the same request must see the
     // fresh universe (the skin save resets the memo).
     $skin = $this->container->get('daedalus_stylish.skin_manager')->loadActiveSkin();
-    $skin->setTokens(['space' => ['4' => '1rem', 'gutter' => '2.5rem', '8' => '2rem']])->save();
+    $skin->setPackageTokens(['space' => ['4' => '1rem', 'gutter' => '2.5rem', '8' => '2rem']])->save();
     $this->assertSame([], $this->validateStyles(['margin' => 'var(--space-8)']));
   }
 
@@ -264,15 +272,17 @@ class TokenConsumptionTest extends KernelTestBase {
    */
   public function testTokenValueReferences(): void {
     $validator = $this->container->get('daedalus_stylish.style_map_validator');
-    $tokens = [
+    // The seam validates records; the fixtures pass through the door's
+    // canonicalization like every authored payload.
+    $tokens = SkinTokensItem::canonicalizeTokens([
       'color' => [
         'accent' => '#1a1a2e',
         'accent-hover' => 'var(--color-accent)',
       ],
-    ];
+    ]);
     // Permissive: references pass structurally, minted or not.
     $this->assertSame([], $validator->validateTokens($tokens, ['theme' => self::THEME]));
-    $orphan = ['color' => ['accent-hover' => 'var(--color-accent)']];
+    $orphan = SkinTokensItem::canonicalizeTokens(['color' => ['accent-hover' => 'var(--color-accent)']]);
     $this->assertSame([], $validator->validateTokens($orphan, ['theme' => self::THEME]));
 
     // Strict: the universe is the SUBMITTED map — the skin's whole set.
@@ -280,17 +290,19 @@ class TokenConsumptionTest extends KernelTestBase {
     $this->assertSame([], $validator->validateTokens($tokens, ['theme' => self::THEME]));
     $errors = $validator->validateTokens($orphan, ['theme' => self::THEME]);
     $error = $this->assertSingleError($errors, 'STYLE_TOKEN_NOT_MINTED');
-    $this->assertSame('color.accent-hover', $error->getPath());
+    $this->assertSame('color.accent-hover.value', $error->getPath());
     // The corrective pairs what the submitted map DOES mint on the scale
     // with each token's value: the nearest valid reference is one of these.
     $this->assertSame(['accent-hover'], $error->getContext()['minted']);
     $this->assertStringContainsString('Tokens this skin mints on the "color" scale: var(--color-accent-hover) = var(--color-accent).', $error->getHint());
     // Out-of-namespace variables pass in token values too.
-    $this->assertSame([], $validator->validateTokens(['color' => ['accent' => 'var(--brand-accent)']], ['theme' => self::THEME]));
+    $this->assertSame([], $validator->validateTokens(SkinTokensItem::canonicalizeTokens(['color' => ['accent' => 'var(--brand-accent)']]), ['theme' => self::THEME]));
     // Condition-keyed values are checked per condition.
-    $conditioned = ['color' => ['accent-hover' => ['default' => '#111111', 'dark' => 'var(--color-accent)']]];
+    $conditioned = SkinTokensItem::canonicalizeTokens([
+      'color' => ['accent-hover' => ['default' => '#111111', 'dark' => 'var(--color-accent)']],
+    ]);
     $errors = $validator->validateTokens($conditioned, ['theme' => self::THEME]);
-    $this->assertSame('color.accent-hover.dark', $this->assertSingleError($errors, 'STYLE_TOKEN_NOT_MINTED')->getPath());
+    $this->assertSame('color.accent-hover.value.dark', $this->assertSingleError($errors, 'STYLE_TOKEN_NOT_MINTED')->getPath());
   }
 
   /**

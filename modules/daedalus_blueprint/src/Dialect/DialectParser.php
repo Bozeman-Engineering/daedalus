@@ -81,12 +81,14 @@ class DialectParser {
    */
   private const UNPREFIXED = [
     'container' => 'pb-container',
+    'slot' => 'pb-slot',
     'text' => 'pb-text',
     'formatted-text' => 'pb-formatted-text',
     'teaser' => 'pb-teaser',
     'block' => 'pb-block',
     'field' => 'pb-field',
-    'stencil' => 'pb-stencil',
+    'blueprint' => 'pb-blueprint',
+    'linked' => 'pb-linked',
   ];
 
   /**
@@ -98,10 +100,12 @@ class DialectParser {
   /**
    * Parses a full page document: top-level containers plus <style> blocks.
    *
-   * The top level holds <pb-container> elements and <pb-stencil>
-   * references (a placement lands as its root; the same set the insert
-   * door admits at the page's root anchor); blocks belong inside a
-   * container. Beside them, write-only: <style> blocks and <pb-file
+   * The top level holds <pb-container> elements, <pb-slot> sections (a
+   * container filling a slot of the document around this one, top level
+   * only) and <pb-blueprint> references (a placement lands as its root;
+   * the same set the insert door admits at the page's root anchor);
+   * blocks belong inside a container, a linked placement (<pb-linked>, a
+   * block) among them. Beside them, write-only: <style> blocks and <pb-file
    * name type> declarations (bytes the author wrote, carried on the
    * result's files for the op layer to save before the tree lands; they
    * never print, since after commit a declared file is media).
@@ -131,10 +135,11 @@ class DialectParser {
         }
         continue;
       }
-      if (!in_array($child->tag, ['pb-container', 'pb-stencil'], TRUE) && !isset(self::SUGAR[$child->tag]) && !isset(self::UNPREFIXED[$child->tag])) {
+      if (!in_array($child->tag, [...DialectWalk::CONTAINER_TAGS, 'pb-blueprint'], TRUE) && !isset(self::SUGAR[$child->tag]) && !isset(self::UNPREFIXED[$child->tag])) {
         if ($catalog->blockType((string) DialectCatalog::blockTypeForTag($child->tag)) !== NULL || in_array($child->tag, [
           'pb-block',
           'pb-field',
+          DialectWalk::LINKED_TAG,
         ], TRUE)) {
           $walk->errors[] = new DialectError('ILLEGAL_CONTAINMENT', sprintf('top level of a page holds <pb-container> elements; <%s> belongs inside one', $child->tag), $child->line);
         }

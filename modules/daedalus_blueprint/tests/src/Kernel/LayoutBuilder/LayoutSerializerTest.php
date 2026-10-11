@@ -14,7 +14,14 @@ use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 
 /**
- * Tests the LayoutSerializer service.
+ * Tests the LayoutSerializer service: the lean node tree's one producer.
+ *
+ * A host's sections serialize as kind-discriminated container, region and
+ * block nodes with ONE child axis at every depth (a one-column layout's
+ * sole region is a region node under its container), sparse facts on the
+ * node (label, label_rendered, a non-default view_mode, blueprint, styles)
+ * and no storage residue (no regions map, section_index, weight, region,
+ * label_display or block_revision_id).
  */
 #[CoversClass(LayoutSerializer::class)]
 #[Group('daedalus_blueprint')]
@@ -27,6 +34,13 @@ class LayoutSerializerTest extends BlueprintKernelTestBase {
    * @var \Drupal\daedalus_blueprint\LayoutBuilder\LayoutSerializer
    */
   protected LayoutSerializer $layoutSerializer;
+
+  /**
+   * The block nodes of a one-column container: its sole region's children.
+   */
+  protected static function contentOf(array $container): array {
+    return $container['children'][0]['children'];
+  }
 
   /**
    * {@inheritdoc}
@@ -53,7 +67,7 @@ class LayoutSerializerTest extends BlueprintKernelTestBase {
    */
   public function testSerializeEmptyLayout(): void {
     $entity = $this->createTestEntity();
-    $this->assertSame([], $this->layoutSerializer->serialize($entity));
+    $this->assertSame([], $this->layoutSerializer->serialize($this->host($entity)));
   }
 
   /**
@@ -70,13 +84,13 @@ class LayoutSerializerTest extends BlueprintKernelTestBase {
     $display->removeAllSections(TRUE)->save();
 
     $entity = $this->createTestEntity();
-    $this->assertSame([], $this->layoutSerializer->serialize($entity), 'A blank-only display default reads as no sections.');
+    $this->assertSame([], $this->layoutSerializer->serialize($this->host($entity)), 'A blank-only display default reads as no sections.');
 
     $entity->set('layout_builder__layout', [new Section('layout_builder_blank')]);
     $entity->save();
     $entity = $this->entityTypeManager->getStorage('entity_test')->load($entity->id());
     $this->assertSame('layout_builder_blank', $entity->get('layout_builder__layout')->getSections()[0]->getLayoutId());
-    $this->assertSame([], $this->layoutSerializer->serialize($entity), 'A persisted blank placeholder reads as no sections.');
+    $this->assertSame([], $this->layoutSerializer->serialize($this->host($entity)), 'A persisted blank placeholder reads as no sections.');
   }
 
   /**
@@ -90,11 +104,16 @@ class LayoutSerializerTest extends BlueprintKernelTestBase {
     $entity->save();
     $entity = $this->entityTypeManager->getStorage('entity_test')->load($entity->id());
 
-    $result = $this->layoutSerializer->serialize($entity);
+    $result = $this->layoutSerializer->serialize($this->host($entity));
 
     $this->assertCount(1, $result);
+    $this->assertSame('container', $result[0]['kind']);
     $this->assertSame('layout_onecol', $result[0]['layout_id']);
-    $this->assertSame(['content' => []], $result[0]['regions']);
+    // A multi-region-capable layout's slots are region nodes, empty ones
+    // included: the tree has one child axis and never a regions map.
+    $this->assertSame([['kind' => 'region', 'region' => 'content', 'children' => []]], $result[0]['children']);
+    $this->assertArrayNotHasKey('regions', $result[0]);
+    $this->assertArrayNotHasKey('section_index', $result[0]);
     $this->assertArrayNotHasKey('layout_settings', $result[0]);
     $this->assertArrayNotHasKey('third_party_settings', $result[0]);
     $this->assertArrayNotHasKey('uuid', $result[0]);
@@ -138,23 +157,165 @@ class LayoutSerializerTest extends BlueprintKernelTestBase {
     $entity->save();
     $entity = $this->entityTypeManager->getStorage('entity_test')->load($entity->id());
 
-    $result = $this->layoutSerializer->serialize($entity);
+    $result = $this->layoutSerializer->serialize($this->host($entity));
 
     $this->assertCount(1, $result);
-    $component = $result[0]['regions']['content'][0];
+    $component = self::contentOf($result[0])[0];
 
+    $this->assertSame('block', $component['kind']);
     $this->assertSame($comp_uuid, $component['uuid']);
-    $this->assertArrayNotHasKey('region', $component);
-    $this->assertArrayNotHasKey('weight', $component);
+    // Storage residue never reaches the node: position is the tree's,
+    // the label fact is label_rendered, the default view mode is implied
+    // and the revision is nobody's to read.
+    foreach (['region', 'weight', 'label_display', 'view_mode', 'block_revision_id', 'regions'] as $residue) {
+      $this->assertArrayNotHasKey($residue, $component);
+    }
     $this->assertSame('text_section', $component['block_type']);
     $this->assertSame('Welcome Text', $component['label']);
-    $this->assertSame('full', $component['view_mode']);
-    $this->assertIsInt($component['block_revision_id']);
+    $this->assertTrue($component['label_rendered']);
     $this->assertArrayHasKey('block_fields', $component);
     $this->assertSame('<p>Hello world</p>', $component['block_fields']['body']['value']);
     $this->assertSame('plain_text', $component['block_fields']['body']['format']);
     // No plugin_id on inline blocks.
     $this->assertArrayNotHasKey('plugin_id', $component);
+  }
+
+  /**
+   * A non-default view mode rides the node; a hidden label is not rendered.
+   */
+  public function testNonDefaultViewModeAndHiddenLabel(): void {
+    $entity = $this->createTestEntity();
+
+    $block = $this->entityTypeManager->getStorage('block_content')->create([
+      'type' => 'text_section',
+      'info' => 'Teaser',
+      'reusable' => FALSE,
+      'body' => ['value' => '<p>Teaser</p>', 'format' => 'plain_text'],
+    ]);
+    $block->save();
+
+    $configuration = $this->createInlineBlockConfiguration('text_section', $block, 'Teaser');
+    $configuration['view_mode'] = 'teaser';
+    $configuration['label_display'] = '0';
+    $section = $this->createSection('layout_onecol', [
+      [
+        'uuid' => 'd874430b-a2a5-0cb2-93ff-7d6a2958e3fe',
+        'region' => 'content',
+        'weight' => 0,
+        'configuration' => $configuration,
+      ],
+    ]);
+
+    $entity->get('layout_builder__layout')->appendSection($section);
+    $entity->save();
+    $entity = $this->entityTypeManager->getStorage('entity_test')->load($entity->id());
+
+    $component = self::contentOf($this->layoutSerializer->serialize($this->host($entity))[0])[0];
+    $this->assertSame('teaser', $component['view_mode']);
+    $this->assertSame('Teaser', $component['label']);
+    $this->assertArrayNotHasKey('label_rendered', $component);
+  }
+
+  /**
+   * A field block names its field; the per-bundle derivative never rides.
+   *
+   * Core places a host's field as field_block:{type}:{bundle}:{field}; the
+   * tree spells the field alone (the destination host supplies the
+   * derivative on write), with the formatter's own keys as its
+   * configuration like any plugin block's. A plugin block that is no field
+   * block keeps its plugin_id.
+   */
+  public function testFieldBlockNamesTheField(): void {
+    $entity = $this->createTestEntity();
+    $section = $this->createSection('layout_onecol', [
+      [
+        'uuid' => 'a1b2c3d4-0000-4000-8000-000000000001',
+        'region' => 'content',
+        'weight' => 0,
+        'configuration' => [
+          'id' => 'field_block:entity_test:entity_test:name',
+          'provider' => 'layout_builder',
+          'label' => 'Name',
+          'label_display' => 'visible',
+          'context_mapping' => ['entity' => 'layout_builder.entity'],
+          'formatter' => ['type' => 'string', 'label' => 'inline', 'settings' => ['link_to_entity' => FALSE], 'third_party_settings' => []],
+        ],
+      ],
+      [
+        'uuid' => 'a1b2c3d4-0000-4000-8000-000000000002',
+        'region' => 'content',
+        'weight' => 1,
+        'configuration' => ['id' => 'system_powered_by_block', 'provider' => 'system', 'label' => '', 'label_display' => '0'],
+      ],
+    ]);
+    $entity->get('layout_builder__layout')->appendSection($section);
+    $entity->save();
+    $entity = $this->entityTypeManager->getStorage('entity_test')->load($entity->id());
+
+    [$field, $plugin] = self::contentOf($this->layoutSerializer->serialize($this->host($entity))[0]);
+    $this->assertSame('block', $field['kind']);
+    $this->assertSame('name', $field['field']);
+    $this->assertArrayNotHasKey('plugin_id', $field);
+    $this->assertArrayNotHasKey('block_type', $field);
+    $this->assertSame('Name', $field['label']);
+    $this->assertTrue($field['label_rendered']);
+    $this->assertSame(['formatter'], array_keys($field['configuration']), 'The formatter is the field block\'s own configuration; id, provider and context_mapping are the spine\'s.');
+    $this->assertSame('inline', $field['configuration']['formatter']['label']);
+
+    $this->assertSame('system_powered_by_block', $plugin['plugin_id']);
+    $this->assertArrayNotHasKey('field', $plugin);
+
+    // The summary pares the configuration and keeps the identity.
+    [$summary] = self::contentOf($this->layoutSerializer->serializeSummary($this->host($entity))[0]);
+    $this->assertSame('name', $summary['field']);
+    $this->assertArrayNotHasKey('configuration', $summary);
+  }
+
+  /**
+   * The styles a caller hands in ride the nodes they address.
+   *
+   * The host's own map is the default; a given map (what delivery is
+   * about to print) is distributed instead, and keys addressing no node
+   * of the document stay out of the tree.
+   */
+  public function testGivenStylesRideTheNodes(): void {
+    $entity = $this->createTestEntity();
+    $block = $this->entityTypeManager->getStorage('block_content')->create([
+      'type' => 'text_section',
+      'info' => 'Styled',
+      'reusable' => FALSE,
+    ]);
+    $block->save();
+    $block_uuid = 'd874430b-a2a5-0cb2-93ff-7d6a2958e3ff';
+    $section = $this->createSection('layout_onecol', [
+      [
+        'uuid' => $block_uuid,
+        'region' => 'content',
+        'weight' => 0,
+        'configuration' => $this->createInlineBlockConfiguration('text_section', $block, 'Styled'),
+      ],
+    ]);
+    $entity->get('layout_builder__layout')->appendSection($section);
+    $entity->save();
+    $entity = $this->entityTypeManager->getStorage('entity_test')->load($entity->id());
+
+    $map = [
+      'entity:' . $entity->uuid() => ['default' => ['margin' => '0']],
+      "block:$block_uuid" => ['default' => ['color' => 'red']],
+      "block:$block_uuid::p" => ['default' => ['gap' => '1rem']],
+      'block:00000000-0000-4000-8000-000000000000' => ['default' => ['color' => 'blue']],
+    ];
+    $tree = $this->layoutSerializer->serialize($this->host($entity), $map);
+    $this->assertSame([
+      '' => ['default' => ['color' => 'red']],
+      '::p' => ['default' => ['gap' => '1rem']],
+    ], self::contentOf($tree[0])[0]['styles']);
+    $this->assertArrayNotHasKey('styles', $tree[0]);
+
+    // Without a style store, the host's own map is empty: no node wears
+    // anything.
+    $tree = $this->layoutSerializer->serialize($this->host($entity));
+    $this->assertArrayNotHasKey('styles', self::contentOf($tree[0])[0]);
   }
 
   /**
@@ -198,8 +359,8 @@ class LayoutSerializerTest extends BlueprintKernelTestBase {
     $entity->save();
     $entity = $this->entityTypeManager->getStorage('entity_test')->load($entity->id());
 
-    $result = $this->layoutSerializer->serialize($entity);
-    $components = $result[0]['regions']['content'];
+    $result = $this->layoutSerializer->serialize($this->host($entity));
+    $components = self::contentOf($result[0]);
 
     $this->assertCount(2, $components);
     // Verify order: components are sorted by weight (appendComponent order).
@@ -221,7 +382,7 @@ class LayoutSerializerTest extends BlueprintKernelTestBase {
     $entity->save();
     $entity = $this->entityTypeManager->getStorage('entity_test')->load($entity->id());
 
-    $result = $this->layoutSerializer->serialize($entity);
+    $result = $this->layoutSerializer->serialize($this->host($entity));
 
     $this->assertCount(2, $result);
     $this->assertSame('layout_onecol', $result[0]['layout_id']);
@@ -263,12 +424,12 @@ class LayoutSerializerTest extends BlueprintKernelTestBase {
     $entity->save();
     $entity = $this->entityTypeManager->getStorage('entity_test')->load($entity->id());
 
-    $result = $this->layoutSerializer->serialize($entity);
+    $result = $this->layoutSerializer->serialize($this->host($entity));
 
     // Non-managed opaque data should not appear.
     $this->assertArrayNotHasKey('layout_settings', $result[0]);
     $this->assertArrayNotHasKey('third_party_settings', $result[0]);
-    $this->assertArrayNotHasKey('additional', $result[0]['regions']['content'][0]);
+    $this->assertArrayNotHasKey('additional', self::contentOf($result[0])[0]);
   }
 
   /**
@@ -322,7 +483,7 @@ class LayoutSerializerTest extends BlueprintKernelTestBase {
     $entity->save();
     $entity = $this->entityTypeManager->getStorage('entity_test')->load($entity->id());
 
-    $result = $layout_serializer->serialize($entity);
+    $result = $layout_serializer->serialize($this->host($entity));
 
     // Managed layout_settings visible, non-managed excluded.
     $this->assertArrayHasKey('layout_settings', $result[0]);
@@ -332,7 +493,7 @@ class LayoutSerializerTest extends BlueprintKernelTestBase {
 
     // Third party settings and additional are always hidden.
     $this->assertArrayNotHasKey('third_party_settings', $result[0]);
-    $this->assertArrayNotHasKey('additional', $result[0]['regions']['content'][0]);
+    $this->assertArrayNotHasKey('additional', self::contentOf($result[0])[0]);
   }
 
   /**
@@ -366,8 +527,8 @@ class LayoutSerializerTest extends BlueprintKernelTestBase {
     $entity->save();
     $entity = $this->entityTypeManager->getStorage('entity_test')->load($entity->id());
 
-    $result = $this->layoutSerializer->serialize($entity);
-    $block_fields = $result[0]['regions']['content'][0]['block_fields'];
+    $result = $this->layoutSerializer->serialize($this->host($entity));
+    $block_fields = self::contentOf($result[0])[0]['block_fields'];
 
     $this->assertSame('Card Title', $block_fields['field_heading']);
     $this->assertSame('<p>Card body</p>', $block_fields['field_text']['value']);
@@ -402,13 +563,13 @@ class LayoutSerializerTest extends BlueprintKernelTestBase {
     $entity = $this->entityTypeManager->getStorage('entity_test')->load($entity->id());
 
     $serializer = $this->container->get('daedalus_blueprint.serializer');
-    $result = $serializer->serialize($entity);
+    $result = $serializer->serialize($this->host($entity));
 
     // Should have both fields and layout.
     $this->assertArrayHasKey('fields', $result);
-    $this->assertArrayHasKey('layout_builder__layout', $result);
-    $this->assertCount(1, $result['layout_builder__layout']);
-    $this->assertSame('layout_onecol', $result['layout_builder__layout'][0]['layout_id']);
+    $this->assertArrayHasKey('layout', $result);
+    $this->assertCount(1, $result['layout']);
+    $this->assertSame('layout_onecol', $result['layout'][0]['layout_id']);
   }
 
   /**
@@ -419,9 +580,9 @@ class LayoutSerializerTest extends BlueprintKernelTestBase {
     $entity = $this->createRevEntity();
 
     $serializer = $this->container->get('daedalus_blueprint.serializer');
-    $result = $serializer->serialize($entity);
+    $result = $serializer->serialize($this->host($entity));
 
-    $this->assertArrayNotHasKey('layout_builder__layout', $result);
+    $this->assertArrayNotHasKey('layout', $result);
   }
 
   /**
@@ -461,8 +622,8 @@ class LayoutSerializerTest extends BlueprintKernelTestBase {
     $entity->save();
     $entity = $this->entityTypeManager->getStorage('entity_test')->load($entity->id());
 
-    $result = $this->layoutSerializer->serialize($entity);
-    $component = $result[0]['regions']['content'][0];
+    $result = $this->layoutSerializer->serialize($this->host($entity));
+    $component = self::contentOf($result[0])[0];
 
     $this->assertSame('text_section', $component['block_type']);
     $this->assertArrayHasKey('block_fields', $component);
@@ -497,8 +658,8 @@ class LayoutSerializerTest extends BlueprintKernelTestBase {
     $entity->save();
     $entity = $this->entityTypeManager->getStorage('entity_test')->load($entity->id());
 
-    $result = $this->layoutSerializer->serialize($entity);
-    $block_fields = $result[0]['regions']['content'][0]['block_fields'];
+    $result = $this->layoutSerializer->serialize($this->host($entity));
+    $block_fields = self::contentOf($result[0])[0]['block_fields'];
 
     // Internal/entity key fields should not appear.
     $this->assertArrayNotHasKey('id', $block_fields);
@@ -562,8 +723,8 @@ class LayoutSerializerTest extends BlueprintKernelTestBase {
     $entity->save();
     $entity = $this->entityTypeManager->getStorage('entity_test')->load($entity->id());
 
-    $result = $layout_serializer->serialize($entity);
-    $component = $result[0]['regions']['content'][0];
+    $result = $layout_serializer->serialize($this->host($entity));
+    $component = self::contentOf($result[0])[0];
 
     // Managed config keys should appear in configuration.
     $this->assertArrayHasKey('configuration', $component);
@@ -599,8 +760,8 @@ class LayoutSerializerTest extends BlueprintKernelTestBase {
     $entity->save();
     $entity = $this->entityTypeManager->getStorage('entity_test')->load($entity->id());
 
-    $result = $this->layoutSerializer->serialize($entity);
-    $component = $result[0]['regions']['content'][0];
+    $result = $this->layoutSerializer->serialize($this->host($entity));
+    $component = self::contentOf($result[0])[0];
 
     // Without managed keys, no configuration key.
     $this->assertArrayNotHasKey('configuration', $component);

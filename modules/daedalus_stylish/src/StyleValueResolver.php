@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Drupal\daedalus_stylish;
 
-use Drupal\Core\Entity\FieldableEntityInterface;
+use Drupal\daedalus_blueprint\Host\HostInterface;
 use Drupal\daedalus_blueprint\Result\BlueprintError;
 
 /**
@@ -97,8 +97,9 @@ final class StyleValueResolver {
    *   The style map as written: full selectable-key maps, element-relative
    *   variant styles, and update_style's one-key patch all share the entry
    *   shape.
-   * @param \Drupal\Core\Entity\FieldableEntityInterface|null $entity
-   *   The entity being written, when the lane has one (handler context).
+   * @param \Drupal\daedalus_blueprint\Host\HostInterface|null $host
+   *   The host being written, when the lane has one (the op spine's and
+   *   the style map field's; the variant lane carries none).
    * @param string $conversation
    *   The conversation the write belongs to (the op spine's 'conversation'
    *   option), '' when the caller has none (handler context).
@@ -108,7 +109,7 @@ final class StyleValueResolver {
    *   validate or commit), otherwise the stand-in map to validate plus the
    *   pending commits.
    */
-  public function check(array $map, ?FieldableEntityInterface $entity = NULL, string $conversation = ''): StyleValueResolution {
+  public function check(array $map, ?HostInterface $host = NULL, string $conversation = ''): StyleValueResolution {
     $errors = [];
     $pending = [];
     foreach ($map as $key => $entry) {
@@ -133,7 +134,7 @@ final class StyleValueResolver {
             'property' => $property,
             'path' => $at,
             'layer' => NULL,
-            'entity' => $entity,
+            'host' => $host,
             'conversation' => $conversation,
           ];
           $layers = array_is_list($value)

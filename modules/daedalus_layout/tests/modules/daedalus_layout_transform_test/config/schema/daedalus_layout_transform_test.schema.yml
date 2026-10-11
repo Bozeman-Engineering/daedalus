@@ -1,0 +1,7 @@
+core.entity_view_display.third_party.daedalus_layout_transform_test:
+  type: mapping
+  label: 'Transform test marks'
+  mapping:
+    legacy:
+      type: boolean
+      label: 'Whether the display is a legacy host the host transform renames'

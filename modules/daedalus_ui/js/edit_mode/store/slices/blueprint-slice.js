@@ -19,21 +19,34 @@ import { createSlice } from '@reduxjs/toolkit';
  * langcode, viewMode). It travels beside the blueprint because the
  * serializer does not emit the root uuid and mutation responses carry only
  * the blueprint.
+ *
+ * verdict is the host-level verdict ({can, refused}: what the actor may
+ * do at the root and, explained, why not; BlueprintElementAnnotator::
+ * hostVerdict), delivered on the envelope and refreshed by every mutation
+ * response beside the blueprint. The document notice reads it; the
+ * per-element verdicts ride the blueprint's `_element.can`.
  */
 const blueprintSlice = createSlice({
   name: 'blueprint',
   initialState: {
     root: null,
     blueprint: null,
+    verdict: null,
   },
   reducers: {
     blueprintBooted: (state, action) => {
-      const { blueprint, ...root } = action.payload;
+      const { blueprint, verdict = null, ...root } = action.payload;
       state.root = root;
       state.blueprint = blueprint;
+      state.verdict = verdict;
     },
+    // Payload: {blueprint, verdict?}. A response without a verdict (an
+    // older seam) leaves the one in place.
     blueprintReplaced: (state, action) => {
-      state.blueprint = action.payload;
+      state.blueprint = action.payload.blueprint;
+      if (action.payload.verdict !== undefined) {
+        state.verdict = action.payload.verdict;
+      }
     },
   },
 });

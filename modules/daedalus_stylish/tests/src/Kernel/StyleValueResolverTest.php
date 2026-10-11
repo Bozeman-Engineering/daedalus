@@ -13,6 +13,7 @@ use Drupal\daedalus_stylish_value_handler_test\TestStyleValueHandler;
 use Drupal\Tests\user\Traits\UserCreationTrait;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
+use Drupal\Tests\daedalus_stylish\Traits\HostTrait;
 
 /**
  * Tests the style grammar's input tier: the style-value handler seam.
@@ -35,6 +36,7 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 #[RunTestsInSeparateProcesses]
 class StyleValueResolverTest extends KernelTestBase {
 
+  use HostTrait;
   use UserCreationTrait;
 
   /**
@@ -286,7 +288,7 @@ class StyleValueResolverTest extends KernelTestBase {
     $gradient = 'linear-gradient(rgb(0 0 0 / 0.5), rgb(0 0 0 / 0.5))';
 
     // The patch writes the resolved canonical string.
-    $result = $operations->batchOperations($entity, [
+    $result = $operations->batchOperations($this->host($entity), [
       [
         'op' => 'update_style',
         'key' => $key,
@@ -305,7 +307,7 @@ class StyleValueResolverTest extends KernelTestBase {
     // A failing patch mints nothing: the guide violation beside the
     // handled value blocks the write before any resolve.
     $this->container->get('state')->delete(TestStyleValueHandler::RESOLVES);
-    $result = $operations->batchOperations($entity, [
+    $result = $operations->batchOperations($this->host($entity), [
       [
         'op' => 'update_style',
         'key' => $key,
@@ -320,7 +322,7 @@ class StyleValueResolverTest extends KernelTestBase {
     $this->assertSame([], $this->resolves());
 
     // Input-tier errors reroute onto the operation's properties path.
-    $result = $operations->batchOperations($entity, [
+    $result = $operations->batchOperations($this->host($entity), [
       [
         'op' => 'update_style',
         'key' => $key,

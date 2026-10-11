@@ -5,12 +5,17 @@ declare(strict_types=1);
 namespace Drupal\daedalus_blueprint\LayoutBuilder;
 
 use Drupal\Core\Block\BlockManagerInterface;
+use Drupal\Core\Block\MainContentBlockPluginInterface;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\Layout\LayoutPluginManagerInterface;
 use Drupal\Core\Plugin\Context\Context;
 use Drupal\Core\Plugin\Context\ContextDefinition;
 use Drupal\Core\Plugin\Context\ContextRepositoryInterface;
 use Drupal\Core\Plugin\Context\EntityContext;
+use Drupal\daedalus_blueprint\Plugin\Block\SlotBlock;
+use Drupal\daedalus_blueprint\Plugin\SectionStorage\FrameSectionStorage;
+use Drupal\daedalus_blueprint\Slot\SlotRoster;
+use Drupal\layout_builder\DefaultsSectionStorageInterface;
 use Drupal\layout_builder\Section;
 use Drupal\layout_builder\SectionStorageInterface;
 
@@ -47,6 +52,8 @@ class PlacementRestrictions implements PlacementRestrictionsInterface {
    *   The entity type manager.
    * @param \Drupal\Core\Plugin\Context\ContextRepositoryInterface $contextRepository
    *   The context repository, for context-aware definition filtering.
+   * @param \Drupal\daedalus_blueprint\Slot\SlotRoster $slotRoster
+   *   The slot roster: which tier of the stack declares each slot.
    * @param \Drupal\Core\Layout\LayoutPluginManagerInterface|null $layoutPluginManager
    *   The layout plugin manager (NULL when layout_discovery is not installed).
    * @param object|null $sectionStorageManager
@@ -57,6 +64,7 @@ class PlacementRestrictions implements PlacementRestrictionsInterface {
     protected BlockManagerInterface $blockManager,
     protected EntityTypeManagerInterface $entityTypeManager,
     protected ContextRepositoryInterface $contextRepository,
+    protected SlotRoster $slotRoster,
     protected ?LayoutPluginManagerInterface $layoutPluginManager = NULL,
     protected ?object $sectionStorageManager = NULL,
   ) {}
@@ -85,7 +93,108 @@ class PlacementRestrictions implements PlacementRestrictionsInterface {
         }
       }
     }
-    return $this->blockManager->getFilteredDefinitions('layout_builder', $contexts, $extra);
+    $definitions = $this->blockManager->getFilteredDefinitions('layout_builder', $contexts, $extra);
+    // The fallback plugin core instantiates for a missing block is a
+    // definition like any other, so the filter leaves it in; core's UI hides
+    // it in BlockManager::getSortedDefinitions(), which this roster does not
+    // go through. Dropped here, at the spine, so no consumer (the Add panel,
+    // the schema, the validator) ever offers "Broken/Missing" as a block to
+    // place.
+    unset($definitions['broken']);
+    // A slot is declared by exactly one tier of the render stack, the site
+    // frame (the chrome's slots) or a template (the areas a locked page
+    // fills), never both: a slot door asks the documents beneath it for
+    // the section tagged with its id, door by door, so one page section
+    // would fill two doors and render twice. The roster names each slot's
+    // tier (SlotRoster), and a slot block is offered where the destination
+    // is a document of that tier (the frame's storage for the frame tier,
+    // a template's defaults storage for the template tier) and nowhere
+    // else: a page and a blueprint declare none. Decided here, at the
+    // spine, so the Add panel, the schema and the op door agree, and the
+    // verdict reads the same tier (OwnershipPolicy::doorOf()).
+    $destination_tier = $this->slotDestinationTier($storage);
+    foreach (array_keys($definitions) as $plugin_id) {
+      $slot = SlotBlock::slotIdOf($plugin_id);
+      if ($slot !== NULL && ($destination_tier === NULL || $this->slotRoster->tier($slot) !== $destination_tier)) {
+        unset($definitions[$plugin_id]);
+      }
+    }
+    // The site frame is the page's chrome, so it offers the blocks that
+    // make a page and core's Layout Builder filter drops from every
+    // document (LayoutBuilderHooks::pluginFilterBlockLayoutBuilderAlter():
+    // the title, the messages, help, local tasks and actions, placed by
+    // the page display variant's contract rather than a document's), and
+    // never the main content: the frame's main slot (FrameHost::MAIN_SLOT)
+    // is where the variant drops what the route produced, and a block that
+    // would show it a second time (core's system_main_block, any
+    // MainContentBlockPluginInterface) is refused. Decided here for the
+    // same reason as the slot.
+    if ($this->isFrameDestination($storage)) {
+      foreach (self::FRAME_PAGE_BLOCKS as $plugin_id) {
+        if (!isset($definitions[$plugin_id]) && $this->blockManager->hasDefinition($plugin_id)) {
+          $definitions[$plugin_id] = $this->blockManager->getDefinition($plugin_id);
+        }
+      }
+      foreach ($definitions as $plugin_id => $definition) {
+        if (isset($definition['class']) && is_a($definition['class'], MainContentBlockPluginInterface::class, TRUE)) {
+          unset($definitions[$plugin_id]);
+        }
+      }
+    }
+    return $definitions;
+  }
+
+  /**
+   * The roster tier a destination storage declares slots for, or NULL.
+   *
+   * A template (a defaults storage) and the site frame (the frame storage)
+   * are the outer layers of the document stack, the ones a page's or a
+   * template's own sections fill: the frame declares the frame tier's
+   * slots, a template the template tier's. A page's own storage and a
+   * blueprint's declare none. The nested-aware wrapper is unwrapped to its
+   * root: a slot placed in a nested section of a template is still placed
+   * in the template.
+   */
+  protected function slotDestinationTier(?SectionStorageInterface $storage): ?string {
+    if ($storage === NULL) {
+      return NULL;
+    }
+    if (method_exists($storage, 'getRootStorage')) {
+      $storage = $storage->getRootStorage();
+    }
+    if ($storage instanceof FrameSectionStorage) {
+      return SlotRoster::TIER_FRAME;
+    }
+    return $storage instanceof DefaultsSectionStorageInterface ? SlotRoster::TIER_TEMPLATE : NULL;
+  }
+
+  /**
+   * The page-level blocks the site frame offers.
+   *
+   * What core's Layout Builder filter removes from a document's offer
+   * because a document is never a whole page; the frame is one. The main
+   * content block is not among them: the frame's main slot is the main
+   * content.
+   */
+  public const FRAME_PAGE_BLOCKS = [
+    'page_title_block',
+    'system_messages_block',
+    'help_block',
+    'local_tasks_block',
+    'local_actions_block',
+  ];
+
+  /**
+   * Whether a destination storage is the site frame's.
+   */
+  protected function isFrameDestination(?SectionStorageInterface $storage): bool {
+    if ($storage === NULL) {
+      return FALSE;
+    }
+    if (method_exists($storage, 'getRootStorage')) {
+      $storage = $storage->getRootStorage();
+    }
+    return $storage instanceof FrameSectionStorage;
   }
 
   /**

@@ -58,6 +58,7 @@ class DaedalusStylishSwatchTest extends KernelTestBase {
     $this->installEntitySchema('user');
     $this->installEntitySchema('daedalus_swatch');
     $this->installEntitySchema('daedalus_animation');
+    $this->installEntitySchema('daedalus_font');
     // The materials roster's daedalus_stylish provider reads all four storages on
     // every build, and every compile and validation builds it.
     $this->installEntitySchema('daedalus_variant');

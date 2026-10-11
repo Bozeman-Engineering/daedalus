@@ -8,6 +8,7 @@ dependencies:
   # The file lane (file.upload_handler), the SVG sanitizer (FileValidationEvent) and the media upload controller.
   - drupal:file
   - drupal:navigation
+  - drupal:block_content
   - twig_events:twig_events
   - daedalus:daedalus_tempstore
   - daedalus:daedalus_blueprint_api

@@ -8,17 +8,17 @@ use Drupal\Core\DependencyInjection\Container;
 use Drupal\Core\Entity\EntityFieldManagerInterface;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\Logger\LoggerChannelFactoryInterface;
+use Drupal\daedalus_blueprint\Host\HostResolver;
 use Drupal\daedalus_layout\ComponentTransform\ComponentTransformRegistry;
 use Drupal\daedalus_layout\ComponentTransform\HostEntityWalker;
 
 /**
  * Renames a variant machine name across every store, once.
  *
- * A shipped variant's machine name is identity in three stores: host style
- * maps reference it ({variant, fragment, via} items, the map lane), stored
- * stencils name it (the bare-name list the exporter writes) and variant
- * styles nest it (a composition's slot entries, the variant-styles lane).
- * This service owns the rewrite of all three plus the retirement of the
+ * A shipped variant's machine name is identity in two stores: host style
+ * maps reference it ({variant, fragment, via} items, the map lane) and
+ * variant styles nest it (a composition's slot entries, the variant-styles
+ * lane). This service owns the rewrite of both plus the retirement of the
  * old shipped entity, so a rename post-update speaks through one
  * implementation and names only the two spellings.
  *
@@ -40,6 +40,7 @@ class VariantRename {
     protected EntityTypeManagerInterface $entityTypeManager,
     protected EntityFieldManagerInterface $entityFieldManager,
     protected LoggerChannelFactoryInterface $loggerFactory,
+    protected HostResolver $hostResolver,
   ) {}
 
   /**
@@ -78,7 +79,7 @@ class VariantRename {
     $walker = new HostEntityWalker(
       $this->entityTypeManager,
       $this->entityFieldManager,
-      new ComponentTransformRegistry($services, [], [], [self::SWEEP_ID]),
+      new ComponentTransformRegistry($services, [], [], [self::SWEEP_ID], $this->hostResolver),
     );
     return $walker->walk($sandbox);
   }
@@ -182,82 +183,7 @@ class VariantRename {
     return $lines;
   }
 
-  /**
-   * Renames $from to $to in every stored stencil's bare-name variant lists.
-   *
-   * File-shipped stencils are module code and cannot be rewritten here.
-   * Every node depth is walked (the current `children` grammar and the
-   * retired `regions` one, so no stored stencil escapes).
-   *
-   * @return string[]
-   *   Report lines.
-   */
-  public function renameInStencils(string $from, string $to): array {
-    $lines = [];
-    if (!$this->entityTypeManager->hasDefinition('stencil')) {
-      return $lines;
-    }
-    $storage = $this->entityTypeManager->getStorage('stencil');
-    $ids = $storage->getQuery()->accessCheck(FALSE)->execute();
-    foreach ($storage->loadMultiple($ids) as $stencil) {
-      /** @var \Drupal\daedalus_blueprint_stencil\StencilInterface $stencil */
-      $changed = FALSE;
-      $element = $this->renameInStencilNode($stencil->getElement(), $from, $to, sprintf('Stencil "%s"', $stencil->getMachineName()), $lines, $changed);
-      if ($changed) {
-        $stencil->setElement($element);
-        $stencil->save();
-      }
-    }
-    return $lines;
-  }
 
-  /**
-   * Recursively renames one stencil node's bare-name variant lists.
-   */
-  protected function renameInStencilNode(array $node, string $from, string $to, string $context, array &$lines, bool &$changed): array {
-    if (!empty($node['children']) && is_array($node['children'])) {
-      foreach ($node['children'] as $i => $child) {
-        if (is_array($child)) {
-          $node['children'][$i] = $this->renameInStencilNode($child, $from, $to, $context, $lines, $changed);
-        }
-      }
-    }
-    if (!empty($node['regions']) && is_array($node['regions'])) {
-      foreach ($node['regions'] as $region => $children) {
-        if (!is_array($children)) {
-          continue;
-        }
-        foreach ($children as $i => $child) {
-          if (is_array($child)) {
-            $node['regions'][$region][$i] = $this->renameInStencilNode($child, $from, $to, $context, $lines, $changed);
-          }
-        }
-      }
-    }
-    if (empty($node['styles']) || !is_array($node['styles'])) {
-      return $node;
-    }
-    foreach ($node['styles'] as $relative => $entry) {
-      if (!is_array($entry) || empty($entry['variants']) || !is_array($entry['variants']) || !in_array($from, $entry['variants'], TRUE)) {
-        continue;
-      }
-      $names = [];
-      foreach ($entry['variants'] as $name) {
-        if ($name === $from) {
-          $name = $to;
-        }
-        if (in_array($name, $names, TRUE)) {
-          $this->report($lines, sprintf('%s styles %s: dropped a duplicate "%s" name after the rename.', $context, $relative, is_string($name) ? $name : '?'));
-          continue;
-        }
-        $names[] = $name;
-      }
-      $node['styles'][$relative]['variants'] = $names;
-      $this->report($lines, sprintf('%s styles %s: renamed the "%s" variant name to "%s".', $context, $relative, $from, $to));
-      $changed = TRUE;
-    }
-    return $node;
-  }
 
   /**
    * Deletes a provider's unmodified shipped variant under a retired name.

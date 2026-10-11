@@ -68,7 +68,7 @@ final class EntityUiWrapper implements EventSubscriberInterface {
 
     // Is this the main entity for the page?
     $main_entity = '';
-    $entity = $this->daedalusUi->deriveEntityFromRoute();
+    $entity = $this->daedalusUi->deriveHostFromRoute()?->entity();
     if (
       !empty($entity) &&
       $entity_info['entity_type'] === $entity->getEntityTypeId() &&
@@ -81,14 +81,12 @@ final class EntityUiWrapper implements EventSubscriberInterface {
     }
 
     // Stamp the entity root's selection identity (selectable key) and the
-    // metadata entities are loaded by. Inline-block content is skipped: its
+    // metadata entities are loaded by. Block content is skipped: its
     // canonical identity is the Layout Builder placement
-    // (block:{component_uuid}), not its block_content entity. The exception
-    // is a block_content that is the route's entity: on its standalone
-    // editing surface it is the page builder root and its selection identity
-    // IS the entity (mirroring DaedalusUiHooks::entityView()).
+    // (block:{component_uuid}), never its block_content entity (mirroring
+    // DaedalusUiHooks::entityView()).
     $selectable = '';
-    if (!empty($entity_info['uuid']) && ($entity_info['entity_type'] !== 'block_content' || $main_entity !== '')) {
+    if (!empty($entity_info['uuid']) && $entity_info['entity_type'] !== 'block_content') {
       $selectable = sprintf(' %s="%s" data-entity-type="%s" data-entity-id="%s"', SelectableKey::ATTRIBUTE, SelectableKey::entity($entity_info['uuid']), $entity_info['entity_type'], $entity_info['entity_id']);
     }
 

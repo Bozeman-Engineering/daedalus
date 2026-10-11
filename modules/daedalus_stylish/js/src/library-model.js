@@ -12,7 +12,7 @@
  *
  * Variants are materials: the list is materials.ofKind('variant') (record
  * shape: id, label, description, weight, group = the axis, scope,
- * owned_by, origin), stencils are materials.ofKind('stencil'), and the
+ * owned_by, origin), blueprints are materials.ofKind('blueprint'), and the
  * management facts a card needs past its record (the live wearer count,
  * the shipped state against the current disk copy, the shipping module)
  * are one per-open read of the usage route, never a list fact.
@@ -98,32 +98,32 @@ export const libraryRows = (
 };
 
 /**
- * A stencil's display label, from the store's stencil record.
+ * A blueprint's display label, from the store's blueprint record.
  *
- * The one read for naming a stencil in the variant area's chrome
- * (ownership badge and line, mint-time consent chip): the stencil record
- * carries the label; a stencil the roster no longer holds (an orphaned
+ * The one read for naming a blueprint in the variant area's chrome
+ * (ownership badge and line, mint-time consent chip): the blueprint record
+ * carries the label; a blueprint the roster no longer holds (an orphaned
  * owner) reads as its id, the degraded posture.
  *
- * @param {string} stencil
- *   The stencil's id.
+ * @param {string} blueprint
+ *   The blueprint's id.
  * @param {object} materials
  *   The materials roster.
  *
  * @return {string}
  */
-export const stencilLabel = (stencil, materials) =>
-  materials.get('stencil', stencil)?.label ?? stencil;
+export const blueprintLabel = (blueprint, materials) =>
+  materials.get('blueprint', blueprint)?.label ?? blueprint;
 
 /**
- * A variant's stencil-ownership face, or null when unowned.
+ * A variant's blueprint-ownership face, or null when unowned.
  *
- * Ownership is CURATION: an owned variant is one of its stencil's
- * switchable looks, offered only on that stencil's placements
+ * Ownership is CURATION: an owned variant is one of its blueprint's
+ * switchable looks, offered only on that blueprint's placements
  * (variant-scope.js gates the offer; this is the card's honesty read).
  * The record carries the owner's id (`owned_by`); the label comes from the
- * owner's own stencil record. An orphaned owner (the roster holds no such
- * stencil: deleted or no longer discovered) has no name at all: `owner`
+ * owner's own blueprint record. An orphaned owner (the roster holds no such
+ * blueprint: deleted or no longer discovered) has no name at all: `owner`
  * and `label` read null, and the variant offers nowhere until released.
  *
  * @param {?object} variant
@@ -142,20 +142,20 @@ export const variantOwnership = (variant, materials) => {
   }
   return {
     owner: variant.owned_by,
-    label: stencilLabel(variant.owned_by, materials),
+    label: blueprintLabel(variant.owned_by, materials),
     orphaned: false,
   };
 };
 
 /**
- * The stencils a variant could transfer to, sorted by label.
+ * The blueprints a variant could transfer to, sorted by label.
  *
- * Transfer targets are content stencils only (`updatable`: file-shipped
- * stencils' ownership belongs to the disk lane and the route refuses
+ * Transfer targets are content blueprints only (`updatable`: file-shipped
+ * blueprints' ownership belongs to the disk lane and the route refuses
  * them), minus the current owner (a transfer to itself is no gesture).
- * For an UNOWNED variant every content stencil is a target: the transfer
+ * For an UNOWNED variant every content blueprint is a target: the transfer
  * route with no prior owner is adopt-later, the card's "Assign to
- * stencil" gesture.
+ * blueprint" gesture.
  *
  * @param {?object} variant
  *   The variant record.
@@ -164,14 +164,14 @@ export const variantOwnership = (variant, materials) => {
  *
  * @return {Array<{id: string, label: string}>}
  */
-export const stencilTargets = (variant, materials) =>
+export const blueprintTargets = (variant, materials) =>
   materials
-    .ofKind('stencil')
+    .ofKind('blueprint')
     .filter(
-      (stencil) =>
-        stencil.updatable === true && stencil.id !== variant?.owned_by,
+      (blueprint) =>
+        blueprint.updatable === true && blueprint.id !== variant?.owned_by,
     )
-    .map((stencil) => ({ id: stencil.id, label: stencil.label ?? stencil.id }))
+    .map((blueprint) => ({ id: blueprint.id, label: blueprint.label ?? blueprint.id }))
     .sort((a, b) => a.label.localeCompare(b.label));
 
 /**
@@ -190,13 +190,13 @@ export const stencilTargets = (variant, materials) =>
  * needs the in-use grade (its delete runs the detach-then-delete batch),
  * an unworn one either grade.
  *
- * The ownership gestures gate on the STENCIL side's grant ("save
- * stencils", delivered as the variant gates' `canOwn`: ownership lives on
- * the stencil vocabulary, not the variant permissions) and never offer on
- * locked variants (the disk lane owns their `stencil:` key; the routes
+ * The ownership gestures gate on the BLUEPRINT side's grant (the library's
+ * ownership permission, delivered as the variant gates' `canOwn`: ownership lives on
+ * the blueprint vocabulary, not the variant permissions) and never offer on
+ * locked variants (the disk lane owns their `blueprint:` key; the routes
  * refuse). Release needs an owner to release from (orphans included:
  * releasing an orphan IS the cleanup gesture); transfer needs somewhere
- * to go (stencilTargets) and doubles as adopt-later on unowned variants.
+ * to go (blueprintTargets) and doubles as adopt-later on unowned variants.
  *
  * @param {object} variant
  *   The variant record.
@@ -209,7 +209,7 @@ export const stencilTargets = (variant, materials) =>
  *   while it is in flight — then the count reads as zero and revert waits
  *   for the state.
  * @param {object} materials
- *   The materials roster (the stencils the ownership gestures need).
+ *   The materials roster (the blueprints the ownership gestures need).
  *
  * @return {{details: boolean, revisions: boolean, editStyles: boolean,
  *   duplicate: boolean, copy: boolean, revert: boolean, release: boolean,
@@ -238,7 +238,7 @@ export const cardGestures = (
       Boolean(config.canUpdate),
     release: editable && canOwn && variant?.owned_by != null,
     transfer:
-      editable && canOwn && stencilTargets(variant, materials).length > 0,
+      editable && canOwn && blueprintTargets(variant, materials).length > 0,
     delete:
       editable &&
       (worn
@@ -265,10 +265,10 @@ export const cardGestures = (
  * renders every state — the doorway's presence tells the browsing user it
  * exists; the disabled titles say honestly why it is shut. Off the offer,
  * ownership names its own reasons: 'unfit-owned' when the variant belongs
- * to a stencil and the target is not inside that stencil's placements
+ * to a blueprint and the target is not inside that blueprint's placements
  * (the caller resolves the target's provenance, variant-scope.js
- * stencilProvenance), 'unfit-orphaned' when the owner is gone (offers
- * nowhere until released), so the title can say "belongs to stencil X"
+ * blueprintProvenance), 'unfit-orphaned' when the owner is gone (offers
+ * nowhere until released), so the title can say "belongs to blueprint X"
  * instead of a vague scope shrug. An owned variant refused by scope INSIDE
  * its own placements reads plain 'unfit': ownership was not the reason.
  *
@@ -284,7 +284,7 @@ export const cardGestures = (
  *   applicableVariants); empty when nothing is selected or the target
  *   is unstylable.
  * @param {?string} provenance
- *   The target's stencil provenance (stencilProvenance), or null.
+ *   The target's blueprint provenance (blueprintProvenance), or null.
  * @param {object} materials
  *   The materials roster (the orphan rule).
  *
@@ -333,7 +333,9 @@ export const applyDoorway = (
  * root wearing (the full-sheet context with a read subject), then a
  * rule's (`container:X::> pb-text`: the document rendered at the
  * rule's own stack, previewing on every match), then a fragment
- * wearing, map order breaking ties. Null when nothing on this page
+ * wearing, map order breaking ties (the map's canonical order is the
+ * document's, styleMapOf, so the first wearer on the page wins, never
+ * the first written). Null when nothing on this page
  * wears it — the view degrades the doorway honestly (a wearer on
  * another page, or the unworn degenerate case, cannot anchor here).
  *

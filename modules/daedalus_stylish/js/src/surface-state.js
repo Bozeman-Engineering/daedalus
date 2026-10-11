@@ -1,4 +1,6 @@
 import { entryRefs } from './variant-scope.js';
+import { stagesLines } from './pending.js';
+import { skinDocumentScope } from './code/layers.js';
 
 /**
  * The inspector's place state (four controls, one loud mode).
@@ -9,7 +11,7 @@ import { entryRefs } from './variant-scope.js';
  * the pose group), the styling MODE (basic / advanced / code, the
  * segments on the same row, a preference over the styling place;
  * ui-mode.js), the code SCOPE (code mode only, the showing row's
- * sentence at the top of the code body; page-view.js) and the POSE
+ * sentence in the pinned head above the body; page-view.js) and the POSE
  * (the chip row above the mode row,
  * the styling place only). Exactly one of
  * the row's four buttons is lit: a mode click always lands in the
@@ -27,7 +29,10 @@ import { entryRefs } from './variant-scope.js';
  * mode's source-owned half, satellite parity included, alongside
  * `place`; the pending session itself (staged lines, draft capture)
  * stays panel state (pending.js), so a draft never phantoms into the
- * other window as a document.
+ * other window as a document. A document is a variant's (its reference)
+ * or the skin's at a scope (code/layers.js skinDocument): the skin
+ * session enters through the same doorways and exits through the same
+ * bar, so `editing` carries either reference.
  *
  * This module owns everything decidable without a DOM: the vocabulary,
  * the selection-move rule (on a selection or target move an editing
@@ -71,17 +76,31 @@ export const normalizePlace = (place) =>
  * A reference IS the variant's record id (one identity, one string), so
  * wearing is a verbatim match over the entry's references.
  *
+ * A skin document is worn by every element its scope reaches, a fact of
+ * the subject's stack and not of any entry: the caller hands the scopes
+ * the subject reads (style-stack.js skinScopesAt) and the document is
+ * worn while its scope is among them.
+ *
  * @param {?object} entry
  *   The wear key's style entry: an element's root entry or a rule's
  *   (references live on element and rule entries, never on parts).
  * @param {?string} reference
  *   The edited document's reference.
+ * @param {string[]} [skinScopes]
+ *   The scopes whose skin block the read subject's stack carries.
  *
  * @return {boolean}
  */
-export const wearsDocument = (entry, reference) =>
-  reference != null &&
-  entryRefs(entry).some((ref) => ref.variant === reference);
+export const wearsDocument = (entry, reference, skinScopes = []) => {
+  if (reference == null) {
+    return false;
+  }
+  const scope = skinDocumentScope(reference);
+  if (scope !== null) {
+    return skinScopes.includes(scope);
+  }
+  return entryRefs(entry).some((ref) => ref.variant === reference);
+};
 
 /**
  * The selection-move rule.
@@ -110,29 +129,35 @@ export const wearsDocument = (entry, reference) =>
  *   rule the target names).
  * @param {number} context.pending
  *   The open session's pending row count (pending.js sessionCount()).
+ * @param {string[]} [context.skinScopes]
+ *   The scopes whose skin block the NEW read subject's stack carries
+ *   (style-stack.js skinScopesAt): a skin session survives the move
+ *   while the subject still reads the edited scope (another h2, another
+ *   text block), the wearing fact for a skin document.
  *
  * @return {{place: string, editing: ?string, prompt: boolean}}
  */
 export const selectionMove = (
   { place, editing = null },
-  { entry = null, pending = 0 } = {},
+  { entry = null, pending = 0, skinScopes = [] } = {},
 ) => {
-  if (editing === null || wearsDocument(entry, editing)) {
+  if (editing === null || wearsDocument(entry, editing, skinScopes)) {
     return { place, editing, prompt: false };
   }
   return { place, editing: null, prompt: pending > 0 };
 };
 
 /**
- * Re-anchors an update session on a wearer-to-wearer move.
+ * Re-anchors an update or skin session on a wearer-to-wearer move.
  *
- * The session's staged lines are variant-relative — nothing in them names
- * the old wearer — so anchoring is ONE field: the wearer whose context
- * previews the document, the styling target's wear key (an element, or
- * a rule wearing the document: a selection move and a target move
- * re-anchor alike). Only update sessions re-anchor (a save session's
- * anchor is its capture root: the capture IS that element's look), and a
- * no-op move returns the same object so subscribers can skip re-rendering.
+ * The session's staged lines are document-relative — nothing in them
+ * names the old wearer — so anchoring is ONE field: the wearer whose
+ * context previews the document, the styling target's wear key (an
+ * element, or a rule wearing the document: a selection move and a target
+ * move re-anchor alike). Only line-staging sessions re-anchor (a save
+ * session's anchor is its capture root: the capture IS that element's
+ * look), and a no-op move returns the same object so subscribers can
+ * skip re-rendering.
  *
  * @param {?object} session
  *   The open pending session (pending.js shapes).
@@ -142,7 +167,7 @@ export const selectionMove = (
  * @return {?object}
  */
 export const reanchorSession = (session, key) =>
-  session?.kind === 'update' &&
+  stagesLines(session) &&
   typeof key === 'string' &&
   key !== '' &&
   session.anchor !== key
@@ -165,6 +190,6 @@ export const reanchorSession = (session, key) =>
  * @return {boolean}
  */
 export const sessionFocuses = (session, reference) =>
-  session?.kind === 'update' &&
+  stagesLines(session) &&
   reference != null &&
   session.reference === reference;

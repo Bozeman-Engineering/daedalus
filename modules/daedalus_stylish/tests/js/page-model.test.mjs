@@ -8,7 +8,7 @@
  */
 import { strict as assert } from 'node:assert';
 import {
-  pageNodes, rowWords, findNode, subtreeNodes, scopeNodes, isStyledElement, visibleTree, reapplyRef,
+  pageNodes, findNode, subtreeNodes, scopeNodes, isStyledElement, visibleTree, reapplyRef,
   hasBody, outlineOf, foldSummary,
 } from '../../js/src/code/page-model.js';
 import { holdsFragments } from '../../js/src/variant-scope.js';
@@ -22,36 +22,39 @@ const B1 = '44444444-4444-4444-4444-444444444444';
 const B2 = '55555555-5555-5555-5555-555555555555';
 const B3 = '66666666-6666-6666-6666-666666666666';
 
-// The pared layoutTree() shape: a transitional multi-region section first
-// (its children flatten under the section row — regions have no keys), then
-// a container section holding a nested container beside nothing else. Each
-// node carries its two minted words (the annotator's `_element.type` and
-// `_element.name`, pared through by layoutTree): S1 is renamed, S2 and
-// the image are not (an unrenamed element's name IS its type word), the
-// text block is named by its content excerpt.
+// The lean node tree (`layout`): a transitional multi-region section first
+// (its region nodes unwrap under the section row — regions have no keys),
+// then a container section holding a nested container beside nothing
+// else. Each node carries its three minted words on its annotation (the
+// annotator's `_element.type`, `_element.name` and `_element.icon`): S1 is
+// renamed, S2 and the image are not (an unrenamed element's name IS its
+// type word), the text block is named by its content excerpt; the icon is
+// a URL, null where nothing answered the icon collector (the nested
+// container here).
+const named = (type, name = type, icon = `/icons/${type.toLowerCase()}.svg`) => ({ _element: { type, name, icon } });
 const LAYOUT = [
   {
+    kind: 'container',
     uuid: S1,
     layout_id: 'daedalus_stylish_twocol',
-    type: 'Section',
-    name: 'Welcome',
-    regions: {
-      first: [{ uuid: B1, block_type: 'text', type: 'Text', name: 'Welcome!' }],
-      second: [{ uuid: B2, block_type: null, type: 'Main navigation', name: 'Main navigation' }],
-    },
+    ...named('Section', 'Welcome'),
+    children: [
+      { kind: 'region', region: 'first', children: [{ kind: 'block', uuid: B1, block_type: 'text', ...named('Text', 'Welcome!') }] },
+      { kind: 'region', region: 'second', children: [{ kind: 'block', uuid: B2, plugin_id: 'system_menu_block:main', ...named('Main navigation') }] },
+    ],
   },
   {
+    kind: 'container',
     uuid: S2,
     layout_id: 'daedalus_stylish_container',
-    type: 'Section',
-    name: 'Section',
+    ...named('Section'),
     children: [
       {
+        kind: 'container',
         uuid: NESTED,
         layout_id: 'daedalus_stylish_container',
-        type: 'Container',
-        name: 'Hero band',
-        children: [{ uuid: B3, block_type: 'image', type: 'Image', name: 'Image' }],
+        ...named('Container', 'Hero band', null),
+        children: [{ kind: 'block', uuid: B3, block_type: 'image', ...named('Image') }],
       },
     ],
   },
@@ -111,8 +114,8 @@ test('pageNodes nests the whole layout under the entity root in layout order', (
   assert.equal(first.name, 'Welcome');
   assert.equal('layoutId' in first, false);
   assert.equal(first.depth, 1);
-  // A multi-region section's children flatten directly under its row in
-  // stored region order: regions have no keys, so no region rows.
+  // A multi-region section's region nodes unwrap directly under its row
+  // in stored region order: regions have no keys, so no region rows.
   assert.deepEqual(first.children.map((node) => node.key), [
     `block:${B1}`,
     `block:${B2}`,
@@ -124,34 +127,45 @@ test('pageNodes nests the whole layout under the entity root in layout order', (
   // A plugin block keeps its node with its own words.
   assert.equal(first.children[1].type, 'Main navigation');
   assert.equal(first.children[1].name, 'Main navigation');
-  // A pared node the spine never named carries null words, never undefined.
-  const unnamed = pageNodes([{ uuid: S1, layout_id: 'x', children: [{ uuid: B1 }] }], null);
+  // A node the spine never named carries null words, never undefined.
+  const unnamed = pageNodes([{ kind: 'container', uuid: S1, layout_id: 'x', children: [{ kind: 'block', uuid: B1 }] }], null);
   assert.equal(unnamed[0].type, null);
   assert.equal(unnamed[0].name, null);
   assert.equal(unnamed[0].children[0].name, null);
 });
 
-// --- rowWords: the two words every element row reads ------------------------
+// --- The three minted words ride every node --------------------------------
 
-test('rowWords spells the type word then the name, the name only when it says more', () => {
+test('pageNodes carries the icon beside the type and the name, null where nothing answered', () => {
   const nodes = pageNodes(LAYOUT, ROOT);
-  // A renamed section: "Section Welcome".
-  assert.deepEqual(rowWords(findNode(nodes, `container:${S1}`)), { word: 'Section', name: 'Welcome' });
-  // A block named by its content excerpt: "Text Welcome!".
-  assert.deepEqual(rowWords(findNode(nodes, `block:${B1}`)), { word: 'Text', name: 'Welcome!' });
-  // An unrenamed element's name IS its type word, so the row reads the
-  // word once, never "Section Section" / "Image Image".
-  assert.deepEqual(rowWords(findNode(nodes, `container:${S2}`)), { word: 'Section', name: null });
-  assert.deepEqual(rowWords(findNode(nodes, `block:${B3}`)), { word: 'Image', name: null });
-  assert.deepEqual(rowWords(findNode(nodes, `block:${B2}`)), { word: 'Main navigation', name: null });
-  // The matcher's facts shape (name/type nullable) reads the same way.
-  assert.deepEqual(rowWords({ type: 'Container', name: 'Hero band' }), { word: 'Container', name: 'Hero band' });
-  // Whitespace is no name; a missing type falls back to the caller's word.
-  assert.deepEqual(rowWords({ type: 'Text', name: '   ' }), { word: 'Text', name: null });
-  assert.deepEqual(rowWords({ type: null, name: null }, 'Element'), { word: 'Element', name: null });
-  assert.deepEqual(rowWords(null, 'Element'), { word: 'Element', name: null });
-  // A name without a type word still prints beside the fallback.
-  assert.deepEqual(rowWords({ type: null, name: 'Welcome' }, 'Element'), { word: 'Element', name: 'Welcome' });
+  // A renamed section: its glyph, its type word and its name.
+  const section = findNode(nodes, `container:${S1}`);
+  assert.deepEqual([section.type, section.name, section.icon], ['Section', 'Welcome', '/icons/section.svg']);
+  // A block named by its content excerpt carries its type's glyph.
+  const text = findNode(nodes, `block:${B1}`);
+  assert.deepEqual([text.type, text.name, text.icon], ['Text', 'Welcome!', '/icons/text.svg']);
+  // The icon collector answered nothing for the nested container: null,
+  // never a client-side guess (the row draws no icon zone then).
+  const nested = findNode(nodes, `container:${NESTED}`);
+  assert.deepEqual([nested.type, nested.name, nested.icon], ['Container', 'Hero band', null]);
+  // A node without an annotation carries three nulls.
+  const [unnamed] = pageNodes([{ kind: 'container', uuid: S1, children: [] }]);
+  assert.deepEqual([unnamed.type, unnamed.name, unnamed.icon], [null, null, null]);
+});
+
+test('pageNodes words the page row from the root\'s minted words when the source carries them', () => {
+  // The lean tree holds the layout elements alone; the page row's words
+  // arrive beside it (the leader reads the blueprint root's `_element`,
+  // the satellite the broadcast's `rootElement`).
+  const [page] = pageNodes(LAYOUT, ROOT, { type: 'Basic page', name: 'Welcome to Daedalus', icon: '/icons/page.svg' });
+  assert.equal(page.key, `entity:${ROOT}`);
+  assert.deepEqual([page.type, page.name, page.icon], ['Basic page', 'Welcome to Daedalus', '/icons/page.svg']);
+  // Without them (a satellite before its first broadcast) the page row
+  // has no words of its own; the view falls back to its vocabulary.
+  const [bare] = pageNodes(LAYOUT, ROOT);
+  assert.deepEqual([bare.type, bare.name, bare.icon], [null, null, null]);
+  // The sections render bare without a root uuid, whatever the root words.
+  assert.deepEqual(pageNodes(LAYOUT, null, { type: 'Basic page', name: 'x', icon: null }).map((node) => node.key), [`container:${S1}`, `container:${S2}`]);
 });
 
 test('pageNodes recurses nested containers in place of components', () => {
@@ -168,12 +182,13 @@ test('pageNodes renders containers bare without a root uuid and skips uuid-less 
   const bare = pageNodes(LAYOUT, null);
   assert.deepEqual(bare.map((node) => node.key), [`container:${S1}`, `container:${S2}`]);
   assert.equal(bare[0].depth, 0);
-  const withNoise = pageNodes([{ uuid: null, children: [] }, ...LAYOUT.slice(0, 1)], null);
+  const withNoise = pageNodes([{ kind: 'container', uuid: null, children: [] }, ...LAYOUT.slice(0, 1)], null);
   assert.deepEqual(withNoise.map((node) => node.key), [`container:${S1}`]);
   const noiseChild = pageNodes([{
+    kind: 'container',
     uuid: S1,
     layout_id: 'daedalus_stylish_container',
-    children: [{ uuid: null, block_type: 'text' }],
+    children: [{ kind: 'block', uuid: null, block_type: 'text' }],
   }], null);
   assert.deepEqual(noiseChild[0].children, []);
 });
@@ -272,7 +287,7 @@ test('visibleTree over a scoped projection annotates every row the scope project
   // Element scope of an unstyled selection: one bare row.
   const one = visibleTree(scopeNodes(nodes, 'element', `container:${S2}`), map);
   assert.deepEqual(one, [
-    { key: `container:${S2}`, kind: 'container', type: 'Section', name: 'Section', depth: 1, styled: false, children: [] },
+    { key: `container:${S2}`, kind: 'container', type: 'Section', name: 'Section', icon: '/icons/section.svg', depth: 1, styled: false, children: [] },
   ]);
 });
 

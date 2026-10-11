@@ -3,23 +3,21 @@
 namespace Drupal\daedalus_layout\Form;
 
 use Drupal\Core\Form\FormStateInterface;
-use Drupal\Core\Extension\ModuleHandlerInterface;
-use Drupal\Core\StringTranslation\StringTranslationTrait;
-use Drupal\Core\DependencyInjection\ClassResolverInterface;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use Drupal\Core\DependencyInjection\ContainerInjectionInterface;
+use Drupal\daedalus_blueprint\Host\HostResolver;
+use Drupal\daedalus_ui\ModeState;
 use Drupal\layout_builder\Form\OverridesEntityForm as LayoutBuilderOverridesEntityForm;
+use Drupal\layout_builder\SectionStorageInterface;
 
 /**
  * Trims the Layout Builder override and defaults forms.
  */
 class OverridesEntityForm implements ContainerInjectionInterface {
 
-  use StringTranslationTrait;
-
   public function __construct(
-    protected ModuleHandlerInterface $moduleHandler,
-    protected ClassResolverInterface $classResolver,
+    protected ModeState $modeState,
+    protected HostResolver $hostResolver,
   ) {}
 
   /**
@@ -27,13 +25,23 @@ class OverridesEntityForm implements ContainerInjectionInterface {
    */
   public static function create(ContainerInterface $container) {
     return new static(
-      $container->get('module_handler'),
-      $container->get('class_resolver'),
+      $container->get('daedalus_ui.mode_state'),
+      $container->get('daedalus_blueprint.host_resolver'),
     );
   }
 
   /**
-   * Hides the revision information and the Layout Builder message.
+   * Hides the revision information, the message, and core's writes.
+   *
+   * Core's Save layout and Revert to defaults write the storage beside
+   * the spine (the entity saved off the storage, the override field
+   * emptied), so for a storage Daedalus hosts they leave the form in every
+   * mode: a hosted document is committed through the top bar's Save
+   * (daedalus_edit's tempstore routes, one host each). Discard changes
+   * stays: it drops the staged copy through the tempstore repository
+   * daedalus_tempstore provides, the top bar's own Discard. In Edit Mode
+   * the actions leave the form altogether, the top bar owning them; a
+   * storage with no host (core's navigation layout) keeps core's actions.
    *
    * @param array $form
    *   The form array.
@@ -52,7 +60,33 @@ class OverridesEntityForm implements ContainerInjectionInterface {
       if (!empty($form['layout_builder_message'])) {
         unset($form['layout_builder_message']);
       }
+      if ($this->hostResolver->fromSectionStorage($this->sectionStorage($form_state)) !== NULL) {
+        $form['actions']['submit']['#access'] = FALSE;
+        if (isset($form['actions']['revert'])) {
+          $form['actions']['revert']['#access'] = FALSE;
+        }
+      }
+      if ($this->modeState->getMode() === 'edit' && isset($form['actions'])) {
+        $form['actions']['#access'] = FALSE;
+      }
     }
+  }
+
+  /**
+   * The storage the form was built on: core's first build argument.
+   *
+   * @param \Drupal\Core\Form\FormStateInterface $form_state
+   *   The form state.
+   *
+   * @return \Drupal\layout_builder\SectionStorageInterface
+   *   The section storage.
+   */
+  protected function sectionStorage(FormStateInterface $form_state): SectionStorageInterface {
+    $storage = $form_state->getBuildInfo()['args'][0] ?? NULL;
+    if (!$storage instanceof SectionStorageInterface) {
+      throw new \LogicException('Daedalus Layout: a Layout Builder entity form was built without its section storage.');
+    }
+    return $storage;
   }
 
 }

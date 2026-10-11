@@ -13,7 +13,7 @@ use Drupal\Core\Ajax\ReplaceCommand;
 use Drupal\daedalus_ui\Ajax\HighlightCommand;
 use Drupal\daedalus_ui\DaedalusUi;
 use Drupal\daedalus_ai\UiCommandQueue;
-use Drupal\Core\Entity\FieldableEntityInterface;
+use Drupal\daedalus_blueprint\Host\HostInterface;
 use Drupal\daedalus_blueprint_ai\Event\AiToolActionEvent;
 use Drupal\tool_ai_connector\Plugin\AiFunctionCall\ToolPluginBase;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
@@ -25,9 +25,11 @@ use Symfony\Component\EventDispatcher\EventSubscriberInterface;
  * payloads ride the chat response and are applied through the app's one
  * applyResponse pipeline (no parallel refresh path). Every reference is
  * final at compose time (identity-first), so all targets refresh
- * immediately; pending generations only need the persisted entity bound
+ * immediately; pending generations only need the persisted host bound
  * onto the PendingTargetCollector, which the response listener flushes as
- * one trigger command. New-entity creation opens the created page.
+ * one trigger command. New-entity creation opens the created page. Every
+ * effect is keyed by the host the tool persisted (a page's entity or a
+ * template's display), never by a fieldable entity.
  */
 class AiToolActionSubscriber implements EventSubscriberInterface {
 
@@ -104,30 +106,31 @@ class AiToolActionSubscriber implements EventSubscriberInterface {
    */
   protected function handleEntityPersisted(AiToolActionEvent $event): void {
     $context = $event->getContext();
-    $entity = $context['entity'] ?? NULL;
-    if (!$entity instanceof FieldableEntityInterface) {
+    $host = $context['host'] ?? NULL;
+    // A config result (a swatch, a variant: site-wide material with no
+    // page) carries no host: nowhere to navigate, nothing to refresh; its
+    // mint reaches the client as the turn's materials delta (MutatedTurn),
+    // which the entity hooks recorded when the tool persisted it.
+    if (!$host instanceof HostInterface) {
       return;
     }
 
-    // Pending generations registered during this turn ride this entity's
-    // batch: the collector needs an entity route for the trigger POST and
+    // Pending generations registered during this turn ride this host's
+    // batch: the collector needs a host route for the trigger POST and
     // the completion re-render. The response listener flushes it.
     if ($this->pendingTargets->hasPending()) {
-      $this->pendingTargets->bindEntity($entity);
+      $this->pendingTargets->bindHost($host);
     }
 
     // Open a newly created page on its editing surface. Nothing to refresh
     // here: the browser navigates to the fresh render. The URL comes from the
-    // spine (canonical for most entities, the standalone /block-content
-    // editing route for block_content, which has no public page of its own).
-    // A new NON-PAGE entity (a swatch, a variant: site-wide material with
-    // no page) has nowhere to navigate and nothing to refresh; its mint
-    // reaches the client as the turn's materials delta (MutatedTurn), which
-    // the entity hooks recorded when the tool persisted it.
+    // spine (canonical for most entities, the site frame among them; core's
+    // manage-display layout route for a template).
     if (!empty($context['is_new'])) {
+      $entity = $host->entity();
       if ($this->daedalusUi->hasEditingUrl($entity)) {
         $url = $this->daedalusUi->getEditingUrl($entity)->toString();
-        $this->commandQueue->add(new OpenLinkCommand($url, (string) ($entity->label() ?? $entity->bundle())));
+        $this->commandQueue->add(new OpenLinkCommand($url, $host->label()));
       }
       return;
     }
@@ -135,7 +138,7 @@ class AiToolActionSubscriber implements EventSubscriberInterface {
     // Every reference is final at compose time, so every target joins the
     // turn's mutation-response payload; the pending shimmer rides the
     // trigger command's target keys, not a refresh split.
-    $this->mutatedTurn->collect($entity, $context['targets'] ?? []);
+    $this->mutatedTurn->collect($host, $context['targets'] ?? []);
   }
 
   /**

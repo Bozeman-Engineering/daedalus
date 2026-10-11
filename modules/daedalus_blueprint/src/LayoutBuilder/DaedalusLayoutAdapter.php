@@ -5,30 +5,30 @@ declare(strict_types=1);
 namespace Drupal\daedalus_blueprint\LayoutBuilder;
 
 use Drupal\Component\Uuid\Php as PhpUuid;
+use Drupal\Core\Block\BlockManagerInterface;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\Entity\FieldableEntityInterface;
 use Drupal\Core\Extension\ModuleHandlerInterface;
-use Drupal\Core\Plugin\Context\Context;
-use Drupal\Core\Plugin\Context\ContextDefinition;
-use Drupal\Core\Plugin\Context\EntityContext;
 use Drupal\daedalus_blueprint\ElementContext;
-use Drupal\layout_builder\Entity\LayoutBuilderEntityViewDisplay;
-use Drupal\layout_builder\LayoutTempstoreRepositoryInterface;
+use Drupal\daedalus_blueprint\Host\HostInterface;
+use Drupal\daedalus_blueprint\Plugin\Block\SlotBlock;
 use Drupal\layout_builder\Section;
 use Drupal\layout_builder\SectionComponent;
-use Drupal\layout_builder\SectionStorage\SectionStorageManagerInterface;
+use Drupal\layout_builder\SectionListInterface;
 use Drupal\layout_builder\SectionStorageInterface;
 use Drupal\daedalus_layout\NestedSectionStorageInterface;
 use Drupal\daedalus_layout\Plugin\Block\SectionBlock;
 use Drupal\daedalus_layout\SectionStorage\EmbeddedSectionList;
-use Drupal\daedalus_layout\SectionStorage\NestedAwareSectionStorage;
 
 /**
  * Encapsulates all Layout Builder component access behind a single service.
  *
- * Every place the module needs Layout Builder functionality calls this adapter.
- * When daedalus_layout is installed, uses O(1) TreeIndex lookups and nested layout
- * traversal. Without daedalus_layout, falls back to flat section iteration.
+ * Every place the module needs Layout Builder functionality calls this
+ * adapter. The document is read through its host (HostInterface): the
+ * host answers the storage, the adapter walks and mutates what the storage
+ * holds. When daedalus_layout is installed, uses O(1) TreeIndex lookups and
+ * nested layout traversal. Without daedalus_layout, falls back to flat
+ * section iteration.
  */
 class DaedalusLayoutAdapter {
 
@@ -39,11 +39,12 @@ class DaedalusLayoutAdapter {
    *   The module handler.
    * @param \Drupal\Core\Entity\EntityTypeManagerInterface $entityTypeManager
    *   The entity type manager.
-   * @param \Drupal\layout_builder\SectionStorage\SectionStorageManagerInterface|null $sectionStorageManager
-   *   The section storage manager, or NULL if layout_builder is not installed.
-   * @param \Drupal\layout_builder\LayoutTempstoreRepositoryInterface|null $layoutTempstoreRepository
-   *   The layout tempstore repository, or NULL if layout_builder is not
-   *   installed.
+   * @param \Drupal\daedalus_blueprint\LayoutBuilder\InlineBlockValues $inlineBlockValues
+   *   Inline blocks as values: hydrates a value block (a display's stored
+   *   shape) into the unsaved block the spine works on.
+   * @param \Drupal\Core\Block\BlockManagerInterface $blockManager
+   *   The block manager: whether a placed slot block's plugin exists, the
+   *   slot deriver's answer for the roster (declaredSlots()).
    * @param \Drupal\daedalus_blueprint\LayoutBuilder\PlacementRestrictionsInterface|null $placementRestrictions
    *   The placement-restrictions spine, for the default-section layout
    *   ladder. NULL only in hand-wired construction.
@@ -51,8 +52,8 @@ class DaedalusLayoutAdapter {
   public function __construct(
     protected ModuleHandlerInterface $moduleHandler,
     protected EntityTypeManagerInterface $entityTypeManager,
-    protected ?SectionStorageManagerInterface $sectionStorageManager = NULL,
-    protected ?LayoutTempstoreRepositoryInterface $layoutTempstoreRepository = NULL,
+    protected InlineBlockValues $inlineBlockValues,
+    protected BlockManagerInterface $blockManager,
     protected ?PlacementRestrictionsInterface $placementRestrictions = NULL,
   ) {}
 
@@ -67,67 +68,12 @@ class DaedalusLayoutAdapter {
   }
 
   /**
-   * Resolves tempstore-aware section storage for an entity.
-   *
-   * Loads the overrides section storage, then checks tempstore for an
-   * in-progress version. When daedalus_layout is available, wraps the result in
-   * NestedAwareSectionStorage for nested layout traversal.
-   *
-   * @param \Drupal\Core\Entity\FieldableEntityInterface $entity
-   *   The entity to resolve section storage for.
-   *
-   * @return \Drupal\layout_builder\SectionStorageInterface|null
-   *   The section storage, or NULL if not available.
-   */
-  public function getSectionStorage(FieldableEntityInterface $entity): ?SectionStorageInterface {
-    if ($this->sectionStorageManager === NULL || $this->layoutTempstoreRepository === NULL) {
-      return NULL;
-    }
-
-    if (!$entity->hasField('layout_builder__layout')) {
-      return NULL;
-    }
-
-    $view_mode = LayoutBuilderEntityViewDisplay::collectRenderDisplay($entity, 'full')->getMode();
-    $contexts = [
-      'entity' => EntityContext::fromEntity($entity),
-      'view_mode' => new Context(new ContextDefinition('string'), $view_mode),
-    ];
-
-    $storage = $this->sectionStorageManager->load('overrides', $contexts);
-    if ($storage === NULL) {
-      return NULL;
-    }
-
-    // Prefer the tempstore storage (in-progress edits) only when it stages
-    // THIS entity instance: then its request-shared wrapper (TreeIndex and
-    // embedded-list registry included) is the one everything else in the
-    // request mutates. The staged storage carries its own entity object, so
-    // for any other instance it is a parallel world: locates through it
-    // cannot see what operations just did to the passed entity (a nested
-    // section minted mid-batch resolved nowhere: ANCHOR_NOT_FOUND on
-    // identity that plainly existed), and every caller of this method
-    // passes the entity whose tree it is about to read or mutate.
-    if ($this->layoutTempstoreRepository->has($storage)) {
-      $staged = $this->layoutTempstoreRepository->get($storage);
-      if ($staged->getContext('entity')->getContextValue() === $entity) {
-        $storage = $staged;
-      }
-    }
-
-    // Wrap with NestedAwareSectionStorage if daedalus_layout is available.
-    if ($this->isDaedalusLayoutAvailable()) {
-      return NestedAwareSectionStorage::wrap($storage);
-    }
-
-    return $storage;
-  }
-
-  /**
    * Extracts a block_content entity from an InlineBlock component.
    *
-   * Handles both block_serialized (PHP unserialize) and block_revision_id
-   * (revision load) paths.
+   * Three storage shapes, in precedence order: block_serialized (an
+   * unsaved block, the staged shape), block_revision_id (a saved block, a
+   * content host's stored shape) and block_values (a value block, a
+   * display's stored shape, hydrated to an unsaved block).
    *
    * @param \Drupal\layout_builder\SectionComponent $component
    *   The section component.
@@ -152,6 +98,14 @@ class DaedalusLayoutAdapter {
     if (!empty($configuration['block_revision_id'])) {
       $storage = $this->entityTypeManager->getStorage('block_content');
       return $storage->loadRevision($configuration['block_revision_id']);
+    }
+
+    // Path 3: block_values (a value block, hydrated fresh each time).
+    if (InlineBlockValues::hasValues($configuration)) {
+      $block_type = $this->getInlineBlockType($component);
+      if ($block_type !== NULL) {
+        return $this->inlineBlockValues->hydrate($block_type, $configuration[InlineBlockValues::KEY]);
+      }
     }
 
     return NULL;
@@ -236,6 +190,180 @@ class DaedalusLayoutAdapter {
   }
 
   /**
+   * Indexes a section tree by element: each uuid to its parent's.
+   *
+   * Every element at any depth (a section by its daedalus_layout uuid, a
+   * component by its own; a container is one element, its component uuid
+   * being its embedded section's) maps to the uuid of the section holding
+   * it, or NULL for a top-level section (held by the root). The one walk
+   * behind "is this element in the document" and "what does this element
+   * sit in" (the capability resolver's ownership answer, the op door's
+   * destination of a placement).
+   *
+   * @param \Drupal\layout_builder\Section[] $sections
+   *   The top-level sections.
+   *
+   * @return array<string, string|null>
+   *   Element uuid to parent section uuid (NULL at the top level).
+   */
+  public function parentIndex(array $sections): array {
+    $index = [];
+    $this->indexSections($sections, NULL, $index);
+    return $index;
+  }
+
+  /**
+   * Walks sections into the parent index (see parentIndex()).
+   *
+   * @param \Drupal\layout_builder\Section[] $sections
+   *   The sections at this depth.
+   * @param string|null $parent
+   *   The uuid of the section holding them, or NULL at the top level.
+   * @param array<string, string|null> $index
+   *   The index being built.
+   */
+  protected function indexSections(array $sections, ?string $parent, array &$index): void {
+    foreach ($sections as $section) {
+      $section_uuid = $this->getSectionUuid($section);
+      // A container's own entry was written by its component below (the
+      // uuid is one); a top-level section is held by the root.
+      if ($section_uuid !== NULL && !array_key_exists($section_uuid, $index)) {
+        $index[$section_uuid] = $parent;
+      }
+      foreach ($section->getComponents() as $component) {
+        $index[$component->getUuid()] ??= $section_uuid;
+        $embedded = $this->embeddedSection($component);
+        if ($embedded !== NULL) {
+          $this->indexSections([$embedded], $section_uuid, $index);
+        }
+      }
+    }
+  }
+
+  /**
+   * The slot ids a section tree declares: its slot blocks, at any depth.
+   *
+   * A slot block (daedalus_slot:{id}, SlotBlock::slotIdOf()) placed in a
+   * document declares the slot the documents rendered inside it may fill.
+   * The one walk behind "which slots does this template place": the
+   * ownership policy's corrective names them, and a start of slot fills
+   * fits a locked bundle only when every fill names one of them
+   * (CanvasOffer::fillsSlots()).
+   *
+   * Only a slot whose block plugin exists counts. A slot block derives per
+   * roster id (SlotDeriver), so a placed daedalus_slot:{id} whose id the
+   * roster dropped (a config write core never validates: a bare config
+   * save, drush config:set) resolves to core's broken block, a door
+   * nothing renders into and nothing can fill. Counting it would make the
+   * page display variant skip its main-content fallback (the whole theme
+   * swallowed), the ownership corrective name a dead door and a fit
+   * accept a fill nothing shows, so the block manager's answer, the
+   * deriver's own, is the judge rather than the plugin id string.
+   *
+   * @param \Drupal\layout_builder\Section[] $sections
+   *   The top-level sections.
+   *
+   * @return string[]
+   *   The slot ids in document order, each once.
+   */
+  public function declaredSlots(array $sections): array {
+    $slots = [];
+    foreach ($this->components($sections) as $component) {
+      $plugin_id = $component->getPluginId();
+      $slot = SlotBlock::slotIdOf($plugin_id);
+      if ($slot !== NULL && $this->blockManager->hasDefinition($plugin_id)) {
+        $slots[] = $slot;
+      }
+    }
+    return array_values(array_unique($slots));
+  }
+
+  /**
+   * Every component of a document, at any depth, in document order.
+   *
+   * The one walk of a section list through its nested containers for a
+   * read-only question about what a document places (which slots it
+   * declares, whether it holds a block of some kind): each container's
+   * embedded section is hydrated by value (embeddedSection()), so this is
+   * never a road for a mutation.
+   *
+   * @param \Drupal\layout_builder\Section[] $sections
+   *   The top-level sections.
+   *
+   * @return \Generator<\Drupal\layout_builder\SectionComponent>
+   *   The components, a container before what it embeds.
+   */
+  public function components(array $sections): \Generator {
+    foreach ($sections as $section) {
+      foreach ($section->getComponents() as $component) {
+        yield $component;
+        $embedded = $this->embeddedSection($component);
+        if ($embedded !== NULL) {
+          yield from $this->components([$embedded]);
+        }
+      }
+    }
+  }
+
+  /**
+   * The host's own field a component presents, when it is such a field block.
+   *
+   * Core's field block plugin id is field_block:{entity_type}:{bundle}:
+   * {field}; one naming the host's own type and bundle shows the host's
+   * field, whose content is the host's to edit: the capability resolver
+   * keeps that field's content verdict on the block (OwnershipPolicy), and
+   * a write into the field it shows is a write on the host's root. The
+   * component is found in the document the host renders (its own or its
+   * template's, nested sections included), since a plain host's template
+   * elements are not locatable in its own storage.
+   *
+   * @param \Drupal\daedalus_blueprint\Host\HostInterface $host
+   *   The host.
+   * @param string $uuid
+   *   The component uuid.
+   *
+   * @return string|null
+   *   The presented field's name, or NULL when the uuid names no component
+   *   or one that is not a field block of the host's own bundle.
+   */
+  public function presentedHostField(HostInterface $host, string $uuid): ?string {
+    $component = $this->findComponent($host->sections(), $uuid);
+    if ($component === NULL) {
+      return NULL;
+    }
+    return FieldBlock::fieldFor($component->getPluginId(), $host->entityTypeId(), $host->bundle());
+  }
+
+  /**
+   * Finds a component by uuid in a section list, nested sections included.
+   *
+   * @param \Drupal\layout_builder\Section[] $sections
+   *   The sections.
+   * @param string $uuid
+   *   The component uuid.
+   */
+  protected function findComponent(array $sections, string $uuid): ?SectionComponent {
+    foreach ($sections as $section) {
+      if (!$section instanceof Section) {
+        continue;
+      }
+      foreach ($section->getComponents() as $component) {
+        if ($component->getUuid() === $uuid) {
+          return $component;
+        }
+        $embedded = $this->embeddedSection($component);
+        if ($embedded !== NULL) {
+          $found = $this->findComponent([$embedded], $uuid);
+          if ($found !== NULL) {
+            return $found;
+          }
+        }
+      }
+    }
+    return NULL;
+  }
+
+  /**
    * Creates a container component embedding the given section.
    *
    * Delegates to SectionBlock::createComponent(), the one blessed container
@@ -249,7 +377,7 @@ class DaedalusLayoutAdapter {
    * @param int $weight
    *   The component weight.
    * @param array $additional
-   *   Opaque additional data carried by the component (e.g. stencil
+   *   Opaque additional data carried by the component (e.g. blueprint
    *   provenance).
    *
    * @return \Drupal\layout_builder\SectionComponent
@@ -304,15 +432,21 @@ class DaedalusLayoutAdapter {
   }
 
   /**
-   * Whether a section list is core's blank placeholder.
+   * Whether a section list is core's blank section list.
    *
-   * Core marks a layout that has never been instantiated with one
-   * layout_builder_blank section at delta 0 (SectionListTrait::
-   * hasBlankSection()) and hides it behind count(): the section renders
-   * nothing and no core consumer ever sees it as a section. Every Daedalus
-   * read of a section list answers the same way through this one predicate,
-   * so a blank placeholder never surfaces as an element a client can name,
-   * anchor or style.
+   * Core marks a layout that "has purposefully had all sections removed"
+   * (as against one never instantiated, which is the truly empty list)
+   * with one layout_builder_blank section at delta 0 (SectionListTrait::
+   * hasBlankSection(), written by removeSection() when the last section
+   * goes and by removeAllSections(TRUE)) and hides it behind count(): the
+   * section renders nothing and no core consumer ever sees it as a
+   * section. Every Daedalus read of a section list answers the same way
+   * through this one predicate (the host's ownSections() and sections()
+   * included), so the marker never surfaces as an element a client can
+   * name, anchor or style. What the marker MEANS is the host's business:
+   * on a page it is a started, empty document that seeds nothing and
+   * renders as its own (ContentHost::seed()); on a template it is an
+   * empty template that seeds nothing (DocumentInstantiator::seed()).
    *
    * @param \Drupal\layout_builder\Section[] $sections
    *   A section list, root or display.
@@ -320,68 +454,32 @@ class DaedalusLayoutAdapter {
    * @return bool
    *   TRUE when the list is the blank placeholder.
    */
-  public function isBlankSectionList(array $sections): bool {
+  public static function isBlankSectionList(array $sections): bool {
     $first = reset($sections);
     return $first instanceof Section && $first->getLayoutId() === 'layout_builder_blank';
   }
 
   /**
-   * The sections an entity's own layout field holds.
+   * The root section list of a host's storage.
    *
-   * A blank placeholder list (core's marker, copied from the display into
-   * a fresh override's tempstore by core's PrepareLayout subscriber and
-   * persisted on save) reads as empty, so the field's own sections are the
-   * ones a client can actually see on the canvas.
+   * Root sections are read and written through the storage at every depth,
+   * never through a field: a nested-aware wrapper's own list is SCOPED
+   * (forSection()), so the root list is the wrapper at its root scope (its
+   * append, insert, remove and removeAll land on the root list and
+   * invalidate the tree index), and a plain storage is its own root list.
    *
-   * @param \Drupal\Core\Entity\FieldableEntityInterface $entity
-   *   The entity.
+   * @param \Drupal\layout_builder\SectionStorageInterface $storage
+   *   The host's storage, as sectionStorage() answered it or as an
+   *   operation passes it along.
    *
-   * @return \Drupal\layout_builder\Section[]
-   *   The field's sections, or an empty array without a layout field or
-   *   with only the blank placeholder.
+   * @return \Drupal\layout_builder\SectionListInterface
+   *   The root section list.
    */
-  public function getFieldSections(FieldableEntityInterface $entity): array {
-    if (!$entity->hasField('layout_builder__layout')) {
-      return [];
+  public function rootList(SectionStorageInterface $storage): SectionListInterface {
+    if ($storage instanceof NestedSectionStorageInterface) {
+      return $storage->forSection(NULL);
     }
-    $sections = [];
-    foreach ($entity->get('layout_builder__layout') as $item) {
-      $sections[] = $item->section;
-    }
-    return $this->isBlankSectionList($sections) ? [] : $sections;
-  }
-
-  /**
-   * Gets the default layout sections for a Layout Builder entity.
-   *
-   * When a Layout Builder entity has no overridden layout, sections come from
-   * the entity view display. A display whose default is only the blank
-   * placeholder has no sections: a reader sees an empty page, exactly what
-   * the canvas renders, and the first placement mints the page's first
-   * section through the ladder in createDefaultSection().
-   *
-   * @param \Drupal\Core\Entity\FieldableEntityInterface $entity
-   *   The entity to get default sections for.
-   *
-   * @return \Drupal\layout_builder\Section[]
-   *   The default sections, or an empty array if LB is not enabled.
-   */
-  public function getDefaultSections(FieldableEntityInterface $entity): array {
-    $display_id = $entity->getEntityTypeId() . '.' . $entity->bundle() . '.default';
-    $display = $this->entityTypeManager
-      ->getStorage('entity_view_display')
-      ->load($display_id);
-
-    if (!$display instanceof LayoutBuilderEntityViewDisplay) {
-      return [];
-    }
-
-    if (!$display->isLayoutBuilderEnabled()) {
-      return [];
-    }
-
-    $sections = $display->getSections();
-    return $this->isBlankSectionList($sections) ? [] : $sections;
+    return $storage;
   }
 
   /**
@@ -406,22 +504,21 @@ class DaedalusLayoutAdapter {
    *    mint a section it would itself reject, and layouts like
    *    layout_onecol are neither guaranteed installed nor allowed.
    *
-   * @param \Drupal\Core\Entity\FieldableEntityInterface $entity
-   *   The root entity whose display supplies the default-section setting.
+   * @param \Drupal\daedalus_blueprint\Host\HostInterface $host
+   *   The host whose display supplies the default-section setting.
    * @param string|null $uuid
    *   A client-provided section UUID to honor, or NULL for a fresh one.
    * @param \Drupal\layout_builder\SectionStorageInterface|null $storage
    *   The operation's already-resolved section storage, or NULL to resolve
-   *   one for the restrictions answer.
+   *   the host's for the restrictions answer.
    *
    * @return \Drupal\layout_builder\Section|null
    *   The new, uninserted section, or NULL when no allowed layout exists.
    */
-  public function createDefaultSection(FieldableEntityInterface $entity, ?string $uuid = NULL, ?SectionStorageInterface $storage = NULL): ?Section {
+  public function createDefaultSection(HostInterface $host, ?string $uuid = NULL, ?SectionStorageInterface $storage = NULL): ?Section {
     $settings = [];
     if ($this->isDaedalusLayoutAvailable()) {
-      $display = LayoutBuilderEntityViewDisplay::collectRenderDisplay($entity, 'full');
-      $settings = $display->getThirdPartySetting('daedalus_layout', 'default_section', []);
+      $settings = $host->display()?->getThirdPartySetting('daedalus_layout', 'default_section', []) ?? [];
     }
 
     // NULL means no restrictions answer is computable (hand-wired
@@ -429,7 +526,7 @@ class DaedalusLayoutAdapter {
     // then, but no layout is ever invented.
     $allowed = NULL;
     if ($this->placementRestrictions !== NULL) {
-      $allowed = $this->placementRestrictions->allowedLayoutDefinitions($storage ?? $this->getSectionStorage($entity));
+      $allowed = $this->placementRestrictions->allowedLayoutDefinitions($storage ?? $host->sectionStorage());
     }
 
     $configured = $settings['layout_plugin'] ?? NULL;
@@ -470,24 +567,25 @@ class DaedalusLayoutAdapter {
   /**
    * Locates a section nested inside a container component by its daedalus_layout UUID.
    *
-   * Root-level sections are found by iterating the entity's layout field
-   * directly; this method covers sections at any nesting depth via daedalus_layout's
-   * TreeIndex. Returns NULL without daedalus_layout (nested sections require it).
+   * Root-level sections are found by iterating the root list of the host's
+   * storage (ElementLocator::locateSection()); this method covers sections
+   * at any nesting depth via daedalus_layout's TreeIndex. Returns NULL
+   * without daedalus_layout (nested sections require it).
    *
-   * @param \Drupal\Core\Entity\FieldableEntityInterface $entity
-   *   The root entity to search.
+   * @param \Drupal\daedalus_blueprint\Host\HostInterface $host
+   *   The host to search.
    * @param string $uuid
    *   The section UUID to find.
    * @param object|null $sectionStorage
-   *   A nested-aware section storage the caller already holds, or NULL to load
-   *   the entity's.
+   *   A nested-aware section storage the caller already holds, or NULL to
+   *   resolve the host's.
    *
    * @return array{section: \Drupal\layout_builder\Section, storage: object}|null
    *   The section and the nested-aware storage (needed to bubble changes
    *   back to the root entity), or NULL if not found.
    */
-  public function locateNestedSection(FieldableEntityInterface $entity, string $uuid, ?object $sectionStorage = NULL): ?array {
-    $sectionStorage ??= $this->getSectionStorage($entity);
+  public function locateNestedSection(HostInterface $host, string $uuid, ?object $sectionStorage = NULL): ?array {
+    $sectionStorage ??= $host->sectionStorage();
     if (!$sectionStorage instanceof NestedSectionStorageInterface) {
       return NULL;
     }
@@ -509,41 +607,41 @@ class DaedalusLayoutAdapter {
    * Locates a Layout Builder component by UUID.
    *
    * When daedalus_layout is available, uses NestedAwareSectionStorage for O(1)
-   * component lookup at any nesting depth. Without daedalus_layout, performs a flat
-   * iteration of the entity's layout_builder__layout field.
+   * component lookup at any nesting depth. Without daedalus_layout, performs a
+   * flat iteration of the root sections of the host's storage.
    *
-   * @param \Drupal\Core\Entity\FieldableEntityInterface $entity
-   *   The root entity to search.
+   * @param \Drupal\daedalus_blueprint\Host\HostInterface $host
+   *   The host to search.
    * @param string $uuid
    *   The component UUID to find.
    * @param object|null $sectionStorage
    *   An already-resolved section storage to search. Pass this when one
    *   operation performs multiple locates that will mutate the results:
-   *   each getSectionStorage() call builds a fresh wrapper whose nested
-   *   Section/entity instances are NOT shared with other wrappers, so
-   *   mutations spread across wrappers lose each other on bubbling.
+   *   each sectionStorage() call on the host builds a fresh wrapper whose
+   *   nested Section/entity instances are NOT shared with other wrappers,
+   *   so mutations spread across wrappers lose each other on bubbling.
    *
    * @return \Drupal\daedalus_blueprint\ElementContext|null
    *   The component context, or NULL if the component is not found.
    */
-  public function locateElement(FieldableEntityInterface $entity, string $uuid, ?object $sectionStorage = NULL): ?ElementContext {
-    $sectionStorage ??= $this->getSectionStorage($entity);
+  public function locateElement(HostInterface $host, string $uuid, ?object $sectionStorage = NULL): ?ElementContext {
+    $sectionStorage ??= $host->sectionStorage();
     if ($sectionStorage === NULL) {
       return NULL;
     }
 
     if ($sectionStorage instanceof NestedSectionStorageInterface) {
-      return $this->locateElementViaTreeIndex($entity, $sectionStorage, $uuid);
+      return $this->locateElementViaTreeIndex($host, $sectionStorage, $uuid);
     }
 
-    return $this->locateElementFlat($entity, $sectionStorage, $uuid);
+    return $this->locateElementFlat($host, $sectionStorage, $uuid);
   }
 
   /**
    * Locates a component via daedalus_layout O(1) TreeIndex lookup.
    *
-   * @param \Drupal\Core\Entity\FieldableEntityInterface $entity
-   *   The root entity to search.
+   * @param \Drupal\daedalus_blueprint\Host\HostInterface $host
+   *   The host to search.
    * @param \Drupal\daedalus_layout\NestedSectionStorageInterface $wrapped
    *   The tempstore-aware nested section storage.
    * @param string $uuid
@@ -552,7 +650,7 @@ class DaedalusLayoutAdapter {
    * @return \Drupal\daedalus_blueprint\ElementContext|null
    *   The component context, or NULL if not found.
    */
-  protected function locateElementViaTreeIndex(FieldableEntityInterface $entity, NestedSectionStorageInterface $wrapped, string $uuid): ?ElementContext {
+  protected function locateElementViaTreeIndex(HostInterface $host, NestedSectionStorageInterface $wrapped, string $uuid): ?ElementContext {
     $component = $wrapped->getComponent($uuid);
     if ($component === NULL) {
       return NULL;
@@ -560,8 +658,8 @@ class DaedalusLayoutAdapter {
 
     $section = $wrapped->getSectionFor($uuid);
     // Owner-entity plumbing is gone: components at every depth belong to the
-    // root entity (nested sections are values, not entities).
-    $parent_entity = $entity;
+    // host's fields entity (nested sections are values, not entities).
+    $parent_entity = $host->fields();
     $tree_path = $wrapped->getPath($uuid);
     $nested_context = $wrapped->getNestedContext($uuid);
 
@@ -573,6 +671,7 @@ class DaedalusLayoutAdapter {
     return new ElementContext(
       type: ElementContext::TYPE_LB_COMPONENT,
       target: $component,
+      host: $host,
       parentEntity: $parent_entity,
       path: $this->buildPathString($wrapped, $tree_path),
       section: $section,
@@ -587,8 +686,8 @@ class DaedalusLayoutAdapter {
    * Rides walkComponents(), so the path it reports is the one the
    * block-content sweep yields for the same component.
    *
-   * @param \Drupal\Core\Entity\FieldableEntityInterface $entity
-   *   The entity with a layout_builder__layout field.
+   * @param \Drupal\daedalus_blueprint\Host\HostInterface $host
+   *   The host to search.
    * @param \Drupal\layout_builder\SectionStorageInterface $sectionStorage
    *   The tempstore-aware section storage.
    * @param string $uuid
@@ -597,13 +696,14 @@ class DaedalusLayoutAdapter {
    * @return \Drupal\daedalus_blueprint\ElementContext|null
    *   The component context, or NULL if not found.
    */
-  protected function locateElementFlat(FieldableEntityInterface $entity, SectionStorageInterface $sectionStorage, string $uuid): ?ElementContext {
+  protected function locateElementFlat(HostInterface $host, SectionStorageInterface $sectionStorage, string $uuid): ?ElementContext {
     foreach ($this->walkComponents($sectionStorage) as $path => [$section_index, $section, $component]) {
       if ($component->getUuid() === $uuid) {
         return new ElementContext(
           type: ElementContext::TYPE_LB_COMPONENT,
           target: $component,
-          parentEntity: $entity,
+          host: $host,
+          parentEntity: $host->fields(),
           path: $path,
           section: $section,
           sectionIndex: $section_index,
@@ -623,15 +723,15 @@ class DaedalusLayoutAdapter {
    * root sections. Extraction (unserialize/revision load) happens on
    * demand so the caller can stop early.
    *
-   * @param \Drupal\Core\Entity\FieldableEntityInterface $entity
-   *   The root entity.
+   * @param \Drupal\daedalus_blueprint\Host\HostInterface $host
+   *   The host.
    *
    * @return \Generator
    *   Yields arrays with 'entity' (FieldableEntityInterface),
    *   'component_uuid' (string), and 'path' (string) keys.
    */
-  public function getBlockContentEntities(FieldableEntityInterface $entity): \Generator {
-    $sectionStorage = $this->getSectionStorage($entity);
+  public function getBlockContentEntities(HostInterface $host): \Generator {
+    $sectionStorage = $host->sectionStorage();
     if ($sectionStorage instanceof NestedSectionStorageInterface) {
       yield from $this->getBlockContentEntitiesViaTreeIndex($sectionStorage);
     }
@@ -728,17 +828,17 @@ class DaedalusLayoutAdapter {
    *   The zero-based positional index of the component within the section.
    *
    * @return string
-   *   The segment, such as "layout_builder__layout[0].components[1]".
+   *   The segment, such as "layout[0].components[1]".
    */
   protected function componentPath(int $section_index, int $component_index): string {
-    return "layout_builder__layout[{$section_index}].components[{$component_index}]";
+    return "layout[{$section_index}].components[{$component_index}]";
   }
 
   /**
    * Builds a path string from a TreeIndex path array.
    *
    * Converts the alternating [sectionDelta, blockUuid, ...] array into
-   * a dotted path like "layout_builder__layout[0].components[1]".
+   * a dotted path like "layout[0].components[1]".
    *
    * @param object $wrapped
    *   The NestedAwareSectionStorage instance.

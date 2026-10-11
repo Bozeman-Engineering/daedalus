@@ -17,7 +17,7 @@ import {
   sessionFocuses,
   wearsDocument,
 } from '../../js/src/surface-state.js';
-import { stageLine, updateSession, saveSession } from '../../js/src/pending.js';
+import { skinSession, stageLine, updateSession, saveSession } from '../../js/src/pending.js';
 
 test('the vocabulary is the styling place and the materials catalog', () => {
   assert.deepEqual(PLACES, ['styles', 'materials']);
@@ -117,6 +117,32 @@ test('reanchorSession moves only an update session\'s preview anchor', () => {
   const save = saveSession('block:b1');
   assert.equal(reanchorSession(save, 'block:b2'), save);
   assert.equal(reanchorSession(null, 'block:b2'), null);
+  // A skin session re-anchors like an update session (its lines are
+  // scope-relative; only the previewing element travels).
+  const skin = skinSession('base:h2', 'block:b1');
+  assert.equal(reanchorSession(skin, 'block:b2').anchor, 'block:b2');
+  assert.equal(reanchorSession(skin, 'block:b1'), skin);
+});
+
+test('a skin document is worn by every subject whose stack reads its scope: the move rule and the wearing read key on the skin scopes', () => {
+  const bare = { default: { padding: '1rem' } };
+  assert.equal(wearsDocument(bare, 'skin:base:h2', ['base:h2', 'kind:block', 'block_type:text']), true);
+  assert.equal(wearsDocument(bare, 'skin:base:h2', ['base:p', 'kind:block']), false);
+  assert.equal(wearsDocument(bare, 'skin:base:h2'), false);
+  // A variant reference never reads the scopes.
+  assert.equal(wearsDocument(bare, 'cta', ['base:h2']), false);
+  assert.deepEqual(
+    selectionMove({ place: 'styles', editing: 'skin:base:h2' }, { entry: bare, pending: 2, skinScopes: ['base:h2', 'kind:block'] }),
+    { place: 'styles', editing: 'skin:base:h2', prompt: false },
+  );
+  assert.deepEqual(
+    selectionMove({ place: 'styles', editing: 'skin:base:h2' }, { entry: bare, pending: 2, skinScopes: ['base:p', 'kind:block'] }),
+    { place: 'styles', editing: null, prompt: true },
+  );
+  // One session per document: a skin session focuses its skin document.
+  assert.equal(sessionFocuses(skinSession('base:h2', 'block:b1'), 'skin:base:h2'), true);
+  assert.equal(sessionFocuses(skinSession('base:h2', 'block:b1'), 'skin:base:p'), false);
+  assert.equal(sessionFocuses(skinSession('base:h2', 'block:b1'), 'cta'), false);
 });
 
 test('sessionFocuses ties the open update session to the edited document', () => {

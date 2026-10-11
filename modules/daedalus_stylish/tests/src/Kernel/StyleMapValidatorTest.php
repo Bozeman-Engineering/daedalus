@@ -22,6 +22,7 @@ use Drupal\Tests\media\Traits\MediaTypeCreationTrait;
 use Drupal\Tests\user\Traits\UserCreationTrait;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
+use Drupal\Tests\daedalus_stylish\Traits\HostTrait;
 
 /**
  * Tests style-map resolution through the spine's instance namespaces.
@@ -44,6 +45,7 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 #[RunTestsInSeparateProcesses]
 class StyleMapValidatorTest extends KernelTestBase {
 
+  use HostTrait;
   use DesignSystemActivationTrait;
 
   /**
@@ -100,13 +102,20 @@ class StyleMapValidatorTest extends KernelTestBase {
     $this->installEntitySchema('daedalus_variant');
     $this->installEntitySchema('daedalus_swatch');
     $this->installEntitySchema('daedalus_animation');
+    $this->installEntitySchema('daedalus_font');
     $this->installConfig(['daedalus_stylish']);
     // Activating a design system syncs every enabled module's shipped
     // definitions (ShippedSync::onDesignSystemActivated()): the importers
     // mirror motion-* and --swatch-* references into the usage tables and
     // switch to an administrative account, so the fixture carries both.
     $this->installEntitySchema('user');
-    $this->installSchema('daedalus_stylish', ['daedalus_variant_usage', 'daedalus_swatch_usage', 'daedalus_animation_usage']);
+    $this->installSchema('daedalus_stylish', [
+      'daedalus_variant_usage',
+      'daedalus_swatch_usage',
+      'daedalus_animation_usage',
+      'daedalus_token_usage',
+      'daedalus_font_usage',
+    ]);
     $this->setUpCurrentUser([], [], TRUE);
     $this->validator = $this->container->get('daedalus_stylish.style_map_validator');
   }
@@ -750,7 +759,7 @@ class StyleMapValidatorTest extends KernelTestBase {
     $root->appendComponent(SectionBlock::createComponent($nested, 'content'));
     $entity = EntityTest::create(['name' => 'host', 'layout_builder__layout' => [$root]]);
     $entity->save();
-    $context = ['entity' => $entity];
+    $context = ['host' => $this->host($entity)];
 
     // The allowlist refuses the shorthand and the inline sides at both
     // depths and grants the declared side to both.
@@ -879,7 +888,7 @@ class StyleMapValidatorTest extends KernelTestBase {
     $root->appendComponent(SectionBlock::createComponent($nested, 'content'));
     $entity = EntityTest::create(['name' => 'host', 'layout_builder__layout' => [$root]]);
     $entity->save();
-    $context = ['entity' => $entity];
+    $context = ['host' => $this->host($entity)];
     $block = ['default' => ['max-width' => '60rem', 'padding-top' => '2rem']];
     $paths = static fn (array $warnings): array => array_map(static fn ($warning) => $warning->getPath(), $warnings);
 

@@ -19,7 +19,7 @@ use Drupal\daedalus_blueprint\Materials\RelativeSelector;
  * "::p > *"): host style maps (the RelativeSelectorSweep, riding
  * daedalus_layout's transform spine), daedalus_variant styles (all
  * revisions, composition slot paths and fragment references included),
- * daedalus_skin defaults, and stored stencils. The rewrite is
+ * daedalus_skin defaults. The rewrite is
  * idempotent: a canonical key rewrites to itself and reports nothing.
  *
  * Shipped-unmodified variants and skins are SKIPPED: the sync lane owns
@@ -187,22 +187,31 @@ class RelativeSelectorConvergence {
     $ids = $storage->getQuery()->accessCheck(FALSE)->execute();
     foreach ($storage->loadMultiple($ids) as $skin) {
       /** @var \Drupal\daedalus_stylish\DaedalusStylishSkinInterface $skin */
-      if ($skin->isShipped() && !$skin->isModified()) {
-        continue;
-      }
+      // A shipped unmodified package layer is left to the sync lane; the
+      // site layer over it is the site's and is converged either way.
+      $package_swept = !($skin->isShipped() && !$skin->isModified());
       $revision_ids = array_keys($storage->getQuery()->allRevisions()->accessCheck(FALSE)->condition('id', $skin->id())->execute());
       foreach ($revision_ids as $revision_id) {
         /** @var \Drupal\daedalus_stylish\DaedalusStylishSkinInterface $revision */
         $revision = $storage->loadRevision($revision_id);
         $changed = FALSE;
-        $defaults = $revision->getDefaults();
-        foreach ($defaults as $scope => $relatives) {
-          if (is_array($relatives)) {
-            $defaults[$scope] = $this->convergeEntries($relatives, sprintf('Skin "%s" (revision %s) defaults %s', $skin->getMachineName(), $revision_id, $scope), $lines, $changed);
+        $layers = ['site' => [$revision->siteDefaults(), $revision->setSiteDefaults(...)]];
+        if ($package_swept) {
+          $layers['package'] = [$revision->packageDefaults(), $revision->setPackageDefaults(...)];
+        }
+        foreach ($layers as $layer => [$defaults, $write]) {
+          $layer_changed = FALSE;
+          foreach ($defaults as $scope => $relatives) {
+            if (is_array($relatives)) {
+              $defaults[$scope] = $this->convergeEntries($relatives, sprintf('Skin "%s" (revision %s) %s defaults %s', $skin->getMachineName(), $revision_id, $layer, $scope), $lines, $layer_changed);
+            }
+          }
+          if ($layer_changed) {
+            $write($defaults);
+            $changed = TRUE;
           }
         }
         if ($changed) {
-          $revision->setDefaults($defaults);
           $revision->setNewRevision(FALSE);
           $revision->save();
         }
@@ -211,66 +220,6 @@ class RelativeSelectorConvergence {
     return $lines;
   }
 
-  /**
-   * Converges every stored stencil's styles, at every node depth.
-   *
-   * File-shipped stencils are module code and cannot be rewritten here;
-   * one still carrying a legacy spelling fails loudly at instantiate time
-   * with the grammar's corrective.
-   *
-   * @return string[]
-   *   Report lines.
-   */
-  public function convergeStencils(): array {
-    $lines = [];
-    if (!$this->entityTypeManager->hasDefinition('stencil')) {
-      return $lines;
-    }
-    $storage = $this->entityTypeManager->getStorage('stencil');
-    $ids = $storage->getQuery()->accessCheck(FALSE)->execute();
-    foreach ($storage->loadMultiple($ids) as $stencil) {
-      /** @var \Drupal\daedalus_blueprint_stencil\StencilInterface $stencil */
-      $changed = FALSE;
-      $element = $this->convergeStencilNode($stencil->getElement(), sprintf('Stencil "%s"', $stencil->getMachineName()), $lines, $changed);
-      if ($changed) {
-        $stencil->setElement($element);
-        $stencil->save();
-      }
-    }
-    return $lines;
-  }
 
-  /**
-   * Recursively converges one stencil node's styles.
-   */
-  protected function convergeStencilNode(array $node, string $context, array &$lines, bool &$changed): array {
-    foreach (['regions', 'children'] as $axis) {
-      if (empty($node[$axis]) || !is_array($node[$axis])) {
-        continue;
-      }
-      if ($axis === 'regions') {
-        foreach ($node[$axis] as $region => $children) {
-          if (!is_array($children)) {
-            continue;
-          }
-          foreach ($children as $i => $child) {
-            if (is_array($child)) {
-              $node[$axis][$region][$i] = $this->convergeStencilNode($child, $context, $lines, $changed);
-            }
-          }
-        }
-        continue;
-      }
-      foreach ($node[$axis] as $i => $child) {
-        if (is_array($child)) {
-          $node[$axis][$i] = $this->convergeStencilNode($child, $context, $lines, $changed);
-        }
-      }
-    }
-    if (!empty($node['styles']) && is_array($node['styles'])) {
-      $node['styles'] = $this->convergeEntries($node['styles'], "$context styles", $lines, $changed);
-    }
-    return $node;
-  }
 
 }

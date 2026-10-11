@@ -399,7 +399,7 @@ export const BoxModelDiagram = ({
   // "from Base"; a variant cell names its variant when the library can
   // label it, a defaults cell its supplier (the declaring layer's scope
   // for a declaration, so a kind block says "kind"), each with "at
-  // @condition" when the delivering block is not the pose ("from the
+  // !condition" when the delivering block is not the pose ("from the
   // active skin at Base").
   const stateLabel = (cell) => {
     if (cell.state === 'computed') {
@@ -410,12 +410,12 @@ export const BoxModelDiagram = ({
       if (cell.here) {
         return condition === 'default'
           ? Drupal.t('set here')
-          : Drupal.t('set here at @condition', {
-              '@condition': conditionText(condition, conditions),
+          : Drupal.t('set here at !condition', {
+              '!condition': conditionText(condition, conditions),
             });
       }
-      return Drupal.t('from @condition', {
-        '@condition': conditionText(cell.from, conditions),
+      return Drupal.t('from !condition', {
+        '!condition': conditionText(cell.from, conditions),
       });
     }
     let supplier;
@@ -424,16 +424,16 @@ export const BoxModelDiagram = ({
     } else if (cell.state === 'skin') {
       supplier = Drupal.t('the active skin');
     } else {
-      supplier = Drupal.t('the @declaration declaration', {
-        '@declaration':
+      supplier = Drupal.t('the !declaration declaration', {
+        '!declaration':
           declarationLabel(cell.layer?.scope ?? null) ?? Drupal.t('element'),
       });
     }
     return cell.here
-      ? Drupal.t('from @supplier', { '@supplier': supplier })
-      : Drupal.t('from @supplier at @condition', {
-          '@supplier': supplier,
-          '@condition': conditionText(cell.from, conditions),
+      ? Drupal.t('from !supplier', { '!supplier': supplier })
+      : Drupal.t('from !supplier at !condition', {
+          '!supplier': supplier,
+          '!condition': conditionText(cell.from, conditions),
         });
   };
 
@@ -795,9 +795,9 @@ export const BoxModelDiagram = ({
   const cellTitle = (cell) => {
     const gesture = gestureTitle(cell);
     if (cell.granted && !blocked && !cell.opaque && cell.state !== 'computed') {
-      const origin = Drupal.t('@value @origin', {
-        '@value': cell.shown ?? '',
-        '@origin': stateLabel(cell),
+      const origin = Drupal.t('!value !origin', {
+        '!value': cell.shown ?? '',
+        '!origin': stateLabel(cell),
       }).trim();
       return gesture ? `${origin} · ${gesture}` : origin;
     }
@@ -810,8 +810,8 @@ export const BoxModelDiagram = ({
     }
     if (blocked) {
       return Drupal.t(
-        'A @property value the diagram cannot split per side is set (calc/var). Edit @property itself.',
-        { '@property': ringName },
+        'A !property value the diagram cannot split per side is set (calc/var). Edit !property itself.',
+        { '!property': ringName },
       );
     }
     if (cell.opaque) {
@@ -860,10 +860,10 @@ export const BoxModelDiagram = ({
             .join(' ')}
           style={cell.color ? { '--daedalus-stylish-origin': cell.color } : undefined}
           title={cellTitle(cell)}
-          aria-label={Drupal.t('@label @side: @value (not stylable here)', {
-            '@label': ringLabel,
-            '@side': sideLabels[cell.side],
-            '@value': cell.shown ?? Drupal.t('not set'),
+          aria-label={Drupal.t('!label !side: !value (not stylable here)', {
+            '!label': ringLabel,
+            '!side': sideLabels[cell.side],
+            '!value': cell.shown ?? Drupal.t('not set'),
           })}
         >
           {face(cell)}
@@ -890,11 +890,11 @@ export const BoxModelDiagram = ({
         className={classes}
         aria-pressed={selected === cell.side}
         style={cell.color ? { '--daedalus-stylish-origin': cell.color } : undefined}
-        aria-label={Drupal.t('@label @side: @value (@state)', {
-          '@label': ringLabel,
-          '@side': sideLabels[cell.side],
-          '@value': cell.shown ?? Drupal.t('not set'),
-          '@state': stateLabel(cell),
+        aria-label={Drupal.t('!label !side: !value (!state)', {
+          '!label': ringLabel,
+          '!side': sideLabels[cell.side],
+          '!value': cell.shown ?? Drupal.t('not set'),
+          '!state': stateLabel(cell),
         })}
         title={cellTitle(cell)}
         onPointerDown={onCellPointerDown(cell)}
@@ -914,9 +914,9 @@ export const BoxModelDiagram = ({
     );
   };
 
-  const editorLabel = Drupal.t('@label @side', {
-    '@label': ringLabel,
-    '@side': sideLabels[editorSide],
+  const editorLabel = Drupal.t('!label !side', {
+    '!label': ringLabel,
+    '!side': sideLabels[editorSide],
   });
 
   const rootClasses = [
@@ -946,9 +946,9 @@ export const BoxModelDiagram = ({
               .join(' ')}
             aria-label={
               offered.length === SIDES.length
-                ? Drupal.t('@label, all four sides', { '@label': ringLabel })
-                : Drupal.t('@label, all stylable sides', {
-                    '@label': ringLabel,
+                ? Drupal.t('!label, all four sides', { '!label': ringLabel })
+                : Drupal.t('!label, all stylable sides', {
+                    '!label': ringLabel,
                   })
             }
             title={

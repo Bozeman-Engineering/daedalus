@@ -9,12 +9,8 @@ use Drupal\Core\Entity\EntityTypeBundleInfoInterface;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\Entity\FieldableEntityInterface;
 use Drupal\Core\Field\FieldDefinitionInterface;
-use Drupal\Core\Layout\LayoutPluginManagerInterface;
 use Drupal\daedalus_blueprint\FieldHandler\FieldHandlerBase;
 use Drupal\daedalus_blueprint\FieldHandler\FieldHandlerManager;
-use Drupal\daedalus_blueprint\LayoutBuilder\AvailableLayouts;
-use Drupal\daedalus_blueprint\LayoutBuilder\ContainerLayout;
-use Drupal\daedalus_blueprint\LayoutBuilder\PlacementRestrictionsInterface;
 use Drupal\daedalus_blueprint\Result\BlueprintError;
 use Drupal\daedalus_blueprint\Utility\FormOnlyStub;
 use Drupal\daedalus_blueprint\Utility\SampleRequest;
@@ -49,19 +45,12 @@ class StructuralValidator {
    *   The entity field manager.
    * @param \Drupal\daedalus_blueprint\FieldHandler\FieldHandlerManager $fieldHandlerManager
    *   The field handler manager.
-   * @param \Drupal\Core\Layout\LayoutPluginManagerInterface|null $layoutPluginManager
-   *   The layout plugin manager (NULL when layout_discovery is not installed).
-   * @param \Drupal\daedalus_blueprint\LayoutBuilder\PlacementRestrictionsInterface|null $placementRestrictions
-   *   The placement-restriction spine (NULL for no restriction enforcement,
-   *   e.g. in test isolation).
    */
   public function __construct(
     protected EntityTypeManagerInterface $entityTypeManager,
     protected EntityTypeBundleInfoInterface $bundleInfo,
     protected EntityFieldManagerInterface $entityFieldManager,
     protected FieldHandlerManager $fieldHandlerManager,
-    protected ?LayoutPluginManagerInterface $layoutPluginManager = NULL,
-    protected ?PlacementRestrictionsInterface $placementRestrictions = NULL,
   ) {}
 
   /**
@@ -72,13 +61,11 @@ class StructuralValidator {
    *
    * @param array $data
    *   The blueprint data with keys: entity_type, bundle, fields.
-   * @param string $view_mode
-   *   The view mode for layout_builder_restrictions enforcement.
    *
    * @return \Drupal\daedalus_blueprint\Result\BlueprintError[]
    *   Structural errors. Empty if valid.
    */
-  public function validate(array $data, string $view_mode = 'full'): array {
+  public function validate(array $data): array {
     $entity_type = $data['entity_type'] ?? NULL;
     $errors = $this->validateEntityType($entity_type);
     if (!empty($errors)) {
@@ -104,7 +91,7 @@ class StructuralValidator {
         code: 'UNKNOWN_KEY',
         message: "Unknown top-level key '$unknown_key'.",
         context: ['expected' => static::BLUEPRINT_ROOT_KEYS],
-        hint: "Entity field values belong inside the \"fields\" object, e.g. {\"fields\": {\"$unknown_key\": ...}}. Only \"layout_builder__layout\" sits at the top level.",
+        hint: "Entity field values belong inside the \"fields\" object, e.g. {\"fields\": {\"$unknown_key\": ...}}. Only the document keys \"layout\" and \"styles\" sit at the top level.",
       );
     }
 
@@ -115,14 +102,35 @@ class StructuralValidator {
       ));
     }
 
-    // Validate layout_builder__layout if present. Restriction answers are
-    // display-level here (whole-layout writes stage sections that do not
-    // exist in storage yet, so per-region providers cannot be consulted;
-    // targeted ops enforce those at op time).
-    $layout = $data['layout_builder__layout'] ?? NULL;
-    if ($layout !== NULL && is_array($layout)) {
-      $storage = $this->placementRestrictions?->defaultsStorage($entity_type, $bundle, $view_mode);
-      $all_errors = array_merge($all_errors, $this->validateLayout($layout, $storage));
+    // The layout's shape: a list of nodes, the lean node tree. Its grammar
+    // is the instantiator's and everything it names (layouts, block types,
+    // placement restrictions, fields) is the op door's, judged when the
+    // tree expands in Phase B; Phase A refuses only what no tree could be.
+    if (array_key_exists('layout', $data)) {
+      $layout = $data['layout'];
+      if (!is_array($layout) || !array_is_list($layout)) {
+        $all_errors[] = new BlueprintError(
+          path: 'layout',
+          code: 'INVALID_LAYOUT',
+          message: 'layout is a list of container nodes.',
+          hint: 'Provide the document as a list of tree nodes, e.g. {"layout": [{"kind": "container", "layout_id": "...", "children": [...]}]}.',
+        );
+      }
+    }
+
+    // The style map's shape: an object of selectable keys. Its grammar is
+    // the style store's handler's (Phase B); Phase A refuses only what no
+    // map could be.
+    if (array_key_exists('styles', $data)) {
+      $styles = $data['styles'];
+      if (!is_array($styles) || (array_is_list($styles) && $styles !== [])) {
+        $all_errors[] = new BlueprintError(
+          path: 'styles',
+          code: 'INVALID_STYLE_MAP',
+          message: 'styles is an object keyed by selectable key.',
+          hint: 'Provide an object mapping selectable keys to style entries, e.g. {"styles": {"block:UUID": {"default": {"padding": "2rem"}}}}.',
+        );
+      }
     }
 
     return $all_errors;
@@ -247,11 +255,14 @@ class StructuralValidator {
   /**
    * Valid top-level keys in a blueprint's JSON structure.
    *
-   * Entity field values belong inside the "fields" object. The only field
-   * hoisted to the top level is "layout_builder__layout" (handled by the
-   * layout deserializer, not a field handler). "entity_type"/"bundle"/
-   * "langcode" are addressing metadata; "_root_entity" is an internal marker
-   * set when building a sub-entity blueprint for an operation.
+   * Entity field values belong inside the "fields" object. The document
+   * rides beside it at the top level for every host: "layout" (the section
+   * tree, the layout deserializer's) and "styles" (the style map, the host's
+   * style store's). "entity_type"/"bundle"/"langcode" are addressing
+   * metadata; "_root_entity" is an internal marker set when building a
+   * sub-entity blueprint for an operation; "_verdict" is the read's
+   * capability stamp (VerdictStamper), delivery-only and ignored on echo,
+   * so a read deserializes as written.
    *
    * @var string[]
    */
@@ -260,8 +271,10 @@ class StructuralValidator {
     'bundle',
     'langcode',
     'fields',
-    'layout_builder__layout',
+    'layout',
+    'styles',
     '_root_entity',
+    '_verdict',
   ];
 
   /**
@@ -589,6 +602,17 @@ class StructuralValidator {
       }
 
       if (!isset($processable_fields[$field_name])) {
+        // A document field (the layout, the style map) spelled as a field
+        // would be dropped on the floor by the write path; refuse it with
+        // the road it belongs on.
+        if ($this->fieldHandlerManager->isSkippedFieldType($field_definitions[$field_name]->getType())) {
+          $errors[] = new BlueprintError(
+            path: $field_path,
+            code: 'DOCUMENT_KEY_IN_FIELDS',
+            message: "'$field_name' is the document, not a field.",
+            hint: 'The layout and the style map ride the top-level "layout" and "styles" keys of the blueprint, never "fields".',
+          );
+        }
         continue;
       }
 
@@ -644,393 +668,6 @@ class StructuralValidator {
         $types[] = $id;
       }
     }
-    sort($types);
-    return $types;
-  }
-
-  /**
-   * Validates the layout_builder__layout array.
-   *
-   * Checks layout plugin IDs, regions, block types, and block fields.
-   *
-   * @param array $layout
-   *   The layout sections array from the blueprint.
-   * @param object|null $storage
-   *   The defaults section storage governing restriction answers, or NULL
-   *   when none is resolvable.
-   *
-   * @return \Drupal\daedalus_blueprint\Result\BlueprintError[]
-   *   Layout validation errors.
-   */
-  protected function validateLayout(array $layout, ?object $storage): array {
-    if ($this->layoutPluginManager === NULL) {
-      // Layout discovery not available — skip layout validation.
-      return [];
-    }
-
-    $errors = [];
-
-    foreach ($layout as $section_index => $section) {
-      if (!is_array($section)) {
-        continue;
-      }
-      $errors = array_merge($errors, $this->validateSectionNode(
-        $section, "layout_builder__layout[{$section_index}]", $storage,
-      ));
-    }
-
-    return $errors;
-  }
-
-  /**
-   * Validates one section node, recursing into nested section nodes.
-   *
-   * The one section grammar at every depth: a region entry carrying
-   * layout_id is a nested section node, identical in shape, validated
-   * identically (same restriction answer — the root display governs all
-   * depths).
-   *
-   * @param array $section
-   *   The section node.
-   * @param string $section_path
-   *   The error path for this section.
-   * @param object|null $storage
-   *   The defaults section storage governing restriction answers, or NULL.
-   *
-   * @return \Drupal\daedalus_blueprint\Result\BlueprintError[]
-   *   Section validation errors.
-   */
-  protected function validateSectionNode(array $section, string $section_path, ?object $storage): array {
-    $errors = [];
-
-    // Validate layout_id.
-    $layout_id = $section['layout_id'] ?? NULL;
-    $layout_errors = $this->validateLayoutId($section_path, $layout_id, $storage);
-    if (!empty($layout_errors)) {
-      // Can't validate regions without a valid layout.
-      return $layout_errors;
-    }
-
-    // Validate regions.
-    $regions = $section['regions'] ?? [];
-    if (is_array($regions)) {
-      foreach ($regions as $region_name => $region_components) {
-        // Validate region name against layout plugin.
-        $region_path = "{$section_path}.regions.{$region_name}";
-        $region_errors = $this->validateRegion($region_path, $region_name, $layout_id);
-        $errors = array_merge($errors, $region_errors);
-
-        if (is_array($region_components)) {
-          foreach ($region_components as $comp_index => $component) {
-            $errors = array_merge($errors, $this->validateElementEntry(
-              $component, "{$region_path}[{$comp_index}]", $layout_id, $storage,
-            ));
-          }
-        }
-      }
-    }
-
-    // Validate the ordered children list — the container-section shape (a
-    // container layout's sole region is a storage vestige, see
-    // ContainerLayout). Refused for multi-region layouts and never combined
-    // with the regions map, mirroring the deserializer.
-    if (array_key_exists('children', $section)) {
-      $definition = $this->layoutPluginManager->getDefinition($layout_id, FALSE);
-      if (!ContainerLayout::isContainer($definition)) {
-        $errors[] = new BlueprintError(
-          path: "{$section_path}.children",
-          code: 'INVALID_CHILDREN',
-          message: "Layout '$layout_id' is not a container layout, so its elements are keyed by region.",
-          context: ['available' => $definition?->getRegionNames() ?? []],
-          hint: 'Use regions: {REGION_NAME: [...]}; the ordered children list is the container-section shape.',
-        );
-      }
-      elseif (!empty($regions)) {
-        $errors[] = new BlueprintError(
-          path: "{$section_path}.children",
-          code: 'INVALID_CHILDREN',
-          message: 'A section node carries children or regions, never both.',
-          hint: 'A container section lists its elements in children; drop the regions key.',
-        );
-      }
-      elseif (!is_array($section['children']) || !array_is_list($section['children'])) {
-        $errors[] = new BlueprintError(
-          path: "{$section_path}.children",
-          code: 'INVALID_CHILDREN',
-          message: 'children is an ordered array of blocks and nested sections.',
-          hint: 'Provide a list, not a map: container sections have no addressable regions.',
-        );
-      }
-      else {
-        foreach ($section['children'] as $comp_index => $component) {
-          $errors = array_merge($errors, $this->validateElementEntry(
-            $component, "{$section_path}.children[{$comp_index}]", $layout_id, $storage,
-          ));
-        }
-      }
-    }
-
-    return $errors;
-  }
-
-  /**
-   * Validates one element-list entry (a block or a nested section).
-   *
-   * The shared rule for region lists and container children lists: an entry
-   * carrying layout_id is a nested section node and recurses through the
-   * one section grammar; anything else validates as a block entry.
-   *
-   * @param mixed $component
-   *   The entry (non-arrays — e.g. bare relocation UUIDs — pass through).
-   * @param string $comp_path
-   *   The error path for the entry.
-   * @param string $layout_id
-   *   The parent section's layout plugin ID.
-   * @param object|null $storage
-   *   The defaults section storage governing restriction answers, or NULL.
-   *
-   * @return \Drupal\daedalus_blueprint\Result\BlueprintError[]
-   *   Entry validation errors.
-   */
-  protected function validateElementEntry(mixed $component, string $comp_path, string $layout_id, ?object $storage): array {
-    if (!is_array($component)) {
-      return [];
-    }
-    if (isset($component['layout_id'])) {
-      // An entry carrying layout_id is a nested section node.
-      return $this->validateSectionNode($component, $comp_path, $storage);
-    }
-    return $this->validateLayoutElement($comp_path, $component, $layout_id, $storage);
-  }
-
-  /**
-   * Validates a layout plugin ID.
-   *
-   * @param string $section_path
-   *   The error path for the section.
-   * @param mixed $layout_id
-   *   The layout plugin ID.
-   * @param object|null $storage
-   *   The defaults section storage governing restriction answers, or NULL.
-   *
-   * @return \Drupal\daedalus_blueprint\Result\BlueprintError[]
-   *   Errors if invalid.
-   */
-  protected function validateLayoutId(string $section_path, mixed $layout_id, ?object $storage = NULL): array {
-    if ($layout_id === NULL || $layout_id === '') {
-      return [
-        new BlueprintError(
-          path: "{$section_path}.layout_id",
-          code: 'INVALID_LAYOUT',
-          message: 'Layout plugin ID is required.',
-          context: ['available' => AvailableLayouts::summarize($this->layoutPluginManager)],
-          hint: 'Provide a valid layout plugin ID; each entry\'s columns is how many regions sit side by side.',
-        ),
-      ];
-    }
-
-    $available = AvailableLayouts::summarize($this->layoutPluginManager);
-    if (!in_array($layout_id, array_column($available, 'id'), TRUE)) {
-      return [
-        new BlueprintError(
-          path: "{$section_path}.layout_id",
-          code: 'INVALID_LAYOUT',
-          message: "Layout plugin '$layout_id' does not exist.",
-          context: ['available' => $available],
-          hint: 'Check the layout plugin ID spelling; each entry\'s columns is how many regions sit side by side.',
-        ),
-      ];
-    }
-
-    // Restriction enforcement at the spine: the display's allowed layouts.
-    if ($this->placementRestrictions !== NULL
-        && !$this->placementRestrictions->layoutAllowed($layout_id, $storage)) {
-      return [
-        new BlueprintError(
-          path: "{$section_path}.layout_id",
-          code: 'RESTRICTED_LAYOUT',
-          message: "Layout '$layout_id' is not allowed for this entity display.",
-          context: ['allowed_layouts' => array_keys($this->placementRestrictions->allowedLayoutDefinitions($storage))],
-          hint: 'Pick an allowed layout, or update the display\'s layout restrictions.',
-        ),
-      ];
-    }
-
-    return [];
-  }
-
-  /**
-   * Validates a layout block entry's structure.
-   *
-   * Validates block type (for inline blocks), block fields, and plugin_id
-   * (for non-inline blocks). Region is validated at the container level.
-   *
-   * @param string $comp_path
-   *   The error path for the component.
-   * @param array $component
-   *   The component data.
-   * @param string $layout_id
-   *   The parent section's layout plugin ID.
-   * @param object|null $storage
-   *   The defaults section storage governing restriction answers, or NULL.
-   *
-   * @return \Drupal\daedalus_blueprint\Result\BlueprintError[]
-   *   Component validation errors.
-   */
-  protected function validateLayoutElement(string $comp_path, array $component, string $layout_id, ?object $storage): array {
-    $errors = [];
-
-    // Determine if inline block or non-inline.
-    $block_type = $component['block_type'] ?? NULL;
-    $plugin_id = $component['plugin_id'] ?? NULL;
-
-    if ($block_type !== NULL) {
-      // Inline block: validate block_type and block_fields.
-      $block_type_errors = $this->validateBlockType($comp_path, $block_type, $storage);
-      if (empty($block_type_errors)) {
-        // Validate block_fields if present.
-        $block_fields = $component['block_fields'] ?? [];
-        if (is_array($block_fields) && !empty($block_fields)) {
-          $field_errors = $this->validateFieldSet(
-            'block_content', $block_type, $block_fields,
-            "$comp_path.block_fields", "block type '$block_type'",
-            'UNKNOWN_BLOCK_FIELD',
-          );
-          $errors = array_merge($errors, $field_errors);
-        }
-      }
-      else {
-        $errors = array_merge($errors, $block_type_errors);
-      }
-    }
-    elseif ($plugin_id !== NULL && $this->placementRestrictions !== NULL) {
-      // Plugin block: existence, then the same spine restriction answer as
-      // inline blocks (display-level here — see validate()).
-      if (!is_string($plugin_id) || $plugin_id === '' || !$this->placementRestrictions->blockExists($plugin_id)) {
-        $errors[] = new BlueprintError(
-          path: "{$comp_path}.plugin_id",
-          code: 'INVALID_PLUGIN_ID',
-          message: "Block plugin '" . (is_string($plugin_id) ? $plugin_id : gettype($plugin_id)) . "' does not exist.",
-          hint: 'Check the block plugin ID.',
-        );
-      }
-      elseif (!$this->placementRestrictions->blockAllowed($plugin_id, $storage)) {
-        $errors[] = new BlueprintError(
-          path: "{$comp_path}.plugin_id",
-          code: 'RESTRICTED_PLUGIN_ID',
-          message: "Block plugin '$plugin_id' is not allowed for this entity display.",
-          hint: 'Pick an allowed block plugin, or update the display\'s block restrictions.',
-        );
-      }
-    }
-
-    return $errors;
-  }
-
-  /**
-   * Validates a region name against the layout plugin.
-   *
-   * @param string $path
-   *   The error path for the region.
-   * @param mixed $region
-   *   The region name.
-   * @param string $layout_id
-   *   The layout plugin ID.
-   *
-   * @return \Drupal\daedalus_blueprint\Result\BlueprintError[]
-   *   Region validation errors.
-   */
-  protected function validateRegion(string $path, mixed $region, string $layout_id): array {
-    if (!is_string($region) || $region === '') {
-      return [];
-    }
-
-    $definition = $this->layoutPluginManager->getDefinition($layout_id, FALSE);
-    if ($definition === NULL) {
-      return [];
-    }
-
-    $valid_regions = $definition->getRegionNames();
-    if (!in_array($region, $valid_regions, TRUE)) {
-      return [
-        new BlueprintError(
-          path: $path,
-          code: 'INVALID_REGION',
-          message: "Region '$region' does not exist on layout '$layout_id'.",
-          context: ['available' => $valid_regions],
-          hint: 'Use one of the valid regions for this layout.',
-        ),
-      ];
-    }
-
-    return [];
-  }
-
-  /**
-   * Validates an inline block type.
-   *
-   * @param string $comp_path
-   *   The error path for the component.
-   * @param mixed $block_type
-   *   The block content type.
-   * @param object|null $storage
-   *   The defaults section storage governing restriction answers, or NULL.
-   *
-   * @return \Drupal\daedalus_blueprint\Result\BlueprintError[]
-   *   Block type validation errors.
-   */
-  protected function validateBlockType(string $comp_path, mixed $block_type, ?object $storage): array {
-    if (!is_string($block_type) || $block_type === '') {
-      return [
-        new BlueprintError(
-          path: "{$comp_path}.block_type",
-          code: 'INVALID_BLOCK_TYPE',
-          message: 'Block type must be a non-empty string.',
-          context: ['available' => $this->getAvailableBlockTypes()],
-          hint: 'Provide a valid block content type.',
-        ),
-      ];
-    }
-
-    $bundles = $this->bundleInfo->getBundleInfo('block_content');
-    if (!isset($bundles[$block_type])) {
-      return [
-        new BlueprintError(
-          path: "{$comp_path}.block_type",
-          code: 'INVALID_BLOCK_TYPE',
-          message: "Block type '$block_type' does not exist.",
-          context: ['available' => $this->getAvailableBlockTypes()],
-          hint: 'Check the block type machine name.',
-        ),
-      ];
-    }
-
-    // Restriction enforcement at the spine.
-    if ($this->placementRestrictions !== NULL
-        && !$this->placementRestrictions->blockAllowed('inline_block:' . $block_type, $storage)) {
-      return [
-        new BlueprintError(
-          path: "{$comp_path}.block_type",
-          code: 'RESTRICTED_BLOCK_TYPE',
-          message: "Block type '$block_type' is not allowed for this entity display.",
-          context: ['allowed_block_types' => $this->placementRestrictions->allowedInlineBlockBundles($storage)],
-          hint: 'Check the schema for available block types, or update the display\'s block restrictions.',
-        ),
-      ];
-    }
-
-    return [];
-  }
-
-  /**
-   * Gets available block content type machine names.
-   *
-   * @return string[]
-   *   Sorted block type machine names.
-   */
-  protected function getAvailableBlockTypes(): array {
-    $bundles = $this->bundleInfo->getBundleInfo('block_content');
-    $types = array_keys($bundles);
     sort($types);
     return $types;
   }

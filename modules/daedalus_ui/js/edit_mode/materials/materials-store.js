@@ -19,7 +19,7 @@ import { openChannel } from '../../broadcast/channel.js';
  *
  * Delta: every mutation-response payload carries `materials` {upsert,
  * remove} (daedalus_blueprint_api's MutationResponseBuilder, the daedalus_stylish and
- * stencil gesture routes, the AI turn's payloads). The op queue applies it
+ * blueprint gesture routes, the AI turn's payloads). The op queue applies it
  * through applyMaterialsDelta() on every payload, and the applied delta is
  * relayed over the shared BroadcastChannel wire (broadcast/channel.js) so
  * every paired window of this edit session (a popped-out inspector, a

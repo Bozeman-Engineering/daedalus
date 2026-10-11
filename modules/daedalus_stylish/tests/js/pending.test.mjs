@@ -24,6 +24,9 @@ import {
   stageIslandLines,
   stageLine,
   stageValue,
+  skinPushOperations,
+  skinSession,
+  stagesLines,
   updateSession,
 } from '../../js/src/pending.js';
 
@@ -319,7 +322,7 @@ test('the push payload merges sets over the variant styles; untouched facts ride
   let session = updateSession('cta', 'block:abc');
   session = stageLine(session, { relative: '', condition: 'default', property: 'gap', value: '24px' });
   session = stageLine(session, { relative: '::.inner', condition: 'narrow', property: 'padding', value: '0.5rem' });
-  const merged = sessionStyles(session, { variantStyles });
+  const merged = sessionStyles(session, { documentStyles: variantStyles });
   assert.deepEqual(merged[''], {
     default: { display: 'grid', gap: '24px' },
     dark: { background: 'black' },
@@ -336,7 +339,7 @@ test('a null value is a pending unset: the property leaves and emptied shells dr
   let session = updateSession('cta', 'block:abc');
   session = stageLine(session, { relative: '', condition: 'dark', property: 'background', value: null });
   session = stageLine(session, { relative: '::.inner', condition: 'default', property: 'padding', value: null });
-  const merged = sessionStyles(session, { variantStyles });
+  const merged = sessionStyles(session, { documentStyles: variantStyles });
   // The emptied dark block drops; the default block survives.
   assert.deepEqual(merged[''], { default: { display: 'grid', gap: '16px' } });
   // The part entry emptied entirely drops.
@@ -346,14 +349,14 @@ test('a null value is a pending unset: the property leaves and emptied shells dr
 test('an unset that empties conditions never drops an entry still carrying references', () => {
   let session = updateSession('cta', 'block:abc');
   session = stageLine(session, { relative: 'container(1)', condition: 'default', property: 'margin', value: null });
-  const merged = sessionStyles(session, { variantStyles });
+  const merged = sessionStyles(session, { documentStyles: variantStyles });
   assert.deepEqual(merged['container(1)'], { variants: [{ variant: 'nested', fragment: '' }] });
 });
 
 test('a set landing where the variant stores nothing mints the entry and condition', () => {
   let session = updateSession('cta', 'block:abc');
   session = stageLine(session, { relative: 'container(1)/block(text,1)', condition: 'default', property: 'color', value: 'red' });
-  const merged = sessionStyles(session, { variantStyles });
+  const merged = sessionStyles(session, { documentStyles: variantStyles });
   assert.deepEqual(merged['container(1)/block(text,1)'], { default: { color: 'red' } });
 });
 
@@ -362,7 +365,44 @@ test('merging never mutates the variant styles or the session', () => {
   let session = updateSession('cta', 'block:abc');
   session = stageLine(session, { relative: '', condition: 'default', property: 'gap', value: null });
   const snapshot = JSON.stringify(session);
-  sessionStyles(session, { variantStyles });
+  sessionStyles(session, { documentStyles: variantStyles });
   assert.equal(JSON.stringify(variantStyles), before);
   assert.equal(JSON.stringify(session), snapshot);
+});
+
+// --- the skin session: the update session's site-scope twin -----------------
+
+test('a fresh skin session names its scope and its skin document reference, and stages lines exactly as an update session does', () => {
+  const session = skinSession('base:h2', 'block:abc');
+  assert.deepEqual(session, { kind: 'skin', reference: 'skin:base:h2', scope: 'base:h2', anchor: 'block:abc', lines: [] });
+  assert.equal(stagesLines(session), true);
+  assert.equal(stagesLines(updateSession('cta', 'block:abc')), true);
+  assert.equal(stagesLines(saveSession('block:abc')), false);
+  assert.equal(stagesLines(null), false);
+  const defaults = { '': { default: { 'font-size': '2rem', 'font-weight': '700' } } };
+  let staged = stageValue(session, defaults, '', 'default', 'font-size', '3rem');
+  staged = stageValue(staged, defaults, '', 'default', 'font-weight', null);
+  staged = stageValue(staged, defaults, '::strong', 'dark', 'color', 'white');
+  assert.equal(sessionCount(staged), 3);
+  // Settling back on the stored default dismisses, as on a variant.
+  assert.equal(sessionCount(stageValue(staged, defaults, '', 'default', 'font-size', '2rem')), 2);
+  assert.deepEqual(sessionStyles(staged, { documentStyles: defaults }), {
+    '': { default: { 'font-size': '3rem' } },
+    '::strong': { dark: { color: 'white' } },
+  });
+  assert.deepEqual(defaults, { '': { default: { 'font-size': '2rem', 'font-weight': '700' } } }, 'the stored defaults are never mutated');
+  assert.equal(stageIslandLines(staged, '', 'default', [{ property: 'font-size', value: '4rem' }]).lines.find((line) => line.property === 'font-size').value, '4rem');
+});
+
+test('skinPushOperations spells the staged lines as one update_default per (key, condition), null unsetting', () => {
+  let session = skinSession('base:h2', 'block:abc');
+  session = stageLine(session, { relative: '', condition: 'default', property: 'font-size', value: '3rem' });
+  session = stageLine(session, { relative: '::strong', condition: 'dark', property: 'color', value: 'white' });
+  session = stageLine(session, { relative: '', condition: 'default', property: 'font-weight', value: null });
+  assert.deepEqual(skinPushOperations(session), [
+    { op: 'update_default', scope: 'base:h2', key: '', condition: 'default', properties: { 'font-size': '3rem', 'font-weight': null } },
+    { op: 'update_default', scope: 'base:h2', key: '::strong', condition: 'dark', properties: { color: 'white' } },
+  ]);
+  assert.deepEqual(skinPushOperations(skinSession('kind:container', 'container:c')), []);
+  assert.deepEqual(skinPushOperations(updateSession('cta', 'block:abc')), []);
 });

@@ -9,6 +9,7 @@ use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\Entity\FieldableEntityInterface;
 use Drupal\Core\Field\FieldDefinitionInterface;
 use Drupal\field\Entity\FieldConfig;
+use Drupal\daedalus_blueprint\LayoutBuilder\FieldBlock;
 use Drupal\daedalus_ui\Presentation\Presentation;
 
 /**
@@ -36,8 +37,8 @@ use Drupal\daedalus_ui\Presentation\Presentation;
  *    (a container whose meaningful content is exactly one thing merges into
  *    it) and the tagged existence feeders (ExistenceFeederInterface,
  *    collected via the daedalus_ui.existence_feeder tag), so modules
- *    that own render truths (daedalus_layout's preserved fields) feed the model
- *    without a dependency cycle.
+ *    that own render truths (daedalus_layout's root fields on Layout
+ *    Builder displays) feed the model without a dependency cycle.
  *
  * The presentation inventory is DEFINITION-based, never
  * serialized-output-based: counting serialized fields would make structure
@@ -196,9 +197,9 @@ final class ElementModel {
    * the entity render, but the root rule creates no row anyway — the label
    * presents AS the root row — and the label's one canvas render is
    * allowed to live OUTSIDE the entity as the page title (daedalus_edit's
-   * PageTitleEditing stamps it), which a declaration cannot speak for. On
-   * the block_content editing surface the H1 IS the info label, so the
-   * root must name it as its target for that stamp to happen.
+   * PageTitleEditing stamps it), which a declaration cannot speak for: on
+   * a canvas whose H1 IS the label, the root must name it as its target
+   * for that stamp to happen.
    *
    * @param string $entity_type_id
    *   The root entity type.
@@ -241,12 +242,8 @@ final class ElementModel {
    *   The presented field's definition on that entity, or NULL.
    */
   public function presentedField(string $plugin_id, FieldableEntityInterface $entity): ?FieldDefinitionInterface {
-    $parts = explode(':', $plugin_id);
-    if (count($parts) !== 4 || $parts[0] !== 'field_block') {
-      return NULL;
-    }
-    [, $entity_type_id, $bundle, $field_name] = $parts;
-    if ($entity->getEntityTypeId() !== $entity_type_id || $entity->bundle() !== $bundle || !$entity->hasField($field_name)) {
+    $field_name = FieldBlock::fieldFor($plugin_id, $entity->getEntityTypeId(), $entity->bundle());
+    if ($field_name === NULL || $field_name === '' || !$entity->hasField($field_name)) {
       return NULL;
     }
     return $entity->getFieldDefinition($field_name);
@@ -257,15 +254,15 @@ final class ElementModel {
    *
    * A field block renders one root field inside a plugin-block placement:
    * the placement wrapper (block:{uuid}) around the field's own render
-   * (field:{root}:{name}, attributed exactly as a preserved field's, the
-   * same leaf inside). The placement presents MERGED into that field, the
-   * rule a single-content inline block merges under: one row keyed by the
-   * placement (the outermost carrier, so move, trash and duplicate arm),
-   * labeled with the field's definition label, editing routed to the
-   * field's leaf, which edits in place. Rendered evidence beats display
-   * inference: the root's existence feeders may report the field
-   * nonexistent for the root display's own rows (it renders here, not
-   * there), and the placement's merged fold is what keeps the leaf
+   * (field:{root}:{name}, attributed exactly as the display's own render of
+   * the field, the same leaf inside). The placement presents MERGED into
+   * that field, the rule a single-content inline block merges under: one
+   * row keyed by the placement (the outermost carrier, so move, trash and
+   * duplicate arm), labeled with the field's definition label, editing
+   * routed to the field's leaf, which edits in place. Rendered evidence
+   * beats display inference: the root's existence feeders may report the
+   * field nonexistent for the root display's own rows (it renders here,
+   * not there), and the placement's merged fold is what keeps the leaf
    * editable regardless.
    *
    * @param \Drupal\Core\Field\FieldDefinitionInterface $definition
@@ -366,8 +363,9 @@ final class ElementModel {
    *   like block_content's info: no canvas render by design).
    * - Inference: what the registered feeders derive from render
    *   configuration: daedalus_ui's own display-hidden inference for
-   *   inline blocks, daedalus_layout's preserved-fields rule for root entities on
-   *   Layout Builder displays.
+   *   inline blocks, daedalus_layout's root-field rule for root entities on
+   *   Layout Builder displays (every display-configurable root field
+   *   renders under its placement, none at the root).
    *
    * A nonexistent field never renders as an attributed element, so no
    * canvas element answers to its key (no row, no outline, no styling

@@ -258,14 +258,19 @@ class WriteEchoResultFormatTest extends BlueprintKernelTestBase {
   }
 
   /**
-   * Tests entity creation echoes the whole page: it IS the affected target.
+   * Tests entity creation echoes the whole entity: it IS the affected target.
+   *
+   * The JSON create is the non-page door (a page bundle is refused toward
+   * page_create, pinned in PageLanguageDoorsTest), so the entity born here
+   * is entity_test_rev, whose display has no Layout Builder; the whole
+   * entity's projection is still the echo of what the tool created.
    */
   public function testCreateEntityEchoesWholePage(): void {
     $output = $this->runTool('eb_create_entity', [
       'blueprint' => [
-        'entity_type' => 'entity_test',
-        'bundle' => 'entity_test',
-        'fields' => ['name' => 'Fresh page'],
+        'entity_type' => 'entity_test_rev',
+        'bundle' => 'entity_test_rev',
+        'fields' => ['name' => 'Fresh entity'],
       ],
     ]);
 

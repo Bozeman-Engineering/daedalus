@@ -14,6 +14,7 @@ use Drupal\daedalus_stylish\DaedalusStylishFieldManager;
 use Drupal\Tests\user\Traits\UserCreationTrait;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
+use Drupal\Tests\daedalus_stylish\Traits\HostTrait;
 
 /**
  * Tests per-layout default variants on the section-created event.
@@ -43,6 +44,7 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 #[RunTestsInSeparateProcesses]
 class SectionDefaultVariantTest extends KernelTestBase {
 
+  use HostTrait;
   use UserCreationTrait;
 
   /**
@@ -100,6 +102,7 @@ class SectionDefaultVariantTest extends KernelTestBase {
     // published swatches (testLayoutEntryCarriesDefaultsLine).
     $this->installEntitySchema('daedalus_swatch');
     $this->installEntitySchema('daedalus_animation');
+    $this->installEntitySchema('daedalus_font');
     // The materials roster's daedalus_stylish provider reads all four storages on
     // every build, and every compile and validation builds it.
     $this->installEntitySchema('daedalus_skin');
@@ -180,7 +183,7 @@ class SectionDefaultVariantTest extends KernelTestBase {
    * Runs a batch of operations, asserting success.
    */
   protected function batch(EntityTest $entity, array $operations): void {
-    $result = $this->operations->batchOperations($entity, $operations);
+    $result = $this->operations->batchOperations($this->host($entity), $operations);
     $this->assertTrue($result->isSuccess(), print_r($result->toArray()['errors'] ?? [], TRUE));
   }
 
@@ -402,7 +405,7 @@ class SectionDefaultVariantTest extends KernelTestBase {
    * A dressed batch stamps nothing; an undressed one stamps every default.
    *
    * Birth is gated on the batch's posture alone: a batch declaring
-   * ['dressed' => TRUE] (a stencil expansion, a document dialect) is a
+   * ['dressed' => TRUE] (a blueprint expansion, a document dialect) is a
    * total statement, so its sections wear exactly what the batch itself
    * applies, house defaults included only when the batch names them. The
    * same add in an undressed batch (the op door) is born wearing the
@@ -418,7 +421,7 @@ class SectionDefaultVariantTest extends KernelTestBase {
     // Dressed: a bare add_section is born wearing NONE, at either depth.
     $bare_root = $this->mintUuid();
     $bare_nested = $this->mintUuid();
-    $result = $this->operations->batchOperations($entity, [
+    $result = $this->operations->batchOperations($this->host($entity), [
       [
         'op' => 'add_section',
         'location' => ['anchor' => $entity->uuid(), 'placement' => 'inside'],
@@ -442,7 +445,7 @@ class SectionDefaultVariantTest extends KernelTestBase {
     // Dressed: what the batch applies is exactly what the section wears,
     // with no house default beneath it.
     $dressed = $this->mintUuid();
-    $result = $this->operations->batchOperations($entity, [
+    $result = $this->operations->batchOperations($this->host($entity), [
       ['op' => 'add_section', 'location' => ['anchor' => $entity->uuid(), 'placement' => 'inside'], 'uuid' => $dressed],
       ['op' => 'apply_variant', 'key' => "container:$dressed", 'variant' => 'explicit_pick'],
     ], ['dressed' => TRUE]);
@@ -536,12 +539,12 @@ class SectionDefaultVariantTest extends KernelTestBase {
       'bundle' => 'entity_test',
       'fields' => [
         'name' => 'Blueprint born',
-        'daedalus_stylish_styles' => [
-          "container:$authored" => ['variants' => [['variant' => 'onecol_row', 'fragment' => '']]],
-        ],
       ],
-      'layout_builder__layout' => [
-        ['layout_id' => 'layout_onecol', 'uuid' => $authored, 'regions' => []],
+      'styles' => [
+        "container:$authored" => ['variants' => [['variant' => 'onecol_row', 'fragment' => '']]],
+      ],
+      'layout' => [
+        ['kind' => 'container', 'layout_id' => 'layout_onecol', 'uuid' => $authored, 'children' => []],
       ],
     ]);
     $this->assertTrue($result->isSuccess(), print_r(array_map(fn ($e) => $e->toArray(), $result->getErrors()), TRUE));
@@ -556,8 +559,8 @@ class SectionDefaultVariantTest extends KernelTestBase {
       'entity_type' => 'entity_test',
       'bundle' => 'entity_test',
       'fields' => ['name' => 'Blueprint bare'],
-      'layout_builder__layout' => [
-        ['layout_id' => 'layout_onecol', 'uuid' => $bare, 'regions' => []],
+      'layout' => [
+        ['kind' => 'container', 'layout_id' => 'layout_onecol', 'uuid' => $bare, 'children' => []],
       ],
     ]);
     $this->assertTrue($result->isSuccess(), print_r(array_map(fn ($e) => $e->toArray(), $result->getErrors()), TRUE));
@@ -579,7 +582,7 @@ class SectionDefaultVariantTest extends KernelTestBase {
     $schema = $this->container->get('daedalus_blueprint.schema_builder')
       ->getSchema('entity_test', 'entity_test');
     $layouts = [];
-    foreach ($schema['layout_builder__layout']['available_layouts'] as $layout) {
+    foreach ($schema['layout']['available_layouts'] as $layout) {
       $layouts[$layout['id']] = $layout;
     }
 

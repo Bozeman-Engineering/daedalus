@@ -125,13 +125,13 @@ class HtmlEntityDecodeTest extends BlueprintKernelTestBase {
     $operations = $this->container->get('daedalus_blueprint.operations');
     $entity = $this->createTestEntity(['field_subtitle' => 'Original']);
 
-    $result = $operations->updateFields($entity, [
+    $result = $operations->updateFields($this->host($entity), [
       'field_subtitle' => 'Tom &amp; Jerry',
     ], ['decode_html_entities' => TRUE]);
     $this->assertTrue($result->isSuccess());
     $this->assertSame('Tom & Jerry', $entity->get('field_subtitle')->value);
 
-    $result = $operations->updateFields($entity, [
+    $result = $operations->updateFields($this->host($entity), [
       'field_subtitle' => 'Tom &amp; Jerry',
     ]);
     $this->assertTrue($result->isSuccess());

@@ -21,6 +21,7 @@ use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\layout_builder\SectionStorageInterface;
 use Drupal\layout_builder\DefaultsSectionStorageInterface;
 use Drupal\layout_builder\OverridesSectionStorageInterface;
+use Drupal\daedalus_layout\Plugin\Block\InlineBlock as DaedalusInlineBlock;
 use Drupal\layout_builder\Plugin\Block\InlineBlock;
 use Drupal\Component\Plugin\Context\ContextInterface;
 use Drupal\Core\Cache\RefinableCacheableDependencyInterface;
@@ -160,6 +161,12 @@ class NestedAwareSectionStorage implements NestedSectionStorageInterface {
   public static function extractBlockContent(BlockPluginInterface $plugin): ?BlockContentInterface {
     if (!$plugin instanceof InlineBlock) {
       return NULL;
+    }
+    // daedalus_layout's plugin answers the instance it renders, whatever
+    // the stored shape (a value block's hydration mints a fresh uuid, so
+    // only the plugin's own instance names what the render carries).
+    if ($plugin instanceof DaedalusInlineBlock) {
+      return $plugin->blockContent();
     }
 
     $configuration = $plugin->getConfiguration();
@@ -501,7 +508,7 @@ class NestedAwareSectionStorage implements NestedSectionStorageInterface {
    * - Section uuid missing: stamped from the component uuid.
    * - Section uuid present but differs from the component uuid (a copy that
    *   re-minted only the wrapper): the SECTION uuid wins — it is the
-   *   user-facing identity styles and stencils key on — and the component is
+   *   user-facing identity styles and blueprints key on — and the component is
    *   re-keyed to match.
    * - Uuid already in the index (duplicated container config): a
    *   deterministic replacement is minted for BOTH.
@@ -659,19 +666,24 @@ class NestedAwareSectionStorage implements NestedSectionStorageInterface {
   /**
    * The root Layout Builder entity, when the root storage exposes one.
    *
+   * An overrides storage renders its sections against its preview entity,
+   * so that is the root: the entity itself for core's overrides storage, the
+   * subject (the sample entity of the bundle the blueprint is for) for a
+   * blueprint's (daedalus_blueprint's BlueprintSectionStorage), whose
+   * entity context is the blueprint and must not reach a field block or
+   * the Add panel's roster as the root. A defaults storage has no entity
+   * context and its preview sample is not a root entity.
+   *
    * @return \Drupal\Core\Entity\FieldableEntityInterface|null
    *   The root entity, or NULL for storages without an entity context.
    */
   protected function getRootEntity(): ?FieldableEntityInterface {
+    $contexts = $this->rootStorage instanceof OverridesSectionStorageInterface
+      ? $this->rootStorage->getContextsDuringPreview()
+      : $this->rootStorage->getContexts();
     foreach (['layout_builder.entity', 'entity'] as $name) {
-      try {
-        $context = $this->rootStorage->getContext($name);
-      }
-      catch (\Exception) {
-        continue;
-      }
-      if ($context->hasContextValue()) {
-        $value = $context->getContextValue();
+      if (isset($contexts[$name]) && $contexts[$name]->hasContextValue()) {
+        $value = $contexts[$name]->getContextValue();
         if ($value instanceof FieldableEntityInterface) {
           return $value;
         }

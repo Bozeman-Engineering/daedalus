@@ -46,7 +46,6 @@ const ROOT = `block:${UUID}`;
 const BLOCK_TYPES = { [UUID]: 'text' };
 const SECTION = 'container:cccccccc-1111-2222-3333-444444444444';
 const WORN_RULE = `${SECTION}::> pb-text`;
-const SKIN_URL = '/admin/appearance/skins/1';
 
 const VARIANTS = [
   variantRecord('stuff', {
@@ -78,14 +77,17 @@ const originAt = ({ map = {}, guide = BARE, session = null, tree = null, editabl
 };
 
 // A recording of every handler the dispatch can reach.
-const recorder = () => {
+const recorder = (hovered = { pair: null }) => {
   const calls = [];
   return {
     calls,
     handlers: {
       source: {
         target: (key, selector) => calls.push(['target', key, selector]),
+        address: (key, selector = null) => calls.push(['address', key, selector]),
         select: (key) => calls.push(['select', key]),
+        hoverSelector: (key, selector = null) => calls.push(['hoverSelector', key, selector]),
+        getHoveredSelector: () => hovered.pair,
       },
       onOpenDocument: (reference, condition, anchor) => calls.push(['document', reference, condition, anchor]),
       onPickCondition: (condition) => calls.push(['condition', condition]),
@@ -117,19 +119,19 @@ test('own over a variant: Unset is the row\'s unset gesture, the document doorwa
   assert.deepEqual(calls, [['unset'], ['document', 'stuff', 'default', null]]);
 });
 
-test('the skin: its doorway opens the skin edit page in a new window', () => {
-  const origin = originAt({ guide: SKIN }, 'default', { skinEditUrl: SKIN_URL });
-  const opened = [];
-  globalThis.window = { open: (...args) => opened.push(args) };
-  try {
-    const spec = rowMenuSpec({ origin, ...recorder().handlers });
-    assert.deepEqual(labels(spec), ['Edit skin…']);
-    run(spec, 'Edit skin…');
-    assert.deepEqual(opened, [[SKIN_URL, '_blank', 'noopener']]);
-  }
-  finally {
-    delete globalThis.window;
-  }
+test('the skin: its doorway opens the editing session on the skin document at the delivering scope, through the one openDocument, at the host\'s own anchor', () => {
+  const origin = originAt({ guide: SKIN }, 'default');
+  const { calls, handlers } = recorder();
+  const spec = rowMenuSpec({ origin, ...handlers });
+  assert.deepEqual(labels(spec), ['Edit skin…']);
+  run(spec, 'Edit skin…');
+  assert.deepEqual(calls, [['document', 'skin:block_type:text', 'default', null]]);
+  // Posed elsewhere, the session opens at the delivering condition (the
+  // drive the variant doorway makes too).
+  const posed = originAt({ guide: SKIN }, 'medium');
+  const { calls: posedCalls, handlers: posedHandlers } = recorder();
+  run(rowMenuSpec({ origin: posed, ...posedHandlers }), 'Edit skin…');
+  assert.deepEqual(posedCalls, [['document', 'skin:block_type:text', 'default', null]]);
 });
 
 test('a variant at another condition: drive poses the canvas, the document doorway opens the variant, an "Also set at" entry poses too', () => {
@@ -143,13 +145,43 @@ test('a variant at another condition: drive poses the canvas, the document doorw
   assert.deepEqual(calls, [['condition', 'default'], ['document', 'stuff', 'default', null], ['condition', 'narrow']]);
 });
 
-test('an ancestor\'s own rule: Edit at seats the rule as the styling target on the source', () => {
+test('an ancestor\'s own rule: Edit at seats the rule as the write address on the source, never as the facet', () => {
   const origin = originAt({ map: { [`${SECTION}::> *`]: { default: { 'padding-top': '8px' } } }, tree: TREE }, 'default');
   const { calls, handlers } = recorder();
   const spec = rowMenuSpec({ origin, ...handlers });
   assert.deepEqual(labels(spec), ['Edit at Section (> *)']);
   run(spec, 'Edit at Section (> *)');
-  assert.deepEqual(calls, [['target', SECTION, '> *']]);
+  assert.deepEqual(calls, [['address', SECTION, '> *']]);
+});
+
+test('an ancestor\'s rule previews its reach while active: enter drives the hover-selector facet, leave clears only its own pair, and the element doorway previews nothing', () => {
+  const origin = originAt({ map: { [`${SECTION}::> *`]: { default: { 'padding-top': '8px' } } }, tree: TREE }, 'default');
+  const hovered = { pair: null };
+  const { calls, handlers } = recorder(hovered);
+  const spec = rowMenuSpec({ origin, ...handlers });
+  const item = spec.items.find((entry) => entry.label === 'Edit at Section (> *)');
+  assert.equal(typeof item.preview, 'function');
+  item.preview(true);
+  assert.deepEqual(calls, [['hoverSelector', SECTION, '> *']]);
+  // Another surface took the hover meanwhile: leaving touches nothing.
+  hovered.pair = { key: SECTION, selector: '> pb-text' };
+  item.preview(false);
+  assert.deepEqual(calls, [['hoverSelector', SECTION, '> *']]);
+  // The hover is still this pair: leaving clears it.
+  hovered.pair = { key: SECTION, selector: '> *' };
+  item.preview(false);
+  assert.deepEqual(calls, [['hoverSelector', SECTION, '> *'], ['hoverSelector', null, null]]);
+  // A row handed no source keeps an inert preview: nothing throws.
+  const inert = rowMenuSpec({ origin }).items.find((entry) => entry.label === 'Edit at Section (> *)');
+  inert.preview(true);
+  inert.preview(false);
+  // The element doorway (address(null)) has no pair to paint.
+  const standing = originAt(
+    { map: { [ROOT]: { default: { 'padding-top': '24px' } } }, tree: TREE, editable: { key: SECTION, selector: '> *' } },
+    'default',
+  );
+  const element = rowMenuSpec({ origin: standing, source: handlers.source }).items.find((entry) => entry.label === 'Edit on the element');
+  assert.equal(element.preview, undefined);
 });
 
 test('a variant an ancestor\'s rule wears: the document doorway opens the variant anchored at the CARRIER, Edit at seats the carrier rule', () => {
@@ -161,7 +193,7 @@ test('a variant an ancestor\'s rule wears: the document doorway opens the varian
   assert.deepEqual(doorways(spec), ['Edit Stuff at Base…', 'Edit at Text blocks directly in Section']);
   run(spec, 'Edit Stuff at Base…');
   run(spec, 'Edit at Text blocks directly in Section');
-  assert.deepEqual(calls, [['document', 'stuff', 'default', WORN_RULE], ['target', SECTION, '> pb-text']]);
+  assert.deepEqual(calls, [['document', 'stuff', 'default', WORN_RULE], ['address', SECTION, '> pb-text']]);
 });
 
 test('a row handed no source keeps an inert ancestor doorway: the menu opens, the item runs, nothing throws', () => {
@@ -181,7 +213,7 @@ test('a session\'s winner: the doorway hands the winner to onWinner', () => {
   assert.deepEqual(calls, [['winner', { variant: null }]]);
 });
 
-test('a write address: the element\'s own value above the rule\'s layer offers "Edit on the element", which re-selects the element on the source (dropping the target) with no sheet and no winner handler; a row with no source stays inert, nothing throws', () => {
+test('a write address: the element\'s own value above the rule\'s layer offers "Edit on the element", which drops the address on the source (address(null), the subject staying) with no sheet and no winner handler; a row with no source stays inert, nothing throws', () => {
   const origin = originAt(
     { map: { [ROOT]: { default: { 'padding-top': '24px' } } }, tree: TREE, editable: { key: SECTION, selector: '> *' } },
     'default',
@@ -193,7 +225,9 @@ test('a write address: the element\'s own value above the rule\'s layer offers "
   assert.equal(spec.header, '24px from this element');
   assert.deepEqual(labels(spec), ['Edit on the element']);
   run(spec, 'Edit on the element');
-  assert.deepEqual(calls, [['select', ROOT]]);
+  // Never a selection write: the subject facet (a part under the
+  // address) must survive the drop.
+  assert.deepEqual(calls, [['address', null, null]]);
   run(rowMenuSpec({ origin }), 'Edit on the element');
 });
 

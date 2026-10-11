@@ -25,7 +25,7 @@
  * property definitions (groups), the conditions, the token scale
  * vocabulary (label, shape, prefix, keywords) and the swatch kind labels.
  * The materials themselves (the skin's minted tokens, the published
- * swatches, variants, stencils) are the materials store's, read beside
+ * swatches, variants, blueprints) are the materials store's, read beside
  * the guide as a roster (materials.js); nothing here lists or mutates a
  * material.
  */
@@ -94,188 +94,198 @@ export const parseKey = (key) => {
 };
 
 /**
- * The root entity's style map from the blueprint mirror, or {}.
+ * The document's style map, derived from the blueprint mirror, or {}.
  *
- * The field is cardinality 1, so the serializer's cardinality wrapping
- * delivers the map bare (an empty map serializes to no field at all).
+ * The client twin of NodeTreeBuilder::styleMapOf() (PHP is
+ * authoritative; PrinterEquivalenceTest locks the two): the flat index
+ * every stylish reader iterates and looks up, built from the mirror's
+ * tree in the map's ONE canonical order, the document's. The node-less
+ * keys of the blueprint's top-level `styles` come first (`entity:` and
+ * `field:` keys and their rule forms, which no layout node carries), in
+ * their stored order; then every node of `layout` in document order
+ * (depth-first, a container before its children, region nodes
+ * transparent), each node's own keys as the node stores them, under
+ * their absolute keys (`block:{uuid}` / `container:{uuid}` plus the
+ * node's local remainder). A key a tree node carries is the node's and
+ * is never read from `styles`, so the top-level map may hold every key
+ * or, as the serializer emits it, the node-less remainder alone: the
+ * index holds each key exactly once.
+ * Nothing else reads `blueprint.styles`; this is the one road from the
+ * mirror to the flat map, and the printer (printMap), the paint
+ * coverage, a variant's carriers and the library's page wearer all
+ * follow this order. Memoized per blueprint object: the mirror replaces
+ * the blueprint wholesale, so the index is as stable per mirror state
+ * as the stored map was.
  */
-export const styleMapOf = (blueprint) =>
-  blueprint?.fields?.daedalus_stylish_styles ?? {};
-
-/**
- * Whether a layout-tree node is a nested-section (container) node.
- *
- * The serializer's one discriminator (containers all the way down): a child
- * entry carrying `layout_id` IS a nested section node — layout_id, uuid,
- * label, children (containers) or regions (multi-region layouts),
- * recursive — identical in shape to a top-level section. Everything else
- * in a child list is a component node (component nodes never carry any of
- * these keys).
- */
-export const isSectionNode = (node) =>
-  node !== null &&
-  typeof node === 'object' &&
-  ((typeof node.layout_id === 'string' && node.layout_id !== '') ||
-    (node.regions !== null &&
-      typeof node.regions === 'object' &&
-      node.regions !== undefined) ||
-    Array.isArray(node.children));
-
-/**
- * A section node's ordered child nodes, both serializer shapes.
- *
- * The ONE accessor for "what does this section hold, in order": container
- * sections serialize an ordered `children` list; multi-region sections
- * keep the `regions` map, whose lists concatenate in stored region order.
- * Callers that need the CONTAINER flow (the positional slot grammar) check
- * Array.isArray(node.children) themselves — a multi-region section's
- * children are reachable, but not positionally addressable.
- *
- * @return {Array}
- *   The ordered child nodes ([] when none).
- */
-export const sectionChildNodes = (section) => {
-  if (Array.isArray(section?.children)) {
-    return section.children;
+const styleMaps = new WeakMap();
+export const styleMapOf = (blueprint) => {
+  if (blueprint === null || typeof blueprint !== 'object') {
+    return {};
   }
-  const children = [];
-  Object.values(section?.regions ?? {}).forEach((nodes) => {
-    if (Array.isArray(nodes)) {
-      children.push(...nodes);
+  const cached = styleMaps.get(blueprint);
+  if (cached) {
+    return cached;
+  }
+  const carried = {};
+  const collect = (nodes) => {
+    (Array.isArray(nodes) ? nodes : []).forEach((node) => {
+      if (node === null || typeof node !== 'object') {
+        return;
+      }
+      if ((isContainerNode(node) || node.kind === 'block') && node.uuid) {
+        const prefix = `${node.kind}:${node.uuid}`;
+        Object.entries(node.styles ?? {}).forEach(([local, entry]) => {
+          carried[prefix + local] = entry;
+        });
+      }
+      collect(node.children);
+    });
+  };
+  collect(blueprint.layout);
+  const map = {};
+  Object.entries(blueprint.styles ?? {}).forEach(([key, entry]) => {
+    if (!Object.hasOwn(carried, key)) {
+      map[key] = entry;
     }
   });
-  return children;
+  Object.assign(map, carried);
+  styleMaps.set(blueprint, map);
+  return map;
 };
 
 /**
- * Flattens the blueprint's layout to component uuid → block discriminator.
+ * Whether a lean-tree node is a container (a section at any depth).
  *
- * Inline components map to their block type; non-inline (plugin)
- * components map to 'plugin:{base id}' (the :derivative suffix stripped —
- * derivatives share one template, so one declaration covers them), the
- * namespaced form declarationForKey() and captureScope() route on. A
- * component carrying neither maps to null — it styles against the
- * universal block kind, exactly as the server validator's fallback does.
- * Nested sections are walked so their components resolve at every depth.
+ * The tree's one discriminator: `kind` ('container', 'region', 'block').
+ * A container node carries uuid, layout_id, label and ONE child axis,
+ * `children`, holding element nodes directly (a container layout's
+ * ordered flow) or region nodes (a multi-region layout's named slots),
+ * recursive and identical in shape at every depth.
+ */
+export const isContainerNode = (node) => node?.kind === 'container';
+
+/**
+ * Whether a lean-tree node is a region: a multi-region layout's named
+ * slot, transparent grouping with no uuid and no styles of its own.
+ */
+export const isRegionNode = (node) => node?.kind === 'region';
+
+/**
+ * A node's element children in document order, region grouping unwrapped.
+ *
+ * The ONE accessor for "what does this node hold, in order": a container
+ * layout's `children` as they stand; a multi-region layout's region nodes
+ * concatenated in stored region order. Callers that need the CONTAINER
+ * FLOW (the positional slot grammar) ask isFlowNode() first: a
+ * multi-region container's children are reachable through here, but not
+ * positionally addressable. A block node holds nothing.
+ *
+ * @return {Array}
+ *   The ordered element nodes ([] when none).
+ */
+export const nodeChildren = (node) =>
+  (Array.isArray(node?.children) ? node.children : []).flatMap((child) =>
+    isRegionNode(child)
+      ? Array.isArray(child.children)
+        ? child.children
+        : []
+      : [child],
+  );
+
+/**
+ * Whether a container's children form one positional flow.
+ *
+ * A container LAYOUT holds its element nodes directly, one ordered flow
+ * the positional slot grammar addresses; a multi-region layout holds
+ * region nodes (every region of the layout, empty ones included), named
+ * slots the grammar no longer speaks. A node that is no container is no
+ * flow.
+ */
+export const isFlowNode = (node) =>
+  isContainerNode(node) &&
+  Array.isArray(node.children) &&
+  !node.children.some(isRegionNode);
+
+/**
+ * The base block plugin a block node is an instance of, else null.
+ *
+ * The client twin of NodeTreeBuilder::pluginBase(), the one derivation
+ * every styling surface shares: a plugin node's plugin id with the
+ * :derivative suffix stripped (derivatives share one template, so one
+ * declaration covers them), `field_block` for a node that names a field
+ * (the tree spells the page's FIELD, never a per-bundle plugin id, so no
+ * client reads a bundle off a node), null for an inline block and for a
+ * node that is no block.
+ *
+ * @param {Object} node
+ *   A lean node.
+ *
+ * @return {?string}
+ *   The base plugin id, or null.
+ */
+export const blockPluginBase = (node) => {
+  if (typeof node?.field === 'string' && node.field !== '') {
+    return 'field_block';
+  }
+  if (typeof node?.plugin_id === 'string' && node.plugin_id !== '') {
+    return node.plugin_id.split(':')[0];
+  }
+  return null;
+};
+
+/**
+ * Flattens the blueprint's tree to component uuid → block discriminator.
+ *
+ * Inline components map to their block type; non-inline (plugin and
+ * field) components map to 'plugin:{base id}' (blockPluginBase(): the
+ * :derivative suffix stripped, a field node's base being field_block),
+ * the namespaced form declarationForKey() and captureScope() route on. A
+ * component carrying none maps to null — it styles against the universal
+ * block kind, exactly as the server validator's fallback does. Nested
+ * containers are walked so their components resolve at every depth.
  */
 export const componentBlockTypes = (blueprint) => {
   const types = {};
-  const walkSections = (sections) => {
-    (Array.isArray(sections) ? sections : []).forEach((section) => {
-      sectionChildNodes(section).forEach((node) => {
-        if (isSectionNode(node)) {
-          walkSections([node]);
-          return;
-        }
-        if (node?.uuid) {
-          types[node.uuid] =
-            node.block_type ??
-            (typeof node.plugin_id === 'string' && node.plugin_id !== ''
-              ? `plugin:${node.plugin_id.split(':')[0]}`
-              : null);
-        }
-      });
+  const walk = (nodes) => {
+    (Array.isArray(nodes) ? nodes : []).forEach((node) => {
+      if (isContainerNode(node)) {
+        walk(nodeChildren(node));
+        return;
+      }
+      if (node?.uuid) {
+        const base = blockPluginBase(node);
+        types[node.uuid] = node.block_type ?? (base === null ? null : `plugin:${base}`);
+      }
     });
   };
-  walkSections(blueprint?.layout_builder__layout);
+  walk(blueprint?.layout);
   return types;
 };
 
 /**
- * Flattens the blueprint's layout to section uuid → layout plugin id.
+ * Flattens the blueprint's tree to section uuid → layout plugin id.
  *
  * The section counterpart of componentBlockTypes(): the layout plugin id is
  * to sections what the bundle is to inline blocks, and per-layout guide
- * declarations (guide.layouts) key by it. Nested sections register at every
- * depth — one resolution rule: a section's declaration IS its layout's
- * declaration, top-level or nested.
+ * declarations (guide.layouts) key by it. Nested containers register at
+ * every depth — one resolution rule: a section's declaration IS its
+ * layout's declaration, top-level or nested.
  */
 export const sectionLayouts = (blueprint) => {
   const layouts = {};
-  const walkSections = (sections) => {
-    (Array.isArray(sections) ? sections : []).forEach((section) => {
-      if (section?.uuid) {
-        layouts[section.uuid] = section.layout_id ?? null;
+  const walk = (nodes) => {
+    (Array.isArray(nodes) ? nodes : []).forEach((node) => {
+      if (!isContainerNode(node)) {
+        return;
       }
-      sectionChildNodes(section).forEach((node) => {
-        if (isSectionNode(node)) {
-          walkSections([node]);
-        }
-      });
+      if (node.uuid) {
+        layouts[node.uuid] = node.layout_id ?? null;
+      }
+      walk(nodeChildren(node));
     });
   };
-  walkSections(blueprint?.layout_builder__layout);
+  walk(blueprint?.layout);
   return layouts;
-};
-
-/**
- * The blueprint's layout pared to its structural bones.
- *
- * The staged-subtree shape composition capture walks (variant-scope.js's
- * subtreeSlotTable) and the popout leader broadcasts: sections carry uuid,
- * layout_id and their ordered child nodes — a container section's
- * `children` list, a multi-region section's `regions` map, each shape
- * preserved so the positional slot grammar can tell them apart. A child
- * node is either a nested section (pared recursively, same shape) or a
- * component carrying uuid and block_type (null for non-inline placements,
- * the walk's transparency contract). Every node carries the naming
- * spine's `type` and `name` words. Sections and components keep their
- * read-only `stencil` provenance stamp when they carry one (the serializer's
- * placed-root annotation) — the offering filter for stencil-owned
- * variants reads it (variant-scope.js stencilProvenance). Field names are
- * the same as the raw blueprint's, so walkers accept either shape; paring
- * exists so the satellite broadcast ships structure, not embedded content.
- *
- * @param {?object} blueprint
- *   The blueprint mirror of the root entity.
- *
- * @return {Array}
- *   The pared sections tree.
- */
-export const layoutTree = (blueprint) => {
-  const stampOf = (node) =>
-    typeof node?.stencil === 'string' && node.stencil !== ''
-      ? { stencil: node.stencil }
-      : {};
-  // The element-naming spine's two words (the annotator's minted
-  // `_element.type` and `_element.name`: "Section" / "Welcome", "Text" /
-  // its content excerpt, an unrenamed element's name being its type word)
-  // ride the pared node: the code view's page tree titles its rows with
-  // them, and the satellite reads them off this broadcast alone.
-  const typeOf = (node) => node?._element?.type ?? null;
-  const nameOf = (node) => node?._element?.name ?? null;
-  const pareNode = (node) =>
-    isSectionNode(node)
-      ? pareSection(node)
-      : {
-          uuid: node?.uuid ?? null,
-          block_type: node?.block_type ?? null,
-          type: typeOf(node),
-          name: nameOf(node),
-          ...stampOf(node),
-        };
-  const pareSection = (section) => {
-    const pared = {
-      uuid: section?.uuid ?? null,
-      layout_id: section?.layout_id ?? null,
-      type: typeOf(section),
-      name: nameOf(section),
-      ...stampOf(section),
-    };
-    if (Array.isArray(section?.children)) {
-      pared.children = section.children.map(pareNode);
-    } else {
-      pared.regions = Object.fromEntries(
-        Object.entries(section?.regions ?? {}).map(([name, nodes]) => [
-          name,
-          (Array.isArray(nodes) ? nodes : []).map(pareNode),
-        ]),
-      );
-    }
-    return pared;
-  };
-  const sections = blueprint?.layout_builder__layout;
-  return (Array.isArray(sections) ? sections : []).map(pareSection);
 };
 
 /**
@@ -1327,6 +1337,75 @@ export const resolvedConstraintsFor = (guide, declaration, property) => {
     ? guide.constraintDefaults[property]
     : null;
   return isPlainObject(defaults) ? defaults : null;
+};
+
+/**
+ * Whether a token record is offered in the basic rows (its skin's
+ * `offered` flag; a record carrying none is offered, the store's
+ * default).
+ */
+const offeredToken = (token) => token.record?.offered !== false;
+
+/**
+ * Whether a token record was minted on the site: its origin is not
+ * shipped (a token in the skin's site layer that the package does not
+ * ship, or any token of the site's own skin), the fact the provider
+ * stamps per token.
+ */
+const siteMinted = (token) => token.record?.origin !== 'shipped';
+
+/**
+ * Resolves which of a scale's minted tokens a basic row offers, in order.
+ *
+ * The roster's scaleStops() (PHP: VocabularyRoster::scaleStops()), the
+ * one row resolution every stop-table widget reads through stopsFor;
+ * offer-shaping only, never legality (the whole scale validates in
+ * every mode, and advanced mode and the code view keep offering it):
+ * - The element's curated stops (`constraints.stops`, the names its
+ *   declaration lists, entries compared as strings so numeric YAML
+ *   names work) in list order, a name the skin does not mint dropped: a
+ *   curated name is a promise on the skin (SkinConformance's fact), and
+ *   a row never offers a token that does not exist. A curated row is
+ *   exact: a shipped token the list leaves out is not offered there.
+ * - Else the scale's OFFERED tokens in stored order (each token's
+ *   `offered` flag on the skin: the site-wide everyday steps are a fact
+ *   about the tokens, never a guide list), which is also what a curated
+ *   row falls back to when none of its names are minted.
+ * - On a curated row, SITE-MINTED tokens (record origin not shipped)
+ *   follow the curated ones while offered, on open and guarded systems,
+ *   so a token minted in the UI reaches the rows without a guide edit;
+ *   on a strict system (propertiesClosed) they are withheld from the
+ *   basic rows, the curated list being the law's own offer there.
+ *
+ * @param {?object} guide
+ *   The style guide payload (enforcement).
+ * @param {Array<{name: string, record: object}>} minted
+ *   The scale's rostered tokens in roster order (materials.js
+ *   scaleTokens), each carrying its delivery record.
+ * @param {?object} constraints
+ *   The bound property's resolved constraints ({scale, stops, ...}).
+ *
+ * @return {Array<{name: string, record: object}>}
+ *   The entries the row offers, in row order.
+ */
+export const scaleRow = (guide, minted, constraints) => {
+  const curated = (Array.isArray(constraints?.stops) ? constraints.stops : [])
+    .map((name) => String(name))
+    .map((name) => minted.find((token) => String(token.name) === name))
+    .filter((token) => token !== undefined);
+  if (!curated.length) {
+    return minted.filter(offeredToken);
+  }
+  if (propertiesClosed(guide)) {
+    return curated;
+  }
+  return [
+    ...curated,
+    ...minted.filter(
+      (token) =>
+        !curated.includes(token) && offeredToken(token) && siteMinted(token),
+    ),
+  ];
 };
 
 /**

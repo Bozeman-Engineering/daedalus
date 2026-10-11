@@ -15,7 +15,7 @@
 import { strict as assert } from 'node:assert';
 import {
   parseKey, declarationForKey, landingForKey, declaredForKey, pseudoGroups, findInstanceDeclaration, findBaseTagDeclaration,
-  baseTags, instanceTags, tagWord, isInstancePartKey, animationReference, swatchReference,
+  baseTags, instanceTags, tagWord, isInstancePartKey, animationReference, swatchReference, scaleRow, styleMapOf,
 } from '../../js/src/style-guide.js';
 import { selectorLabel } from '../../js/src/parts.js';
 
@@ -343,6 +343,155 @@ test('animationReference is the motion namespace twin of swatchReference', () =>
   // a keyframes ident is no swatch.
   assert.equal(swatchReference('motion-fade_in'), null);
   assert.equal(animationReference('--swatch-fade_in'), null);
+});
+
+// --- scaleRow: the row resolution, the roster's scaleStops() twin ----
+
+// A scale's rostered tokens as scaleTokens hands them: the name and the
+// delivery record's offered flag and origin (shipped: the package ships
+// it; user: minted on the site).
+const minted = (...entries) => entries.map(([name, offered = true, origin = 'shipped']) => ({
+  name,
+  record: { offered, origin },
+}));
+const names = (row) => row.map((token) => token.name);
+
+test('scaleRow: an uncurated row is the scale\'s offered tokens in stored order, in every mode', () => {
+  const tokens = minted(['sm'], ['md'], ['lg'], ['xl'], ['gutter', false], ['hero', true, 'user'], ['mine', false, 'user']);
+  // The offered flag is the whole rule where no element curates: a
+  // shipped token opted out and a site-minted token opted out leave the
+  // row alike; a site-minted offered token is in it by its own flag.
+  for (const enforcement of ['open', 'guarded', 'strict']) {
+    assert.deepEqual(names(scaleRow({ enforcement }, tokens, { scale: 'space' })), ['sm', 'md', 'lg', 'xl', 'hero'], enforcement);
+    assert.deepEqual(names(scaleRow({ enforcement }, tokens, { scale: 'space', allowed: ['0'] })), ['sm', 'md', 'lg', 'xl', 'hero'], 'allowed literals are the caller\'s to append');
+  }
+  // A record carrying no flag is offered (the delivery default).
+  assert.deepEqual(names(scaleRow({ enforcement: 'strict' }, [{ name: 'a', record: {} }], { scale: 'space' })), ['a']);
+});
+
+test('scaleRow: curated stops are exact and ordered, unminted names drop, numeric names compare as strings', () => {
+  const tokens = minted(['2'], ['4', false], ['8'], ['16']);
+  // The list order wins over stored order; an unoffered token the list
+  // names is offered by the curation (the element said so); a shipped
+  // token the list leaves out is not on the row; a name the skin does
+  // not mint drops.
+  assert.deepEqual(names(scaleRow({ enforcement: 'strict' }, tokens, { scale: 'space', stops: [16, '4', 'xl'] })), ['16', '4']);
+  assert.deepEqual(names(scaleRow({ enforcement: 'open' }, tokens, { scale: 'space', stops: ['8', '2'] })), ['8', '2']);
+});
+
+test('scaleRow: a curated row none of whose names are minted falls back to the offered tokens', () => {
+  const tokens = minted(['2'], ['4', false]);
+  assert.deepEqual(names(scaleRow({ enforcement: 'guarded' }, tokens, { scale: 'space', stops: ['xl'] })), ['2']);
+  assert.deepEqual(names(scaleRow({ enforcement: 'guarded' }, [], { scale: 'space', stops: ['xl'] })), [], 'a scale minting nothing is the honest empty row');
+});
+
+test('scaleRow: site-minted tokens follow a curated row on open and guarded systems, never on strict', () => {
+  const tokens = minted(['2'], ['4'], ['8'], ['hero', true, 'user'], ['quiet', false, 'user'], ['ai-step', true, 'ai']);
+  const constraints = { scale: 'space', stops: ['8', '2'] };
+  // After the curated ones, in stored order, offered ones only; a
+  // shipped token the list leaves out (4) stays off the row.
+  assert.deepEqual(names(scaleRow({ enforcement: 'open' }, tokens, constraints)), ['8', '2', 'hero', 'ai-step']);
+  assert.deepEqual(names(scaleRow({ enforcement: 'guarded' }, tokens, constraints)), ['8', '2', 'hero', 'ai-step']);
+  assert.deepEqual(names(scaleRow({ enforcement: 'strict' }, tokens, constraints)), ['8', '2'], 'strict withholds site-minted tokens from a curated row');
+  // A curated site-minted token is not listed twice.
+  assert.deepEqual(names(scaleRow({ enforcement: 'open' }, tokens, { scale: 'space', stops: ['hero', '2'] })), ['hero', '2', 'ai-step']);
+});
+
+// The derived index: the flat map every stylish reader iterates, built
+// from the mirror's tree in the canonical order (the client twin of
+// NodeTreeBuilder::styleMapOf; PrinterEquivalenceTest locks the bytes
+// the two print). A document whose map was written in no document
+// order: a nested container under a region, a part before its root.
+const UUID_C = 'cccccccc-1111-2222-3333-444444444444';
+const UUID_D = 'dddddddd-1111-2222-3333-444444444444';
+const ENTRY = (property, value) => ({ default: { [property]: value } });
+const documentTree = () => [
+  {
+    kind: 'container', uuid: UUID_A, layout_id: 'layout_twocol_section',
+    styles: { '::.band': ENTRY('gap', '1rem'), '': ENTRY('padding', '4rem') },
+    children: [
+      { kind: 'region', region: 'first', children: [
+        { kind: 'block', uuid: UUID_B, block_type: 'text', styles: { '': ENTRY('color', 'red'), ':field_title': ENTRY('font-weight', '700') } },
+      ] },
+      { kind: 'region', region: 'second', children: [
+        { kind: 'container', uuid: UUID_C, layout_id: 'daedalus_stylish_container', styles: { '::> *': ENTRY('min-width', '0') }, children: [
+          { kind: 'block', uuid: UUID_D, block_type: 'text', styles: { '': ENTRY('color', 'purple') } },
+        ] },
+      ] },
+    ],
+  },
+  // A styleless container, an unstyled block: nothing of theirs lands.
+  { kind: 'container', uuid: 'eeeeeeee-1111-2222-3333-444444444444', layout_id: 'daedalus_stylish_container', children: [
+    { kind: 'block', uuid: 'ffffffff-1111-2222-3333-444444444444', block_type: 'text' },
+  ] },
+];
+const scrambled = {
+  [`block:${UUID_D}`]: ENTRY('color', 'purple'),
+  [`field:${UUID_A}:field_body`]: ENTRY('color', 'teal'),
+  [`block:${UUID_B}:field_title`]: ENTRY('font-weight', '700'),
+  [`container:${UUID_A}::.band`]: ENTRY('gap', '1rem'),
+  [`container:${UUID_C}::> *`]: ENTRY('min-width', '0'),
+  [`entity:${UUID_A}`]: ENTRY('padding', '2rem'),
+  [`block:${UUID_B}`]: ENTRY('color', 'red'),
+  [`container:${UUID_A}`]: ENTRY('padding', '4rem'),
+};
+const documentOrder = [
+  `field:${UUID_A}:field_body`,
+  `entity:${UUID_A}`,
+  `container:${UUID_A}::.band`,
+  `container:${UUID_A}`,
+  `block:${UUID_B}`,
+  `block:${UUID_B}:field_title`,
+  `container:${UUID_C}::> *`,
+  `block:${UUID_D}`,
+];
+
+test('styleMapOf: node-less keys first in stored order, then the tree in document order, a node\'s own keys as stored', () => {
+  const map = styleMapOf({ layout: documentTree(), styles: scrambled });
+  assert.deepEqual(Object.keys(map), documentOrder);
+  // Every entry is the one the key names, under its absolute key.
+  assert.deepEqual(map[`container:${UUID_A}::.band`], ENTRY('gap', '1rem'));
+  assert.deepEqual(map[`block:${UUID_B}:field_title`], ENTRY('font-weight', '700'));
+  assert.deepEqual(map[`container:${UUID_C}::> *`], ENTRY('min-width', '0'));
+  assert.deepEqual(map[`entity:${UUID_A}`], ENTRY('padding', '2rem'));
+});
+
+test('styleMapOf: a node\'s keys are read from the node, whether or not the top-level map still holds them', () => {
+  const whole = styleMapOf({ layout: documentTree(), styles: scrambled });
+  const nodeless = styleMapOf({
+    layout: documentTree(),
+    styles: { [`field:${UUID_A}:field_body`]: ENTRY('color', 'teal'), [`entity:${UUID_A}`]: ENTRY('padding', '2rem') },
+  });
+  assert.deepEqual(nodeless, whole);
+  // A node's entry wins over a stale top-level copy of the same key: the
+  // index holds each key once, at the node's place.
+  const stale = styleMapOf({
+    layout: documentTree(),
+    styles: { [`block:${UUID_D}`]: ENTRY('color', 'stale'), [`entity:${UUID_A}`]: ENTRY('padding', '2rem') },
+  });
+  assert.deepEqual(Object.keys(stale), [`entity:${UUID_A}`, ...documentOrder.filter((key) => !key.startsWith('field:') && !key.startsWith('entity:'))]);
+  assert.deepEqual(stale[`block:${UUID_D}`], ENTRY('color', 'purple'));
+});
+
+test('styleMapOf: without a tree the stored order stands; a key no node carries is node-less', () => {
+  assert.deepEqual(Object.keys(styleMapOf({ styles: scrambled })), Object.keys(scrambled));
+  assert.deepEqual(Object.keys(styleMapOf({ layout: [], styles: scrambled })), Object.keys(scrambled));
+  // Only the second top-level container in the tree: every other key is
+  // node-less and keeps its stored place.
+  const partial = styleMapOf({ layout: [documentTree()[1]], styles: scrambled });
+  assert.deepEqual(Object.keys(partial), Object.keys(scrambled));
+  // Nothing to read: the empty index, never a throw.
+  assert.deepEqual(styleMapOf(null), {});
+  assert.deepEqual(styleMapOf(undefined), {});
+  assert.deepEqual(styleMapOf({}), {});
+  assert.deepEqual(styleMapOf({ layout: documentTree() }), documentOrder.slice(2).reduce((map, key) => ({ ...map, [key]: scrambled[key] }), {}));
+});
+
+test('styleMapOf: the index is stable per blueprint object and fresh per replacement', () => {
+  const blueprint = { layout: documentTree(), styles: scrambled };
+  assert.equal(styleMapOf(blueprint), styleMapOf(blueprint));
+  assert.notEqual(styleMapOf(blueprint), styleMapOf({ ...blueprint }));
+  assert.deepEqual(styleMapOf(blueprint), styleMapOf({ ...blueprint }));
 });
 
 let failures = 0;

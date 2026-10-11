@@ -824,7 +824,10 @@ CSS;
   }
 
   /**
-   * A map prints one @scope block per key, joined in stored order.
+   * A map prints one @scope block per key, joined in the map's order.
+   *
+   * The printer imposes no order of its own: delivery hands it the
+   * canonical order (NodeTreeBuilder::styleMapOf(), CssEmissionTest).
    */
   public function testMultipleKeys(): void {
     $other = $this->container->get('uuid')->generate();

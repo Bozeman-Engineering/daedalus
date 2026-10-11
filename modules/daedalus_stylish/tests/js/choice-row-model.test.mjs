@@ -283,7 +283,6 @@ const posedGuide = {
     medium: { label: 'Medium', axis: 'width' },
     dark: { label: 'Dark', axis: 'scheme' },
   },
-  skinEditUrl: '/admin/appearance/skins/1',
 };
 const library = [{
   id: 'loud',
@@ -348,7 +347,7 @@ test('originFor: the declaration delivers beneath a skin that sets nothing for t
   assert.equal(origin.delivers, true);
   assert.equal(origin.layer, 'declared:block_type:text');
   assert.equal(origin.header, '1rem from the text block type declaration at Base');
-  assert.deepEqual(origin.doorways.map((doorway) => [doorway.id, doorway.disabled]), [['declared', true]]);
+  assert.deepEqual(origin.doorways.map((doorway) => [doorway.id, doorway.scope, doorway.property]), [['declared', 'block_type:text', 'font-size']], 'the one doorway opens the Law tab at the declaration');
   assert.equal(originAt(stackOf({ declared: { default: { 'font-size': '1rem' } } }), 'medium').layer, 'declared:block_type:text', 'no skin at all');
 }));
 

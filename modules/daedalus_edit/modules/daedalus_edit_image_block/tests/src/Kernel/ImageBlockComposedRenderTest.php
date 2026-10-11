@@ -119,6 +119,7 @@ class ImageBlockComposedRenderTest extends BlueprintKernelTestBase {
     $this->installEntitySchema('daedalus_variant');
     $this->installEntitySchema('daedalus_swatch');
     $this->installEntitySchema('daedalus_animation');
+    $this->installEntitySchema('daedalus_font');
     // The composed render derives its src through an image style, and
     // derivative generation resolves the default toolkit from system.image,
     // which only exists once system's shipped config is installed.
@@ -598,7 +599,7 @@ class ImageBlockComposedRenderTest extends BlueprintKernelTestBase {
       ],
     ]);
 
-    $result = $this->container->get('daedalus_blueprint.operations')->addElement($host, [
+    $result = $this->container->get('daedalus_blueprint.operations')->addElement($this->host($host), [
       'anchor' => $anchor,
       'placement' => 'after',
     ], [

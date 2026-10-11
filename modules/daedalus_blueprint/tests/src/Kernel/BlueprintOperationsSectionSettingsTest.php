@@ -84,7 +84,7 @@ class BlueprintOperationsSectionSettingsTest extends BlueprintKernelTestBase {
    * Runs one update_element op on the fixture section.
    */
   protected function update(array $properties): object {
-    return $this->operations->batchOperations($this->entity, [
+    return $this->operations->batchOperations($this->host($this->entity), [
       ['op' => 'update_element', 'element' => $this->sectionUuid, 'properties' => $properties],
     ]);
   }

@@ -5,12 +5,14 @@ declare(strict_types=1);
 namespace Drupal\daedalus_blueprint;
 
 use Drupal\Core\Entity\FieldableEntityInterface;
+use Drupal\daedalus_blueprint\Host\HostInterface;
 
 /**
  * Value object returned by ElementLocator.
  *
  * Contains the located element target (SectionComponent, section, or
- * paragraph entity), its parent entity, and the path from the root.
+ * paragraph entity), the host it was located in, the entity owning the
+ * field the target sits in (when one does), and the path from the root.
  */
 class ElementContext {
 
@@ -36,11 +38,15 @@ class ElementContext {
    *   The element type (TYPE_LB_COMPONENT, TYPE_PARAGRAPH, or TYPE_SECTION).
    * @param object $target
    *   The located target: SectionComponent (LB) or paragraph entity.
-   * @param \Drupal\Core\Entity\FieldableEntityInterface $parentEntity
-   *   The entity containing the target (root entity or parent
-   *   block_content/paragraph).
+   * @param \Drupal\daedalus_blueprint\Host\HostInterface $host
+   *   The host the element was located in.
+   * @param \Drupal\Core\Entity\FieldableEntityInterface|null $parentEntity
+   *   The entity owning the field the target lives in: the host's fields
+   *   entity for a layout element or a root-level paragraph, the parent
+   *   block_content or paragraph for a nested paragraph. NULL for a layout
+   *   element on a host with no fields of its own.
    * @param string $path
-   *   The full path from the root entity to this element.
+   *   The full path from the root to this element.
    * @param object|null $section
    *   The Section containing this element (LB only).
    * @param int|null $sectionIndex
@@ -52,12 +58,13 @@ class ElementContext {
    * @param object|null $sectionStorage
    *   The NestedAwareSectionStorage wrapper used for nested lookups (LB
    *   only). Kept alive so bubbleChangesToRoot() can propagate nested
-   *   changes to the root entity after modifications.
+   *   changes to the root after modifications.
    */
   public function __construct(
     public readonly string $type,
     public readonly object $target,
-    public readonly FieldableEntityInterface $parentEntity,
+    public readonly HostInterface $host,
+    public readonly ?FieldableEntityInterface $parentEntity,
     public readonly string $path,
     public readonly ?object $section = NULL,
     public readonly ?int $sectionIndex = NULL,

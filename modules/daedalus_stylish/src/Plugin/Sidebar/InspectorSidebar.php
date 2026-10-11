@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace Drupal\daedalus_stylish\Plugin\Sidebar;
 
 use Drupal\Core\Cache\Cache;
-use Drupal\Core\Entity\FieldableEntityInterface;
+use Drupal\daedalus_blueprint\Capability\Capability;
+use Drupal\daedalus_blueprint\Capability\VerdictStamper;
+use Drupal\daedalus_blueprint\EntityStorageHandler;
 use Drupal\Core\Plugin\ContainerFactoryPluginInterface;
 use Drupal\Core\StringTranslation\StringTranslationTrait;
 use Drupal\Core\StringTranslation\TranslatableMarkup;
@@ -18,10 +20,7 @@ use Drupal\daedalus_ui\SidebarPluginBase;
 use Drupal\daedalus_stylish\ClientStyleGuide;
 use Drupal\daedalus_stylish\InspectorGates;
 use Drupal\daedalus_stylish\MediaValueResolver;
-use Drupal\daedalus_stylish\Plugin\Field\FieldType\StyleMapItem;
-use Drupal\daedalus_stylish\DaedalusStylishFieldManager;
 use Drupal\daedalus_stylish\DaedalusStylishMediaLibraryOpener;
-use Drupal\daedalus_tempstore\EntityTempstoreRepository;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 
 /**
@@ -68,12 +67,12 @@ final class InspectorSidebar extends SidebarPluginBase implements ContainerFacto
     string $plugin_id,
     mixed $plugin_definition,
     private readonly DaedalusUi $daedalusUi,
-    private readonly DaedalusStylishFieldManager $fieldManager,
     private readonly ClientStyleGuide $clientStyleGuide,
     private readonly InspectorGates $gates,
     private readonly EditSessionScope $editSessionScope,
     private readonly MediaValueResolver $mediaValueResolver,
-    private readonly ?EntityTempstoreRepository $entityTempstoreRepository = NULL,
+    private readonly EntityStorageHandler $storageHandler,
+    private readonly VerdictStamper $verdictStamper,
     private readonly ?DaedalusStylishMediaLibraryOpener $mediaLibraryOpener = NULL,
   ) {
     parent::__construct($configuration, $plugin_id, $plugin_definition);
@@ -88,12 +87,12 @@ final class InspectorSidebar extends SidebarPluginBase implements ContainerFacto
       $plugin_id,
       $plugin_definition,
       $container->get('daedalus_ui.ui'),
-      $container->get('daedalus_stylish.field_manager'),
       $container->get('daedalus_stylish.client_style_guide'),
       $container->get('daedalus_stylish.inspector_gates'),
       $container->get('daedalus_ui.edit_session_scope'),
       $container->get('daedalus_stylish.media_value_resolver'),
-      $container->has('daedalus_tempstore.entity_tempstore_repository') ? $container->get('daedalus_tempstore.entity_tempstore_repository') : NULL,
+      $container->get('daedalus_blueprint.storage_handler'),
+      $container->get('daedalus_blueprint.verdict_stamper'),
       // The opener registers only when media_library is installed
       // (DaedalusStylishServiceProvider); without it the panel simply attaches no
       // library URL and pickers degrade to free text.
@@ -104,39 +103,45 @@ final class InspectorSidebar extends SidebarPluginBase implements ContainerFacto
   /**
    * {@inheritdoc}
    *
-   * The inspector (and its toggle button) only exists on pages whose main
-   * entity's bundle has styling enabled. A bundle with styling off is
-   * a deliberate admin choice — a panel that can never do anything there
-   * renders truthfully as absent, not as a permanently-dead husk.
+   * The inspector (and its toggle button) only exists on pages whose route
+   * host keeps a style map (a content host whose bundle has styling
+   * enabled, a template host) AND where the actor may style something:
+   * the capability spine's verdict set allows style on the root or on
+   * some element (VerdictStamper::allowsAnywhere). A bundle with styling
+   * off is a deliberate admin choice, and an actor the role policy or
+   * ownership refuses style everywhere (an editor without the bundle's
+   * style permission, a frozen translation) has nothing to style: in
+   * both cases a panel that can never do anything renders truthfully as
+   * absent, not as a permanently-dead husk.
    */
   public function applies(): bool {
-    $entity = $this->daedalusUi->deriveEntityFromRoute();
-    if ($entity === NULL) {
-      return FALSE;
-    }
-    return $this->fieldManager->isEnabled($entity->getEntityTypeId(), $entity->bundle());
+    $host = $this->daedalusUi->deriveHostFromRoute();
+    return $host !== NULL
+      && $host->hasStyleStore()
+      && $this->verdictStamper->allowsAnywhere($host, Capability::Style);
   }
 
   /**
    * {@inheritdoc}
    */
   public function build(): array {
-    $entity = $this->daedalusUi->deriveEntityFromRoute();
+    $route_host = $this->daedalusUi->deriveHostFromRoute();
+    $entity = $route_host?->entity();
 
     // The client mirror's media table: lowercased media uuid => URL for
     // every token in the host's style map, so the live-preview tag resolves
     // tokens exactly where the server print sites would. Seeded from the
-    // tempstore-staged copy when one exists (that staged map is what the
-    // blueprint mirror will show), which is per-user state, hence the user
-    // cache context below. Picks made during the session extend the table
-    // client-side; this seed covers reload with staged-but-unsaved tokens.
+    // working copy (the staged map is what the blueprint mirror will
+    // show), which is per-user state, hence the user cache context below.
+    // Picks made during the session extend the table client-side; this
+    // seed covers reload with staged-but-unsaved tokens.
     $media_urls = [];
     $media_tags = [];
-    if ($entity instanceof FieldableEntityInterface && $entity->hasField(DaedalusStylishFieldManager::FIELD_NAME)) {
-      $host = $this->entityTempstoreRepository?->get($entity) ?? $entity;
-      $item = $host->get(DaedalusStylishFieldManager::FIELD_NAME)->first();
-      $map = $item instanceof StyleMapItem ? $item->getStyleMap() : [];
-      $media_urls = $this->mediaValueResolver->clientUrlTable($map, $media_tags, $host);
+    if ($route_host !== NULL) {
+      $host = $this->storageHandler->load($route_host->entityTypeId(), $route_host->id()) ?? $route_host;
+      if ($host->hasStyleStore()) {
+        $media_urls = $this->mediaValueResolver->clientUrlTable($host->styleMap(), $media_tags, $host);
+      }
     }
 
     $build = [
@@ -159,13 +164,17 @@ final class InspectorSidebar extends SidebarPluginBase implements ContainerFacto
         'drupalSettings' => [
           'daedalusStylish' => [
             'guide' => $this->clientStyleGuide->build(),
-            // The variant, swatch and animation gesture gates: which
-            // controls the panel's variant area, Materials cards and
-            // gradient builder render (InspectorGates: honest chrome, not
-            // access control; the satellite window reads the same).
+            // The variant, swatch, token, animation and skin gesture gates:
+            // which controls the panel's variant area, Materials cards,
+            // gradient builder and skin session render (InspectorGates:
+            // honest chrome, not access control; the satellite window
+            // reads the same).
             'variants' => $this->gates->variants(),
             'swatches' => $this->gates->swatches(),
+            'tokens' => $this->gates->tokens(),
             'animations' => $this->gates->animations(),
+            'fonts' => $this->gates->fonts(),
+            'skin' => $this->gates->skin(),
             'mediaUrls' => $media_urls,
           ],
         ],

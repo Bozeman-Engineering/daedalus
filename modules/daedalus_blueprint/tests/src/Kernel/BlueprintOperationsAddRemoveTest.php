@@ -79,7 +79,7 @@ class BlueprintOperationsAddRemoveTest extends BlueprintKernelTestBase {
     ]);
     $entity->save();
 
-    $result = $this->operations->addElement($entity, [
+    $result = $this->operations->addElement($this->host($entity), [
       'anchor' => self::SEED_UUID,
       'placement' => 'after',
     ], [
@@ -141,7 +141,7 @@ class BlueprintOperationsAddRemoveTest extends BlueprintKernelTestBase {
     ]);
     $entity->save();
 
-    $result = $this->operations->addElement($entity, [
+    $result = $this->operations->addElement($this->host($entity), [
       'anchor' => self::SEED_UUID,
       'placement' => 'after',
     ], [
@@ -166,7 +166,7 @@ class BlueprintOperationsAddRemoveTest extends BlueprintKernelTestBase {
    *
    * The additional map lands on the SectionComponent's additional slot
    * (never in plugin configuration), and a non-map fails loudly before
-   * anything is placed. Stencil provenance stamping rides this seam.
+   * anything is placed. Blueprint provenance stamping rides this seam.
    */
   public function testAddComponentLbAdditional(): void {
     $this->enableLayoutBuilder();
@@ -193,7 +193,7 @@ class BlueprintOperationsAddRemoveTest extends BlueprintKernelTestBase {
     $entity->save();
 
     $location = ['anchor' => self::SEED_UUID, 'placement' => 'after'];
-    $result = $this->operations->addElement($entity, $location, [
+    $result = $this->operations->addElement($this->host($entity), $location, [
       'block_type' => 'text_section',
       'uuid' => '83b529a6-15f8-4c9c-b48a-4f7e0d10c1d2',
       'additional' => ['my_module' => ['marker' => 'value']],
@@ -207,7 +207,7 @@ class BlueprintOperationsAddRemoveTest extends BlueprintKernelTestBase {
     $this->assertArrayNotHasKey('my_module', $component->get('configuration'));
 
     // A non-map additional is a grammar error, refused before placement.
-    $result = $this->operations->addElement($entity, $location, [
+    $result = $this->operations->addElement($this->host($entity), $location, [
       'block_type' => 'text_section',
       'additional' => ['not', 'a', 'map'],
     ]);
@@ -242,7 +242,7 @@ class BlueprintOperationsAddRemoveTest extends BlueprintKernelTestBase {
     ]);
     $entity->save();
 
-    $result = $this->operations->addElement($entity, [
+    $result = $this->operations->addElement($this->host($entity), [
       'anchor' => self::SEED_UUID,
       'placement' => 'after',
     ], [
@@ -270,7 +270,7 @@ class BlueprintOperationsAddRemoveTest extends BlueprintKernelTestBase {
     ]);
     $entity->save();
 
-    $result = $this->operations->addElement($entity, [
+    $result = $this->operations->addElement($this->host($entity), [
       'anchor' => '0d1d6dcd-2f11-45f5-9db1-f0d6b8f3a2ce',
       'placement' => 'after',
     ], [
@@ -311,7 +311,7 @@ class BlueprintOperationsAddRemoveTest extends BlueprintKernelTestBase {
     ]);
     $entity->save();
 
-    $result = $this->operations->addElement($entity, [
+    $result = $this->operations->addElement($this->host($entity), [
       'anchor' => self::SEED_UUID,
       'placement' => 'after',
     ], [
@@ -360,7 +360,7 @@ class BlueprintOperationsAddRemoveTest extends BlueprintKernelTestBase {
     ]);
     $entity->save();
 
-    $result = $this->operations->addElement($entity, [
+    $result = $this->operations->addElement($this->host($entity), [
       'anchor' => 'a0bd9075-abce-9a83-7b79-d4db72ff887b',
       'placement' => 'after',
     ], [
@@ -412,7 +412,7 @@ class BlueprintOperationsAddRemoveTest extends BlueprintKernelTestBase {
     ]);
     $entity = $this->entityTypeManager->getStorage('entity_test')->load($entity->id());
 
-    $result = $this->operations->addElement($entity, [
+    $result = $this->operations->addElement($this->host($entity), [
       'field' => 'field_paragraphs',
       'position' => 0,
     ], [
@@ -456,7 +456,7 @@ class BlueprintOperationsAddRemoveTest extends BlueprintKernelTestBase {
     ]);
     $entity = $this->entityTypeManager->getStorage('entity_test')->load($entity->id());
 
-    $result = $this->operations->addElement($entity, [
+    $result = $this->operations->addElement($this->host($entity), [
       'field' => 'field_paragraphs',
     ], [
       'type' => 'entity_test_rev',
@@ -509,7 +509,7 @@ class BlueprintOperationsAddRemoveTest extends BlueprintKernelTestBase {
 
     $parent_uuid = $entity->get('field_paragraphs')->first()->entity->uuid();
 
-    $result = $this->operations->addElement($entity, [
+    $result = $this->operations->addElement($this->host($entity), [
       'parent_uuid' => $parent_uuid,
       'field' => 'field_items',
       'position' => 0,
@@ -544,7 +544,7 @@ class BlueprintOperationsAddRemoveTest extends BlueprintKernelTestBase {
 
     $entity = $this->createTestEntity(['name' => 'Page']);
 
-    $result = $this->operations->addElement($entity, [
+    $result = $this->operations->addElement($this->host($entity), [
       'parent_uuid' => 'c68c9561-d36d-b4fc-77ac-50039f354800',
       'field' => 'field_paragraphs',
     ], [
@@ -563,7 +563,7 @@ class BlueprintOperationsAddRemoveTest extends BlueprintKernelTestBase {
   public function testAddComponentParagraphFieldNotFound(): void {
     $entity = $this->createTestEntity(['name' => 'Page']);
 
-    $result = $this->operations->addElement($entity, [
+    $result = $this->operations->addElement($this->host($entity), [
       'field' => 'field_nonexistent',
     ], [
       'type' => 'entity_test_rev',
@@ -589,7 +589,7 @@ class BlueprintOperationsAddRemoveTest extends BlueprintKernelTestBase {
 
     $entity = $this->createTestEntity(['name' => 'Page']);
 
-    $result = $this->operations->addElement($entity, [
+    $result = $this->operations->addElement($this->host($entity), [
       'field' => 'field_paragraphs',
     ], [
       'type' => 'nonexistent_bundle',
@@ -619,7 +619,7 @@ class BlueprintOperationsAddRemoveTest extends BlueprintKernelTestBase {
 
     $entity = $this->createTestEntity(['name' => 'Page']);
 
-    $result = $this->operations->addElement($entity, [
+    $result = $this->operations->addElement($this->host($entity), [
       'field' => 'field_paragraphs',
     ], [
       'type' => 'entity_test_rev',
@@ -666,7 +666,7 @@ class BlueprintOperationsAddRemoveTest extends BlueprintKernelTestBase {
     ]);
     $entity->save();
 
-    $result = $this->operations->removeElement($entity, '474ec695-fe40-d152-f511-3878a0d103ef');
+    $result = $this->operations->removeElement($this->host($entity), '474ec695-fe40-d152-f511-3878a0d103ef');
 
     $this->assertTrue($result->isSuccess());
     $this->assertSame($entity, $result->getEntity());
@@ -717,7 +717,7 @@ class BlueprintOperationsAddRemoveTest extends BlueprintKernelTestBase {
     ]);
     $entity->save();
 
-    $result = $this->operations->removeElement($entity, 'faf95c53-35e7-74e1-184e-041152031df4');
+    $result = $this->operations->removeElement($this->host($entity), 'faf95c53-35e7-74e1-184e-041152031df4');
 
     $this->assertTrue($result->isSuccess());
 
@@ -760,7 +760,7 @@ class BlueprintOperationsAddRemoveTest extends BlueprintKernelTestBase {
 
     $para1Uuid = $entity->get('field_paragraphs')->get(0)->entity->uuid();
 
-    $result = $this->operations->removeElement($entity, $para1Uuid);
+    $result = $this->operations->removeElement($this->host($entity), $para1Uuid);
 
     $this->assertTrue($result->isSuccess());
     $this->assertSame($entity, $result->getEntity());
@@ -800,7 +800,7 @@ class BlueprintOperationsAddRemoveTest extends BlueprintKernelTestBase {
 
     // Remove the middle one.
     $para2Uuid = $entity->get('field_paragraphs')->get(1)->entity->uuid();
-    $result = $this->operations->removeElement($entity, $para2Uuid);
+    $result = $this->operations->removeElement($this->host($entity), $para2Uuid);
 
     $this->assertTrue($result->isSuccess());
 
@@ -817,7 +817,7 @@ class BlueprintOperationsAddRemoveTest extends BlueprintKernelTestBase {
   public function testRemoveElementNotFound(): void {
     $entity = $this->createTestEntity(['name' => 'Test']);
 
-    $result = $this->operations->removeElement($entity, 'c68c9561-d36d-b4fc-77ac-50039f354800');
+    $result = $this->operations->removeElement($this->host($entity), 'c68c9561-d36d-b4fc-77ac-50039f354800');
 
     $this->assertFalse($result->isSuccess());
     $this->assertEquals('structural', $result->getPhase());
@@ -841,7 +841,7 @@ class BlueprintOperationsAddRemoveTest extends BlueprintKernelTestBase {
 
     $entity = $this->createTestEntity(['name' => 'Page']);
 
-    $result = $this->operations->addElement($entity, [
+    $result = $this->operations->addElement($this->host($entity), [
       'field' => 'field_paragraphs',
     ], [
       'type' => 'entity_test_rev',

@@ -73,6 +73,10 @@ interface FieldHandlerInterface {
    *     and paragraphs. Context for handlers that record change targets of
    *     their own (e.g. pending-generation effects); not guaranteed on every
    *     path.
+   *   - 'system' (bool): TRUE when the caller acts for the site, not for an
+   *     actor (a load of stored values, a system batch, an importer). A
+   *     handler that judges the current user (field access on an owned
+   *     child, the use of a text format) does not judge under it.
    *
    * @return \Drupal\daedalus_blueprint\FieldHandler\FieldHandlerResult
    *   The result containing the processed value and any errors/warnings.

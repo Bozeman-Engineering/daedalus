@@ -1,7 +1,7 @@
 /**
  * Self-asserting tests for the mirror's uuid lookup (componentForUuid).
  *
- * The lookup walks the delivered blueprint's lean node tree (`_tree`):
+ * The lookup walks the delivered blueprint's lean node tree (`layout`):
  * kind-discriminated container/region/block nodes with ONE child axis at
  * every depth. Any node may match by uuid (a container's uuid is the
  * element's uuid at every surface — both halves of the selectable
@@ -23,7 +23,7 @@ const REGION_BLOCK = 'dddddddd-1111-2222-3333-444444444444';
 const blueprint = {
   bundle: 'page',
   fields: {},
-  _tree: [
+  layout: [
     {
       kind: 'container',
       uuid: SECTION,
@@ -77,6 +77,6 @@ test('region nodes are walked through, never returned', () => {
 
 test('an unknown uuid, an empty tree, and a missing blueprint answer null', () => {
   assert.equal(componentForUuid(blueprint, '00000000-0000-0000-0000-000000000000'), null);
-  assert.equal(componentForUuid({ _tree: [] }, BLOCK), null);
+  assert.equal(componentForUuid({ layout: [] }, BLOCK), null);
   assert.equal(componentForUuid(null, BLOCK), null);
 });

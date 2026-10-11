@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Drupal\Tests\daedalus_stylish\Kernel;
 
-use Drupal\daedalus_blueprint_stencil\Entity\Stencil;
 use Drupal\entity_test\Entity\EntityTest;
 use Drupal\layout_builder\Section;
 use Drupal\layout_builder\Plugin\SectionStorage\OverridesSectionStorage;
@@ -24,7 +23,7 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  * synthetic shape. Around it: region-style relocation onto minted
  * children, variant reference re-pointing (shipped-unmodified only),
  * compound condition rewrites, variant entity migration (scopes, slot
- * paths, conditions), and stored stencil migration.
+ * paths, conditions).
  *
  * @group daedalus_stylish
  */
@@ -38,12 +37,9 @@ class ContainerModelMigrationTest extends NestedStorageKernelTestBase {
   protected static $modules = [
     'daedalus_stylish',
     'daedalus_stylish_layouts',
-    // The stencil entity's icon field references media, so installing the
-    // stencil schema needs the media entity type (and its field types).
     'file',
     'image',
     'media',
-    'daedalus_blueprint_stencil',
     // Re-declares the retired daedalus_stylish_onecol..fourcol plugins: persisting
     // the captured PRE-migration fixtures needs live plugins because core's
     // Section::toArray() resolves layout_settings through the plugin. Real
@@ -72,8 +68,8 @@ class ContainerModelMigrationTest extends NestedStorageKernelTestBase {
     // every build, and every compile and validation builds it.
     $this->installEntitySchema('daedalus_swatch');
     $this->installEntitySchema('daedalus_animation');
+    $this->installEntitySchema('daedalus_font');
     $this->installEntitySchema('daedalus_skin');
-    $this->installEntitySchema('stencil');
     $this->installSchema('daedalus_stylish', ['daedalus_variant_usage']);
     $this->installConfig(['daedalus_stylish']);
     $this->container->get('daedalus_stylish.field_manager')->enable('entity_test', 'entity_test');
@@ -574,75 +570,5 @@ class ContainerModelMigrationTest extends NestedStorageKernelTestBase {
     $this->assertNotNull($storage->loadUnchanged($user->id()), 'A user variant reusing a retired name survives.');
   }
 
-  /**
-   * Stored stencils: nodes, relative styles, and variant names migrate.
-   */
-  public function testStencilMigration(): void {
-    $shipped = DaedalusStylishVariant::create([
-      'label' => 'Two column LG',
-      'machine_name' => 'twocol_lg',
-      'scope' => 'layout:daedalus_stylish_twocol',
-      'axis' => 'width',
-      'status' => TRUE,
-    ]);
-    $styles = ['::.daedalus-stylish-layout-container' => ['default' => ['max-width' => '80rem']]];
-    $shipped->setStyles($styles);
-    $shipped->setShippedSource('daedalus_stylish_layouts', $styles);
-    $shipped->save();
-
-    $stencil = Stencil::create([
-      'label' => 'Legacy CTA',
-      'machine_name' => 'legacy_cta',
-      'description' => 'Captured before the container model.',
-      'status' => TRUE,
-    ]);
-    $stencil->setElement([
-      'layout_id' => 'daedalus_stylish_twocol',
-      'label' => 'CTA',
-      'styles' => [
-        '' => ['variants' => ['twocol_lg'], 'default' => ['background-color' => 'aliceblue']],
-        'region:first' => ['default' => ['display' => 'flex'], 'mobile' => ['padding' => '1rem']],
-      ],
-      'regions' => [
-        'first' => [
-          ['block_type' => 'text', 'styles' => ['::.inner' => ['mobile' => ['padding' => '2rem']]]],
-        ],
-        'second' => [
-          [
-            'layout_id' => 'daedalus_stylish_onecol',
-            'regions' => ['first' => [['block_type' => 'basic']]],
-          ],
-        ],
-      ],
-    ]);
-    $stencil->save();
-
-    $lines = $this->container->get('daedalus_stylish_layouts.container_migration')->migrateStencils();
-    $this->assertNotEmpty($lines);
-    $storage = $this->entityTypeManager->getStorage('stencil');
-    $storage->resetCache();
-    $component = $storage->loadUnchanged($stencil->id())->getElement();
-
-    $this->assertSame('daedalus_stylish_container', $component['layout_id']);
-    $this->assertSame('CTA', $component['label']);
-    $this->assertSame(['variants' => ['container_lg'], 'default' => ['background-color' => 'aliceblue']], $component['styles']['']);
-    $this->assertArrayNotHasKey('region:first', $component['styles']);
-
-    $children = $component['regions']['content'];
-    $this->assertCount(2, $children);
-    // Region first: styled, so a child container carries the region styles
-    // and the text block.
-    $this->assertSame('daedalus_stylish_container', $children[0]['layout_id']);
-    $this->assertSame(['default' => ['display' => 'flex'], 'narrow' => ['padding' => '1rem']], $children[0]['styles']['']);
-    $text = $children[0]['regions']['content'][0];
-    $this->assertSame('text', $text['block_type']);
-    $this->assertSame(['narrow' => ['padding' => '2rem']], $text['styles']['::.inner']);
-    // Region second: its nested onecol converted (children-first) and the
-    // minted child wraps it.
-    $this->assertSame('daedalus_stylish_container', $children[1]['layout_id']);
-    $inner = $children[1]['regions']['content'][0];
-    $this->assertSame('daedalus_stylish_container', $inner['layout_id']);
-    $this->assertSame('basic', $inner['regions']['content'][0]['block_type']);
-  }
 
 }

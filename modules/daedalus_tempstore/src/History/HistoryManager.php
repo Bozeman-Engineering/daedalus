@@ -7,6 +7,8 @@ namespace Drupal\daedalus_tempstore\History;
 use Drupal\Core\Entity\EntityInterface;
 use Drupal\Core\Session\AccountProxyInterface;
 use Drupal\Core\TempStore\SharedTempStoreFactory;
+use Drupal\daedalus_blueprint\Host\HostInterface;
+use Drupal\daedalus_blueprint\Host\HostResolver;
 use Drupal\layout_builder\SectionStorageInterface;
 use Drupal\daedalus_tempstore\StrategySelector;
 
@@ -19,6 +21,11 @@ use Drupal\daedalus_tempstore\StrategySelector;
  * Undo/redo/jump all reduce to "move the pointer and write that entry's
  * snapshot back" — no inverse operations, no patch replay.
  *
+ * A timeline belongs to a host: the manager keys it by the host's entity
+ * through the tempstore strategies (the same key every mutation and
+ * save/discard already uses), and a restore answers the hosts whose staged
+ * state moved, resolved from the restored envelopes' storages.
+ *
  * Restore writes through the tempstore strategies (the same machinery every
  * mutation and save/discard already trusts), with recording suppressed so
  * the restore itself never becomes history. Going through the strategies —
@@ -28,7 +35,7 @@ use Drupal\daedalus_tempstore\StrategySelector;
  *
  * This service moves state only; it fires no hooks and renders nothing.
  * Callers that expose restore over HTTP own firing the persist hook with
- * the returned entities (the cache-invalidation contract lives with them).
+ * the returned hosts (the cache-invalidation contract lives with them).
  */
 class HistoryManager {
 
@@ -38,6 +45,7 @@ class HistoryManager {
     protected StrategySelector $strategySelector,
     protected SharedTempStoreFactory $tempStoreFactory,
     protected AccountProxyInterface $currentUser,
+    protected HostResolver $hostResolver,
   ) {}
 
   /**
@@ -57,21 +65,22 @@ class HistoryManager {
   }
 
   /**
-   * Resolves the timeline ID for a tempstore subject.
+   * Resolves the timeline ID for a host.
    *
-   * @param mixed $subject
-   *   Anything a tempstore strategy supports (an entity, section storage).
+   * @param \Drupal\daedalus_blueprint\Host\HostInterface $host
+   *   The host whose staged state the timeline tracks.
    *
    * @return string
    *   The timeline ID: "{collection}:{key}".
    */
-  public function timelineFor(mixed $subject): string {
+  public function timelineFor(HostInterface $host): string {
+    $subject = $host->entity();
     $strategy = $this->strategySelector->getStrategy($subject);
     return $strategy->getCollection($subject) . ':' . $strategy->getKey($subject);
   }
 
   /**
-   * The current user's timeline metadata for a subject, UI-shaped.
+   * The current user's timeline metadata for a host, UI-shaped.
    *
    * @return array
    *   ['pointer' => int, 'can_undo' => bool, 'can_redo' => bool,
@@ -79,8 +88,8 @@ class HistoryManager {
    *   (seq, label, uid, timestamp, targets, bytes, baseline) — snapshot
    *   payloads never leave the store for display.
    */
-  public function metadata(mixed $subject): array {
-    $timeline = $this->timelineFor($subject);
+  public function metadata(HostInterface $host): array {
+    $timeline = $this->timelineFor($host);
     $index = $this->store->loadIndex($this->currentUser->id(), $timeline);
     if ($index === NULL) {
       return [
@@ -104,16 +113,16 @@ class HistoryManager {
   /**
    * Undoes one step: restores the entry before the pointer.
    *
-   * @param mixed $subject
-   *   The tempstore subject whose timeline to move.
+   * @param \Drupal\daedalus_blueprint\Host\HostInterface $host
+   *   The host whose timeline to move.
    *
    * @return array|null
    *   The restore result (see restoreTo()), or NULL if there is nothing
    *   to undo.
    */
-  public function undo(mixed $subject): ?array {
-    $target = $this->adjacentSeq($subject, -1);
-    return $target === NULL ? NULL : $this->restoreTo($subject, $target);
+  public function undo(HostInterface $host): ?array {
+    $target = $this->adjacentSeq($host, -1);
+    return $target === NULL ? NULL : $this->restoreTo($host, $target);
   }
 
   /**
@@ -122,16 +131,16 @@ class HistoryManager {
    * @return array|null
    *   The restore result, or NULL if there is nothing to redo.
    */
-  public function redo(mixed $subject): ?array {
-    $target = $this->adjacentSeq($subject, 1);
-    return $target === NULL ? NULL : $this->restoreTo($subject, $target);
+  public function redo(HostInterface $host): ?array {
+    $target = $this->adjacentSeq($host, 1);
+    return $target === NULL ? NULL : $this->restoreTo($host, $target);
   }
 
   /**
    * Restores the staged state to a specific history entry.
    *
-   * @param mixed $subject
-   *   The tempstore subject whose timeline to move.
+   * @param \Drupal\daedalus_blueprint\Host\HostInterface $host
+   *   The host whose timeline to move.
    * @param int $seq
    *   The target entry's sequence number.
    *
@@ -139,16 +148,16 @@ class HistoryManager {
    *   On success: [
    *     'pointer' => the new pointer (= $seq),
    *     'label' => the restored entry's label,
-   *     'entities' => the entities whose staged state changed (for the
+   *     'hosts' => the hosts whose staged state changed (for the
    *       caller's persist-hook firing),
    *     'targets' => the union of the traversed entries' targets (the
    *       subtree that changed between the two states, for re-render),
    *   ]. NULL when the entry does not exist, has expired, or is already
    *   current.
    */
-  public function restoreTo(mixed $subject, int $seq): ?array {
+  public function restoreTo(HostInterface $host, int $seq): ?array {
     $uid = $this->currentUser->id();
-    $timeline = $this->timelineFor($subject);
+    $timeline = $this->timelineFor($host);
     $index = $this->store->loadIndex($uid, $timeline);
     if ($index === NULL || !isset($index['entries'][$seq]) || $index['pointer'] === $seq) {
       return NULL;
@@ -158,13 +167,13 @@ class HistoryManager {
       return NULL;
     }
 
-    $entities = [];
+    $hosts = [];
     foreach ($entry['writes'] as $write) {
       $restored = !empty($write['absent'])
         ? $this->restoreAbsent($write)
         : $this->restoreEnvelope($write);
-      if ($restored instanceof EntityInterface) {
-        $entities[] = $restored;
+      if ($restored !== NULL) {
+        $hosts[] = $restored;
       }
     }
 
@@ -184,7 +193,7 @@ class HistoryManager {
     return [
       'pointer' => $seq,
       'label' => $index['entries'][$seq]['label'],
-      'entities' => $entities,
+      'hosts' => $hosts,
       'targets' => $targets,
     ];
   }
@@ -192,8 +201,8 @@ class HistoryManager {
   /**
    * Finds the entry adjacent to the pointer in the given direction.
    */
-  protected function adjacentSeq(mixed $subject, int $direction): ?int {
-    $timeline = $this->timelineFor($subject);
+  protected function adjacentSeq(HostInterface $host, int $direction): ?int {
+    $timeline = $this->timelineFor($host);
     $index = $this->store->loadIndex($this->currentUser->id(), $timeline);
     if ($index === NULL) {
       return NULL;
@@ -211,10 +220,10 @@ class HistoryManager {
   /**
    * Restores a snapshot envelope by writing its subject through a strategy.
    *
-   * @return \Drupal\Core\Entity\EntityInterface|null
-   *   The entity whose staged state changed, when one can be identified.
+   * @return \Drupal\daedalus_blueprint\Host\HostInterface|null
+   *   The host whose staged state changed, when one can be identified.
    */
-  protected function restoreEnvelope(array $write): ?EntityInterface {
+  protected function restoreEnvelope(array $write): ?HostInterface {
     // The envelope is this module's own gzcompress()ed serialize() of a
     // tempstore envelope (HistoryRecorder), read back from the key-value
     // store; it carries section storage objects, so the classes cannot be
@@ -228,7 +237,7 @@ class HistoryManager {
     $this->recorder->suppress(
       fn() => $this->strategySelector->getStrategy($subject)->set($subject),
     );
-    return $this->entityFromSubject($subject);
+    return $this->hostOf($subject);
   }
 
   /**
@@ -237,10 +246,10 @@ class HistoryManager {
    * The snapshot has no subject to delete BY, so the subject is derived
    * from the state currently in tempstore — the state being replaced.
    *
-   * @return \Drupal\Core\Entity\EntityInterface|null
-   *   The entity whose staged state was removed, when one can be identified.
+   * @return \Drupal\daedalus_blueprint\Host\HostInterface|null
+   *   The host whose staged state was removed, when one can be identified.
    */
-  protected function restoreAbsent(array $write): ?EntityInterface {
+  protected function restoreAbsent(array $write): ?HostInterface {
     $current = $this->tempStoreFactory->get($write['collection'])->get($write['key']);
     $subject = $this->subjectFromEnvelope(is_array($current) ? $current : NULL);
     if ($subject === NULL) {
@@ -250,7 +259,7 @@ class HistoryManager {
     $this->recorder->suppress(
       fn() => $this->strategySelector->getStrategy($subject)->delete($subject),
     );
-    return $this->entityFromSubject($subject);
+    return $this->hostOf($subject);
   }
 
   /**
@@ -261,19 +270,19 @@ class HistoryManager {
   }
 
   /**
-   * Extracts the entity a tempstore subject stages, when there is one.
+   * The host a tempstore subject stages, when it has one.
+   *
+   * A section storage's host is the owner of the storage (the entity in an
+   * overrides storage's context, the display in a defaults storage's); an
+   * entity envelope's host is the entity's own, when it is hostable.
    */
-  protected function entityFromSubject(mixed $subject): ?EntityInterface {
+  protected function hostOf(mixed $subject): ?HostInterface {
     if ($subject instanceof SectionStorageInterface) {
-      try {
-        $entity = $subject->getContextValue('entity');
-        return $entity instanceof EntityInterface ? $entity : NULL;
-      }
-      catch (\Exception) {
-        return NULL;
-      }
+      return $this->hostResolver->fromSectionStorage($subject);
     }
-    return $subject instanceof EntityInterface ? $subject : NULL;
+    return $subject instanceof EntityInterface && $this->hostResolver->hosts($subject)
+      ? $this->hostResolver->fromEntity($subject)
+      : NULL;
   }
 
 }

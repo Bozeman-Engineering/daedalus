@@ -1,6 +1,7 @@
 import { axisLabel, findVariant, orderedEntryRefs } from './variant-scope.js';
-import { stencilLabel } from './library-model.js';
-import { sessionCount } from './pending.js';
+import { blueprintLabel } from './library-model.js';
+import { sessionCount, stagesLines } from './pending.js';
+import { skinScopeLabel } from './provenance-model.js';
 
 /**
  * The editing session frame's pure model (four controls, one loud mode).
@@ -25,11 +26,12 @@ import { sessionCount } from './pending.js';
 /**
  * The frame's posture for one render.
  *
- * 'editing' mounts the frame over the variant document (update session),
- * 'creating' over the draft document (save session), 'parked' renders
- * the resume chip instead of the frame, and null renders plain places —
- * no session, or an update session whose `editing` echo is in flight
- * (source round-trip): nothing mounts rather than an anchorless frame.
+ * 'editing' mounts the frame over the edited document (an update
+ * session's variant, a skin session's scope defaults), 'creating' over
+ * the draft document (save session), 'parked' renders the resume chip
+ * instead of the frame, and null renders plain places — no session, or
+ * an update or skin session whose `editing` echo is in flight (source
+ * round-trip): nothing mounts rather than an anchorless frame.
  *
  * @param {?object} session
  *   The open pending session (pending.js shapes), or null.
@@ -70,11 +72,11 @@ export const parkTransition = () => ({ editing: null, parked: true });
 /**
  * Resuming a parked session (the chip's Resume).
  *
- * The mode remounts exactly where it parked: an update session restores
- * `editing` from its own reference (the session IS the document's
- * pending store — the reference never left it), a draft restores with
- * `editing` still null (a draft has no document reference until Push
- * mints one; its frame mounts off the session itself).
+ * The mode remounts exactly where it parked: an update or skin session
+ * restores `editing` from its own reference (the session IS the
+ * document's pending store — the reference never left it), a draft
+ * restores with `editing` still null (a draft has no document reference
+ * until Push mints one; its frame mounts off the session itself).
  *
  * @param {?object} session
  *   The parked session.
@@ -82,7 +84,7 @@ export const parkTransition = () => ({ editing: null, parked: true });
  * @return {{editing: ?string, parked: false}}
  */
 export const resumeTransition = (session) => ({
-  editing: session?.kind === 'update' ? session.reference : null,
+  editing: stagesLines(session) ? session.reference : null,
   parked: false,
 });
 
@@ -93,10 +95,12 @@ export const resumeTransition = (session) => ({
  * session resolves its variant through the store's records (label and
  * axis degrade honestly to the verbatim reference and the built-in 'style'
  * axis when the records cannot resolve it — a session must still render
- * its exits); a draft speaks its own panel-held name and axis pick. The
- * axis label follows the one axis-label rule (variant-scope.js
- * axisLabel) so the blast line's "@axis variant" agrees with the wear
- * bar and the library chips.
+ * its exits); a draft speaks its own panel-held name and axis pick; a
+ * skin session speaks its scope in words (provenance-model.js
+ * skinScopeLabel, the one name the skin document has) and no axis (a
+ * default competes on none). The axis label follows the one axis-label
+ * rule (variant-scope.js axisLabel) so the blast line's "!axis variant"
+ * agrees with the wear bar and the library chips.
  *
  * @param {?object} session
  *   The open pending session.
@@ -105,12 +109,23 @@ export const resumeTransition = (session) => ({
  * @param {?object} guide
  *   The style guide (axis labels).
  *
- * @return {?{posture: string, label: string, axis: string,
- *   axisLabel: string}}
+ * @return {?{posture: string, label: string, axis: ?string,
+ *   axisLabel: ?string, scope: ?string}}
+ *   posture 'creating', 'editing' or 'skin'; `scope` the skin session's
+ *   declaring scope, null otherwise.
  */
 export const sessionHeader = (session, variants, guide = null) => {
   if (!session) {
     return null;
+  }
+  if (session.kind === 'skin') {
+    return {
+      posture: 'skin',
+      label: skinScopeLabel(session.scope, guide),
+      axis: null,
+      axisLabel: null,
+      scope: session.scope,
+    };
   }
   if (session.kind === 'save') {
     return {
@@ -118,6 +133,7 @@ export const sessionHeader = (session, variants, guide = null) => {
       label: session.label.trim(),
       axis: session.axis,
       axisLabel: axisLabel(guide, session.axis),
+      scope: null,
     };
   }
   const variant = findVariant(variants, session.reference);
@@ -127,36 +143,37 @@ export const sessionHeader = (session, variants, guide = null) => {
     label: variant?.label ?? session.reference,
     axis,
     axisLabel: axisLabel(guide, axis),
+    scope: null,
   };
 };
 
 /**
  * The creating posture's mint-time ownership consent, as facts.
  *
- * A variant minted inside a stencil placement is born as that stencil's
+ * A variant minted inside a blueprint placement is born as that blueprint's
  * own switchable look (silently, before this chip existed: the #4
  * surprise). This is the ONE read behind both consumers of that fact:
- * the session header renders it as the "belongs to <stencil>" chip
+ * the session header renders it as the "belongs to <blueprint>" chip
  * (unlink = the opt-out gesture, `linked: false` on the session), and
- * the push bar sends `stencil` iff this answers non-null, so what the
+ * the push bar sends `blueprint` iff this answers non-null, so what the
  * chip says IS what Save commits, by construction. Null means no chip
  * and no owner: not a draft, the user unlinked, or the anchor has no
  * placement provenance (the null-provenance direction stays chipless on
  * purpose: there is nothing to consent to, and adopt-later is the
  * Materials surface's Assign gesture). The label resolves through the
- * store's stencil record (library-model.js stencilLabel), the id when the
- * roster holds no such stencil; both windows read the same roster.
+ * store's blueprint record (library-model.js blueprintLabel), the id when the
+ * roster holds no such blueprint; both windows read the same roster.
  *
  * @param {?object} session
  *   The open pending session (pending.js shapes).
  * @param {?string} provenance
  *   The anchor's placement provenance (variant-scope.js
- *   stencilProvenance(session.anchor, layout), derived live by the
+ *   blueprintProvenance(session.anchor, layout), derived live by the
  *   caller; a layout fact, never session state).
  * @param {object} materials
  *   The materials roster.
  *
- * @return {?{stencil: string, label: string}}
+ * @return {?{blueprint: string, label: string}}
  */
 export const mintConsent = (session, provenance, materials) => {
   if (
@@ -167,7 +184,7 @@ export const mintConsent = (session, provenance, materials) => {
   ) {
     return null;
   }
-  return { stencil: provenance, label: stencilLabel(provenance, materials) };
+  return { blueprint: provenance, label: blueprintLabel(provenance, materials) };
 };
 
 /**
@@ -226,10 +243,11 @@ export const switcherRoster = (
  *
  * Rendered on BOTH places ("✎ CTA · 3 staged changes · Resume /
  * Discard"): the label resolves like the header (an unnamed draft
- * returns '' and the view supplies its translated fallback), the count
- * is the session's loud number (pending.js sessionCount — a save
- * session's caller passes the live capture, derived fresh so the chip
- * says what Push would commit right now).
+ * returns '' and the view supplies its translated fallback; a skin
+ * session names its scope), the count is the session's loud number
+ * (pending.js sessionCount — a save session's caller passes the live
+ * capture, derived fresh so the chip says what Push would commit right
+ * now).
  *
  * @param {?object} session
  *   The parked session.
@@ -237,10 +255,12 @@ export const switcherRoster = (
  *   The store's variant records.
  * @param {?object} capture
  *   A save session's live capture payload (saveStyles()).
+ * @param {?object} [guide]
+ *   The style guide (a skin session's scope words).
  *
  * @return {?{kind: string, label: string, count: number}}
  */
-export const resumeChip = (session, variants, capture = null) => {
+export const resumeChip = (session, variants, capture = null, guide = null) => {
   if (!session) {
     return null;
   }
@@ -249,7 +269,9 @@ export const resumeChip = (session, variants, capture = null) => {
     label:
       session.kind === 'update'
         ? (findVariant(variants, session.reference)?.label ?? session.reference)
-        : session.label.trim(),
+        : session.kind === 'skin'
+          ? skinScopeLabel(session.scope, guide)
+          : session.label.trim(),
     count: sessionCount(session, capture),
   };
 };

@@ -1,5 +1,7 @@
 import store from '../store/store';
-import { setSelected, setTarget } from '../store/slices/selection-slice';
+import { setTarget } from '../store/slices/selection-slice';
+import { selectKey } from './select-door';
+import { selectable } from './capable';
 
 /**
  * Commits an index address onto the spine: the element as the selection
@@ -10,7 +12,15 @@ import { setSelected, setTarget } from '../store/slices/selection-slice';
  * not: the selection is re-committed only when the element or the set
  * changes (a selection write clears the target), and the target is
  * written only when its value changes, so a same-address commit
- * dispatches nothing and no subscriber fires for a non-move.
+ * dispatches nothing and no subscriber fires for a non-move. An address
+ * whose element is not selectable (capable.js selectable: the actor can
+ * do nothing to it) commits nothing at all, target included.
+ *
+ * The re-select goes through the selection door (select-door.js): an
+ * open edit on another key is committed before the selection moves, and
+ * when the engine refuses the leave (an invalid widget) nothing is
+ * committed, the target included, since a target belongs to the
+ * selection that did not change.
  *
  * @param {string} key
  *   The element key to select (the owner, for a part address).
@@ -19,10 +29,13 @@ import { setSelected, setTarget } from '../store/slices/selection-slice';
  *   bare element (which drops any standing target).
  */
 export const commitAddress = (key, selector = null) => {
+  if (!selectable(key)) {
+    return;
+  }
   const { selectedKey, selectedKeys, target } = store.getState().selection;
   const reselect = key !== selectedKey || selectedKeys.length !== 1;
-  if (reselect) {
-    store.dispatch(setSelected(key));
+  if (reselect && !selectKey(key)) {
+    return;
   }
   const standing = reselect ? null : target;
   const next = selector ? { key, selector } : null;

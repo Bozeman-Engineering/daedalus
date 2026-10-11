@@ -99,18 +99,20 @@
  *   from declarations alone, never to an emptier tree than they promise.
  *
  * Composed node vocabulary (one `type` per identity class):
- * - model: {type, key, kind, label, elementType, bundle?, presentation,
- *   children} — a blueprint identity, carrying the same facts the built-in
+ * - model: {type, key, kind, label, elementType, icon?, bundle?,
+ *   presentation, children} — a blueprint identity, carrying the same facts the built-in
  *   projection's row does (the selection index derives from THIS
  *   composition, so a bundle-bearing row's bundle and a form-only stub's
  *   `formOnly` ride here too). `label` and `elementType` are the
  *   annotation's `_element.name` and `_element.type`, the server-minted
- *   naming spine (projection.js documents the words); the composed
- *   vocabulary's own `type` is why the element's type word travels as
- *   `elementType`. Field rows with shells on also carry `markupClass` (the
- *   field's own wrapper class: the selectable element and the
- *   .field--name-X wrapper are ONE element = ONE row), merged rows carry
- *   `editTarget`, absorbed field rows carry `absorbed: true`.
+ *   naming spine (projection.js documents the words), `icon` the
+ *   annotation's `_element.icon` on the nodes it mints one for; the
+ *   composed vocabulary's own `type` is why the element's type word
+ *   travels as `elementType`. Field rows with shells on also carry
+ *   `markupClass` (the field's own wrapper class: the selectable element
+ *   and the .field--name-X wrapper are ONE element = ONE row, and an
+ *   absorbed row presents AS it), merged rows carry `editTarget`,
+ *   absorbed field rows carry `absorbed: true`.
  * - shell: {type, selector, label, parentKey, children, claims?} — a
  *   declared class row; parentKey is the owning MODEL key at any depth
  *   (flat sub-keys: `${parentKey}::${selector}` addresses it). A part with
@@ -133,6 +135,12 @@
  * - value: {type, key: null, label, children: []} — the editable content
  *   of a single-value scalar field (an daedalus_edit page element, not a
  *   selectable identity).
+ * - shown: {type, shown: true, label, elementType, icon, showing,
+ *   parentKey, children: []} — the document a door shows by reference
+ *   (shown-rows.js), under the door after its fills. No key, no claimable
+ *   slot kind: the shown document is another host's, so the row is no
+ *   identity of this page and mounts at the door's root like any
+ *   unclaimed child; the seam carries it as the same row minus `type`.
  *
  * Ordering convention: shell rows render in authored order first, then the
  * children mounting at that position (root-mounted model rows after their
@@ -141,8 +149,9 @@
  * declared, so the model picks one convention and keeps it.
  */
 
-import { isSectionNode, sectionChildren } from './projection.js';
 import { isFormOnlyStub } from '../../blueprint/form-only-stub.js';
+import { pairSlotFills } from './slot-fills.js';
+import { shownRows } from './shown-rows.js';
 
 const isPlainObject = (value) =>
   value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -174,7 +183,7 @@ const humanize = (machineName) => {
  * A content row's text: the value's first line, 80 chars (the row shows
  * content, not a preview). Non-string and empty values fall through to
  * null. This words VALUE rows (a scalar field's editable content) and, in
- * instance-rows.js, a carrier's excerpt sublabel: content rows, never
+ * instance-rows.js, a carrier's name (its excerpt): content rows, never
  * elements. An element's name is minted server-side (`_element.name`),
  * where the same first-line rule names a merged block.
  */
@@ -602,9 +611,14 @@ const absorb = (blockNode, component, context) => {
     kind: 'block',
     label: element.name,
     elementType: element.type,
+    icon: element.icon ?? null,
     bundle: component.block_type ?? null,
     presentation: 'merged',
     editTarget: target,
+    // The stored configuration label, the rename input's seed: the merged
+    // row names itself by its content, never by this (rename-commit.js).
+    customLabel: component.label ?? '',
+    can: element.can ?? null,
     children: [],
   };
 
@@ -711,7 +725,10 @@ const composeComponent = (component, context) => {
 
   // A rendered label (heading-style blocks) is a real element with its own
   // selection key. It is not a field, so no slot can claim it: root mount.
-  if (component.label && component.label_display === 'visible') {
+  // label_rendered is the lean node's derived boolean, present only when
+  // the label renders as page content (projection.js applies the same
+  // rule to the data tree's row).
+  if (component.label && component.label_rendered) {
     entries.unshift({
       slotKind: null,
       name: null,
@@ -726,12 +743,35 @@ const composeComponent = (component, context) => {
     });
   }
 
+  // A door's fills (slot-fills.js): the page's own sections filling the
+  // slot this block declares, section rows under the door as the canvas
+  // renders them. A `section` entry a block's declaration never claims,
+  // so they mount at the door's root after its shells.
+  for (const fill of context.fillsOf(component)) {
+    entries.push({
+      slotKind: 'section',
+      name: null,
+      node: composeSection(fill, context),
+    });
+  }
+
+  // What the door shows by reference (shown-rows.js): one shown-document
+  // row after the fills. Unclaimable (no slot kind), so it mounts at the
+  // door's root after its shells, the same position a fill takes.
+  for (const row of shownRows(component)) {
+    entries.push({ slotKind: null, name: null, node: { type: 'shown', ...row } });
+  }
+
   // Plugin blocks (site branding, menus) resolve by BASE plugin id: all
   // derivatives of a plugin share one template, so the payload keys on the
-  // id with any :derivative suffix stripped.
-  const basePluginId = component.plugin_id
-    ? component.plugin_id.split(':')[0]
-    : null;
+  // id with any :derivative suffix stripped. A field node names the page's
+  // field, never a per-bundle plugin id; its base is field_block
+  // (NodeTreeBuilder::pluginBase, the server's one derivation).
+  const basePluginId = component.field
+    ? 'field_block'
+    : component.plugin_id
+      ? component.plugin_id.split(':')[0]
+      : null;
   // A collapsed type's declared elements are interior parts of its single
   // tag, so they mount even collapsed; only the block kind's fallback tree
   // stays out (it describes the wrapper sandwich collapse merges away).
@@ -751,8 +791,18 @@ const composeComponent = (component, context) => {
     kind: 'block',
     label: element.name,
     elementType: element.type,
+    icon: element.icon ?? null,
     bundle,
     presentation: presentation.mode,
+    // The slot a door declares (the lean node's `slot` on a slot block): the
+    // tree stamps it as data-tree-door, the drop resolver's door fact.
+    slot: component.slot ?? null,
+    // The stored configuration label (the lean node's sparse `label`), the
+    // rename input's seed.
+    customLabel: component.label ?? '',
+    // The spine's verdict on the element (`_element.can`), the fact the
+    // client gate reads (selection/capable.js).
+    can: element.can ?? null,
     children,
   };
   if (presentation.mode === 'merged') {
@@ -762,62 +812,61 @@ const composeComponent = (component, context) => {
 };
 
 /**
- * A region entry's rows: a nested section node recurses as a SECTION —
- * sections all the way down, one node shape at every depth — anything else
- * composes as a component.
+ * A lean-tree child's rows: a container node recurses as a SECTION —
+ * sections all the way down, one node shape at every depth — anything
+ * else composes as a component. (Region nodes never reach here;
+ * composeSection unwraps them.)
  */
-const composeRegionChild = (child, context) =>
-  isSectionNode(child)
+const composeTreeChild = (child, context) =>
+  child.kind === 'container'
     ? [composeSection(child, context)]
     : composeComponent(child, context);
 
 /**
- * A section row — top-level or nested, one shape: region rows
- * (multi-region) or the components themselves (a one-region section's
- * region level is pure noise — they occupy the region position, so
- * `regions` and `region:NAME` slots still claim them) mounted into the
- * layout's shell. A container section's ordered `children` list composes
- * exactly like the one-region case: its entries occupy the region
- * position (a `regions` bucket claims them into whichever part declares
- * it) with no region name to bind a specific claim. A section is ONE
- * element at every depth — its declaration mounts the same rows nested
- * as at root (the root's own tag swap is the annotation's business, not
- * the sketch's). Its words are the annotation's: `name` (the custom label
- * when renamed, else the type word) and `type` ("Section" at page depth,
- * "Container" nested); `customLabel` is the raw stored label the rename
- * input seeds from.
+ * A section row — top-level or nested, one shape, from a lean container
+ * node. A multi-region layout's children are region nodes: region rows
+ * (more than one region) or the lone region's components themselves (a
+ * one-region section's region level is pure noise — they occupy the
+ * region position, so `regions` and `region:NAME` slots still claim
+ * them) mount into the layout's shell. A container layout's ordered
+ * `children` compose exactly like the one-region case: its entries
+ * occupy the region position (a `regions` bucket claims them into
+ * whichever part declares it) with no region name to bind a specific
+ * claim. A section is ONE element at every depth — its declaration
+ * mounts the same rows nested as at root (the root's own tag swap is the
+ * annotation's business, not the sketch's). Its words are the
+ * annotation's: `name` (the custom label when renamed, else the type
+ * word) and `type` ("Section" at page depth, "Container" nested);
+ * `customLabel` is the raw stored label the rename input seeds from.
  */
 const composeSection = (section, context) => {
   const key = section.uuid ? `container:${section.uuid}` : null;
   const element = section._element ?? {};
-  const list = sectionChildren(section);
-  const regions = Object.entries(section.regions ?? {});
+  const list = section.children ?? [];
+  const regions = list.filter((child) => child.kind === 'region');
   let entries;
-  if (list) {
-    entries = list
-      .flatMap((child) => composeRegionChild(child, context))
-      .map((node) => ({ slotKind: 'region', name: null, node }));
-  } else if (regions.length > 1) {
-    entries = regions.map(([name, components]) => ({
+  if (regions.length > 1) {
+    entries = regions.map((region) => ({
       slotKind: 'region',
-      name,
+      name: region.region,
       node: {
         type: 'model',
         key: null,
         kind: 'region',
-        label: humanize(name),
+        label: humanize(region.region),
         presentation: 'open',
-        children: (Array.isArray(components) ? components : []).flatMap(
-          (child) => composeRegionChild(child, context),
+        children: (region.children ?? []).flatMap((child) =>
+          composeTreeChild(child, context),
         ),
       },
     }));
   } else {
-    entries = (regions[0]?.[1] ?? [])
-      .flatMap((child) => composeRegionChild(child, context))
+    const [region = null] = regions;
+    entries = (region ? (region.children ?? []) : list)
+      .flatMap((child) => composeTreeChild(child, context))
       .map((node) => ({
         slotKind: 'region',
-        name: regions[0]?.[0] ?? null,
+        name: region?.region ?? null,
         node,
       }));
   }
@@ -833,8 +882,10 @@ const composeSection = (section, context) => {
     kind: 'container',
     label: element.name,
     elementType: element.type,
+    icon: element.icon ?? null,
     customLabel: section.label ?? '',
     presentation: 'open',
+    can: element.can ?? null,
     children: context.targets
       ? mount(declaration, key, entries, context.placement)
       : entries.map((entry) => entry.node),
@@ -912,11 +963,15 @@ export const compose = (blueprint, anatomy, view = {}) => {
   const { root = null, targets = false, placement = null } = view;
   // The root's field map rides the context: a field-block placement's
   // merged row labels itself from the root field it presents.
+  // A locked page's slot fills leave the root list for their doors
+  // (slot-fills.js); composeComponent mounts them under the door.
+  const { roots, fillsOf } = pairSlotFills(blueprint?.layout);
   const context = {
     anatomy: anatomy ?? {},
     targets,
     placement,
     rootFields: blueprint?.fields ?? {},
+    fillsOf,
   };
   const uuid = root?.uuid ?? null;
   const key = uuid ? `entity:${uuid}` : null;
@@ -940,8 +995,9 @@ export const compose = (blueprint, anatomy, view = {}) => {
   // The root's section list mounts through the same slot machinery as its
   // fields: a `sections` bucket (daedalus_layout's layout root) claims every
   // section row; unclaimed, they mount at the entity root after the
-  // fields, the plain tree's order.
-  for (const section of blueprint?.layout_builder__layout ?? []) {
+  // fields, the plain tree's order. The structure is the lean node tree
+  // (`layout`), the one shape projection.js reads too.
+  for (const section of roots) {
     entries.push({
       slotKind: 'section',
       name: null,
@@ -962,9 +1018,11 @@ export const compose = (blueprint, anatomy, view = {}) => {
     kind: 'entity',
     label: element.name,
     elementType: element.type,
+    icon: element.icon ?? null,
     bundle: blueprint?.bundle ?? null,
     presentation: 'open',
     editTarget,
+    can: element.can ?? null,
     children,
   };
   if (editTarget && uuid) {

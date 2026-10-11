@@ -30,9 +30,10 @@ use Symfony\Component\HttpFoundation\File\UploadedFile;
  * FileRepository::writeData(), which bypasses the validator.
  *
  * The accepted set is explicit: the union of every media type's source-field
- * extensions plus the textual kinds the AI reads, never a media type's
- * "any extension" setting, and one size ceiling. An adapter that knows a
- * narrower target (a replace-drop on a media bundle) may narrow the set, never
+ * extensions plus the textual kinds the AI reads and the self-hosted font
+ * kinds a design system ships, never a media type's "any extension"
+ * setting, and one size ceiling. An adapter that knows a narrower target (a
+ * replace-drop on a media bundle, the font store) may narrow the set, never
  * widen it.
  *
  * Files are saved temporary unless the adapter asks for permanence; a
@@ -45,6 +46,14 @@ final class FileLane {
    * The textual kinds accepted beside the media types' source extensions.
    */
   public const TEXTUAL_EXTENSIONS = ['html', 'css', 'csv', 'md', 'txt', 'json', 'svg', 'pdf'];
+
+  /**
+   * The self-hosted font kinds accepted beside them (the font material).
+   *
+   * The two formats every current browser loads; a font store narrows the
+   * lane to exactly these, so no other door ever admits font bytes.
+   */
+  public const FONT_EXTENSIONS = ['woff2', 'woff'];
 
   /**
    * The one size ceiling, in bytes.
@@ -136,10 +145,10 @@ final class FileLane {
    *
    * @return list<string>
    *   Lowercase extensions: the union of every media type's source-field
-   *   extensions plus the textual kinds.
+   *   extensions plus the textual and font kinds.
    */
   public function acceptedExtensions(): array {
-    $extensions = array_fill_keys(self::TEXTUAL_EXTENSIONS, TRUE);
+    $extensions = array_fill_keys([...self::TEXTUAL_EXTENSIONS, ...self::FONT_EXTENSIONS], TRUE);
     if ($this->entityTypeManager->hasDefinition('media_type')) {
       foreach ($this->entityTypeManager->getStorage('media_type')->loadMultiple() as $media_type) {
         foreach ($this->mediaTypeExtensions($media_type) ?? [] as $extension) {

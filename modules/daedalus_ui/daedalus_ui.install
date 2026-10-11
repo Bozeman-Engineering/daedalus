@@ -5,7 +5,6 @@
  * Install, update and uninstall functions for the daedalus_ui module.
  */
 
-use Drupal\Core\Config\Entity\ThirdPartySettingsInterface;
 use Drupal\Core\Field\BaseFieldDefinition;
 use Drupal\user\Entity\Role;
 use Drupal\user\Entity\User;
@@ -73,7 +72,6 @@ function daedalus_ui_update_10001(&$sandbox) {
 function daedalus_ui_update_10401(&$sandbox) {
   $renames = [
     'use toolbar plus edit mode' => 'use daedalus ui edit mode',
-    'configure toolbar plus modes' => 'configure daedalus ui modes',
   ];
   foreach (Role::loadMultiple() as $role) {
     $changed = FALSE;
@@ -100,57 +98,4 @@ function daedalus_ui_update_10402(&$sandbox) {
       $role->save();
     }
   }
-}
-
-/**
- * Strips the retired default_tool setting from every bundle's Edit Mode config.
- *
- * Edit Mode has no tools any more (one pointer, one keyboard grammar over
- * the one selection), so the Edit mode plugin keeps no per-bundle
- * configuration: the `modes.edit.default_tool` third-party setting goes,
- * a mode entry it leaves empty goes with it, and so does an empty `modes`
- * map, so the stored config carries nothing without a schema.
- */
-function daedalus_ui_update_10404(&$sandbox) {
-  $entity_type_manager = \Drupal::entityTypeManager();
-  $bundle_entity_types = [];
-  foreach ($entity_type_manager->getDefinitions() as $entity_type) {
-    if ($bundle_entity_type = $entity_type->getBundleEntityType()) {
-      $bundle_entity_types[$bundle_entity_type] = $bundle_entity_type;
-    }
-  }
-  $count = 0;
-  foreach ($bundle_entity_types as $bundle_entity_type) {
-    foreach ($entity_type_manager->getStorage($bundle_entity_type)->loadMultiple() as $bundle) {
-      if (!$bundle instanceof ThirdPartySettingsInterface) {
-        continue;
-      }
-      $modes = $bundle->getThirdPartySetting('daedalus_ui', 'modes');
-      if (!is_array($modes)) {
-        continue;
-      }
-      $changed = FALSE;
-      foreach ($modes as $mode => $settings) {
-        if (is_array($settings) && array_key_exists('default_tool', $settings)) {
-          unset($modes[$mode]['default_tool']);
-          $changed = TRUE;
-          if ($modes[$mode] === []) {
-            unset($modes[$mode]);
-          }
-        }
-      }
-      if (!$changed) {
-        continue;
-      }
-      if ($modes === []) {
-        $bundle->unsetThirdPartySetting('daedalus_ui', 'modes');
-      }
-      else {
-        $bundle->setThirdPartySetting('daedalus_ui', 'modes', $modes);
-      }
-      $bundle->save();
-      $count++;
-    }
-  }
-  return t('Removed the retired default_tool Edit Mode setting from @count bundles.', ['@count' => $count]);
 }

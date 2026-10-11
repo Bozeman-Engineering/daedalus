@@ -24,14 +24,21 @@
  * boxes ride both too: the terminal pseudo-element (`&::before`,
  * `.quote::after`, `> pb-text::before`) printed last on every target,
  * after a state's suffix and the hold's :not(), the anchor continued
- * onto a rule's landing in the rule-wear lane.
+ * onto a rule's landing in the rule-wear lane. documentCases exercise the
+ * ordering pair (NodeTreeBuilder::styleMapOf / styleMapOf): each case is
+ * a mirror's `layout` and top-level `styles`, and the client prints the
+ * flat index it derives from them, so a map written in a different order
+ * than its document prints the same bytes on both sides, in document
+ * order.
  */
 import { readFileSync } from 'node:fs';
 import { printMap, printFragmentStyles, printKeyframes } from '../../js/src/printer.js';
+import { styleMapOf } from '../../js/src/style-guide.js';
 
 const input = JSON.parse(readFileSync(0, 'utf8'));
 process.stdout.write(JSON.stringify({
   cases: (input.cases ?? []).map((entry) => printMap(entry, input.conditions)),
   variantCases: (input.variantCases ?? []).map((entry) => printFragmentStyles(entry.scopeRoot, entry.scope, entry.styles, entry.fragment, input.conditions, entry.under ?? null)),
   keyframesCases: (input.keyframesCases ?? []).map((entry) => printKeyframes(entry.name, entry.steps)),
+  documentCases: (input.documentCases ?? []).map((entry) => printMap(styleMapOf({ layout: entry.tree, styles: entry.styles }), input.conditions)),
 }));

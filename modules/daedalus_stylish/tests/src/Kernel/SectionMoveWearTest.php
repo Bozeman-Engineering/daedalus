@@ -12,6 +12,7 @@ use Drupal\daedalus_stylish\DaedalusStylishFieldManager;
 use Drupal\Tests\user\Traits\UserCreationTrait;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
+use Drupal\Tests\daedalus_stylish\Traits\HostTrait;
 
 /**
  * Tests root-only wear following a section's depth on move_element.
@@ -37,6 +38,7 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 #[RunTestsInSeparateProcesses]
 class SectionMoveWearTest extends KernelTestBase {
 
+  use HostTrait;
   use UserCreationTrait;
 
   /**
@@ -87,13 +89,19 @@ class SectionMoveWearTest extends KernelTestBase {
     // every build, and the strip reads the roster's depth stamp.
     $this->installEntitySchema('daedalus_swatch');
     $this->installEntitySchema('daedalus_animation');
+    $this->installEntitySchema('daedalus_font');
     $this->installEntitySchema('daedalus_skin');
     $this->installConfig(['daedalus_stylish']);
     $this->installSchema('layout_builder', ['inline_block_usage']);
     // The daedalus_stylish_layouts install syncs the shipped variants; a host saved
     // directly (the whole-map lane) mirrors its references into the usage
     // tables.
-    $this->installSchema('daedalus_stylish', ['daedalus_variant_usage', 'daedalus_animation_usage']);
+    $this->installSchema('daedalus_stylish', [
+      'daedalus_variant_usage',
+      'daedalus_animation_usage',
+      'daedalus_token_usage',
+      'daedalus_font_usage',
+    ]);
     $this->setUpCurrentUser([], [], TRUE);
     \Drupal::service('module_installer')->install(['daedalus_stylish_layouts']);
     $this->container->get('daedalus_stylish.field_manager')->enable('entity_test', 'entity_test');
@@ -112,7 +120,7 @@ class SectionMoveWearTest extends KernelTestBase {
    * Runs a batch of operations, asserting success, and returns the result.
    */
   protected function batch(EntityTest $entity, array $operations): BlueprintResult {
-    $result = $this->operations->batchOperations($entity, $operations);
+    $result = $this->operations->batchOperations($this->host($entity), $operations);
     $this->assertTrue($result->isSuccess(), print_r($result->toArray()['errors'] ?? [], TRUE));
     return $result;
   }
@@ -146,7 +154,7 @@ class SectionMoveWearTest extends KernelTestBase {
    * Asserts the map validates clean against the host.
    */
   protected function assertMapValid(EntityTest $entity): void {
-    $this->assertSame([], $this->container->get('daedalus_stylish.style_map_validator')->validate($this->styleMap($entity), ['entity' => $entity]));
+    $this->assertSame([], $this->container->get('daedalus_stylish.style_map_validator')->validate($this->styleMap($entity), ['host' => $this->host($entity)]));
   }
 
   /**
@@ -166,7 +174,7 @@ class SectionMoveWearTest extends KernelTestBase {
    * Whether a section sits nested, per the element locator.
    */
   protected function isNested(EntityTest $entity, string $uuid): bool {
-    return $this->container->get('daedalus_blueprint.element_locator')->isNestedSection($entity, $uuid);
+    return $this->container->get('daedalus_blueprint.element_locator')->isNestedSection($this->host($entity), $uuid);
   }
 
   /**

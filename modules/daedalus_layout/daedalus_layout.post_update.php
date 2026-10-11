@@ -134,43 +134,33 @@ function daedalus_layout_post_update_0003_layout_block_gc(&$sandbox) {
  * (the module is deleted from the codebase in the same release as this
  * update). Then deletes the bundle and its displays (install-provided
  * config carries no enforced module dependency, so uninstalling alone
- * leaves it behind) and strips the Add panel references
- * (inline_block:layout_block promoted-blocks and icon entries) from every
- * display's daedalus_layout settings. Field config cascades with the bundle
- * (field_entity_bundle_delete()), and the shared layout_builder__layout
+ * leaves it behind) and strips the inline_block:layout_block icon entry
+ * from every display's daedalus_layout block_config setting. Field config
+ * cascades with the bundle (field_entity_bundle_delete()), and the shared
+ * layout_builder__layout
  * storage on block_content auto-deletes with its last field
  * (persist_with_no_fields: false).
  *
  * When the GC above kept reusable/region-placed layout_block entities, the
  * bundle, its displays, and the field stay: deleting them would orphan the
  * surviving entities and PURGE their layout field data, exactly the loss the
- * GC skip exists to prevent. The module retirement and the Add panel strip
+ * GC skip exists to prevent. The module retirement and the icon strip
  * (nested-model concerns) proceed either way.
  */
 function daedalus_layout_post_update_0004_remove_daedalus_edit_layout_block() {
   $entity_type_manager = \Drupal::entityTypeManager();
 
-  // Add panel references first: they are plain third-party settings, valid to
+  // The icon entry first: it is a plain third-party setting, valid to
   // rewrite whether or not the module/bundle still exist.
   $display_storage = $entity_type_manager->getStorage('entity_view_display');
   foreach ($display_storage->loadMultiple() as $display) {
     if (!$display instanceof ThirdPartySettingsInterface) {
       continue;
     }
-    $changed = FALSE;
-    $promoted = $display->getThirdPartySetting('daedalus_layout', 'promoted_blocks');
-    if (is_array($promoted) && array_key_exists('inline_block:layout_block', $promoted)) {
-      unset($promoted['inline_block:layout_block']);
-      $display->setThirdPartySetting('daedalus_layout', 'promoted_blocks', $promoted);
-      $changed = TRUE;
-    }
     $block_config = $display->getThirdPartySetting('daedalus_layout', 'block_config');
     if (is_array($block_config) && isset($block_config['icon']['inline_block:layout_block'])) {
       unset($block_config['icon']['inline_block:layout_block']);
       $display->setThirdPartySetting('daedalus_layout', 'block_config', $block_config);
-      $changed = TRUE;
-    }
-    if ($changed) {
       $display->save();
     }
   }
@@ -267,4 +257,34 @@ function daedalus_layout_post_update_0005_block_icons_to_block_types() {
     $display->save();
   }
   return t('Moved Add panel block icons from entity view displays onto their block types.');
+}
+
+/**
+ * Stores the inline blocks of Layout Builder default layouts as values.
+ *
+ * A display is a host now, and its blocks are values: every inline block a
+ * Layout Builder enabled display names by block revision id is rewritten
+ * to block_values (the block's fields in the blueprint field grammar,
+ * references by uuid) so the display exports as config with no content id
+ * in it; the orphaned block entities are garbage-collected by the save.
+ * See ValueBlockTransform.
+ */
+function daedalus_layout_post_update_0006_display_value_blocks(&$sandbox) {
+  $saved = \Drupal::service('daedalus_layout.entity_view_display_walker')->walk($sandbox);
+  if (!empty($sandbox['#finished']) && $sandbox['#finished'] >= 1) {
+    return t('Stored the inline blocks of Layout Builder default layouts as values.');
+  }
+  return t('Stored inline blocks as values on @count displays in this batch.', ['@count' => $saved]);
+}
+
+/**
+ * Drops the daedalus_layout.settings config object.
+ *
+ * Its one key, contextual_links, switched on core's block contextual links
+ * over a Daedalus canvas; core's Layout Builder routes they pointed at are
+ * closed for any storage Daedalus hosts, so the links and their switch are
+ * gone.
+ */
+function daedalus_layout_post_update_0007_drop_contextual_links_setting() {
+  \Drupal::configFactory()->getEditable('daedalus_layout.settings')->delete();
 }

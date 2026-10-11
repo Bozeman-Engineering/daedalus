@@ -19,6 +19,7 @@ services:
       - '@daedalus_stylish_layouts.container_migration'
       - '@uuid'
       - '@logger.factory'
+      - '@daedalus_blueprint.host_resolver'
     tags:
       - { name: daedalus_layout.section_transform }
 
@@ -41,8 +42,8 @@ services:
     tags:
       - { name: daedalus_layout.host_transform, priority: -10 }
 
-  # A variant machine-name rename across every store (host maps, stored
-  # stencils, variant styles) plus the old shipped entity's retirement.
+  # A variant machine-name rename across every store (host maps, variant
+  # styles) plus the old shipped entity's retirement.
   # Its host sweep (VariantRenameSweep) is built per walk inside the
   # service with a private registry, never tagged: a rename is a one-shot.
   daedalus_stylish_layouts.variant_rename:
@@ -51,6 +52,7 @@ services:
       - '@entity_type.manager'
       - '@entity_field.manager'
       - '@logger.factory'
+      - '@daedalus_blueprint.host_resolver'
   Drupal\daedalus_stylish_layouts\VariantRename: '@daedalus_stylish_layouts.variant_rename'
 
   daedalus_stylish_layouts.container_part_hoist:

@@ -9,14 +9,21 @@ use Drupal\ai\OperationType\Chat\ChatMessage;
 use Drupal\ai_agents\Event\BuildSystemPromptEvent;
 use Drupal\ai_agents\PluginInterfaces\ConfigAiAgentInterface;
 use Drupal\ai_assistant_api\Event\AiAssistantPassContextToAgentEvent;
+use Drupal\block_content\Entity\BlockContent;
+use Drupal\block_content\Entity\BlockContentType;
 use Drupal\daedalus_ai\ElementSelectionResolver;
 use Drupal\daedalus_ai\RouteEntityResolver;
-use Drupal\Core\Entity\FieldableEntityInterface;
+use Drupal\daedalus_blueprint\Host\HostInterface;
 use Drupal\daedalus_ai_anthropic\EventSubscriber\CurrentEntityContextSubscriber;
 use Drupal\daedalus_ai_anthropic\EventSubscriber\CurrentPageMarkupContextSubscriber;
 use Drupal\daedalus_ai_anthropic\EventSubscriber\DesignPostureContextSubscriber;
 use Drupal\daedalus_ai_anthropic\EventSubscriber\SelectedElementContextSubscriber;
+use Drupal\field\Entity\FieldConfig;
+use Drupal\field\Entity\FieldStorageConfig;
 use Drupal\KernelTests\KernelTestBase;
+use Drupal\layout_builder\Entity\LayoutBuilderEntityViewDisplay;
+use Drupal\layout_builder\Section;
+use Drupal\layout_builder\SectionComponent;
 use Drupal\Tests\user\Traits\UserCreationTrait;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
@@ -36,8 +43,10 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  * - SelectedElementContextSubscriber prepends a numbered "ACTIVE SELECTION"
  *   <system-reminder> describing the resolved elements.
  * - CurrentPageMarkupContextSubscriber prepends the routed page's
- *   page-language print (the dialect projection of its node tree) so
- *   the model's first write needs no read of the current page.
+ *   page-language print (HostPrinter's read of its staged host) so the
+ *   model's first write needs no read of the current page; a page holding
+ *   anything the language cannot spell prints whole, its reading notes
+ *   heading the document once.
  * - DesignPostureContextSubscriber prepends a "DESIGN POSTURE"
  *   <system-reminder>
  *   naming the user's declared posture (on brand or workshopping, the design
@@ -184,6 +193,89 @@ class AnthropicContextSubscriberTest extends KernelTestBase {
       [],
     ));
     $this->assertSame('Just chatting.', $empty_message->getText(), 'An empty context is a no-op.');
+  }
+
+  /**
+   * A template route names the template, prints it, and gates on access.
+   *
+   * Core's manage-display layout route (field_ui) derives a display host:
+   * the "Current page" reminder names the template and what editing it
+   * reaches, the page print rides headed as a template, and a user who
+   * cannot administer the display gets neither.
+   */
+  public function testTemplateRouteNamesTheTemplate(): void {
+    $this->enableModules(['field_ui']);
+    $this->setUpCurrentUser([], [], TRUE);
+    LayoutBuilderEntityViewDisplay::create([
+      'targetEntityType' => 'entity_test',
+      'bundle' => 'entity_test',
+      'mode' => 'default',
+      'status' => TRUE,
+    ])->enableLayoutBuilder()->save();
+    $this->container->get('router.builder')->rebuild();
+    $display = LayoutBuilderEntityViewDisplay::load('entity_test.entity_test.default');
+    $path = $this->container->get('daedalus_ui.ui')->getEditingUrl($display)->toString();
+
+    $message = new ChatMessage('user', 'Add a hero.');
+    $this->currentEntitySubscriber()->onPassContext($this->contextEvent(
+      $this->agent($message),
+      ['view_mode' => 'default', 'current_route' => $path],
+    ));
+    $text = $message->getText();
+    $this->assertStringContainsString(sprintf(
+      'Current page: the default template for entity_test entity_tests (a template, not a page: entity_view_display ID: entity_test.entity_test.default, UUID: %s). Editing it changes every entity_test entity_test without a layout of its own; its field blocks show sample content, never a real entity\'s.',
+      $display->uuid(),
+    ), $text);
+    $this->assertStringEndsWith('Add a hero.', $text);
+
+    $print_message = new ChatMessage('user', 'Add a hero.');
+    $this->pageMarkupSubscriber()->onPassContext($this->contextEvent(
+      $this->agent($print_message),
+      ['current_route' => $path],
+    ));
+    $print_text = $print_message->getText();
+    $this->assertStringContainsString("<system-reminder>\nCurrent page print (the template in the page language; field blocks show sample content):", $print_text);
+    $this->assertStringContainsString('(the template is empty: no layout content yet)', $print_text);
+
+    // Access net: viewing entities is not administering their display.
+    $this->setUpCurrentUser([], ['view test entity']);
+    $denied = new ChatMessage('user', 'Change it.');
+    $this->currentEntitySubscriber()->onPassContext($this->contextEvent(
+      $this->agent($denied),
+      ['current_route' => $path],
+    ));
+    $this->assertStringNotContainsString('Current page:', $denied->getText(), 'A template the user cannot administer is never surfaced.');
+  }
+
+  /**
+   * A page rendering its template says so on the current-page line.
+   *
+   * The root verdict RouteEntityResolver::describe() carries explains a
+   * host-level refusal in advance: a page of a non-overridable bundle
+   * names the template its layout belongs to and where it is edited.
+   */
+  public function testPlainHostLineStatesTheTemplate(): void {
+    $this->setUpCurrentUser([], [], TRUE);
+    LayoutBuilderEntityViewDisplay::create([
+      'targetEntityType' => 'entity_test',
+      'bundle' => 'entity_test',
+      'mode' => 'default',
+      'status' => TRUE,
+    ])->enableLayoutBuilder()->save();
+    $entity = $this->createEntity('Plain Page');
+
+    $message = new ChatMessage('user', 'Add a hero.');
+    $this->currentEntitySubscriber()->onPassContext($this->contextEvent(
+      $this->agent($message),
+      ['current_route' => '/entity_test/' . $entity->id()],
+    ));
+    $text = $message->getText();
+    $identity = sprintf('entity_test (ID: %s, UUID: %s, type: entity_test, title: "Plain Page")', $entity->id(), $entity->uuid());
+    $line = 'Current page: ' . $identity . '.'
+      . ' The layout of this entity_test belongs to the template entity_view_display entity_test.entity_test.default, which it renders but does not own.'
+      . ' Edit this entity_test\'s own fields here; edit its layout on the template: run the operation against entity_view_display entity_test.entity_test.default.';
+    $this->assertStringContainsString($line, $text);
+    $this->assertStringEndsWith('Add a hero.', $text);
   }
 
   /**
@@ -340,12 +432,12 @@ class AnthropicContextSubscriberTest extends KernelTestBase {
    */
   public function testSelectedElementRendersMaterialsAndProvenance(): void {
     $this->setUpCurrentUser([], [], TRUE);
-    $resolver = new class() extends ElementSelectionResolver {
+    $resolver = new class($this->container->get('daedalus_blueprint.host_resolver')) extends ElementSelectionResolver {
 
       /**
        * {@inheritdoc}
        */
-      public function resolve(array $selectedElements, ?FieldableEntityInterface $rootEntity): array {
+      public function resolve(array $selectedElements, ?HostInterface $host): array {
         return [
           1 => [
             'description' => 'Section (UUID: s1)',
@@ -363,7 +455,7 @@ class AnthropicContextSubscriberTest extends KernelTestBase {
 
     };
     $subscriber = new SelectedElementContextSubscriber($this->routeResolver(), $resolver);
-    $message = new ChatMessage('user', 'Update the stencil this came from.');
+    $message = new ChatMessage('user', 'Update the blueprint this came from.');
     $subscriber->onPassContext($this->contextEvent($this->agent($message), [
       'selected_elements' => [
         ['key' => 'container:s1', 'number' => 1],
@@ -496,6 +588,79 @@ class AnthropicContextSubscriberTest extends KernelTestBase {
   }
 
   /**
+   * A page the language cannot spell whole prints whole, its notes first.
+   *
+   * A two-column section (a layout the site refuses to create, so built
+   * on the storage) holding an undeclared block whose multi-value field
+   * has no spelling. The per-turn block is the header, then the print as
+   * the model reads it: the reading notes once (the layout sentence
+   * teaching at: {ref, position, region} and both refusal codes, the
+   * unprinted-field sentence), a blank line, then the document with its
+   * read-only facts (data-layout and data-regions on the section,
+   * data-region and data-unprinted on the block). There is no fallback
+   * and no error: the read is total.
+   */
+  public function testUnspellablePagePrintsWholeWithReadingNotes(): void {
+    $this->enableModules(['block', 'block_content']);
+    $this->installEntitySchema('block_content');
+    $this->installConfig(['block_content']);
+    $this->installSchema('layout_builder', ['inline_block_usage']);
+    $this->setUpCurrentUser([], [], TRUE);
+    LayoutBuilderEntityViewDisplay::create([
+      'targetEntityType' => 'entity_test',
+      'bundle' => 'entity_test',
+      'mode' => 'default',
+      'status' => TRUE,
+    ])->enableLayoutBuilder()->setOverridable()->save();
+    BlockContentType::create(['id' => 'card', 'label' => 'Card', 'revision' => TRUE])->save();
+    FieldStorageConfig::create([
+      'field_name' => 'field_card_items',
+      'entity_type' => 'block_content',
+      'type' => 'string',
+      'cardinality' => -1,
+    ])->save();
+    FieldConfig::create([
+      'field_name' => 'field_card_items',
+      'entity_type' => 'block_content',
+      'bundle' => 'card',
+      'label' => 'Items',
+    ])->save();
+    $card = BlockContent::create(['type' => 'card', 'info' => 'Card', 'reusable' => FALSE, 'field_card_items' => ['Plans', 'Pricing']]);
+    $card_uuid = '7a1e2b3c-0000-4000-8000-000000000021';
+    $section = new Section('layout_twocol_section', [], [
+      new SectionComponent($card_uuid, 'first', [
+        'id' => 'inline_block:card',
+        'provider' => 'layout_builder',
+        'label' => '',
+        'label_display' => '0',
+        'view_mode' => 'full',
+        'block_serialized' => serialize($card),
+        'block_revision_id' => NULL,
+      ]),
+    ], ['daedalus_layout' => ['uuid' => $this->container->get('uuid')->generate()]]);
+    $entity = $this->container->get('entity_type.manager')->getStorage('entity_test')->create([
+      'name' => 'Two columns',
+      'layout_builder__layout' => [$section],
+    ]);
+    $entity->save();
+
+    $message = new ChatMessage('user', 'Fill the right column.');
+    $this->pageMarkupSubscriber()->onPassContext($this->contextEvent(
+      $this->agent($message),
+      ['current_route' => '/entity_test/' . $entity->id()],
+    ));
+    $text = $message->getText();
+    $this->assertStringContainsString("<system-reminder>\nCurrent page print (the page in the page language):\n\nReading notes:\n- A <pb-container> carrying data-layout is a section on that layout rather than the container", $text, 'The reading notes head the print, right under the header.');
+    $this->assertStringContainsString('An insert or move into such a section names the region as at: {ref, position, region}; afterbegin or beforeend on it without a region is refused (REGION_REQUIRED), a region anywhere else is refused too (REGION_NOT_APPLICABLE), and nothing creates such a section.', $text, 'The layout sentence teaches the region address and both refusals.');
+    $this->assertStringContainsString("\n- data-unprinted names fields the element holds that the page language cannot spell: a set on the element keeps them, a replace rebuilds the element and loses them.\n\n<pb-container", $text, 'The unprinted-field sentence closes the notes; a blank line separates them from the document.');
+    $this->assertStringNotContainsString('data-partial names', $text, 'No partial field, no partial-field sentence.');
+    $this->assertSame(1, substr_count($text, 'Reading notes:'), 'The notes head the print once.');
+    $this->assertMatchesRegularExpression('/\n\n<pb-container( id="[^"]*")?( data-can="[^"]*")? data-layout="layout_twocol_section" data-regions="first second">\n  <pb-block id="' . preg_quote($card_uuid, '/') . '"( data-can="[^"]*")? data-region="first" data-unprinted="field_card_items" type="card" \/>\n<\/pb-container>\n\n<\/system-reminder>\n\nFill the right column\.$/', $text, 'The document prints whole with its read-only facts, and the user\'s words follow.');
+    $this->assertStringNotContainsString('Plans', $text, 'The unspellable value is named, never printed.');
+    $this->assertStringNotContainsString('Error', $text);
+  }
+
+  /**
    * DesignPostureContextSubscriber: texts, absent default, guard, one live.
    *
    * The posture block is the one per-turn block that is never a no-op: on
@@ -619,16 +784,16 @@ class AnthropicContextSubscriberTest extends KernelTestBase {
   private function selectedElementSubscriber(): SelectedElementContextSubscriber {
     return new SelectedElementContextSubscriber(
       $this->routeResolver(),
-      new ElementSelectionResolver(NULL),
+      new ElementSelectionResolver($this->container->get('daedalus_blueprint.host_resolver'), NULL),
     );
   }
 
   /**
    * Builds a fresh CurrentPageMarkupContextSubscriber.
    *
-   * The dialect services are the container's real ones (the generated
-   * catalog, the node tree builder, the printer), so the scenario
-   * exercises the live page-language print, not a fixture.
+   * The host printer is the container's real one (the generated catalog,
+   * the node tree builder, the stamper, the printer behind it), so the
+   * scenario exercises the live page-language print, not a fixture.
    *
    * @return \Drupal\daedalus_ai_anthropic\EventSubscriber\CurrentPageMarkupContextSubscriber
    *   The subscriber wired to a fresh route resolver.
@@ -637,11 +802,7 @@ class AnthropicContextSubscriberTest extends KernelTestBase {
     return new CurrentPageMarkupContextSubscriber(
       $this->routeResolver(),
       $this->container->get('daedalus_blueprint.storage_handler'),
-      $this->container->get('daedalus_blueprint.markup_projection'),
-      $this->container->get('daedalus_blueprint.node_tree_builder'),
-      $this->container->get('daedalus_blueprint.dialect_printer'),
-      $this->container->get('daedalus_blueprint.dialect_catalog_builder'),
-      $this->container->get('daedalus_blueprint.dialect_alias_map'),
+      $this->container->get('daedalus_blueprint.host_printer'),
     );
   }
 
@@ -670,6 +831,7 @@ class AnthropicContextSubscriberTest extends KernelTestBase {
       $this->container->get('daedalus_blueprint.access_checker'),
       $this->container->get('router.no_access_checks'),
       $this->container->get('daedalus_ui.ui'),
+      $this->container->get('daedalus_blueprint.verdict_stamper'),
     );
   }
 
@@ -762,6 +924,56 @@ class AnthropicContextSubscriberTest extends KernelTestBase {
    */
   private function promptEvent(string $systemPrompt, array $tokens = []): BuildSystemPromptEvent {
     return new BuildSystemPromptEvent($systemPrompt, 'daedalus', $tokens);
+  }
+
+
+  /**
+   * A blueprint route names the blueprint and what editing it reaches.
+   *
+   * The blueprint's canonical route is its canvas: the "Current page"
+   * reminder says it is a saved blueprint, not a page, what it is for and
+   * that editing it changes what every later placement lands, with its
+   * field blocks the subject's.
+   */
+  public function testBlueprintRouteNamesTheBlueprint(): void {
+    $this->enableModules(['options', 'image', 'media', 'daedalus_blueprint_library']);
+    $this->installEntitySchema('file');
+    $this->installSchema('file', ['file_usage']);
+    $this->installEntitySchema('media');
+    $this->installEntitySchema('blueprint');
+    $this->installConfig(['image', 'file', 'media', 'daedalus_blueprint_library']);
+    $this->setUpCurrentUser([], [], TRUE);
+    LayoutBuilderEntityViewDisplay::create([
+      'targetEntityType' => 'entity_test',
+      'bundle' => 'entity_test',
+      'mode' => 'default',
+      'status' => TRUE,
+    ])->enableLayoutBuilder()->setOverridable()->save();
+    $this->container->get('router.builder')->rebuild();
+    $blueprint = $this->container->get('entity_type.manager')->getStorage('blueprint')->create([
+      'type' => 'section',
+      'label' => 'Card',
+      'machine_name' => 'card',
+      'scope' => 'block',
+      'subject_type' => 'entity_test',
+      'subject_bundle' => 'entity_test',
+      'status' => 1,
+    ]);
+    $blueprint->save();
+    $path = $blueprint->toUrl()->toString();
+
+    $message = new ChatMessage('user', 'Add a link.');
+    $this->currentEntitySubscriber()->onPassContext($this->contextEvent(
+      $this->agent($message),
+      ['view_mode' => 'full', 'current_route' => $path],
+    ));
+    $text = $message->getText();
+    $this->assertStringContainsString(sprintf(
+      'Current page: the block blueprint "Card" for entity_test entity_tests (a saved blueprint, not a page: blueprint ID: %s, UUID: %s). Editing it changes the blueprint every later placement lands; placements already on pages are independent copies. Its field blocks are the entity_test entity_test\'s fields and show sample content, never a real entity\'s.',
+      $blueprint->id(),
+      $blueprint->uuid(),
+    ), $text);
+    $this->assertStringEndsWith('Add a link.', $text);
   }
 
 }

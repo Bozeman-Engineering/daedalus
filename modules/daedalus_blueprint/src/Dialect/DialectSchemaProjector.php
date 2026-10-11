@@ -7,12 +7,13 @@ namespace Drupal\daedalus_blueprint\Dialect;
 use Drupal\daedalus_blueprint\Hook\MaterialsSchemaHooks;
 use Drupal\daedalus_blueprint\Materials\Address;
 use Drupal\daedalus_blueprint\Materials\MaterialKind;
+use Drupal\daedalus_blueprint\Plugin\Block\LinkedBlueprintBlock;
 
 /**
  * Projects a bundle's blueprint schema into the page language's view.
  *
  * BlueprintSchemaBuilder describes a bundle for the JSON door (the API,
- * the CLI, eb_create_entity/eb_edit): the layout_builder__layout node
+ * the CLI, eb_create_entity/eb_edit): the layout node
  * shape, the style map's key grammar, the anatomy trees. A writer on the
  * dialect door authors none of that: the layout is ONE page-language
  * document, styles ride style="" and a <style> block, parts are the
@@ -34,9 +35,15 @@ use Drupal\daedalus_blueprint\Materials\MaterialKind;
  *   body), the tags the active skin dresses on a tag attribute, and the
  *   variants the palette's placements of the element are born wearing
  *   (the catalog's birth defaults; a document states them itself);
- * - `materials`: the roster's schema fragment (every kind, full text),
- *   the schema's own top-level key, carried through unchanged, plus the
- *   style guide's remaining prose (bindings, deviations, guidance);
+ * - `materials`: the roster's schema fragment (every kind, full text;
+ *   the favorite block blueprints the bundle's host is offered, with the
+ *   group index of the rest, or one group in full when the read named
+ *   one), the schema's own top-level key, carried through unchanged,
+ *   plus the style guide's remaining prose (bindings, deviations,
+ *   guidance);
+ * - `starts`: a page bundle's page blueprints (what a page of it may
+ *   start as, the ids page_create's `start` takes), carried through as
+ *   Hook\MaterialsSchemaHooks landed it, the structure line naming it;
  *
  * And drops what contradicts or duplicates the catalog: the layout node
  * grammar, the style-map guidance and key grammar, `stylable` sets,
@@ -67,6 +74,10 @@ final class DialectSchemaProjector {
   /**
    * The guidance beside the container's name attribute.
    */
+  private const SLOT_GUIDANCE = 'A slot section: a top-level container that fills a slot of the document around this one (a locked bundle\'s template, the site frame) instead of standing in the page\'s own flow. Its children are the page\'s own content, shown where the slot sits; everything a <pb-container> takes, it takes, with name being the slot id.';
+
+  private const LINKED_GUIDANCE = 'A linked placement: a saved block blueprint shown by reference as one block, its document rendered live where the element sits under this page\'s own fields (a field block inside it shows this page\'s field). Editing the blueprint changes every page linking it; the element takes no children and no content of its own (edit the blueprint through page_read and page_edit with entity_type blueprint), only its own box styles and axes. A copy to adapt is <pb-blueprint name="id"/> instead.';
+
   private const NAME_GUIDANCE = 'The container\'s name: what the editor\'s page tree, canvas chips and panels call it ("Hero", "Pricing"). Prints on a named container, set {name} renames it (null clears); an unnamed container reads by its kind (Section at the top level, Container nested).';
 
   /**
@@ -76,7 +87,7 @@ final class DialectSchemaProjector {
    * container layout: without a container there is no document to write.
    */
   public function applies(array $schema, DialectCatalog $catalog): bool {
-    return isset($schema['layout_builder__layout']) && $catalog->containerLayoutId() !== '';
+    return isset($schema['layout']) && $catalog->containerLayoutId() !== '';
   }
 
   /**
@@ -99,27 +110,26 @@ final class DialectSchemaProjector {
     }
     $out['_structure'] = sprintf('This bundle carries a page-builder layout, authored in the page language: page_create takes the entity field values below in "fields" and the whole layout as ONE page-language document in "layout"; page_edit takes ops on the current page. The Page language section of your instructions carries the element vocabulary, the per-kind stylable rosters, the conditions, and the design system brief (every material by its first sentence); this schema carries what it does not: the entity fields, what each element is for, and the materials in full (%s, each with its whole description).', implode(', ', array_map(static fn (MaterialKind $kind): string => $kind->plural(), MaterialKind::cases())));
 
-    $style_guide = NULL;
-    $fields = [];
-    foreach ($schema['fields'] ?? [] as $name => $field_schema) {
-      // The styling field is never authored on this door: styles ride the
-      // document. Its style guide's remaining prose is hoisted.
-      if (is_array($field_schema) && isset($field_schema[MaterialsSchemaHooks::STYLE_GUIDE])) {
-        $style_guide ??= $field_schema['style_guide'];
-        continue;
-      }
-      $fields[$name] = $field_schema;
-    }
-    $out['fields'] = $fields;
+    // The style map is never authored on this door: styles ride the
+    // document. Its style guide's remaining prose is hoisted.
+    $style_guide = $schema['styles'][MaterialsSchemaHooks::STYLE_GUIDE] ?? NULL;
+    $out['fields'] = $schema['fields'] ?? [];
     if (isset($schema['guidance'])) {
       $out['guidance'] = $schema['guidance'];
     }
 
-    $layout = $schema['layout_builder__layout'] ?? [];
+    $layout = $schema['layout'] ?? [];
     $out['elements'] = $this->elements($layout, $catalog);
 
     if (isset($schema[self::MATERIALS])) {
       $out[self::MATERIALS] = $schema[self::MATERIALS];
+    }
+    // A page bundle's starts (the page blueprints page_create's `start`
+    // takes) carry through as the hook landed them, and the structure
+    // line says what the key is while it rides.
+    if (isset($schema[MaterialsSchemaHooks::STARTS])) {
+      $out[MaterialsSchemaHooks::STARTS] = $schema[MaterialsSchemaHooks::STARTS];
+      $out['_structure'] .= ' "starts" lists the page blueprints a page of this bundle may start as (label, description, a saved one\'s entity_id for page_read): page_create\'s start takes one of their ids, blank or template, instead of a layout.';
     }
     if (is_array($style_guide)) {
       $rest = array_diff_key($style_guide, array_flip(self::CATALOG_TAUGHT));
@@ -149,6 +159,19 @@ final class DialectSchemaProjector {
       $container['born_wearing'] = $born;
     }
     $elements['pb-container'] = $container;
+    // The slot form: the same container, filling a slot the document
+    // around this one placed. Top level only; name is the slot id.
+    $elements[DialectWalk::SLOT_TAG] = [
+      'guidance' => self::SLOT_GUIDANCE,
+      'attributes' => [DialectWalk::NAME_ATTR => ['guidance' => 'Required. The id of the slot this section fills (the slot block the template or the site frame placed); a slot fills once per document, and the id is fixed for the section\'s life.']] + $axes,
+    ];
+    // The linked placement: a block whose content is a blueprint's live
+    // document. Its one attribute names the blueprint; its axes are the
+    // block kind's.
+    $elements[DialectWalk::LINKED_TAG] = [
+      'guidance' => self::LINKED_GUIDANCE,
+      'attributes' => [DialectWalk::LINKED_ATTR => ['guidance' => 'Required. The machine name of a published block blueprint saved on this site (materials.blueprints); fixed for the element\'s life, and never a shipped file.']] + $this->axisAttributes($catalog->axesFor(FALSE, NULL, LinkedBlueprintBlock::PLUGIN_ID)),
+    ];
 
     $declared = $catalog->blockTypes();
     foreach ($layout['available_block_types'] ?? [] as $type => $type_schema) {

@@ -48,9 +48,10 @@ export const styleReference = (record) => {
 /**
  * The custom property a token's or swatch's style spelling delivers as
  * ('--swatch-brand_red'), read back from the spelling: the one place the
- * client needs the bare property name is the token scope element's
- * inline delivery extension (the leader source), and the prompt's PHP
- * reader (MaterialsSchema::customProperty) reads it the same way.
+ * client needs the bare property name is the token scope lane (preview.js:
+ * the live drafts and the committed materials' delivery on the token
+ * scope element), and the prompt's PHP reader
+ * (MaterialsSchema::customProperty) reads it the same way.
  */
 export const customProperty = (record) => {
   const spelling = styleReference(record);
@@ -258,6 +259,52 @@ export const animationOf = (materials, name) => {
     ? animationEntry(resolved.record)
     : null;
 };
+
+/**
+ * A record's committable family spelling ('"Inter"', the quoted family a
+ * font-family stack names), or null for a record with none in the font
+ * slot.
+ */
+export const fontSpelling = (record) => {
+  const spelling = record?.spellings?.[SLOT.FONT];
+  return typeof spelling === 'string' && spelling !== '' ? spelling : null;
+};
+
+/**
+ * One font record as a picker entry: `family` the name stacks reference,
+ * `spelling` its quoted form (the one component a stack commits), `faces`
+ * the canonical faces the family ships ([{weight, style, source}]).
+ */
+const fontEntry = (record) => ({
+  name: record.id,
+  label: record.label !== '' ? record.label : record.id,
+  family:
+    typeof record.value?.family === 'string' ? record.value.family : '',
+  spelling: fontSpelling(record),
+  faces: Array.isArray(record.value?.faces) ? record.value.faces : [],
+  description: typeof record.description === 'string' ? record.description : '',
+  record,
+});
+
+/**
+ * Every rostered font as a picker entry, roster order (the provider's:
+ * the published fonts by label, the compiled @font-face file's own
+ * order). The guide declares nothing a font joins against: the record
+ * carries its family, spelling and faces whole, so only the roster is
+ * read.
+ *
+ * @param {object} materials
+ *   The materials roster.
+ *
+ * @return {Array<{name: string, label: string, family: string,
+ *   spelling: string, faces: Array<object>, description: string,
+ *   record: object}>}
+ */
+export const fontOptions = (materials) =>
+  materials
+    .ofKind(KIND.FONT)
+    .map((record) => fontEntry(record))
+    .filter((entry) => entry.spelling !== null);
 
 /**
  * A style value that is an inline LITERAL to the grammar (a hex, a

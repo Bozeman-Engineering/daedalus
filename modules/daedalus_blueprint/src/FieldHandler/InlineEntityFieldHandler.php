@@ -400,8 +400,9 @@ class InlineEntityFieldHandler extends FieldHandlerBase {
       // Per-field edit access on the child entity's own field, mirroring the
       // root deserialize path. Owned children have no independent entity-level
       // access, so field access is the enforcement surface here. Denial errors
-      // rather than silently dropping the field.
-      if (!$this->accessChecker->fieldEditable($entity->get($field_name))) {
+      // rather than silently dropping the field. The system posture names
+      // no actor to judge.
+      if (empty($options['system']) && !$this->accessChecker->fieldEditable($entity->get($field_name))) {
         $errors[] = new BlueprintError(
           path: "{$base_path}.fields.{$field_name}",
           code: 'ACCESS_DENIED_FIELD',

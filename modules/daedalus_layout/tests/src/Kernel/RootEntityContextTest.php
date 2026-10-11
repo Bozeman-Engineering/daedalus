@@ -90,7 +90,7 @@ class RootEntityContextTest extends NestedStorageKernelTestBase {
     ]);
     $entity->setName('Root entity name sentinel');
 
-    $result = $this->operations->moveElement($entity, $field_block_uuid, [
+    $result = $this->operations->moveElement($this->host($entity), $field_block_uuid, [
       'anchor' => $nested_section_uuid,
       'placement' => 'inside',
     ]);
@@ -151,7 +151,7 @@ class RootEntityContextTest extends NestedStorageKernelTestBase {
     $entity->setName('Added block name sentinel');
 
     $new_uuid = $this->uuid->generate();
-    $result = $this->operations->addElement($entity, [
+    $result = $this->operations->addElement($this->host($entity), [
       'anchor' => $nested_section_uuid,
       'placement' => 'inside',
     ], [

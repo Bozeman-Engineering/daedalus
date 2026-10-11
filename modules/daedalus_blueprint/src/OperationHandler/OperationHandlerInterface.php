@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Drupal\daedalus_blueprint\OperationHandler;
 
-use Drupal\Core\Entity\FieldableEntityInterface;
+use Drupal\daedalus_blueprint\Host\HostInterface;
 use Drupal\daedalus_blueprint\Result\BlueprintResult;
 
 /**
@@ -19,8 +19,14 @@ use Drupal\daedalus_blueprint\Result\BlueprintResult;
  * Handlers participate fully in batchOperations() semantics: return a
  * structural failure to collect errors across operations, a semantic
  * failure to trigger rollback, or success with targets and warnings like
- * any built-in operation. Never save the entity — mutate it and let the
- * caller decide persistence.
+ * any built-in operation. Never save the host — mutate its document and
+ * fields in place and let the caller decide persistence.
+ *
+ * Every operation declares what it requires of its targets
+ * (getRequirements()): the op door asks the capability resolver before
+ * dispatching, so a handler never judges ownership, translation, workspace
+ * or access itself. A handler whose declaration misses one of its
+ * operations is refused at registration.
  */
 interface OperationHandlerInterface {
 
@@ -33,14 +39,30 @@ interface OperationHandlerInterface {
   public function getOperations(): array;
 
   /**
-   * Applies one operation to the entity.
+   * Declares what each provided operation requires of its targets.
+   *
+   * One entry per operation name getOperations() lists, each a list of
+   * Requirement shapes (Requirement::element(), ::styleKey(),
+   * ::destination(), ::root()) the op door resolves against the operation
+   * and asks the capability resolver before dispatch. An empty list
+   * declares that the operation has nothing to judge on an element (it
+   * writes a material or a skin, or expands into spine operations that
+   * are judged themselves); a missing entry is a registration error.
+   *
+   * @return array<string, \Drupal\daedalus_blueprint\Capability\Requirement[]>
+   *   The requirements keyed by operation name.
+   */
+  public function getRequirements(): array;
+
+  /**
+   * Applies one operation to the host.
    *
    * String-encoded JSON in the standard parameter keys (fields, data,
    * structure, location, properties, regions) is already decoded by the
    * dispatcher before this is called.
    *
-   * @param \Drupal\Core\Entity\FieldableEntityInterface $entity
-   *   The entity to operate on. Mutate in place; never save.
+   * @param \Drupal\daedalus_blueprint\Host\HostInterface $host
+   *   The host to operate on. Mutate in place; never save.
    * @param array $operation
    *   The full operation definition including the 'op' key.
    * @param array $options
@@ -51,7 +73,7 @@ interface OperationHandlerInterface {
    * @return \Drupal\daedalus_blueprint\Result\BlueprintResult
    *   The operation result.
    */
-  public function apply(FieldableEntityInterface $entity, array $operation, array $options = []): BlueprintResult;
+  public function apply(HostInterface $host, array $operation, array $options = []): BlueprintResult;
 
   /**
    * Gets the LLM-facing router line for each provided operation.

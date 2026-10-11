@@ -42,13 +42,13 @@ test('a variant-supplied line offers only the lift, winning or lost alike', () =
   assert.deepEqual(lost, [{ type: 'lift' }]);
 });
 
-test('a skin line offers the lift and the skin doorway, never Unset, whichever skin scope supplies it', () => {
+test('a skin line offers the lift and the skin doorway to its scope\'s session, never Unset, whichever skin scope supplies it', () => {
   const skin = { property: 'gap', value: 'var(--space-gutter)', layer: skinLayerId('kind:block'), variant: null, lost: false };
-  assert.deepEqual(lineMenuItems(skin), [{ type: 'lift' }, { type: 'edit-skin' }]);
+  assert.deepEqual(lineMenuItems(skin), [{ type: 'lift' }, { type: 'edit-skin', scope: 'kind:block' }]);
   const lost = { ...skin, lost: true, winner: { layer: ELEMENT_LAYER, variant: null } };
-  assert.deepEqual(lineMenuItems(lost), [{ type: 'lift' }, { type: 'edit-skin' }]);
+  assert.deepEqual(lineMenuItems(lost), [{ type: 'lift' }, { type: 'edit-skin', scope: 'kind:block' }]);
   const base = { ...skin, layer: skinLayerId('base:p') };
-  assert.deepEqual(lineMenuItems(base), [{ type: 'lift' }, { type: 'edit-skin' }]);
+  assert.deepEqual(lineMenuItems(base), [{ type: 'lift' }, { type: 'edit-skin', scope: 'base:p' }]);
 });
 
 test('a declared line offers only the lift (a declaration is code: no doorway, no unset)', () => {
@@ -97,10 +97,10 @@ test('a rule-carried variant run anchors its document at the carrier rule, the p
   assert.deepEqual(carried, [{ type: 'edit-variant', reference: 'guide_button_primary', anchor: 'container:band::pb-text' }]);
 });
 
-test('a skin run opens the skin form; a declared run says it is code', () => {
-  assert.deepEqual(runMenuItems(skinLayerId('kind:block')), [{ type: 'edit-skin' }]);
-  assert.deepEqual(runMenuItems(skinLayerId('base:p')), [{ type: 'edit-skin' }]);
-  assert.deepEqual(runMenuItems(declaredLayerId('block_type:text')), [{ type: 'declared' }]);
+test('a skin run opens the skin session at its scope; a declared run says it is code', () => {
+  assert.deepEqual(runMenuItems(skinLayerId('kind:block')), [{ type: 'edit-skin', scope: 'kind:block' }]);
+  assert.deepEqual(runMenuItems(skinLayerId('base:p')), [{ type: 'edit-skin', scope: 'base:p' }]);
+  assert.deepEqual(runMenuItems(declaredLayerId('block_type:text')), [{ type: 'declared', scope: 'block_type:text' }]);
 });
 
 test('an ancestor rule\'s own run offers nothing: the rule prints as a rule island whose header is its seat', () => {

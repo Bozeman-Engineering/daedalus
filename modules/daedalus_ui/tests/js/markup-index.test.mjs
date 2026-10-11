@@ -133,7 +133,7 @@ const boot = () => {
           },
         },
       },
-      _tree: [{
+      layout: [{
         kind: 'container',
         uuid: SECTION,
         layout_id: 'layout_onecol',
@@ -365,4 +365,34 @@ test('partLabel is null when the part is absent or the model does not speak', ()
   assert.equal(partLabel(`block:${PLUGIN}`, '.anything'), null);
   assert.equal(partLabel('block:not-a-real-uuid', '.anything'), null);
   assert.equal(partLabel(null, '.anything'), null);
+});
+
+test('a root with no fields indexes its own markup and no field carriers', () => {
+  boot();
+  const state = store.getState().blueprint;
+  const { fields, ...fieldless } = state.blueprint;
+  const { fields: rootFields, ...element } = fieldless._element;
+  store.dispatch(blueprintBooted({
+    entityType: 'entity_view_display',
+    entityId: 'node.page.default',
+    uuid: ROOT,
+    label: 'node.page.default',
+    langcode: 'en',
+    viewMode: 'default',
+    blueprint: { ...fieldless, _element: element },
+  }));
+  assert.equal(rootTag(`entity:${ROOT}`), 'article');
+  assert.equal(partPlacement(`field:${ROOT}:body`, '.s-ab'), null);
+  assert.equal(partLabel(`field:${ROOT}:body`, '.s-ab'), null);
+  assert.equal(partPlacement(`block:${LINKED}`, '.image-block-img'), 'element');
+  // Restore the fielded mirror for any later reader.
+  store.dispatch(blueprintBooted({
+    entityType: 'node',
+    entityId: '1',
+    uuid: ROOT,
+    label: 'Page',
+    langcode: 'en',
+    viewMode: 'full',
+    blueprint: state.blueprint,
+  }));
 });

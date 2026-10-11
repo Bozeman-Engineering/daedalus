@@ -25,7 +25,7 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  * Pins the roster contract a provider and a consumer meet at: typed
  * accessors over the collected records, the spelling index per slot, the
  * one applicability predicate (scope family rule, root-only depth,
- * stencil ownership, band stencils derived from their root's wearings),
+ * blueprint ownership, band blueprints derived from their root's wearings),
  * the one did-you-mean formatter, the record's
  * delivery shape, loud refusal of duplicate ids and spellings, the
  * builder's per-request memo with reset and merged cache metadata, the
@@ -73,7 +73,7 @@ class MaterialsRosterTest extends KernelTestBase {
     $this->assertSame(['color/accent'], array_keys($roster->tokens()));
     $this->assertSame(['lime_green'], array_keys($roster->swatches()));
     $this->assertSame(['button', 'container_full', 'block_full', 'hero_glow', 'link_quiet'], array_keys($roster->variants()));
-    $this->assertSame(['hero'], array_keys($roster->stencils()));
+    $this->assertSame(['hero'], array_keys($roster->blueprints()));
     $this->assertSame(['fade_in'], array_keys($roster->animations()));
     $this->assertSame($roster->variants(), $roster->ofKind(MaterialKind::Variant));
 
@@ -87,7 +87,7 @@ class MaterialsRosterTest extends KernelTestBase {
         'variant:block_full',
         'variant:hero_glow',
         'variant:link_quiet',
-        'stencil:hero',
+        'blueprint:hero',
         'animation:fade_in',
       ],
       array_map(static fn (MaterialRecord $r): string => $r->kind->value . ':' . $r->id, $roster->all()),
@@ -98,8 +98,8 @@ class MaterialsRosterTest extends KernelTestBase {
     $this->assertSame('Lime green', $swatch->label);
     $this->assertSame('#4dff8c', $swatch->value);
     $this->assertSame('color', $swatch->group);
-    $this->assertTrue($roster->has(MaterialKind::Stencil, 'hero'));
-    $this->assertFalse($roster->has(MaterialKind::Stencil, 'lime_green'));
+    $this->assertTrue($roster->has(MaterialKind::Blueprint, 'hero'));
+    $this->assertFalse($roster->has(MaterialKind::Blueprint, 'lime_green'));
     $this->assertNull($roster->get(MaterialKind::Token, 'lime_green'), 'Ids are kind-local: a swatch id names no token.');
 
     // The record's delivery shape: every field, snake_case, always present.
@@ -118,20 +118,23 @@ class MaterialsRosterTest extends KernelTestBase {
       'published' => TRUE,
       'weight' => -10,
       'icon' => NULL,
-      'root_kind' => NULL,
+      'blueprint_scope' => NULL,
       'origin' => 'shipped',
       'updatable' => TRUE,
       'design_system' => NULL,
       'offered' => TRUE,
+      'groups' => [],
+      'favorite' => FALSE,
+      'url' => NULL,
     ], $full->toArray());
     $this->assertTrue($full->rootOnly());
     $this->assertTrue($full->isGlobal());
     $this->assertSame('full', $full->spelling('attr:kind:container:width'));
     $this->assertNull($full->spelling('class'));
-    $stencil = $roster->get(MaterialKind::Stencil, 'hero');
-    $this->assertSame('section', $stencil->rootKind);
-    $this->assertFalse($stencil->updatable);
-    $this->assertSame('/modules/x/assets/hero.svg', $stencil->icon);
+    $blueprint = $roster->get(MaterialKind::Blueprint, 'hero');
+    $this->assertSame('block', $blueprint->blueprintScope);
+    $this->assertFalse($blueprint->updatable);
+    $this->assertSame('/modules/x/assets/hero.svg', $blueprint->icon);
   }
 
   /**
@@ -146,10 +149,10 @@ class MaterialsRosterTest extends KernelTestBase {
     $this->assertSame('container_full', $roster->bySpelling(MaterialRecord::attrSlot('kind:container', 'width'), 'full')?->id);
     $this->assertSame('block_full', $roster->bySpelling(MaterialRecord::attrSlot('kind:block', 'width'), 'full')?->id, 'The same attribute value on another scope is that scope\'s variant.');
     $this->assertNull($roster->bySpelling('attr:width', 'full'), 'There is no site-wide attribute slot.');
-    $this->assertSame('hero', $roster->bySpelling(MaterialRecord::SLOT_STENCIL, 'hero')?->id);
+    $this->assertSame('hero', $roster->bySpelling(MaterialRecord::SLOT_BLUEPRINT, 'hero')?->id);
     $this->assertSame('fade_in', $roster->bySpelling(MaterialRecord::SLOT_ANIMATION, 'motion-fade_in')?->id);
 
-    // Slots are separate vocabularies: the stencil "hero" is no class, and
+    // Slots are separate vocabularies: the blueprint "hero" is no class, and
     // an animation's ident is no style-slot value.
     $this->assertNull($roster->bySpelling(MaterialRecord::SLOT_CLASS, 'hero'));
     $this->assertNull($roster->bySpelling(MaterialRecord::SLOT_STYLE, 'motion-fade_in'));
@@ -220,70 +223,70 @@ class MaterialsRosterTest extends KernelTestBase {
     $this->assertFalse($roster->applicable($full, Address::fromString('layout:layout_onecol'), top_level: FALSE));
     $this->assertTrue($roster->applicable($button, Address::fromString('block_type:text'), top_level: FALSE), 'Depth gates root-only variants only.');
 
-    // An owned variant applies only inside its stencil's placements.
+    // An owned variant applies only inside its blueprint's placements.
     $this->assertFalse($roster->applicable($glow, Address::fromString('kind:container')));
-    $this->assertFalse($roster->applicable($glow, Address::fromString('kind:container'), within_stencil: 'call_to_action'));
-    $this->assertTrue($roster->applicable($glow, Address::fromString('kind:container'), within_stencil: 'hero'));
-    $this->assertTrue($roster->applicable($button, Address::fromString('block_type:text'), within_stencil: 'hero'), 'Unowned variants apply inside placements too.');
+    $this->assertFalse($roster->applicable($glow, Address::fromString('kind:container'), within_blueprint: 'call_to_action'));
+    $this->assertTrue($roster->applicable($glow, Address::fromString('kind:container'), within_blueprint: 'hero'));
+    $this->assertTrue($roster->applicable($button, Address::fromString('block_type:text'), within_blueprint: 'hero'), 'Unowned variants apply inside placements too.');
 
     // Base-scoped variants pair with every element scope.
     $this->assertTrue($roster->applicable($quiet, Address::fromString('block_type:text')));
     $this->assertTrue($roster->applicable($quiet, Address::fromString('layout:layout_onecol'), top_level: FALSE));
 
-    // Non-variant kinds apply everywhere; a stencil wearing nothing too.
+    // Non-variant kinds apply everywhere; a blueprint wearing nothing too.
     $this->assertTrue($roster->applicable($roster->get(MaterialKind::Swatch, 'lime_green'), Address::fromString('block_type:image'), top_level: FALSE));
-    $this->assertTrue($roster->applicable($roster->get(MaterialKind::Stencil, 'hero'), Address::fromString('kind:container'), top_level: FALSE));
+    $this->assertTrue($roster->applicable($roster->get(MaterialKind::Blueprint, 'hero'), Address::fromString('kind:container'), top_level: FALSE));
     $this->assertTrue($roster->applicable($roster->get(MaterialKind::Animation, 'fade_in'), Address::fromString('kind:container'), top_level: FALSE));
-    $this->assertFalse($roster->isBand($roster->get(MaterialKind::Stencil, 'hero')));
+    $this->assertFalse($roster->isBand($roster->get(MaterialKind::Blueprint, 'hero')));
   }
 
   /**
-   * A stencil is a band when its root wears a root-only variant.
+   * A blueprint is a band when its root wears a root-only variant.
    *
-   * The stencil case of the one predicate: the record carries the ids
+   * The blueprint case of the one predicate: the record carries the ids
    * its root captured (a capture fact the provider writes without
    * knowing any axis) and the roster resolves them against ITS variant
    * records, so a band is not applicable nested and applicable at top
-   * level, a stencil wearing only style variants applies everywhere, and
+   * level, a blueprint wearing only style variants applies everywhere, and
    * a wearing that names no record in the roster has no opinion.
    */
-  public function testApplicableStencils(): void {
-    $stencil = static fn (string $id, array $wears): MaterialRecord => new MaterialRecord(
-      kind: MaterialKind::Stencil,
+  public function testApplicableBlueprints(): void {
+    $blueprint = static fn (string $id, array $wears): MaterialRecord => new MaterialRecord(
+      kind: MaterialKind::Blueprint,
       id: $id,
       label: ucfirst($id),
-      spellings: [MaterialRecord::SLOT_STENCIL => $id],
+      spellings: [MaterialRecord::SLOT_BLUEPRINT => $id],
       applies: $wears === [] ? [] : [MaterialRecord::APPLIES_WEARS => $wears],
-      rootKind: MaterialRecord::ROOT_SECTION,
+      blueprintScope: MaterialRecord::SCOPE_BLOCK,
     );
     $site = new MaterialRecord(kind: MaterialKind::Variant, id: 'container_site', label: 'Site', group: 'width', spellings: [MaterialRecord::attrSlot('kind:container', 'width') => 'site'], scope: Address::fromString('kind:container'), applies: [MaterialRecord::APPLIES_DEPTH => MaterialRecord::DEPTH_ROOT]);
     $card = new MaterialRecord(kind: MaterialKind::Variant, id: 'card', label: 'Card', group: 'style', spellings: [MaterialRecord::SLOT_CLASS => 'card'], scope: Address::fromString('kind:container'));
     $roster = new MaterialsRoster([
       $site,
       $card,
-      $stencil('band', ['card', 'container_site']),
-      $stencil('tile', ['card']),
-      $stencil('plain', []),
-      $stencil('orphan', ['ghost']),
+      $blueprint('band', ['card', 'container_site']),
+      $blueprint('tile', ['card']),
+      $blueprint('plain', []),
+      $blueprint('orphan', ['ghost']),
     ], new CacheableMetadata());
 
-    $band = $roster->get(MaterialKind::Stencil, 'band');
+    $band = $roster->get(MaterialKind::Blueprint, 'band');
     $this->assertSame(['card', 'container_site'], $band->wears());
     $this->assertTrue($roster->isBand($band));
     $this->assertSame(['container_site' => $site], $roster->rootOnlyWears($band));
     $this->assertTrue($roster->applicable($band, Address::fromString('kind:container'), top_level: TRUE));
     $this->assertFalse($roster->applicable($band, Address::fromString('kind:container'), top_level: FALSE));
-    $this->assertFalse($roster->applicable($band, Address::fromString('kind:container'), top_level: FALSE, within_stencil: 'band'), 'A placement inside a stencil is nested too.');
+    $this->assertFalse($roster->applicable($band, Address::fromString('kind:container'), top_level: FALSE, within_blueprint: 'band'), 'A placement inside a blueprint is nested too.');
 
     foreach (['tile', 'plain', 'orphan'] as $id) {
-      $record = $roster->get(MaterialKind::Stencil, $id);
+      $record = $roster->get(MaterialKind::Blueprint, $id);
       $this->assertFalse($roster->isBand($record), "$id is not a band.");
       $this->assertSame([], $roster->rootOnlyWears($record));
       $this->assertTrue($roster->applicable($record, Address::fromString('kind:container'), top_level: TRUE), "$id places at the top level.");
       $this->assertTrue($roster->applicable($record, Address::fromString('kind:container'), top_level: FALSE), "$id places nested.");
     }
-    $this->assertSame([], $roster->get(MaterialKind::Stencil, 'plain')->wears());
-    $this->assertSame([], $site->wears(), 'Only stencils carry wearings.');
+    $this->assertSame([], $roster->get(MaterialKind::Blueprint, 'plain')->wears());
+    $this->assertSame([], $site->wears(), 'Only blueprints carry wearings.');
     $this->assertSame([], $roster->rootOnlyWears($site));
   }
 
@@ -296,7 +299,7 @@ class MaterialsRosterTest extends KernelTestBase {
    * resolves it (the validators' universe is untouched). A roster with
    * nothing opted out answers with itself, so a consumer memoizing on
    * roster identity sees one roster. A band verdict on the view resolves
-   * the stencil's wearings against the full roster: opting the worn
+   * the blueprint's wearings against the full roster: opting the worn
    * root-only variant out of the brief does not free the band.
    */
   public function testOfferedView(): void {
@@ -307,12 +310,12 @@ class MaterialsRosterTest extends KernelTestBase {
     $site = new MaterialRecord(kind: MaterialKind::Variant, id: 'container_site', label: 'Site', group: 'width', spellings: [MaterialRecord::attrSlot('kind:container', 'width') => 'site'], scope: Address::fromString('kind:container'), applies: [MaterialRecord::APPLIES_DEPTH => MaterialRecord::DEPTH_ROOT], offered: FALSE);
     $card = new MaterialRecord(kind: MaterialKind::Variant, id: 'card', label: 'Card', group: 'style', spellings: [MaterialRecord::SLOT_CLASS => 'card'], scope: Address::fromString('kind:container'));
     $ink = new MaterialRecord(kind: MaterialKind::Swatch, id: 'ink', label: 'Ink', value: '#1a1a2e', group: 'color', spellings: [MaterialRecord::SLOT_STYLE => 'var(--swatch-ink)'], offered: FALSE);
-    $band = new MaterialRecord(kind: MaterialKind::Stencil, id: 'band', label: 'Band', spellings: [
-      MaterialRecord::SLOT_STENCIL => 'band',
+    $band = new MaterialRecord(kind: MaterialKind::Blueprint, id: 'band', label: 'Band', spellings: [
+      MaterialRecord::SLOT_BLUEPRINT => 'band',
     ], applies: [
       MaterialRecord::APPLIES_WEARS => ['card', 'container_site'],
-    ], rootKind: MaterialRecord::ROOT_SECTION);
-    $secret = new MaterialRecord(kind: MaterialKind::Stencil, id: 'secret', label: 'Secret', spellings: [MaterialRecord::SLOT_STENCIL => 'secret'], rootKind: MaterialRecord::ROOT_BLOCK, offered: FALSE);
+    ], blueprintScope: MaterialRecord::SCOPE_BLOCK);
+    $secret = new MaterialRecord(kind: MaterialKind::Blueprint, id: 'secret', label: 'Secret', spellings: [MaterialRecord::SLOT_BLUEPRINT => 'secret'], blueprintScope: MaterialRecord::SCOPE_BLOCK, offered: FALSE);
     $metadata = (new CacheableMetadata())->addCacheTags(['materials_x']);
     $roster = new MaterialsRoster([$site, $card, $ink, $band, $secret], $metadata);
     $offered = $roster->offered();
@@ -320,23 +323,23 @@ class MaterialsRosterTest extends KernelTestBase {
     $this->assertNotSame($roster, $offered);
     $this->assertSame($offered, $roster->offered(), 'Built once.');
     $this->assertSame($offered, $offered->offered(), 'The view is its own view.');
-    $this->assertSame(['variant:card', 'stencil:band'], array_map(static fn (MaterialRecord $r): string => $r->kind->value . ':' . $r->id, $offered->all()));
+    $this->assertSame(['variant:card', 'blueprint:band'], array_map(static fn (MaterialRecord $r): string => $r->kind->value . ':' . $r->id, $offered->all()));
     $this->assertSame([], $offered->swatches());
     $this->assertFalse($offered->has(MaterialKind::Variant, 'container_site'));
     $this->assertNull($offered->bySpelling(MaterialRecord::attrSlot('kind:container', 'width'), 'site'));
-    $this->assertNull($offered->bySpelling(MaterialRecord::SLOT_STENCIL, 'secret'));
+    $this->assertNull($offered->bySpelling(MaterialRecord::SLOT_BLUEPRINT, 'secret'));
     $this->assertSame([], $offered->candidates(MaterialKind::Swatch, 'ink'), 'A did-you-mean over the view never names an unoffered material.');
     $this->assertSame(['materials_x'], $offered->getCacheableMetadata()->getCacheTags());
 
     // Legality is the full roster, unchanged.
     $this->assertSame($site, $roster->get(MaterialKind::Variant, 'container_site'));
     $this->assertSame($site, $roster->bySpelling(MaterialRecord::attrSlot('kind:container', 'width'), 'site'));
-    $this->assertSame($secret, $roster->bySpelling(MaterialRecord::SLOT_STENCIL, 'secret'));
+    $this->assertSame($secret, $roster->bySpelling(MaterialRecord::SLOT_BLUEPRINT, 'secret'));
     $this->assertTrue($roster->applicable($site, Address::fromString('kind:container'), top_level: TRUE));
 
     // The band verdict rides the full roster on both views.
     $this->assertTrue($roster->isBand($band));
-    $this->assertTrue($offered->isBand($band), 'An unoffered root-only wearing still makes the stencil a band.');
+    $this->assertTrue($offered->isBand($band), 'An unoffered root-only wearing still makes the blueprint a band.');
     $this->assertSame(['container_site' => $site], $offered->rootOnlyWears($band));
     $this->assertFalse($offered->applicable($band, Address::fromString('kind:container'), top_level: FALSE));
   }
@@ -370,15 +373,15 @@ class MaterialsRosterTest extends KernelTestBase {
 
     // One formatter: id "Label" (spelling as written): description.
     $this->assertSame(
-      'container_full "Full width" (width="full"): Let the container span the full page width.; hero "Hero" (<pb-stencil name="hero">): Single-column hero banner with a heading.',
+      'container_full "Full width" (width="full"): Let the container span the full page width.; hero "Hero" (<pb-blueprint name="hero">): Single-column hero banner with a heading.',
       MaterialsRoster::describe([
         $roster->get(MaterialKind::Variant, 'container_full'),
-        $roster->get(MaterialKind::Stencil, 'hero'),
+        $roster->get(MaterialKind::Blueprint, 'hero'),
       ]),
     );
     $this->assertSame(
-      'Did you mean this stencil: hero "Hero" (<pb-stencil name="hero">): Single-column hero banner with a heading.?',
-      $roster->didYouMean(MaterialKind::Stencil, 'Hro'),
+      'Did you mean this blueprint: hero "Hero" (<pb-blueprint name="hero">): Single-column hero banner with a heading.?',
+      $roster->didYouMean(MaterialKind::Blueprint, 'Hro'),
     );
   }
 
@@ -402,10 +405,10 @@ class MaterialsRosterTest extends KernelTestBase {
     $this->assertSame(['container_full'], $ids($roster->candidatesInSlot(MaterialRecord::attrSlot('kind:container', 'width'), 'ful')), 'Candidates are the scope\'s own: the block kind\'s full is no container candidate.');
     $this->assertSame(['block_full'], $ids($roster->candidatesInSlot(MaterialRecord::attrSlot('kind:block', 'width'), 'ful')));
     $this->assertSame([], $ids($roster->candidatesInSlot(MaterialRecord::attrSlot('kind:container', 'height'), 'full')), 'An undeclared axis offers nothing.');
-    $this->assertSame(['hero'], $ids($roster->candidatesInSlot(MaterialRecord::SLOT_STENCIL, 'hero-band')));
+    $this->assertSame(['hero'], $ids($roster->candidatesInSlot(MaterialRecord::SLOT_BLUEPRINT, 'hero-band')));
     $this->assertSame(['fade_in'], $ids($roster->candidatesInSlot(MaterialRecord::SLOT_ANIMATION, 'motion-fadein')));
     $this->assertSame('Did you mean this animation: fade_in "Fade in" (animation-name: motion-fade_in): Fade the element in from transparent.?', $roster->didYouMeanInSlot(MaterialRecord::SLOT_ANIMATION, 'motion-fadein'));
-    $this->assertSame('', $roster->didYouMeanInSlot(MaterialRecord::SLOT_STENCIL, 'zzz'));
+    $this->assertSame('', $roster->didYouMeanInSlot(MaterialRecord::SLOT_BLUEPRINT, 'zzz'));
 
     // Mixed kinds in one slot phrase as materials.
     TestMaterialsProvider::$records = [

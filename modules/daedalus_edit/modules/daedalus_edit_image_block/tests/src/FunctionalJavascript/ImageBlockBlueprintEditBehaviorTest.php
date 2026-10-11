@@ -60,6 +60,26 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  *   the part-is-root img, the .cls half on the linked descendant) and
  *   never retarget onto the anchor root — the reason the picture controls
  *   are element-bound.
+ * - The hoisted part under Cmd+click: the same picture, resolved from the
+ *   canvas across the real link mutation. Unlinked, the part coincides
+ *   with the root and the annotation hoists its class onto the img
+ *   (ElementResolver's hoisting rule), so the projection index composes
+ *   NO row for it and a Cmd+click on the img commits the block with no
+ *   target, even with the Markup view on; linked, the server re-render
+ *   nests the img under the anchor root, the annotation carries it as a
+ *   declared shell part, the index gains its Raster row, and the same
+ *   Cmd+click commits the block with the part as the styling target
+ *   (getTarget() is {key, selector}) and the breadcrumb's current crumb
+ *   reads Raster. The reach gate is the third fact: a shell row is
+ *   depicted only while the Markup view is on (view-registry.js's
+ *   reachableRow over reach.js), so with the view off the same click on
+ *   the same linked img stops at the block again. The seam is the
+ *   annotation of a real mutation response reaching the index, the gate,
+ *   daedalus_stylish's part behavior (tree-parts.js resolve, whose
+ *   `placed` predicate is the MODEL's answer, never the DOM's) and
+ *   commit-address.js in one gesture; the node suite pins resolve with a
+ *   stubbed placed and the kernel tier pins the annotation, and only a
+ *   browser watches them agree.
  * - The picture part holds through BOTH media forms: the part's ordered
  *   forms (img on raster, svg on vector) keep .image-block-image
  *   on whatever element the media renders, so swapping to an svg keeps the
@@ -354,6 +374,58 @@ class ImageBlockBlueprintEditBehaviorTest extends WebDriverTestBase {
       'Blur after the media commit ended the edit without sending a second op.',
     );
 
+    // ——— The hoisted part under Cmd+click, unlinked. ———
+    // The Markup view decides whether the panel draws declared shell part
+    // rows, and so what a Cmd+click can reach (the reach gate); it goes ON
+    // first, through the Show menu's real toggle, so the leg below shows
+    // that reach alone does not conjure a row for a part the annotation
+    // hoisted: unlinked, the picture IS the root, the index composes no
+    // row for it, and daedalus_stylish's part behavior must decline the
+    // containment match (self-inclusive closest() finds the root) on the
+    // MODEL's placed answer. The click is synthetic because the modifier
+    // cannot ride a Mink click; it runs the same document listener a real
+    // click does. The selection is cleared first so the click commits a
+    // selection rather than re-clicking a standing one.
+    $this->assertNotNull(
+      $assert_session->waitForElement('css', '.daedalus-ui-show-menu__button'),
+      'The page elements panel is mounted with its Show kebab.',
+    );
+    $this->setMarkupView(TRUE);
+    $part_row_js = "document.querySelector('.daedalus-ui-tree [data-tree-address=\"block:$component_uuid::.image-block-image\"]')";
+    $this->assertJsCondition(
+      "$part_row_js === null && document.querySelector(\"$leaf\").matches('img.image-block-image')",
+      20000,
+      'Unlinked with the Markup view on, the panel draws no row for the hoisted picture part: the part is the root, so there is no row to reach.',
+    );
+    $session->executeScript('Drupal.Daedalus.Selection.clear();');
+    $this->assertJsCondition(
+      'Drupal.Daedalus.Selection.getSelected() === null',
+      20000,
+      'The selection cleared before the unlinked Cmd+click.',
+    );
+    $this->cmdClick($leaf);
+    $this->assertJsCondition(
+      "Drupal.Daedalus.Selection.getSelected() === 'block:$component_uuid'"
+      . ' && Drupal.Daedalus.Selection.getTarget() === null',
+      20000,
+      'Cmd+click on the unlinked img selected the block with no styling target: the hoisted part has no row, so the canvas offers no part either.',
+    );
+    // Parenthesised: JS refuses `??` beside `&&` in one expression, and every
+    // condition below conjoins this with the target crumb.
+    $current_crumb_js = "(document.querySelector('.daedalus-ui-breadcrumb .daedalus-ui-breadcrumb__crumb--current')?.textContent.trim() ?? null)";
+    $target_crumb_js = "document.querySelector('.daedalus-ui-breadcrumb .daedalus-ui-breadcrumb__crumb--target')";
+    $this->assertJsCondition(
+      "$current_crumb_js === 'Image' && $target_crumb_js === null",
+      20000,
+      'The breadcrumb ends on the block (Image) with no target crumb after the unlinked Cmd+click.',
+    );
+    $session->executeScript('Drupal.Daedalus.Selection.clear();');
+    $this->assertJsCondition(
+      'Drupal.Daedalus.Selection.getSelected() === null && Drupal.Daedalus.Selection.getTarget() === null',
+      20000,
+      'The selection cleared again after the unlinked Cmd+click; the Markup view stays on for the linked leg.',
+    );
+
     // Staged, not committed: the whole layout lives in tempstore; the saved
     // node still has no layout override.
     $storage = \Drupal::entityTypeManager()->getStorage('node');
@@ -443,6 +515,80 @@ class ImageBlockBlueprintEditBehaviorTest extends WebDriverTestBase {
       JS,
       20000,
       'Linked server render: the img carries the part class, the anchor root does not.',
+    );
+
+    // ——— The hoisted part under Cmd+click, linked. ———
+    // The link mutation's response re-rendered the block with the img
+    // nested under the anchor root, and its annotation now carries the
+    // picture as a declared shell part: with the Markup view still on the
+    // index composes the Raster row (the part's matched-form label), the
+    // reach gate admits it, the part behavior's placed answer flips, and
+    // the SAME Cmd+click on the img commits the block with the part as
+    // the styling target (commit-address.js: the owner selected, the
+    // selector the target) and the breadcrumb trails to Raster as a
+    // target crumb. Read from the spine's target facet and the rendered
+    // nav, never the inspector (one consumer among several).
+    $linked_picture = "{$wrapper} img.image-block-image";
+    $this->assertJsCondition(
+      "$part_row_js !== null && ($part_row_js).textContent.includes('Raster')",
+      20000,
+      'Linked with the Markup view on, the panel draws the picture part\'s Raster row: the annotation of the real link mutation reached the index.',
+    );
+    $session->executeScript('Drupal.Daedalus.Selection.clear();');
+    $this->assertJsCondition(
+      'Drupal.Daedalus.Selection.getSelected() === null',
+      20000,
+      'The selection cleared before the linked Cmd+click.',
+    );
+    $this->cmdClick($linked_picture);
+    $this->assertJsCondition(
+      "Drupal.Daedalus.Selection.getSelected() === 'block:$component_uuid'"
+      . " && Drupal.Daedalus.Selection.getTarget()?.key === 'block:$component_uuid'"
+      . " && Drupal.Daedalus.Selection.getTarget()?.selector === '.image-block-image'",
+      20000,
+      'Cmd+click on the linked img selected the block and targeted the picture part: {key: block, selector: .image-block-image} on the spine.',
+    );
+    $this->assertJsCondition(
+      "$current_crumb_js === 'Raster' && $target_crumb_js !== null"
+      . " && ($target_crumb_js).classList.contains('daedalus-ui-breadcrumb__crumb--current')",
+      20000,
+      'The breadcrumb ends on Raster as the target crumb after the linked Cmd+click.',
+    );
+
+    // The reach gate: the Markup view back off, the shell row is not
+    // drawn, and the same click on the same linked img stops at the block
+    // (no target), exactly where the keyboard and the breadcrumb stop.
+    // The view stays off from here so the rest of the class runs over the
+    // default tree.
+    $this->setMarkupView(FALSE);
+    $this->assertJsCondition(
+      "$part_row_js === null",
+      20000,
+      'With the Markup view off the panel dropped the Raster row.',
+    );
+    $session->executeScript('Drupal.Daedalus.Selection.clear();');
+    $this->assertJsCondition(
+      'Drupal.Daedalus.Selection.getSelected() === null && Drupal.Daedalus.Selection.getTarget() === null',
+      20000,
+      'The selection and its target cleared before the view-off Cmd+click.',
+    );
+    $this->cmdClick($linked_picture);
+    $this->assertJsCondition(
+      "Drupal.Daedalus.Selection.getSelected() === 'block:$component_uuid'"
+      . ' && Drupal.Daedalus.Selection.getTarget() === null',
+      20000,
+      'Cmd+click on the linked img with the Markup view off selected the block with no target: the reach gate stops the canvas where the panel stops.',
+    );
+    $this->assertJsCondition(
+      "$current_crumb_js === 'Image' && $target_crumb_js === null",
+      20000,
+      'The breadcrumb ends on the block (Image) with no target crumb when the Raster row is not depicted.',
+    );
+    $session->executeScript('Drupal.Daedalus.Selection.clear();');
+    $this->assertJsCondition(
+      'Drupal.Daedalus.Selection.getSelected() === null',
+      20000,
+      'The selection cleared after the reach-gate leg.',
     );
 
     // Links are selection surfaces, not navigation: a REAL pointer
@@ -968,6 +1114,34 @@ class ImageBlockBlueprintEditBehaviorTest extends WebDriverTestBase {
     $session->executeScript("Drupal.Daedalus.Selection.select('block:$component_uuid');");
     $session->executeScript("document.querySelector(" . json_encode($css) . ").scrollIntoView({ block: 'center' });");
     $session->getPage()->find('css', $css)->doubleClick();
+  }
+
+  /**
+   * Cmd+clicks an element through the pointer grammar's click listener.
+   *
+   * The modifier is the one depth signal (depth-policy.js isDeep: metaKey
+   * or ctrlKey): the click resolves the deepest DEPICTED thing under the
+   * pointer, an element always, a part only while the panel draws its
+   * row. The OS-level modifier state cannot ride a Mink click, so the
+   * event is dispatched; it runs the same document listener a real click
+   * does (selector-events.js onClick), the path the stylish classes'
+   * deep-select legs take.
+   *
+   * @param string $css
+   *   A CSS selector for the element to click (document.querySelector).
+   */
+  private function cmdClick(string $css): void {
+    $selector = json_encode($css);
+    $this->getSession()->executeScript(<<<JS
+      (() => {
+        const target = document.querySelector($selector);
+        if (!target) {
+          throw new Error('cmdClick: no element matches ' + $selector);
+        }
+        target.scrollIntoView({ block: 'center' });
+        target.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, metaKey: true }));
+      })();
+      JS);
   }
 
   /**

@@ -38,7 +38,7 @@ final class LayoutDefaultsSchemaHooks {
    */
   #[Hook('daedalus_blueprint_schema_alter')]
   public function schemaAlter(array &$schema, array &$context): void {
-    if (empty($schema['layout_builder__layout']['available_layouts'])) {
+    if (empty($schema['layout']['available_layouts'])) {
       return;
     }
 
@@ -47,7 +47,7 @@ final class LayoutDefaultsSchemaHooks {
     // describes rendered pages, not the editing request's admin theme).
     $theme = $this->declarations->siteTheme();
     $touched = FALSE;
-    foreach ($schema['layout_builder__layout']['available_layouts'] as &$layout) {
+    foreach ($schema['layout']['available_layouts'] as &$layout) {
       $id = $layout['id'] ?? NULL;
       if (!is_string($id)) {
         continue;

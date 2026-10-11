@@ -44,10 +44,23 @@ import { fillWithSample } from './daedalus_edit/sample-fill.js';
     label: Drupal.t('Edit'),
     icon: '<svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 256 256"><path d="M227.31,73.37,182.63,28.68a16,16,0,0,0-22.63,0L36.69,152A15.86,15.86,0,0,0,32,163.31V208a16,16,0,0,0,16,16H92.69A15.86,15.86,0,0,0,104,219.31L227.31,96a16,16,0,0,0,0-22.63ZM92.69,208H48V163.31l88-88L180.69,120ZM192,108.68,147.31,64l24-24L216,84.68Z"></path></svg>',
     kinds: ['field', 'block', 'entity'],
+    // Editing is content: a field's value, an inline block's fields, the
+    // root's form. On a plain host a field block placement presenting
+    // the page's OWN field carries content (the spine's verdict), so the
+    // leaf still edits in place; the template's own blocks carry none.
+    capability: 'content',
     applies: (key) => {
       if (key.startsWith('entity:')) {
-        const root = Drupal.Daedalus.Blueprint.getRoot();
-        return !!root && key === `entity:${root.uuid}`;
+        // The root's Edit is the entity-form panel: a root whose
+        // blueprint carries no `fields` (a template host) has no form
+        // to present, so the door is inert there.
+        const { Blueprint } = Drupal.Daedalus;
+        const root = Blueprint.getRoot();
+        return (
+          !!root &&
+          key === `entity:${root.uuid}` &&
+          Blueprint.getBlueprint()?.fields !== undefined
+        );
       }
       // Only PLACEMENT keys (block:{uuid}, two segments) are gated on
       // merged; block:{uuid}:{name} keys are semantically fields (the
@@ -85,6 +98,7 @@ import { fillWithSample } from './daedalus_edit/sample-fill.js';
     label: Drupal.t('Fill with sample'),
     icon: '<svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 256 256"><path d="M208,144a15.78,15.78,0,0,1-10.42,14.94L146,178l-19.07,51.6a16,16,0,0,1-29.88,0L78,178l-51.6-19.07a16,16,0,0,1,0-29.88L78,110l19.07-51.6a16,16,0,0,1,29.88,0L146,110l51.6,19.07A15.78,15.78,0,0,1,208,144Zm-56-96h16V64a8,8,0,0,0,16,0V48h16a8,8,0,0,0,0-16H184V16a8,8,0,0,0-16,0V32H152a8,8,0,0,0,0,16Zm88,32h-8V72a8,8,0,0,0-16,0v8h-8a8,8,0,0,0,0,16h8v8a8,8,0,0,0,16,0V96h8a8,8,0,0,0,0-16Z"></path></svg>',
     kinds: ['field'],
+    capability: 'content',
     applies: (key) => isEmptyValue(mirrorValueForKey(key)),
     weight: 5,
     run: (key) => {

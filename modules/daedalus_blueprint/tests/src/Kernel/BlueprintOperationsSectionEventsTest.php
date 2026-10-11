@@ -157,8 +157,8 @@ class BlueprintOperationsSectionEventsTest extends BlueprintKernelTestBase {
    *   The root entity.
    */
   protected function assertOwnerIsRoot(object $event, object $entity): void {
-    $this->assertSame('entity_test', $event->getEntity()->getEntityTypeId());
-    $this->assertSame($entity->uuid(), $event->getEntity()->uuid());
+    $this->assertSame('entity_test', $event->getHost()->entityTypeId());
+    $this->assertSame($entity->uuid(), $event->getHost()->uuid());
   }
 
   /**
@@ -168,7 +168,7 @@ class BlueprintOperationsSectionEventsTest extends BlueprintKernelTestBase {
     $entity = $this->createEntityWithNestedSection();
 
     $section_uuid = (new PhpUuid())->generate();
-    $result = $this->operations->addSection($entity, [
+    $result = $this->operations->addSection($this->host($entity), [
       'anchor' => $entity->uuid(),
       'placement' => 'inside',
     ], $section_uuid);
@@ -192,13 +192,13 @@ class BlueprintOperationsSectionEventsTest extends BlueprintKernelTestBase {
     $this->container->get('event_dispatcher')->addListener(
       SectionCreatedEvent::class,
       static function (SectionCreatedEvent $event): void {
-        $event->addTarget($event->getEntity()->uuid(), 'field_listener');
-        $event->addTarget($event->getEntity()->uuid(), 'field_listener');
+        $event->addTarget($event->getHost()->uuid(), 'field_listener');
+        $event->addTarget($event->getHost()->uuid(), 'field_listener');
       },
     );
 
     $section_uuid = (new PhpUuid())->generate();
-    $result = $this->operations->addSection($entity, [
+    $result = $this->operations->addSection($this->host($entity), [
       'anchor' => $entity->uuid(),
       'placement' => 'inside',
     ], $section_uuid);
@@ -222,7 +222,7 @@ class BlueprintOperationsSectionEventsTest extends BlueprintKernelTestBase {
     $entity = $this->createEntityWithNestedSection();
 
     $section_uuid = (new PhpUuid())->generate();
-    $result = $this->operations->addSection($entity, [
+    $result = $this->operations->addSection($this->host($entity), [
       'anchor' => $this->rootSectionUuid,
       'placement' => 'after',
     ], $section_uuid);
@@ -245,7 +245,7 @@ class BlueprintOperationsSectionEventsTest extends BlueprintKernelTestBase {
     $entity = $this->createEntityWithNestedSection();
 
     $section_uuid = (new PhpUuid())->generate();
-    $result = $this->operations->addSection($entity, [
+    $result = $this->operations->addSection($this->host($entity), [
       'anchor' => $this->nestedSectionUuid,
       'placement' => 'after',
     ], $section_uuid);
@@ -271,7 +271,7 @@ class BlueprintOperationsSectionEventsTest extends BlueprintKernelTestBase {
     $entity = $this->createEntityWithNestedSection();
 
     $section_uuid = (new PhpUuid())->generate();
-    $result = $this->operations->addSection($entity, [
+    $result = $this->operations->addSection($this->host($entity), [
       'anchor' => $this->nestedSectionUuid,
       'placement' => 'inside',
     ], $section_uuid);
@@ -289,7 +289,7 @@ class BlueprintOperationsSectionEventsTest extends BlueprintKernelTestBase {
   public function testNoCreatedEventOnFailure(): void {
     $entity = $this->createEntityWithNestedSection();
 
-    $result = $this->operations->addSection($entity, [
+    $result = $this->operations->addSection($this->host($entity), [
       'anchor' => '266985a2-5059-ae4c-d8ac-2dd69846853e',
       'placement' => 'after',
     ]);
@@ -310,7 +310,7 @@ class BlueprintOperationsSectionEventsTest extends BlueprintKernelTestBase {
 
     $section_uuid = (new PhpUuid())->generate();
     $result = $this->operations->addSection(
-      $entity,
+      $this->host($entity),
       ['anchor' => $entity->uuid(), 'placement' => 'inside'],
       $section_uuid,
       'layout_twocol_section',
@@ -334,7 +334,7 @@ class BlueprintOperationsSectionEventsTest extends BlueprintKernelTestBase {
    */
   protected function addRootSibling(object $entity): string {
     $section_uuid = (new PhpUuid())->generate();
-    $result = $this->operations->addSection($entity, [
+    $result = $this->operations->addSection($this->host($entity), [
       'anchor' => $this->rootSectionUuid,
       'placement' => 'after',
     ], $section_uuid);
@@ -377,7 +377,7 @@ class BlueprintOperationsSectionEventsTest extends BlueprintKernelTestBase {
     $entity = $this->createEntityWithNestedSection();
     $section_uuid = $this->addRootSibling($entity);
 
-    $result = $this->operations->moveElement($entity, $section_uuid, [
+    $result = $this->operations->moveElement($this->host($entity), $section_uuid, [
       'anchor' => $this->nestedSectionUuid,
       'placement' => 'after',
     ]);
@@ -398,7 +398,7 @@ class BlueprintOperationsSectionEventsTest extends BlueprintKernelTestBase {
   public function testMovedEventSectionNestedToRoot(): void {
     $entity = $this->createEntityWithNestedSection();
 
-    $result = $this->operations->moveElement($entity, $this->nestedSectionUuid, [
+    $result = $this->operations->moveElement($this->host($entity), $this->nestedSectionUuid, [
       'anchor' => $this->rootSectionUuid,
       'placement' => 'after',
     ]);
@@ -415,7 +415,7 @@ class BlueprintOperationsSectionEventsTest extends BlueprintKernelTestBase {
     $entity = $this->createEntityWithNestedSection();
     $section_uuid = $this->addRootSibling($entity);
 
-    $result = $this->operations->moveElement($entity, $section_uuid, [
+    $result = $this->operations->moveElement($this->host($entity), $section_uuid, [
       'anchor' => $this->rootSectionUuid,
       'placement' => 'before',
     ]);
@@ -439,13 +439,13 @@ class BlueprintOperationsSectionEventsTest extends BlueprintKernelTestBase {
     $entity = $this->createEntityWithNestedSection();
 
     $sibling_uuid = (new PhpUuid())->generate();
-    $add = $this->operations->addSection($entity, [
+    $add = $this->operations->addSection($this->host($entity), [
       'anchor' => $this->nestedSectionUuid,
       'placement' => 'after',
     ], $sibling_uuid);
     $this->assertTrue($add->isSuccess(), print_r($add->toArray()['errors'] ?? [], TRUE));
 
-    $result = $this->operations->moveElement($entity, $sibling_uuid, [
+    $result = $this->operations->moveElement($this->host($entity), $sibling_uuid, [
       'anchor' => $this->nestedSectionUuid,
       'placement' => 'inside',
     ]);
@@ -465,7 +465,7 @@ class BlueprintOperationsSectionEventsTest extends BlueprintKernelTestBase {
     $entity = $this->createEntityWithNestedSection();
 
     $block_uuid = (new PhpUuid())->generate();
-    $add = $this->operations->addElement($entity, [
+    $add = $this->operations->addElement($this->host($entity), [
       'anchor' => $this->rootSectionUuid,
       'placement' => 'inside',
     ], [
@@ -474,7 +474,7 @@ class BlueprintOperationsSectionEventsTest extends BlueprintKernelTestBase {
     ]);
     $this->assertTrue($add->isSuccess(), print_r($add->toArray()['errors'] ?? [], TRUE));
 
-    $result = $this->operations->moveElement($entity, $block_uuid, [
+    $result = $this->operations->moveElement($this->host($entity), $block_uuid, [
       'anchor' => $this->nestedSectionUuid,
       'placement' => 'inside',
     ]);
@@ -497,11 +497,11 @@ class BlueprintOperationsSectionEventsTest extends BlueprintKernelTestBase {
     $this->container->get('event_dispatcher')->addListener(
       ElementMovedEvent::class,
       static function (ElementMovedEvent $event): void {
-        $event->addTarget($event->getEntity()->uuid(), 'field_listener');
+        $event->addTarget($event->getHost()->uuid(), 'field_listener');
       },
     );
 
-    $result = $this->operations->moveElement($entity, $this->nestedSectionUuid, [
+    $result = $this->operations->moveElement($this->host($entity), $this->nestedSectionUuid, [
       'anchor' => $this->rootSectionUuid,
       'placement' => 'after',
     ]);
@@ -522,7 +522,7 @@ class BlueprintOperationsSectionEventsTest extends BlueprintKernelTestBase {
   public function testNoMovedEventOnFailure(): void {
     $entity = $this->createEntityWithNestedSection();
 
-    $result = $this->operations->moveElement($entity, $this->nestedSectionUuid, [
+    $result = $this->operations->moveElement($this->host($entity), $this->nestedSectionUuid, [
       'anchor' => '266985a2-5059-ae4c-d8ac-2dd69846853e',
       'placement' => 'after',
     ]);

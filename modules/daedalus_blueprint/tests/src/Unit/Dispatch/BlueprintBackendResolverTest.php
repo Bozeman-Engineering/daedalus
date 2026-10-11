@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Drupal\Tests\daedalus_blueprint\Unit\Dispatch;
 
+use Drupal\Core\Entity\EntityInterface;
 use Drupal\daedalus_blueprint\Dispatch\BlueprintBackendInterface;
 use Drupal\daedalus_blueprint\Dispatch\BlueprintBackendResolver;
 use Drupal\Tests\UnitTestCase;
@@ -83,6 +84,31 @@ class BlueprintBackendResolverTest extends UnitTestCase {
     // hasBackend mirrors resolve() !== NULL for supported types.
     $this->assertTrue($resolver->hasBackend('view'));
     $this->assertTrue($resolver->hasBackend('node'));
+  }
+
+  /**
+   * Tests the entity-level door: resolveFor() asks supportsEntity() in order.
+   *
+   * What an entity IS decides its backend, not its type id: the first
+   * backend in priority order that claims the entity wins, and no claim
+   * yields NULL.
+   */
+  public function testResolveForAsksBackendsAboutTheEntity(): void {
+    $resolver = new BlueprintBackendResolver();
+    $claimed = $this->createMock(EntityInterface::class);
+    $unclaimed = $this->createMock(EntityInterface::class);
+
+    $backendA = $this->createMock(BlueprintBackendInterface::class);
+    $backendA->method('supportsEntity')->willReturn(FALSE);
+    $backendB = $this->createMock(BlueprintBackendInterface::class);
+    $backendB->method('supportsEntity')->willReturnCallback(
+      static fn (EntityInterface $entity): bool => $entity === $claimed,
+    );
+    $resolver->addBackend($backendA);
+    $resolver->addBackend($backendB);
+
+    $this->assertSame($backendB, $resolver->resolveFor($claimed));
+    $this->assertNull($resolver->resolveFor($unclaimed));
   }
 
   /**

@@ -37,6 +37,7 @@ final class ActivationVotersWiringTest extends KernelTestBase {
     'field',
     'layout_discovery',
     'layout_builder',
+    'daedalus_blueprint',
     'daedalus_tempstore',
     'entity_test',
   ];

@@ -15,14 +15,14 @@
  */
 
 import { axisLabel } from './variant-scope.js';
-import { stencilLabel } from './library-model.js';
+import { blueprintLabel } from './library-model.js';
 import { listboxHome } from './palette-picker-model.js';
 
 /**
  * Whether a variant answers a search needle.
  *
  * Type-to-filter over the things a user knows a variant by: its label,
- * its axis's label, its owner's label when a stencil owns it (the
+ * its axis's label, its owner's label when a blueprint owns it (the
  * heading it sits under), and its description (the when-to-reach-for-
  * this text the AI reads from the same record). Case-insensitive; every
  * whitespace-separated token of the needle must land somewhere in that
@@ -36,7 +36,7 @@ import { listboxHome } from './palette-picker-model.js';
  * @param {string} needle
  *   The search text, raw.
  * @param {string} [ownerLabelText]
- *   The display label of the owning stencil, '' when unowned.
+ *   The display label of the owning blueprint, '' when unowned.
  *
  * @return {boolean}
  */
@@ -73,9 +73,9 @@ export const matchesNeedle = (
  * not offered, because the vocabulary is where depth enters (a root-only
  * axis at nested depth: variant-scope.js axisVocabulary) and an offer the
  * scope cannot wear would dress an axis it has no row for. Within an
- * axis, ownership is the heading: a stencil-owned variant (the offer
+ * axis, ownership is the heading: a blueprint-owned variant (the offer
  * already gated it to the owner's placements) lands in a leading group
- * labeled by its stencil (library-model.js stencilLabel, either
+ * labeled by its blueprint (library-model.js blueprintLabel, either
  * ownership lane since the roster names both by one machine name), the
  * unowned stay in the axis's own group after it. Ownership names the
  * curated set; the axis stays the competition rule (Form A), so an
@@ -98,7 +98,7 @@ export const matchesNeedle = (
  * @param {?object} context.guide
  *   The style guide (axis labels).
  * @param {object} context.materials
- *   The materials roster (the owners' stencil records).
+ *   The materials roster (the owners' blueprint records).
  * @param {string} [context.search]
  *   The search text.
  * @param {?string} [context.axis]
@@ -108,7 +108,7 @@ export const matchesNeedle = (
  *   string, options: Array<{id: string, label: string, hint: ?{resolved:
  *   number, total: number}, worn: boolean, description: string}>}>}
  *   `key` is unique per group (the axis, or "axis:owner"): the view's
- *   identity for it. `owner` is the owning stencil's id on an owner
+ *   identity for it. `owner` is the owning blueprint's id on an owner
  *   group, null on an axis group. `hint` carries the fit facts when the
  *   variant fits fewer slots than it addresses (the view phrases "fits N
  *   of M slots"), null on a full fit; `description` is '' when the
@@ -152,7 +152,7 @@ export const pickerGroups = ({
         key: `${slot.generic.axis}:${owner}`,
         axis: slot.generic.axis,
         owner,
-        label: stencilLabel(owner, materials),
+        label: blueprintLabel(owner, materials),
         options: [],
       });
     }

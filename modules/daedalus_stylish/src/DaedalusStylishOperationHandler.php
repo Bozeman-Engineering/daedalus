@@ -4,21 +4,23 @@ declare(strict_types=1);
 
 namespace Drupal\daedalus_stylish;
 
-use Drupal\Core\Entity\FieldableEntityInterface;
+use Drupal\daedalus_blueprint\Host\HostInterface;
+use Drupal\Core\Session\AccountProxyInterface;
 use Drupal\daedalus_blueprint\Access\BlueprintAccessChecker;
+use Drupal\daedalus_blueprint\Capability\Requirement;
+use Drupal\daedalus_blueprint\Dialect\PageLanguageOperationsInterface;
 use Drupal\daedalus_blueprint\Dialect\PageOnlyOperationsInterface;
 use Drupal\daedalus_blueprint\Materials\RelativeSelector;
 use Drupal\daedalus_blueprint\Result\BlueprintError;
 use Drupal\daedalus_blueprint\Result\BlueprintResult;
 use Drupal\daedalus_blueprint\Result\BlueprintWarning;
-use Drupal\daedalus_stylish\Plugin\Field\FieldType\StyleMapItem;
 use Drupal\daedalus_stylish\Plugin\PropertyGroup\GeneratedContent;
 
 /**
  * Registers Daedalus Stylish's batch operations with daedalus_blueprint.
  *
- * Four operations join the batch grammar, all built on the layered entry
- * model: an entry's own condition-keyed properties are OVERRIDES that layer
+ * Four element operations join the batch grammar, all built on the layered
+ * entry model: an entry's own condition-keyed properties are OVERRIDES that layer
  * over the variants its "variants" list references and win on conflict, so
  * following a variant and tweaking on top are not mutually exclusive.
  * - update_style: a PATCH against one selectable key's styles. Values merge
@@ -93,6 +95,28 @@ use Drupal\daedalus_stylish\Plugin\PropertyGroup\GeneratedContent;
  *   lookup itself stays values-only, and no detach ever mints or strands
  *   a nested reference.
  *
+ * A fifth operation is the site-scope twin of update_style:
+ * - update_default: a PATCH against one SCOPE's default styles on the
+ *   active skin ({scope, key, condition, properties}: "base:h2",
+ *   "kind:container", "block_type:text", "block_plugin:system_menu_block",
+ *   "layout:layout_onecol"; the key is "" for the scope's element or "::"
+ *   plus a relative selector under it). Values merge into the scope's
+ *   entry under a condition, null values unset. The write lands where
+ *   every skin gesture lands (SkinManager::writesSiteLayer()): the skin's
+ *   SITE layer on a consuming site, so a package update still shows
+ *   through and unsetting a site value reveals the package's; the skin's
+ *   one layer on the site's own skin or under the developer gate. Every
+ *   property set is validated through the defaults seam
+ *   (StyleMapValidator::validateDefaults()) against the skin's tokens AS
+ *   WORN (the merge of both layers), the same gate the disk lane's sync
+ *   takes. The gesture is a revisioned save of the skin, gated by "edit
+ *   skin defaults"; the batch's own entity is only the page the gesture
+ *   rides (a default has no home but the skin), exactly as a material
+ *   gesture rides a page. It is a page-language op (page_edit admits it:
+ *   the page language spells no skin default), while the four element ops
+ *   are page-only (the page language spells them as CSS and class
+ *   attributes).
+ *
  * Both interfaces (the inspector panel's op queue and the AI's batch tool)
  * land here, and everything written is validated by the same
  * StyleMapValidator that guards whole-map writes through the field handler.
@@ -100,7 +124,12 @@ use Drupal\daedalus_stylish\Plugin\PropertyGroup\GeneratedContent;
  * a tightened style guide never blocks cleaning up styles it no longer
  * permits.
  */
-class DaedalusStylishOperationHandler implements PageOnlyOperationsInterface {
+class DaedalusStylishOperationHandler implements PageOnlyOperationsInterface, PageLanguageOperationsInterface {
+
+  /**
+   * The site defaults op.
+   */
+  public const UPDATE_DEFAULT = 'update_default';
 
   /**
    * Constructs the operation handler.
@@ -115,6 +144,11 @@ class DaedalusStylishOperationHandler implements PageOnlyOperationsInterface {
    *   The condition type plugin manager.
    * @param \Drupal\daedalus_stylish\StyleValueResolver $valueResolver
    *   The style value resolver.
+   * @param \Drupal\daedalus_stylish\SkinManager $skinManager
+   *   The skin manager: update_default's active skin, layer rule and
+   *   revisioned save.
+   * @param \Drupal\Core\Session\AccountProxyInterface $currentUser
+   *   The current user, update_default's permission gate.
    * @param iterable<\Drupal\daedalus_stylish\VariantApplicabilityCheckerInterface> $applicabilityCheckers
    *   The applicability seam (tag daedalus_stylish.variant_applicability_checker):
    *   cross-module vetoes consulted before a NEW apply of a variant.
@@ -125,6 +159,8 @@ class DaedalusStylishOperationHandler implements PageOnlyOperationsInterface {
     protected SubtreeSlotKeys $subtreeSlotKeys,
     protected ConditionTypePluginManager $conditionTypes,
     protected StyleValueResolver $valueResolver,
+    protected SkinManager $skinManager,
+    protected AccountProxyInterface $currentUser,
     protected iterable $applicabilityCheckers = [],
   ) {}
 
@@ -132,7 +168,27 @@ class DaedalusStylishOperationHandler implements PageOnlyOperationsInterface {
    * {@inheritdoc}
    */
   public function getOperations(): array {
-    return ['update_style', 'apply_variant', 'remove_variant', 'detach_variant'];
+    return ['update_style', 'apply_variant', 'remove_variant', 'detach_variant', self::UPDATE_DEFAULT];
+  }
+
+  /**
+   * {@inheritdoc}
+   *
+   * The four element ops ask style of the element their key addresses (a
+   * rule key or a field key resolves to its element), so a foreign
+   * element's styles, a translation's, or a host the actor may not update
+   * are refused at the door before any map is read. update_default writes
+   * the skin, not the page: nothing to judge on an element (its own gate
+   * is the "edit skin defaults" permission).
+   */
+  public function getRequirements(): array {
+    return [
+      'update_style' => [Requirement::styleKey()],
+      'apply_variant' => [Requirement::styleKey()],
+      'remove_variant' => [Requirement::styleKey()],
+      'detach_variant' => [Requirement::styleKey()],
+      self::UPDATE_DEFAULT => [],
+    ];
   }
 
   /**
@@ -144,23 +200,37 @@ class DaedalusStylishOperationHandler implements PageOnlyOperationsInterface {
    * page-language site the JSON spellings leave eb_edit's roll-call.
    */
   public function getPageOnlyOperations(): array {
-    return $this->getOperations();
+    return ['update_style', 'apply_variant', 'remove_variant', 'detach_variant'];
+  }
+
+  /**
+   * {@inheritdoc}
+   *
+   * The site defaults op has no page-language spelling (a skin default is
+   * no element's CSS), so page_edit admits the JSON op itself, riding a
+   * page batch the way a material gesture does.
+   */
+  public function getPageLanguageOperations(): array {
+    return [self::UPDATE_DEFAULT];
   }
 
   /**
    * {@inheritdoc}
    */
-  public function apply(FieldableEntityInterface $entity, array $operation, array $options = []): BlueprintResult {
+  public function apply(HostInterface $host, array $operation, array $options = []): BlueprintResult {
+    if ($operation['op'] === self::UPDATE_DEFAULT) {
+      return $this->updateDefault($host, $operation, $options);
+    }
     $key = $operation['key'] ?? NULL;
-    if ($errors = $this->validateTarget($entity, $key)) {
+    if ($errors = $this->validateTarget($host, $key)) {
       return BlueprintResult::structuralFailure($errors);
     }
 
     return match ($operation['op']) {
-      'update_style' => $this->updateStyle($entity, $key, $operation, $options),
-      'apply_variant' => $this->applyVariant($entity, $key, $operation),
-      'remove_variant' => $this->removeVariant($entity, $key, $operation),
-      'detach_variant' => $this->detachVariant($entity, $key, $operation),
+      'update_style' => $this->updateStyle($host, $key, $operation, $options),
+      'apply_variant' => $this->applyVariant($host, $key, $operation),
+      'remove_variant' => $this->removeVariant($host, $key, $operation),
+      'detach_variant' => $this->detachVariant($host, $key, $operation),
     };
   }
 
@@ -173,13 +243,181 @@ class DaedalusStylishOperationHandler implements PageOnlyOperationsInterface {
       'apply_variant' => 'with "key" (an element or rule key; a rule wears at its matches, never a composition or root-only axis) and "variant"; dresses it, replacing its same-axis reference (the class and axis attributes are the taught form)',
       'remove_variant' => 'with "key" (an element or rule key) and "variant" (a reference the entry carries); undresses it WITHOUT materializing, so the look changes (dropping the class or nulling the axis attribute is the taught form)',
       'detach_variant' => 'with "key" (an element or rule key) and "variant"; materializes its styles into the entry\'s own properties (a rule\'s parts continue under it) and unlinks it, keeping the look (set\'s detach list is the taught form)',
+      self::UPDATE_DEFAULT => 'with "scope" (base:{tag}, kind:{kind}, block_type:{bundle}, block_plugin:{id}, layout:{id}) and "properties" {css-property: value; null unsets}, optional "key" ("::" plus a relative selector under the scope\'s element) and "condition"; the active skin\'s default look for every element of the scope',
     ];
+  }
+
+  /**
+   * Applies an update_default operation: one scope's defaults, patched.
+   *
+   * @param \Drupal\Core\Entity\HostInterface $host
+   *   The batch's entity: the page the gesture rides, untouched (the
+   *   write is the active skin's).
+   * @param array $operation
+   *   The operation: scope, optional key ('' for the scope's element or
+   *   "::" plus a relative selector) and condition, and properties.
+   * @param array $options
+   *   The batch options; 'conversation' reaches the style value seam so a
+   *   handled value naming something the conversation holds resolves.
+   */
+  protected function updateDefault(HostInterface $host, array $operation, array $options = []): BlueprintResult {
+    $errors = [];
+    $scope = $operation['scope'] ?? NULL;
+    if (!is_string($scope) || $scope === '') {
+      $errors[] = new BlueprintError('scope', 'MISSING_PARAMETER', 'A non-empty scope is required.', [], 'Name the scope the default styles: "base:{tag}" (bare prose markup), "kind:{entity|container|field|block}", "block_type:{bundle}", "block_plugin:{plugin_id}" or "layout:{layout_id}".');
+    }
+    $key = $operation['key'] ?? '';
+    if (!is_string($key) || ($key !== '' && !str_starts_with($key, RelativeSelector::SUFFIX))) {
+      $errors[] = new BlueprintError('key', 'INVALID_STYLE_KEY', 'The key must be "" (the scope\'s element) or "::" plus a relative selector under it.', [], 'Omit the key to style the scope\'s element itself; "::.class-name" styles a declared part, "::p" its paragraphs, "::> *" its children. ' . RelativeSelector::GRAMMAR);
+    }
+    $condition = $operation['condition'] ?? 'default';
+    if (!is_string($condition) || $condition === '') {
+      $errors[] = new BlueprintError('condition', 'INVALID_STYLE_CONDITION', 'The condition must be a condition name.', [], 'Condition names are lowercase tokens such as "default", "hover", or "narrow"; omit the parameter for "default".');
+    }
+    $properties = $operation['properties'] ?? [];
+    if (!is_array($properties) || (array_is_list($properties) && $properties !== [])) {
+      $errors[] = new BlueprintError('properties', 'INVALID_STYLE_ENTRY', 'The properties parameter is not a property map.', [], 'Provide an object mapping CSS property names to values, e.g. {"font-size": "var(--text-2xl)"} — null values unset.');
+      $properties = [];
+    }
+    if (!$errors && $properties === []) {
+      $errors[] = new BlueprintError('properties', 'MISSING_PARAMETER', 'The operation changes nothing.', [], 'Provide "properties" values to set or unset.');
+    }
+    if ($errors) {
+      return BlueprintResult::structuralFailure($errors);
+    }
+
+    // The grade is the gesture's, not the page's: a default restyles every
+    // element of the scope site-wide, whatever page the batch rides.
+    if (!$this->currentUser->hasPermission('edit skin defaults') && !$this->currentUser->hasPermission('administer skins')) {
+      return BlueprintResult::semanticFailure([
+        new BlueprintError('', 'PERMISSION_DENIED', 'Editing skin defaults requires the "edit skin defaults" permission.', ['permission' => 'edit skin defaults'], 'Ask an administrator for the permission, or style the element itself with update_style.'),
+      ]);
+    }
+    $skin = $this->skinManager->loadActiveSkin();
+    if ($skin === NULL) {
+      return BlueprintResult::semanticFailure([
+        new BlueprintError('scope', 'STYLE_SKIN_NONE_ACTIVE', 'No skin is active: a site default is a fact of the active skin.', [], 'Activate a design system that carries a skin, or create a skin and make it the active system\'s default_skin, then set its defaults.'),
+      ]);
+    }
+
+    // Validate exactly what is being set through the defaults seam, as a
+    // one-scope map, against the skin's tokens AS WORN: a default delivers
+    // only while its skin is active, so its var() references resolve
+    // against that skin's merge of both layers, never the write-time
+    // universe alone. The input tier resolves first (CHECK), the commit
+    // waits until validation succeeded, exactly as update_style does.
+    $resolution_warnings = [];
+    $setting = array_filter($properties, static fn ($value) => $value !== NULL);
+    if ($setting) {
+      $flat = $scope . $key;
+      $resolution = $this->valueResolver->check([$flat => [$condition => $setting]], $host, (string) ($options['conversation'] ?? ''));
+      if ($resolution->getErrors()) {
+        return BlueprintResult::semanticFailure(array_map(
+          fn (BlueprintError $error) => $error->withPath($this->operationPath($error->getPath(), $flat, $condition)),
+          $resolution->getErrors(),
+        ));
+      }
+      $errors = $this->validator->validateDefaults([$scope => [$key => [$condition => $resolution->getMap()[$flat][$condition]]]], ['skin_tokens' => $skin->tokens()]);
+      if ($errors) {
+        return BlueprintResult::semanticFailure(array_map(
+          fn (BlueprintError $error) => $error->withPath($this->defaultPath($error->getPath(), $scope, $key, $condition)),
+          $errors,
+        ));
+      }
+      $properties = array_replace($properties, $resolution->commit()[$flat][$condition] ?? []);
+      $resolution_warnings = $resolution->getWarnings();
+    }
+
+    // The map write lands under the canonical compound spelling, as every
+    // defaults store holds it.
+    $condition = $this->conditionTypes->canonicalizeCondition($condition);
+
+    $site_layer = $this->skinManager->writesSiteLayer($skin);
+    $layer = $site_layer ? $skin->siteDefaults() : $skin->packageDefaults();
+    $patched = static::patchDefaults($layer, $scope, $key, $condition, $properties);
+    if ($patched === $layer) {
+      // An unset of what the layer never held: nothing to save, no
+      // revision minted.
+      return BlueprintResult::success($host, $resolution_warnings);
+    }
+    if ($site_layer) {
+      $skin->setSiteDefaults($patched);
+    }
+    else {
+      $skin->setPackageDefaults($patched);
+    }
+    $this->skinManager->saveRevision($skin, sprintf('%s%s: updated the %s defaults.', $scope, $key, $condition));
+
+    return BlueprintResult::success($host, $resolution_warnings);
+  }
+
+  /**
+   * One defaults layer with a patch applied at a scope, key and condition.
+   *
+   * Null values unset; an entry, key or scope the patch empties leaves
+   * the layer, so on a consuming site the package's value at that place
+   * shows through the merge again (SkinDefaultsItem::mergeLayers()).
+   */
+  protected static function patchDefaults(array $layer, string $scope, string $key, string $condition, array $properties): array {
+    $entry = $layer[$scope][$key][$condition] ?? [];
+    $entry = is_array($entry) ? $entry : [];
+    foreach ($properties as $property => $value) {
+      if ($value === NULL) {
+        unset($entry[$property]);
+      }
+      else {
+        $entry[$property] = $value;
+      }
+    }
+    if ($entry !== []) {
+      $layer[$scope][$key][$condition] = $entry;
+      return $layer;
+    }
+    unset($layer[$scope][$key][$condition]);
+    if (($layer[$scope][$key] ?? NULL) === []) {
+      unset($layer[$scope][$key]);
+    }
+    if (($layer[$scope] ?? NULL) === []) {
+      unset($layer[$scope]);
+    }
+    return $layer;
+  }
+
+  /**
+   * Maps a defaults-seam error path onto update_default's parameter space.
+   *
+   * The seam's paths are "{scope}", "{scope}.{key}" and
+   * "{scope}{key}.{condition}.{property}" ("{scope}.{condition}.{property}"
+   * for the scope's own element); the operation names each as a
+   * parameter, so errors point at the parameter carrying the bad value.
+   */
+  protected function defaultPath(string $path, string $scope, string $key, string $condition): string {
+    if ($path === $scope) {
+      return 'scope';
+    }
+    if (!str_starts_with($path, $scope)) {
+      return $path;
+    }
+    $remainder = ltrim(substr($path, strlen($scope)), '.');
+    if ($key !== '' && str_starts_with($remainder, $key)) {
+      $remainder = ltrim(substr($remainder, strlen($key)), '.');
+    }
+    if ($remainder === '') {
+      return 'key';
+    }
+    if ($remainder === $condition) {
+      return 'condition';
+    }
+    if (str_starts_with($remainder, "$condition.")) {
+      return 'properties.' . substr($remainder, strlen($condition) + 1);
+    }
+    return $path;
   }
 
   /**
    * Applies an update_style operation.
    *
-   * @param \Drupal\Core\Entity\FieldableEntityInterface $entity
+   * @param \Drupal\Core\Entity\HostInterface $host
    *   The entity whose style map is patched.
    * @param string $key
    *   The element or rule key the patch lands on.
@@ -189,7 +427,7 @@ class DaedalusStylishOperationHandler implements PageOnlyOperationsInterface {
    *   The batch options; 'conversation' reaches the style value seam so a
    *   handled value naming something the conversation holds resolves.
    */
-  protected function updateStyle(FieldableEntityInterface $entity, string $key, array $operation, array $options = []): BlueprintResult {
+  protected function updateStyle(HostInterface $host, string $key, array $operation, array $options = []): BlueprintResult {
     $errors = [];
     $condition = $operation['condition'] ?? 'default';
     if (!is_string($condition) || $condition === '') {
@@ -219,7 +457,7 @@ class DaedalusStylishOperationHandler implements PageOnlyOperationsInterface {
     // disappears. Variant wear never births a box (a generated box lands
     // on no element scope, so no reference is accepted at its key) and
     // detach materializes a fragment's authored content verbatim.
-    $map = $this->getStyleMap($entity);
+    $map = $this->getStyleMap($host);
     $seed = !isset($map[$key]) && RelativeSelector::splitKey($key)[1]?->pseudo !== NULL
       ? ['default' => [GeneratedContent::CONTENT => GeneratedContent::BOX]]
       : [];
@@ -234,7 +472,7 @@ class DaedalusStylishOperationHandler implements PageOnlyOperationsInterface {
     $setting = array_filter($properties, static fn ($value) => $value !== NULL);
     $entry_to_validate = $setting ? StyleEntry::merge([$condition => $setting], $seed) : [];
     if ($entry_to_validate) {
-      $resolution = $this->valueResolver->check([$key => $entry_to_validate], $entity, (string) ($options['conversation'] ?? ''));
+      $resolution = $this->valueResolver->check([$key => $entry_to_validate], $host, (string) ($options['conversation'] ?? ''));
       if ($resolution->getErrors()) {
         return BlueprintResult::semanticFailure(array_map(
           fn (BlueprintError $error) => $error->withPath($this->operationPath($error->getPath(), $key, $condition)),
@@ -242,7 +480,7 @@ class DaedalusStylishOperationHandler implements PageOnlyOperationsInterface {
         ));
       }
       $owned_warnings = [];
-      $errors = $this->validator->validate($resolution->getMap(), ['entity' => $entity], $owned_warnings);
+      $errors = $this->validator->validate($resolution->getMap(), ['host' => $host], $owned_warnings);
       if ($errors) {
         return BlueprintResult::semanticFailure(array_map(
           fn (BlueprintError $error) => $error->withPath($this->operationPath($error->getPath(), $key, $condition)),
@@ -298,13 +536,13 @@ class DaedalusStylishOperationHandler implements PageOnlyOperationsInterface {
       $map[$key] = $entry;
     }
 
-    return $this->setStyleMap($entity, $map, $resolution_warnings);
+    return $this->setStyleMap($host, $map, $resolution_warnings);
   }
 
   /**
    * Applies an apply_variant operation.
    */
-  protected function applyVariant(FieldableEntityInterface $entity, string $key, array $operation): BlueprintResult {
+  protected function applyVariant(HostInterface $host, string $key, array $operation): BlueprintResult {
     $variant = $operation['variant'] ?? NULL;
     if (!is_string($variant) || $variant === '') {
       return BlueprintResult::structuralFailure([
@@ -317,7 +555,7 @@ class DaedalusStylishOperationHandler implements PageOnlyOperationsInterface {
     // whole-map writes, so both write paths agree. The incoming reference
     // is validated alone: an axis conflict cannot arise, because the write
     // below replaces the entry's same-axis reference.
-    $errors = $this->validator->validate([$key => ['variants' => [['variant' => $variant, 'fragment' => '']]]], ['entity' => $entity]);
+    $errors = $this->validator->validate([$key => ['variants' => [['variant' => $variant, 'fragment' => '']]]], ['host' => $host]);
     if ($errors) {
       return BlueprintResult::semanticFailure(array_map(
         static fn (BlueprintError $error) => $error->withPath('variant'),
@@ -325,7 +563,7 @@ class DaedalusStylishOperationHandler implements PageOnlyOperationsInterface {
       ));
     }
 
-    // The applicability seam: cross-module facts (stencil ownership first
+    // The applicability seam: cross-module facts (blueprint ownership first
     // among them) veto a NEW wearing that scope alone would allow. Gesture
     // target only — nested distribution references below are the variant's
     // own composition, and existing references never re-check here (they
@@ -340,16 +578,16 @@ class DaedalusStylishOperationHandler implements PageOnlyOperationsInterface {
     // Address::pairsWith()), now with this gesture backstop.
     $loaded = $this->validator->loadVariant($variant);
     foreach ($this->applicabilityCheckers as $checker) {
-      if ($checker_errors = $checker->check($loaded, $entity, $key)) {
+      if ($checker_errors = $checker->check($loaded, $host, $key)) {
         return BlueprintResult::semanticFailure($checker_errors);
       }
     }
 
-    $map = $this->getStyleMap($entity);
+    $map = $this->getStyleMap($host);
     $warnings = [];
-    $this->distributeVariant($entity, $map, $key, $variant, $loaded, [], $warnings);
+    $this->distributeVariant($host, $map, $key, $variant, $loaded, [], $warnings);
 
-    return $this->setStyleMap($entity, $map, $warnings);
+    return $this->setStyleMap($host, $map, $warnings);
   }
 
   /**
@@ -388,7 +626,7 @@ class DaedalusStylishOperationHandler implements PageOnlyOperationsInterface {
    *   (StyleMapValidator::orderedEntryRefs()), so list order carries no
    *   meaning.
    *
-   * @param \Drupal\Core\Entity\FieldableEntityInterface $entity
+   * @param \Drupal\Core\Entity\HostInterface $host
    *   The host entity.
    * @param array &$map
    *   The style map, modified in place.
@@ -414,7 +652,7 @@ class DaedalusStylishOperationHandler implements PageOnlyOperationsInterface {
    *   variant whose nested reference this apply distributes, NULL at the
    *   op's own target (a direct apply is the editor's, never derived).
    */
-  protected function distributeVariant(FieldableEntityInterface $entity, array &$map, string $key, string $reference, DaedalusStylishVariantInterface $variant, array $chain, array &$warnings, array $spare = [], ?string $via = NULL): void {
+  protected function distributeVariant(HostInterface $host, array &$map, string $key, string $reference, DaedalusStylishVariantInterface $variant, array $chain, array &$warnings, array $spare = [], ?string $via = NULL): void {
     $axis = $variant->getAxis();
     $chain[] = $variant->getMachineName();
     $styles = [];
@@ -425,7 +663,7 @@ class DaedalusStylishOperationHandler implements PageOnlyOperationsInterface {
     // The root entry's nested references land on the key itself, before
     // its own reference does (the names feed the sparing set; delivery
     // order is structural, never list order).
-    $spared = [...$spare, ...$this->distributeEntryRefs($entity, $map, $key, $styles[''] ?? NULL, $chain, $warnings)];
+    $spared = [...$spare, ...$this->distributeEntryRefs($host, $map, $key, $styles[''] ?? NULL, $chain, $warnings)];
 
     $replaced = [];
     $map[$key] = $this->placeReference(is_array($map[$key] ?? NULL) ? $map[$key] : [], $reference, '', $axis, $replaced, [
@@ -433,7 +671,7 @@ class DaedalusStylishOperationHandler implements PageOnlyOperationsInterface {
       ...$spared,
     ], $via);
     if ($replaced !== []) {
-      $this->removeDistributedReferences($entity, $map, $key, $replaced);
+      $this->removeDistributedReferences($host, $map, $key, $replaced);
     }
 
     // Slot paths resolve once, per element (part suffixes stripped). A
@@ -451,12 +689,12 @@ class DaedalusStylishOperationHandler implements PageOnlyOperationsInterface {
     }
     $resolved = $fragments === [] || $is_rule
       ? []
-      : $this->subtreeSlotKeys->resolveSlotKeys($entity, $key, array_keys($fragments));
+      : $this->subtreeSlotKeys->resolveSlotKeys($host, $key, array_keys($fragments));
 
     // Each resolved child: the fragment entry's nested references first,
     // then the variant's own fragment reference beside them (the pair).
     foreach ($resolved as $fragment => $target) {
-      $spared = $this->distributeEntryRefs($entity, $map, $target, $styles[$fragment] ?? NULL, $chain, $warnings);
+      $spared = $this->distributeEntryRefs($host, $map, $target, $styles[$fragment] ?? NULL, $chain, $warnings);
       $map[$target] = $this->placeReference(is_array($map[$target] ?? NULL) ? $map[$target] : [], $reference, $fragment, $axis, spare: [
         ...$chain,
         ...$spared,
@@ -476,7 +714,7 @@ class DaedalusStylishOperationHandler implements PageOnlyOperationsInterface {
       $suffix = substr($relative, strlen($path));
       $carrier = $path === '' ? static::carrierKey($key, $suffix) : (isset($resolved[$path]) ? $resolved[$path] . $suffix : NULL);
       if ($carrier !== NULL) {
-        $this->distributeEntryRefs($entity, $map, $carrier, $entry, $chain, $warnings);
+        $this->distributeEntryRefs($host, $map, $carrier, $entry, $chain, $warnings);
       }
     }
   }
@@ -554,7 +792,7 @@ class DaedalusStylishOperationHandler implements PageOnlyOperationsInterface {
    *   Machine names of the references distributed — the sparing set for
    *   the owner's own placement beside them.
    */
-  protected function distributeEntryRefs(FieldableEntityInterface $entity, array &$map, string $carrier, mixed $entry, array $chain, array &$warnings): array {
+  protected function distributeEntryRefs(HostInterface $host, array &$map, string $carrier, mixed $entry, array $chain, array &$warnings): array {
     $owner = $chain[array_key_last($chain)];
     $spared = [];
     foreach (StyleMapValidator::entryRefs($entry) as $ref) {
@@ -572,7 +810,7 @@ class DaedalusStylishOperationHandler implements PageOnlyOperationsInterface {
         $spared[] = $name;
         continue;
       }
-      $this->distributeVariant($entity, $map, $carrier, $ref['variant'], $nested, $chain, $warnings, $spared, $owner);
+      $this->distributeVariant($host, $map, $carrier, $ref['variant'], $nested, $chain, $warnings, $spared, $owner);
       $spared[] = $name;
     }
     return $spared;
@@ -678,7 +916,7 @@ class DaedalusStylishOperationHandler implements PageOnlyOperationsInterface {
    * stays; references that rode out on moved elements are orphans owned by
    * their elements, untouched by gestures on this root.
    *
-   * @param \Drupal\Core\Entity\FieldableEntityInterface $entity
+   * @param \Drupal\Core\Entity\HostInterface $host
    *   The host entity.
    * @param array &$map
    *   The style map, modified in place.
@@ -689,8 +927,8 @@ class DaedalusStylishOperationHandler implements PageOnlyOperationsInterface {
    *   origins match by machine name too, since distribution stamps the
    *   name whatever spelling the root reference used.
    */
-  protected function removeDistributedReferences(FieldableEntityInterface $entity, array &$map, string $root_key, array $variants): void {
-    $subtree = $this->subtreeSlotKeys->subtreeKeys($entity, $root_key);
+  protected function removeDistributedReferences(HostInterface $host, array &$map, string $root_key, array $variants): void {
+    $subtree = $this->subtreeSlotKeys->subtreeKeys($host, $root_key);
     if ($subtree === []) {
       return;
     }
@@ -742,7 +980,7 @@ class DaedalusStylishOperationHandler implements PageOnlyOperationsInterface {
     // Recurse after the sweep: the walk above must not re-read a stale
     // entry and resurrect what a nested reap took.
     foreach ($reaped_roots as [$key, $variant]) {
-      $this->removeDistributedReferences($entity, $map, $key, [$variant]);
+      $this->removeDistributedReferences($host, $map, $key, [$variant]);
     }
   }
 
@@ -780,7 +1018,7 @@ class DaedalusStylishOperationHandler implements PageOnlyOperationsInterface {
    * what lets a mode flip back restore them (the layout widget's
    * Columns -> Stack -> Columns round trip keeps its proportions).
    */
-  protected function removeVariant(FieldableEntityInterface $entity, string $key, array $operation): BlueprintResult {
+  protected function removeVariant(HostInterface $host, string $key, array $operation): BlueprintResult {
     $variant = $operation['variant'] ?? NULL;
     if (!is_string($variant) || $variant === '') {
       return BlueprintResult::structuralFailure([
@@ -788,7 +1026,7 @@ class DaedalusStylishOperationHandler implements PageOnlyOperationsInterface {
       ]);
     }
 
-    $map = $this->getStyleMap($entity);
+    $map = $this->getStyleMap($host);
     $fragments = array_column(StyleMapValidator::entryRefs($map[$key] ?? NULL), 'fragment', 'variant');
     if (!array_key_exists($variant, $fragments)) {
       $references = array_keys($fragments);
@@ -799,16 +1037,16 @@ class DaedalusStylishOperationHandler implements PageOnlyOperationsInterface {
 
     $this->dropReference($map, $key, $variant);
     if ($fragments[$variant] === '') {
-      $this->removeDistributedReferences($entity, $map, $key, [$variant]);
+      $this->removeDistributedReferences($host, $map, $key, [$variant]);
     }
 
-    return $this->setStyleMap($entity, $map);
+    return $this->setStyleMap($host, $map);
   }
 
   /**
    * Applies a detach_variant operation.
    */
-  protected function detachVariant(FieldableEntityInterface $entity, string $key, array $operation): BlueprintResult {
+  protected function detachVariant(HostInterface $host, string $key, array $operation): BlueprintResult {
     $variant = $operation['variant'] ?? NULL;
     if (!is_string($variant) || $variant === '') {
       return BlueprintResult::structuralFailure([
@@ -816,7 +1054,7 @@ class DaedalusStylishOperationHandler implements PageOnlyOperationsInterface {
       ]);
     }
 
-    $map = $this->getStyleMap($entity);
+    $map = $this->getStyleMap($host);
     $fragments = array_column(StyleMapValidator::entryRefs($map[$key] ?? NULL), 'fragment', 'variant');
     if (!array_key_exists($variant, $fragments)) {
       $references = array_keys($fragments);
@@ -838,14 +1076,14 @@ class DaedalusStylishOperationHandler implements PageOnlyOperationsInterface {
     // A fragment wearing distributed FROM elsewhere detaches alone; its
     // siblings belong to the root they were distributed onto.
     if ($fragments[$variant] === '') {
-      $this->detachDistributedReferences($entity, $map, $key, $variant);
+      $this->detachDistributedReferences($host, $map, $key, $variant);
     }
 
-    return $this->setStyleMap($entity, $map);
+    return $this->setStyleMap($host, $map);
   }
 
   /**
-   * Detaches EVERY wearing of a variant from one host entity's map.
+   * Detaches EVERY wearing of a variant from one host's map.
    *
    * The site-gesture entry into the op's one detach math (the delete
    * batch's per-wearer step, VariantDeleteBatch): where detach_variant
@@ -862,27 +1100,27 @@ class DaedalusStylishOperationHandler implements PageOnlyOperationsInterface {
    * anywhere in the map (orphans included) is released to its carrier:
    * the "via" naming it drops, and the wear reads as the element's own.
    *
-   * Mutates the entity's field in place; the CALLER saves (the batch
+   * Mutates the host's map in place; the CALLER saves (the batch
    * decides revision posture and log message). No access or key
    * validation happens here — the delete gesture's own permission is the
    * authority, exactly like push touching every wearer.
    *
    * @return bool
-   *   TRUE when the entity wore the variant and its map changed.
+   *   TRUE when the host wore the variant and its map changed.
    */
-  public function detachVariantEverywhere(FieldableEntityInterface $entity, DaedalusStylishVariantInterface $variant): bool {
-    if (!$entity->hasField(DaedalusStylishFieldManager::FIELD_NAME)) {
+  public function detachVariantEverywhere(HostInterface $host, DaedalusStylishVariantInterface $variant): bool {
+    if (!$host->hasStyleStore()) {
       return FALSE;
     }
     $forms = array_filter([$variant->getMachineName(), (string) $variant->uuid()]);
-    $map = $this->getStyleMap($entity);
+    $map = $this->getStyleMap($host);
     $changed = FALSE;
     while (($wearing = $this->findWearing($map, $forms)) !== NULL) {
       [$key, $reference, $fragment] = $wearing;
       $this->materializeReference($map, $key, $reference, $fragment);
       $this->dropReference($map, $key, $reference);
       if ($fragment === '') {
-        $this->detachDistributedReferences($entity, $map, $key, $reference);
+        $this->detachDistributedReferences($host, $map, $key, $reference);
       }
       $changed = TRUE;
     }
@@ -890,7 +1128,7 @@ class DaedalusStylishOperationHandler implements PageOnlyOperationsInterface {
       $changed = TRUE;
     }
     if ($changed) {
-      $this->setStyleMap($entity, $map);
+      $this->setStyleMap($host, $map);
     }
     return $changed;
   }
@@ -943,8 +1181,8 @@ class DaedalusStylishOperationHandler implements PageOnlyOperationsInterface {
    * materializes them). A fragment the variant held but never bound has no
    * carrier and materializes nowhere.
    */
-  protected function detachDistributedReferences(FieldableEntityInterface $entity, array &$map, string $root_key, string $variant): void {
-    $subtree = $this->subtreeSlotKeys->subtreeKeys($entity, $root_key);
+  protected function detachDistributedReferences(HostInterface $host, array &$map, string $root_key, string $variant): void {
+    $subtree = $this->subtreeSlotKeys->subtreeKeys($host, $root_key);
     if ($subtree === []) {
       return;
     }
@@ -1163,15 +1401,15 @@ class DaedalusStylishOperationHandler implements PageOnlyOperationsInterface {
   }
 
   /**
-   * Validates that the entity and key can hold styles at all.
+   * Validates that the host and key can hold styles at all.
    *
    * @return \Drupal\daedalus_blueprint\Result\BlueprintError[]
    *   Structural errors; empty when the target is sound.
    */
-  protected function validateTarget(FieldableEntityInterface $entity, mixed $key): array {
-    if (!$entity->hasField(DaedalusStylishFieldManager::FIELD_NAME)) {
+  protected function validateTarget(HostInterface $host, mixed $key): array {
+    if (!$host->hasStyleStore()) {
       return [
-        new BlueprintError('key', 'STYLING_NOT_ENABLED', sprintf('Styling is not enabled for %s %s entities.', $entity->bundle(), $entity->getEntityTypeId()), [], 'Enable styling for this bundle on its edit form, or style an entity of a bundle that has it enabled.'),
+        new BlueprintError('key', 'STYLING_NOT_ENABLED', sprintf('Styling is not enabled for %s %s entities.', $host->bundle(), $host->entityTypeId()), [], 'Enable styling for this bundle on its edit form, or style an entity of a bundle that has it enabled.'),
       ];
     }
     if (!is_string($key) || $this->validator->parseKey($key) === NULL) {
@@ -1179,7 +1417,10 @@ class DaedalusStylishOperationHandler implements PageOnlyOperationsInterface {
         new BlueprintError('key', 'INVALID_STYLE_KEY', sprintf('"%s" is not a valid style map key.', is_scalar($key) ? (string) $key : gettype($key)), [], StyleMapValidator::KEY_GRAMMAR_HINT),
       ];
     }
-    if (!$this->accessChecker->fieldEditable($entity->get(DaedalusStylishFieldManager::FIELD_NAME))) {
+    // The store is a field of the host's fields entity: its edit access is
+    // the field's.
+    $store = $host->fields()?->get($host->styleMapDefinition()->getName());
+    if ($store !== NULL && !$this->accessChecker->fieldEditable($store)) {
       return [
         new BlueprintError('key', 'ACCESS_DENIED_FIELD', 'Access denied: cannot edit the styles of this entity.', [], 'The current user lacks permission to modify this field.'),
       ];
@@ -1209,30 +1450,27 @@ class DaedalusStylishOperationHandler implements PageOnlyOperationsInterface {
   }
 
   /**
-   * Reads the entity's style map.
+   * Reads the host's style map.
    */
-  protected function getStyleMap(FieldableEntityInterface $entity): array {
-    $item = $entity->get(DaedalusStylishFieldManager::FIELD_NAME)->first();
-    return $item instanceof StyleMapItem ? $item->getStyleMap() : [];
+  protected function getStyleMap(HostInterface $host): array {
+    return $host->styleMap();
   }
 
   /**
    * Writes the style map back and builds the success result.
    *
-   * @param \Drupal\Core\Entity\FieldableEntityInterface $entity
+   * @param \Drupal\Core\Entity\HostInterface $host
    *   The host entity.
    * @param array $map
    *   The style map to write.
    * @param \Drupal\daedalus_blueprint\Result\BlueprintWarning[] $warnings
    *   Loud non-blocking observations (apply's integrity skips).
    */
-  protected function setStyleMap(FieldableEntityInterface $entity, array $map, array $warnings = []): BlueprintResult {
-    $items = $entity->get(DaedalusStylishFieldManager::FIELD_NAME);
-    $item = $items->first() ?? $items->appendItem();
-    $item->setStyleMap($map);
+  protected function setStyleMap(HostInterface $host, array $map, array $warnings = []): BlueprintResult {
+    $host->setStyleMap($map);
 
-    return BlueprintResult::success($entity, $warnings)
-      ->withTargetsFrom($entity->uuid(), [DaedalusStylishFieldManager::FIELD_NAME]);
+    return BlueprintResult::success($host, $warnings)
+      ->withTargetsFrom($host->uuid(), [$host->styleMapDefinition()->getName()]);
   }
 
 }

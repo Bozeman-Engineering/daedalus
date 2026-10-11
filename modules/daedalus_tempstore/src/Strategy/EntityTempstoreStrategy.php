@@ -4,6 +4,7 @@ namespace Drupal\daedalus_tempstore\Strategy;
 
 use Drupal\Core\Entity\EntityInterface;
 use Drupal\daedalus_tempstore\History\HistoryRecorder;
+use Drupal\daedalus_tempstore\SectionStorageHelper;
 use Drupal\daedalus_tempstore\WorkspaceKeyTrait;
 use Drupal\Core\Entity\TranslatableInterface;
 use Drupal\Core\TempStore\SharedTempStoreFactory;
@@ -41,6 +42,13 @@ class EntityTempstoreStrategy implements TempstoreStrategyInterface {
    * {@inheritdoc}
    */
   public function supports($subject): bool {
+    // A config entity that is its own section list (a Layout Builder
+    // enabled display, a site frame) is the layout strategy's: it stages
+    // as its own section storage, so the staged layout, Save, Discard and
+    // History share one key.
+    if ($subject instanceof EntityInterface && SectionStorageHelper::isSectionListConfig($subject)) {
+      return FALSE;
+    }
     return $subject instanceof EntityInterface;
   }
 

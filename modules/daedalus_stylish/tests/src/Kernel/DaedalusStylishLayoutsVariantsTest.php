@@ -84,10 +84,16 @@ class DaedalusStylishLayoutsVariantsTest extends KernelTestBase {
     // every build, and every compile and validation builds it.
     $this->installEntitySchema('daedalus_swatch');
     $this->installEntitySchema('daedalus_animation');
+    $this->installEntitySchema('daedalus_font');
     $this->installEntitySchema('daedalus_skin');
     // The container entrance variants reference motion-* names, which a
     // variant save mirrors into the animation usage table.
-    $this->installSchema('daedalus_stylish', ['daedalus_variant_usage', 'daedalus_animation_usage']);
+    $this->installSchema('daedalus_stylish', [
+      'daedalus_variant_usage',
+      'daedalus_animation_usage',
+      'daedalus_token_usage',
+      'daedalus_font_usage',
+    ]);
     $this->installConfig(['daedalus_stylish']);
     // The importer switches to an administrative account (shipped variants
     // are code, not user input); give the switcher one to find.

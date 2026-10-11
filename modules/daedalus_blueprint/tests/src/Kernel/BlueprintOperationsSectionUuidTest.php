@@ -15,7 +15,7 @@ use Drupal\Tests\daedalus\Kernel\BlueprintKernelTestBase;
 /**
  * Tests writer-minted section identity on add_section at any depth.
  *
- * Batch writers (the stencil expander, AI batches) need to anchor child
+ * Batch writers (the blueprint expander, AI batches) need to anchor child
  * placements on a section that does not exist until their add operation
  * runs, so add_section accepts a client-minted uuid that becomes the new
  * section's identity, top-level (root entity anchor) and nested (placement
@@ -90,7 +90,7 @@ class BlueprintOperationsSectionUuidTest extends BlueprintKernelTestBase {
    *   The storage.
    */
   protected function getStorage(): object {
-    return $this->container->get('daedalus_blueprint.daedalus_layout_adapter')->getSectionStorage($this->entity);
+    return $this->container->get('daedalus_blueprint.host_resolver')->fromEntity($this->entity)->sectionStorage();
   }
 
   /**
@@ -100,7 +100,7 @@ class BlueprintOperationsSectionUuidTest extends BlueprintKernelTestBase {
     $section_uuid = (new PhpUuid())->generate();
 
     $result = $this->operations->addSection(
-      $this->entity,
+      $this->host($this->entity),
       ['anchor' => $this->entity->uuid(), 'placement' => 'inside'],
       $section_uuid,
     );
@@ -112,7 +112,7 @@ class BlueprintOperationsSectionUuidTest extends BlueprintKernelTestBase {
 
     // The minted identity is immediately addressable.
     $result = $this->operations->addSection(
-      $this->entity,
+      $this->host($this->entity),
       ['anchor' => $section_uuid, 'placement' => 'after'],
       NULL,
       'layout_twocol_section',
@@ -132,7 +132,7 @@ class BlueprintOperationsSectionUuidTest extends BlueprintKernelTestBase {
   public function testMintedUuidNamesNestedSection(): void {
     $section_uuid = (new PhpUuid())->generate();
 
-    $result = $this->operations->addSection($this->entity, [
+    $result = $this->operations->addSection($this->host($this->entity), [
       'anchor' => $this->rootSectionUuid,
       'placement' => 'inside',
       'region' => 'content',
@@ -155,7 +155,7 @@ class BlueprintOperationsSectionUuidTest extends BlueprintKernelTestBase {
    * Tests data.section_uuid on a block add is refused.
    */
   public function testSectionUuidOnBlockAddRefused(): void {
-    $result = $this->operations->addElement($this->entity, ['anchor' => $this->rootSectionUuid, 'placement' => 'inside'], [
+    $result = $this->operations->addElement($this->host($this->entity), ['anchor' => $this->rootSectionUuid, 'placement' => 'inside'], [
       'block_type' => 'basic',
       'section_uuid' => (new PhpUuid())->generate(),
     ]);
@@ -168,7 +168,7 @@ class BlueprintOperationsSectionUuidTest extends BlueprintKernelTestBase {
   }
 
   /**
-   * Tests the stencil shape: one batch builds and fills a nested section.
+   * Tests the blueprint shape: one batch builds and fills a nested section.
    *
    * Add_section mints the identity born as its explicit layout, and a
    * child add_element anchors inside it, all in one atomic batch against
@@ -178,7 +178,7 @@ class BlueprintOperationsSectionUuidTest extends BlueprintKernelTestBase {
     $section_uuid = (new PhpUuid())->generate();
     $child_uuid = (new PhpUuid())->generate();
 
-    $result = $this->operations->batchOperations($this->entity, [
+    $result = $this->operations->batchOperations($this->host($this->entity), [
       [
         'op' => 'add_section',
         'uuid' => $section_uuid,

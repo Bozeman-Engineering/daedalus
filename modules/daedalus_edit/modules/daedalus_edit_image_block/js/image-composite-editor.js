@@ -435,6 +435,7 @@
             : Drupal.t('Add an image'),
         icon: IMAGE_ICON,
         kinds: ['block'],
+        capability: 'content',
         editScoped: true,
         applies: () => currentImageEdit() !== null,
         // On the chip's face at clean density too, not behind the chevron:

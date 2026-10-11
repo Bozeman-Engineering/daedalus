@@ -15,7 +15,7 @@ namespace Drupal\daedalus_blueprint\Materials;
  * generation request, a file the conversation holds by its name); Unknown
  * is a reference-shaped value the roster
  * does not carry (a var() naming no material, a class no variant spells,
- * a stencil name nothing publishes), kept apart from Literal so a
+ * a blueprint name nothing publishes), kept apart from Literal so a
  * consumer never lets an unrostered reference through as plain CSS.
  */
 enum ValueKind: string {
@@ -23,7 +23,7 @@ enum ValueKind: string {
   case Token = 'token';
   case Swatch = 'swatch';
   case Variant = 'variant';
-  case Stencil = 'stencil';
+  case Blueprint = 'blueprint';
   case Animation = 'animation';
   case Media = 'media';
   case Generate = 'generate';

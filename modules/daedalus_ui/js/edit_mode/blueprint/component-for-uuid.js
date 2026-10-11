@@ -1,7 +1,7 @@
 /**
  * Finds an element node in the blueprint's lean node tree by its uuid.
  *
- * The delivered blueprint carries the spine's lean node tree as `_tree`:
+ * The delivered blueprint carries the spine's lean node tree as `layout`:
  * kind-discriminated container/region/block nodes with ONE child axis at
  * every depth (no regions map), styles on the node, `_element` annotations
  * riding along. The walk is uniform (any node may match by uuid, since a
@@ -34,5 +34,5 @@ export const componentForUuid = (blueprint, uuid) => {
     }
     return null;
   };
-  return find(blueprint?._tree);
+  return find(blueprint?.layout);
 };

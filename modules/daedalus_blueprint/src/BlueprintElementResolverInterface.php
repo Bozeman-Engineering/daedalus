@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Drupal\daedalus_blueprint;
 
-use Drupal\Core\Entity\FieldableEntityInterface;
+use Drupal\daedalus_blueprint\Host\HostInterface;
 
 /**
  * Resolves any addressable page element with full context.
@@ -17,8 +17,8 @@ interface BlueprintElementResolverInterface {
   /**
    * Resolves any addressable page element with full context.
    *
-   * @param \Drupal\Core\Entity\FieldableEntityInterface $entity
-   *   The root entity containing the element.
+   * @param \Drupal\daedalus_blueprint\Host\HostInterface $host
+   *   The host containing the element.
    * @param string $identifier
    *   UUID (for blocks, paragraphs, sections) or field name (for fields).
    * @param string|null $parentUuid
@@ -30,7 +30,7 @@ interface BlueprintElementResolverInterface {
    *   NULL if the element cannot be found.
    */
   public function resolve(
-    FieldableEntityInterface $entity,
+    HostInterface $host,
     string $identifier,
     ?string $parentUuid = NULL,
   ): ?ResolvedElement;

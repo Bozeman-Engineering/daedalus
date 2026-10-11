@@ -5,7 +5,7 @@ services:
 
   daedalus_edit.form_alter.inline_entity_form:
     class: Drupal\daedalus_edit\Form\InlineEntityFormAlter
-    arguments: ['@entity_display.repository', '@daedalus_tempstore.entity_tempstore_repository', '@event_dispatcher', '@request_stack', '@daedalus_edit.form_commit']
+    arguments: ['@entity_display.repository', '@daedalus_tempstore.entity_tempstore_repository', '@event_dispatcher', '@request_stack', '@daedalus_edit.form_commit', '@daedalus_blueprint.host_resolver']
 
   # The form transport's server half: a panel form's submit hands the one
   # property the client named to the op spine (update_element with an

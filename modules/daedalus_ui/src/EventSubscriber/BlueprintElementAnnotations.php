@@ -5,18 +5,26 @@ declare(strict_types=1);
 namespace Drupal\daedalus_ui\EventSubscriber;
 
 use Drupal\Component\Serialization\Json;
+use Drupal\Core\Entity\EntityInterface;
+use Drupal\daedalus_blueprint\Host\HostInterface;
+use Drupal\daedalus_blueprint\Host\HostResolver;
+use Drupal\daedalus_blueprint\Result\BlueprintResult;
 use Drupal\daedalus_blueprint_api\Event\BlueprintMutationResponseEvent;
 use Drupal\daedalus_blueprint_api\Event\BlueprintReadEvent;
 use Drupal\daedalus_ui\ElementModel\BlueprintElementAnnotator;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 
 /**
- * Annotates the mutation response's blueprint with `_element`.
+ * Annotates the mutation response's blueprint, the verdict beside it.
+ *
+ * The blueprint gains `_element`; the payload gains the host-level
+ * `verdict` (BlueprintElementAnnotator::hostVerdict), as the mirror
+ * envelope carries it.
  *
  * The read endpoint's derived modes ride the same annotator (onRead()):
  * the css print heads each element with its words, which are this
- * annotation's `type` and `name`, so the blueprint a read mode projects
- * through the lean tree is annotated exactly as a delivered one.
+ * annotation's `type` and `name`, so the lean tree a read mode projects
+ * is annotated exactly as a delivered one (annotateTree()).
  *
  * The mutation response is one of the mirror's delivery seams (the others
  * ride drupalSettings through BlueprintMirror: boot render and form
@@ -38,6 +46,7 @@ final class BlueprintElementAnnotations implements EventSubscriberInterface {
 
   public function __construct(
     private readonly BlueprintElementAnnotator $annotator,
+    private readonly HostResolver $hostResolver,
   ) {}
 
   /**
@@ -60,23 +69,41 @@ final class BlueprintElementAnnotations implements EventSubscriberInterface {
     // for that display.
     $body = Json::decode($event->request->getContent()) ?? [];
     $view_mode = is_string($body['view_mode'] ?? NULL) && $body['view_mode'] !== '' ? $body['view_mode'] : 'full';
-    // The blueprint was serialized from the result entity; on success it is
-    // the event's entity (the mutation's root). Its type/bundle supply the
-    // root field definitions.
-    $payload['blueprint'] = $this->annotator->annotate($payload['blueprint'], $event->result->getEntity() ?? $event->entity, $view_mode);
+    // The blueprint was serialized from the result's host; on success that
+    // is the mutation's root, else the event's entity hosts it. Its
+    // type/bundle supply the root field definitions.
+    $host = $event->result instanceof BlueprintResult ? $event->result->getHost() : NULL;
+    $host ??= $this->hostOf($event->entity);
+    if ($host === NULL) {
+      return;
+    }
+    $payload['blueprint'] = $this->annotator->annotate($payload['blueprint'], $host, $view_mode);
+    // The host-level verdict rides beside the blueprint, as it does on the
+    // mirror envelope, so the document notice follows every mutation.
+    $payload['verdict'] = $this->annotator->hostVerdict($payload['blueprint']);
     $event->setPayload($payload);
   }
 
   /**
-   * Annotates the blueprint a derived read mode projects.
+   * Annotates the tree a derived read mode projects.
    *
-   * The view mode rides the query (the read endpoint has no body), 'full'
-   * when absent, as the mutation seam defaults it.
+   * The tree's nodes gain `_element` exactly as a delivered blueprint's
+   * `layout` wears it; the root is not a tree node and a derived mode
+   * prints none.
    */
   public function onRead(BlueprintReadEvent $event): void {
-    $view_mode = $event->request->query->get('view_mode');
-    $view_mode = is_string($view_mode) && $view_mode !== '' ? $view_mode : 'full';
-    $event->setBlueprint($this->annotator->annotate($event->getBlueprint(), $event->entity, $view_mode));
+    $host = $this->hostOf($event->entity);
+    if ($host === NULL) {
+      return;
+    }
+    $event->setTree($this->annotator->annotateTree($event->getTree(), $host));
+  }
+
+  /**
+   * The host of an event's entity, or NULL when nothing hosts it.
+   */
+  private function hostOf(EntityInterface $entity): ?HostInterface {
+    return $this->hostResolver->hosts($entity) ? $this->hostResolver->fromEntity($entity) : NULL;
   }
 
   /**

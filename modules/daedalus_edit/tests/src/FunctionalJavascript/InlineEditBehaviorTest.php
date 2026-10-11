@@ -8,6 +8,7 @@ use Drupal\FunctionalJavascriptTests\WebDriverTestBase;
 use Drupal\Tests\daedalus\Traits\ImageMediaCreationTrait;
 use Drupal\Tests\daedalus\Traits\EditModeTrait;
 use Drupal\Tests\daedalus\Traits\DaedalusFixtureTrait;
+use Drupal\field\Entity\FieldConfig;
 use Drupal\node\Entity\Node;
 use Drupal\user\Entity\Role;
 use PHPUnit\Framework\Attributes\Group;
@@ -84,6 +85,14 @@ class InlineEditBehaviorTest extends WebDriverTestBase {
     // test. enable() creates the daedalus_stylish_styles field for the bundle, which is
     // the enablement state InspectorSidebar::applies() reads.
     \Drupal::service('daedalus_stylish.field_manager')->enable('node', 'plain');
+    // The inspector mounts by capability: style must be allowed somewhere,
+    // and the style policy asks the bundle's permission, which exists only
+    // once the store does (the line above) and which the recipe's editor
+    // role cannot carry for a bundle created after install (the consumer
+    // contract: whoever creates a bundle grants its permissions).
+    $editor_role = Role::load('daedalus_editor');
+    $editor_role->grantPermission('style plain node elements');
+    $editor_role->save();
 
     // The page-title leg edits the theme's H1 (the outside-rendered label).
     // The recipe places no page title block in its theme (page nodes carry
@@ -182,6 +191,11 @@ class InlineEditBehaviorTest extends WebDriverTestBase {
    *   through the panel widget editor, while the page element keeps a
    *   selection outline, and the Styles inspector in the right/TOP slot stays
    *   open through the whole form lifecycle; its native change commits.
+   * - The selection door's refusal: with an invalid panel widget open (the
+   *   field marked required for the step, its fresh widget empty), a
+   *   programmatic select of another key returns false and moves nothing,
+   *   the engine's validation message and warning shown; once valid the
+   *   same call lands, the edit committed and ended, the selection moved.
    * - The editing grammar: Tab commits, Escape cancels (restoring the
    *   snapshot, the cached form untouched) and the next Escape clears the
    *   selection, the panel and the mode untouched.
@@ -873,6 +887,129 @@ class InlineEditBehaviorTest extends WebDriverTestBase {
       'The inspector is still open after the panel-widget edit committed.',
     );
 
+    // ----- The selection door: an invalid widget refuses the leave. -----
+    // A selection moved any way but a press (a placement's select, the
+    // inspector's select-parent, a page-tree right-click) goes through
+    // daedalus_ui's selection write door, which asks the open edit before
+    // the write leaves it; the engine's canEndEdit answers over the
+    // widget's validity (hasInvalidFormItem) and shows its own feedback on
+    // a refusal. The fixture ships no required field, so the step makes
+    // field_empty required for its own duration: the field is emptied
+    // through its leaf first (while it may still commit empty), the
+    // FieldConfig is marked required, and the cached subject form is
+    // refetched through the sidebar's own refetch door so the fresh widget
+    // carries the server-rendered required attribute, the judge revealing
+    // it again (still empty). Reverted at the step's end: the later legs
+    // commit the field empty through its leaf.
+    $empty_via_leaf();
+    $this->assertJsCondition('window.__applied >= 9', 20000);
+    $this->assertJsCondition($empty_revealed, 20000, 'field_empty is emptied and revealed ahead of the refusal step.');
+    $empty_field_config = FieldConfig::loadByName('node', 'plain', 'field_empty');
+    $empty_field_config->setRequired(TRUE)->save();
+    $session->executeScript(<<<JS
+      (() => {
+        window.__requiredForm = document.querySelector('{$subject_form}');
+        window.__requiredRefetchError = undefined;
+        Drupal.Daedalus.SidebarManager.getPlugin('daedalus_edit_form')
+          .refetch(window.__requiredForm)
+          .catch((error) => {
+            window.__requiredRefetchError = error.message;
+          });
+      })();
+      JS);
+    $this->assertJsCondition(<<<JS
+      (() => {
+        if (window.__requiredRefetchError !== undefined) { return true; }
+        const form = document.querySelector('{$subject_form}');
+        const input = document.querySelector('{$empty_input}');
+        return !!form && form !== window.__requiredForm
+          && !!input && input.required === true && input.value === ''
+          && $empty_revealed;
+      })()
+      JS,
+      20000,
+      'The refetched subject form renders field_empty required, empty and revealed.',
+    );
+    $required_refetch_error = $session->evaluateScript('window.__requiredRefetchError ?? null');
+    $this->assertNull($required_refetch_error, 'The refetch of the subject form failed: ' . ($required_refetch_error ?? ''));
+
+    // Open the required, empty widget as the edit (the press into the
+    // revealed widget, as above): field_empty's key is the selection and
+    // the editing key. The press opens it: validity gates leaving an edit,
+    // never opening one.
+    $session->executeScript(
+      "document.querySelector('" . $empty_input . "')"
+      . ".dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));"
+    );
+    $this->assertJsCondition(
+      "Drupal.Daedalus.Edit.CurrentlyEditingElement?.plugin.id === 'panel_widget'"
+      . " && Drupal.Daedalus.Edit.CurrentlyEditingElement.info.fieldName === 'field_empty'"
+      . " && Drupal.Daedalus.Selection.getSelected() === '$empty_key'"
+      . " && Drupal.Daedalus.EditSession.isEditing()",
+      20000,
+      'The required, empty widget opened as the panel widget edit on its field key.',
+    );
+
+    // The refusal: a programmatic select of another key (the body's; the
+    // plain node places no blocks, so a sibling field is the other
+    // element) returns false and writes nothing, the selection and the
+    // edit staying on field_empty, and the engine has shown its feedback:
+    // the HTML5 validation message beside the input (isValid's
+    // displayValidationMessage) and the "fix or discard" warning in the
+    // messenger, once.
+    $invalid_warnings = "Drupal.Daedalus.messenger.history()"
+      . ".filter((entry) => entry.type === 'warning' && entry.message.includes('Fix the invalid form item')).length";
+    $session->executeScript("window.__warningsBefore = $invalid_warnings;");
+    $refused = $session->evaluateScript("Drupal.Daedalus.Selection.select('field:$node_uuid:body')");
+    $this->assertFalse($refused, 'Selection.select of another key returned false while the open panel widget was invalid.');
+    $this->assertJsCondition(<<<JS
+      (() => {
+        const input = document.querySelector('{$empty_input}');
+        const message = input?.nextElementSibling;
+        return Drupal.Daedalus.Selection.getSelected() === '{$empty_key}'
+          && Drupal.Daedalus.EditSession.isEditing() === true
+          && Drupal.Daedalus.Edit.CurrentlyEditingElement?.info.fieldName === 'field_empty'
+          && !!message && message.classList.contains('daedalus-edit-validation-message')
+          && message.textContent.trim() !== ''
+          && $invalid_warnings === window.__warningsBefore + 1;
+      })()
+      JS,
+      20000,
+      'The refused leave kept the selection and the edit on the invalid widget, showed the validation message beside its input and warned once.',
+    );
+
+    // Valid again (a value typed into the widget, the explicit floor's
+    // input signal; the programmatic value clears the validation message)
+    // and the same call lands: the door asks, the engine commits the edit
+    // through the panel widget's blur (the form transport, riding the op
+    // queue) and the edit ends synchronously, the selection moves to the
+    // body's key, and the committed value materializes the leaf, hiding
+    // the widget.
+    $door_value = 'Valid again, so the selection may leave';
+    $session->executeScript(<<<JS
+      const requiredInput = document.querySelector('{$empty_input}');
+      requiredInput.value = '{$door_value}';
+      requiredInput.dispatchEvent(new Event('input', { bubbles: true }));
+    JS);
+    $landed = $session->evaluateScript("Drupal.Daedalus.Selection.select('field:$node_uuid:body')");
+    $this->assertTrue($landed, 'Selection.select of another key returned true once the panel widget was valid.');
+    $this->assertJsCondition(
+      "Drupal.Daedalus.EditSession.isEditing() === false"
+      . " && Drupal.Daedalus.Edit.CurrentlyEditingElement === null"
+      . " && Drupal.Daedalus.Selection.getSelected() === 'field:$node_uuid:body'",
+      20000,
+      'The landed leave ended the edit and moved the selection to the body.',
+    );
+    $this->assertJsCondition('window.__applied >= 10 && ' . $empty_hidden, 20000, 'The door\'s commit materialized the leaf and hid the widget.');
+    $storage->resetCache([$nid]);
+    $this->assertSame(
+      $door_value,
+      $tempstore->get($storage->load($nid))->get('field_empty')->value,
+      'The landed leave committed the valid widget to tempstore through the form transport.',
+    );
+    // field_empty is the fixture's optional field again.
+    $empty_field_config->setRequired(FALSE)->save();
+
     // The editing grammar around an open edit. Re-opening the editor uses
     // a dispatched double-click into the pointer grammar's document-level
     // handlers (the same three events the real first double-click above
@@ -947,7 +1084,8 @@ class InlineEditBehaviorTest extends WebDriverTestBase {
     // The staged title too: the tempstore-swapped route entity feeds the
     // title resolver, so the theme's H1 renders the staged value.
     $assert_session->pageTextContains('A staged new title');
-    $assert_session->pageTextContains('Committed by Cmd+Enter');
+    // And field_empty's last staged value: the refusal step's commit.
+    $assert_session->pageTextContains($door_value);
 
     // Exactly ONE element answers to the title's identity on the SSR
     // edit-mode render. Core's buildTitle() inlines the rendered title
@@ -984,8 +1122,8 @@ class InlineEditBehaviorTest extends WebDriverTestBase {
     $this->countApplied('__nodeApplied');
 
     // ——— Fill with sample: the empty field materializes on canvas. ———
-    // field_empty holds the Cmd+Enter value (a leaf); empty it through the
-    // leaf so the panel offers the sample fill again.
+    // field_empty holds the refusal step's value (a leaf); empty it through
+    // the leaf so the panel offers the sample fill again.
     $empty_via_leaf();
     $this->assertJsCondition('window.__nodeApplied >= 1', 20000);
     $this->assertJsCondition($empty_revealed, 20000, 'The empty field offers the Fill with sample button on its revealed widget.');

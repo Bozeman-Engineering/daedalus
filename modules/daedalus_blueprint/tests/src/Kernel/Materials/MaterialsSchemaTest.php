@@ -4,10 +4,12 @@ declare(strict_types=1);
 
 namespace Drupal\Tests\daedalus_blueprint\Kernel\Materials;
 
+use Drupal\daedalus_blueprint\Dialect\DialectCatalog;
 use Drupal\daedalus_blueprint\Hook\MaterialsSchemaHooks;
 use Drupal\daedalus_blueprint\Materials\MaterialKind;
 use Drupal\daedalus_blueprint\Materials\MaterialRecord;
 use Drupal\daedalus_blueprint\Materials\MaterialsSchema;
+use Drupal\daedalus_blueprint_materials_test\TestGroupsContributor;
 use Drupal\daedalus_blueprint_materials_test\TestMaterialsProvider;
 use Drupal\KernelTests\KernelTestBase;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -19,11 +21,13 @@ use PHPUnit\Framework\Attributes\Group;
  * One projection for both doors: the fragment groups the roster by kind
  * (grows-by-data: a kind the site lacks is absent), keys named values by the
  * custom property a style value references, serializes a variant's
- * page-language spelling and applicability, prints each stencil as a
- * page-language fragment with its owned looks beneath it, and the hook places
- * it as the schema's own `materials` key on every schema whose values can
- * reference materials (a layout, or a field carrying a style guide) with the
- * roster's cache tags on the alter context.
+ * page-language spelling and applicability, prints each blueprint as a
+ * page-language fragment with its owned looks beneath it (the site favorites
+ * by default, one group in full when a read narrows to it after the cache,
+ * the group index with counts beside them), and the hook places it as the
+ * schema's own `materials` key on every schema whose values can reference
+ * materials (a layout, or a field carrying a style guide) with the roster's
+ * cache tags on the alter context.
  */
 #[CoversClass(MaterialsSchema::class)]
 #[CoversClass(MaterialsSchemaHooks::class)]
@@ -46,6 +50,15 @@ class MaterialsSchemaTest extends KernelTestBase {
   protected function setUp(): void {
     parent::setUp();
     TestMaterialsProvider::$records = NULL;
+    TestGroupsContributor::$groups = [];
+  }
+
+  /**
+   * Rebuilds the roster and the catalog after the fixtures changed.
+   */
+  protected function reset(): void {
+    $this->container->get('daedalus_blueprint.materials_roster_builder')->reset();
+    $this->container->get('daedalus_blueprint.dialect_catalog_builder')->reset();
   }
 
   /**
@@ -53,16 +66,18 @@ class MaterialsSchemaTest extends KernelTestBase {
    */
   public function testFragment(): void {
     $fragment = $this->container->get('daedalus_blueprint.materials_schema')->fragment();
-    $this->assertSame(['guidance', 'tokens', 'swatches', 'variants', 'stencils', 'animations'], array_keys($fragment));
+    $this->assertSame(['guidance', 'tokens', 'swatches', 'variants', 'groups', 'blueprints', 'animations'], array_keys($fragment));
 
     // Named values key by the custom property inside the var() spelling,
-    // values as stored; a swatch carries the label a person asks for.
-    $this->assertSame(['default' => '#1475ad', 'dark' => '#52b3eb'], $fragment['tokens']['color']['--color-accent']);
+    // values as stored; a token's description rides only when written
+    // (the fixture's carries none); a swatch carries the label a person
+    // asks for.
+    $this->assertSame(['value' => ['default' => '#1475ad', 'dark' => '#52b3eb']], $fragment['tokens']['color']['--color-accent']);
     $this->assertSame(['label' => 'Lime green', 'kind' => 'color', 'value' => '#4dff8c'], $fragment['swatches']['--swatch-lime_green']);
 
     // Variants: spelling as the page language writes it, axis only off
     // the style axis, applies for root-only, and nothing emitted empty.
-    // A look a stencil owns is not here: it lists under its stencil.
+    // A look a blueprint owns is not here: it lists under its blueprint.
     $this->assertSame([
       'label' => 'Full width',
       'spelling' => 'width="full"',
@@ -73,19 +88,23 @@ class MaterialsSchemaTest extends KernelTestBase {
     ], $fragment['variants']['container_full']);
     $this->assertSame(['button', 'container_full', 'block_full', 'link_quiet'], array_keys($fragment['variants']));
 
-    // Stencils: label, full description, root kind, the owned looks under
-    // the stencil (label and spelling; no scope, no owner key); nothing
+    // Blueprints: the site favorites (the fixture's hero is one), each
+    // with label, full description, scope, the owned looks under the
+    // blueprint (label and spelling; no scope, no owner key); nothing
     // else (no fragment: the fixture record carries no tree; no placement
     // key: hero wears nothing root-only), and the guidance says nothing
-    // about bands while the roster has none.
+    // about bands while the roster has none. The index beside it: no
+    // vocabulary is declared, so the one offered blueprint files under
+    // the reserved bucket.
     $this->assertSame([
       'label' => 'Hero',
       'description' => 'Single-column hero banner with a heading.',
-      'root' => 'section',
+      'scope' => 'block',
       'looks' => [
         'hero_glow' => ['label' => 'Hero glow', 'spelling' => 'class="hero_glow"'],
       ],
-    ], $fragment['stencils']['hero']);
+    ], $fragment['blueprints']['hero']);
+    $this->assertSame([DialectCatalog::UNGROUPED => [MaterialsSchema::GROUP_COUNT => 1]], $fragment['groups']);
     $this->assertStringNotContainsString('"placement"', $fragment['guidance']);
 
     // Animations: label, the ident as animation-name writes it, the steps
@@ -97,18 +116,20 @@ class MaterialsSchemaTest extends KernelTestBase {
       'description' => 'Fade the element in from transparent.',
     ], $fragment['animations']['fade_in']);
 
-    // The guidance teaches the page language's spellings, the stencil
-    // vocabulary (the site has stencils), and never a JSON op.
+    // The guidance teaches the page language's spellings, the blueprint
+    // vocabulary (the site has blueprints), and never a JSON op.
     $guidance = $fragment['guidance'];
     $this->assertStringContainsString('a kind absent here has no materials on this site', $guidance);
     $this->assertStringContainsString('class="name"', $guidance);
-    $this->assertStringContainsString('<pb-stencil name="id"/>', $guidance);
+    $this->assertStringContainsString('<pb-blueprint name="id"/>', $guidance);
     $this->assertStringContainsString('"fragment"', $guidance);
     $this->assertStringContainsString(MaterialsSchema::LOOKS_BY_POSITION, $guidance);
+    $this->assertStringContainsString('"blueprints" holds the site favorites in full', $guidance);
+    $this->assertStringContainsString('eb_read_schema with group (an id, or ungrouped)', $guidance);
     $this->assertStringNotContainsString('owned_by', $guidance);
     $this->assertStringContainsString('animation-name', $guidance);
     $this->assertStringNotContainsString('apply_variant', $guidance);
-    $this->assertStringNotContainsString('instantiate_stencil', $guidance);
+    $this->assertStringNotContainsString('place_blueprint', $guidance);
   }
 
   /**
@@ -145,7 +166,7 @@ class MaterialsSchemaTest extends KernelTestBase {
   }
 
   /**
-   * A band stencil prints its fragment and carries placement: top_level.
+   * A band blueprint prints its fragment and carries placement: top_level.
    *
    * The fragment is the record's tree through the dialect printer over
    * the site's catalog: no ids, the root's wears spelled as the page
@@ -158,17 +179,18 @@ class MaterialsSchemaTest extends KernelTestBase {
    * isBand(), and the placement sentence rides only while the roster has
    * a band (grows-by-data).
    */
-  public function testBandStencilPrintsAndPlaces(): void {
+  public function testBandBlueprintPrintsAndPlaces(): void {
     TestMaterialsProvider::$records = [
       ...TestMaterialsProvider::referenceRecords(),
       new MaterialRecord(
-        kind: MaterialKind::Stencil,
+        kind: MaterialKind::Blueprint,
         id: 'wide_band',
         label: 'Wide band',
         description: 'A full-width band.',
-        spellings: [MaterialRecord::SLOT_STENCIL => 'wide_band'],
+        spellings: [MaterialRecord::SLOT_BLUEPRINT => 'wide_band'],
         applies: [MaterialRecord::APPLIES_WEARS => ['hero_glow', 'container_full']],
-        rootKind: MaterialRecord::ROOT_SECTION,
+        blueprintScope: MaterialRecord::SCOPE_BLOCK,
+        favorite: TRUE,
         tree: [[
           'kind' => 'container',
           'layout_id' => 'layout_onecol',
@@ -203,39 +225,43 @@ HTML;
     $this->assertSame([
       'label' => 'Wide band',
       'description' => 'A full-width band.',
-      'root' => 'section',
+      'scope' => 'block',
       'fragment' => $expected,
       'placement' => MaterialsSchema::PLACEMENT_TOP_LEVEL,
-    ], $fragment['stencils']['wide_band']);
-    $this->assertArrayNotHasKey('placement', $fragment['stencils']['hero']);
-    $this->assertArrayNotHasKey('fragment', $fragment['stencils']['hero']);
-    $this->assertStringContainsString('A stencil with "placement": "top_level" is a page band', $fragment['guidance']);
+    ], $fragment['blueprints']['wide_band']);
+    $this->assertArrayNotHasKey('placement', $fragment['blueprints']['hero']);
+    $this->assertArrayNotHasKey('fragment', $fragment['blueprints']['hero']);
+    $this->assertStringContainsString('A blueprint with "placement": "top_level" is a page band', $fragment['guidance']);
   }
 
   /**
-   * An unprintable tree says why, and the schema still answers.
+   * A tree the page language cannot spell whole says why; the schema answers.
    *
-   * A multi-region layout has no dialect print (region nodes), so the
-   * entry carries the printer's reason under "unprintable" and the
-   * placement spelling instead of a fragment; the rest of the schema is
-   * untouched. The one recovery a whole-site read takes for one
-   * definition: the stencil stays placeable by name.
+   * The fragment is a write template, so a print with a note (here a
+   * multi-region layout: the print carries region facts the model cannot
+   * write back) is not offered; the entry carries the print's first note
+   * under "unprintable" and the placement spelling instead of a
+   * fragment; the rest of the schema is untouched. The one recovery a
+   * whole-site read takes for one definition: the blueprint stays
+   * placeable by name.
    */
-  public function testUnprintableStencilSaysWhy(): void {
+  public function testUnprintableBlueprintSaysWhy(): void {
     TestMaterialsProvider::$records = [
       ...TestMaterialsProvider::referenceRecords(),
       new MaterialRecord(
-        kind: MaterialKind::Stencil,
+        kind: MaterialKind::Blueprint,
         id: 'two_up',
         label: 'Two up',
         description: 'Two columns.',
-        spellings: [MaterialRecord::SLOT_STENCIL => 'two_up'],
-        rootKind: MaterialRecord::ROOT_SECTION,
+        spellings: [MaterialRecord::SLOT_BLUEPRINT => 'two_up'],
+        blueprintScope: MaterialRecord::SCOPE_BLOCK,
+        favorite: TRUE,
         tree: [[
           'kind' => 'container',
           'layout_id' => 'layout_twocol_section',
           'children' => [
             ['kind' => 'region', 'region' => 'first', 'children' => [['kind' => 'block', 'block_type' => 'text']]],
+            ['kind' => 'region', 'region' => 'second', 'children' => []],
           ],
         ],
         ],
@@ -243,24 +269,24 @@ HTML;
     ];
     $this->container->get('daedalus_blueprint.materials_roster_builder')->reset();
     $fragment = $this->container->get('daedalus_blueprint.materials_schema')->fragment();
-    $entry = $fragment['stencils']['two_up'];
-    $this->assertSame(['label', 'description', 'root', 'unprintable'], array_keys($entry));
-    $this->assertStringStartsWith('The page language cannot print this stencil (multi-region layouts have no dialect print', $entry['unprintable']);
-    $this->assertStringContainsString('<pb-stencil name="two_up"/>', $entry['unprintable']);
-    $this->assertArrayHasKey('hero', $fragment['stencils']);
+    $entry = $fragment['blueprints']['two_up'];
+    $this->assertSame(['label', 'description', 'scope', 'unprintable'], array_keys($entry));
+    $this->assertStringStartsWith('The page language cannot print this blueprint (<pb-container> is a section on the "layout_twocol_section" layout (regions first, second), which the page language does not spell)', $entry['unprintable']);
+    $this->assertStringContainsString('<pb-blueprint name="two_up"/>', $entry['unprintable']);
+    $this->assertArrayHasKey('hero', $fragment['blueprints']);
   }
 
   /**
    * A material opted out of the AI has no entry; what wears it still prints.
    *
    * The fragment iterates the roster's offered view: an unoffered swatch,
-   * variant, owned look, stencil or animation is absent (entry and
+   * variant, owned look, blueprint or animation is absent (entry and
    * description), and the vocabulary of a kind left empty by the opt-out
-   * goes with it. Legality is untouched and the stencil prints are
-   * legality: a band stencil whose root wears the unoffered root-only
+   * goes with it. Legality is untouched and the blueprint prints are
+   * legality: a band blueprint whose root wears the unoffered root-only
    * variant still carries placement top_level (the verdict resolves
    * against the full roster) and its fragment still spells the axis the
-   * definition wears, since the print says what the stencil IS.
+   * definition wears, since the print says what the blueprint IS.
    */
   public function testOptedOutMaterialsLeaveTheFragment(): void {
     $reference = [];
@@ -279,9 +305,10 @@ HTML;
       applies: $record->applies,
       ownedBy: $record->ownedBy,
       weight: $record->weight,
-      rootKind: $record->rootKind,
+      blueprintScope: $record->blueprintScope,
       origin: $record->origin,
       offered: FALSE,
+      favorite: $record->favorite,
     );
     $reference['variant:container_full'] = $opt_out($reference['variant:container_full']);
     $reference['variant:hero_glow'] = $opt_out($reference['variant:hero_glow']);
@@ -299,22 +326,23 @@ HTML;
         offered: FALSE,
       ),
       new MaterialRecord(
-        kind: MaterialKind::Stencil,
+        kind: MaterialKind::Blueprint,
         id: 'secret',
         label: 'Secret',
         description: 'For the UI only.',
-        spellings: [MaterialRecord::SLOT_STENCIL => 'secret'],
-        rootKind: MaterialRecord::ROOT_BLOCK,
+        spellings: [MaterialRecord::SLOT_BLUEPRINT => 'secret'],
+        blueprintScope: MaterialRecord::SCOPE_BLOCK,
         offered: FALSE,
       ),
       new MaterialRecord(
-        kind: MaterialKind::Stencil,
+        kind: MaterialKind::Blueprint,
         id: 'wide_band',
         label: 'Wide band',
         description: 'A full-width band.',
-        spellings: [MaterialRecord::SLOT_STENCIL => 'wide_band'],
+        spellings: [MaterialRecord::SLOT_BLUEPRINT => 'wide_band'],
         applies: [MaterialRecord::APPLIES_WEARS => ['container_full']],
-        rootKind: MaterialRecord::ROOT_SECTION,
+        blueprintScope: MaterialRecord::SCOPE_BLOCK,
+        favorite: TRUE,
         tree: [[
           'kind' => 'container',
           'layout_id' => 'layout_onecol',
@@ -327,22 +355,52 @@ HTML;
     $this->container->get('daedalus_blueprint.materials_roster_builder')->reset();
     $fragment = $this->container->get('daedalus_blueprint.materials_schema')->fragment();
 
-    $this->assertSame(['guidance', 'tokens', 'swatches', 'variants', 'stencils'], array_keys($fragment), 'The animation kind emptied by the opt-out is absent with its vocabulary.');
+    $this->assertSame(['guidance', 'tokens', 'swatches', 'variants', 'groups', 'blueprints'], array_keys($fragment), 'The animation kind emptied by the opt-out is absent with its vocabulary.');
+    $this->assertSame([DialectCatalog::UNGROUPED => [MaterialsSchema::GROUP_COUNT => 2]], $fragment['groups'], 'The unoffered blueprint is not counted.');
     $this->assertStringNotContainsStringIgnoringCase('animation', $fragment['guidance']);
     $this->assertSame(['--swatch-lime_green'], array_keys($fragment['swatches']));
     $this->assertSame(['button', 'block_full', 'link_quiet'], array_keys($fragment['variants']));
-    $this->assertSame(['hero', 'wide_band'], array_keys($fragment['stencils']));
-    $this->assertArrayNotHasKey('looks', $fragment['stencils']['hero'], 'An unoffered owned look lists nowhere.');
+    $this->assertSame(['hero', 'wide_band'], array_keys($fragment['blueprints']));
+    $this->assertArrayNotHasKey('looks', $fragment['blueprints']['hero'], 'An unoffered owned look lists nowhere.');
     $this->assertStringNotContainsString('Reach for it on body copy', json_encode($fragment));
     $this->assertStringNotContainsString('For the UI only', json_encode($fragment));
 
     // Legality and the print are the full roster's.
-    $this->assertSame(MaterialsSchema::PLACEMENT_TOP_LEVEL, $fragment['stencils']['wide_band']['placement']);
-    $this->assertStringContainsString('A stencil with "placement": "top_level" is a page band', $fragment['guidance']);
-    $this->assertSame("<pb-container width=\"full\">\n</pb-container>\n", $fragment['stencils']['wide_band']['fragment']);
+    $this->assertSame(MaterialsSchema::PLACEMENT_TOP_LEVEL, $fragment['blueprints']['wide_band']['placement']);
+    $this->assertStringContainsString('A blueprint with "placement": "top_level" is a page band', $fragment['guidance']);
+    $this->assertSame("<pb-container width=\"full\">\n</pb-container>\n", $fragment['blueprints']['wide_band']['fragment']);
     $roster = $this->container->get('daedalus_blueprint.materials_roster_builder')->build();
     $this->assertTrue($roster->has(MaterialKind::Variant, 'container_full'));
-    $this->assertTrue($roster->has(MaterialKind::Stencil, 'secret'));
+    $this->assertTrue($roster->has(MaterialKind::Blueprint, 'secret'));
+  }
+
+  /**
+   * A token's whole description rides its schema entry, when written.
+   */
+  public function testTokenDescriptionRides(): void {
+    TestMaterialsProvider::$records = [
+      new MaterialRecord(
+        kind: MaterialKind::Token,
+        id: 'color/ink',
+        label: 'ink',
+        description: 'The reading color. Reach for it on body text and headings, never on a ground.',
+        value: '#1a1a2e',
+        group: 'color',
+        spellings: [MaterialRecord::SLOT_STYLE => 'var(--color-ink)'],
+      ),
+    ];
+    $this->container->get('daedalus_blueprint.materials_roster_builder')->reset();
+    $fragment = $this->container->get('daedalus_blueprint.materials_schema')->fragment();
+    // The whole description, not the first sentence: the schema is the
+    // surface that carries every material in full.
+    $this->assertSame(
+      [
+        'value' => '#1a1a2e',
+        'description' => 'The reading color. Reach for it on body text and headings, never on a ground.',
+      ],
+      $fragment['tokens']['color']['--color-ink'],
+    );
+    $this->assertStringContainsString('each entry carrying its "value" and, when its author wrote one, a "description"', $fragment['guidance']);
   }
 
   /**
@@ -356,9 +414,176 @@ HTML;
     $this->container->get('daedalus_blueprint.materials_roster_builder')->reset();
     $fragment = $this->container->get('daedalus_blueprint.materials_schema')->fragment();
     $this->assertSame(['guidance', 'tokens'], array_keys($fragment));
-    $this->assertStringNotContainsStringIgnoringCase('stencil', $fragment['guidance']);
+    $this->assertStringNotContainsStringIgnoringCase('blueprint', $fragment['guidance']);
     $this->assertStringNotContainsStringIgnoringCase('animation', $fragment['guidance']);
     $this->assertStringNotContainsString(MaterialsSchema::LOOKS_BY_POSITION, $fragment['guidance']);
+  }
+
+  /**
+   * A page blueprint is a start, never a placement: it leaves the fragment.
+   *
+   * The blueprints group is block scope (what places into a page); a
+   * page-scope record is in no entry and no description of it rides, and
+   * a roster whose blueprints are all page scope carries no blueprints
+   * group and none of the blueprint vocabulary in the guidance, exactly
+   * as a site with no blueprints. Where a page blueprint IS shown (a page
+   * bundle's `starts`) is the hook's, with a bundle host in hand.
+   */
+  public function testPageBlueprintsLeaveTheFragment(): void {
+    $landing = new MaterialRecord(
+      kind: MaterialKind::Blueprint,
+      id: 'landing',
+      label: 'Landing',
+      description: 'A whole landing page.',
+      spellings: [MaterialRecord::SLOT_BLUEPRINT => 'landing'],
+      blueprintScope: MaterialRecord::SCOPE_PAGE,
+      entityId: '9',
+      tree: [['kind' => 'container', 'layout_id' => 'layout_onecol', 'children' => []]],
+    );
+    TestMaterialsProvider::$records = [...TestMaterialsProvider::referenceRecords(), $landing];
+    $this->container->get('daedalus_blueprint.materials_roster_builder')->reset();
+    $fragment = $this->container->get('daedalus_blueprint.materials_schema')->fragment();
+    $this->assertSame(['hero'], array_keys($fragment['blueprints']));
+    $this->assertStringNotContainsString('landing', json_encode($fragment));
+    $this->assertStringContainsString('<pb-blueprint name="id"/>', $fragment['guidance']);
+
+    TestMaterialsProvider::$records = [$landing];
+    $this->container->get('daedalus_blueprint.materials_roster_builder')->reset();
+    $fragment = $this->container->get('daedalus_blueprint.materials_schema')->fragment();
+    $this->assertSame(['guidance'], array_keys($fragment));
+    $this->assertStringNotContainsStringIgnoringCase('blueprint', $fragment['guidance']);
+    $this->assertTrue($this->container->get('daedalus_blueprint.materials_roster_builder')->build()->has(MaterialKind::Blueprint, 'landing'), 'The full roster keeps the page blueprint: it is a start.');
+  }
+
+  /**
+   * A roster holding favorites, grouped, stray and page blueprints over a vocabulary.
+   *
+   * The reference hero (a favorite, no group), a favorite opener in
+   * heroes, a wide band in bands and heroes, a stray filed under a group
+   * this site does not declare, and a page blueprint in heroes that is a
+   * start and never in the index.
+   */
+  protected function groupedRoster(): void {
+    TestGroupsContributor::$groups = [
+      'heroes' => ['label' => 'Heroes', 'description' => 'Full-width openers. The top of a page.'],
+      'bands' => ['label' => 'Bands'],
+      'cards' => ['label' => 'Cards'],
+    ];
+    $tree = [['kind' => 'container', 'layout_id' => 'layout_onecol', 'children' => []]];
+    TestMaterialsProvider::$records = [
+      ...TestMaterialsProvider::referenceRecords(),
+      new MaterialRecord(
+        kind: MaterialKind::Blueprint,
+        id: 'opener',
+        label: 'Opener',
+        description: 'An opening band.',
+        spellings: [MaterialRecord::SLOT_BLUEPRINT => 'opener'],
+        blueprintScope: MaterialRecord::SCOPE_BLOCK,
+        groups: ['heroes'],
+        favorite: TRUE,
+        tree: $tree,
+      ),
+      new MaterialRecord(
+        kind: MaterialKind::Blueprint,
+        id: 'wide_band',
+        label: 'Wide band',
+        description: 'A full-width band.',
+        spellings: [MaterialRecord::SLOT_BLUEPRINT => 'wide_band'],
+        blueprintScope: MaterialRecord::SCOPE_BLOCK,
+        groups: ['bands', 'heroes'],
+        tree: $tree,
+      ),
+      new MaterialRecord(
+        kind: MaterialKind::Blueprint,
+        id: 'stray',
+        label: 'Stray',
+        description: 'Filed under a group this site lacks.',
+        spellings: [MaterialRecord::SLOT_BLUEPRINT => 'stray'],
+        blueprintScope: MaterialRecord::SCOPE_BLOCK,
+        groups: ['foreign'],
+        tree: $tree,
+      ),
+      new MaterialRecord(
+        kind: MaterialKind::Blueprint,
+        id: 'landing',
+        label: 'Landing',
+        description: 'A whole landing page.',
+        spellings: [MaterialRecord::SLOT_BLUEPRINT => 'landing'],
+        blueprintScope: MaterialRecord::SCOPE_PAGE,
+        groups: ['heroes'],
+        favorite: TRUE,
+        tree: $tree,
+      ),
+    ];
+    $this->reset();
+  }
+
+  /**
+   * The default listing is the favorites; the index is the vocabulary with counts.
+   *
+   * The blueprints group prints the site favorites alone (the model's
+   * cached text and the Add panel's default list agree); the groups group
+   * carries every declared group in declaration order with its label,
+   * its description when written and how many offered block blueprints
+   * it holds (a group holding none included: the vocabulary is also the
+   * ids a blueprint's groups take), then the reserved bucket counting the
+   * ones in no declared group (an undeclared id counts nowhere). A page
+   * blueprint is a start: it is neither listed nor counted.
+   */
+  public function testDefaultListingAndGroupIndex(): void {
+    $this->groupedRoster();
+    $schema = $this->container->get('daedalus_blueprint.materials_schema');
+    $fragment = $schema->fragment();
+
+    $this->assertSame(['guidance', 'tokens', 'swatches', 'variants', 'groups', 'blueprints', 'animations'], array_keys($fragment));
+    $this->assertSame(['hero', 'opener'], array_keys($fragment['blueprints']), 'The favorites, in roster order.');
+    $this->assertSame([
+      'heroes' => ['label' => 'Heroes', 'description' => 'Full-width openers. The top of a page.', 'blueprints' => 2],
+      'bands' => ['label' => 'Bands', 'blueprints' => 1],
+      'cards' => ['label' => 'Cards', 'blueprints' => 0],
+      DialectCatalog::UNGROUPED => ['blueprints' => 2],
+    ], $fragment['groups']);
+    $this->assertStringNotContainsString('landing', json_encode($fragment));
+    $this->assertSame(['heroes', 'bands', 'cards', DialectCatalog::UNGROUPED], $schema->groupIds());
+    $this->assertStringContainsString('"groups" is the site\'s group vocabulary (the ids a blueprint\'s groups take) with how many offered blueprints each holds', $fragment['guidance']);
+  }
+
+  /**
+   * One group in full, after the cache: the listing replaces the favorites in place.
+   *
+   * Narrowing takes the fragment as built (what the schema cache holds)
+   * and swaps its blueprints group for the group's offered block
+   * blueprints printed in full, every other group carried through in its
+   * place, so the cache key never carries the group. A declared group
+   * holding nothing leaves the blueprints group absent, as an empty kind
+   * is; the reserved bucket lists the ones in no declared group; an
+   * unknown group is refused loudly (the tool answers the corrective
+   * from groupIds() before asking).
+   */
+  public function testNarrowToOneGroup(): void {
+    $this->groupedRoster();
+    $schema = $this->container->get('daedalus_blueprint.materials_schema');
+    $fragment = $schema->fragment();
+
+    $heroes = $schema->narrow($fragment, NULL, 'heroes');
+    $this->assertSame(array_keys($fragment), array_keys($heroes), 'The blueprints group keeps its place.');
+    $this->assertSame(['opener', 'wide_band'], array_keys($heroes['blueprints']));
+    $this->assertStringStartsWith('<pb-container', $heroes['blueprints']['wide_band']['fragment'], 'A group lists its blueprints in full.');
+    $this->assertSame($fragment['groups'], $heroes['groups'], 'The index is carried through as cached.');
+    $this->assertSame($fragment['guidance'], $heroes['guidance']);
+
+    $this->assertSame(['hero', 'stray'], array_keys($schema->narrow($fragment, NULL, DialectCatalog::UNGROUPED)['blueprints']), 'The reserved bucket: no group, or only groups this site lacks; roster order.');
+    $cards = $schema->narrow($fragment, NULL, 'cards');
+    $this->assertArrayNotHasKey('blueprints', $cards, 'A declared group holding nothing lists nothing.');
+    $this->assertSame(['guidance', 'tokens', 'swatches', 'variants', 'groups', 'animations'], array_keys($cards));
+
+    try {
+      $schema->narrow($fragment, NULL, 'foreign');
+      $this->fail('An undeclared group id was narrowed to.');
+    }
+    catch (\InvalidArgumentException $e) {
+      $this->assertStringContainsString('heroes, bands, cards, ungrouped', $e->getMessage());
+    }
   }
 
   /**
@@ -371,15 +596,21 @@ HTML;
       return [$schema, $context];
     };
 
-    // A layout references materials (variants worn, stencils placed).
-    [$schema, $context] = $alter(['fields' => [], 'layout_builder__layout' => ['guidance' => 'x']]);
-    $this->assertArrayHasKey('stencils', $schema['materials']);
+    // A layout references materials (variants worn, blueprints placed).
+    // The context names a type nothing hosts, so the blueprints are block
+    // scope unfiltered by fit and no starts ride (a start needs a page
+    // bundle's host).
+    [$schema, $context] = $alter(['fields' => [], 'layout' => ['guidance' => 'x']]);
+    $this->assertArrayHasKey('blueprints', $schema['materials']);
+    $this->assertArrayNotHasKey('starts', $schema);
     $this->assertContains('materials_test_list', $context['cache_tags'], 'The roster\'s invalidation domain rides the alter context.');
+    $this->assertContains('config:field_config_list', $context['cache_tags'], 'The offer\'s (the site lists a fit reads) rides beside it.');
 
-    // A field carrying a style guide references materials.
-    [$schema] = $alter(['fields' => ['styles' => ['type' => 'x', 'style_guide' => ['guidance' => 'x']]]]);
+    // A document's style store (the top-level `styles` entry, carrying the
+    // style guide) references materials.
+    [$schema] = $alter(['fields' => [], 'styles' => ['type' => 'x', 'style_guide' => ['guidance' => 'x']]]);
     $this->assertArrayHasKey('variants', $schema['materials']);
-    $this->assertSame(['guidance'], array_keys($schema['fields']['styles']['style_guide']), 'The field\'s own fragment is untouched.');
+    $this->assertSame(['guidance'], array_keys($schema['styles']['style_guide']), 'The store\'s own fragment is untouched.');
 
     // Anything else says nothing about materials and carries none.
     [$schema, $context] = $alter(['fields' => ['name' => ['type' => 'string']]]);

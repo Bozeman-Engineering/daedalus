@@ -35,59 +35,6 @@ class SemanticValidatorTest extends BlueprintKernelTestBase {
   }
 
   /**
-   * Tests entity access allowed for new entity with correct permissions.
-   */
-  public function testEntityAccessAllowedForCreate(): void {
-    $entity = $this->entityTypeManager->getStorage('entity_test')
-      ->create(['name' => 'Test']);
-
-    $errors = $this->validator->validateEntityAccess($entity);
-    $this->assertEmpty($errors);
-  }
-
-  /**
-   * Tests entity access allowed for existing entity with correct permissions.
-   */
-  public function testEntityAccessAllowedForUpdate(): void {
-    $entity = $this->createTestEntity(['name' => 'Test']);
-
-    $errors = $this->validator->validateEntityAccess($entity);
-    $this->assertEmpty($errors);
-  }
-
-  /**
-   * Tests entity access denied for create without permission.
-   */
-  public function testEntityAccessDeniedForCreate(): void {
-    // Switch to a user without entity_test permissions.
-    $this->setUpCurrentUser([], []);
-
-    $entity = $this->entityTypeManager->getStorage('entity_test')
-      ->create(['name' => 'Test']);
-
-    $errors = $this->validator->validateEntityAccess($entity);
-    $this->assertCount(1, $errors);
-    $this->assertSame('ACCESS_DENIED_ENTITY', $errors[0]->getCode());
-    $this->assertSame('entity_type', $errors[0]->getPath());
-    $this->assertStringContainsString('cannot create', $errors[0]->getMessage());
-  }
-
-  /**
-   * Tests entity access denied for update without permission.
-   */
-  public function testEntityAccessDeniedForUpdate(): void {
-    $entity = $this->createTestEntity(['name' => 'Test']);
-
-    // Switch to a user without entity_test permissions.
-    $this->setUpCurrentUser([], []);
-
-    $errors = $this->validator->validateEntityAccess($entity);
-    $this->assertCount(1, $errors);
-    $this->assertSame('ACCESS_DENIED_ENTITY', $errors[0]->getCode());
-    $this->assertStringContainsString('cannot update', $errors[0]->getMessage());
-  }
-
-  /**
    * Tests field access allowed for accessible fields.
    */
   public function testFieldAccessAllowed(): void {
@@ -302,6 +249,10 @@ class SemanticValidatorTest extends BlueprintKernelTestBase {
 
   /**
    * Tests end-to-end: ACCESS_DENIED_ENTITY through deserializer.
+   *
+   * Host-level access is the capability resolver's host access policy,
+   * asked at the root of the whole-document path for a create as for an
+   * update; the deserializer reports its refusal at entity_type.
    */
   public function testDeserializerReturnsAccessDeniedEntity(): void {
     // Switch to a user without entity_test permissions.
@@ -324,6 +275,19 @@ class SemanticValidatorTest extends BlueprintKernelTestBase {
     $errors = $result->getErrors();
     $this->assertCount(1, $errors);
     $this->assertSame('ACCESS_DENIED_ENTITY', $errors[0]->getCode());
+    $this->assertSame('entity_type', $errors[0]->getPath());
+    $this->assertStringContainsString('cannot create', $errors[0]->getMessage());
+
+    $entity = $this->createTestEntity(['name' => 'Test']);
+    $result = $deserializer->deserialize([
+      'entity_type' => 'entity_test',
+      'bundle' => 'entity_test',
+      '_root_entity' => ['field' => 'id', 'value' => (int) $entity->id()],
+      'fields' => ['name' => 'Renamed'],
+    ]);
+    $this->assertFalse($result->isSuccess());
+    $this->assertSame('ACCESS_DENIED_ENTITY', $result->getErrors()[0]->getCode());
+    $this->assertStringContainsString('cannot update', $result->getErrors()[0]->getMessage());
   }
 
   /**

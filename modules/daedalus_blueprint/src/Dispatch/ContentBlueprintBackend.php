@@ -12,13 +12,18 @@ use Drupal\daedalus_blueprint\BlueprintOperationsInterface;
 use Drupal\daedalus_blueprint\BlueprintSchemaBuilderInterface;
 use Drupal\daedalus_blueprint\BlueprintSerializerInterface;
 use Drupal\daedalus_blueprint\EntityStorageHandler;
+use Drupal\daedalus_blueprint\Host\HostInterface;
+use Drupal\daedalus_blueprint\Host\HostResolver;
 use Drupal\daedalus_blueprint\Result\BlueprintResultInterface;
 
 /**
- * Blueprint backend for content (fieldable) entities.
+ * Blueprint backend for page hosts: what the host resolver hosts.
  *
- * Delegates to existing content entity services. Acts as the fallback backend
- * for any entity type that implements FieldableEntityInterface.
+ * The generic dispatch surface takes entities; this backend is the door
+ * where an entity becomes its host and the host spine takes over: a
+ * fieldable entity (a content host) or a Layout Builder enabled display (a
+ * display host, a page document although the entity is config). Acts as
+ * the fallback backend for any entity the host resolver can host.
  */
 class ContentBlueprintBackend implements BlueprintBackendInterface {
 
@@ -37,6 +42,8 @@ class ContentBlueprintBackend implements BlueprintBackendInterface {
    *   The operations service.
    * @param \Drupal\daedalus_blueprint\EntityStorageHandler $storageHandler
    *   The entity storage handler.
+   * @param \Drupal\daedalus_blueprint\Host\HostResolver $hostResolver
+   *   The host resolver.
    */
   public function __construct(
     protected EntityTypeManagerInterface $entityTypeManager,
@@ -45,6 +52,7 @@ class ContentBlueprintBackend implements BlueprintBackendInterface {
     protected BlueprintSchemaBuilderInterface $schemaBuilder,
     protected BlueprintOperationsInterface $operations,
     protected EntityStorageHandler $storageHandler,
+    protected HostResolver $hostResolver,
   ) {}
 
   /**
@@ -61,21 +69,22 @@ class ContentBlueprintBackend implements BlueprintBackendInterface {
   /**
    * {@inheritdoc}
    */
+  public function supportsEntity(EntityInterface $entity): bool {
+    return $this->hostResolver->hosts($entity);
+  }
+
+  /**
+   * {@inheritdoc}
+   */
   public function serialize(EntityInterface $entity, ?string $langcode = NULL): array {
-    if (!$entity instanceof FieldableEntityInterface) {
-      throw new \InvalidArgumentException('ContentBlueprintBackend requires a FieldableEntityInterface entity.');
-    }
-    return $this->serializer->serialize($entity, $langcode);
+    return $this->serializer->serialize($this->host($entity), $langcode);
   }
 
   /**
    * {@inheritdoc}
    */
   public function serializeSummary(EntityInterface $entity, ?string $langcode = NULL): array {
-    if (!$entity instanceof FieldableEntityInterface) {
-      throw new \InvalidArgumentException('ContentBlueprintBackend requires a FieldableEntityInterface entity.');
-    }
-    return $this->serializer->serializeSummary($entity, $langcode);
+    return $this->serializer->serializeSummary($this->host($entity), $langcode);
   }
 
   /**
@@ -99,10 +108,7 @@ class ContentBlueprintBackend implements BlueprintBackendInterface {
    * {@inheritdoc}
    */
   public function update(EntityInterface $entity, array $data, array $options = []): BlueprintResultInterface {
-    if (!$entity instanceof FieldableEntityInterface) {
-      throw new \InvalidArgumentException('ContentBlueprintBackend requires a FieldableEntityInterface entity.');
-    }
-    return $this->operations->updateFields($entity, $data, $options);
+    return $this->operations->updateFields($this->host($entity), $data, $options);
   }
 
   /**
@@ -116,27 +122,21 @@ class ContentBlueprintBackend implements BlueprintBackendInterface {
    * {@inheritdoc}
    */
   public function batchOperations(EntityInterface $entity, array $operations, array $options = []): BlueprintResultInterface {
-    if (!$entity instanceof FieldableEntityInterface) {
-      throw new \InvalidArgumentException('ContentBlueprintBackend requires a FieldableEntityInterface entity.');
-    }
-    return $this->operations->batchOperations($entity, $operations, $options);
+    return $this->operations->batchOperations($this->host($entity), $operations, $options);
   }
 
   /**
    * {@inheritdoc}
    */
   public function persist(EntityInterface $entity, bool $is_new = FALSE): void {
-    if (!$entity instanceof FieldableEntityInterface) {
-      throw new \InvalidArgumentException('ContentBlueprintBackend requires a FieldableEntityInterface entity.');
-    }
-    $this->storageHandler->persist($entity, $is_new);
+    $this->storageHandler->persist($this->host($entity), $is_new);
   }
 
   /**
    * {@inheritdoc}
    */
   public function load(string $entity_type_id, int|string $entity_id): ?EntityInterface {
-    return $this->storageHandler->load($entity_type_id, $entity_id);
+    return $this->storageHandler->load($entity_type_id, $entity_id)?->entity();
   }
 
   /**
@@ -144,6 +144,19 @@ class ContentBlueprintBackend implements BlueprintBackendInterface {
    */
   public function requiresWorkspace(): bool {
     return $this->storageHandler->isWorkspaceRequired();
+  }
+
+  /**
+   * The host of an entity this backend was handed.
+   *
+   * @param \Drupal\Core\Entity\EntityInterface $entity
+   *   The entity.
+   *
+   * @return \Drupal\daedalus_blueprint\Host\HostInterface
+   *   Its host.
+   */
+  public function host(EntityInterface $entity): HostInterface {
+    return $this->hostResolver->fromEntity($entity);
   }
 
   /**

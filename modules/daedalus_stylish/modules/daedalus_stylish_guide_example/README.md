@@ -21,9 +21,9 @@ follows.
 
 | File | Role |
 |------|------|
-| `config/install/daedalus_blueprint.design_system.guide_example.yml` | The design system itself: the unit the skin, guide, materials and stencil are members of, the thing the site activates, the identity paragraph the AI is told the system is, and `enforcement: strict`. |
-| `daedalus_stylish_guide_example.daedalus_stylish.skins.yml` | The skin: token values (light and dark, banded) on every declared scale, and site element defaults. The DATA half. |
-| `daedalus_stylish_guide_example.page_builder.yml` | The style guide: the token scales, the package's bindings as deltas over the suite's, the prose tags it opens, the container axes (each with its description and the properties it owns), the motion grants, the in-body ramp on the instances lane. The LAW half. |
+| `config/install/daedalus_blueprint.design_system.guide_example.yml` | The design system itself: the unit the skin, guide, materials and blueprint are members of, the thing the site activates, the identity paragraph the AI is told the system is, and `enforcement: strict`. |
+| `daedalus_stylish_guide_example.daedalus_stylish.skins.yml` | The skin: token records (light and dark, banded; `offered: false` on the tokens the rows should not lead with) on every declared scale, and site element defaults. The DATA half; on a site it is the package layer a tenant's site layer sits over. |
+| `daedalus_stylish_guide_example.page_builder.yml` | The style guide: the token scales, the token contract (the names the skin must mint and the stops may name), the package's bindings as deltas over the suite's, the prose tags it opens, the container axes (each with its description and the properties it owns), the motion grants, the in-body ramp on the instances lane. The LAW half. |
 | `daedalus_stylish_guide_example.page_builder.layout.daedalus_stylish_container.yml` | Birth defaults for page bands (surface, rhythm). |
 | `daedalus_stylish_guide_example.page_builder.block_type.text.yml` | Text block stops; the link part as the site's button; the `button` variant axis and what it owns; element-bound controls. |
 | `daedalus_stylish_guide_example.page_builder.block_type.image.yml` | Image part constraints; Rounded as the birth default. |
@@ -31,7 +31,7 @@ follows.
 | `daedalus_stylish_guide_example.daedalus_stylish.variants.yml` | The component library: bands, rhythms, cards and tiles, text looks, buttons, image frames, motion. Every look carries a description saying what it is and when to reach for it. |
 | `daedalus_stylish_guide_example.daedalus_stylish.swatches.yml` | The palette: three backgrounds beyond the role tokens, each with a description. |
 | `daedalus_stylish_guide_example.daedalus_stylish.animations.yml` | Three keyframe materials paired with animation-axis variants. |
-| `daedalus_stylish_guide_example.daedalus_blueprint.stencils.card.yml` | The composition: a band of three cards, as a page-language fragment. |
+| `daedalus_stylish_guide_example.daedalus_blueprint.blueprints.card.yml` | The composition: a band of three cards, as a page-language fragment. |
 
 ## Enable
 
@@ -68,7 +68,12 @@ drush daedalus_stylish:sync daedalus_stylish_guide_example
 
 Guide (`page_builder`) edits need only a cache rebuild; the design
 system entity is config and re-imports with `drush config:import` or a
-recipe.
+recipe. On a consuming site the shipped skin is locked and the site's
+token and defaults edits land in its site layer (the Palette, "Edit
+skin…"); a developer editing the skin itself lifts the distro lock and
+ships the system back with `drush daedalus-blueprint:design-system:ship
+guide_example`, which rewrites the per-id files and reports an edit to
+this hand-authored skin file as `modified` for a person to carry over.
 
 ## What the suite binds and what this package adds
 
@@ -85,9 +90,10 @@ A package never restates a block the suite authors. Constraint blocks
 merge like every map, so this package's site section carries only
 deltas:
 
-- `stops:` curation merged over the suite's blocks (the type ramp
-  top-down; the everyday six of the nine space steps on padding, gap
-  and margin);
+- no site-wide `stops:` (a build error there): the type ramp top-down
+  and the everyday six of the nine space steps are the skin's `offered`
+  flags per token, in the skin's stored order; stops are curated per
+  element in the block type files;
 - the bindings the suite cannot promise for every skin: letter-spacing
   to `tracking`, text and border colors to `color` (with the
   transparent / currentColor literals);
@@ -122,7 +128,7 @@ this module:
   and max-width, button the link part's fill, corners and padding): a
   hand-written owned property is answered with a warning naming the
   axis, never an error.
-- Each variant, swatch, animation and stencil carries a `description`
+- Each variant, swatch, animation and blueprint carries a `description`
   written as "what it is; reach for it when", including its
   cardinalities (one Eyebrow and one Lead per band, never a Card in a
   Card).
@@ -149,10 +155,21 @@ accept only their scale's tokens (plus a few literals such as `0`,
 `auto`, `none`). Iteration counts, text-transform and z-index carry
 closed lists or ranges.
 
-**Stops curate the offer.** The inspector shows the six type roles, the
-everyday six space steps and three tracking steps; per element the rows
-narrow further (a button offers three sizes, six fills, two radii; the
-in-body ramp offers four roles). Legality stays the whole scale.
+**The contract names what the skin must mint.** `site.token_contract`
+lists, per scale the guide curates stops on (text, tracking, space,
+color, radius, stroke), the token names the system promises; every
+per-element stop is one of them, checked at guide build, and the skin
+conforms by minting them all (a site-minted token beyond the contract
+is welcome, and on this strict system stays out of basic rows).
+
+**The offer is the skin's, stops narrow it per element.** The rows lead
+with the tokens the skin marks `offered` (the six type roles, the
+everyday six space steps, three tracking steps, in the skin's order);
+per element the block type files narrow further (a button offers three
+sizes, six fills, two radii; the in-body ramp offers four roles).
+Legality stays the whole scale. The Law tab in Edit Mode shows every
+grant, constraint, stop list, axis and birth default of this system
+with the file it came from.
 
 **Bands.** Every top-level container wears a surface (Plain, Tint,
 Elevated, Inverse, Accent) and a rhythm (Compact, Standard, Spacious),

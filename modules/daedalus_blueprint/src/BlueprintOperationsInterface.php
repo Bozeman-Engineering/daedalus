@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Drupal\daedalus_blueprint;
 
-use Drupal\Core\Entity\FieldableEntityInterface;
+use Drupal\daedalus_blueprint\Host\HostInterface;
 use Drupal\daedalus_blueprint\Result\BlueprintResult;
 
 /**
@@ -39,30 +39,30 @@ interface BlueprintOperationsInterface {
   /**
    * Returns the full serialized blueprint for an entity.
    *
-   * @param \Drupal\Core\Entity\FieldableEntityInterface $entity
-   *   The entity to serialize.
+   * @param \Drupal\daedalus_blueprint\Host\HostInterface $host
+   *   The host to serialize.
    * @param string|null $langcode
    *   The language code for translation output. NULL for default language.
    *
    * @return array
    *   The full blueprint array.
    */
-  public function getBlueprint(FieldableEntityInterface $entity, ?string $langcode = NULL): array;
+  public function getBlueprint(HostInterface $host, ?string $langcode = NULL): array;
 
   /**
    * Returns the structural summary of an entity.
    *
    * Shows the full tree hierarchy at all depths without field values.
    *
-   * @param \Drupal\Core\Entity\FieldableEntityInterface $entity
-   *   The entity to summarize.
+   * @param \Drupal\daedalus_blueprint\Host\HostInterface $host
+   *   The host to summarize.
    * @param string|null $langcode
    *   The language code for translation output. NULL for default language.
    *
    * @return array
    *   The summary blueprint array.
    */
-  public function getBlueprintSummary(FieldableEntityInterface $entity, ?string $langcode = NULL): array;
+  public function getBlueprintSummary(HostInterface $host, ?string $langcode = NULL): array;
 
   /**
    * Returns a single element's data by UUID.
@@ -71,8 +71,8 @@ interface BlueprintOperationsInterface {
    * summaries. Walks LB sections, paragraph fields, and nested structures
    * at arbitrary depth to find the target.
    *
-   * @param \Drupal\Core\Entity\FieldableEntityInterface $entity
-   *   The entity containing the element.
+   * @param \Drupal\daedalus_blueprint\Host\HostInterface $host
+   *   The host containing the element.
    * @param string $uuid
    *   The UUID of the element to serialize.
    * @param string|null $langcode
@@ -81,7 +81,7 @@ interface BlueprintOperationsInterface {
    * @return array|null
    *   The element array, or NULL if the UUID was not found.
    */
-  public function getElement(FieldableEntityInterface $entity, string $uuid, ?string $langcode = NULL): ?array;
+  public function getElement(HostInterface $host, string $uuid, ?string $langcode = NULL): ?array;
 
   /**
    * Adds a new element at the specified location.
@@ -101,8 +101,8 @@ interface BlueprintOperationsInterface {
    *   names a reference field slot directly (a separate family with no
    *   anchor equivalent yet).
    *
-   * @param \Drupal\Core\Entity\FieldableEntityInterface $entity
-   *   The entity to add an element to.
+   * @param \Drupal\daedalus_blueprint\Host\HostInterface $host
+   *   The host to add an element to.
    * @param array $location
    *   The location specification.
    * @param array $data
@@ -114,7 +114,7 @@ interface BlueprintOperationsInterface {
    *   event fires for every LB add and carries the batch's dressed
    *   posture), and an optional additional map: opaque per-placement
    *   metadata stored on the SectionComponent (keyed by owning module),
-   *   never rendered or serialized to clients; the stencil provenance
+   *   never rendered or serialized to clients; the blueprint provenance
    *   stamp rides here.
    *   Blocks hold no nested layouts: sections nest inside sections via
    *   addSection (placement 'inside') or section nodes in layout shapes.
@@ -125,7 +125,7 @@ interface BlueprintOperationsInterface {
    * @return \Drupal\daedalus_blueprint\Result\BlueprintResult
    *   The result with the modified entity on success.
    */
-  public function addElement(FieldableEntityInterface $entity, array $location, array $data, array $options = []): BlueprintResult;
+  public function addElement(HostInterface $host, array $location, array $data, array $options = []): BlueprintResult;
 
   /**
    * Adds a new Layout Builder section, born with its real layout.
@@ -137,8 +137,8 @@ interface BlueprintOperationsInterface {
    * (or pins layout settings) at birth; there is no layout-change
    * operation, a section IS its layout for life.
    *
-   * @param \Drupal\Core\Entity\FieldableEntityInterface $entity
-   *   The entity to add a section to.
+   * @param \Drupal\daedalus_blueprint\Host\HostInterface $host
+   *   The host to add a section to.
    * @param array $location
    *   Anchor-relative placement: anchor (a UUID) + placement, the ONE
    *   placement grammar, page or nested. Any sibling element in a flow
@@ -157,32 +157,42 @@ interface BlueprintOperationsInterface {
    *   Layout plugin settings patched over the explicit layout's defaults
    *   (the OpaqueDataMerger PATCH contract: an explicit empty value clears
    *   the key). Only valid together with an explicit layout.
-   * @param string|null $stencil
-   *   The source stencil ID when this section is a stencil placement's
+   * @param string|null $blueprint
+   *   The source blueprint ID when this section is a blueprint placement's
    *   root, or NULL. Provenance is a birth fact: the ID is written into the
    *   section's third-party settings (LayoutSerializer's
-   *   STENCIL_PROVENANCE_KEY) at creation, exactly as uuid carries
+   *   BLUEPRINT_PROVENANCE_KEY) at creation, exactly as uuid carries
    *   identity, so trailing style operations already see the stamp.
-   *   instantiate_stencil passes it on the root op it expands; pass it
-   *   directly only when hand-placing a stencil root.
+   *   place_blueprint passes it on the root op it expands; pass it
+   *   directly only when hand-placing a blueprint root.
+   * @param string|null $slot
+   *   The slot id this section fills, or NULL for an ordinary section. A
+   *   slot section is the host's own top-level section filling the slot
+   *   of that id the document around it placed (a locked bundle's
+   *   template, the site frame): a birth fact written into the section's
+   *   third-party settings (LayoutSerializer::SLOT_PROVIDER), surfaced as
+   *   the node's `slot` key. The id is a machine name (INVALID_SLOT
+   *   otherwise), the section lands in the root flow only
+   *   (BLUEPRINT_SLOT_NESTED on any other anchor) and the id appears at
+   *   most once in the host's own document (BLUEPRINT_SLOT_DUPLICATE).
    *
    * @return \Drupal\daedalus_blueprint\Result\BlueprintResult
    *   The result with the modified entity on success.
    */
-  public function addSection(FieldableEntityInterface $entity, array $location, ?string $uuid = NULL, ?string $layout = NULL, array $layout_settings = [], ?string $stencil = NULL): BlueprintResult;
+  public function addSection(HostInterface $host, array $location, ?string $uuid = NULL, ?string $layout = NULL, array $layout_settings = [], ?string $blueprint = NULL, ?string $slot = NULL): BlueprintResult;
 
   /**
    * Removes an element by UUID.
    *
-   * @param \Drupal\Core\Entity\FieldableEntityInterface $entity
-   *   The entity to remove an element from.
+   * @param \Drupal\daedalus_blueprint\Host\HostInterface $host
+   *   The host to remove an element from.
    * @param string $uuid
    *   The UUID of the element to remove.
    *
    * @return \Drupal\daedalus_blueprint\Result\BlueprintResult
    *   The result with the modified entity on success.
    */
-  public function removeElement(FieldableEntityInterface $entity, string $uuid): BlueprintResult;
+  public function removeElement(HostInterface $host, string $uuid): BlueprintResult;
 
   /**
    * Duplicates an element, inserted after the original.
@@ -194,8 +204,8 @@ interface BlueprintOperationsInterface {
    * Sections duplicate uniformly at every depth (a top-level clone becomes
    * a new layout row, a nested clone a sibling container).
    *
-   * @param \Drupal\Core\Entity\FieldableEntityInterface $entity
-   *   The entity containing the element.
+   * @param \Drupal\daedalus_blueprint\Host\HostInterface $host
+   *   The host containing the element.
    * @param string $uuid
    *   The UUID of the element to duplicate.
    * @param string|null $new_uuid
@@ -205,7 +215,7 @@ interface BlueprintOperationsInterface {
    *   The result with the modified entity on success; the clone's UUID is
    *   reported as an added target.
    */
-  public function duplicateElement(FieldableEntityInterface $entity, string $uuid, ?string $new_uuid = NULL): BlueprintResult;
+  public function duplicateElement(HostInterface $host, string $uuid, ?string $new_uuid = NULL): BlueprintResult;
 
   /**
    * Moves a layout element (block or section) to an anchor-relative spot.
@@ -223,8 +233,8 @@ interface BlueprintOperationsInterface {
    * conversion and keep identity. Paragraphs are not movable here;
    * reorder_field covers ordering within a field.
    *
-   * @param \Drupal\Core\Entity\FieldableEntityInterface $entity
-   *   The entity containing the element.
+   * @param \Drupal\daedalus_blueprint\Host\HostInterface $host
+   *   The host containing the element.
    * @param string $uuid
    *   The UUID of the element to move.
    * @param array $location
@@ -234,7 +244,7 @@ interface BlueprintOperationsInterface {
    * @return \Drupal\daedalus_blueprint\Result\BlueprintResult
    *   The result with the modified entity on success.
    */
-  public function moveElement(FieldableEntityInterface $entity, string $uuid, array $location): BlueprintResult;
+  public function moveElement(HostInterface $host, string $uuid, array $location): BlueprintResult;
 
   /**
    * Updates properties on an entity or one of its elements.
@@ -243,8 +253,8 @@ interface BlueprintOperationsInterface {
    * storage location: entity fields, managed configuration keys, or element
    * label. Unknown properties produce structural errors.
    *
-   * @param \Drupal\Core\Entity\FieldableEntityInterface $entity
-   *   The entity to update.
+   * @param \Drupal\daedalus_blueprint\Host\HostInterface $host
+   *   The host to update.
    * @param string $uuid
    *   The UUID of the element to update. For root entity fields, pass the
    *   entity's own UUID.
@@ -257,15 +267,15 @@ interface BlueprintOperationsInterface {
    * @return \Drupal\daedalus_blueprint\Result\BlueprintResult
    *   The result with the modified entity on success.
    */
-  public function updateElement(FieldableEntityInterface $entity, string $uuid, array $properties, array $options = []): BlueprintResult;
+  public function updateElement(HostInterface $host, string $uuid, array $properties, array $options = []): BlueprintResult;
 
   /**
    * Updates top-level entity fields only.
    *
    * Rejects layout_section and entity_reference_revisions fields.
    *
-   * @param \Drupal\Core\Entity\FieldableEntityInterface $entity
-   *   The entity to update.
+   * @param \Drupal\daedalus_blueprint\Host\HostInterface $host
+   *   The host to update.
    * @param array $fields
    *   Map of field name to value.
    * @param array $options
@@ -275,28 +285,7 @@ interface BlueprintOperationsInterface {
    * @return \Drupal\daedalus_blueprint\Result\BlueprintResult
    *   The result with the modified entity on success.
    */
-  public function updateFields(FieldableEntityInterface $entity, array $fields, array $options = []): BlueprintResult;
-
-  /**
-   * Restructures the entity's Layout Builder layout.
-   *
-   * Declares the complete layout structure. Sections can be existing (matched
-   * by UUID) or new (no matching UUID). Region entries can be bare UUID strings
-   * (relocate an existing element) or element objects (create/update via
-   * LayoutDeserializer).
-   *
-   * @param \Drupal\Core\Entity\FieldableEntityInterface $entity
-   *   The entity to restructure.
-   * @param array $structure
-   *   The new layout structure with section and element positions.
-   * @param array $options
-   *   Deserialization options forwarded to field handlers (e.g.
-   *   decode_html_entities for the AI plain-text entity-escape defense).
-   *
-   * @return \Drupal\daedalus_blueprint\Result\BlueprintResult
-   *   The result with the modified entity on success.
-   */
-  public function restructureLayout(FieldableEntityInterface $entity, array $structure, array $options = []): BlueprintResult;
+  public function updateFields(HostInterface $host, array $fields, array $options = []): BlueprintResult;
 
   /**
    * Reorders items in an entity_reference_revisions field.
@@ -304,15 +293,15 @@ interface BlueprintOperationsInterface {
    * Accepts UUIDs in the desired order. Optionally scoped to a specific
    * parent paragraph via parent_uuid for nested fields.
    *
-   * @param \Drupal\Core\Entity\FieldableEntityInterface $entity
-   *   The entity to reorder.
+   * @param \Drupal\daedalus_blueprint\Host\HostInterface $host
+   *   The host to reorder.
    * @param array $structure
    *   The reorder specification with field name and UUID order.
    *
    * @return \Drupal\daedalus_blueprint\Result\BlueprintResult
    *   The result with the modified entity on success.
    */
-  public function reorderField(FieldableEntityInterface $entity, array $structure): BlueprintResult;
+  public function reorderField(HostInterface $host, array $structure): BlueprintResult;
 
   /**
    * Applies multiple operations atomically to a single entity.
@@ -327,8 +316,8 @@ interface BlueprintOperationsInterface {
    * failure, not real findings — and structural errors take priority over
    * semantic ones in the returned result.
    *
-   * @param \Drupal\Core\Entity\FieldableEntityInterface $entity
-   *   The entity to modify.
+   * @param \Drupal\daedalus_blueprint\Host\HostInterface $host
+   *   The host to modify.
    * @param array $operations
    *   Array of operation definitions, each with an 'op' key.
    * @param array $options
@@ -337,11 +326,21 @@ interface BlueprintOperationsInterface {
    *   entity-escape defense, or any module-defined key) — one lane, so an
    *   option means the same thing on every write path. The batch's own
    *   key is `dressed` (bool, default FALSE): TRUE declares that the
-   *   batch's elements arrive with their styles (a stencil expansion, a
+   *   batch's elements arrive with their styles (a blueprint expansion, a
    *   document dialect), so the lifecycle events it dispatches answer
    *   dressed() and birth subscribers stamp no defaults under it. An
    *   enclosing dressed batch dresses its nested batches; the option
-   *   cannot undress a nested batch of a dressed one. `judge` (bool,
+   *   cannot undress a nested batch of a dressed one. `admitted` (bool,
+   *   default FALSE): TRUE declares that the batch copies a document the
+   *   display already holds (a page seeded from its template), so the
+   *   placement restrictions, which gate what an author may pick, are not
+   *   asked; nested batches inherit it. `system` (bool, default FALSE):
+   *   TRUE declares that the batch acts for the site, not for an actor
+   *   (the seed of a page from its template, an importer), so the
+   *   capability gate is not asked; nested batches inherit it. `actor`
+   *   (AccountInterface, default the current user): the account every
+   *   operation is judged for at the capability gate; nested batches
+   *   inherit the outermost batch's. `judge` (bool,
    *   default FALSE): TRUE evaluates the batch in full and lands
    *   nothing: every op runs on the entity so later ops are judged
    *   against the world the earlier ones made, the result reports what
@@ -357,6 +356,6 @@ interface BlueprintOperationsInterface {
    * @return \Drupal\daedalus_blueprint\Result\BlueprintResult
    *   Success with the fully modified entity, or failure with errors.
    */
-  public function batchOperations(FieldableEntityInterface $entity, array $operations, array $options = []): BlueprintResult;
+  public function batchOperations(HostInterface $host, array $operations, array $options = []): BlueprintResult;
 
 }

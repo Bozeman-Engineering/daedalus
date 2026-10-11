@@ -1,9 +1,0 @@
-label: 'Bad Styles'
-description: 'A block node carrying a section-only relative style key.'
-element:
-  kind: block
-  block_type: basic
-  styles:
-    'region:first':
-      default:
-        display: flex

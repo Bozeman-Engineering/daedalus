@@ -128,9 +128,13 @@ button.daedalus-ui-breadcrumb__crumb:hover {
   gap: 0.25rem;
 }
 
+/* The primary (the anchor of traversal and drill) wears the solid
+   selection color the frame's chip wears; the secondaries stay plain
+   kit chips. State is told by the selection token, never the site's
+   highlight color, which is the attention token. */
 .daedalus-ui-chip--primary {
   color: var(--daedalus-selection-text);
-  background: var(--daedalus-ui-highlight-color);
+  background: var(--daedalus-selection);
 }
 
 .daedalus-ui-chip__label {

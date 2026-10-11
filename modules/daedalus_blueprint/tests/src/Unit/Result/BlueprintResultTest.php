@@ -6,6 +6,7 @@ namespace Drupal\Tests\daedalus_blueprint\Unit\Result;
 
 // cspell:ignore Newz
 use Drupal\Core\Entity\FieldableEntityInterface;
+use Drupal\daedalus_blueprint\Host\HostInterface;
 use Drupal\daedalus_blueprint\Result\BlueprintError;
 use Drupal\daedalus_blueprint\Result\BlueprintResult;
 use Drupal\daedalus_blueprint\Result\BlueprintWarning;
@@ -23,14 +24,17 @@ use PHPUnit\Framework\Attributes\Group;
 class BlueprintResultTest extends UnitTestCase {
 
   /**
-   * Tests a successful result with a hydrated entity.
+   * Tests a successful result carrying the host it ran against.
    */
   public function testSuccess(): void {
+    $host = $this->createMock(HostInterface::class);
     $entity = $this->createMock(FieldableEntityInterface::class);
-    $result = BlueprintResult::success($entity);
+    $host->method('entity')->willReturn($entity);
+    $result = BlueprintResult::success($host);
 
     $this->assertTrue($result->isSuccess());
     $this->assertSame('hydrated', $result->getPhase());
+    $this->assertSame($host, $result->getHost());
     $this->assertSame($entity, $result->getEntity());
     $this->assertEmpty($result->getErrors());
     $this->assertEmpty($result->getWarnings());
@@ -40,13 +44,13 @@ class BlueprintResultTest extends UnitTestCase {
    * Tests a successful result with warnings.
    */
   public function testSuccessWithWarnings(): void {
-    $entity = $this->createMock(FieldableEntityInterface::class);
+    $host = $this->createMock(HostInterface::class);
     $warning = new BlueprintWarning(
       'fields.field_tags[0]',
       'LABEL_MISMATCH',
       'Label does not match.',
     );
-    $result = BlueprintResult::success($entity, [$warning]);
+    $result = BlueprintResult::success($host, [$warning]);
 
     $this->assertTrue($result->isSuccess());
     $this->assertCount(1, $result->getWarnings());
@@ -61,6 +65,7 @@ class BlueprintResultTest extends UnitTestCase {
 
     $this->assertTrue($result->isSuccess());
     $this->assertSame('validated', $result->getPhase());
+    $this->assertNull($result->getHost());
     $this->assertNull($result->getEntity());
     $this->assertEmpty($result->getErrors());
   }
@@ -80,6 +85,7 @@ class BlueprintResultTest extends UnitTestCase {
 
     $this->assertFalse($result->isSuccess());
     $this->assertSame('structural', $result->getPhase());
+    $this->assertNull($result->getHost());
     $this->assertNull($result->getEntity());
     $this->assertCount(1, $result->getErrors());
     $this->assertSame($error, $result->getErrors()[0]);
@@ -113,12 +119,12 @@ class BlueprintResultTest extends UnitTestCase {
    * Tests toArray() for a successful result.
    */
   public function testToArraySuccess(): void {
-    $entity = $this->createMock(FieldableEntityInterface::class);
-    $entity->method('getEntityTypeId')->willReturn('node');
-    $entity->method('bundle')->willReturn('page');
-    $entity->method('id')->willReturn('42');
+    $host = $this->createMock(HostInterface::class);
+    $host->method('entityTypeId')->willReturn('node');
+    $host->method('bundle')->willReturn('page');
+    $host->method('id')->willReturn('42');
 
-    $result = BlueprintResult::success($entity);
+    $result = BlueprintResult::success($host);
     $array = $result->toArray();
 
     $this->assertTrue($array['success']);
@@ -134,12 +140,12 @@ class BlueprintResultTest extends UnitTestCase {
    * Tests toArray() for a new (unsaved) entity without an ID.
    */
   public function testToArrayNewEntity(): void {
-    $entity = $this->createMock(FieldableEntityInterface::class);
-    $entity->method('getEntityTypeId')->willReturn('node');
-    $entity->method('bundle')->willReturn('page');
-    $entity->method('id')->willReturn(NULL);
+    $host = $this->createMock(HostInterface::class);
+    $host->method('entityTypeId')->willReturn('node');
+    $host->method('bundle')->willReturn('page');
+    $host->method('id')->willReturn(NULL);
 
-    $result = BlueprintResult::success($entity);
+    $result = BlueprintResult::success($host);
     $array = $result->toArray();
 
     $this->assertArrayNotHasKey('entity_id', $array);
@@ -288,8 +294,8 @@ class BlueprintResultTest extends UnitTestCase {
    * Tests withTargetsFrom builds targets from UUID and field names.
    */
   public function testWithTargetsFrom(): void {
-    $entity = $this->createMock(FieldableEntityInterface::class);
-    $result = BlueprintResult::success($entity)
+    $host = $this->createMock(HostInterface::class);
+    $result = BlueprintResult::success($host)
       ->withTargetsFrom('uuid-123', ['field_heading', 'field_body']);
 
     $targets = $result->getTargets();
@@ -304,8 +310,8 @@ class BlueprintResultTest extends UnitTestCase {
    * Tests getElementUuids extracts unique UUIDs from targets.
    */
   public function testGetComponentUuids(): void {
-    $entity = $this->createMock(FieldableEntityInterface::class);
-    $result = BlueprintResult::success($entity)
+    $host = $this->createMock(HostInterface::class);
+    $result = BlueprintResult::success($host)
       ->withTargets([
         ['uuid' => '2ccc0362-5579-85a0-f3a6-624b8a6de818', 'field_name' => 'field_heading'],
         ['uuid' => 'de7c633e-5ca8-1342-f47f-08ec9da298e0', 'field_name' => 'field_body'],
@@ -326,12 +332,12 @@ class BlueprintResultTest extends UnitTestCase {
    * the entity identity keys only.
    */
   public function testToArrayWithTargets(): void {
-    $entity = $this->createMock(FieldableEntityInterface::class);
-    $entity->method('getEntityTypeId')->willReturn('node');
-    $entity->method('bundle')->willReturn('page');
-    $entity->method('id')->willReturn('1');
+    $host = $this->createMock(HostInterface::class);
+    $host->method('entityTypeId')->willReturn('node');
+    $host->method('bundle')->willReturn('page');
+    $host->method('id')->willReturn('1');
 
-    $result = BlueprintResult::success($entity)
+    $result = BlueprintResult::success($host)
       ->withTargetsFrom('uuid-123', ['field_heading']);
 
     $array = $result->toArray();

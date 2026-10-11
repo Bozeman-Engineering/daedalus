@@ -23,7 +23,7 @@ use Drupal\daedalus_blueprint_ai\DaedalusBlueprintToolBase;
       data_type: 'map',
       label: new TranslatableMarkup('Blueprint'),
       required: TRUE,
-      description: new TranslatableMarkup('An object. Required: "entity_type". All entity field values (title, body, etc.) go inside a "fields" object — never at the top level. "layout_builder__layout" is the one exception: a separate top-level key, not inside "fields". See the schema\'s "_structure" note.'),
+      description: new TranslatableMarkup('An object. Required: "entity_type". All entity field values (title, body, etc.) go inside a "fields" object — never at the top level. The document is the exception: the layout is the top-level "layout" key and the style map the top-level "styles" key, neither inside "fields". See the schema\'s "_structure" note.'),
     ),
   ],
 )]
@@ -44,12 +44,19 @@ class CreateEntity extends DaedalusBlueprintToolBase {
       return;
     }
 
-    if (!$this->requireContentEntityType($entity_type)) {
+    if (!$this->requireDocumentHostType($entity_type) || !$this->requireFieldableType($entity_type)) {
       return;
     }
 
     $bundle = $data['bundle'] ?? NULL;
     if (is_string($bundle) && $bundle !== '' && !$this->requireVisibleEntityType($entity_type, $bundle)) {
+      return;
+    }
+
+    // A page bundle is page_create's, judged before the deserializer runs
+    // (a missing bundle falls to the deserializer's own INVALID_BUNDLE).
+    if (is_string($bundle) && $bundle !== '' && $this->pageHosts->isPageBundle($entity_type, $bundle)) {
+      $this->output = $this->pageCreateCorrective($entity_type, $bundle);
       return;
     }
 

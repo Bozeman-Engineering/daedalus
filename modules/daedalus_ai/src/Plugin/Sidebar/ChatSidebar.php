@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Drupal\daedalus_ai\Plugin\Sidebar;
 
 use Drupal\ai_assistant_api\AiAssistantApiRunner;
+use Drupal\ai_chatbot\Plugin\Block\DeepChatFormBlock;
 use Drupal\Component\Serialization\Json;
 use Drupal\Core\Access\CsrfTokenGenerator;
 use Drupal\Core\Config\ConfigFactoryInterface;
@@ -138,12 +139,26 @@ final class ChatSidebar extends SidebarPluginBase implements ContainerFactoryPlu
       // copy button render twice, and it re-runs the responseInterceptor
       // per chunk, which resets ai_chatbot's should_continue flag before
       // onMessage fires.
+      //
+      // The body is ai_chatbot's chat-turn request contract (drupal/ai 1.5:
+      // DeepChatApi::api() refuses any body without a chat_processor_plugin
+      // it knows), and this object is the ONE place daedalus spells it:
+      // ai_chatbot's deepchat-init.js reads the processor keys off this same
+      // object for its clear-history reset and its prepend call, and the
+      // follow-up loop derives its body from it. The processor id is
+      // ai_chatbot's own constant, so a rename there fails here at load;
+      // plugin_configuration carries exactly the processor's
+      // defaultConfiguration() keys (ChatSidebarTest pins both against the
+      // live plugin).
       'additionalBodyProps' => [
-        'assistant_id' => $assistant_id,
+        'chat_processor_plugin' => DeepChatFormBlock::ASSISTANT_PROCESSOR_PLUGIN_ID,
+        'plugin_configuration' => [
+          'assistant_id' => $assistant_id,
+          'stream_output' => FALSE,
+          'verbose_mode' => TRUE,
+          'show_structured_results' => FALSE,
+        ],
         'stream' => FALSE,
-        'structured_results' => FALSE,
-        'show_copy_icon' => TRUE,
-        'verbose_mode' => TRUE,
         'contexts' => [
           'current_route' => $this->currentPath->getPath(),
         ],

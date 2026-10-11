@@ -9,6 +9,7 @@ use Drupal\daedalus_blueprint\Materials\MaterialsRoster;
 use Drupal\daedalus_blueprint\Materials\RelativeSelector;
 use Drupal\daedalus_blueprint\Materials\ValueKind;
 use Drupal\daedalus_blueprint\Materials\ValueReference;
+use Drupal\daedalus_blueprint\NodeTree\NodeTreeBuilder;
 
 /**
  * Parses and validates the dialect's CSS surface.
@@ -1125,7 +1126,8 @@ final class DialectCssParser {
    * between them: `container` for a container node, `block_type` the
    * declared inline bundle (NULL for a plugin block and for an undeclared
    * bundle, which the page language prints as <pb-block>), `plugin_id`
-   * the plugin block's id, and `body` the element's rich text (staged
+   * the plugin block's BASE id (field_block for a field node), and `body`
+   * the element's rich text (staged
    * content) when its type declares a rich body, else NULL.
    *
    * @param array $node
@@ -1154,7 +1156,9 @@ final class DialectCssParser {
     return [
       'container' => $is_container,
       'block_type' => $block_type,
-      'plugin_id' => isset($node['plugin_id']) ? (string) $node['plugin_id'] : NULL,
+      // The base plugin the element wears under (a field node's is
+      // field_block): the axis and class views key by it.
+      'plugin_id' => $is_container ? NULL : NodeTreeBuilder::pluginBase($node),
       'body' => $body,
     ];
   }
@@ -1178,12 +1182,8 @@ final class DialectCssParser {
       if ($identity !== NULL && ($node['kind'] ?? '') !== 'region') {
         $ids[(string) $identity] = self::knownId($node, $catalog);
       }
-      foreach (['children', 'regions'] as $axis) {
-        if (!is_array($node[$axis] ?? NULL)) {
-          continue;
-        }
-        $children = $axis === 'regions' ? array_merge(...array_values(array_filter($node[$axis], 'is_array'))) : $node[$axis];
-        $ids += self::knownIds($children, $catalog);
+      if (is_array($node['children'] ?? NULL)) {
+        $ids += self::knownIds($node['children'], $catalog);
       }
     }
     return $ids;
@@ -1273,7 +1273,7 @@ final class DialectCssParser {
    * The structured error for a reference the roster does not carry.
    *
    * One shape for every material miss on the dialect door (a var() in a
-   * style value, a class, an axis attribute value, a stencil name): the
+   * style value, a class, an axis attribute value, a blueprint name): the
    * message names the miss, the context carries the reference as written
    * and the candidates the roster ranked (kind, id, spelling, the same
    * facts a client store can offer), and the hint is the roster's one

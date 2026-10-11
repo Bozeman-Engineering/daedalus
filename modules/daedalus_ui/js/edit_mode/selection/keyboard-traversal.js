@@ -57,14 +57,16 @@ import { seatOf, siblingOf, parentOf, firstRowOf } from './traversal';
  * element-tier, so a part seats it at its owner's parent, exactly where
  * the crumb click does (traversal.js `drill`).
  *
- * The styling target rides the walk as the row it seats on: a placed,
- * drawn part target IS its row (Up/Down among the owner's rows, Left to
- * the row parent), while a target the index does not place (a tag tier,
- * a chain seated from code mode, an ancestor rule, a hoisted part) or
- * places on a row the panel is not drawing (a shell part with the
- * Markup view off) sits on the selected element, and Left from it drops
- * the target back to the bare element (the same drop Escape's target
- * rung makes) instead of climbing past it.
+ * The styling subject facet rides the walk as the row it seats on: a
+ * placed, drawn part facet IS its row (Up/Down among the owner's rows,
+ * Left to the row parent), while a facet the index does not place (a tag
+ * tier, a chain seated from code mode, a hoisted part) or places on a
+ * row the panel is not drawing (a shell part with the Markup view off)
+ * sits on the selected element, and Left from it drops the styling back
+ * to the bare element (the same drop Escape's styling rung makes: the
+ * facet and the write address together) instead of climbing past it. A
+ * write address standing with no facet is dropped by Left the same way;
+ * the address is never a row.
  *
  * F6 toggles DOM focus between the page-elements panel and the canvas:
  * a FOCUS toggle, never a selection transfer, since selection is shared
@@ -101,17 +103,17 @@ const declines = (stroke) => stroke.control;
  * The selection, the selector it seats on, the index and the reach
  * predicate for this keystroke, or null when the index cannot seat the
  * selection (no selection, or no projection node for its key). The
- * selector is the target's when the target sits on the selected element
- * (a part row, or an unplaced tag or chain); an ancestor-rule target
- * seats the bare element.
+ * selector is the subject facet's (a part row, or an unplaced tag or
+ * chain; the facet's key is always the selected key); the write address
+ * seats nothing, it only says whether styling stands.
  */
 const seated = () => {
-  const { selectedKey: key, target } = store.getState().selection;
-  const selector = target && target.key === key ? target.selector : null;
+  const { selectedKey: key, target, address } = store.getState().selection;
+  const selector = target?.selector ?? null;
   const index = projectionIndex();
   const reach = reachPredicate();
   return key && seatOf(index, reach, key, selector)
-    ? { index, reach, key, selector, target }
+    ? { index, reach, key, selector, styling: !!(target || address) }
     : null;
 };
 
@@ -163,13 +165,15 @@ const traverseOut = (stroke) => {
   if (!current) {
     return enter();
   }
-  // A target the index does not place, or places on a row the panel is
-  // not drawing, sits on the selected element: Left drops it back to the
-  // bare element (the drop Escape's target rung makes), the symmetric
-  // move to Right seating a part. A drawn part climbs its row parent
-  // like any row.
+  // Styling (a facet the index does not place or places on a row the
+  // panel is not drawing, or a write address with no facet) sits on the
+  // selected element: Left drops it back to the bare element, facet and
+  // address together (the drop Escape's styling rung makes; setTarget(null)
+  // clears both), the symmetric move to Right seating a part. A drawn
+  // part climbs its row parent like any row, and that commit is a facet
+  // write, which drops the address with it.
   if (
-    current.target &&
+    current.styling &&
     seatOf(current.index, current.reach, current.key, current.selector)
       .address === current.key
   ) {
@@ -235,8 +239,8 @@ const toggleSurfaceFocus = () => {
     return;
   }
   const focusRow = () => {
-    // Focus follows the seat (reach.js seatAddress): the target's row
-    // while a placed, drawn part is targeted (the row the tree marks
+    // Focus follows the seat (reach.js seatAddress): the facet's row
+    // while a placed, drawn part is the subject (the row the tree marks
     // active), else the selected element's row, exactly where the walks
     // and the breadcrumb stand.
     const { selectedKey: key, target } = store.getState().selection;
@@ -246,7 +250,7 @@ const toggleSurfaceFocus = () => {
         projectionIndex(),
         reachPredicate(),
         key,
-        target && target.key === key ? target.selector : null,
+        target?.selector ?? null,
       );
     const row =
       (seat &&

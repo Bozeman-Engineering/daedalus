@@ -108,7 +108,7 @@ class BlueprintOperationsSampleFillTest extends BlueprintKernelTestBase {
     $entity = $this->createTestEntity(['field_subtitle' => NULL]);
     $this->assertTrue($entity->get('field_subtitle')->isEmpty());
 
-    $result = $this->operations->batchOperations($entity, [$this->sampleOp($entity, ['field_subtitle'])]);
+    $result = $this->operations->batchOperations($this->host($entity), [$this->sampleOp($entity, ['field_subtitle'])]);
 
     $this->assertTrue($result->isSuccess(), print_r($result->toArray(), TRUE));
     $this->assertSame('The site default', $entity->get('field_subtitle')->value);
@@ -132,7 +132,7 @@ class BlueprintOperationsSampleFillTest extends BlueprintKernelTestBase {
     $this->configureGenerator('field_subtitle');
     $entity = $this->createTestEntity();
 
-    $result = $this->operations->batchOperations($entity, [$this->sampleOp($entity, ['field_subtitle'])]);
+    $result = $this->operations->batchOperations($this->host($entity), [$this->sampleOp($entity, ['field_subtitle'])]);
 
     $this->assertTrue($result->isSuccess(), print_r($result->toArray(), TRUE));
     // random_string writes a sentence of at least the configured word count;
@@ -150,7 +150,7 @@ class BlueprintOperationsSampleFillTest extends BlueprintKernelTestBase {
     $entity = $this->createTestEntity();
     $this->assertTrue($entity->get('field_count')->isEmpty());
 
-    $result = $this->operations->batchOperations($entity, [$this->sampleOp($entity, ['field_count'])]);
+    $result = $this->operations->batchOperations($this->host($entity), [$this->sampleOp($entity, ['field_count'])]);
 
     $this->assertTrue($result->isSuccess(), print_r($result->toArray(), TRUE));
     $this->assertIsNumeric($entity->get('field_count')->value);
@@ -179,7 +179,7 @@ class BlueprintOperationsSampleFillTest extends BlueprintKernelTestBase {
     EntityTestMulRevPub::create(['name' => 'Draft only', 'status' => 0])->save();
     $entity = $this->createTestEntity();
 
-    $result = $this->operations->batchOperations($entity, [$this->sampleOp($entity, ['field_ref'])]);
+    $result = $this->operations->batchOperations($this->host($entity), [$this->sampleOp($entity, ['field_ref'])]);
 
     $this->assertFalse($result->isSuccess());
     $this->assertSame('semantic', $result->getPhase());
@@ -199,7 +199,7 @@ class BlueprintOperationsSampleFillTest extends BlueprintKernelTestBase {
     $field->setDefaultValue([['value' => 'The site default']])->save();
     $entity = $this->createTestEntity(['field_subtitle' => 'Typed by hand']);
 
-    $result = $this->operations->batchOperations($entity, [$this->sampleOp($entity, ['field_subtitle'])]);
+    $result = $this->operations->batchOperations($this->host($entity), [$this->sampleOp($entity, ['field_subtitle'])]);
 
     $this->assertTrue($result->isSuccess(), print_r($result->toArray(), TRUE));
     $this->assertSame('The site default', $entity->get('field_subtitle')->value);
@@ -217,7 +217,7 @@ class BlueprintOperationsSampleFillTest extends BlueprintKernelTestBase {
     $entity->set('created', NULL);
     $this->assertTrue($entity->get('created')->isEmpty());
 
-    $result = $this->operations->batchOperations($entity, [$this->sampleOp($entity, ['created'])]);
+    $result = $this->operations->batchOperations($this->host($entity), [$this->sampleOp($entity, ['created'])]);
 
     $this->assertTrue($result->isSuccess(), print_r($result->toArray(), TRUE));
     // CreatedItem's item-level default (the request time) is the first rung.
@@ -246,7 +246,7 @@ class BlueprintOperationsSampleFillTest extends BlueprintKernelTestBase {
     ]);
     $entity->save();
 
-    $result = $this->operations->batchOperations($entity, [
+    $result = $this->operations->batchOperations($this->host($entity), [
       [
         'op' => 'update_element',
         'element' => self::BLOCK_UUID,
@@ -273,7 +273,7 @@ class BlueprintOperationsSampleFillTest extends BlueprintKernelTestBase {
   public function testExtraKeysRefused(): void {
     $entity = $this->createTestEntity(['field_subtitle' => 'Kept']);
 
-    $result = $this->operations->batchOperations($entity, [
+    $result = $this->operations->batchOperations($this->host($entity), [
       [
         'op' => 'update_element',
         'element' => $entity->uuid(),
@@ -302,7 +302,7 @@ class BlueprintOperationsSampleFillTest extends BlueprintKernelTestBase {
     $this->createField('field_blank', 'test_field');
     $entity = $this->createTestEntity();
 
-    $result = $this->operations->batchOperations($entity, [$this->sampleOp($entity, ['field_blank'])]);
+    $result = $this->operations->batchOperations($this->host($entity), [$this->sampleOp($entity, ['field_blank'])]);
 
     $this->assertFalse($result->isSuccess());
     $this->assertSame('semantic', $result->getPhase());
@@ -322,7 +322,7 @@ class BlueprintOperationsSampleFillTest extends BlueprintKernelTestBase {
     \Drupal::state()->set('views_field_access_test-field', 'field_subtitle');
     $this->setUpCurrentUser([], ['administer entity_test content']);
 
-    $result = $this->operations->batchOperations($entity, [$this->sampleOp($entity, ['field_subtitle'])]);
+    $result = $this->operations->batchOperations($this->host($entity), [$this->sampleOp($entity, ['field_subtitle'])]);
 
     $this->assertFalse($result->isSuccess());
     $errors = $result->getErrors();
@@ -344,7 +344,7 @@ class BlueprintOperationsSampleFillTest extends BlueprintKernelTestBase {
     $this->configureGenerator('field_subtitle', TRUE);
     $entity = $this->createTestEntity(['field_subtitle' => 'Saved']);
 
-    $result = $this->operations->batchOperations($entity, [$this->sampleOp($entity, ['field_subtitle'])]);
+    $result = $this->operations->batchOperations($this->host($entity), [$this->sampleOp($entity, ['field_subtitle'])]);
 
     $this->assertFalse($result->isSuccess());
     $this->assertSame('semantic', $result->getPhase());
@@ -385,7 +385,7 @@ class BlueprintOperationsSampleFillTest extends BlueprintKernelTestBase {
     ]);
     $entity->save();
 
-    $result = $this->operations->addElement($entity, ['anchor' => $seed_uuid, 'placement' => 'after'], [
+    $result = $this->operations->addElement($this->host($entity), ['anchor' => $seed_uuid, 'placement' => 'after'], [
       'block_type' => 'text_section',
       'uuid' => self::BLOCK_UUID,
       'populate' => 'sample',

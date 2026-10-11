@@ -1,0 +1,19 @@
+daedalus_blueprint_library.blueprint_type.*:
+  type: config_entity
+  label: 'Blueprint type'
+  mapping:
+    id:
+      type: machine_name
+      label: 'Machine name'
+      constraints:
+        Length:
+          max: 32
+    label:
+      type: required_label
+      label: 'Label'
+    description:
+      type: text
+      label: 'Description'
+    frame_only:
+      type: boolean
+      label: 'Frame only'

@@ -25,7 +25,6 @@ use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 use Symfony\Component\HttpFoundation\InputBag;
 use Symfony\Component\HttpFoundation\Request;
-use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
 use Symfony\Component\Routing\Route;
 
 /**
@@ -107,10 +106,14 @@ class ReplaceMediaOperationTest extends NestedStorageKernelTestBase {
       ])
       ->save();
 
-    // The spine checks field edit access per field and the reference
-    // handler resolves the target; the block keys the re-render swaps by
-    // are stamped for edit-mode users.
+    // The op door asks update access on the host and, for an inline
+    // block's field, core's inline block content permission (the role
+    // policy); the spine checks field edit access per field and the
+    // reference handler resolves the target; the block keys the re-render
+    // swaps by are stamped for edit-mode users.
     $this->setUpCurrentUser([], [
+      'administer entity_test content',
+      'create and edit custom blocks',
       'configure any layout',
       'use daedalus ui edit mode',
       'view media',
@@ -171,7 +174,7 @@ class ReplaceMediaOperationTest extends NestedStorageKernelTestBase {
    */
   protected function working(EntityTest $entity): EntityTest {
     /** @var \Drupal\entity_test\Entity\EntityTest */
-    return $this->container->get('daedalus_blueprint.storage_handler')->load('entity_test', $entity->id());
+    return $this->container->get('daedalus_blueprint.storage_handler')->load('entity_test', $entity->id())->entity();
   }
 
   /**
@@ -211,7 +214,7 @@ class ReplaceMediaOperationTest extends NestedStorageKernelTestBase {
     }
     finally {
       $request_stack->pop();
-      $this->container->get('daedalus_ui.ui')->clearDerivedEntity();
+      $this->container->get('daedalus_ui.ui')->clearDerivedHost();
     }
     return $event;
   }
@@ -291,16 +294,25 @@ class ReplaceMediaOperationTest extends NestedStorageKernelTestBase {
     $this->assertArrayNotHasKey('persisted', $payload);
     $this->assertArrayNotHasKey('history', $payload);
     $this->assertSame((int) $original->id(), $this->referencedMediaId($this->working($entity)), 'A failed op stages nothing.');
-    $this->assertSame([], $this->container->get('daedalus_tempstore.history_manager')->metadata($this->working($entity))['entries'], 'No history entry was produced.');
+    $this->assertSame([], $this->container->get('daedalus_tempstore.history_manager')->metadata($this->host($this->working($entity)))['entries'], 'No history entry was produced.');
   }
 
   /**
-   * A Layout Builder drop without its block context is a bad request.
+   * A drop without block context targets the host's own field.
+   *
+   * The root is the op's element; this host carries no photo field of its
+   * own, so the spine refuses the property and stages nothing.
    */
-  public function testMissingBlockContextIsRefused(): void {
-    $entity = $this->createHost($this->createImageMedia('original'));
-    $this->expectException(BadRequestHttpException::class);
-    $this->dispatch($entity, $this->createImageMedia('replacement'), NULL);
+  public function testMissingBlockContextTargetsTheRoot(): void {
+    $original = $this->createImageMedia('original');
+    $entity = $this->createHost($original);
+
+    $event = $this->dispatch($entity, $this->createImageMedia('replacement'), NULL);
+    $payload = $this->appliedPayload($event->getResponse());
+    $this->assertFalse($payload['success']);
+    $this->assertSame('UNKNOWN_FIELD', $payload['errors'][0]['code'], print_r($payload['errors'], TRUE));
+    $this->assertArrayNotHasKey('persisted', $payload);
+    $this->assertSame((int) $original->id(), $this->referencedMediaId($this->working($entity)), 'The block is untouched: the root was the target.');
   }
 
 }

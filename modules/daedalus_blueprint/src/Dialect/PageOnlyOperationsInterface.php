@@ -14,7 +14,7 @@ use Drupal\daedalus_blueprint\OperationHandler\OperationHandlerInterface;
  * catalog declares a container layout) the op has no JSON-door work left:
  * eb_edit refuses page entities outright, and the page language spells
  * the gesture its own way (variant wear is set's class attribute, styles
- * are CSS, a stencil stamps as <pb-stencil>). Declaring an op here takes
+ * are CSS, a blueprint stamps as <pb-blueprint>). Declaring an op here takes
  * it off eb_edit's always-on roll-call on such a site, so the cached
  * surface never teaches a second grammar for a page gesture.
  *

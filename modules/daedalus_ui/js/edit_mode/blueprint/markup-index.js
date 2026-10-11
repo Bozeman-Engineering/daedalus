@@ -108,7 +108,7 @@ export const markupForKey = (key) => {
         }
       }
     }
-    indexTree(state.blueprint._tree);
+    indexTree(state.blueprint.layout);
   }
   return index.get(key) ?? null;
 };

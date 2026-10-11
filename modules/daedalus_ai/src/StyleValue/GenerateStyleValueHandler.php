@@ -119,16 +119,16 @@ class GenerateStyleValueHandler implements StyleValueHandlerInterface {
       // (where the style backend's <style> tag renders), mirroring
       // update_style's own targets; the style key rides as pending_key so
       // the shimmer lands on the styled element itself. The variant-styles
-      // lane's root entry has no key ('') and its entity is the variant,
-      // not a page — the media still processes, just with no page target.
-      // A keyed write whose lane carried no entity (the seam allows NULL)
+      // lane's root entry has no key ('') and its host is the variant's,
+      // not a page: the media still processes, just with no page target.
+      // A keyed write whose lane carried no host (the seam allows NULL)
       // degrades to the bare style key: shimmer without a completion swap.
       $key = $context['key'];
-      $entity = $context['entity'];
+      $host = $context['host'] ?? NULL;
       $target = NULL;
       if ($key !== '') {
-        $target = $entity === NULL ? $key : [
-          'uuid' => $entity->uuid(),
+        $target = $host === NULL ? $key : [
+          'uuid' => $host->uuid(),
           'field_name' => DaedalusStylishFieldManager::FIELD_NAME,
           'pending_key' => $key,
         ];

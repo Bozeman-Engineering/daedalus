@@ -7,21 +7,26 @@ namespace Drupal\daedalus_stylish;
 use Drupal\Core\Database\Connection;
 use Drupal\Core\Database\Statement\FetchAs;
 use Drupal\Core\Entity\EntityFieldManagerInterface;
+use Drupal\Core\Entity\EntityInterface;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\Entity\FieldableEntityInterface;
 use Drupal\Core\Entity\RevisionableInterface;
-use Drupal\daedalus_stylish\Plugin\Field\FieldType\StyleMapItem;
+use Drupal\daedalus_blueprint\Entity\FrameInterface;
+use Drupal\daedalus_blueprint\Host\HostResolver;
+use Drupal\layout_builder\Entity\LayoutEntityDisplayInterface;
 
 /**
- * The daedalus_variant_usage table: which host entities wear which variants.
+ * The daedalus_variant_usage table: which hosts wear which variants.
  *
  * The inline_block_usage pattern: instead of parsing content on demand (the
  * retired LIKE scan plus load-everything walk in VariantManager::usages()),
  * a dedicated table mirrors the variant references in every saved style map,
- * maintained at the map field's one chokepoint, the host entity save (every
- * map write, whether from the op spine, a blueprint write, or a programmatic
- * save, ends in one). All usage consumers read it: push impact, the
- * card's per-open usage read, wearer lists, delete gating.
+ * maintained at the map's one chokepoint, the host entity save (every map
+ * write, whether from the op spine, a blueprint write, or a programmatic
+ * save, ends in one). A host is whatever keeps a style map (HostResolver):
+ * a content entity carrying the map field, a Layout Builder enabled
+ * display carrying its template's map. All usage consumers read it: push
+ * impact, the card's per-open usage read, wearer lists, delete gating.
  *
  * Rows are (variant, entity_type, entity_id): one row per distinct reference
  * string per host entity. The variant column stores the reference VERBATIM
@@ -50,25 +55,26 @@ class VariantUsage {
     protected Connection $database,
     protected EntityTypeManagerInterface $entityTypeManager,
     protected EntityFieldManagerInterface $entityFieldManager,
+    protected HostResolver $hostResolver,
   ) {}
 
   /**
    * Syncs a saved map host's rows with its style map (the chokepoint).
    *
    * Called from daedalus_stylish_entity_insert()/daedalus_stylish_entity_update() for every
-   * entity carrying the map field. Non-default revision saves (workspace
+   * saved host with a style store. Non-default revision saves (workspace
    * staging, pending revisions) are skipped: the table mirrors the default
    * revision the compiled stylesheet serves. Saves that neither carry nor
    * previously carried references never touch the database, so the common
    * unstyled save costs nothing.
    */
-  public function track(FieldableEntityInterface $entity): void {
+  public function track(EntityInterface $entity): void {
     if ($entity instanceof RevisionableInterface && !$entity->isDefaultRevision()) {
       return;
     }
     $references = $this->mapReferences($entity);
     $original = $entity->getOriginal();
-    $previous = $original instanceof FieldableEntityInterface ? $this->mapReferences($original) : [];
+    $previous = $original instanceof EntityInterface ? $this->mapReferences($original) : [];
     if ($references === $previous) {
       return;
     }
@@ -88,7 +94,7 @@ class VariantUsage {
    * table rows drifted from its map (the accepted staleness edges in the
    * class docblock) is rebuild()'s job either way.
    */
-  public function untrack(FieldableEntityInterface $entity): void {
+  public function untrack(EntityInterface $entity): void {
     if ($this->mapReferences($entity) === []) {
       return;
     }
@@ -106,7 +112,7 @@ class VariantUsage {
    * (workspace publish promotes staged revisions), so there is no original
    * to compare against and the rows must simply match the map now.
    */
-  public function resync(FieldableEntityInterface $entity): void {
+  public function resync(EntityInterface $entity): void {
     if ($entity instanceof RevisionableInterface && !$entity->isDefaultRevision()) {
       return;
     }
@@ -195,11 +201,15 @@ class VariantUsage {
    *
    * The repair path (drush daedalus_stylish:variant-usage:rebuild) for the staleness
    * edges the class docblock names, and the seed for sites updating into
-   * the table. Runs in a transaction so readers never see a half-built
-   * table (delete, not truncate: truncate commits implicitly on MySQL).
+   * the table. Every host store is enumerated: the entity types carrying
+   * the auto-managed map field, then every Layout Builder enabled display
+   * (a template's map lives on its display), then every site frame (a
+   * frame's map lives on its config entity). Runs in a transaction so
+   * readers never see a half-built table (delete, not truncate: truncate
+   * commits implicitly on MySQL).
    *
    * @return int
-   *   The number of reference-carrying host entities tracked.
+   *   The number of reference-carrying hosts tracked.
    */
   public function rebuild(): int {
     // Held until the method returns: the transaction commits when the object
@@ -220,41 +230,100 @@ class VariantUsage {
         ->accessCheck(FALSE)
         ->exists(DaedalusStylishFieldManager::FIELD_NAME)
         ->execute();
-      foreach (array_chunk($ids, 50) as $chunk) {
-        foreach ($storage->loadMultiple($chunk) as $entity) {
-          if (!$entity instanceof FieldableEntityInterface) {
-            continue;
-          }
-          $references = $this->mapReferences($entity);
-          if ($references !== []) {
-            $this->insertReferences($entity_type_id, (string) $entity->id(), $references);
-            $tracked++;
-          }
+      $tracked += $this->rebuildChunked($entity_type_id, $ids);
+    }
+    $tracked += $this->rebuildChunked('entity_view_display', static::templateDisplayIds($this->entityTypeManager));
+    $tracked += $this->rebuildChunked(FrameInterface::ENTITY_TYPE_ID, static::frameIds($this->entityTypeManager));
+    return $tracked;
+  }
+
+  /**
+   * Rebuild's inner loop: inserts one entity type's rows, chunked.
+   *
+   * @return int
+   *   The number of reference-carrying hosts inserted.
+   */
+  protected function rebuildChunked(string $entity_type_id, array $ids): int {
+    $storage = $this->entityTypeManager->getStorage($entity_type_id);
+    $tracked = 0;
+    foreach (array_chunk($ids, 50) as $chunk) {
+      foreach ($storage->loadMultiple($chunk) as $entity) {
+        $references = $this->mapReferences($entity);
+        if ($references !== []) {
+          $this->insertReferences($entity_type_id, (string) $entity->id(), $references);
+          $tracked++;
         }
-        $storage->resetCache($chunk);
       }
+      $storage->resetCache($chunk);
     }
     return $tracked;
   }
 
   /**
-   * The distinct variant references in a host entity's style map, sorted.
+   * The ids of every Layout Builder enabled display: the template hosts.
    *
-   * Reads the auto-managed map field only (DaedalusStylishFieldManager::FIELD_NAME,
-   * the one map field the module manages and delivers), through the one
-   * structured reference read (StyleMapValidator::entryVariants()), so a
-   * variant name mentioned inside a css VALUE never counts. Sorted so
-   * track()'s changed-or-not comparison is order-insensitive.
+   * Shared with the value-usage tables (ValueUsageBase::rebuild()): one
+   * enumeration of the template store, the walk EntityViewDisplayWalker
+   * makes.
+   *
+   * @return string[]
+   *   The display config ids, [] when layout_builder is not installed.
+   */
+  public static function templateDisplayIds(EntityTypeManagerInterface $entity_type_manager): array {
+    if (!interface_exists(LayoutEntityDisplayInterface::class)) {
+      return [];
+    }
+    return array_values($entity_type_manager->getStorage('entity_view_display')->getQuery()
+      ->accessCheck(FALSE)
+      ->condition('third_party_settings.layout_builder.enabled', TRUE)
+      ->sort('id')
+      ->execute());
+  }
+
+  /**
+   * The ids of every site frame: the frame hosts.
+   *
+   * The third host store beside the map field and the templates (a
+   * frame's map is its third-party setting, as a template's is). Shared
+   * with the value-usage tables for the same reason as the display ids.
+   *
+   * @return string[]
+   *   The frame config ids (the themes), [] when the entity type is not
+   *   defined (layout_builder absent).
+   */
+  public static function frameIds(EntityTypeManagerInterface $entity_type_manager): array {
+    if (!$entity_type_manager->hasDefinition(FrameInterface::ENTITY_TYPE_ID)) {
+      return [];
+    }
+    return array_values($entity_type_manager->getStorage(FrameInterface::ENTITY_TYPE_ID)->getQuery()
+      ->accessCheck(FALSE)
+      ->sort('id')
+      ->execute());
+  }
+
+  /**
+   * The distinct variant references in a host's style map, sorted.
+   *
+   * Reads the host's store (the content host's auto-managed map field, the
+   * display host's third-party setting) through the one structured
+   * reference read (StyleMapValidator::entryVariants()), so a variant name
+   * mentioned inside a css VALUE never counts; an entity nothing hosts has
+   * none. Sorted so track()'s changed-or-not comparison is
+   * order-insensitive.
    *
    * @return string[]
    *   The reference strings, verbatim as the map stores them.
    */
-  protected function mapReferences(FieldableEntityInterface $entity): array {
-    if (!$entity->hasField(DaedalusStylishFieldManager::FIELD_NAME)) {
+  protected function mapReferences(EntityInterface $entity): array {
+    if (!$this->hostResolver->hosts($entity)) {
       return [];
     }
-    $item = $entity->get(DaedalusStylishFieldManager::FIELD_NAME)->first();
-    $map = $item instanceof StyleMapItem ? $item->getStyleMap() : [];
+    $host = $this->hostResolver->fromEntity($entity);
+    // The map as saved: tracking counts stored wear, so the read declines
+    // the template seed a content host runs on the first read of either
+    // document door (ValueUsageBase::hostMap() takes the same posture).
+    $host->declineSeed();
+    $map = $host->hasStyleStore() ? $host->styleMap() : [];
     $references = [];
     foreach ($map as $entry) {
       foreach (StyleMapValidator::entryVariants($entry) as $reference) {

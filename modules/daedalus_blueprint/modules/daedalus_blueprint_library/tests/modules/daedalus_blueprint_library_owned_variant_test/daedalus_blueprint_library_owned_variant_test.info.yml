@@ -1,0 +1,8 @@
+name: Daedalus Blueprint Library Owned Variant Test
+type: module
+description: Ships a blueprint-owned style variant for the variants disk lane tests.
+package: Testing
+core_version_requirement: ^10.3 || ^11
+dependencies:
+  - daedalus:daedalus_blueprint_library
+  - daedalus:daedalus_stylish

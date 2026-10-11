@@ -66,7 +66,7 @@ import { addressKey, withheldAt } from './write-address.js';
  * shadowing wars are structurally impossible.
  *
  * Everything arrives through the state source, so the same components
- * render in-page and in the satellite window: layout tree and style map
+ * render in-page and in the satellite window: node tree and style map
  * are broadcast state, drag previews ride the ordinary preview intents,
  * and the batches go through commitBatch — the satellite relays them to
  * the leader's one op queue.
@@ -303,7 +303,7 @@ const rootFacts = (
     selected,
     blockTypes,
     sectionLayouts,
-    source.getLayout?.() ?? [],
+    tree ?? [],
   );
   // Under a write address the rows' editable layer is that rule's
   // ancestor layer in the container's stack (the inspector's rows read
@@ -610,7 +610,7 @@ export const layoutSectionTarget = (source, selected) => {
   if (!parsed || parsed.kind !== 'container' || parsed.selector) {
     return null;
   }
-  const children = containerChildren(source.getLayout?.() ?? [], parsed.uuid);
+  const children = containerChildren(source.getTree?.() ?? [], parsed.uuid);
   return children === null ? null : { parsed, children };
 };
 
@@ -733,8 +733,8 @@ export const LayoutSection = ({
           ? createMatcher(nodeTree).facts(removal.key)?.type
           : null) ?? Drupal.t('Element');
       const confirmed = await Drupal.Daedalus.dialog.confirm({
-        message: Drupal.t('Remove "@label" and its content?', {
-          '@label': label,
+        message: Drupal.t('Remove "!label" and its content?', {
+          '!label': label,
         }),
         confirmLabel: Drupal.t('Remove'),
         danger: true,
@@ -794,8 +794,8 @@ export const LayoutSection = ({
           title={
             onOpenDocument
               ? Drupal.t(
-                  'Edit what "@label" sets at @pose. Its wearing stays as it is; the variant owns its own conditions.',
-                  { '@label': viaLabel, '@pose': poseLabel },
+                  'Edit what "!label" sets at !pose. Its wearing stays as it is; the variant owns its own conditions.',
+                  { '!label': viaLabel, '!pose': poseLabel },
                 )
               : undefined
           }
@@ -805,9 +805,9 @@ export const LayoutSection = ({
               : undefined
           }
         >
-          {Drupal.t('@label stacks at @pose', {
-            '@label': viaLabel,
-            '@pose': poseLabel,
+          {Drupal.t('!label stacks at !pose', {
+            '!label': viaLabel,
+            '!pose': poseLabel,
           })}
         </button>
       )}
@@ -938,8 +938,8 @@ export const ColumnSection = ({
   ) {
     return null;
   }
-  const layout = source.getLayout?.() ?? [];
-  const parent = parentContainerOf(layout, selected);
+  const tree = source.getTree?.() ?? [];
+  const parent = parentContainerOf(tree, selected);
   if (!parent) {
     return null;
   }
@@ -954,7 +954,7 @@ export const ColumnSection = ({
   if (parentState.mode !== 'columns') {
     return null;
   }
-  const childKeys = (containerChildren(layout, parent.uuid) ?? []).map(
+  const childKeys = (containerChildren(tree, parent.uuid) ?? []).map(
     (child) => child.key,
   );
   if (childKeys.length < 2) {
@@ -969,8 +969,8 @@ export const ColumnSection = ({
         </h3>
       </div>
       <div className="daedalus-stylish-inspector__layout-note">
-        {Drupal.t('Column @n of @count · drag the dividers to resize', {
-          '@n': parent.index + 1,
+        {Drupal.t('Column !n of @count · drag the dividers to resize', {
+          '!n': parent.index + 1,
           '@count': parent.count,
         })}
       </div>

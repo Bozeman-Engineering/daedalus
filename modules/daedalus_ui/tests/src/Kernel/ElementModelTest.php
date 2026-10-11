@@ -246,8 +246,8 @@ class ElementModelTest extends KernelTestBase {
   /**
    * A bundle carrying a nested layout is a structural container: open.
    */
-  public function testLayoutBlockStaysOpen(): void {
-    $this->createBlockType('layout_block');
+  public function testNestedLayoutBundleStaysOpen(): void {
+    $this->createBlockType('nested_layout');
     FieldStorageConfig::create([
       'field_name' => 'field_nested_layout',
       'entity_type' => 'block_content',
@@ -256,11 +256,11 @@ class ElementModelTest extends KernelTestBase {
     FieldConfig::create([
       'field_name' => 'field_nested_layout',
       'entity_type' => 'block_content',
-      'bundle' => 'layout_block',
+      'bundle' => 'nested_layout',
       'label' => 'Layout',
     ])->save();
 
-    $presentation = $this->model->bundlePresentation('block_content', 'layout_block');
+    $presentation = $this->model->bundlePresentation('block_content', 'nested_layout');
 
     $this->assertSame(Presentation::OPEN, $presentation->mode);
   }
@@ -410,19 +410,48 @@ class ElementModelTest extends KernelTestBase {
       ->removeComponent('field_hidden')
       ->save();
 
-    $this->assertEqualsCanonicalizing(
-      ['info', 'field_gone', 'field_hidden'],
-      $this->model->nonExistentFields(ElementModel::KIND_BLOCK, 'block_content', 'gone_field', 'full'),
-    );
+    $block = $this->model->nonExistentFields(ElementModel::KIND_BLOCK, 'block_content', 'gone_field', 'full');
+    foreach (['info', 'field_gone', 'field_hidden'] as $name) {
+      $this->assertContains($name, $block);
+    }
+    foreach (['field_shown', 'field_unit_declared'] as $name) {
+      $this->assertNotContains($name, $block);
+    }
 
-    $this->assertEqualsCanonicalizing(
-      ['info', 'field_gone'],
-      $this->model->nonExistentFields(ElementModel::KIND_ENTITY, 'block_content', 'gone_field', 'full'),
-      'The display-hidden inference never speaks for root entities.',
-    );
+    $root = $this->model->nonExistentFields(ElementModel::KIND_ENTITY, 'block_content', 'gone_field', 'full');
+    foreach (['info', 'field_gone'] as $name) {
+      $this->assertContains($name, $root);
+    }
+    $this->assertNotContains('field_hidden', $root, 'The display-hidden inference never speaks for root entities.');
 
     $this->expectException(\InvalidArgumentException::class);
     $this->model->nonExistentFields('region', 'block_content', 'gone_field', 'full');
+  }
+
+  /**
+   * A field with no view display options exists at neither kind.
+   *
+   * Core's display carries only the fields that declare view display
+   * options, so a base field without them (block_content's reusable: record
+   * metadata) renders through no display and nothing answers to its key.
+   * The root's label key is the one exception: block_content's info has no
+   * view display options either, but it renders as the page title, outside
+   * the display, so the inference must not veto the root row's edit target.
+   */
+  public function testFieldsWithoutViewDisplayOptionsNeverExist(): void {
+    $this->createBlockType('plain', ['field_shown' => 'string']);
+
+    foreach ([ElementModel::KIND_ENTITY, ElementModel::KIND_BLOCK] as $kind) {
+      $names = $this->model->nonExistentFields($kind, 'block_content', 'plain', 'full');
+      $this->assertContains('reusable', $names, "$kind: a base field with no view display options never renders.");
+      $this->assertNotContains('field_shown', $names, "$kind: a configurable field always carries view display options.");
+    }
+
+    $this->assertSame(
+      'info',
+      $this->model->rootPresentation('block_content', 'plain', 'full')->editTarget,
+      'The label key renders as the page title: the root row still renames it.',
+    );
   }
 
 }

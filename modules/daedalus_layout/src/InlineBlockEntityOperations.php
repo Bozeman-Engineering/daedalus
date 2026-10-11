@@ -3,13 +3,17 @@
 namespace Drupal\daedalus_layout;
 
 use Drupal\Core\Entity\EntityInterface;
+use Drupal\daedalus_blueprint\Host\HostInterface;
+use Drupal\daedalus_blueprint\Host\HostResolver;
+use Drupal\daedalus_blueprint\LayoutBuilder\DaedalusLayoutAdapter;
+use Drupal\daedalus_blueprint\LayoutBuilder\InlineBlockValues;
 use Drupal\layout_builder\SectionComponent;
 use Drupal\Core\Entity\EntityRepositoryInterface;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\layout_builder\Plugin\Block\InlineBlock;
 use Drupal\layout_builder\InlineBlockUsageInterface;
+use Psr\Log\LoggerInterface;
 use Symfony\Component\DependencyInjection\ContainerInterface;
-use Drupal\daedalus_layout\SectionStorage\NestedAwareSectionStorage;
 use Drupal\layout_builder\SectionStorage\SectionStorageManagerInterface;
 use Drupal\layout_builder\InlineBlockEntityOperations as InlineBlockEntityOperationsBase;
 
@@ -38,8 +42,24 @@ use Drupal\layout_builder\InlineBlockEntityOperations as InlineBlockEntityOperat
  * non-reusable blocks requires a usage row resolving to an accessible host
  * (see SetInlineBlockDependency), and GC on host delete marks the whole
  * tree's rows unused in one query.
+ *
+ * The save walks what the host OWNS (OwnedSectionsTrait: the host's own
+ * section storage, the seed declined), never what renders for it. A
+ * content host saves each inline block of its own document as a
+ * block_content entity (above); a page with no document of its own
+ * (following its template, or a plain host) saves nothing of the template.
+ * A display host stores each as VALUES (InlineBlockValues::store(): the
+ * block's fields in the field grammar under block_values, no entity, no
+ * revision id, no usage row), because a display is config and its export
+ * cannot carry a content id. Core's removal walk then garbage-collects the
+ * entities a converted display no longer names.
  */
 class InlineBlockEntityOperations extends InlineBlockEntityOperationsBase {
+
+  use OwnedSectionsTrait {
+    ownedHost as private freshOwnedHost;
+    ownedStorage as private freshOwnedStorage;
+  }
 
   /**
    * The entity repository.
@@ -49,7 +69,18 @@ class InlineBlockEntityOperations extends InlineBlockEntityOperationsBase {
   protected EntityRepositoryInterface $entityRepository;
 
   /**
-   * Nested-aware storages hydrated during the current operation.
+   * The hosts resolved during the current operation.
+   *
+   * Keyed by spl_object_id() of the entity, as the storages below are: the
+   * host's persistence decides the block's shape in the save loop, and the
+   * host is resolved once per entity beside its storage.
+   *
+   * @var array<int, \Drupal\daedalus_blueprint\Host\HostInterface|null>
+   */
+  private array $hosts = [];
+
+  /**
+   * The hosts' own nested-aware storages hydrated during the current operation.
    *
    * Keyed by spl_object_id() of the entity (the saved entity and its
    * original are distinct objects needing distinct wrappers). Memoization is
@@ -57,11 +88,20 @@ class InlineBlockEntityOperations extends InlineBlockEntityOperationsBase {
    * see the SAME hydrated Section objects, so mutations made by the save
    * loop are visible to the removed-blocks diff and reachable by the flush.
    *
-   * @var \Drupal\daedalus_layout\NestedSectionStorageInterface[]
+   * @var array<int, \Drupal\daedalus_layout\NestedSectionStorageInterface|null>
    */
   private array $nestedStorages = [];
 
-  public function __construct(EntityTypeManagerInterface $entityTypeManager, InlineBlockUsageInterface $usage, SectionStorageManagerInterface $section_storage_manager, EntityRepositoryInterface $entity_repository) {
+  public function __construct(
+    EntityTypeManagerInterface $entityTypeManager,
+    InlineBlockUsageInterface $usage,
+    SectionStorageManagerInterface $section_storage_manager,
+    EntityRepositoryInterface $entity_repository,
+    protected InlineBlockValues $inlineBlockValues,
+    protected DaedalusLayoutAdapter $adapter,
+    protected LoggerInterface $logger,
+    protected HostResolver $hostResolver,
+  ) {
     parent::__construct($entityTypeManager, $usage, $section_storage_manager);
     $this->entityRepository = $entity_repository;
   }
@@ -75,28 +115,86 @@ class InlineBlockEntityOperations extends InlineBlockEntityOperationsBase {
       $container->get('inline_block.usage'),
       $container->get('plugin.manager.layout_builder.section_storage'),
       $container->get('entity.repository'),
+      $container->get('daedalus_blueprint.inline_block_values'),
+      $container->get('daedalus_blueprint.daedalus_layout_adapter'),
+      $container->get('logger.channel.daedalus_layout'),
+      $container->get('daedalus_blueprint.host_resolver'),
     );
   }
 
   /**
    * {@inheritdoc}
    *
-   * Returns ALL sections, root and embedded, making every core call site
-   * (handlePreSave's save loop, getRemovedBlockIds' revision diff)
-   * depth-aware. Embedded sections are identity-stable per wrapper: the
-   * components core mutates are the same objects bubbleChangesToRoot()
-   * flushes.
+   * Memoized per entity object for the operation: one host per entity, its
+   * seed declined once, read by the save loop (persistence) and the
+   * storage below.
+   */
+  protected function ownedHost(EntityInterface $entity): ?HostInterface {
+    $key = spl_object_id($entity);
+    if (!array_key_exists($key, $this->hosts)) {
+      $this->hosts[$key] = $this->freshOwnedHost($entity);
+    }
+    return $this->hosts[$key];
+  }
+
+  /**
+   * {@inheritdoc}
+   *
+   * Memoized per entity object for the operation: the host's
+   * sectionStorage() is a fresh wrapper per call, and every core call site
+   * within one presave must see the SAME hydrated Section objects.
+   */
+  protected function ownedStorage(EntityInterface $entity): ?NestedSectionStorageInterface {
+    $key = spl_object_id($entity);
+    if (!array_key_exists($key, $this->nestedStorages)) {
+      $this->nestedStorages[$key] = $this->freshOwnedStorage($entity);
+    }
+    return $this->nestedStorages[$key];
+  }
+
+  /**
+   * {@inheritdoc}
+   *
+   * The sections the entity OWNS (ownedSections(), the host's own storage
+   * with the seed declined), ALL of them, root and embedded, making every
+   * core call site (handlePreSave's save loop, getRemovedBlockIds' revision
+   * diff) depth-aware. Embedded sections are identity-stable per wrapper:
+   * the components core mutates are the same objects bubbleChangesToRoot()
+   * flushes. A page following its template owns no section and saves
+   * nothing; core's reading would have walked the template.
    */
   protected function getEntitySections(EntityInterface $entity) {
-    $key = spl_object_id($entity);
-    if (!isset($this->nestedStorages[$key])) {
-      $storage = $this->getSectionStorageForEntity($entity);
-      if (!$storage) {
-        return [];
-      }
-      $this->nestedStorages[$key] = NestedAwareSectionStorage::wrap($storage);
+    return $this->ownedSections($entity);
+  }
+
+  /**
+   * {@inheritdoc}
+   *
+   * An entity that can hold a document of its own. A plain host (no
+   * override field on its bundle) renders its display's document and saves
+   * none of it.
+   */
+  protected function isLayoutCompatibleEntity(EntityInterface $entity) {
+    return $this->ownsDocument($entity);
+  }
+
+  /**
+   * {@inheritdoc}
+   *
+   * A host fact: the original's own document was empty and this one is not,
+   * so this save lands the page's first document (the seed, or a creator's
+   * authored one). A seeded document can carry a block_revision_id (a
+   * template block the grammar could not spell stays an entity on the
+   * display), and the page must get its own copy rather than share the
+   * template's entity, as core intends for a first override. Core's
+   * reading asked which STORAGE each resolved to, which for an empty
+   * override is the display's.
+   */
+  protected function originalEntityUsesDefaultStorage(EntityInterface $entity) {
+    if ($entity->isNew() || !$entity->getOriginal()) {
+      return FALSE;
     }
-    return $this->nestedStorages[$key]->getAllSections();
+    return $this->ownedSections($entity->getOriginal()) === [] && $this->ownedSections($entity) !== [];
   }
 
   /**
@@ -117,15 +215,24 @@ class InlineBlockEntityOperations extends InlineBlockEntityOperationsBase {
     }
     finally {
       // The class resolver serves one instance per request; hydrated
-      // wrappers must not leak into the next entity's save.
+      // wrappers and declined hosts must not leak into the next entity's
+      // save (spl_object_id() values are reused once an object is freed).
       $this->nestedStorages = [];
+      $this->hosts = [];
     }
   }
 
   /**
    * {@inheritdoc}
+   *
+   * The host's persistence decides: a host whose blocks persist as values
+   * (a display) stores the block as values; any other saves it as an
+   * entity.
    */
   protected function saveInlineBlockComponent(EntityInterface $entity, SectionComponent $component, $new_revision, $duplicate_blocks) {
+    if ($this->ownedHost($entity)->persistence()->valueBlocks && $this->storeValueBlock($component)) {
+      return;
+    }
     /** @var \Drupal\layout_builder\Plugin\Block\InlineBlock $plugin */
     $plugin = $component->getPlugin();
     $plugin->saveBlockContent($new_revision, $duplicate_blocks);
@@ -141,6 +248,45 @@ class InlineBlockEntityOperations extends InlineBlockEntityOperationsBase {
       ]);
     }
     $component->setConfiguration($post_save_configuration);
+  }
+
+  /**
+   * Stores a display's inline block as values.
+   *
+   * A component already stored as values (or naming no block at all) is
+   * left as it is. A block the grammar cannot spell (a non-empty field
+   * whose handler serializes nothing) stays an entity on core's road, with
+   * a warning: the spine's doors refuse such a block on a template, so one
+   * reaching a save predates the door, and losing its field is worse than
+   * keeping its id.
+   *
+   * @param \Drupal\layout_builder\SectionComponent $component
+   *   The inline block component.
+   *
+   * @return bool
+   *   TRUE when the component holds values now, FALSE when the entity road
+   *   must run.
+   */
+  protected function storeValueBlock(SectionComponent $component): bool {
+    $configuration = $component->get('configuration');
+    if (empty($configuration['block_serialized']) && empty($configuration['block_revision_id'])) {
+      return TRUE;
+    }
+    $block = $this->adapter->extractBlockContent($component);
+    if ($block === NULL) {
+      return TRUE;
+    }
+    $unspellable = $this->inlineBlockValues->unspellable($block);
+    if ($unspellable !== []) {
+      $this->logger->warning('Inline block @uuid (@type) on a display holds fields the field grammar cannot spell (@fields); it stays a block entity.', [
+        '@uuid' => $component->getUuid(),
+        '@type' => $block->bundle(),
+        '@fields' => implode(', ', $unspellable),
+      ]);
+      return FALSE;
+    }
+    $this->inlineBlockValues->store($component, $block);
+    return TRUE;
   }
 
   /**

@@ -86,7 +86,7 @@ class BlueprintOperationsAddSectionLayoutTest extends BlueprintKernelTestBase {
     $entity = $this->createLbEntity();
 
     $result = $this->operations->addSection(
-      $entity,
+      $this->host($entity),
       ['anchor' => $entity->uuid(), 'placement' => 'inside'],
       NULL,
       'layout_twocol_section',
@@ -113,7 +113,7 @@ class BlueprintOperationsAddSectionLayoutTest extends BlueprintKernelTestBase {
     $entity->set('layout_builder__layout', [new Section('layout_builder_blank')]);
     $entity->save();
 
-    $result = $this->operations->addSection($entity, ['anchor' => $entity->uuid(), 'placement' => 'inside']);
+    $result = $this->operations->addSection($this->host($entity), ['anchor' => $entity->uuid(), 'placement' => 'inside']);
     $this->assertTrue($result->isSuccess(), print_r($result->toArray()['errors'] ?? [], TRUE));
     $sections = $entity->get('layout_builder__layout')->getSections();
     $this->assertCount(1, $sections);
@@ -127,7 +127,7 @@ class BlueprintOperationsAddSectionLayoutTest extends BlueprintKernelTestBase {
     $entity = $this->createLbEntity();
 
     $result = $this->operations->addSection(
-      $entity,
+      $this->host($entity),
       ['anchor' => $entity->uuid(), 'placement' => 'inside'],
       NULL,
       'layout_bogus',
@@ -154,7 +154,7 @@ class BlueprintOperationsAddSectionLayoutTest extends BlueprintKernelTestBase {
     $entity = $this->createLbEntity();
 
     $result = $this->operations->addSection(
-      $entity,
+      $this->host($entity),
       ['anchor' => $entity->uuid(), 'placement' => 'inside'],
       NULL,
       '',
@@ -171,7 +171,7 @@ class BlueprintOperationsAddSectionLayoutTest extends BlueprintKernelTestBase {
     $entity = $this->createLbEntity();
 
     $result = $this->operations->addSection(
-      $entity,
+      $this->host($entity),
       ['anchor' => $entity->uuid(), 'placement' => 'inside'],
       NULL,
       'layout_twocol_section',
@@ -193,7 +193,7 @@ class BlueprintOperationsAddSectionLayoutTest extends BlueprintKernelTestBase {
     $entity = $this->createLbEntity();
 
     $result = $this->operations->addSection(
-      $entity,
+      $this->host($entity),
       ['anchor' => $entity->uuid(), 'placement' => 'inside'],
       NULL,
       NULL,
@@ -210,7 +210,7 @@ class BlueprintOperationsAddSectionLayoutTest extends BlueprintKernelTestBase {
   public function testAddSectionLayoutViaBatch(): void {
     $entity = $this->createLbEntity();
 
-    $result = $this->operations->batchOperations($entity, [
+    $result = $this->operations->batchOperations($this->host($entity), [
       [
         'op' => 'add_section',
         'location' => ['anchor' => $entity->uuid(), 'placement' => 'inside'],
@@ -227,17 +227,17 @@ class BlueprintOperationsAddSectionLayoutTest extends BlueprintKernelTestBase {
   }
 
   /**
-   * Tests the stencil parameter stamps provenance at birth.
+   * Tests the blueprint parameter stamps provenance at birth.
    *
    * Provenance is a birth fact: the root create op carries the source
-   * stencil ID into the section's third-party settings at creation, exactly
+   * blueprint ID into the section's third-party settings at creation, exactly
    * as uuid carries identity — never a post-batch fixup.
    */
-  public function testStencilProvenanceAtBirth(): void {
+  public function testBlueprintProvenanceAtBirth(): void {
     $entity = $this->createLbEntity();
 
     $result = $this->operations->addSection(
-      $entity,
+      $this->host($entity),
       ['anchor' => $entity->uuid(), 'placement' => 'inside'],
       NULL,
       'layout_twocol_section',
@@ -248,11 +248,11 @@ class BlueprintOperationsAddSectionLayoutTest extends BlueprintKernelTestBase {
     $this->assertTrue($result->isSuccess(), print_r($result->toArray()['errors'] ?? [], TRUE));
     $sections = $entity->get('layout_builder__layout')->getSections();
     $section = end($sections);
-    $this->assertSame('hero_band', $section->getThirdPartySetting(LayoutSerializer::STENCIL_PROVENANCE_KEY, 'stencil'));
+    $this->assertSame('hero_band', $section->getThirdPartySetting(LayoutSerializer::BLUEPRINT_PROVENANCE_KEY, 'blueprint'));
 
-    // A section that is not a stencil placement carries no stamp.
+    // A section that is not a blueprint placement carries no stamp.
     $result = $this->operations->addSection(
-      $entity,
+      $this->host($entity),
       ['anchor' => $entity->uuid(), 'placement' => 'inside'],
       NULL,
       'layout_twocol_section',
@@ -260,38 +260,38 @@ class BlueprintOperationsAddSectionLayoutTest extends BlueprintKernelTestBase {
     $this->assertTrue($result->isSuccess(), print_r($result->toArray()['errors'] ?? [], TRUE));
     $sections = $entity->get('layout_builder__layout')->getSections();
     $section = end($sections);
-    $this->assertNull($section->getThirdPartySetting(LayoutSerializer::STENCIL_PROVENANCE_KEY, 'stencil'));
+    $this->assertNull($section->getThirdPartySetting(LayoutSerializer::BLUEPRINT_PROVENANCE_KEY, 'blueprint'));
   }
 
   /**
-   * Tests the batch dispatch wires the stencil parameter through.
+   * Tests the batch dispatch wires the blueprint parameter through.
    */
-  public function testStencilProvenanceViaBatch(): void {
+  public function testBlueprintProvenanceViaBatch(): void {
     $entity = $this->createLbEntity();
 
-    $result = $this->operations->batchOperations($entity, [
+    $result = $this->operations->batchOperations($this->host($entity), [
       [
         'op' => 'add_section',
         'location' => ['anchor' => $entity->uuid(), 'placement' => 'inside'],
         'layout' => 'layout_onecol',
-        'stencil' => 'hero_band',
+        'blueprint' => 'hero_band',
       ],
     ]);
 
     $this->assertTrue($result->isSuccess(), print_r($result->toArray()['errors'] ?? [], TRUE));
     $sections = $entity->get('layout_builder__layout')->getSections();
     $section = end($sections);
-    $this->assertSame('hero_band', $section->getThirdPartySetting(LayoutSerializer::STENCIL_PROVENANCE_KEY, 'stencil'));
+    $this->assertSame('hero_band', $section->getThirdPartySetting(LayoutSerializer::BLUEPRINT_PROVENANCE_KEY, 'blueprint'));
   }
 
   /**
-   * Tests an empty stencil ID errors.
+   * Tests an empty blueprint ID errors.
    */
-  public function testEmptyStencilRejected(): void {
+  public function testEmptyBlueprintRejected(): void {
     $entity = $this->createLbEntity();
 
     $result = $this->operations->addSection(
-      $entity,
+      $this->host($entity),
       ['anchor' => $entity->uuid(), 'placement' => 'inside'],
       NULL,
       NULL,
@@ -300,7 +300,7 @@ class BlueprintOperationsAddSectionLayoutTest extends BlueprintKernelTestBase {
     );
 
     $this->assertFalse($result->isSuccess());
-    $this->assertEquals('INVALID_STENCIL', $result->getErrors()[0]->getCode());
+    $this->assertEquals('INVALID_BLUEPRINT', $result->getErrors()[0]->getCode());
   }
 
   /**
@@ -316,7 +316,7 @@ class BlueprintOperationsAddSectionLayoutTest extends BlueprintKernelTestBase {
     $this->enableModules(['daedalus_blueprint_test']);
     $this->operations = $this->container->get('daedalus_blueprint.operations');
 
-    $result = $this->operations->addSection($entity, [
+    $result = $this->operations->addSection($this->host($entity), [
       'anchor' => $entity->uuid(),
       'placement' => 'inside',
     ]);
@@ -337,7 +337,7 @@ class BlueprintOperationsAddSectionLayoutTest extends BlueprintKernelTestBase {
   public function testChangeSectionLayoutRetired(): void {
     $entity = $this->createLbEntity();
 
-    $result = $this->operations->batchOperations($entity, [
+    $result = $this->operations->batchOperations($this->host($entity), [
       [
         'op' => 'change_section_layout',
         'element' => 'faf95c53-35e7-74e1-184e-041152031df4',

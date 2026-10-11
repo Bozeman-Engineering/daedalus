@@ -4,216 +4,247 @@ declare(strict_types=1);
 
 namespace Drupal\daedalus_blueprint\NodeTree;
 
-use Drupal\Core\Entity\FieldableEntityInterface;
+use Drupal\daedalus_blueprint\Host\HostInterface;
+use Drupal\daedalus_blueprint\LayoutBuilder\FieldBlock;
 use Drupal\daedalus_blueprint\LayoutBuilder\LayoutSerializer;
+use Drupal\daedalus_blueprint\Plugin\Block\LinkedBlueprintBlock;
 
 /**
- * Builds the lean node tree — the spine's canonical page representation.
+ * The lean node tree's reads: a host's tree, its style map, its nodes.
  *
- * One kind-discriminated tree of containers and blocks, derived from
- * LayoutSerializer's section output plus the entity's style map. It is the
- * representation the model-facing dialect prints from and the shape the
- * browser consumers (the blueprint mirror's `_tree`) read, so the two
+ * The tree is the spine's canonical page representation: one
+ * kind-discriminated tree of containers, regions and blocks with styles
+ * on the node, produced by LayoutSerializer (the one producer; its
+ * docblock is the shape's reference) and carried by the blueprint's
+ * `layout`. It is the representation the model-facing dialect prints
+ * from, the instantiator writes, and every client reader walks, so the
  * surfaces project the same nodes by construction.
  *
- * Node shapes:
- * - Container (every section, top-level or nested):
- *   {kind: 'container', uuid?, layout_id, label?, layout_settings?,
- *   stencil?, children: [...], styles?}. A container LAYOUT's ordered flow
- *   is its `children` directly; a multi-region layout's genuinely named
- *   slots appear as region nodes.
- * - Region (multi-region layouts only, until they retire):
- *   {kind: 'region', region: name, children: [...]}. Regions are not
- *   addressable elements — no uuid, no styles — but their grouping is real
- *   structure while multi-region layouts exist, so it is a node, never a
- *   map: the tree has ONE child axis at every depth.
- * - Block: {kind: 'block', uuid, block_type|plugin_id, label?,
- *   label_rendered?, block_fields?, configuration?, stencil?, styles?}.
+ * This service is what a consumer holds to read a tree without a
+ * blueprint: build() for a host's tree, the style map reads for the
+ * printers, and the static node helpers (find(), labelRendered()) every
+ * tree walker shares.
  *
- * Leanness is structural, not lossy-by-default: unknown keys on a
- * serialized node (delivery annotations like `_element`, future serializer
- * keys) are carried verbatim; only the storage residue named below is
- * removed. Removed residue:
- * - the `regions` map and per-component region names (structure is the one
- *   `children` axis, region nodes where slots are real),
- * - `section_index` (order IS the array order),
- * - `view_mode` and `block_revision_id` (render/revision plumbing no
- *   consumer of the tree reads and no author writes),
- * - `label_display` (core's 'visible'/'0' storage spelling), replaced by
- *   the derived boolean `label_rendered`, present only when TRUE: whether
- *   the label renders as page content is the fact consumers need.
- *
- * Styles live ON the node (the ruled spine shape): the entity's flat style
- * map — selectable keys to condition-keyed entries — is distributed onto
- * the nodes its keys address, and becomes a derived delivery index for the
- * CSS printers rather than the canonical shape. A node's `styles` is keyed
- * by the LOCAL remainder of the selectable key after the node's own
- * identity (`block:{uuid}` / `container:{uuid}`) is stripped:
- * - '' — the element's own entry,
- * - ':{field_name}' — a block field's entry,
- * - '::{selector}' — a relative selector under the element ('::.class'
- *   a part, '::> *' its direct children, '::p' its paragraphs,
- *   '::> pb-text .link' a compound), in its canonical spelling,
- * and the field-scoped compounds of those, exactly as the map spells
- * them. Entries are
- * carried verbatim (condition-keyed property maps plus any `variants`
- * reference list), so the flat map is exactly reconstructible from the
- * tree. Keys addressing the root entity or root fields (`entity:`,
- * `field:`) have no layout node and stay in the flat map only.
+ * The flat style map (selectable keys to condition-keyed entries) is a
+ * derived delivery index of the tree for the CSS printers, not the
+ * canonical shape: a node's `styles` is keyed by the LOCAL remainder of
+ * the selectable key after the node's own identity is stripped, and the
+ * flat map is exactly reconstructible from the tree plus the node-less
+ * keys (`entity:`, `field:` and their rule forms, which no layout node
+ * carries). The reconstruction has ONE order, the document's
+ * (styleMapOf()): the node-less keys first, then every node in document
+ * order, each node's own keys as the node stores them. Storage keeps
+ * whatever order the writes left (the style ops append), and nothing
+ * reads that order back: the printers on both sides print the canonical
+ * order, so an entity's inline tag and the client's live preview emit the
+ * same bytes whatever the write history was.
  */
 class NodeTreeBuilder {
-
-  /**
-   * The field type carrying an entity's style map.
-   *
-   * The type id is daedalus_stylish's, referenced as a string so the spine stays
-   * page-builder-agnostic (the entity_reference_revisions precedent): with
-   * no styling module installed no field of this type exists and the tree
-   * simply carries no styles.
-   */
-  public const STYLE_MAP_FIELD_TYPE = 'daedalus_stylish_style_map';
 
   public function __construct(
     protected LayoutSerializer $layoutSerializer,
   ) {}
 
   /**
-   * Builds the lean node tree for an entity.
+   * Builds the lean node tree for a host.
    *
-   * @param \Drupal\Core\Entity\FieldableEntityInterface $entity
-   *   The blueprint root entity (staged state included — the serializer
-   *   reads whatever sections the entity carries).
-   *
-   * @return array
-   *   The ordered list of top-level container nodes.
-   */
-  public function build(FieldableEntityInterface $entity): array {
-    return $this->fromSections($this->layoutSerializer->serialize($entity), $this->styleMap($entity));
-  }
-
-  /**
-   * Transforms serialized section nodes into the lean node tree.
-   *
-   * Pure: annotated input (the delivered blueprint's section nodes) yields
-   * an annotated tree, because unknown keys ride along.
-   *
-   * @param array $sections
-   *   Section nodes as LayoutSerializer emits them ({layout_id, uuid?,
-   *   regions|children, ...}), annotated or not.
-   * @param array $style_map
-   *   The entity's flat style map (selectable keys to entries).
+   * @param \Drupal\daedalus_blueprint\Host\HostInterface $host
+   *   The host (staged state included: the serializer reads whatever
+   *   sections the host carries), its own style map on the nodes.
    *
    * @return array
    *   The ordered list of top-level container nodes.
    */
-  public function fromSections(array $sections, array $style_map = []): array {
-    $styles = $this->indexStyles($style_map);
-    return array_map(
-      fn (array $section) => $this->containerNode($section, $styles),
-      array_values($sections),
-    );
+  public function build(HostInterface $host): array {
+    return $this->layoutSerializer->serialize($host);
   }
 
   /**
-   * Reads an entity's flat style map.
+   * Builds the lean node tree of a host's OWN document.
    *
-   * @param \Drupal\Core\Entity\FieldableEntityInterface $entity
-   *   The entity.
+   * What build() answers for a host that owns the whole document it
+   * renders; for a host rendered inside a foreign document (a page of a
+   * locked bundle) the slot sections it owns alone, as top-level
+   * containers each tagged with its slot, the owner's template left out.
+   * The whole-document capture reads here: a locked page saved as a
+   * blueprint is its fills, a page blueprint of slot sections, exactly
+   * what a locked page takes as a start.
+   *
+   * @param \Drupal\daedalus_blueprint\Host\HostInterface $host
+   *   The host.
    *
    * @return array
-   *   The decoded style map; empty when the entity has no style map field
-   *   or the field is empty.
+   *   The ordered list of the host's own top-level container nodes.
    */
-  public function styleMap(FieldableEntityInterface $entity): array {
-    foreach ($entity->getFieldDefinitions() as $field_name => $definition) {
-      if ($definition->getType() !== self::STYLE_MAP_FIELD_TYPE) {
+  public function buildOwn(HostInterface $host): array {
+    return $this->layoutSerializer->serialize($host, NULL, $host->ownSections());
+  }
+
+  /**
+   * Reads a host's flat style map.
+   *
+   * @param \Drupal\daedalus_blueprint\Host\HostInterface $host
+   *   The host.
+   *
+   * @return array
+   *   The decoded style map; empty when the host has no style store or no
+   *   styles.
+   */
+  public function styleMap(HostInterface $host): array {
+    return $host->styleMap();
+  }
+
+  /**
+   * Orders a map addressing a host's document canonically, for delivery.
+   *
+   * The map given, not the host's stored one: delivery layers and
+   * re-keys a map before it prints (a template render lands the
+   * template's document-level entries on the entity's root), so the
+   * caller hands over what it is about to print. The map is distributed
+   * onto the host's document and flattened back by styleMapOf(), the one
+   * ordering; a key addressing no node of the document is node-less and
+   * prints first, in its stored place among the node-less keys.
+   *
+   * The document is read through the host's own door, which seeds an
+   * empty override from the display's template on first read: a caller
+   * that renders rather than authors (CssStyleBackend) hands over a host
+   * over a disposable clone of the entity (daedalus_stylish's
+   * RenderStyles), so the ordering walks the seeded document and the
+   * request's entity stays as loaded.
+   *
+   * @param \Drupal\daedalus_blueprint\Host\HostInterface $host
+   *   The host whose document the map's keys address.
+   * @param array $map
+   *   The flat map to order.
+   *
+   * @return array
+   *   The same entries, in canonical order.
+   */
+  public function orderedStyleMap(HostInterface $host, array $map): array {
+    return static::styleMapOf($this->layoutSerializer->serialize($host, $map), $map);
+  }
+
+  /**
+   * The flat style map in its canonical order: the document's.
+   *
+   * The ONE ordering of the map, read by every printer: the server's
+   * CssPrinter prints what CssStyleBackend hands it through here, and the
+   * client's printMap prints what styleMapOf() in style-guide.js (this
+   * function's twin, locked byte for byte by PrinterEquivalenceTest)
+   * builds from the mirror's tree. Node-less keys come first (`entity:`
+   * and `field:` keys and their rule forms, which no layout node carries:
+   * the root and its fields render before any section), in their stored
+   * order; then every node in document order (depth-first, a container
+   * before its children, region nodes transparent), each node's own keys
+   * in the order the node stores them. Order between different nodes
+   * carries no cascade meaning (specificity, then @scope proximity
+   * decide), and a node's own keys keep their stored order verbatim, so
+   * the rendered result never changes by this: only which byte sequence
+   * prints it, which is now the same from both printers.
+   *
+   * @param array $nodes
+   *   The lean tree, styles on the nodes.
+   * @param array $styles
+   *   The flat map the node-less keys are read from. A key a tree node
+   *   carries is the node's and is read from the node, so the map may be
+   *   the whole stored map or the node-less remainder alone (the
+   *   blueprint's top-level `styles`): either way the result holds every
+   *   key exactly once.
+   *
+   * @return array
+   *   Absolute selectable keys to their entries, in canonical order.
+   */
+  public static function styleMapOf(array $nodes, array $styles): array {
+    $carried = [];
+    self::collectStyles($nodes, $carried);
+    return self::nodeless($styles, $carried) + $carried;
+  }
+
+  /**
+   * The keys of a flat map that no node of a tree carries, in stored order.
+   *
+   * The blueprint's top-level `styles`: what is left of the map once the
+   * nodes own theirs. A stored key addressing a node the document no
+   * longer has (a stale key) is node-less by this reading and stays in the
+   * map, so nothing is dropped and the map stays exactly reconstructible.
+   *
+   * @param array $nodes
+   *   The lean tree, styles on the nodes.
+   * @param array $styles
+   *   The flat map.
+   *
+   * @return array
+   *   The entries of $styles no node carries.
+   */
+  public static function nodelessStyles(array $nodes, array $styles): array {
+    $carried = [];
+    self::collectStyles($nodes, $carried);
+    return self::nodeless($styles, $carried);
+  }
+
+  /**
+   * The entries of a map whose keys are not among the carried keys.
+   */
+  private static function nodeless(array $styles, array $carried): array {
+    $map = [];
+    foreach ($styles as $key => $entry) {
+      $key = (string) $key;
+      if (!array_key_exists($key, $carried)) {
+        $map[$key] = $entry;
+      }
+    }
+    return $map;
+  }
+
+  /**
+   * Collects the tree's node styles under their absolute keys, in order.
+   *
+   * @param array $nodes
+   *   Lean nodes (a tree, or any node list).
+   * @param array &$carried
+   *   Absolute keys to entries, appended in document order.
+   */
+  protected static function collectStyles(array $nodes, array &$carried): void {
+    foreach ($nodes as $node) {
+      if (!is_array($node)) {
         continue;
       }
-      $value = $entity->get($field_name)->value;
-      if (!is_string($value) || $value === '') {
-        return [];
+      $kind = $node['kind'] ?? NULL;
+      // A linked node's identity is its block component's: block-keyed.
+      if ($kind === LinkedBlueprintBlock::KIND) {
+        $kind = 'block';
       }
-      $map = json_decode($value, TRUE);
-      return is_array($map) ? $map : [];
+      if (($kind === 'container' || $kind === 'block') && isset($node['uuid'])) {
+        $prefix = $kind . ':' . $node['uuid'];
+        foreach (is_array($node['styles'] ?? NULL) ? $node['styles'] : [] as $local => $entry) {
+          $carried[$prefix . $local] = $entry;
+        }
+      }
+      self::collectStyles(is_array($node['children'] ?? NULL) ? $node['children'] : [], $carried);
     }
-    return [];
   }
 
   /**
-   * Builds a container node from a serialized section node.
-   */
-  protected function containerNode(array $section, array $styles): array {
-    $node = ['kind' => 'container'] + $section;
-    unset($node['regions'], $node['children'], $node['section_index']);
-
-    if (array_key_exists('children', $section)) {
-      // A container layout: one ordered flow.
-      $children = array_map(
-        fn (array $child) => $this->childNode($child, $styles),
-        array_values($section['children']),
-      );
-    }
-    else {
-      // A multi-region layout: the named slots are region nodes.
-      $children = [];
-      foreach ($section['regions'] ?? [] as $region_name => $components) {
-        $children[] = [
-          'kind' => 'region',
-          'region' => $region_name,
-          'children' => array_map(
-            fn (array $child) => $this->childNode($child, $styles),
-            array_values($components),
-          ),
-        ];
-      }
-    }
-    $node['children'] = $children;
-
-    if (isset($section['uuid'])) {
-      $this->attachStyles($node, $styles['container'][$section['uuid']] ?? []);
-    }
-    return $node;
-  }
-
-  /**
-   * Builds the node for one component-list entry.
+   * Whether a block's label shows: the one rule behind `label_rendered`.
    *
-   * A nested section carries the section node shape (`layout_id`) and
-   * recurses as a container; anything else is a block.
+   * A label renders when it is non-empty and core's label_display is
+   * 'visible' (the absent-key default, core's block plugin default): core's
+   * block template prints no label element for an empty label, so an
+   * empty label with display on shows nothing. Every surface that asks
+   * the fact of storage asks here (the tree's `label_rendered`, the
+   * blueprint export, daedalus_ui's canvas attribution), so the tree and the
+   * canvas agree by construction.
+   *
+   * @param array $component
+   *   A component's configuration, or anything carrying `label` and
+   *   `label_display` in core's spelling.
+   *
+   * @return bool
+   *   TRUE when the label renders as page content.
    */
-  protected function childNode(array $child, array $styles): array {
-    if (array_key_exists('layout_id', $child)) {
-      return $this->containerNode($child, $styles);
-    }
-    return $this->blockNode($child, $styles);
-  }
-
-  /**
-   * Builds a block node from a serialized component.
-   */
-  protected function blockNode(array $component, array $styles): array {
-    $node = ['kind' => 'block'] + $component;
-    unset($node['label_display'], $node['view_mode'], $node['block_revision_id']);
-
-    // label_display's absent-key default is 'visible' (core's block plugin
-    // default), same as the serializer's uniform emission.
-    if (($component['label'] ?? '') !== '' && ($component['label_display'] ?? 'visible') === 'visible') {
-      $node['label_rendered'] = TRUE;
-    }
-
-    if (isset($component['uuid'])) {
-      $this->attachStyles($node, $styles['block'][$component['uuid']] ?? []);
-    }
-    return $node;
-  }
-
-  /**
-   * Attaches a node's style entries, keyed by local remainder.
-   */
-  protected function attachStyles(array &$node, array $entries): void {
-    if (!empty($entries)) {
-      $node['styles'] = $entries;
-    }
+  public static function labelRendered(array $component): bool {
+    $label = $component['label'] ?? '';
+    return is_string($label) && $label !== '' && ($component['label_display'] ?? 'visible') === 'visible';
   }
 
   /**
@@ -247,34 +278,36 @@ class NodeTreeBuilder {
   }
 
   /**
-   * Indexes a flat style map by addressed node.
+   * The base block plugin a block node is an instance of, or NULL.
    *
-   * @param array $style_map
-   *   The flat map.
+   * The one derivation every styling and dialect surface shares (the
+   * server's SelectorMatcher, the dialect's axis and class views, the
+   * clients' twins): a plugin block's plugin id with any derivative
+   * stripped (derivatives share one template, so `system_menu_block:main`
+   * styles as `system_menu_block`), `field_block` for a node that names a
+   * field (the node spells no derivative, and no reader needs the subject's
+   * bundle to address it), NULL for an inline block (addressed by its
+   * block_type) and for any node that is not a block.
    *
-   * @return array
-   *   ['container' => [uuid => [local => entry]], 'block' => [...]] where
-   *   local is the selectable key with the node identity stripped ('' for
-   *   the element's own entry; every sub-address keeps its leading ':').
+   * @param array $node
+   *   A lean node.
+   *
+   * @return string|null
+   *   The base plugin id, or NULL.
    */
-  protected function indexStyles(array $style_map): array {
-    $index = [];
-    foreach ($style_map as $key => $entry) {
-      if (!is_string($key)) {
-        continue;
-      }
-      [$prefix, $rest] = array_pad(explode(':', $key, 2), 2, '');
-      if (($prefix !== 'container' && $prefix !== 'block') || $rest === '') {
-        continue;
-      }
-      $colon = strpos($rest, ':');
-      $uuid = $colon === FALSE ? $rest : substr($rest, 0, $colon);
-      $local = $colon === FALSE ? '' : substr($rest, $colon);
-      if ($uuid !== '') {
-        $index[$prefix][$uuid][$local] = $entry;
-      }
+  public static function pluginBase(array $node): ?string {
+    if (is_string($node['field'] ?? NULL) && $node['field'] !== '') {
+      return FieldBlock::PLUGIN;
     }
-    return $index;
+    // A linked node spells no plugin id; its kind is the linked block's.
+    if (($node['kind'] ?? NULL) === LinkedBlueprintBlock::KIND) {
+      return LinkedBlueprintBlock::PLUGIN_ID;
+    }
+    $plugin_id = $node['plugin_id'] ?? NULL;
+    if (!is_string($plugin_id) || $plugin_id === '') {
+      return NULL;
+    }
+    return explode(':', $plugin_id, 2)[0];
   }
 
 }

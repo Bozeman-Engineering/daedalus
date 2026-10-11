@@ -268,7 +268,6 @@ export const originFor = ({
     guide,
     blockTypes,
     sectionLayouts,
-    skinEditUrl: guide?.skinEditUrl ?? null,
     faceOf,
   });
 };

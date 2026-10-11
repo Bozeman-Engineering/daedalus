@@ -136,7 +136,7 @@ class MultilingualTest extends BlueprintKernelTestBase {
       'field_category' => 'News',
     ]);
 
-    $blueprint = $this->serializer->serialize($entity);
+    $blueprint = $this->serializer->serialize($this->host($entity));
 
     $this->assertSame('en', $blueprint['langcode']);
     $this->assertSame('English title', $blueprint['fields']['name']);
@@ -163,7 +163,7 @@ class MultilingualTest extends BlueprintKernelTestBase {
     ]);
     $entity->save();
 
-    $blueprint = $this->serializer->serialize($entity, 'es');
+    $blueprint = $this->serializer->serialize($this->host($entity), 'es');
 
     // Should output the Spanish langcode.
     $this->assertSame('es', $blueprint['langcode']);
@@ -186,7 +186,7 @@ class MultilingualTest extends BlueprintKernelTestBase {
     ]);
 
     // Serialize with explicit 'en' langcode (same as default).
-    $blueprint = $this->serializer->serialize($entity, 'en');
+    $blueprint = $this->serializer->serialize($this->host($entity), 'en');
 
     // Non-translatable fields should still be included for default language.
     $this->assertSame('News', $blueprint['fields']['field_category']);
@@ -201,7 +201,7 @@ class MultilingualTest extends BlueprintKernelTestBase {
       'field_category' => 'News',
     ]);
 
-    $blueprint = $this->serializer->serialize($entity);
+    $blueprint = $this->serializer->serialize($this->host($entity));
 
     $this->assertSame('en', $blueprint['langcode']);
     $this->assertSame('English title', $blueprint['fields']['name']);
@@ -223,7 +223,7 @@ class MultilingualTest extends BlueprintKernelTestBase {
     ]);
     $entity->save();
 
-    $blueprint = $this->serializer->serialize($entity, 'es');
+    $blueprint = $this->serializer->serialize($this->host($entity), 'es');
 
     // _root_entity should reference the same entity ID regardless of
     // translation.
@@ -386,7 +386,7 @@ class MultilingualTest extends BlueprintKernelTestBase {
     $entity->save();
 
     // Serialize the Spanish translation.
-    $blueprint = $this->serializer->serialize($entity, 'es');
+    $blueprint = $this->serializer->serialize($this->host($entity), 'es');
 
     $this->assertSame('es', $blueprint['langcode']);
     $this->assertSame('Título en español', $blueprint['fields']['name']);

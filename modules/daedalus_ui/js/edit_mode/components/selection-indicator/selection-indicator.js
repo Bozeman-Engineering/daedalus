@@ -1,10 +1,7 @@
 import { h } from 'preact';
 import { useSelector, useDispatch } from 'react-redux';
-import {
-  setTarget,
-  setDrill,
-  removeSelected,
-} from '../../store/slices/selection-slice';
+import { setTarget, setDrill } from '../../store/slices/selection-slice';
+import { removeKey } from '../../selection/select-door';
 import { commitAddress } from '../../selection/commit-address';
 import { elementForKey } from '../../selection/resolver';
 import { projectionIndex } from '../page-elements/projection-index';
@@ -17,24 +14,26 @@ import { ancestryOf } from '../../selection/ancestry';
  * ONE selection slice.
  *
  * The BREADCRUMB answers "how deep am I?": the ancestry of the PRIMARY
- * selection and its styling target, read as one address over the shared
- * projection index (ancestry.js: the same map that labels the tree, the
- * chat chips, and keyboard traversal — unison by construction, no
- * cross-wiring) through reach (reach.js: the rows the panel currently
- * draws), so a targeted drawn part (Raster with the Markup view on, a
- * list item in every view) trails through its drawn markup parents up
- * to its owner and on to the root, and any other target (a tag tier, a
- * chain, an ancestor rule, a shell part the Markup view is not drawing)
+ * selection and its styling subject facet (the target), read as one
+ * address over the shared projection index (ancestry.js: the same map
+ * that labels the tree, the chat chips, and keyboard traversal — unison
+ * by construction, no cross-wiring) through reach (reach.js: the rows
+ * the panel currently draws), so a drawn part facet (Raster with the
+ * Markup view on, a list item in every view) trails through its drawn
+ * markup parents up to its owner and on to the root, and any other facet
+ * (a tag tier, a chain, a shell part the Markup view is not drawing)
  * ends the trail as a target crumb after the element's ("Welcome › every
- * link"). Ancestor
- * crumbs are clickable to climb: a crumb click commits what the crumb
- * addresses (the element key, plus the part's selector as the target for
- * a part crumb) and re-seats the drill context on the crumb's element
- * parent (the owner's parent for a part), exactly the shape ArrowLeft
- * commits (the crumb click and ArrowLeft are the step-up gestures; Escape
- * deselects and never climbs). While a target stands, the CURRENT crumb
- * is clickable too: it drops the target back to the bare element, the
- * same drop Escape's target rung makes.
+ * link"). The write address (the slice's `address`, a rule on an
+ * ancestor) is never a crumb: the inspector's chip is its readout.
+ * Ancestor crumbs are clickable to climb: a crumb click commits what the
+ * crumb addresses (the element key, plus the part's selector as the
+ * target for a part crumb) and re-seats the drill context on the crumb's
+ * element parent (the owner's parent for a part), exactly the shape
+ * ArrowLeft commits (the crumb click and ArrowLeft are the step-up
+ * gestures; Escape deselects and never climbs). While a facet stands,
+ * the CURRENT crumb is clickable too: it drops the styling back to the
+ * bare element (the facet, and the address with it), the same drop
+ * Escape's styling rung makes.
  *
  * The CHIPS answer "what all is selected?": one chip per member of the
  * multi-select set, in selection order, each dismissible (dismiss IS
@@ -88,8 +87,9 @@ const Breadcrumb = ({
                 onClick={(event) => {
                   event.preventDefault();
                   event.stopPropagation();
-                  // The target crumb drops the target: the selection
-                  // stays, styling goes back to the element itself.
+                  // The target crumb drops the styling (the facet, and
+                  // the write address with it): the selection stays,
+                  // styling goes back to the element itself.
                   dispatch(setTarget(null));
                 }}
               >
@@ -135,8 +135,6 @@ const Breadcrumb = ({
 };
 
 const Chips = ({ index, keys, primaryKey }) => {
-  const dispatch = useDispatch();
-
   return (
     <div
       className="daedalus-ui-chips"
@@ -161,8 +159,10 @@ const Chips = ({ index, keys, primaryKey }) => {
                 event.preventDefault();
                 event.stopPropagation();
                 // Chip dismiss IS deselection — every rendering of the one
-                // slice (outlines, tree, chat chips) follows.
-                dispatch(removeSelected(key));
+                // slice (outlines, tree, chat chips) follows. Through the
+                // selection door (select-door.js), as every selection
+                // write; the chips render a set, which no edit rides.
+                removeKey(key);
               }}
             >
               ×

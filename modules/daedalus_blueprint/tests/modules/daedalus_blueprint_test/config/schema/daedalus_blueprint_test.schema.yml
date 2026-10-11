@@ -1,0 +1,12 @@
+# A managed configuration key on a templated display is typed config: the
+# component's settings are exported with the display. A module declaring a
+# managed key for an inline block type (the managed_keys.yml beside this
+# file) declares it on the block's settings schema too, as this fixture
+# does for yaml_test_block's yaml_setting; without it a template holding
+# the key fails config schema checking.
+block.settings.inline_block:yaml_test_block:
+  type: inline_block
+  mapping:
+    yaml_setting:
+      type: string
+      label: 'YAML Setting'

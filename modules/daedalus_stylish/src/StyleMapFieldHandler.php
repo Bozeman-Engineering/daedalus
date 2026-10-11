@@ -5,11 +5,14 @@ declare(strict_types=1);
 namespace Drupal\daedalus_stylish;
 
 use Drupal\Core\Entity\FieldableEntityInterface;
+use Drupal\daedalus_blueprint\Host\HostInterface;
+use Drupal\daedalus_blueprint\Host\HostResolver;
 use Drupal\Core\Field\FieldDefinitionInterface;
 use Drupal\Core\Field\FieldItemListInterface;
 use Drupal\daedalus_blueprint\FieldHandler\FieldHandlerBase;
 use Drupal\daedalus_blueprint\FieldHandler\FieldHandlerResult;
 use Drupal\daedalus_blueprint\Materials\Address;
+use Drupal\daedalus_blueprint\Materials\MaterialRecord;
 use Drupal\daedalus_blueprint\Materials\MaterialsProse;
 use Drupal\daedalus_blueprint\Materials\MaterialsRosterBuilder;
 use Drupal\daedalus_blueprint\Materials\RelativeSelector;
@@ -61,6 +64,7 @@ class StyleMapFieldHandler extends FieldHandlerBase {
     protected StyleValueResolver $valueResolver,
     protected MaterialsRosterBuilder $rosterBuilder,
     protected VocabularyRosterBuilder $vocabulary,
+    protected HostResolver $hostResolver,
   ) {}
 
   /**
@@ -97,8 +101,17 @@ class StyleMapFieldHandler extends FieldHandlerBase {
     // unchanged and side-effect-free over an all-strings map. The commit
     // (where handlers perform their effects and the canonical strings land)
     // waits until validation succeeded, so a failed write mints nothing.
-    $entity = $options['entity'] ?? NULL;
-    $resolution = $this->valueResolver->check($value, $entity instanceof FieldableEntityInterface ? $entity : NULL, (string) ($options['conversation'] ?? ''));
+    // The map's host rides the options (every write door hands it, the
+    // display host's store being a third-party setting with no entity of
+    // its own); a content host's field write without one resolves the
+    // entity being written, which IS the host of the map. The validator
+    // resolves the map's block bundles and section layouts through it.
+    $host = $options['host'] ?? NULL;
+    if (!$host instanceof HostInterface) {
+      $entity = $options['entity'] ?? NULL;
+      $host = $entity instanceof FieldableEntityInterface ? $this->hostResolver->fromEntity($entity) : NULL;
+    }
+    $resolution = $this->valueResolver->check($value, $host, (string) ($options['conversation'] ?? ''));
     if ($resolution->getErrors()) {
       return new FieldHandlerResult(NULL, array_map(
         static fn (BlueprintError $error) => $error->withPath("fields.$field_name." . $error->getPath()),
@@ -107,7 +120,7 @@ class StyleMapFieldHandler extends FieldHandlerBase {
     }
 
     $warnings = [];
-    $errors = $this->validator->validate($resolution->getMap(), ['entity' => $entity], $warnings);
+    $errors = $this->validator->validate($resolution->getMap(), ['host' => $host], $warnings);
     if ($errors) {
       return new FieldHandlerResult(NULL, array_map(
         static fn (BlueprintError $error) => $error->withPath("fields.$field_name." . $error->getPath()),
@@ -178,7 +191,7 @@ class StyleMapFieldHandler extends FieldHandlerBase {
     $style_guide['conditions'] = $this->conditionsSchema();
     // Schemas are bundle-level and cached; per-entity data lives on the
     // entities, so point at it rather than embedding a stale copy.
-    $style_guide['current_values'] = 'An entity\'s current styles are its daedalus_stylish_styles field value when the entity is read — the same element-keyed map this schema describes.';
+    $style_guide['current_values'] = 'An entity\'s current styles are the top-level "styles" key of its blueprint when the entity is read — the same element-keyed map this schema describes.';
     // The markup model is the element model's, delivered once as the
     // schema's anatomy fragment; the guide only says what those selectors
     // may wear.
@@ -223,11 +236,12 @@ class StyleMapFieldHandler extends FieldHandlerBase {
    * the polarity sentence saying what this site accepts (VocabularyProse,
    * the one source the design system brief's Law line shares). Everything
    * mode-variant in it is DERIVED from the site's posture; no mode is
-   * ever named. Stencils are named among the materials only while the
-   * roster has some (grows-by-data).
+   * ever named. Blueprints are named among the materials only while the
+   * roster has some at block scope (grows-by-data; a page blueprint is a
+   * start, listed under the schema's starts, never a material to place).
    */
   protected function guidanceParagraph(?string $theme): string {
-    $guidance = 'The site\'s materials (the named values and saved variants' . ($this->rosterBuilder->build()->stencils() !== [] ? ', and the stencils' : '') . ' under the schema\'s materials key) are the design language\'s pre-validated parts. ' . MaterialsProse::preferenceSentence() . ' Standing procedure: when no material fits, compose freely with blocks and styles; novel styling stays on this page; if something deserves to join the design system, propose it and let the user decide.';
+    $guidance = 'The site\'s materials (the named values and saved variants' . ($this->rosterBuilder->build()->blueprints(MaterialRecord::SCOPE_BLOCK) !== [] ? ', and the blueprints' : '') . ' under the schema\'s materials key) are the design language\'s pre-validated parts. ' . MaterialsProse::preferenceSentence() . ' Standing procedure: when no material fits, compose freely with blocks and styles; novel styling stays on this page; if something deserves to join the design system, propose it and let the user decide.';
     if ($media = $this->styleGuide->mediaProperties($theme)) {
       $guidance .= sprintf(' %s also accept%s an image media reference url(\'media:<uuid>\'): store the token, never a file URL (the file URL and its image-style derivative resolve at render); the token composes with gradients and layers wherever the property\'s own grammar takes them.', implode(', ', $media), count($media) > 1 ? '' : 's');
     }

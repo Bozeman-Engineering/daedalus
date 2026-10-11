@@ -6,14 +6,23 @@ namespace Drupal\daedalus_ui\ElementModel;
 
 use Drupal\Component\Utility\Html;
 use Drupal\Core\Block\BlockManagerInterface;
-use Drupal\Core\Entity\EntityInterface;
+use Drupal\Core\Cache\CacheableMetadata;
 use Drupal\Core\Entity\EntityFieldManagerInterface;
-use Drupal\Core\Entity\EntityTypeBundleInfoInterface;
+use Drupal\Core\Entity\EntityInterface;
+use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\Entity\FieldableEntityInterface;
+use Drupal\Core\Extension\ModuleExtensionList;
 use Drupal\Core\StringTranslation\StringTranslationTrait;
+use Drupal\daedalus_blueprint\Capability\Showing;
+use Drupal\daedalus_blueprint\Capability\VerdictStamper;
+use Drupal\daedalus_blueprint\Host\HostInterface;
+use Drupal\daedalus_blueprint\Host\HostResolver;
+use Drupal\daedalus_blueprint\Host\InnerRender;
 use Drupal\daedalus_blueprint\LayoutBuilder\DaedalusLayoutAdapter;
-use Drupal\daedalus_blueprint\NodeTree\NodeTreeBuilder;
+use Drupal\daedalus_blueprint\Plugin\Block\LinkedBlueprintBlock;
+use Drupal\daedalus_blueprint\Plugin\Block\SlotBlock;
 use Drupal\daedalus_blueprint_api\Render\SelectableKey;
+use Drupal\daedalus_ui\DaedalusUi;
 use Drupal\layout_builder\Section;
 use Drupal\daedalus_ui\Presentation\Presentation;
 
@@ -22,14 +31,18 @@ use Drupal\daedalus_ui\Presentation\Presentation;
  *
  * The blueprint is the stored-data model; the element model is page-builder
  * vocabulary, so it is attached only at daedalus_ui's delivery seams,
- * the drupalSettings boot payload (EntityViewAlter::attachBlueprintMirror)
- * and the mutation response (BlueprintElementAnnotations subscriber):
- * never persisted, never visible to headless/AI consumers of base
- * daedalus_blueprint, whose blueprint data stays annotation-free.
+ * the drupalSettings boot payload (BlueprintMirror::attach(), whose
+ * build's cacheability carries what the icon providers read), the
+ * mutation response and the derived read modes (BlueprintElementAnnotations
+ * subscriber) and the HTML projection (HtmlProjector): never persisted,
+ * never visible to headless/AI consumers of base daedalus_blueprint, whose
+ * blueprint data stays annotation-free.
  *
  * ONE annotation, `_element`, rides every owning node, the root blueprint
- * included, mirroring the declaration grammar so the client reads the same
- * vocabulary developers author:
+ * and every container and block node of the lean tree its `layout`
+ * carries (the walk is the tree's: region nodes are structure and carry
+ * nothing), mirroring the declaration grammar so the client reads the
+ * same vocabulary developers author:
  * - name and type: the element-naming spine, two translated strings minted
  *   HERE and delivered as data, never derived by a client. Every surface
  *   that words an element (the page-elements tree, the canvas chips, the
@@ -41,24 +54,46 @@ use Drupal\daedalus_ui\Presentation\Presentation;
  *   tag is the same fact; the palette item stays "Container" because
  *   what you drag is the kind, it becomes a Section when it lands at page
  *   depth); an inline block its block type entity's label ("Text",
- *   "Image"); a field block the field's label; any other plugin block (a
- *   menu, the site branding) its block plugin's admin label, the Add
- *   panel's word for it; the root its bundle label.
+ *   "Image"); a field block the field's label; a slot door "Slot"; a
+ *   linked placement "Linked blueprint"; any other plugin block (a menu,
+ *   the site branding) its block plugin's admin label, the Add panel's
+ *   word for it; the root its bundle label, "Blueprint" on a saved
+ *   blueprint's canvas, "Site frame" on the frame's, "Template" on a
+ *   template's.
  *   `name` answers what the element SAYS: a section's custom label
  *   (layout_settings.label, surfaced by the serializer as the node's
  *   `label`) else its type; a merged block's content excerpt (the edit
  *   target's first line, capped at NAME_CAP) when that value is a string,
  *   else the presentation's label, else the component's label when that
- *   label is a NAME (label_display not visible: a visible label is
- *   rendered content, the heading precedent, so it is never a name by
- *   itself), else its type; a field block the field's label; a plugin
- *   block its unrendered label else its type; the root its entity label.
- *   An unrenamed element's name is therefore its type word, never a
- *   humanized machine id. Both ride `_tree` nodes too (the tree copies
- *   unknown keys), which is how the satellite reads them. Every component
- *   is attributed on the canvas by its uuid (LayoutBuilderBlockAttributes)
- *   and rows in the tree, so every component carries both words: a plugin
- *   block's annotation is exactly these two.
+ *   label is a NAME (not `label_rendered`: a rendered label is content,
+ *   the heading precedent, so it is never a name by itself), else its
+ *   type; a field block the field's label; a slot door its derivative's
+ *   admin label ("Header slot", the roster's word, the Add panel's word
+ *   for it: a door is named by what it is, never by a configured label);
+ *   a linked placement the blueprint's label; a plugin block its
+ *   unrendered label else its type; the root its entity label. An
+ *   unrenamed element's name is therefore its type word, never a
+ *   humanized machine id. The satellite reads both off the tree's nodes.
+ *   Every component is attributed on the canvas by its uuid
+ *   (LayoutBuilderBlockAttributes) and rows in the tree, so every
+ *   component carries both words: a plugin block's annotation is exactly
+ *   these two and the icon below.
+ * - icon: the third minted word, what the element LOOKS like in an
+ *   outline: a root-relative URL, or NULL when nothing answers. Minted
+ *   here like the two words and read as data by every outline (the tree,
+ *   code mode in the leader and in the satellite), never derived by a
+ *   client. daedalus_ui answers its own kinds from assets/outline (the
+ *   root page, a template root, a field block, a plugin block, a slot
+ *   door); a
+ *   container and an inline block are daedalus_layout's concepts, so the
+ *   annotator asks the tagged element icon providers
+ *   (ElementIconProviderInterface, first non-null answer in priority
+ *   order; daedalus_layout answers the Container's asset and the block
+ *   type's icon setting through the icon value grammar). What a provider
+ *   read rides the caller's cacheability when the caller has a render to
+ *   carry it (the mirror's build); pseudo rows the client alone draws
+ *   (shell parts, generated boxes, instance carriers) are the client's
+ *   anatomy and pick their glyph there.
  * - presentation: Presentation::toArray() ({mode, label?, edit_target?}).
  *   Components get the bundle tier of the one model; the root gets the
  *   derived entity rule (its label field presents AS the entity row, so the
@@ -70,7 +105,7 @@ use Drupal\daedalus_ui\Presentation\Presentation;
  *   {markup: {instances?, tags?}}}, only non-default facts, so an absent entry
  *   means "exists, presents open". `element: false` is the EXISTENCE axis
  *   (owner declarations plus the registered feeders: display-hidden inference
- *   for inline blocks, preserved-fields for roots on LB displays): nothing
+ *   for inline blocks, root-field nonexistence for roots on LB displays): nothing
  *   answers to the key in ANY view, so the projection folds the row
  *   unconditionally. Field presentation cannot ride the field nodes themselves
  *   because scalar field values (a plain string) carry no keys. Inline entities
@@ -79,11 +114,11 @@ use Drupal\daedalus_ui\Presentation\Presentation;
  *   resolver's concrete tree for this node's data ({tag, attributes,
  *   classes, hoisted, parts, slots}, see ElementResolver), the canonical
  *   answer to "what does THIS element render as". Stamped on the root
- *   (entity kind), on every section node (the layout's effective
- *   declaration at the section's nesting depth; sections gain their first
- *   `_element` for it), and on every inline-block component whose
- *   block_content entity the root's section data resolves (the effective
- *   block-type declaration against that entity). A component whose entity
+ *   (entity kind), on every container node (the layout's effective
+ *   declaration at the container's nesting depth), and on every
+ *   inline-block component whose block_content entity the root's section
+ *   data resolves (the effective block-type declaration against that
+ *   entity). A component whose entity
  *   cannot be resolved (a dangling revision) carries NO markup: the
  *   annotation only claims what the data can back, and client presence
  *   reads degrade to the declared sketch. Client consumers (part
@@ -113,6 +148,38 @@ use Drupal\daedalus_ui\Presentation\Presentation;
  *   inline code, emphasis), so a client gating base's tag vocabulary on
  *   the annotation can offer `a` on a block whose prose links without any
  *   carrier wearing `a`. Plain-text values (no elements) stamp nothing.
+ *
+ * - showing: on every JOIN of the render stack this document holds, a
+ *   slot door (daedalus_slot:{id}) or a linked placement, what it shows
+ *   seen from this canvas by this actor: the spine's one answer
+ *   (VerdictStamper::showing(), Showing::toArray(): `shows` route | fill
+ *   | default | nothing, `document` {entity_type, id, label}, `blueprint`
+ *   the shown blueprint's machine name under default, `portal` where the
+ *   shown blueprint is edited only when the actor may update it,
+ *   `claimable`), the portal's `url` resolved here from the host it names
+ *   (DaedalusUi::getEditingUrl, as hostVerdict() resolves the root's
+ *   portal: the spine names hosts, surfaces derive urls). The holder the
+ *   spine is asked for is the host whose document holds the node: the
+ *   canvas's own for a top-level section filling a slot (a locked page's
+ *   fill), else the document the canvas renders (HostResolver::
+ *   renderHost(): the template on a locked page, the host itself
+ *   otherwise). Absent on every other node (a copy is the page's own, so
+ *   a detached placement is no join). The Page elements tree's
+ *   shown-document row, the Open blueprint verb and the AI's chips read
+ *   this and nothing else: a client never derives a route or guesses at
+ *   access.
+ * - can and refused: the spine's verdict on the node, copied from the
+ *   `_verdict` stamp the serializer put there (VerdictStamper, for the
+ *   actor the read was made for): `can` maps the five capabilities
+ *   (content, configure, style, arrange, insert) to booleans, `refused`
+ *   lists one {code, capabilities} entry per refusal. The root carries
+ *   them too. The client's one gate (selection/capable.js) reads `can`
+ *   through the projection index, and every gesture (verbs, drags, drops,
+ *   rename, paste, the inspector) asks that gate; nothing on the client
+ *   interprets a cause such as ownership itself. The root's refusals,
+ *   explained (message, hint, the owner and the portal with its editing
+ *   url), ride the mirror envelope and every mutation response as
+ *   `verdict` (hostVerdict()), the one source of the document notice.
  *
  * Only inline blocks are fieldable bundles the model can decide for; plugin
  * components stay unannotated — they present open, exactly as attribution
@@ -158,12 +225,23 @@ final class BlueprintElementAnnotator {
   private array $componentEntities = [];
 
   /**
-   * The root entity of the current annotate() call, when fieldable.
+   * The fields entity of the current annotate() call's host, when it has one.
    *
    * A field block presents one of ITS fields; the component node carries
-   * only the plugin id, so the root supplies the uuid and the definition.
+   * only the field name, so the host's fields entity supplies the uuid and
+   * the definition.
    */
   private ?FieldableEntityInterface $root = NULL;
+
+  /**
+   * The subject of the current annotate() call's host.
+   *
+   * The entity a render of the document shows (the page itself, or a
+   * template's sample): a field block the host does not edit (a template
+   * canvas, a field the page lacks) is still named by the subject's field
+   * label when the subject has the field.
+   */
+  private ?FieldableEntityInterface $subject = NULL;
 
   /**
    * The declared instance namespaces for the current call, keyed by prefix.
@@ -178,49 +256,98 @@ final class BlueprintElementAnnotator {
    */
   private array $instanceNamespaces = [];
 
+  /**
+   * The canvas of the current annotate() call: the host being delivered.
+   *
+   * The showing of a join is answered for the canvas it is seen from (the
+   * route host), the host the blueprint was serialized from.
+   */
+  private ?HostInterface $canvas = NULL;
+
+  /**
+   * The host whose document the canvas renders (HostResolver::renderHost()).
+   *
+   * The holder of every node of the delivered tree that is not the
+   * canvas's own fill: the template on a locked page, the canvas itself
+   * on a page that owns its document, a template, a frame or a blueprint.
+   */
+  private ?HostInterface $renderHost = NULL;
+
+  /**
+   * The holder of the top-level section being walked.
+   *
+   * Seated per top-level container by annotateNodes(): the canvas for a
+   * section filling a slot (a locked page's own), the render host for the
+   * rest.
+   */
+  private ?HostInterface $holder = NULL;
+
+  /**
+   * What the current annotate() call's icon answers depend on.
+   *
+   * The caller's accumulator when it has a render to carry it (the mirror's
+   * build), else a throwaway: a mutation response and the AI's explain
+   * tool deliver uncached.
+   */
+  private CacheableMetadata $cacheability;
+
   public function __construct(
     private readonly ElementModel $elementModel,
     private readonly EntityFieldManagerInterface $entityFieldManager,
     private readonly PageBuilderDeclarations $declarations,
     private readonly ElementResolver $resolver,
     private readonly DaedalusLayoutAdapter $daedalusLayoutAdapter,
-    private readonly NodeTreeBuilder $nodeTreeBuilder,
-    private readonly EntityTypeBundleInfoInterface $bundleInfo,
     private readonly BlockManagerInterface $blockManager,
-  ) {}
+    private readonly EntityTypeManagerInterface $entityTypeManager,
+    private readonly DaedalusUi $daedalusUi,
+    private readonly ElementIconProviderInterface $iconProvider,
+    private readonly ModuleExtensionList $moduleList,
+    private readonly InnerRender $innerRender,
+    private readonly VerdictStamper $verdictStamper,
+    private readonly HostResolver $hostResolver,
+  ) {
+    $this->cacheability = new CacheableMetadata();
+  }
 
   /**
    * Annotates a delivered blueprint in place and returns it.
    *
    * @param array $blueprint
-   *   The serialized blueprint (full mode) of the root entity.
-   * @param \Drupal\Core\Entity\EntityInterface $root
-   *   The root entity the blueprint was serialized from — supplies the
-   *   entity type and bundle for the root field definitions, and the
-   *   section data the component entities resolve from.
+   *   The serialized blueprint (full mode) of the host.
+   * @param \Drupal\daedalus_blueprint\Host\HostInterface $host
+   *   The host the blueprint was serialized from: supplies the entity type
+   *   and bundle for the root field definitions and the section data the
+   *   component entities resolve from.
    * @param string $view_mode
    *   The view mode the root renders with — the display the root existence
-   *   feeders (preserved fields) speak for.
+   *   feeders (daedalus_layout's Layout Builder root-existence rule) speak
+   *   for.
+   * @param \Drupal\Core\Cache\CacheableMetadata|null $cacheability
+   *   Accumulates what the icon answers read (a block type, a media icon's
+   *   tags) when the caller delivers through a cacheable render (the
+   *   mirror's build); NULL when the delivery is uncached (a mutation
+   *   response, the AI's explain tool).
    *
    * @return array
    *   The annotated blueprint.
    */
-  public function annotate(array $blueprint, EntityInterface $root, string $view_mode): array {
-    $this->root = $root instanceof FieldableEntityInterface ? $root : NULL;
-    $this->componentEntities = $this->root !== NULL
-      ? $this->componentEntitiesOf($this->root)
-      : [];
-    $this->instanceNamespaces = $this->instanceNamespacesOf();
-    if ($root instanceof FieldableEntityInterface) {
-      // The root's type is its bundle label ("Page"); its name the entity
-      // label, which is what its edit target (the label field) holds.
-      $type = $this->bundleLabel($root->getEntityTypeId(), $root->bundle());
-      $label = (string) $root->label();
+  public function annotate(array $blueprint, HostInterface $host, string $view_mode, ?CacheableMetadata $cacheability = NULL): array {
+    $this->prepare($host, $cacheability);
+    $root = $this->root;
+    if ($root !== NULL) {
+      // The root's type is the word for what the document is to the
+      // editor (DaedalusUi::hostKind(): the bundle label "Page", or
+      // "Blueprint" for a saved blueprint's canvas, the same word a portal
+      // to it carries); its name the entity label, which is what its edit
+      // target (the label field) holds; its icon the page glyph.
+      $type = $this->daedalusUi->hostKind($host);
+      $label = $host->label();
       $annotation = [
         'name' => $label !== '' ? $label : $type,
         'type' => $type,
+        'icon' => $this->glyph('page'),
         'presentation' => $this->elementModel
-          ->rootPresentation($root->getEntityTypeId(), $root->bundle(), $view_mode)
+          ->rootPresentation($host->entityTypeId(), $host->bundle(), $view_mode)
           ->toArray(),
         'markup' => $this->resolver->resolve(
           $this->declarations->getKind('entity'),
@@ -230,8 +357,8 @@ final class BlueprintElementAnnotator {
       $fields = $this->fieldFacts(
         array_keys($blueprint['fields'] ?? []),
         ElementModel::KIND_ENTITY,
-        $root->getEntityTypeId(),
-        $root->bundle(),
+        $host->entityTypeId(),
+        $host->bundle(),
         $view_mode,
         $root,
       );
@@ -240,103 +367,252 @@ final class BlueprintElementAnnotator {
       }
       $blueprint['_element'] = $annotation;
     }
-    if (!empty($blueprint['layout_builder__layout'])) {
-      $blueprint['layout_builder__layout'] = $this->annotateSections($blueprint['layout_builder__layout'], ElementResolver::DEPTH_ROOT);
+    else {
+      // A host with no fields (a template host, the site frame): the root
+      // is the template or the frame, named by the host's label and typed
+      // by its kind ("Template", "Site frame"); nothing on it edits (no
+      // edit target, no field facts), and its markup is the entity kind's
+      // declaration resolved with no entity data (the layout root part is
+      // present unconditionally, so the canvas and the model agree).
+      $blueprint['_element'] = [
+        'name' => $host->label(),
+        'type' => $this->daedalusUi->hostKind($host),
+        'icon' => $this->glyph('template'),
+        'presentation' => (new Presentation(Presentation::OPEN))->toArray(),
+        'markup' => $this->resolver->resolve($this->declarations->getKind('entity')),
+      ];
     }
-    // The spine's lean node tree rides every delivered blueprint as `_tree`
-    // (an annotation like `_element`: delivery-only, never stored, ignored
-    // on echo). It is built over the ANNOTATED section nodes — the tree
-    // transform carries unknown keys — so tree nodes wear the same
-    // `_element` facts, and the mirror consumers that read the tree
-    // (projection, markup index, componentForUuid) get one shape with
-    // styles on the node and no region/delta residue. Riding the blueprint
-    // rather than the envelope means the mutation-response seam refreshes
-    // it wholesale for free.
-    if ($root instanceof FieldableEntityInterface) {
-      $blueprint['_tree'] = $this->nodeTreeBuilder->fromSections(
-        $blueprint['layout_builder__layout'] ?? [],
-        $this->nodeTreeBuilder->styleMap($root),
-      );
+    $blueprint['_element'] += self::verdictFacts($blueprint);
+    // The blueprint's `layout` is the spine's lean node tree, the spine's
+    // `_verdict` stamp already on its nodes; the one walk below puts
+    // `_element` beside it (an annotation like the stamp: delivery-only,
+    // never stored, ignored on echo), so the mirror consumers that read
+    // the tree (projection, markup index, componentForUuid) get one shape
+    // with the model's facts on it. Riding the blueprint rather than the
+    // envelope means the mutation-response seam refreshes it wholesale for
+    // free.
+    if (isset($blueprint['layout']) && is_array($blueprint['layout'])) {
+      $blueprint['layout'] = $this->annotateNodes($blueprint['layout'], ElementResolver::DEPTH_ROOT);
     }
     return $blueprint;
   }
 
   /**
-   * Annotates a serialized section list (recursively through nested sections).
+   * Annotates a lean node tree of a host, in place, and returns it.
    *
-   * @param array $sections
-   *   Serialized section nodes ({uuid?, layout_id, regions} — or, for
-   *   container sections, {uuid?, layout_id, children}: one ordered
-   *   component list in place of the regions map).
-   * @param string $depth
-   *   The nesting depth of the LIST (ElementResolver::DEPTH_ROOT for the
-   *   root layout's sections, DEPTH_NESTED for sections reached through a
-   *   component list), the depth the layout declarations resolve at.
+   * The tree-only seam (the read endpoint's derived modes, which print
+   * from a tree the spine built): every container and block node gains
+   * `_element` exactly as a delivered blueprint's `layout` wears it; the
+   * root is not a tree node and gets nothing here.
+   *
+   * @param array $tree
+   *   The ordered top-level container nodes (NodeTreeBuilder's shape).
+   * @param \Drupal\daedalus_blueprint\Host\HostInterface $host
+   *   The host the tree was built from.
+   * @param \Drupal\Core\Cache\CacheableMetadata|null $cacheability
+   *   As annotate() takes it.
    *
    * @return array
-   *   The annotated section nodes.
+   *   The annotated tree.
    */
-  private function annotateSections(array $sections, string $depth): array {
-    // The layout vocabulary: a section of the root layout is a Section of
-    // the page, one reached through a component list a grouping Container.
-    // Depth is the one fact that decides it, the same fact that picks the
-    // <section>/<div> root form below.
-    $type = $depth === ElementResolver::DEPTH_ROOT
-      ? (string) $this->t('Section')
-      : (string) $this->t('Container');
-    foreach ($sections as &$section) {
-      // The custom label (layout_settings.label, the serializer's top-level
-      // `label`) is the section's name when set; an unrenamed section is
-      // called by its type, never by its humanized layout id.
-      $label = $section['label'] ?? NULL;
-      $section['_element']['name'] = is_string($label) && trim($label) !== '' ? $label : $type;
-      $section['_element']['type'] = $type;
-      // The section's markup: the layout's effective declaration (the
-      // universal container kind layered under any layout-specific file)
-      // resolved at this depth. Sections carry no entity of their own, so
-      // the resolution is declaration + depth + the emptiness fact, which
-      // only the section node can answer (no components in any region and
-      // no children): the resolver's one {empty: true} answer for
-      // containers, every consumer reading it from this annotation.
-      $section['_element']['markup'] = $this->resolver->resolve(
-        $this->declarations->getLayout((string) ($section['layout_id'] ?? '')),
-        NULL,
-        $depth,
-        $this->sectionIsEmpty($section),
-      );
-      // Iterate variables, never `?? []` expressions: a by-reference
-      // foreach over an expression writes into a temporary and the
-      // annotations silently vanish.
-      if (!empty($section['regions']) && is_array($section['regions'])) {
-        foreach ($section['regions'] as &$components) {
-          $this->annotateComponentList($components);
-        }
-        unset($components);
-      }
-      // A container section's ordered children list is the same component
-      // list under the serializer's container shape (its sole region is a
-      // storage vestige, so there is no regions level to walk).
-      if (!empty($section['children']) && is_array($section['children'])) {
-        $this->annotateComponentList($section['children']);
-      }
-    }
-    return $sections;
+  public function annotateTree(array $tree, HostInterface $host, ?CacheableMetadata $cacheability = NULL): array {
+    $this->prepare($host, $cacheability);
+    return $this->annotateNodes($tree, ElementResolver::DEPTH_ROOT);
   }
 
   /**
-   * Whether a serialized section node carries no components at all.
+   * Seats the per-call state one annotation walk reads.
+   */
+  private function prepare(HostInterface $host, ?CacheableMetadata $cacheability): void {
+    $this->root = $host->fields();
+    $this->subject = $host->subject();
+    $this->componentEntities = $this->componentEntitiesOf($host);
+    $this->instanceNamespaces = $this->instanceNamespacesOf();
+    $this->canvas = $host;
+    $this->renderHost = $this->hostResolver->renderHost($host);
+    $this->holder = $this->renderHost;
+    $this->cacheability = $cacheability ?? new CacheableMetadata();
+  }
+
+  /**
+   * The URL of one of daedalus_ui's own outline glyphs (assets/outline).
+   *
+   * @param string $name
+   *   The glyph's file name without its extension: page, template,
+   *   field-block, plugin-block or slot.
+   */
+  private function glyph(string $name): string {
+    return '/' . $this->moduleList->getPath('daedalus_ui') . '/assets/outline/' . $name . '.svg';
+  }
+
+  /**
+   * Annotates one sibling list of lean nodes.
+   *
+   * A container node is annotated at the list's depth and its children
+   * (through its region nodes, which are structure, not elements) at
+   * nested depth; a block node is annotated as a component.
+   *
+   * @param array $nodes
+   *   Lean nodes (a tree, a container's children, a region's children).
+   * @param string $depth
+   *   The nesting depth of the LIST (ElementResolver::DEPTH_ROOT for the
+   *   tree's top level, DEPTH_NESTED below a container), the depth the
+   *   layout declarations resolve at.
+   *
+   * @return array
+   *   The annotated nodes.
+   */
+  private function annotateNodes(array $nodes, string $depth): array {
+    foreach ($nodes as $index => $node) {
+      if (!is_array($node)) {
+        continue;
+      }
+      $kind = $node['kind'] ?? NULL;
+      if ($kind === 'container') {
+        if ($depth === ElementResolver::DEPTH_ROOT) {
+          // The holder of a top-level section: the delivered tree of a
+          // locked page is its template's sections and then the page's
+          // own, the sections filling the template's slots
+          // (LayoutSerializer::tree() over HostInterface::sections()), and
+          // only a top-level section carries the slot it fills. A fill is
+          // the canvas's own document; every other top-level section
+          // belongs to the document the canvas renders, which is the
+          // canvas itself wherever nothing is locked.
+          $this->holder = isset($node['slot']) ? $this->canvas : $this->renderHost;
+        }
+        $nodes[$index] = $this->annotateContainer($node, $depth);
+      }
+      elseif ($kind === 'region') {
+        $node['children'] = $this->annotateNodes($node['children'] ?? [], $depth);
+        $nodes[$index] = $node;
+      }
+      elseif ($kind === LinkedBlueprintBlock::KIND) {
+        $nodes[$index] = $this->annotateLinked($node);
+      }
+      else {
+        $nodes[$index] = $this->annotateBlock($node);
+      }
+    }
+    return $nodes;
+  }
+
+  /**
+   * Annotates one container node and the nodes it holds.
+   *
+   * @param array $node
+   *   The container node.
+   * @param string $depth
+   *   The depth the container sits at.
+   *
+   * @return array
+   *   The annotated node.
+   */
+  private function annotateContainer(array $node, string $depth): array {
+    // The layout vocabulary: a container at the tree's top level is a
+    // Section of the page, one below another container a grouping
+    // Container. Depth is the one fact that decides it, the same fact
+    // that picks the <section>/<div> root form below.
+    $type = $depth === ElementResolver::DEPTH_ROOT
+      ? (string) $this->t('Section')
+      : (string) $this->t('Container');
+    // The custom label (layout_settings.label, the serializer's top-level
+    // `label`) is the container's name when set; an unrenamed container is
+    // called by its type, never by its humanized layout id.
+    $label = $node['label'] ?? NULL;
+    $node['_element']['name'] = is_string($label) && trim($label) !== '' ? $label : $type;
+    $node['_element']['type'] = $type;
+    // A container is daedalus_layout's concept: its icon is the providers'
+    // answer (the Container asset), NULL with none installed.
+    $node['_element']['icon'] = $this->iconProvider->icon($node, ElementIconProviderInterface::KIND_CONTAINER, $this->cacheability);
+    $node['_element'] += self::verdictFacts($node);
+    // The container's markup: the layout's effective declaration (the
+    // universal container kind layered under any layout-specific file)
+    // resolved at this depth. Containers carry no entity of their own, so
+    // the resolution is declaration + depth + the emptiness fact, which
+    // only the node can answer (no element in any region and no children):
+    // the resolver's one {empty: true} answer for containers, every
+    // consumer reading it from this annotation.
+    $node['_element']['markup'] = $this->resolver->resolve(
+      $this->declarations->getLayout((string) ($node['layout_id'] ?? '')),
+      NULL,
+      $depth,
+      self::containerIsEmpty($node),
+    );
+    $node['children'] = $this->annotateNodes($node['children'] ?? [], ElementResolver::DEPTH_NESTED);
+    return $node;
+  }
+
+  /**
+   * Annotates a linked node: a blueprint shown by reference.
+   *
+   * Its words are the blueprint's: the name is the blueprint's label (the
+   * machine name when no published blueprint carries it any more), the
+   * type the kind's word. It carries the verdict (the spine refuses
+   * `content` on it as FOREIGN_DOCUMENT, with the portal to the blueprint
+   * for an actor who may update it) and its `showing`: the blueprint by
+   * reference, with the portal to its canvas for that actor (the Open
+   * blueprint verb's one source). No markup facts: the blueprint's
+   * elements are the blueprint host's, not this document's.
+   *
+   * @param array $node
+   *   The linked node.
+   *
+   * @return array
+   *   The annotated node.
+   */
+  private function annotateLinked(array $node): array {
+    $name = (string) ($node[LinkedBlueprintBlock::BLUEPRINT_KEY] ?? '');
+    $blueprint = $name === '' ? NULL : $this->innerRender->blueprintHost($name);
+    $type = (string) $this->t('Linked blueprint');
+    $node['_element'] = [
+      'name' => $blueprint !== NULL ? $blueprint->label() : ($name === '' ? $type : $name),
+      'type' => $type,
+      'icon' => $this->glyph('plugin-block'),
+    ] + self::verdictFacts($node) + $this->showingFacts($node);
+    return $node;
+  }
+
+  /**
+   * A join's showing as an `_element` fact: `showing`, or nothing.
+   *
+   * The spine's one answer for the node seen from the canvas by the actor
+   * the read is made for (VerdictStamper::showing(), NULL for a node that
+   * is no join), the portal's url resolved from the host it names the way
+   * hostVerdict() resolves the root's. A node the serializer gave no uuid
+   * is no join either.
+   *
+   * @return array
+   *   {showing: Showing::toArray() with `portal.url`} or [].
+   */
+  private function showingFacts(array $node): array {
+    $uuid = $node['uuid'] ?? NULL;
+    if (!is_string($uuid) || $uuid === '' || $this->holder === NULL) {
+      return [];
+    }
+    $showing = $this->verdictStamper->showing($this->canvas, $this->holder, $uuid);
+    if (!$showing instanceof Showing) {
+      return [];
+    }
+    $facts = $showing->toArray();
+    if ($facts['portal'] !== NULL) {
+      $facts['portal']['url'] = $this->portalUrl($facts['portal']['entity_type'], $facts['portal']['entity_id']);
+    }
+    return ['showing' => $facts];
+  }
+
+  /**
+   * Whether a container node holds no element at all.
    *
    * The {empty: true} fact for containers, answered from the node itself
-   * (sections have no entity to derive it from): every region list empty
-   * and no children entries. Bare-UUID relocation strings count — they
-   * stand in for real components.
+   * (containers have no entity to derive it from): no child, or only
+   * region nodes with no children of their own.
    */
-  private function sectionIsEmpty(array $section): bool {
-    if (!empty($section['children']) && is_array($section['children'])) {
-      return FALSE;
-    }
-    foreach (is_array($section['regions'] ?? NULL) ? $section['regions'] : [] as $components) {
-      if (!empty($components) && is_array($components)) {
+  private static function containerIsEmpty(array $node): bool {
+    foreach ($node['children'] ?? [] as $child) {
+      if (!is_array($child)) {
+        continue;
+      }
+      if (($child['kind'] ?? NULL) !== 'region' || !self::containerIsEmpty($child)) {
         return FALSE;
       }
     }
@@ -344,51 +620,33 @@ final class BlueprintElementAnnotator {
   }
 
   /**
-   * Annotates one component list (a region's entries or a children list).
+   * Annotates one block node.
    *
-   * @param array $components
-   *   The component list, modified by reference.
+   * @param array $component
+   *   The block node.
+   *
+   * @return array
+   *   The annotated node.
    */
-  private function annotateComponentList(array &$components): void {
-    foreach ($components as &$component) {
-      // An entry carrying layout_id is a nested section node: it presents
-      // AS a section (no block facade), so no component annotation beyond
-      // the section markup; recurse into its own component lists like any
-      // section, at nested depth, which is what being reached through a
-      // component list means.
-      if (is_array($component) && isset($component['layout_id'])) {
-        $component = current($this->annotateSections([$component], ElementResolver::DEPTH_NESTED));
-        continue;
-      }
-      $this->annotateComponent($component);
-    }
-    unset($component);
-  }
-
-  /**
-   * Annotates one component node.
-   */
-  private function annotateComponent(array|string &$component): void {
-    // Bare-UUID relocation strings carry no node to annotate.
-    if (!is_array($component)) {
-      return;
-    }
+  private function annotateBlock(array $component): array {
     // The serializer emits `block_type` (the bundle) for inline blocks and
     // `plugin_id` for everything else.
     $block_type = $component['block_type'] ?? NULL;
     if ($block_type === NULL) {
-      $this->annotatePluginBlock($component);
-      return;
+      return $this->annotatePluginBlock($component);
     }
-    // label_display is the raw stored value; an absent key means 'visible'
-    // (core's block plugin default) — the same fallback the serializer and
-    // LayoutBuilderBlockAttributes use.
-    $label_visible = ($component['label_display'] ?? 'visible') === 'visible';
+    // Whether the label renders as page content is the tree's
+    // `label_rendered` (NodeTreeBuilder::labelRendered, the one rule the
+    // canvas attribution reads too), absent when it does not.
+    $label_visible = !empty($component['label_rendered']);
     $presentation = $this->elementModel->bundlePresentation('block_content', $block_type, $label_visible);
-    $type = $this->bundleLabel('block_content', $block_type);
+    $type = $this->daedalusUi->bundleLabel('block_content', $block_type);
     $annotation = [
       'name' => $this->componentName($component, $presentation, $label_visible, $type),
       'type' => $type,
+      // An inline block's icon is its block type's, a daedalus_layout
+      // setting, so the providers answer it; NULL with none installed.
+      'icon' => $this->iconProvider->icon($component, ElementIconProviderInterface::KIND_BLOCK, $this->cacheability),
       'presentation' => $presentation->toArray(),
     ];
     $composed = $this->elementModel->isComposedInlineBlock($block_type);
@@ -421,30 +679,64 @@ final class BlueprintElementAnnotator {
     if (!empty($fields)) {
       $annotation['fields'] = $fields;
     }
-    $component['_element'] = $annotation;
+    $component['_element'] = $annotation + self::verdictFacts($component);
+    return $component;
   }
 
   /**
-   * Annotates a plugin component (anything that is not an inline block).
+   * Annotates a plugin block node (anything that is not an inline block).
    *
-   * A field block of the root presents MERGED into the root field it
-   * renders (ElementModel::fieldBlockPresentation) and names that field by
-   * its selectable key. Any other plugin block (a menu, the site branding,
-   * a field block of some other bundle) is not a fieldable bundle: no
-   * presentation, no compose, no markup, no field facts, it presents open.
-   * It is still an element on the canvas (attributed by its uuid) with a
-   * row in the tree, so it carries the naming spine's two words: its type
-   * is the block plugin's admin label, the same word the Add panel shows
-   * for it, and its name the configured label when that label is a name
-   * (not rendered as content), else the type.
+   * A field node (the tree names the FIELD a field block renders, never a
+   * per-bundle plugin id) of a field the root has presents MERGED into
+   * that root field (ElementModel::fieldBlockPresentation) and names it by
+   * its selectable key. A field node the host does not edit (a template
+   * canvas, whose root is NULL; a field the page lacks) presents open,
+   * typed by the subject's field label when the subject has the field,
+   * else by the field name. A slot door (daedalus_slot:{id}) is a join of
+   * the render stack: its type is the kind's word, "Slot", its name the
+   * derivative's admin label ("Header slot", SlotDeriver: the roster's
+   * word, never a configured label, since a door is what it is), its
+   * glyph the door, and it carries its `showing`. Any other plugin block
+   * (a menu, the site branding) is not a fieldable bundle: no
+   * presentation, no compose, no markup, no field facts, it presents
+   * open. Each is still an element on the canvas (attributed by its uuid)
+   * with a row in the tree, so it carries the naming spine's two words:
+   * its type is the block plugin's admin label, the same word the Add
+   * panel shows for it, and its name the configured label when that label
+   * is a name (not rendered as content), else the type.
    */
-  private function annotatePluginBlock(array &$component): void {
+  private function annotatePluginBlock(array $component): array {
+    $field = $component['field'] ?? NULL;
+    if (is_string($field) && $field !== '') {
+      return $this->annotateFieldBlock($component, $field);
+    }
     $plugin_id = $component['plugin_id'] ?? NULL;
     if (!is_string($plugin_id)) {
-      return;
+      return $component;
     }
-    $definition = $this->root !== NULL
-      ? $this->elementModel->presentedField($plugin_id, $this->root)
+    if (SlotBlock::slotIdOf($plugin_id) !== NULL) {
+      $component['_element'] = [
+        'name' => $this->pluginLabel($plugin_id),
+        'type' => (string) $this->t('Slot'),
+        'icon' => $this->glyph('slot'),
+      ] + self::verdictFacts($component) + $this->showingFacts($component);
+      return $component;
+    }
+    $type = $this->pluginLabel($plugin_id);
+    $component['_element'] = [
+      'name' => $this->labelAsName($component, !empty($component['label_rendered'])) ?? $type,
+      'type' => $type,
+      'icon' => $this->glyph('plugin-block'),
+    ] + self::verdictFacts($component);
+    return $component;
+  }
+
+  /**
+   * Annotates a field node: the root's field it presents, or its words.
+   */
+  private function annotateFieldBlock(array $component, string $field): array {
+    $definition = $this->root !== NULL && $this->root->hasField($field)
+      ? $this->root->getFieldDefinition($field)
       : NULL;
     if ($definition !== NULL) {
       // A field block IS the field it renders: the field's label is both
@@ -453,17 +745,107 @@ final class BlueprintElementAnnotator {
       $component['_element'] = [
         'name' => $label,
         'type' => $label,
+        'icon' => $this->glyph('field-block'),
         'presentation' => $this->elementModel->fieldBlockPresentation($definition)->toArray(),
         'presented_field' => SelectableKey::field($this->root->uuid(), $definition->getName()),
       ];
-      return;
     }
-    $type = $this->pluginLabel($plugin_id);
-    $label_visible = ($component['label_display'] ?? 'visible') === 'visible';
-    $component['_element'] = [
-      'name' => $this->labelAsName($component, $label_visible) ?? $type,
-      'type' => $type,
+    else {
+      $type = $this->subject !== NULL && $this->subject->hasField($field)
+        ? (string) $this->subject->getFieldDefinition($field)->getLabel()
+        : $field;
+      $component['_element'] = [
+        'name' => $this->labelAsName($component, !empty($component['label_rendered'])) ?? $type,
+        'type' => $type,
+        'icon' => $this->glyph('field-block'),
+      ];
+    }
+    $component['_element'] += self::verdictFacts($component);
+    return $component;
+  }
+
+  /**
+   * A node's verdict as `_element` facts: `can` and `refused`.
+   *
+   * Copied from the spine's `_verdict` stamp on the node; a node the
+   * stamper did not reach (a section with no uuid) carries neither key.
+   *
+   * @return array
+   *   {can?: the five capabilities to booleans, refused?: {code,
+   *   capabilities} entries}, empty for an unstamped node.
+   */
+  private static function verdictFacts(array $node): array {
+    $verdict = $node[VerdictStamper::KEY] ?? NULL;
+    if (!is_array($verdict) || !isset($verdict['can'])) {
+      return [];
+    }
+    return [
+      'can' => $verdict['can'],
+      'refused' => $verdict['refused'] ?? [],
     ];
+  }
+
+  /**
+   * The host-level verdict a delivered blueprint explains the page with.
+   *
+   * The root's `_verdict` (the host: its fields, its own style key, its
+   * top-level flow) with each refusal's context resolved for a surface
+   * that words and links: the owner gains its label, the portal (present
+   * only when the actor may open the owner) gains the editing url, NULL
+   * where the site has no such route. Rides the mirror envelope and every
+   * mutation response as `verdict`; the document notice at the top of the
+   * page elements panel reads nothing else.
+   *
+   * @param array $blueprint
+   *   A serialized blueprint (annotated or not; the stamp is the spine's).
+   *
+   * @return array
+   *   The verdict set {can, refused}, its refusals carrying code,
+   *   capabilities, message, hint and context ({owner?: {entity_type,
+   *   entity_id, label}, portal?: {entity_type, entity_id, label, url}}).
+   */
+  public function hostVerdict(array $blueprint): array {
+    $verdict = $blueprint[VerdictStamper::KEY] ?? NULL;
+    if (!is_array($verdict) || !isset($verdict['can'])) {
+      throw new \LogicException('The blueprint carries no verdict stamp on its root.');
+    }
+    $refused = [];
+    foreach ($verdict['refused'] ?? [] as $refusal) {
+      $context = $refusal['context'] ?? [];
+      if (isset($context['owner']['entity_type'], $context['owner']['entity_id'])) {
+        $owner = $this->loadHostEntity($context['owner']['entity_type'], (string) $context['owner']['entity_id']);
+        $context['owner']['entity_id'] = (string) $context['owner']['entity_id'];
+        $context['owner']['label'] = $owner !== NULL ? (string) $owner->label() : (string) $context['owner']['entity_id'];
+      }
+      if (isset($context['portal']['entity_type'], $context['portal']['entity_id'])) {
+        $context['portal']['url'] = $this->portalUrl($context['portal']['entity_type'], (string) $context['portal']['entity_id']);
+      }
+      $refusal['context'] = $context;
+      $refused[] = $refusal;
+    }
+    return ['can' => $verdict['can'], 'refused' => $refused];
+  }
+
+  /**
+   * The editing url of the host a portal names, or NULL.
+   *
+   * The spine names the host (Portal::toArray(): its entity type and id);
+   * the url is this surface's derivation, NULL when the entity is gone or
+   * the site has no editing route for it. One rule for the root's refusal
+   * portals (hostVerdict()) and a join's showing (showingFacts()).
+   */
+  private function portalUrl(string $entity_type_id, string $id): ?string {
+    $portal = $this->loadHostEntity($entity_type_id, $id);
+    return $portal !== NULL && $this->daedalusUi->hasEditingUrl($portal)
+      ? $this->daedalusUi->getEditingUrl($portal)->toString()
+      : NULL;
+  }
+
+  /**
+   * Loads the entity a refusal's context names, or NULL when it is gone.
+   */
+  private function loadHostEntity(string $entity_type_id, string $id): ?EntityInterface {
+    return $this->entityTypeManager->getStorage($entity_type_id)->load($id);
   }
 
   /**
@@ -471,7 +853,8 @@ final class BlueprintElementAnnotator {
    *
    * A plugin the manager no longer knows (its module uninstalled under a
    * placed block, a derivative whose menu is gone) still needs a word: the
-   * plugin id, the one fact left, the same degrade as bundleLabel().
+   * plugin id, the one fact left, the same degrade as
+   * DaedalusUi::bundleLabel().
    */
   private function pluginLabel(string $plugin_id): string {
     $definition = $this->blockManager->getDefinition($plugin_id, FALSE);
@@ -548,18 +931,6 @@ final class BlueprintElementAnnotator {
   }
 
   /**
-   * A bundle's label as the type word, translated config cast to a string.
-   *
-   * A bundle the info service no longer knows (its type deleted under a
-   * placed block) still needs a word: the machine name, the one fact left.
-   */
-  private function bundleLabel(string $entity_type_id, string $bundle): string {
-    $label = $this->bundleInfo->getBundleInfo($entity_type_id)[$bundle]['label'] ?? NULL;
-    $label = $label === NULL ? '' : (string) $label;
-    return $label !== '' ? $label : $bundle;
-  }
-
-  /**
    * The non-default per-field facts for one owning node's field map.
    *
    * Intersected with the names actually present on the node so the payload
@@ -617,25 +988,26 @@ final class BlueprintElementAnnotator {
   }
 
   /**
-   * The component entities the root's section data resolves.
+   * The component entities the host's delivered section data resolves.
    *
    * The blueprint's component nodes carry serialized values, not entities;
    * markup resolution needs the entities, so they come from the same
    * staged section data the blueprint was serialized from, matched back
-   * to the serialized nodes by component uuid.
+   * to the serialized nodes by component uuid. The tree a read delivers
+   * is every document the host's render shows (HostInterface::sections():
+   * the template around a locked page, then the page's own slot
+   * sections), each node attributed to the host whose document holds it
+   * by the spine's verdict stamp; the entities are read from the same
+   * list, so a template's inline block on a page canvas carries its
+   * markup facts exactly as the page's own blocks do.
    *
    * @return array<string, \Drupal\Core\Entity\FieldableEntityInterface>
    *   Component uuid => block_content entity.
    */
-  private function componentEntitiesOf(FieldableEntityInterface $root): array {
-    if (!$root->hasField('layout_builder__layout')) {
-      return [];
-    }
+  private function componentEntitiesOf(HostInterface $host): array {
     $entities = [];
-    foreach ($root->get('layout_builder__layout') as $item) {
-      if ($item->section instanceof Section) {
-        $this->collectComponentEntities($item->section, $entities);
-      }
+    foreach ($host->sections() as $section) {
+      $this->collectComponentEntities($section, $entities);
     }
     return $entities;
   }

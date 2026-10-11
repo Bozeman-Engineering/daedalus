@@ -5,13 +5,13 @@ declare(strict_types=1);
 namespace Drupal\daedalus_blueprint\Dialect;
 
 /**
- * Thrown when a node tree carries something the dialect cannot yet print.
+ * Thrown when a node tree carries a node kind the printer does not know.
  *
- * The printer is loud, never lossy-by-silence: a tree shape outside the
- * spec v0.2 grammar (multi-region layouts, structured link values with
- * title/options, variant references with fragments, field-scoped style
- * keys) raises this instead of printing an approximation a parse could not
- * round-trip. Each gap is a deliberate follow-up, not an accident.
+ * A programming error, never a data gap. The printer is total over data
+ * (DialectPrinter): whatever a page holds that the authored grammar
+ * cannot spell prints in the read-only register and is noted on the
+ * DialectPrint, not thrown. Only a node kind no serializer produces
+ * raises this, and nothing catches it on purpose.
  */
 final class DialectPrintException extends \RuntimeException {
 }

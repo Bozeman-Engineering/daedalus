@@ -51,25 +51,18 @@ class EntityViewDisplayForm implements ContainerInjectionInterface {
         '#attributes' => ['class' => ['button']],
         '#url' => Url::fromRoute('daedalus_layout.settings.configure_default_section', ['entity' => $entity_view_display_id]),
       ],
-      'promoted_blocks' => [
-        '#type' => 'link',
-        '#title' => $this->t('Promoted Blocks'),
-        '#attributes' => ['class' => ['button']],
-        '#url' => Url::fromRoute('daedalus_layout.settings.promoted_blocks', ['entity' => $entity_view_display_id]),
-      ],
     ];
-    $form['manage_layout']['#access'] = empty($form['layout']['allow_custom']['#default_value']);
+    // Core shows the button only while Layout Builder is enabled; the
+    // overridable case moved it into the container above.
+    $form['manage_layout']['#access'] = !empty($form['layout']['enabled']['#default_value'])
+      && empty($form['layout']['allow_custom']['#default_value']);
   }
 
   /**
    * Implements hook_system_breadcrumb_alter().
    */
   public function breadCrumbAlter(Breadcrumb &$breadcrumb, RouteMatchInterface $route_match, array $context) {
-    $settings_routes = [
-      'daedalus_layout.settings.configure_default_section',
-      'daedalus_layout.settings.promoted_blocks',
-    ];
-    if (in_array($route_match->getRouteName(), $settings_routes)) {
+    if ($route_match->getRouteName() === 'daedalus_layout.settings.configure_default_section') {
       $entity = $route_match->getParameter('entity');
       $entity_type = $this->entityTypeManager->getStorage($this->entityTypeManager->getDefinition($entity->getTargetEntityTypeId())->getBundleEntityType())->load($entity->getTargetBundle());
       $link = Link::createFromRoute($entity_type->label(), "entity.entity_view_display.{$entity->getTargetEntityTypeId()}.default", [$entity_type->getEntityTypeId() => $entity_type->id()]);

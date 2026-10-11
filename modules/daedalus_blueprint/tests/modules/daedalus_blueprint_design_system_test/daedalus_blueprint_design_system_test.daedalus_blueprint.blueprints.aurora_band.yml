@@ -1,0 +1,17 @@
+label: 'Aurora band'
+description: 'A full-width band in the aurora design system.'
+scope: block
+subject: 'entity_test:entity_test'
+layout:
+  -
+    kind: container
+    layout_id: layout_onecol
+    label: 'Aurora band'
+    children:
+      -
+        kind: region
+        region: content
+        children:
+          -
+            kind: block
+            block_type: text

@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Drupal\daedalus_blueprint\Markup;
 
-use Drupal\Core\Entity\FieldableEntityInterface;
+use Drupal\daedalus_blueprint\Host\HostInterface;
 
 /**
  * Projects an entity's blueprint as key-annotated HTML — the print format.
@@ -30,10 +30,10 @@ use Drupal\Core\Entity\FieldableEntityInterface;
 interface MarkupProjectorInterface {
 
   /**
-   * Projects a whole entity's page tree as key-annotated HTML.
+   * Projects a whole host's page tree as key-annotated HTML.
    *
-   * @param \Drupal\Core\Entity\FieldableEntityInterface $entity
-   *   The root entity, in its staged state.
+   * @param \Drupal\daedalus_blueprint\Host\HostInterface $host
+   *   The host, in its staged state.
    * @param string|null $langcode
    *   The language code for translation output, or NULL for the default
    *   language.
@@ -42,13 +42,13 @@ interface MarkupProjectorInterface {
    *   The key-annotated HTML, or NULL when this projector does not answer
    *   for the entity.
    */
-  public function projectEntity(FieldableEntityInterface $entity, ?string $langcode = NULL): ?string;
+  public function projectHost(HostInterface $host, ?string $langcode = NULL): ?string;
 
   /**
    * Projects one element (a block or section) as key-annotated HTML.
    *
-   * @param \Drupal\Core\Entity\FieldableEntityInterface $entity
-   *   The root entity containing the element.
+   * @param \Drupal\daedalus_blueprint\Host\HostInterface $host
+   *   The host containing the element.
    * @param string $uuid
    *   The element's UUID (a Layout Builder block or section).
    * @param string|null $langcode
@@ -59,6 +59,6 @@ interface MarkupProjectorInterface {
    *   The key-annotated HTML, or NULL when this projector does not answer
    *   for the entity or no element carries the UUID.
    */
-  public function projectElement(FieldableEntityInterface $entity, string $uuid, ?string $langcode = NULL): ?string;
+  public function projectElement(HostInterface $host, string $uuid, ?string $langcode = NULL): ?string;
 
 }

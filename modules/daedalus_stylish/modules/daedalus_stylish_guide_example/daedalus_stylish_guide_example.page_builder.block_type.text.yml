@@ -16,12 +16,13 @@
 # grammar and WITHOUT element-scoped token names. Two facts keep it
 # honest: curation shapes the OFFER, never the law (any minted type
 # token still validates on a text block; only the stop rows and the AI's
-# deviation lines narrow), and stop names are the SKIN'S data (a name
-# the active skin does not mint drops from the row with a logged notice,
-# never a build error). A node block replaces the site default WHOLE on
-# its node (site blocks merge across layers, node blocks never key-merge
-# with the site's), so a curated property restates the scale and
-# allowed: literals beside its stops.
+# deviation lines narrow), and stop names are CONTRACT names (the site
+# declaration's token_contract: a stop outside it fails the build, and
+# whether the worn skin mints the contract is SkinConformance's answer
+# about that skin, never a build error). A node block replaces the site
+# default WHOLE on its node (site blocks merge across layers, node
+# blocks never key-merge with the site's), so a curated property
+# restates the scale and allowed: literals beside its stops.
 #
 # variant_axes is a list and lists replace, so the universal block axes
 # (daedalus_stylish.page_builder.yml) are re-listed beside the add, descriptions

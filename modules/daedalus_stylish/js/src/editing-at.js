@@ -306,7 +306,7 @@ export const styledConditions = (entry) =>
 /**
  * The structural facts an element satisfies, from the blueprint tree.
  *
- * The tree is the delivered lean node tree (the blueprint's `_tree`,
+ * The tree is the delivered lean node tree (the blueprint's `layout`,
  * source.getTree(): the leader reads the mirror, the satellite the
  * broadcast), so the read works with or without a canvas. The element's
  * place is its index among its tree siblings (a section's children, a

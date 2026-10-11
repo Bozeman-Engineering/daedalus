@@ -10,10 +10,7 @@ use Drupal\Core\Plugin\Context\ContextDefinition;
 use Drupal\Core\StringTranslation\TranslatableMarkup;
 use Drupal\ai\Attribute\FunctionCall;
 use Drupal\ai\OperationType\Chat\Tools\ToolsFunctionInput;
-use Drupal\ai\Service\FunctionCalling\FunctionCallInterface;
-use Drupal\daedalus_blueprint\Dialect\DialectCatalogBuilder;
 use Drupal\daedalus_blueprint_ai\DaedalusBlueprintToolBase;
-use Symfony\Component\DependencyInjection\ContainerInterface;
 
 /**
  * The one mutation tool: applies operations atomically to a single entity.
@@ -83,7 +80,7 @@ class Edit extends DaedalusBlueprintToolBase {
    * on a page-language site the page language owns all of this and the
    * alter hook swaps in OPERATIONS_ROOT_GRAMMAR instead.
    */
-  public const OPERATIONS_LAYOUT_GRAMMAR = 'Placement, stated once for every op that takes a "location" {anchor, placement: before|after|inside}: before/after land beside the anchor in its flow (any element, at any depth), "inside" nests into a section; anchor the root entity UUID with "inside" for a top-level section (the root flow holds only sections). A "region" key applies only to multi-region layouts. Identity, stated once for the creating ops: an optional "uuid" is a fresh UUID v4 you mint (real RFC 4122; human-readable identifiers are rejected), so later operations in the same batch and styling keys such as block:{uuid} reference the newborn; reusing an existing or already-minted uuid is refused as UUID_IN_USE. Content ops: update_element ("properties", optional "element" uuid; a section\'s one property is "label"), add_element ("block_type" for inline blocks OR "plugin_id" for plugin blocks, "location", optional "properties" and "uuid"; blocks never hold nested layouts), add_section ("location", optional "uuid"; a new section is a CONTAINER, one ordered flow of children, born with its layout for life; pass "layout" from available_layouts plus optional "layout_settings" only for a genuinely named-slot layout; an optional "stencil" records a hand-placed stencil root), remove_element ("element" uuid; a section\'s whole subtree goes with it), duplicate_element ("element" uuid; deep-clone with fresh identity, inserted after the original), move_element ("element" uuid and "location"), restructure_layout, reorder_field. ';
+  public const OPERATIONS_LAYOUT_GRAMMAR = 'Placement, stated once for every op that takes a "location" {anchor, placement: before|after|inside}: before/after land beside the anchor in its flow (any element, at any depth), "inside" nests into a section; anchor the root entity UUID with "inside" for a top-level section (the root flow holds only sections). A "region" key applies only to multi-region layouts. Identity, stated once for the creating ops: an optional "uuid" is a fresh UUID v4 you mint (real RFC 4122; human-readable identifiers are rejected), so later operations in the same batch and styling keys such as block:{uuid} reference the newborn; reusing an existing or already-minted uuid is refused as UUID_IN_USE. Content ops: update_element ("properties", optional "element" uuid; a section\'s one property is "label"), add_element ("block_type" for inline blocks OR "plugin_id" for plugin blocks, "location", optional "properties" and "uuid"; blocks never hold nested layouts), add_section ("location", optional "uuid"; a new section is a CONTAINER, one ordered flow of children, born with its layout for life; pass "layout" from available_layouts plus optional "layout_settings" only for a genuinely named-slot layout; an optional "blueprint" records a hand-placed blueprint root; an optional "slot" names the slot of the surrounding document this top-level section fills, once per document), remove_element ("element" uuid; a section\'s whole subtree goes with it), duplicate_element ("element" uuid; deep-clone with fresh identity, inserted after the original), move_element ("element" uuid and "location"), reorder_field. ';
 
   /**
    * The root-field grammar: what a page-language site keeps for content.
@@ -104,20 +101,6 @@ class Edit extends DaedalusBlueprintToolBase {
    * The trivial example for the page-language shape (root fields only).
    */
   public const OPERATIONS_ROOT_EXAMPLE = ' A trivial edit is a one-op batch, e.g. [{"op": "update_element", "properties": {"name": "Hero"}}].';
-
-  /**
-   * The dialect catalog builder: the page-language site predicate.
-   */
-  protected DialectCatalogBuilder $catalogBuilder;
-
-  /**
-   * {@inheritdoc}
-   */
-  public static function create(ContainerInterface $container, array $configuration, $plugin_id, $plugin_definition): FunctionCallInterface|static {
-    $instance = parent::create($container, $configuration, $plugin_id, $plugin_definition);
-    $instance->catalogBuilder = $container->get('daedalus_blueprint.dialect_catalog_builder');
-    return $instance;
-  }
 
   /**
    * {@inheritdoc}
@@ -166,20 +149,37 @@ class Edit extends DaedalusBlueprintToolBase {
       return;
     }
 
-    // eb_edit never edits pages: any entity the page language speaks for
-    // (it carries a layout and the site's catalog declares a container
-    // layout) is page_edit's, whole. One grammar per gesture — teaching a
-    // JSON side door here is how a model learns to route around the page
-    // language, so the refusal routes instead of accommodating.
-    if ($entity instanceof FieldableEntityInterface
-      && $entity->hasField('layout_builder__layout')
-      && $this->catalogBuilder->build()->containerLayoutId() !== '') {
-      $this->output = sprintf(
-        'Error: %s %s is a page, and pages speak the page language: edit it with page_edit. Structure and content are HTML fragments (insert/replace), styling is CSS (style, or set\'s style/class attrs), and entity fields such as the title ride set with ref "root".',
-        $entity_type,
-        $entity_id,
-      );
-      return;
+    // eb_edit never edits pages (PageHosts::isPage(): the one meaning across the AI
+    // doors): a page is page_edit's, whole. One grammar per gesture, so
+    // teaching a JSON side door here is how a model learns to route around
+    // the page language (a template's third-party settings through
+    // update_properties included); the refusal routes instead of
+    // accommodating. A host that owns a document goes to page_edit for
+    // everything; a plain host (its render is its template's document)
+    // edits its fields there and its layout on the template.
+    if ($this->hostResolver->hosts($entity)) {
+      $host = $this->hostResolver->fromEntity($entity);
+      if ($this->pageHosts->isPage($host)) {
+        if ($this->hostResolver->foreignOwner($host) === NULL) {
+          $this->output = sprintf(
+            'Error: %s %s is a %s, and pages speak the page language: edit it with page_edit. Structure and content are HTML fragments (insert/replace), styling is CSS (style, or set\'s style/class attrs), and entity fields such as the title ride set with ref "root".',
+            $entity_type,
+            $entity_id,
+            $entity instanceof FieldableEntityInterface ? 'page' : 'template (a page document)',
+          );
+        }
+        else {
+          $template = $this->hostResolver->renderHost($host);
+          $this->output = sprintf(
+            'Error: %s %s is a page whose layout is its template\'s: edit its fields with page_edit (set with ref "root"); edit its layout on the template: run the operation against %s %s.',
+            $entity_type,
+            $entity_id,
+            $template->entityTypeId(),
+            $template->id(),
+          );
+        }
+        return;
+      }
     }
 
     try {

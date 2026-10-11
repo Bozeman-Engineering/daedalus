@@ -56,6 +56,7 @@ class PaletteAiSurfaceTest extends KernelTestBase {
     $this->installEntitySchema('user');
     $this->installEntitySchema('daedalus_swatch');
     $this->installEntitySchema('daedalus_animation');
+    $this->installEntitySchema('daedalus_font');
     // The materials hook queries the variant and skin storages on the
     // same alter.
     $this->installEntitySchema('daedalus_variant');
@@ -73,8 +74,8 @@ class PaletteAiSurfaceTest extends KernelTestBase {
     $schema = [
       'fields' => [
         'name' => ['type' => 'string'],
-        'daedalus_stylish_styles' => ['type' => 'daedalus_stylish_styles', 'style_guide' => ['guidance' => 'x']],
       ],
+      'styles' => ['type' => 'daedalus_stylish_styles', 'style_guide' => ['guidance' => 'x']],
     ];
     $context = ['entity_type' => 'entity_test', 'bundle' => 'entity_test', 'view_mode' => 'full', 'cache_tags' => []];
     $this->container->get('module_handler')->alter('daedalus_blueprint_schema', $schema, $context);
@@ -129,7 +130,7 @@ class PaletteAiSurfaceTest extends KernelTestBase {
 
     // The materials are the schema's own key; the field's style guide is
     // untouched.
-    $this->assertSame(['guidance'], array_keys($schema['fields']['daedalus_stylish_styles']['style_guide']));
+    $this->assertSame(['guidance'], array_keys($schema['styles']['style_guide']));
 
     // Non-styling fields are untouched.
     $this->assertArrayNotHasKey('style_guide', $schema['fields']['name']);

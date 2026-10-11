@@ -15,9 +15,15 @@ use Drupal\daedalus_blueprint\BlueprintDeserializerInterface;
 use Drupal\daedalus_blueprint\BundleListBuilder;
 use Drupal\daedalus_blueprint\BlueprintOperationsInterface;
 use Drupal\daedalus_blueprint\BlueprintSchemaBuilderInterface;
+use Drupal\daedalus_blueprint\Dialect\DialectCatalogBuilder;
 use Drupal\daedalus_blueprint\Dispatch\BlueprintBackendInterface;
 use Drupal\daedalus_blueprint\Dispatch\BlueprintBackendResolver;
 use Drupal\daedalus_blueprint\EntityStorageHandler;
+use Drupal\daedalus_blueprint\Entity\FrameInterface;
+use Drupal\daedalus_blueprint\Host\BlueprintHost;
+use Drupal\daedalus_blueprint\Host\HostInterface;
+use Drupal\daedalus_blueprint\Host\HostResolver;
+use Drupal\daedalus_blueprint\Host\PageHosts;
 use Drupal\daedalus_blueprint\Markup\MarkupProjection;
 use Drupal\daedalus_blueprint\Materials\MaterialGestureOperationHandler;
 use Drupal\daedalus_blueprint\Materials\MaterialRecord;
@@ -26,6 +32,7 @@ use Drupal\daedalus_blueprint\Result\BlueprintResult;
 use Drupal\daedalus_blueprint\Result\BlueprintResultInterface;
 use Drupal\daedalus_blueprint\Result\TargetType;
 use Drupal\daedalus_blueprint_ai\Event\AiToolActionEvent;
+use Drupal\layout_builder\Entity\LayoutEntityDisplayInterface;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\Yaml\Yaml;
 use Symfony\Contracts\EventDispatcher\EventDispatcherInterface;
@@ -133,6 +140,27 @@ abstract class DaedalusBlueprintToolBase extends FunctionCallBase implements Exe
   protected StructuralAuditor $structuralAuditor;
 
   /**
+   * The host resolver.
+   *
+   * @var \Drupal\daedalus_blueprint\Host\HostResolver
+   */
+  protected HostResolver $hostResolver;
+
+  /**
+   * The dialect catalog builder: the page-language site predicate.
+   *
+   * @var \Drupal\daedalus_blueprint\Dialect\DialectCatalogBuilder
+   */
+  protected DialectCatalogBuilder $catalogBuilder;
+
+  /**
+   * The one meaning of "page" for every AI door.
+   *
+   * @var \Drupal\daedalus_blueprint\Host\PageHosts
+   */
+  protected PageHosts $pageHosts;
+
+  /**
    * {@inheritdoc}
    */
   public static function create(ContainerInterface $container, array $configuration, $plugin_id, $plugin_definition): FunctionCallInterface|static {
@@ -154,7 +182,72 @@ abstract class DaedalusBlueprintToolBase extends FunctionCallBase implements Exe
     $instance->bundleListBuilder = $container->get('daedalus_blueprint.bundle_list_builder');
     $instance->markupProjection = $container->get('daedalus_blueprint.markup_projection');
     $instance->structuralAuditor = $container->get('daedalus_blueprint.structural_auditor');
+    $instance->hostResolver = $container->get('daedalus_blueprint.host_resolver');
+    $instance->catalogBuilder = $container->get('daedalus_blueprint.dialect_catalog_builder');
+    $instance->pageHosts = $container->get('daedalus_blueprint.page_hosts');
     return $instance;
+  }
+
+  /**
+   * The corrective a JSON read door answers for a page.
+   *
+   * The two JSON read doors (eb_read_entity, eb_read_element) refuse a
+   * page (PageHosts::isPage()) toward page_read, whole, in every mode: a page's own
+   * fields ride before its document print and the print carries every
+   * element by id, so nothing a page knows needs the JSON road (its markup
+   * projection included; the per-turn print projects the current page
+   * itself, not through a tool). The refusal sits before any read of the
+   * document, so a never-edited page's template seed is no longer a side
+   * effect of a read. A template has no fields, so its corrective names
+   * the print alone. One spelling for both doors, so the model learns one
+   * route.
+   *
+   * @param \Drupal\daedalus_blueprint\Host\HostInterface $host
+   *   The page host.
+   * @param string $entity_type
+   *   The entity type ID as the model passed it.
+   * @param int|string $entity_id
+   *   The entity ID as the model passed it.
+   *
+   * @return string
+   *   The tool output.
+   */
+  protected function pageReadCorrective(HostInterface $host, string $entity_type, int|string $entity_id): string {
+    $content = $host->entity() instanceof FieldableEntityInterface;
+    return sprintf(
+      'Error: %s %s is a %s, and pages speak the page language: read it with page_read%s.',
+      $entity_type,
+      $entity_id,
+      $content ? 'page' : 'template (a page document)',
+      $content ? ' (its fields ride before the print, and the print carries every element by id)' : ' (the print carries every element by id)',
+    );
+  }
+
+  /**
+   * The corrective a JSON create door answers for a page bundle.
+   *
+   * The two JSON create doors (eb_create_entity, eb_validate) refuse a
+   * page bundle (PageHosts::isPageBundle()) toward page_create before the deserializer
+   * runs: a page is born through the page language, its fields and its
+   * document in one gesture, and page_create judges the whole page before
+   * anything is built, so the judged create (eb_validate) has nothing to
+   * add either. One spelling for both doors, so the model learns one
+   * route.
+   *
+   * @param string $entity_type
+   *   The entity type ID as the model passed it.
+   * @param string $bundle
+   *   The bundle as the model passed it.
+   *
+   * @return string
+   *   The tool output.
+   */
+  protected function pageCreateCorrective(string $entity_type, string $bundle): string {
+    return sprintf(
+      'Error: %s/%s is a page bundle (its entities render a page document), and pages speak the page language: create it with page_create, which judges the whole page before anything is built.',
+      $entity_type,
+      $bundle,
+    );
   }
 
   /**
@@ -267,6 +360,11 @@ abstract class DaedalusBlueprintToolBase extends FunctionCallBase implements Exe
     if (!$this->requireVisibleEntityType($entity_type, $entity->bundle())) {
       return NULL;
     }
+    // A hosted entity is visible by its document's kind (a template by
+    // the bundle it renders), the same rule loadHost() applies.
+    if ($this->hostResolver->hosts($entity) && !$this->requireVisibleHost($this->hostResolver->fromEntity($entity))) {
+      return NULL;
+    }
 
     if (!$entity->access($access_op)) {
       $this->output = "Access denied for '$access_op' on $entity_type:$entity_id.";
@@ -277,7 +375,7 @@ abstract class DaedalusBlueprintToolBase extends FunctionCallBase implements Exe
   }
 
   /**
-   * Loads an entity with access checking.
+   * Loads a page host with access checking.
    *
    * @param string $entity_type
    *   The entity type ID.
@@ -286,36 +384,76 @@ abstract class DaedalusBlueprintToolBase extends FunctionCallBase implements Exe
    * @param string $access_op
    *   The access operation ('view', 'update', 'delete').
    *
-   * @return \Drupal\Core\Entity\FieldableEntityInterface|null
-   *   The loaded entity, or NULL if not found or access denied. When NULL
-   *   is returned, the output property is set with an error message.
+   * @return \Drupal\daedalus_blueprint\Host\HostInterface|null
+   *   The loaded host (its staged copy when one exists), or NULL if not
+   *   found or access denied. When NULL is returned, the output property
+   *   is set with an error message.
    */
-  protected function loadEntity(string $entity_type, int|string $entity_id, string $access_op): ?FieldableEntityInterface {
+  protected function loadHost(string $entity_type, int|string $entity_id, string $access_op): ?HostInterface {
     if (!$this->requireVisibleEntityType($entity_type)) {
       return NULL;
     }
 
-    $entity = $this->storageHandler->load($entity_type, $entity_id);
+    $host = $this->storageHandler->load($entity_type, $entity_id);
 
-    if (!$entity) {
-      $this->output = "Entity $entity_type:$entity_id not found.";
+    if ($host === NULL) {
+      $entity = $this->entityTypeManager->hasDefinition($entity_type)
+        ? $this->entityTypeManager->getStorage($entity_type)->load($entity_id)
+        : NULL;
+      // The entity exists but nothing hosts it: a display without Layout
+      // Builder is config, not a template.
+      $this->output = $entity === NULL
+        ? "Entity $entity_type:$entity_id not found."
+        : "$entity_type:$entity_id is not a template: Layout Builder is not enabled on that display, so it hosts no page document.";
       return NULL;
     }
 
-    if (!$this->requireVisibleEntityType($entity_type, $entity->bundle())) {
+    if (!$this->requireVisibleEntityType($entity_type, $host->bundle()) || !$this->requireVisibleHost($host)) {
       return NULL;
     }
 
-    if (!$entity->access($access_op)) {
+    if (!$host->entity()->access($access_op)) {
       $this->output = "Access denied for '$access_op' on $entity_type:$entity_id.";
       return NULL;
     }
 
-    return $entity;
+    return $host;
   }
 
   /**
-   * Persists an entity via the storage handler.
+   * Guards that AI visibility filtering does not hide a host's document.
+   *
+   * The document's kind decides (BundleListBuilder::isHiddenHost()): a
+   * template of a hidden bundle is as unreachable as the bundle's pages,
+   * and so is a saved blueprint whose subject is a hidden bundle (its
+   * document is that bundle's material; the blueprint type's own
+   * visibility is loadHost()'s earlier question). The refusal names what
+   * is hidden: the bundle for a page or a template, the subject for a
+   * blueprint, since a blueprint's own bundle is never the hidden one.
+   *
+   * @param \Drupal\daedalus_blueprint\Host\HostInterface $host
+   *   The loaded host.
+   *
+   * @return bool
+   *   TRUE if the tool may proceed. FALSE if hidden; the output property
+   *   is set with the refusal message.
+   */
+  protected function requireVisibleHost(HostInterface $host): bool {
+    if (!$this->bundleListBuilder->isHiddenHost($host)) {
+      return TRUE;
+    }
+    // A hidden host has a display: only a display's kind can be hidden
+    // (BundleListBuilder::isHiddenHost()).
+    $display = $host->display();
+    assert($display !== NULL);
+    $this->output = $host instanceof BlueprintHost
+      ? sprintf('Unknown or hidden bundle: %s/%s (the subject of blueprint %s).', $display->getTargetEntityTypeId(), $display->getTargetBundle(), $host->id())
+      : sprintf('Unknown or hidden bundle: %s/%s.', $display->getTargetEntityTypeId(), $display->getTargetBundle());
+    return FALSE;
+  }
+
+  /**
+   * Persists a result's host via the storage handler.
    *
    * Routes to the correct storage backend (database or tempstore) based on
    * module configuration. New entities always save to the database. Edit
@@ -323,7 +461,7 @@ abstract class DaedalusBlueprintToolBase extends FunctionCallBase implements Exe
    * TRUE.
    *
    * @param \Drupal\daedalus_blueprint\Result\BlueprintResult $result
-   *   The blueprint result containing the entity and element UUIDs.
+   *   The blueprint result containing the host and element UUIDs.
    * @param bool $is_new
    *   TRUE if this is a newly created entity.
    * @param bool $force_save
@@ -336,13 +474,13 @@ abstract class DaedalusBlueprintToolBase extends FunctionCallBase implements Exe
   protected function persistEntity(BlueprintResult $result, bool $is_new = FALSE, bool $force_save = FALSE): bool {
     try {
       $this->storageHandler->persist(
-        $result->getEntity(),
+        $result->getHost(),
         $is_new,
         $force_save,
         $result->getElementUuids(),
       );
       $this->moduleHandler->invokeAll('daedalus_blueprint_ai_tool_persisted', [
-        $result->getEntity(),
+        $result->getHost(),
         $is_new,
         $result->getElementUuids(),
       ]);
@@ -350,7 +488,7 @@ abstract class DaedalusBlueprintToolBase extends FunctionCallBase implements Exe
         'entity_persisted',
         $this->getPluginId(),
         [
-          'entity' => $result->getEntity(),
+          'host' => $result->getHost(),
           'is_new' => $is_new,
           'targets' => $result->getTargets(),
         ],
@@ -424,33 +562,69 @@ abstract class DaedalusBlueprintToolBase extends FunctionCallBase implements Exe
   }
 
   /**
-   * Guards that the entity type is a content (fieldable) entity.
+   * Guards that the entity type can host a page document.
    *
-   * Call at the top of execute() in content-only tools (ReadEntity,
-   * ReadElement, CreateEntity, etc.) to give a clear error when a config
-   * entity type is passed.
+   * A document host is a fieldable entity (a content host), a Layout
+   * Builder display (a template host, type entity_view_display; whether a
+   * given display is Layout Builder enabled is loadHost()'s question) or a
+   * site frame (a frame host, type daedalus_frame, addressed by its theme).
+   * Call at the top of execute() in every tool that addresses a host
+   * (page_read, page_edit, eb_read_entity, eb_read_element) to give a
+   * clear corrective when another config entity type is passed.
    *
    * @param string $entity_type
    *   The entity type ID.
    *
    * @return bool
-   *   TRUE if the entity type is a content entity. FALSE if not — the output
-   *   property is set with a helpful error message.
+   *   TRUE if the entity type hosts documents. FALSE if not; the output
+   *   property is set with the corrective.
    */
-  protected function requireContentEntityType(string $entity_type): bool {
+  protected function requireDocumentHostType(string $entity_type): bool {
     $entity_type_def = $this->entityTypeManager->getDefinition($entity_type, FALSE);
     if ($entity_type_def === NULL) {
       $this->output = "Unknown entity type: $entity_type.";
       return FALSE;
     }
-    if (!$entity_type_def->entityClassImplements(FieldableEntityInterface::class)) {
-      $this->output = "This tool only works with content entities (node, block_content, paragraph). "
-        . "For config entities like '$entity_type', use eb_edit: an update_properties operation "
+    if (!$entity_type_def->entityClassImplements(FieldableEntityInterface::class)
+      && !$entity_type_def->entityClassImplements(LayoutEntityDisplayInterface::class)
+      && !$entity_type_def->entityClassImplements(FrameInterface::class)) {
+      $this->output = "This tool works with hosts of a page document: content entities (node, block_content, paragraph), "
+        . "templates (entity_view_display, a bundle's default layout, addressed by its display id such as node.page.default) "
+        . "and the site frame (daedalus_frame, addressed by its theme's machine name). "
+        . "For other config entities like '$entity_type', use eb_edit: an update_properties operation "
         . "for properties, and the plugin-collection operations (add_plugin, update_plugin, "
         . "remove_plugin, reorder_plugins) for plugin collections.";
       return FALSE;
     }
     return $this->requireVisibleEntityType($entity_type);
+  }
+
+  /**
+   * Guards that the entity type is a content (fieldable) entity.
+   *
+   * The doors with no host in hand (a birth, a bundle's grammar) are
+   * content doors: a template is born by enabling Layout Builder on a
+   * bundle's display (config, never created through a blueprint), and its
+   * grammar is its target bundle's. Call after requireDocumentHostType()
+   * in eb_create_entity, page_create and eb_read_schema.
+   *
+   * @param string $entity_type
+   *   The entity type ID.
+   *
+   * @return bool
+   *   TRUE if the entity type is fieldable. FALSE if not; the output
+   *   property is set with the corrective.
+   */
+  protected function requireFieldableType(string $entity_type): bool {
+    $entity_type_def = $this->entityTypeManager->getDefinition($entity_type, FALSE);
+    if ($entity_type_def !== NULL && $entity_type_def->entityClassImplements(FieldableEntityInterface::class)) {
+      return TRUE;
+    }
+    $this->output = "'$entity_type' is a template type, not a content type. A template (a bundle's default layout) "
+      . "is born by enabling Layout Builder on the bundle's display, never through this tool; read and edit an "
+      . "existing template with page_read and page_edit (entity_type entity_view_display, entity_id its display id), "
+      . "and read the grammar of what it renders with eb_read_schema for the target type and bundle.";
+    return FALSE;
   }
 
   /**
@@ -631,7 +805,7 @@ abstract class DaedalusBlueprintToolBase extends FunctionCallBase implements Exe
    * @param string $output
    *   The formatted result output (the YAML the tool already emits).
    * @param \Drupal\daedalus_blueprint\Result\BlueprintResultInterface $result
-   *   The successful mutation result carrying the staged entity and its
+   *   The successful mutation result carrying the staged host and its
    *   change targets.
    * @param bool $whole_entity
    *   TRUE to echo the whole entity's projection regardless of targets
@@ -686,13 +860,13 @@ abstract class DaedalusBlueprintToolBase extends FunctionCallBase implements Exe
     if (!$this->markupProjection->hasProjector() || !$result instanceof BlueprintResult) {
       return [];
     }
-    $entity = $result->getEntity();
-    if ($entity === NULL) {
+    $host = $result->getHost();
+    if ($host === NULL) {
       return [];
     }
 
     if ($whole_entity) {
-      $html = $this->markupProjection->projectEntity($entity);
+      $html = $this->markupProjection->projectHost($host);
       return $html === NULL ? [] : [$html];
     }
 
@@ -707,9 +881,9 @@ abstract class DaedalusBlueprintToolBase extends FunctionCallBase implements Exe
         $projections[$uuid] = sprintf('<!-- %s: removed, no longer on the page -->', $uuid);
         continue;
       }
-      $projections[$uuid] = $uuid === $entity->uuid()
-        ? $this->markupProjection->projectEntity($entity)
-        : $this->markupProjection->projectElement($entity, $uuid);
+      $projections[$uuid] = $uuid === $host->uuid()
+        ? $this->markupProjection->projectHost($host)
+        : $this->markupProjection->projectElement($host, $uuid);
     }
     $projections = array_filter($projections, static fn (?string $html) => $html !== NULL);
 

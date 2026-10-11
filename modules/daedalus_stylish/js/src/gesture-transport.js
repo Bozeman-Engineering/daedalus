@@ -84,8 +84,8 @@ export const asJson = async (response) => {
   if (!response.ok) {
     const error = new Error(
       body?.errors?.[0]?.message ??
-        Drupal.t('The request failed (@status).', {
-          '@status': response.status,
+        Drupal.t('The request failed (!status).', {
+          '!status': response.status,
         }),
     );
     error.payload = body;
@@ -124,6 +124,23 @@ export const send = async (method, path, payload = null) => {
 };
 
 export const post = (path, payload) => send('POST', path, payload);
+
+/**
+ * A multipart write with the CSRF header: the bytes door (a font file
+ * upload). The browser sets the content type with its boundary, so none
+ * is named here.
+ *
+ * @param {string} path
+ * @param {FormData} form
+ */
+export const postForm = async (path, form) => {
+  const token = await csrfToken();
+  return fetch(Drupal.url(path), {
+    method: 'POST',
+    headers: { 'X-CSRF-Token': token },
+    body: form,
+  }).then(asJson);
+};
 
 /**
  * Drives a core Batch API job from JS (a delete gesture's 202 contract).

@@ -11,7 +11,10 @@ dependencies:
   # The attachment store holds a conversation's files on file.usage.
   - drupal:file
   - daedalus:daedalus_ui
-  - ai:ai_chatbot
+  # The chat sidebar speaks ai 1.5's chat-turn request contract (a
+  # chat_processor_plugin and its plugin_configuration in the body);
+  # ai_chatbot's /api/deepchat refuses the pre-1.5 body since 1.5.0.
+  - ai:ai_chatbot (>=1.5)
   - ai_agents:ai_agents
   - daedalus:daedalus_blueprint
   - daedalus:daedalus_blueprint_ai

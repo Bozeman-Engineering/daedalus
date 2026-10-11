@@ -121,11 +121,11 @@ step 'Updates (drush updatedb)' "$DRUSH" updatedb -y
 # migrated export, the run imports it in place of the recipe. That export no
 # longer lists section_library (the first environment uninstalled it), and
 # core refuses to uninstall a module whose content exists, so the templates
-# go first; the update step's section library migration has already read
-# them, and the stencils carry them.
+# go first; nothing carries them (the blueprint library has no update path,
+# MIGRATING.md "What does not carry over").
 if [ "$(sync_holds_migrated_export)" = 1 ]; then
   if [ "$(module_installed section_library)" = 1 ]; then
-    step 'Section library templates (the stencils carry them now)' "$DRUSH" entity:delete section_library_template -y
+    step 'Section library templates (not carried: the blueprint library has no update path)' "$DRUSH" entity:delete section_library_template -y
   fi
   step 'Config import (the export of the first environment)' "$DRUSH" config:import -y
 else

@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Drupal\daedalus_blueprint\Markup;
 
-use Drupal\Core\Entity\FieldableEntityInterface;
+use Drupal\daedalus_blueprint\Host\HostInterface;
 
 /**
  * The markup-projection socket: collects and fronts tagged projectors.
@@ -43,9 +43,9 @@ final class MarkupProjection implements MarkupProjectorInterface {
   /**
    * {@inheritdoc}
    */
-  public function projectEntity(FieldableEntityInterface $entity, ?string $langcode = NULL): ?string {
+  public function projectHost(HostInterface $host, ?string $langcode = NULL): ?string {
     foreach ($this->projectors as $projector) {
-      $html = $projector->projectEntity($entity, $langcode);
+      $html = $projector->projectHost($host, $langcode);
       if ($html !== NULL) {
         return $html;
       }
@@ -56,9 +56,9 @@ final class MarkupProjection implements MarkupProjectorInterface {
   /**
    * {@inheritdoc}
    */
-  public function projectElement(FieldableEntityInterface $entity, string $uuid, ?string $langcode = NULL): ?string {
+  public function projectElement(HostInterface $host, string $uuid, ?string $langcode = NULL): ?string {
     foreach ($this->projectors as $projector) {
-      $html = $projector->projectElement($entity, $uuid, $langcode);
+      $html = $projector->projectElement($host, $uuid, $langcode);
       if ($html !== NULL) {
         return $html;
       }

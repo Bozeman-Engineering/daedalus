@@ -90,20 +90,28 @@ export const createPopoutLeader = ({ scope, url, source }) => {
   // it is site configuration, served to the satellite page directly
   // (InspectorPopout).
   const snapshotState = () => ({
-    // The selection channel carries the styling target beside the key:
-    // the satellite renders the same selection and target the leader's
-    // spine holds, never a parallel target state of its own.
+    // The selection channel carries the two styling facts beside the
+    // key: the satellite renders the same selection, subject facet and
+    // write address the leader's spine holds, never a parallel state of
+    // its own.
     selected: source.getSelected(),
     target: source.getTarget(),
+    address: source.getAddress(),
     styleMap: source.getStyleMap(),
     rootUuid: source.getRootUuid(),
+    // The root's verdict, so the satellite's gate answers for the root
+    // and the host's fields (its tree holds the layout elements alone).
+    rootCan: source.getRootCan?.() ?? null,
+    // The root's three minted words, so the satellite's page row reads
+    // the page's icon and name as the leader's does (its tree holds the
+    // layout elements alone).
+    rootElement: source.getRootElement?.() ?? null,
     blockTypes: source.getBlockTypes(),
     sectionLayouts: source.getSectionLayouts(),
-    // The staged layout's structural tree, so satellite-initiated variant
-    // capture can walk the subtree the leader page stages.
-    layout: source.getLayout(),
-    // The lean node tree, so the satellite's stacks carry the same
-    // ancestor layers and its fact rows light the same way.
+    // The lean node tree, the one structure the satellite walks: its
+    // stacks carry the same ancestor layers, its fact rows light the same
+    // way, and satellite-initiated variant capture walks the subtree the
+    // leader page stages.
     tree: source.getTree?.() ?? [],
     // The selection's layout surroundings (parent computed display et al),
     // digested here because computed style needs the canvas document the
@@ -127,6 +135,10 @@ export const createPopoutLeader = ({ scope, url, source }) => {
     // mounted editing session), so the one source-owned {place,
     // editing} state rides every broadcast.
     place: source.getPlace(),
+    // The skin defaults delivered since boot (a skin session's push):
+    // the satellite's stacks read the pushed document as the skin's,
+    // exactly as this page's panel does.
+    skinDefaults: source.getSkinDefaults?.() ?? null,
   });
 
   // The vector subscription binds on the first hello, not at creation:
@@ -242,14 +254,14 @@ export const createPopoutLeader = ({ scope, url, source }) => {
         // extension, staged preview, commit) all live on this page. The
         // committed token reaches the satellite on the next state broadcast.
         source.pickMedia(payload);
-      } else if (payload.intent === 'swatch-preview') {
-        // A satellite's live swatch-value preview (the gradient swatch
-        // session's drag): the canvas lives here, so the draft lands on
-        // this page's token scope element; null releases it back to the
-        // store's value. Committed changes never come this way: they ride
-        // the materials wire as deltas (materials-store.js).
-        source.previewSwatch(
-          source.getMaterials().get('swatch', payload.id),
+      } else if (payload.intent === 'material-preview') {
+        // A satellite's live material-value preview (a token card's or
+        // the gradient swatch session's drag): the canvas lives here, so
+        // the draft lands on this page's token scope lane; null releases
+        // it back to the store's value. Committed changes never come this
+        // way: they ride the materials wire as deltas (materials-store.js).
+        source.previewMaterial(
+          source.getMaterials().get(payload.kind, payload.id),
           payload.value,
         );
       } else if (payload.intent === 'animation-preview') {
@@ -269,11 +281,17 @@ export const createPopoutLeader = ({ scope, url, source }) => {
         // the ordinary selection subscription.
         source.select(payload.key);
       } else if (payload.intent === 'target') {
-        // The satellite's target intents (a code-mode row header, the
-        // address switcher, "Edit at"): seat the styling target on the
-        // spine here (the canvas paints its matches here); the change
-        // broadcasts back the same way.
+        // The satellite's facet intents (a code-mode row header, a tree
+        // part row, the chip's box doorway): seat the subject facet on
+        // the spine here (the canvas paints its matches here); the
+        // change broadcasts back the same way.
         source.target(payload.key, payload.selector);
+      } else if (payload.intent === 'address') {
+        // The satellite's address intents (the address switcher, "Edit
+        // at", a code-mode rule header; a null key drops it): seat the
+        // write address on the spine here (the canvas paints the rule's
+        // matches dotted here); the change broadcasts back the same way.
+        source.address(payload.key ?? null, payload.selector ?? null);
       } else if (payload.intent === 'hover') {
         // The satellite page tree's row hover: drive the shared selection
         // hover here (canvas outline + page-elements row), the echo
@@ -308,6 +326,11 @@ export const createPopoutLeader = ({ scope, url, source }) => {
         // A satellite place pick: the one place state lives on this
         // page; the new value broadcasts back on its change.
         source.setPlace(payload.state);
+      } else if (payload.intent === 'refresh-defaults') {
+        // A satellite skin session's landing: the canvas and the
+        // delivered-defaults state live here; the map broadcasts back
+        // on its change and the settlement answers it too.
+        settle(payload.request, source.refreshDefaults());
       }
     },
   });
@@ -321,8 +344,8 @@ export const createPopoutLeader = ({ scope, url, source }) => {
 
   const broadcast = () => channel.post('state', { state: snapshotState() });
   // One selection subscription, the target-aware one: it fires on
-  // selection AND target changes, so the snapshot's selection and target
-  // always travel together.
+  // selection, facet AND address changes, so the snapshot's selection,
+  // subject facet and write address always travel together.
   source.onTargetChange(broadcast);
   // Hover rides its own slim message (see the protocol note): transient
   // pointer-speed chrome, deliberately outside the snapshot — a satellite
@@ -337,6 +360,7 @@ export const createPopoutLeader = ({ scope, url, source }) => {
   source.onStyleMapChange(broadcast);
   source.onForceStateChange(broadcast);
   source.onPlaceChange(broadcast);
+  source.onSkinDefaultsChange?.(broadcast);
 
   return {
     isPoppedOut: () => poppedOut,
@@ -403,5 +427,20 @@ export const createPopoutLeader = ({ scope, url, source }) => {
      */
     collapseOutline: (gesture) =>
       channel.post('collapse-outline', { gesture }),
+
+    /**
+     * Runs a page elements panel doorway in the satellite's inspector.
+     *
+     * The variant row-facts doors' popped-out branch (row-facts.js
+     * createVariantDoors): the row menu is on this page but the
+     * inspector that owns the editing session and the Outline Variant
+     * toggle is mounted over there, so the GESTURE goes over the wire and
+     * the satellite runs it through the doors seam its inspector fills
+     * (inspector-doors.js runDoor). One-way, like the picker open.
+     *
+     * @param {{door: string, reference: string, key: ?string}} payload
+     *   The door name, the variant reference and the wearer key.
+     */
+    openDoor: (payload) => channel.post('doorway', payload),
   };
 };

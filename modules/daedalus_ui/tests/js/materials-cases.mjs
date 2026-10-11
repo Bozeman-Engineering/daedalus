@@ -12,7 +12,7 @@
  *    resolve: [{value, slot}], references: [{value, slot}],
  *    canonical: [{value, slot}],
  *    spell: [{kind, id, slot}],
- *    applicable: [{kind, id, scope, topLevel, withinStencil}],
+ *    applicable: [{kind, id, scope, topLevel, withinBlueprint}],
  *    scopesPair: [{variant, element}]}
  * stdout is a JSON object with one array per case list, in case order:
  * resolve/references answers as {kind, id, spelling} (the record is a
@@ -33,6 +33,6 @@ process.stdout.write(JSON.stringify({
   references: (input.references ?? []).map((c) => references(c.value, c.slot, roster).map(contract)),
   canonical: (input.canonical ?? []).map((c) => canonical(c.value, c.slot, roster)),
   spell: (input.spell ?? []).map((c) => spell(roster.get(c.kind, c.id), c.slot)),
-  applicable: (input.applicable ?? []).map((c) => roster.applicable(roster.get(c.kind, c.id), c.scope, c.topLevel ?? true, c.withinStencil ?? null)),
+  applicable: (input.applicable ?? []).map((c) => roster.applicable(roster.get(c.kind, c.id), c.scope, c.topLevel ?? true, c.withinBlueprint ?? null)),
   scopesPair: (input.scopesPair ?? []).map((c) => scopesPair(c.variant, c.element)),
 }));

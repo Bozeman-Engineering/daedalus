@@ -315,7 +315,7 @@ class DefaultsStylesheet extends CompiledStylesheetBase {
           $uses_scheme = $uses_scheme || $this->usesSchemeConditions($entry);
         }
       }
-      foreach ($this->orderedDefaults($skin->getDefaults()) as $scope => $styles) {
+      foreach ($this->orderedDefaults($skin->defaults()) as $scope => $styles) {
         $css = $this->printDefaultsScope($scope, $styles, $cache_tags);
         if ($css !== '') {
           $blocks[] = $css;
@@ -534,7 +534,7 @@ class DefaultsStylesheet extends CompiledStylesheetBase {
       return [];
     }
     $uuids = [];
-    foreach ($skin->getDefaults() as $styles) {
+    foreach ($skin->defaults() as $styles) {
       if (!is_array($styles)) {
         continue;
       }

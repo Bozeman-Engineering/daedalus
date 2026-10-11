@@ -15,6 +15,7 @@ use Drupal\daedalus_blueprint_ai\ConversationContext;
 use Drupal\daedalus_ui\File\FileLane;
 use Drupal\file\FileInterface;
 use Drupal\KernelTests\KernelTestBase;
+use Drupal\layout_builder\Entity\LayoutBuilderEntityViewDisplay;
 use Drupal\Tests\media\Traits\MediaTypeCreationTrait;
 use Drupal\Tests\user\Traits\UserCreationTrait;
 use PHPUnit\Framework\Attributes\Group;
@@ -65,6 +66,17 @@ class RenderPageToolTest extends KernelTestBase {
     'key',
     'ai',
     'entity_test',
+    // The canvas URL is daedalus_ui's answer (a page's canonical URL, a
+    // template's manage-display layout route), so daedalus_ui and its
+    // kernel-test dependency chain ride along (see DaedalusAiKernelTestBase
+    // for the chain's rationale).
+    'daedalus_blueprint',
+    'layout_discovery',
+    'layout_builder',
+    'navigation',
+    'twig_events',
+    'daedalus_tempstore',
+    'daedalus_ui',
     // The kept shot: the lane over core's upload handler, and an image
     // media type so the lane's accepted set includes png.
     'file',
@@ -112,7 +124,21 @@ class RenderPageToolTest extends KernelTestBase {
 
     $this->setUpCurrentUser(['name' => 'editor'], ['view test entity']);
     $this->createMediaType('image', ['id' => 'image', 'label' => 'Image']);
+    $this->entity = $this->container->get('entity_type.manager')
+      ->getStorage('entity_test')
+      ->create(['name' => 'Rendered page']);
+    $this->entity->save();
+    $this->wireStubs();
+  }
 
+  /**
+   * Wires the stubbed collaborators onto the (current) container.
+   *
+   * A container rebuild (enabling a module mid-test) drops every service
+   * set by hand and the pushed request, so a leg that rebuilds calls this
+   * again.
+   */
+  protected function wireStubs(): void {
     // The lane and the store as their service definitions wire them, and
     // the conversation the agent runner would have stamped.
     $this->container->set('daedalus_ui.file_lane', new FileLane(
@@ -133,10 +159,6 @@ class RenderPageToolTest extends KernelTestBase {
     $this->conversation = new ConversationContext();
     $this->conversation->set(self::THREAD);
     $this->container->set('daedalus_blueprint_ai.conversation_context', $this->conversation);
-    $this->entity = $this->container->get('entity_type.manager')
-      ->getStorage('entity_test')
-      ->create(['name' => 'Rendered page']);
-    $this->entity->save();
 
     // The request the tool reads the editor's session cookie from.
     $request = Request::create('/');
@@ -272,6 +294,44 @@ class RenderPageToolTest extends KernelTestBase {
     $this->assertStringContainsString("kept as \"$renamed\"", $tool->getReadableOutput());
     $this->assertNotSame($held->id(), $this->attachments->resolve(self::THREAD, $renamed)?->id());
     $this->assertSame($held->id(), $this->attachments->resolve(self::THREAD, $name)?->id());
+  }
+
+  /**
+   * A template renders its canvas: core's manage-display layout route.
+   *
+   * The URL is the host's editing URL (daedalus_ui's one answer), so a
+   * template's shot shows the template canvas with its sample content,
+   * posed through the same vector; a display with no such route (no
+   * field_ui) has no page of its own, as a block_content has none.
+   */
+  public function testTemplateRendersItsCanvasUrl(): void {
+    $this->installSchema('layout_builder', ['inline_block_usage']);
+    $this->setUpCurrentUser([], [], TRUE);
+    LayoutBuilderEntityViewDisplay::create([
+      'targetEntityType' => 'entity_test',
+      'bundle' => 'entity_test',
+      'mode' => 'default',
+      'status' => TRUE,
+    ])->enableLayoutBuilder()->save();
+
+    $tool = $this->tool(['entity_type' => 'entity_view_display', 'entity_id' => 'entity_test.entity_test.default']);
+    $tool->execute();
+    $this->assertStringContainsString('has no page of its own', $tool->getReadableOutput(), 'Without field_ui the template has no route to render.');
+
+    $this->enableModules(['field_ui']);
+    $this->container->get('router.builder')->rebuild();
+    $this->wireStubs();
+    $tool = $this->tool([
+      'entity_type' => 'entity_view_display',
+      'entity_id' => 'entity_test.entity_test.default',
+      'canvas_width' => '896',
+    ]);
+    $tool->execute();
+    $this->assertCount(1, $this->stub->calls);
+    $call = $this->stub->calls[0];
+    $this->assertStringContainsString('/display/default/layout', $call['url'], 'The template renders on its manage-display layout route.');
+    $this->assertStringContainsString('canvasWidth=896', $call['url']);
+    $this->assertSame('render-entity_view_display-entity_test.entity_test.default-896.png', $tool->getResult()->getContextValues()['_images'][0]->getFilename());
   }
 
   /**

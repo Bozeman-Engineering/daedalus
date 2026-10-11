@@ -26,14 +26,13 @@ use Symfony\Component\Routing\Route;
  * The mirror envelope is the client's boot payload; every JS consumer
  * projects from it, so its shape is a public contract. This test pins the
  * whole payload: the identity keys beside the blueprint, and — the lean
- * node tree contract — the `_tree` the spine's NodeTreeBuilder distributes
- * over the annotated blueprint: kind-discriminated container/region/block
+ * node tree contract — the blueprint's `layout`, the tree the spine's
+ * LayoutSerializer emits: kind-discriminated container/region/block
  * nodes, one child axis, no region/delta residue (no regions map, no
- * section_index, no view_mode/block_revision_id/label_display), the
- * classic layout_builder__layout shape still riding beside it for
- * consumers not yet ported. `_element` annotations ride the tree's nodes
- * (their content is locked by BlueprintElementAnnotatorTest, so the
- * snapshot strips them and asserts presence).
+ * section_index, no block_revision_id/label_display, the default
+ * view_mode implied). `_element` annotations ride the tree's nodes (their
+ * content is locked by BlueprintElementAnnotatorTest, so the snapshot
+ * strips them and asserts presence).
  */
 #[CoversClass(BlueprintMirror::class)]
 #[CoversClass(BlueprintElementAnnotations::class)]
@@ -121,34 +120,40 @@ class BlueprintMirrorPayloadTest extends BlueprintKernelTestBase {
     $entity->save();
     $entity = $this->entityTypeManager->getStorage('entity_test')->load($entity->id());
 
-    $envelope = $this->container->get('daedalus_ui.blueprint_mirror')->envelope($entity, 'full');
+    $envelope = $this->container->get('daedalus_ui.blueprint_mirror')->envelope($this->host($entity), 'full');
     $this->assertIsString($envelope);
     $payload = Json::decode($envelope);
 
-    // The identity keys beside the blueprint.
+    // The identity keys and the host-level verdict beside the blueprint.
     $this->assertSame(
-      ['entityType', 'entityId', 'uuid', 'label', 'langcode', 'viewMode', 'blueprint'],
+      ['entityType', 'entityId', 'uuid', 'label', 'langcode', 'viewMode', 'verdict', 'blueprint'],
       array_keys($payload),
     );
+    $this->assertSame(['can', 'refused'], array_keys($payload['verdict']));
     $this->assertSame('entity_test', $payload['entityType']);
     $this->assertSame($entity->uuid(), $payload['uuid']);
     $this->assertSame('Mirror page', $payload['label']);
     $this->assertSame('full', $payload['viewMode']);
 
     $blueprint = $payload['blueprint'];
-    // The classic layout shape still rides for consumers not yet ported.
-    $this->assertArrayHasKey('layout_builder__layout', $blueprint);
+    $this->assertArrayNotHasKey('_tree', $blueprint, 'The tree is the layout; nothing rides beside it.');
 
-    // `_element` annotations ride the delivered tree's owning nodes — the
-    // tree is built over the ANNOTATED sections, so mirror consumers read
-    // model facts and structure from one shape.
-    $tree = $blueprint['_tree'];
+    // `_element` annotations ride the delivered tree's owning nodes: the
+    // annotator walks the tree, so mirror consumers read model facts and
+    // structure from one shape.
+    $tree = $blueprint['layout'];
     $this->assertArrayHasKey('_element', $tree[0]);
     $this->assertArrayHasKey('_element', $tree[0]['children'][0]);
     $this->assertArrayHasKey('_element', $tree[0]['children'][1]);
+    // The spine's verdict stamp rides the same nodes (the serializer
+    // stamps the tree; the annotator copies it to `_element.can`).
+    $this->assertArrayHasKey('_verdict', $blueprint);
+    $this->assertArrayHasKey('_verdict', $tree[0]);
+    $this->assertArrayHasKey('_verdict', $tree[0]['children'][0]);
 
     // The lean node tree, pinned whole (annotations stripped — their
-    // content is BlueprintElementAnnotatorTest's contract).
+    // content is BlueprintElementAnnotatorTest's and VerdictReadTest's
+    // contract).
     $this->assertSame([
       [
         'kind' => 'container',
@@ -160,6 +165,7 @@ class BlueprintMirrorPayloadTest extends BlueprintKernelTestBase {
             'uuid' => $block_uuid,
             'block_type' => 'text_section',
             'label' => 'First',
+            'label_rendered' => TRUE,
             'block_fields' => [
               'info' => 'First',
               'body' => [
@@ -168,7 +174,6 @@ class BlueprintMirrorPayloadTest extends BlueprintKernelTestBase {
                 'summary' => '',
               ],
             ],
-            'label_rendered' => TRUE,
           ],
           [
             'kind' => 'container',
@@ -181,6 +186,7 @@ class BlueprintMirrorPayloadTest extends BlueprintKernelTestBase {
                 'uuid' => $inner_uuid,
                 'block_type' => 'text_section',
                 'label' => 'Inner',
+                'label_rendered' => TRUE,
                 'block_fields' => [
                   'info' => 'Inner',
                   'body' => [
@@ -189,7 +195,6 @@ class BlueprintMirrorPayloadTest extends BlueprintKernelTestBase {
                     'summary' => '',
                   ],
                 ],
-                'label_rendered' => TRUE,
               ],
             ],
           ],
@@ -204,26 +209,32 @@ class BlueprintMirrorPayloadTest extends BlueprintKernelTestBase {
    * Attach() delivers both envelopes as JSON strings under
    * daedalusUi (blueprint, materials): the page-load half of the
    * materials delivery contract, {records} in the delta's record shape,
+   * resolved for THIS canvas (the spine's CanvasOffer: the fixture's
+   * blueprint carries no tree, so the canvas does not offer it and it
+   * leaves the attached roster while the unfiltered payload still carries
+   * it; the offer rules themselves are the library's BlueprintFitsTest),
    * with the roster's own cache metadata merged into the render so a
    * material write invalidates the page that boots the store.
    */
   public function testAttachDeliversMaterialsBesideTheMirror(): void {
     $this->enableModules(['daedalus_blueprint_materials_test']);
     $entity = $this->createTestEntity(['name' => 'Mirror page']);
+    $host = $this->host($entity);
 
     $build = ['#cache' => ['tags' => ['entity_test:1']]];
-    $this->container->get('daedalus_ui.blueprint_mirror')->attach($build, $entity, 'full');
+    $this->container->get('daedalus_ui.blueprint_mirror')->attach($build, $host, 'full');
 
     $settings = $build['#attached']['drupalSettings']['daedalusUi'];
     $this->assertSame(['blueprint', 'materials'], array_keys($settings));
     $this->assertIsString($settings['materials']);
     $materials = Json::decode($settings['materials']);
     $this->assertSame(['records'], array_keys($materials));
-    $this->assertSame(
-      $this->container->get('daedalus_blueprint.materials_delivery')->payload()['records'],
-      $materials['records'],
-    );
-    $this->assertContains('lime_green', array_column($materials['records'], 'id'));
+    $delivery = $this->container->get('daedalus_blueprint.materials_delivery');
+    $this->assertSame($delivery->payload($host)['records'], $materials['records'], 'The attached roster is the payload for this canvas.');
+    $ids = array_column($materials['records'], 'id');
+    $this->assertContains('lime_green', $ids);
+    $this->assertNotContains('hero', $ids, 'A rootless blueprint is not offered on the canvas, so it does not ride.');
+    $this->assertContains('hero', array_column($delivery->payload()['records'], 'id'), 'Without a canvas the roster is unfiltered.');
     $this->assertSame(
       [
         'kind',
@@ -239,11 +250,14 @@ class BlueprintMirrorPayloadTest extends BlueprintKernelTestBase {
         'published',
         'weight',
         'icon',
-        'root_kind',
+        'blueprint_scope',
         'origin',
         'updatable',
         'design_system',
         'offered',
+        'groups',
+        'favorite',
+        'url',
       ],
       array_keys($materials['records'][0]),
     );
@@ -281,7 +295,7 @@ class BlueprintMirrorPayloadTest extends BlueprintKernelTestBase {
     $request_stack->push($request);
     try {
       $response = $this->container->get('daedalus_blueprint_api.mutation_response_builder')
-        ->build($request, $entity, BlueprintResult::success($entity), NULL, [], 'full');
+        ->build($request, $entity, BlueprintResult::success($this->host($entity)), NULL, [], 'full');
     }
     finally {
       $request_stack->pop();
@@ -330,7 +344,7 @@ class BlueprintMirrorPayloadTest extends BlueprintKernelTestBase {
         ],
       ],
     ];
-    $event = new BlueprintMutationResponseEvent($request, $entity, BlueprintResult::success($entity), $payload);
+    $event = new BlueprintMutationResponseEvent($request, $entity, BlueprintResult::success($this->host($entity)), $payload);
     $this->container->get('event_dispatcher')->dispatch($event);
 
     $expected = $payload;
@@ -344,7 +358,7 @@ class BlueprintMirrorPayloadTest extends BlueprintKernelTestBase {
   protected function stripAnnotations(array $nodes): array {
     foreach ($nodes as &$node) {
       if (is_array($node)) {
-        unset($node['_element']);
+        unset($node['_element'], $node['_verdict']);
         $node = $this->stripAnnotations($node);
       }
     }

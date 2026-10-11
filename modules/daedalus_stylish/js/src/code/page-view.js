@@ -1,12 +1,11 @@
 import { h } from 'preact';
-import { useEffect, useRef, useState } from 'preact/hooks';
+import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { ElementIslands } from './element-view.js';
 import {
   pageNodes,
   scopeNodes,
   visibleTree,
   reapplyRef,
-  rowWords,
   hasBody,
   outlineOf,
   foldSummary,
@@ -24,16 +23,28 @@ import { createStitching } from './stitching.js';
 import { useMenu } from '../menu.js';
 import { CODE_SCOPES } from '../code-scope.js';
 import { findVariant } from '../variant-scope.js';
+import { Portal } from '../popover.js';
+import { createMatcher } from '../selector-matcher.js';
+import { elementWord } from '../subject-model.js';
 
 /**
- * The scope sentence's words, keyed by the scope vocabulary
- * (code-scope.js): "Showing this element", "Showing this element and
- * what is inside it", "Showing the whole page". Read at render, never
- * at load, because the satellite window's Drupal is its own.
+ * The lens's words, keyed by the scope vocabulary (code-scope.js): how
+ * much of the stylesheet is listed, said with the selected element's
+ * NAME ("Showing Chronicle only", "Showing Chronicle and what's
+ * inside", "Showing the whole page"; "the selection" stands for the
+ * name while nothing is selected). Only the lens says the name: the
+ * subject line's address chip answers WHERE a change lands ("This
+ * element", "Every link here") and the lens HOW MUCH is listed, so the
+ * two never share words (Tim, 2026-10-05). Read at render, never at
+ * load, because the satellite window's Drupal is its own.
+ *
+ * @param {string} name
+ *   The selected element's word (subject-model.js elementWord), or
+ *   "the selection" with nothing selected.
  */
-const scopeWords = () => ({
-  element: Drupal.t('this element'),
-  subtree: Drupal.t('this element and what is inside it'),
+const scopeWords = (name) => ({
+  element: Drupal.t('!name only', { '!name': name }),
+  subtree: Drupal.t("!name and what's inside", { '!name': name }),
   page: Drupal.t('the whole page'),
 });
 
@@ -42,7 +53,7 @@ const scopeWords = () => ({
  *
  * Code mode's styling body, the stylesheet read at a SCOPE: the layout
  * — Page, sections, regions, blocks, nested sections recursively
- * (page-model.js walks the source's staged layout tree) — projected by
+ * (page-model.js walks the source's lean node tree) — projected by
  * the code scope preference (code-scope.js) through scopeNodes: the
  * selected element's row alone (`element`), the selection with its
  * descendants (`subtree`), or the whole page (`page`); one chrome row
@@ -54,23 +65,43 @@ const scopeWords = () => ({
  * place renders it as its own root + children view.) The two anchored
  * scopes without a selection project nothing; the view renders the
  * inspector's shared "select an element" empty state (the `empty` prop)
- * under the showing row instead of the tree.
+ * in the body instead of the tree.
  *
  * The scope is the third of the inspector's four controls (place, mode,
  * scope, pose; surface-state.js), the one that exists only in code
- * mode. It reads as the SHOWING ROW at the top of this view, after the
- * wear bar: the sentence "Showing this element ▾" whose scope words are
- * a button opening the shared menu with the three scopes (checked on
- * the current one; a pick writes the scope store through `onScope`, so
- * both windows agree), and, beside it, the outline's collapse-all and
- * expand-all pair (daedalus_ui's shared control). No second segmented
- * track under the mode row.
+ * mode. It reads as the SHOWING ROW, the listing's head: the sentence
+ * "Showing Chronicle only ▾" whose words (scopeWords: the extent with
+ * the element's name) are a button opening the shared menu with the
+ * three scopes (checked on the current one; a pick writes the scope
+ * store through `onScope`, so both windows agree), and, at the row's
+ * end, the outline's collapse-all and expand-all pair (daedalus_ui's
+ * shared control). The row is this view's (its state, `folds`, `outline`
+ * and `scope`, lives here) but it does not scroll with the tree: the
+ * view renders it through a Portal (popover.js) into `head`, the
+ * inspector's pinned head slot at the end of its `__top` box, the one
+ * seat the collapse pair takes in every mode that folds (the Sections'
+ * head fills the same slot in advanced), so a reader scrolled deep into
+ * the listing can still change the lens or fold it. Nothing renders in
+ * the body for it; the wear bar is the body's first row and scrolls.
+ * The row renders whenever this view does, selection or not (it is the
+ * way to the Page scope), once the slot node exists (`head` is null on
+ * the inspector's first render, before its mount effect lifts the node
+ * into state). No
+ * second segmented track under the mode row.
  *
- * The page is an OUTLINE that is also a working surface: every row
- * carries a chevron collapsing it to one summary line (page-model.js
- * foldSummary: the element's own declaration count and one dot per
- * variant it wears, in the layer's hue) and hiding its islands and its
- * children, the outline's rule. The posture is this view's own state
+ * The page is an OUTLINE that is also a working surface, and its rows
+ * wear daedalus_ui's outline row grammar (panel-controls.css
+ * .daedalus-ui-outline__row, the page elements tree's and the Add
+ * panel's headings' too): the chevron column, the element's minted icon,
+ * its minted name (page-model.js carries the annotator's three words;
+ * the type word is the row's tooltip), and the facts zone at the row's
+ * end. Depth is the grammar's token set inline per node, so the washes
+ * span the panel and the children wrapper is structure alone. Every row
+ * carries a chevron collapsing it to its header with the fold's summary
+ * in the facts zone (page-model.js foldSummary: the element's own
+ * declaration count and one dot per variant it wears, in the layer's
+ * hue) and hiding its islands and its children, the outline's rule. The
+ * posture is this view's own state
  * over daedalus_ui's one collapse model (js/outline/collapse.js, the
  * page elements tree's too): the rendered tree projected into the
  * model's shape per render (page-model.js outlineOf, every row open by
@@ -163,7 +194,7 @@ const scopeWords = () => ({
  *
  *
  * Everything flows through the state source, so the satellite renders this
- * view with full parity: the layout tree, uuid tables, and root uuid ride
+ * view with full parity: the node tree, uuid tables, and root uuid ride
  * the state broadcast, and edits/gestures post back as intents.
  */
 export const PageCodeView = ({
@@ -181,6 +212,7 @@ export const PageCodeView = ({
   posed = 'default',
   onPose = null,
   onOpenDocument = null,
+  head = null,
 }) => {
   // The row context menu (the shared primitive): the wearing rows'
   // right-click pattern on tree rows, carrying the Re-apply gesture. The
@@ -204,9 +236,21 @@ export const PageCodeView = ({
   }
   const library = variants ?? [];
   const map = styleMap ?? {};
-  const layout = source.getLayout?.() ?? [];
+  const nodeTree = source.getTree?.() ?? [];
+  // The lens's name: the selected element's word off the tree, the same
+  // spine the subject line reads (subject-model.js elementWord over the
+  // matcher's facts), so the head and the subject never disagree on
+  // what the element is called.
+  const matcher = useMemo(
+    () => (Array.isArray(nodeTree) ? createMatcher(nodeTree) : null),
+    [nodeTree],
+  );
 
-  const pageTree = pageNodes(layout, source.getRootUuid());
+  const pageTree = pageNodes(
+    nodeTree,
+    source.getRootUuid(),
+    source.getRootElement?.() ?? null,
+  );
   const nodes = scopeNodes(pageTree, scope, selected);
   const tree = visibleTree(nodes, map);
   // The rendered tree in the collapse model's shape, projected per
@@ -299,10 +343,10 @@ export const PageCodeView = ({
       return;
     }
     hoverHeaderFor(hoverPaintedRef.current)?.classList.remove(
-      'daedalus-stylish-page-tree__header--hovered',
+      'daedalus-ui-outline__row--hovered',
     );
     hoverPaintedRef.current = next;
-    hoverHeaderFor(next)?.classList.add('daedalus-stylish-page-tree__header--hovered');
+    hoverHeaderFor(next)?.classList.add('daedalus-ui-outline__row--hovered');
   };
   useEffect(() => {
     if (!source.onHoverChange) {
@@ -356,22 +400,40 @@ export const PageCodeView = ({
   // render (a no-op classList.add in the common case).
   useEffect(() => {
     hoverHeaderFor(hoverPaintedRef.current)?.classList.add(
-      'daedalus-stylish-page-tree__header--hovered',
+      'daedalus-ui-outline__row--hovered',
     );
     partHeaderFor(partHotPaintedRef.current)?.classList.add(
       'daedalus-stylish-islands__part--hot',
     );
   });
 
-  // A row's title: the element's two minted words (page-model's `type`
-  // and `name`, the annotator's spine: "Section Welcome", "Text
-  // Welcome!", a bare "Section" when the element was never renamed;
-  // rowWords owns the rule). No machine id ever rides a row. The entity
-  // row is the page.
-  const nodeTitle = (node) =>
-    node.kind === 'entity'
-      ? { word: Drupal.t('Page'), name: null }
-      : rowWords(node, Drupal.t('Element'));
+  // A row's words: the element's minted name (page-model's `name`, the
+  // annotator's spine: "Welcome", "Welcome!", the type word itself when
+  // the element was never renamed) in the name zone, and its minted type
+  // ("Section", "Text") as the row's tooltip, the grammar's rule: the
+  // icon says what a row is. A node the spine never worded (a layout
+  // element with no annotation) says "Element". No machine id ever rides
+  // a row.
+  const nodeWords = (node) => {
+    const type =
+      typeof node.type === 'string' && node.type !== '' ? node.type : null;
+    const name =
+      typeof node.name === 'string' && node.name.trim() !== ''
+        ? node.name
+        : null;
+    return {
+      name: name ?? type ?? Drupal.t('Element'),
+      type: type ?? Drupal.t('Element'),
+    };
+  };
+
+  // The voice a row speaks in, the grammar's modifier by what the element
+  // is: structure (the page, a section, a container) speaks up, a block
+  // speaks plainly (no modifier).
+  const rowVoice = (kind) =>
+    kind === 'entity' || kind === 'container'
+      ? ' daedalus-ui-outline__row--structure'
+      : '';
 
   // The row context menu's items (the wearing-row pattern, the shared menu
   // chrome): the Re-apply gesture on a worn composition root — the exact
@@ -391,25 +453,27 @@ export const PageCodeView = ({
     },
   ];
 
-  // A folded row's summary line: the count and one dot per worn variant
-  // in its layer hue, titled with the variant's label (the library's word
-  // for it; the reference itself when the library lacks it).
+  // A folded row's summary in the grammar's facts zone: the count and one
+  // dot per worn variant in its layer hue, titled with the variant's
+  // label (the library's word for it; the reference itself when the
+  // library lacks it). Nothing when the fold hides no styling, so a bare
+  // row's name runs to the edge.
   const renderSummary = (key) => {
     const { count, worn } = foldSummary(map, key);
     if (!count && !worn.length) {
       return null;
     }
     return (
-      <span className="daedalus-stylish-page-tree__summary">
+      <span className="daedalus-ui-outline__facts">
         {count > 0 && (
-          <span className="daedalus-stylish-page-tree__count">{count}</span>
+          <span className="daedalus-ui-outline__count">{count}</span>
         )}
         {worn.map((layer) => {
           const reference = layer.slice(layer.indexOf(':') + 1);
           return (
             <span
               key={layer}
-              className="daedalus-stylish-page-tree__worn daedalus-ui-dot"
+              className="daedalus-ui-outline__dot daedalus-ui-dot"
               style={{ background: layerColor(layer) }}
               title={findVariant(library, reference)?.label ?? reference}
             />
@@ -419,7 +483,11 @@ export const PageCodeView = ({
     );
   };
 
-  const renderNode = (node) => {
+  // `depth` is the row's depth in the RENDERED tree (the scope's anchor
+  // at 0, whatever its depth in the page), the grammar's token set inline
+  // on the node so the row pads itself by it and the islands beneath
+  // hang from the row's chevron at the same depth.
+  const renderNode = (node, depth = 0) => {
     const isSelected = node.key === selected;
     const active = node.styled || isSelected;
     // The row in the model's shape, the same rule outlineOf projects
@@ -432,20 +500,24 @@ export const PageCodeView = ({
     };
     const open = !isCollapsed(folds, row);
     const reapply = reapplyRef(map, node.key, library);
-    const { word, name } = nodeTitle(node);
+    const { name, type } = nodeWords(node);
 
     return (
       <div
         key={node.key}
         className={`daedalus-stylish-page-tree__node daedalus-stylish-page-tree__node--${node.kind}${open ? '' : ' daedalus-stylish-page-tree__node--collapsed'}${active ? '' : ' daedalus-stylish-page-tree__node--bare'}`}
+        style={{ '--daedalus-outline-depth': depth }}
       >
-        {/* Tree -> canvas/panel: the row IS the element for hover too —
-            enter drives the shared selector hover, and leave clears only
-            a hover this row set (the panel rows' guard; never clobber
-            the canvas's). The islands beneath stay hover-neutral: they
-            are an editing surface, not the element's chrome row. */}
+        {/* The chrome row wears the outline row grammar (its zones, depth,
+            voice and states) beside this tree's own header class (the
+            hover paint's and the selection sync's handle). Tree ->
+            canvas/panel: the row IS the element for hover too — enter
+            drives the shared selector hover, and leave clears only a
+            hover this row set (the panel rows' guard; never clobber the
+            canvas's). The islands beneath stay hover-neutral: they are
+            an editing surface, not the element's chrome row. */}
         <div
-          className={`daedalus-stylish-page-tree__header${isSelected ? ' daedalus-stylish-page-tree__header--selected' : ''}`}
+          className={`daedalus-ui-outline__row daedalus-stylish-page-tree__header${rowVoice(node.kind)}${isSelected ? ' daedalus-ui-outline__row--selected' : ''}`}
           data-daedalus-stylish-page-key={node.key}
           onMouseEnter={() => source.hover?.(node.key)}
           onMouseLeave={() => {
@@ -466,19 +538,18 @@ export const PageCodeView = ({
               : undefined
           }
         >
-          {/* The outline's chevron: the shared disclosure grammar's
-              marker (daedalus_ui panel-controls.css, the page-elements
-              tree's carrier) on this tree's own button. Mouse chrome
+          {/* The grammar's chevron column: the shared disclosure button
+              (daedalus_ui panel-controls.css owns the marker and its open
+              rotation; the page-elements tree's carrier) as mouse chrome
               like the rest of the row (tabindex -1): the keyboard chain
               walks declarations, not rows. Only a row with a body to
-              hide (hasBody) carries it; a bare leaf renders the
-              button's footprint as an inert spacer so its words start
-              in the same column. */}
+              hide (hasBody) carries it; a bare leaf renders the column's
+              inert footprint so its icon starts where its siblings' do. */}
           {row.foldable ? (
             <button
               type="button"
               tabIndex={-1}
-              className="daedalus-stylish-page-tree__chevron daedalus-ui-tree__disclosure"
+              className="daedalus-ui-tree__disclosure daedalus-ui-outline__chevron"
               aria-expanded={open}
               aria-label={open ? Drupal.t('Collapse') : Drupal.t('Expand')}
               onClick={() => setFolds((current) => toggle(current, row))}
@@ -489,26 +560,31 @@ export const PageCodeView = ({
               ></span>
             </button>
           ) : (
-            <span
-              className="daedalus-stylish-page-tree__chevron-spacer"
-              aria-hidden="true"
-            ></span>
+            <span className="daedalus-ui-outline__chevron" aria-hidden="true"></span>
           )}
           {/* Tree -> canvas: the row IS the element; clicking it selects on
               the canvas (via intent from the satellite), and the echo comes
-              back through the selection subscription as the highlight. */}
+              back through the selection subscription as the highlight. The
+              button holds the grammar's icon and name zones (the glyph the
+              annotator minted, painted by the grammar as a mask in the
+              row's color; nothing for a null icon, as the tree draws it)
+              and speaks the type word as its tooltip. */}
           <button
             type="button"
             tabIndex={-1}
             className="daedalus-stylish-page-tree__select"
-            title={node.key}
+            title={type}
             aria-pressed={isSelected}
             onClick={() => source.select?.(node.key)}
           >
-            <span className="daedalus-stylish-page-tree__kind">{word}</span>
-            {name !== null && (
-              <span className="daedalus-stylish-page-tree__name">{name}</span>
+            {node.icon && (
+              <span
+                className="daedalus-ui-outline__icon"
+                aria-hidden="true"
+                style={{ '--daedalus-outline-icon': `url("${node.icon}")` }}
+              ></span>
             )}
+            <span className="daedalus-ui-outline__name">{name}</span>
           </button>
           {!open && renderSummary(node.key)}
         </div>
@@ -537,7 +613,7 @@ export const PageCodeView = ({
         )}
         {open && node.children.length > 0 && (
           <div className="daedalus-stylish-page-tree__children">
-            {node.children.map(renderNode)}
+            {node.children.map((child) => renderNode(child, depth + 1))}
           </div>
         )}
       </div>
@@ -546,7 +622,9 @@ export const PageCodeView = ({
 
   // The showing row's scope menu: the three scopes in vocabulary order,
   // the current one checked, a pick written through the store (onScope).
-  const words = scopeWords();
+  const words = scopeWords(
+    selected ? elementWord(matcher, selected) : Drupal.t('the selection'),
+  );
   const openScopeMenu = (event) => {
     menu.open({
       anchor: event.currentTarget,
@@ -569,36 +647,42 @@ export const PageCodeView = ({
       ref={containerRef}
       data-selection-hover-scope
     >
-      {/* The showing row: the scope as a sentence with a menu, and the
-          outline's collapse-all and expand-all pair at the row's end
-          (daedalus_ui's shared control over this view's posture: each
-          button disabled when its gesture would do nothing, a tree of
-          bare leaves included; the tooltips name the key once the user
-          binds one in the tray). */}
-      <div className="daedalus-stylish-page-tree__showing">
-        <span className="daedalus-stylish-page-tree__showing-word">
-          {Drupal.t('Showing')}
-        </span>
-        <button
-          type="button"
-          className="daedalus-stylish-page-tree__scope"
-          aria-haspopup="menu"
-          data-scope={scope}
-          onClick={openScopeMenu}
-        >
-          {words[scope] ?? words.element}
-        </button>
-        <CollapseControls
-          id={OUTLINE_ID}
-          folds={folds}
-          outline={outline}
-          apply={(next) => setFolds(next)}
-        />
-      </div>
+      {/* The showing row, the listing's head: the scope as a sentence
+          with a menu, and the outline's collapse-all and expand-all pair
+          at the row's end (daedalus_ui's shared control over this view's
+          posture: each button disabled when its gesture would do
+          nothing, a tree of bare leaves included; the tooltips name the
+          key once the user binds one in the tray). Rendered into the
+          inspector's pinned head slot, never into this scrolling tree
+          (see the docblock). */}
+      {head && (
+        <Portal root={head}>
+          <div className="daedalus-stylish-page-tree__showing">
+            <span className="daedalus-stylish-page-tree__showing-word">
+              {Drupal.t('Showing')}
+            </span>
+            <button
+              type="button"
+              className="daedalus-stylish-page-tree__scope"
+              aria-haspopup="menu"
+              data-scope={scope}
+              onClick={openScopeMenu}
+            >
+              {words[scope] ?? words.element}
+            </button>
+            <CollapseControls
+              id={OUTLINE_ID}
+              folds={folds}
+              outline={outline}
+              apply={(next) => setFolds(next)}
+            />
+          </div>
+        </Portal>
+      )}
       {anchorless ? (
         empty
       ) : tree.length ? (
-        tree.map(renderNode)
+        tree.map((node) => renderNode(node))
       ) : (
         /* Every element is a row, so the Page scope is empty only when
            the page holds no element: the empty state names the way in. */

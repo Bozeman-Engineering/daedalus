@@ -59,7 +59,7 @@ const descriptorText = (axis, descriptor) => {
 const itemLabel = (axis, item) => {
   const text = descriptorText(axis, item.label);
   return item.label.system
-    ? Drupal.t('@value (system)', { '@value': text })
+    ? Drupal.t('!value (system)', { '!value': text })
     : text;
 };
 

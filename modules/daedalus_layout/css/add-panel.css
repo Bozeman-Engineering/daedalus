@@ -1,0 +1,361 @@
+/**
+ * @file
+ * The Add panel's own look: one list of folding sets, rows not cards.
+ *
+ * The panel wears daedalus_ui's shared recipes (the panel header grammar
+ * and the close, the recessed input, the panel item, the panel list, the
+ * outline row grammar for its headings, the collapse pair's icon buttons;
+ * panel-controls.css and sidebar.css) and keeps here only what is its
+ * own: the search row, the heading's button reset and its pinning, the
+ * row's tighter box, its home label and its star, the empty sentences,
+ * the armed sentence and the armed cursor, each rule saying why it is not
+ * the shared recipe's. Every rule reaches only inside the panel's block
+ * (.daedalus-layout-add-panel, the mount) or keys off the panel's own
+ * classes, at two-class specificity where it restates a shared recipe's
+ * property, so an override wins by specificity, not load order.
+ */
+
+/* The mount is a flex column by the rail's rule (sidebar.css: any wrapper
+   holding a panel body passes the height chain through, at a 1rem gap);
+   the search row sits closer to the list than that. */
+#place_block .daedalus-layout-add-panel {
+  gap: 0.5rem;
+}
+
+/* ——— The search row ——— */
+
+/* The row clears the scrollbar like the header and the body do. */
+.daedalus-layout-add-panel__search-row {
+  padding-inline-end: 1rem;
+}
+
+/* The recessed input (the kit's) with a magnifier glyph. The glyph is a
+   fixed mid-gray (#8e8e93): a data-URI SVG has no CSS cascade to inherit
+   from, and that tone reads on both schemes' surfaces. */
+.daedalus-layout-add-panel__search.daedalus-ui-input {
+  width: 100%;
+  padding-inline-start: 1.5rem;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 256 256' fill='%238e8e93'%3E%3Cpath d='M229.66,218.34l-50.07-50.06a88.11,88.11,0,1,0-11.31,11.31l50.06,50.07a8,8,0,0,0,11.32-11.32ZM40,112a72,72,0,1,1,72,72A72.08,72.08,0,0,1,40,112Z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: 0.4rem center;
+  background-size: 0.75rem;
+}
+
+.daedalus-layout-add-panel__search::placeholder {
+  color: var(--daedalus-text-muted);
+}
+
+/* ——— The armed sentence ——— */
+
+/* While the Insert verb's anchor is pending the panel says what a click
+   does; the rows read as click-to-place targets below. */
+.daedalus-layout-add-panel__armed {
+  margin: 0 1rem 0 0;
+  padding: 0.3rem 0.5rem;
+  color: var(--daedalus-selection);
+  border-radius: var(--daedalus-border-radius);
+  background: var(--daedalus-selection-background);
+  font-size: var(--daedalus-font-size-small);
+}
+
+.daedalus-layout-insert-pending .daedalus-layout-add-panel__row {
+  cursor: copy;
+}
+
+/* ——— The list ——— */
+
+/* The shared panel list (sidebar.css) at the row rhythm, not the card
+   rhythm; align-content keeps the rows from stretching into the rail's
+   height. */
+.daedalus-layout-add-panel__list.daedalus-ui-panel-list {
+  align-content: start;
+  gap: 0.2rem;
+}
+
+/* ——— The headings ——— */
+
+/* A set's heading wears the outline row grammar (panel-controls.css
+   .daedalus-ui-outline__row, --heading voice: the chevron column, the
+   name, the count in the facts zone, the depth padding, the radius, the
+   type). What is the heading's own: it is a <button> (the heading itself
+   is the toggle, where a tree row's disclosure is a button inside it),
+   so the UA's button box is reset to the row's: full width, no border or
+   fill, the font and color inherited, text at the start (the name zone's
+   text would otherwise center inside the button), and no text selection
+   on a click that toggles. */
+.daedalus-layout-add-panel__heading {
+  width: 100%;
+  margin: 0;
+  user-select: none;
+  text-align: start;
+  color: var(--daedalus-text);
+  border: 0;
+  background: transparent;
+  font-family: inherit;
+}
+
+/* A top-level heading stays pinned while its rows scroll under it, and
+   breathes above when it follows another set (the kinds under All sit on
+   the list's rhythm alone). The grammar's depth is the row's inline
+   token; data-depth is kept for these two rules because CSS cannot
+   select on a custom property. */
+.daedalus-layout-add-panel__heading[data-depth="0"] {
+  position: sticky;
+  z-index: 1;
+  top: 0;
+  background: var(--daedalus-background);
+}
+
+.daedalus-layout-add-panel__heading[data-depth="0"]:not(:first-child) {
+  margin-block-start: 0.35rem;
+}
+
+/* The hover wash is the pseudo-class, as the details summary's is
+   (panel-controls.css): the heading's hover is not synced with the
+   canvas, which is what the grammar's class-driven --hovered is for. */
+.daedalus-layout-add-panel__heading:hover,
+.daedalus-layout-add-panel__heading:focus-visible {
+  background-color: var(--daedalus-selection-background);
+}
+
+/* ——— The rows ——— */
+
+/* The shared panel item (a raised, bordered, grabbable object) at a row's
+   height rather than a card's. The depth is the outline row grammar's
+   token (variables.css: --daedalus-outline-depth, set inline by the
+   component, one --daedalus-outline-step per level), the same step the
+   headings pad by, so a kind's rows sit under their heading; spent as the
+   card's margin, not padding, because a panel item is a bordered object,
+   not an outline row with a wash to span the panel. */
+.daedalus-layout-add-panel__row.daedalus-ui-panel-item {
+  min-height: 2rem;
+  margin-inline-start: calc(var(--daedalus-outline-depth) * var(--daedalus-outline-step));
+  padding: 0.2rem 0.25rem 0.2rem 0.4rem;
+  gap: 0.5rem;
+}
+
+.daedalus-layout-add-panel__row .daedalus-ui-panel-item__image {
+  flex: 0 0 auto;
+  background-repeat: no-repeat;
+  background-position: center;
+}
+
+.daedalus-layout-add-panel__label {
+  overflow: hidden;
+  flex: 1 1 auto;
+  min-width: 0;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* Where a row lives (a search hit, a favorite from elsewhere in All). */
+.daedalus-layout-add-panel__home {
+  margin-inline-start: 0.35rem;
+  color: var(--daedalus-text-muted);
+  font-size: var(--daedalus-font-size-caption);
+  font-variation-settings: "wght" 400;
+}
+
+/* Site themes paint a lingering click ring; keep the keyboard ring. */
+.daedalus-layout-add-panel__row:focus,
+.daedalus-layout-add-panel__heading:focus {
+  outline: none;
+}
+
+.daedalus-layout-add-panel__row:focus-visible,
+.daedalus-layout-add-panel__heading:focus-visible {
+  outline: 2px solid var(--daedalus-selection);
+  outline-offset: -1px;
+}
+
+/* The armed keyboard cursor over the rows (the Insert session's arrows
+   move it, Enter lifts). */
+.daedalus-layout-add-panel__row--highlighted {
+  outline: 2px solid var(--daedalus-selection);
+  outline-offset: -1px;
+}
+
+/* ——— The star ——— */
+
+/* A row's own micro-control: quiet until the row is hovered or focused,
+   always shown when on. It wears the icons' grey in both states, and on
+   and off differ by fill alone: stroked when off, filled when on. The
+   rows' icons are background-image assets drawn in the fixed mid-gray
+   (#8e8e93, the search glyph's tone above, since an asset cannot inherit);
+   the star is inline SVG, so it takes the scheme-aware form of that grey,
+   --daedalus-text-muted (#6e6e73 light, #98989d dark), rather than a
+   literal the schemes could not adjust. No accent hue: a favorite is a
+   listing fact, not a warning. */
+.daedalus-layout-add-panel__star {
+  display: grid;
+  flex: 0 0 auto;
+  width: 1.5rem;
+  height: 1.5rem;
+  margin: 0;
+  padding: 0;
+  cursor: pointer;
+  color: var(--daedalus-text-muted);
+  border: 0;
+  border-radius: calc(var(--daedalus-border-radius) - 0.125rem);
+  background: none;
+  opacity: 0;
+  place-items: center;
+}
+
+.daedalus-layout-add-panel__row:hover .daedalus-layout-add-panel__star,
+.daedalus-layout-add-panel__row:focus-visible .daedalus-layout-add-panel__star,
+.daedalus-layout-add-panel__row:focus-within .daedalus-layout-add-panel__star,
+.daedalus-layout-add-panel__star[aria-pressed="true"] {
+  opacity: 1;
+}
+
+.daedalus-layout-add-panel__star:hover {
+  color: var(--daedalus-text);
+  background: var(--daedalus-selection-background);
+}
+
+.daedalus-layout-add-panel__star:focus {
+  outline: none;
+}
+
+.daedalus-layout-add-panel__star:focus-visible {
+  outline: 2px solid var(--daedalus-selection);
+  outline-offset: -1px;
+}
+
+.daedalus-layout-add-panel__star svg {
+  width: 0.95rem;
+  height: 0.95rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 16;
+  stroke-linejoin: round;
+}
+
+/* On: the same grey, filled. The colour is the base rule's; only the
+   fill changes. */
+.daedalus-layout-add-panel__star[aria-pressed="true"] svg {
+  fill: currentColor;
+}
+
+/* ——— The sentences ——— */
+
+/* The empty Favorites, the empty search, the search's count line. */
+.daedalus-layout-add-panel__empty,
+.daedalus-layout-add-panel__count-line {
+  margin: 0.5rem 0.25rem;
+  color: var(--daedalus-text-muted);
+  font-size: var(--daedalus-font-size-small);
+}
+
+.daedalus-layout-add-panel__count-line {
+  margin-block-start: 0.25rem;
+}
+
+/* ——— The peek ——— */
+
+/* The layer beside the panel (components/peek-frame.js seats it: fixed,
+   on the rail's page-facing side at the rested-on row's height, clamped
+   into the viewport). A chrome surface in the popover's recipe (border,
+   radius, shadow, chrome typeface), below the popover's own z-index so
+   a row's menu sits over it, and above the rails. It takes no pointer
+   and no focus: the editor is resting on the row, not on this. The
+   width and the scale are one pair: a 22rem face frames a 55rem (880px)
+   document, the chooser's technique at a peek's size (its cards frame a
+   whole page at 0.2; one element earns a closer look). */
+.daedalus-layout-add-panel-peek {
+  --daedalus-layout-peek-width: 22rem;
+  --daedalus-layout-peek-scale: 0.4;
+  position: fixed;
+  z-index: 1262;
+  overflow: hidden;
+  box-sizing: border-box;
+  width: var(--daedalus-layout-peek-width);
+  max-width: calc(100vw - 1rem);
+  pointer-events: none;
+  color: var(--daedalus-text);
+  border: 1px solid var(--daedalus-border);
+  border-radius: var(--daedalus-border-radius);
+  background: var(--daedalus-background);
+  box-shadow: 0 8px 24px rgb(0, 0, 0, 0.14);
+  font-family: var(--daedalus-font);
+}
+
+/* The face: the frame's window, the site's white beneath it (the
+   document paints its own background inside). Its height is the placed
+   element's, set inline once the frame loads. */
+.daedalus-layout-add-panel-peek__face {
+  position: relative;
+  overflow: hidden;
+  background: #fff;
+}
+
+/* The frame: the document laid out at the face's width divided by the
+   scale, then scaled onto the face from its top left corner (the start
+   chooser's frame, start-chooser.css). */
+.daedalus-layout-add-panel-peek__frame {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: calc(100% / var(--daedalus-layout-peek-scale));
+  border: 0;
+  background: transparent;
+  transform: scale(var(--daedalus-layout-peek-scale));
+  transform-origin: 0 0;
+  pointer-events: none;
+}
+
+/* The loading state: the chooser's shimmer, beneath the frame until the
+   document paints over it. */
+.daedalus-layout-add-panel-peek[data-daedalus-layout-add-panel-peek="loading"] .daedalus-layout-add-panel-peek__face::before {
+  position: absolute;
+  inset: 0;
+  content: "";
+  background: linear-gradient(100deg, #eef0f6 40%, #fff 50%, #eef0f6 60%);
+  background-size: 200% 100%;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .daedalus-layout-add-panel-peek[data-daedalus-layout-add-panel-peek="loading"] .daedalus-layout-add-panel-peek__face::before {
+    animation: daedalus-layout-peek-sweep 1.4s linear infinite;
+  }
+}
+
+@keyframes daedalus-layout-peek-sweep {
+  to {
+    background-position: -200% 0;
+  }
+}
+
+/* The cut: past the face's ceiling the element fades out at the foot. */
+.daedalus-layout-add-panel-peek[data-clipped] .daedalus-layout-add-panel-peek__face::after {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 22%;
+  content: "";
+  background: linear-gradient(rgba(255, 255, 255, 0), #fff);
+}
+
+/* The caption names the face; a refusal's sentence stands in the
+   frame's place. */
+.daedalus-layout-add-panel-peek__caption,
+.daedalus-layout-add-panel-peek__refused {
+  overflow: hidden;
+  margin: 0;
+  padding: 0.35rem 0.6rem;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: var(--daedalus-font-size-small);
+}
+
+.daedalus-layout-add-panel-peek__caption {
+  color: var(--daedalus-text-muted);
+  border-top: 1px solid var(--daedalus-border);
+}
+
+.daedalus-layout-add-panel-peek__refused {
+  padding-block: 0.6rem;
+  white-space: normal;
+}

@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Drupal\daedalus_stylish_layouts;
 
-use Drupal\Core\Entity\ContentEntityInterface;
+use Drupal\daedalus_blueprint\Host\HostInterface;
 use Drupal\daedalus_stylish\StyleMapSweepBase;
 
 /**
@@ -28,7 +28,7 @@ class VariantRenameSweep extends StyleMapSweepBase {
   /**
    * {@inheritdoc}
    */
-  protected function sweep(array $map, ContentEntityInterface $host, string $context, array &$lines): ?array {
+  protected function sweep(array $map, HostInterface $host, string $context, array &$lines): ?array {
     return $this->rename->renameInStyleMap($map, $this->from, $this->to, $context, $lines);
   }
 

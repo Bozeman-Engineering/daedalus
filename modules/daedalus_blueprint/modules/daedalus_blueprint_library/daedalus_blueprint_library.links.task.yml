@@ -1,0 +1,4 @@
+entity.blueprint.collection:
+  title: 'Blueprints'
+  route_name: entity.blueprint.collection
+  base_route: system.admin_content

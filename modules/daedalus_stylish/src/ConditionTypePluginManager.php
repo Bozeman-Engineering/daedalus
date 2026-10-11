@@ -9,6 +9,7 @@ use Drupal\Core\Config\ConfigFactoryInterface;
 use Drupal\Core\Extension\ModuleHandlerInterface;
 use Drupal\Core\Plugin\DefaultPluginManager;
 use Drupal\daedalus_stylish\Attribute\ConditionType;
+use Drupal\daedalus_stylish\Plugin\Field\FieldType\SkinTokensItem;
 
 /**
  * Condition type plugin manager.
@@ -227,17 +228,24 @@ final class ConditionTypePluginManager extends DefaultPluginManager {
   /**
    * Canonicalizes every condition key of a skin tokens map, for storage.
    *
-   * The tokens shape is one level deeper than a style map ({scale: {name:
-   * value-or-condition-map}}), so each scale's token map normalizes through
-   * normalizeMapConditions(): unconditional string values pass through
-   * untouched, condition-keyed values get canonical compound spellings.
+   * The tokens shape is {scale: {name: record}} with the value inside the
+   * record ({value, description, offered}, SkinTokensItem), so each
+   * record's value normalizes through normalizeValueConditions():
+   * unconditional string values pass through untouched, condition-keyed
+   * values get canonical compound spellings. Entries that are not records
+   * pass through verbatim (the validator has refused them already).
    *
-   * @see self::normalizeMapConditions()
+   * @see self::normalizeValueConditions()
    */
   public function normalizeTokensConditions(array $tokens): array {
     foreach ($tokens as $scale => $names) {
-      if (is_array($names)) {
-        $tokens[$scale] = $this->normalizeMapConditions($names);
+      if (!is_array($names) || array_is_list($names)) {
+        continue;
+      }
+      foreach ($names as $name => $record) {
+        if (SkinTokensItem::isRecord($record) && (is_string($record['value']) || is_array($record['value']))) {
+          $tokens[$scale][$name]['value'] = $this->normalizeValueConditions($record['value']);
+        }
       }
     }
     return $tokens;

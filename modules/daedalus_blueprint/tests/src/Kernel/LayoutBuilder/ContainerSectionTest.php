@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace Drupal\Tests\daedalus_blueprint\Kernel\LayoutBuilder;
 
+use Drupal\daedalus_blueprint\BlueprintDeserializer;
 use Drupal\daedalus_blueprint\LayoutBuilder\ContainerLayout;
-use Drupal\daedalus_blueprint\LayoutBuilder\LayoutDeserializer;
 use Drupal\daedalus_blueprint\LayoutBuilder\LayoutSerializer;
-use Drupal\daedalus_blueprint\Validator\StructuralValidator;
+use Drupal\daedalus_blueprint\NodeTree\NodeTreeBuilder;
 use Drupal\daedalus_layout\Plugin\Block\SectionBlock;
 use Drupal\Tests\daedalus\Kernel\BlueprintKernelTestBase;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -15,18 +15,20 @@ use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 
 /**
- * Tests the children-list serialization shape of container sections.
+ * Tests the children-list shape of container sections.
  *
  * A container layout (`container: true`, exactly one region — see
  * ContainerLayout) has a vestigial storage region, so its section nodes
  * serialize one ordered `children` list instead of the `regions` map, at
- * every depth. Multi-region sections keep the regions shape; the stored
- * regions spelling stays accepted on input for containers.
+ * every depth. Multi-region sections keep the regions shape on the read.
+ * On the write side the tree is the one grammar: a container node's
+ * children are element nodes directly (its flow) and a multi-region
+ * container's children are region nodes; the stored regions spelling is
+ * refused with the tree grammar named.
  */
 #[CoversClass(ContainerLayout::class)]
 #[CoversClass(LayoutSerializer::class)]
-#[CoversClass(LayoutDeserializer::class)]
-#[CoversClass(StructuralValidator::class)]
+#[CoversClass(BlueprintDeserializer::class)]
 #[Group('daedalus_blueprint')]
 #[RunTestsInSeparateProcesses]
 class ContainerSectionTest extends BlueprintKernelTestBase {
@@ -37,9 +39,14 @@ class ContainerSectionTest extends BlueprintKernelTestBase {
   protected LayoutSerializer $layoutSerializer;
 
   /**
-   * The layout deserializer.
+   * The blueprint deserializer.
    */
-  protected LayoutDeserializer $layoutDeserializer;
+  protected BlueprintDeserializer $deserializer;
+
+  /**
+   * The lean node tree builder: the read of the tree.
+   */
+  protected NodeTreeBuilder $treeBuilder;
 
   /**
    * {@inheritdoc}
@@ -71,7 +78,8 @@ class ContainerSectionTest extends BlueprintKernelTestBase {
     $this->createBlockField('body', 'text_with_summary', 'text_section');
 
     $this->layoutSerializer = $this->container->get('daedalus_blueprint.layout_serializer');
-    $this->layoutDeserializer = $this->container->get('daedalus_blueprint.layout_deserializer');
+    $this->deserializer = $this->container->get('daedalus_blueprint.deserializer');
+    $this->treeBuilder = $this->container->get('daedalus_blueprint.node_tree_builder');
   }
 
   /**
@@ -86,6 +94,24 @@ class ContainerSectionTest extends BlueprintKernelTestBase {
     ]);
     $block->save();
     return $block;
+  }
+
+  /**
+   * Creates an entity_test from a layout tree through the deserializer.
+   *
+   * @param array $layout
+   *   The tree.
+   *
+   * @return \Drupal\daedalus_blueprint\Result\BlueprintResult
+   *   The result.
+   */
+  protected function create(array $layout): object {
+    return $this->deserializer->deserialize([
+      'entity_type' => 'entity_test',
+      'bundle' => 'entity_test',
+      'fields' => ['name' => 'Container'],
+      'layout' => $layout,
+    ]);
   }
 
   /**
@@ -116,7 +142,7 @@ class ContainerSectionTest extends BlueprintKernelTestBase {
     $entity->save();
     $entity = $this->entityTypeManager->getStorage('entity_test')->load($entity->id());
 
-    $result = $this->layoutSerializer->serialize($entity);
+    $result = $this->layoutSerializer->serialize($this->host($entity));
 
     $this->assertSame('eb_test_container', $result[0]['layout_id']);
     $this->assertArrayNotHasKey('regions', $result[0]);
@@ -127,7 +153,7 @@ class ContainerSectionTest extends BlueprintKernelTestBase {
     $this->assertSame('<p>First</p>', $result[0]['children'][0]['block_fields']['body']['value']);
 
     // The summary path emits the same shape.
-    $summary = $this->layoutSerializer->serializeSummary($entity);
+    $summary = $this->layoutSerializer->serializeSummary($this->host($entity));
     $this->assertArrayNotHasKey('regions', $summary[0]);
     $this->assertCount(2, $summary[0]['children']);
   }
@@ -166,34 +192,37 @@ class ContainerSectionTest extends BlueprintKernelTestBase {
     $entity->save();
     $entity = $this->entityTypeManager->getStorage('entity_test')->load($entity->id());
 
-    $result = $this->layoutSerializer->serialize($entity);
+    $result = $this->layoutSerializer->serialize($this->host($entity));
 
-    // The multi-region-capable parent keeps the regions map.
-    $node = $result[0]['regions']['content'][0];
+    // The multi-region-capable parent holds its slot as a region node; the
+    // container layouts inside it hold their children directly.
+    $this->assertSame('region', $result[0]['children'][0]['kind']);
+    $node = $result[0]['children'][0]['children'][0];
+    $this->assertSame('container', $node['kind']);
     $this->assertSame('eb_test_container', $node['layout_id']);
     $this->assertSame($nested_uuid, $node['uuid']);
-    $this->assertArrayNotHasKey('regions', $node);
+    $this->assertSame('block', $node['children'][0]['kind']);
     $this->assertSame($block_uuid, $node['children'][0]['uuid']);
 
-    $empty_node = $result[0]['regions']['content'][1];
+    $empty_node = $result[0]['children'][0]['children'][1];
     $this->assertSame([], $empty_node['children']);
-    $this->assertArrayNotHasKey('regions', $empty_node);
   }
 
   /**
-   * Tests deserializing a children list into the vestigial storage region.
+   * Tests a container node's children land in the vestigial storage region.
    */
-  public function testDeserializeChildren(): void {
-    $entity = $this->createTestEntity();
+  public function testCreateWithContainerChildren(): void {
     $nested_uuid = 'cccccccc-3333-4444-8888-000000000001';
     $block_uuid = 'cccccccc-3333-4444-8888-000000000002';
 
-    $new_layout = [
+    $result = $this->create([
       [
+        'kind' => 'container',
         'layout_id' => 'eb_test_container',
         'uuid' => 'cccccccc-3333-4444-8888-000000000000',
         'children' => [
           [
+            'kind' => 'block',
             'uuid' => $block_uuid,
             'block_type' => 'text_section',
             'label' => 'Text',
@@ -202,6 +231,7 @@ class ContainerSectionTest extends BlueprintKernelTestBase {
             ],
           ],
           [
+            'kind' => 'container',
             'layout_id' => 'eb_test_container',
             'uuid' => $nested_uuid,
             'label' => 'Inner',
@@ -209,10 +239,9 @@ class ContainerSectionTest extends BlueprintKernelTestBase {
           ],
         ],
       ],
-    ];
-
-    $result = $this->layoutDeserializer->deserialize($new_layout, $entity);
-    $this->assertFalse($result->hasErrors(), 'Expected no errors. Got: ' . json_encode(array_map(fn($e) => $e->toArray(), $result->getErrors())));
+    ]);
+    $this->assertTrue($result->isSuccess(), 'Expected no errors. Got: ' . json_encode(array_map(fn($e) => $e->toArray(), $result->getErrors())));
+    $entity = $result->getEntity();
 
     $sections = $entity->get('layout_builder__layout')->getSections();
     $this->assertCount(1, $sections);
@@ -230,203 +259,105 @@ class ContainerSectionTest extends BlueprintKernelTestBase {
     $embedded = SectionBlock::embeddedSection($container_component);
     $this->assertSame('Inner', $embedded->getLayoutSettings()['label']);
 
-    // Round trip: what the serializer emits deserializes back unchanged.
-    $again = $this->layoutSerializer->serialize($entity);
-    $this->assertArrayNotHasKey('regions', $again[0]);
-    $this->assertSame([$block_uuid, $nested_uuid], array_column($again[0]['children'], 'uuid'));
-    $result = $this->layoutDeserializer->deserialize($again, $entity);
-    $this->assertFalse($result->hasErrors(), 'Round trip should succeed. Got: ' . json_encode(array_map(fn($e) => $e->toArray(), $result->getErrors())));
-  }
-
-  /**
-   * Tests the stored regions spelling stays accepted for containers.
-   *
-   * Storage shape, stencil definitions, and old payloads key the container's
-   * components by its storage region; input compatibility holds until the
-   * migration retires the spelling.
-   */
-  public function testDeserializeContainerRegionsSpelling(): void {
-    $entity = $this->createTestEntity();
-    $block_uuid = 'dddddddd-4444-4444-8888-000000000001';
-
-    $new_layout = [
-      [
-        'layout_id' => 'eb_test_container',
-        'regions' => [
-          'content' => [
-            [
-              'uuid' => $block_uuid,
-              'block_type' => 'text_section',
-              'block_fields' => [
-                'body' => ['value' => '<p>Stored spelling</p>', 'format' => 'plain_text'],
-              ],
-            ],
-          ],
-        ],
-      ],
-    ];
-
-    $result = $this->layoutDeserializer->deserialize($new_layout, $entity);
-    $this->assertFalse($result->hasErrors(), 'Expected no errors. Got: ' . json_encode(array_map(fn($e) => $e->toArray(), $result->getErrors())));
-
-    $sections = $entity->get('layout_builder__layout')->getSections();
-    $this->assertNotNull($sections[0]->getComponent($block_uuid));
-
-    // Output canonicalizes to children regardless of the input spelling.
-    $serialized = $this->layoutSerializer->serialize($entity);
+    // The read of the created entity answers children, and that tree
+    // creates another equal entity.
+    $serialized = $this->layoutSerializer->serialize($this->host($entity));
     $this->assertArrayNotHasKey('regions', $serialized[0]);
-    $this->assertSame($block_uuid, $serialized[0]['children'][0]['uuid']);
+    $this->assertSame([$block_uuid, $nested_uuid], array_column($serialized[0]['children'], 'uuid'));
+    $tree = $this->treeBuilder->build($this->host($entity));
+    $this->assertSame([$block_uuid, $nested_uuid], array_column($tree[0]['children'], 'uuid'));
+    $result = $this->create($tree);
+    $this->assertTrue($result->isSuccess(), 'Round trip should succeed. Got: ' . json_encode(array_map(fn($e) => $e->toArray(), $result->getErrors())));
+    $this->assertSame([$block_uuid, $nested_uuid], array_keys($result->getEntity()->get('layout_builder__layout')->getSections()[0]->getComponents()));
   }
 
   /**
-   * Tests bare-UUID relocation entries work inside children lists.
+   * Tests the stored regions spelling is refused with the tree grammar.
+   *
+   * A container node has one children axis; the regions map is storage's
+   * (and the read's until the flip), never the write grammar's, with or
+   * without a children list beside it.
    */
-  public function testRelocationInsideChildren(): void {
-    $entity = $this->createTestEntity();
-    $first_uuid = 'eeeeeeee-5555-4444-8888-000000000001';
-    $second_uuid = 'eeeeeeee-5555-4444-8888-000000000002';
+  public function testRegionsSpellingRefused(): void {
+    $regions = ['content' => [['kind' => 'block', 'block_type' => 'text_section']]];
+    foreach ([
+      ['kind' => 'container', 'layout_id' => 'eb_test_container', 'regions' => $regions],
+      ['kind' => 'container', 'layout_id' => 'eb_test_container', 'children' => [], 'regions' => $regions],
+    ] as $node) {
+      $result = $this->create([$node]);
+      $this->assertFalse($result->isSuccess());
+      $error = $result->getErrors()[0];
+      $this->assertSame('INVALID_NODE', $error->getCode());
+      $this->assertSame('layout[0]', $error->getPath());
+      $this->assertStringContainsString('"regions"', $error->getMessage());
+      $this->assertStringContainsString('{kind: region, region, children}', $error->getHint());
+    }
+  }
 
-    $first = $this->createTextBlock('First', '<p>First</p>');
-    $second = $this->createTextBlock('Second', '<p>Second</p>');
-    $section = $this->createSection('eb_test_container', [
+  /**
+   * Tests the one children axis: regions and elements never mix.
+   *
+   * A multi-region container's children are region nodes naming slots the
+   * layout defines; element nodes beside them, or a slot the layout lacks,
+   * are grammar errors on the tree's coordinates.
+   */
+  public function testChildAxisRefusals(): void {
+    $result = $this->create([
       [
-        'uuid' => $first_uuid,
-        'region' => 'content',
-        'weight' => 0,
-        'configuration' => $this->createInlineBlockConfiguration('text_section', $first, 'First'),
-      ],
-      [
-        'uuid' => $second_uuid,
-        'region' => 'content',
-        'weight' => 1,
-        'configuration' => $this->createInlineBlockConfiguration('text_section', $second, 'Second'),
+        'kind' => 'container',
+        'layout_id' => 'layout_twocol_section',
+        'children' => [
+          ['kind' => 'region', 'region' => 'first', 'children' => []],
+          ['kind' => 'block', 'block_type' => 'text_section'],
+        ],
       ],
     ]);
-    $entity->get('layout_builder__layout')->appendSection($section);
-    $entity->save();
-    $entity = $this->entityTypeManager->getStorage('entity_test')->load($entity->id());
+    $this->assertFalse($result->isSuccess());
+    $codes = array_map(fn ($error) => [$error->getCode(), $error->getPath()], $result->getErrors());
+    $this->assertContains(['INVALID_NODE', 'layout[0].children'], $codes);
 
-    // Reorder by bare UUID strings.
-    $new_layout = [
+    $result = $this->create([
       [
-        'layout_id' => 'eb_test_container',
-        'children' => [$second_uuid, $first_uuid],
+        'kind' => 'container',
+        'layout_id' => 'layout_twocol_section',
+        'children' => [
+          ['kind' => 'region', 'region' => 'third', 'children' => []],
+        ],
       ],
-    ];
-    $result = $this->layoutDeserializer->deserialize($new_layout, $entity);
-    $this->assertFalse($result->hasErrors(), 'Expected no errors. Got: ' . json_encode(array_map(fn($e) => $e->toArray(), $result->getErrors())));
-
-    $serialized = $this->layoutSerializer->serialize($entity);
-    $this->assertSame([$second_uuid, $first_uuid], array_column($serialized[0]['children'], 'uuid'));
-  }
-
-  /**
-   * Tests children on a non-container layout is refused loudly.
-   */
-  public function testChildrenRefusedForMultiRegionLayout(): void {
-    $entity = $this->createTestEntity();
-
-    $new_layout = [
-      [
-        'layout_id' => 'layout_onecol',
-        'children' => [],
-      ],
-    ];
-    $result = $this->layoutDeserializer->deserialize($new_layout, $entity);
-    $this->assertTrue($result->hasErrors());
+    ]);
+    $this->assertFalse($result->isSuccess());
     $error = $result->getErrors()[0];
-    $this->assertSame('INVALID_CHILDREN', $error->getCode());
-    $this->assertSame('layout_builder__layout[0].children', $error->getPath());
-  }
-
-  /**
-   * Tests a node carrying both children and regions is refused.
-   */
-  public function testBothShapesRefused(): void {
-    $entity = $this->createTestEntity();
-
-    $new_layout = [
-      [
-        'layout_id' => 'eb_test_container',
-        'children' => [],
-        'regions' => ['content' => []],
-      ],
-    ];
-    $result = $this->layoutDeserializer->deserialize($new_layout, $entity);
-    $this->assertTrue($result->hasErrors());
-    $this->assertSame('INVALID_CHILDREN', $result->getErrors()[0]->getCode());
-  }
-
-  /**
-   * Tests structural validation of the children shape.
-   */
-  public function testStructuralValidation(): void {
-    $validator = $this->container->get('daedalus_blueprint.structural_validator');
-    $base = ['entity_type' => 'entity_test', 'bundle' => 'entity_test'];
-
-    // A valid container node: block and nested container children validate
-    // through the one component grammar.
-    $errors = $validator->validate($base + [
-      'layout_builder__layout' => [
-        [
-          'layout_id' => 'eb_test_container',
-          'children' => [
-            [
-              'block_type' => 'text_section',
-              'block_fields' => ['body' => ['value' => '<p>Ok</p>', 'format' => 'plain_text']],
-            ],
-            ['layout_id' => 'eb_test_container', 'children' => []],
-          ],
-        ],
-      ],
-    ]);
-    $this->assertSame([], $errors);
-
-    // An invalid block type inside children carries the children path.
-    $errors = $validator->validate($base + [
-      'layout_builder__layout' => [
-        [
-          'layout_id' => 'eb_test_container',
-          'children' => [
-            ['block_type' => 'nonexistent_type', 'block_fields' => []],
-          ],
-        ],
-      ],
-    ]);
-    $this->assertCount(1, $errors);
-    $this->assertSame('layout_builder__layout[0].children[0].block_type', $errors[0]->getPath());
-
-    // Children on a multi-region layout is refused with the legal regions.
-    $errors = $validator->validate($base + [
-      'layout_builder__layout' => [
-        ['layout_id' => 'layout_twocol_section', 'children' => []],
-      ],
-    ]);
-    $this->assertCount(1, $errors);
-    $this->assertSame('INVALID_CHILDREN', $errors[0]->getCode());
-    $this->assertSame(['first', 'second'], $errors[0]->getContext()['available']);
-
-    // Both shapes on one node is ambiguous.
-    $errors = $validator->validate($base + [
-      'layout_builder__layout' => [
-        [
-          'layout_id' => 'eb_test_container',
-          'children' => [],
-          'regions' => ['content' => []],
-        ],
-      ],
-    ]);
-    $this->assertCount(1, $errors);
-    $this->assertSame('INVALID_CHILDREN', $errors[0]->getCode());
+    $this->assertSame('INVALID_NODE', $error->getCode());
+    $this->assertSame('layout[0].children[0].region', $error->getPath());
+    $this->assertSame(['first', 'second'], $error->getContext()['available']);
 
     // A children map (not a list) is refused.
-    $errors = $validator->validate($base + [
-      'layout_builder__layout' => [
-        ['layout_id' => 'eb_test_container', 'children' => ['content' => []]],
+    $result = $this->create([
+      ['kind' => 'container', 'layout_id' => 'eb_test_container', 'children' => ['content' => []]],
+    ]);
+    $this->assertFalse($result->isSuccess());
+    $error = $result->getErrors()[0];
+    $this->assertSame('INVALID_NODE', $error->getCode());
+    $this->assertSame('layout[0].children', $error->getPath());
+  }
+
+  /**
+   * Tests the ops' own verdicts ride the children path.
+   */
+  public function testOperationVerdictsOnChildren(): void {
+    $result = $this->create([
+      [
+        'kind' => 'container',
+        'layout_id' => 'eb_test_container',
+        'children' => [
+          ['kind' => 'block', 'block_type' => 'nonexistent_type', 'block_fields' => []],
+        ],
       ],
     ]);
-    $this->assertCount(1, $errors);
-    $this->assertSame('INVALID_CHILDREN', $errors[0]->getCode());
+    $this->assertFalse($result->isSuccess());
+    $this->assertCount(1, $result->getErrors());
+    $this->assertSame('INVALID_BLOCK_TYPE', $result->getErrors()[0]->getCode());
+    $this->assertSame('layout[0].children[0].block_type', $result->getErrors()[0]->getPath());
   }
 
   /**
@@ -436,8 +367,10 @@ class ContainerSectionTest extends BlueprintKernelTestBase {
     $schema_builder = $this->container->get('daedalus_blueprint.schema_builder');
     $schema = $schema_builder->getSchema('entity_test', 'entity_test');
 
-    $lb = $schema['layout_builder__layout'];
+    $lb = $schema['layout'];
     $this->assertArrayHasKey('children', $lb['section_structure']);
+    $this->assertArrayNotHasKey('regions', $lb['section_structure']);
+    $this->assertStringContainsString('"kind": "region"', $lb['section_structure']['children']);
 
     $by_id = array_column($lb['available_layouts'], NULL, 'id');
     $this->assertTrue($by_id['eb_test_container']['container']);

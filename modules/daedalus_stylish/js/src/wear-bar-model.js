@@ -29,7 +29,7 @@ import {
 } from './variant-scope.js';
 import { fragmentStyles } from './slot-key.js';
 import { sharesGrain } from './widgets/lib/box-model.js';
-import { stencilLabel } from './library-model.js';
+import { blueprintLabel } from './library-model.js';
 
 const isEntryObject = (value) =>
   value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -453,13 +453,13 @@ export const outlineGesture = (outlined, setOutlined) => ({
  *
  * A row is one axis's wearing, so it is labeled by its axis, except that
  * an OWNED reference is labeled by its owner:
- * a stencil's curated look sits on the style axis like any generic
+ * a blueprint's curated look sits on the style axis like any generic
  * container style, and what the wearer should read is "Card", not
  * "Style". Ownership stays the offer filter and the axis stays the
  * competition rule; only the name changes, exactly as the picker heads
  * the owner's group (variant-picker-model.js pickerGroups). Both
- * ownership lanes read alike (library-model.js stencilLabel: the roster
- * names a content stencil and a file-shipped one by one machine name,
+ * ownership lanes read alike (library-model.js blueprintLabel: the roster
+ * names a content blueprint and a file-shipped one by one machine name,
  * the id standing in for an owner the roster lacks). A fragment wearing
  * of an owned composition reads its owner too: the reference is the same
  * record. When the scope offers ONE axis and this is it, the row says
@@ -477,7 +477,7 @@ export const outlineGesture = (outlined, setOutlined) => ({
  * @param {string[]} context.vocabulary
  *   The scope's axis vocabulary (axisVocabulary()).
  * @param {object} context.materials
- *   The materials roster (the owners' stencil records).
+ *   The materials roster (the owners' blueprint records).
  * @param {string} context.singleAxisLabel
  *   The word for the one-axis case (the view's translated "Variant").
  *
@@ -490,7 +490,7 @@ export const wearRowLabel = (
 ) => {
   const owner = worn?.owned_by ?? null;
   if (owner !== null) {
-    return stencilLabel(owner, materials);
+    return blueprintLabel(owner, materials);
   }
   return vocabulary.length === 1 && axis === vocabulary[0]
     ? singleAxisLabel
@@ -501,7 +501,7 @@ export const wearRowLabel = (
  * The wearing row menu's headline: the variant's identity facts.
  *
  * The menu is where a worn variant explains itself past its label: the
- * axis it competes on, its owner when a stencil owns it ("owned by Card":
+ * axis it competes on, its owner when a blueprint owns it ("owned by Card":
  * the row itself reads the owner's name, wearRowLabel, so the header is
  * where the axis and the owner are both said), its roster weight (the
  * order every list keeps), and its description (the when-to-reach-for-this
@@ -513,7 +513,7 @@ export const wearRowLabel = (
  * @param {?object} guide
  *   The style guide (axis labels).
  * @param {object} materials
- *   The materials roster (the owners' stencil records).
+ *   The materials roster (the owners' blueprint records).
  *
  * @return {?string}
  */
@@ -526,7 +526,7 @@ export const wearRowHeader = (worn, guide, materials) => {
     axisLabel(guide, worn.group ?? 'style'),
   ];
   if (worn.owned_by != null) {
-    facts.push(`owned by ${stencilLabel(worn.owned_by, materials)}`);
+    facts.push(`owned by ${blueprintLabel(worn.owned_by, materials)}`);
   }
   if (typeof worn.weight === 'number' && worn.weight !== 0) {
     facts.push(`weight ${worn.weight}`);

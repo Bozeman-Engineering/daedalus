@@ -1,5 +1,8 @@
 import store from '../store/store';
-import { setSelected, setEditingKey } from '../store/slices/selection-slice';
+import { setEditingKey } from '../store/slices/selection-slice';
+// Circular with select-door.js (editItem selects through the door, the
+// door asks leaveEdit); safe: both sides dereference only at call time.
+import { selectKey } from '../selection/select-door';
 import {
   resolve,
   setEditableItems,
@@ -72,14 +75,23 @@ import { register as registerHotkey } from '../hotkeys/hotkeys';
  * selection-anchored surface (the frame, the verb edit-scope gate) reads
  * unchanged.
  *
- * THE PRESS while an edit is open (onClick, capture phase) is the one
- * owner of "does this press end the edit": keep (the edit's own surface
- * per engine.keepsEdit, chrome marked [data-keeps-edit], the selection
- * frame), switch (another editable leaf the selection grammar names, or a
- * revealed panel widget), commit (anything else). The commit case leaves
- * the press to the selection grammar that runs after it, so inside the
- * canvas the press lands where a click always lands (a selection, or the
- * keyless clear) and outside the canvas the selection stays.
+ * ENDING THE EDIT is this module's to decide, through two roads. THE
+ * PRESS while an edit is open (onClick, capture phase) decides for a
+ * click: keep (the edit's own surface per engine.keepsEdit, chrome marked
+ * [data-keeps-edit], the selection frame), switch (another editable leaf
+ * the selection grammar names, or a revealed panel widget), commit
+ * (anything else). The commit case leaves the press to the selection
+ * grammar that runs after it, so inside the canvas the press lands where
+ * a click always lands (a selection, or the keyless clear) and outside
+ * the canvas the selection stays. THE SELECTION DOOR (leaveEdit, asked by
+ * selection/select-door.js before every selection write) decides for
+ * everything that moves the selection without a press: a placement's
+ * `select`, a page-tree right-click, an inspector's "select parent", a
+ * programmatic Selection.select(). Editing is a fact of the one
+ * selection, so a write landing anywhere but the editing key is leaving
+ * the edit, and the door commits it first (or, when the engine refuses,
+ * writes nothing: the selection never moves off an invalid widget). The
+ * two roads end in the same engine call; neither watches the store.
  *
  * The app owns the open edit; the editing machinery stays in the module
  * that registers the ENGINE (daedalus_edit: form-swap, field plugins,
@@ -117,6 +129,11 @@ let engine = null;
  *     Ends any current edit itself.
  *   - endEdit: ({cancel}) => Promise — commit (or cancel) the current
  *     edit. Rejects when the widget is invalid and the edit must stay.
+ *   - canEndEdit: () => bool — whether the current edit can end NOW, a
+ *     synchronous answer for the selection write door (leaveEdit): true,
+ *     or false after the engine has shown its own feedback (the invalid
+ *     widget's warning). endEdit's rejection is the same fact, but only a
+ *     microtask later, and the door must know before it writes.
  *   - isEditing: () => bool.
  *   - currentItem: () => ?Element — the leaf being edited, or null.
  *   - inputs: () => Element[]|NodeList — the active widget's focusable
@@ -154,6 +171,7 @@ const registerEngine = (spec) => {
     'items',
     'beginEdit',
     'endEdit',
+    'canEndEdit',
     'isEditing',
     'currentItem',
     'inputs',
@@ -286,6 +304,14 @@ const focusedPanelEntry = () => {
  * Entering backwards (Shift+Tab) lands focus on the widget's last input —
  * the position native Tab would arrive at.
  *
+ * The select goes through the selection door like every other write:
+ * with another edit open the door commits it (blur's body runs
+ * synchronously, so beginEdit finds nothing open and opens this one on
+ * the same microtask timing as before), and a refused leave (an invalid
+ * widget) resolves without opening anything, the selection and the edit
+ * staying where they are, which is what beginEdit's own invalid-item
+ * check answered before.
+ *
  * @param {{item: Element, key: string, panel: boolean}} entry
  *   The entry to edit.
  * @param {number} direction
@@ -295,8 +321,12 @@ const focusedPanelEntry = () => {
  */
 const editItem = (entry, direction = 1) => {
   const { item, key } = entry;
-  if (key && key !== store.getState().selection.selectedKey) {
-    store.dispatch(setSelected(key));
+  if (
+    key &&
+    key !== store.getState().selection.selectedKey &&
+    !selectKey(key)
+  ) {
+    return Promise.resolve();
   }
   return engine.beginEdit(item).then(() => {
     if (direction === -1) {
@@ -489,6 +519,40 @@ export const commit = () => {
   });
 };
 
+/**
+ * The selection write door's question (selection/select-door.js): may
+ * the selection leave the open edit now? Editing is a fact of the one
+ * selection, so a selection write landing anywhere but the editing key is
+ * leaving the edit, whatever moved it (a placement's `select`, a page
+ * tree right-click, an inspector's "select parent"), and the edit must
+ * end before the selection does, as the press decision ends it before
+ * the selection grammar lands a press.
+ *
+ * With no engine or no open edit there is nothing to leave. Otherwise the
+ * engine's synchronous canEndEdit decides: false means the edit stays
+ * (the engine has shown its feedback, an invalid widget's warning) and
+ * the door writes nothing; true commits the edit the way the press
+ * decision does, fire and forget, since blurElement enqueues its op and
+ * resolves at once. A rejection after canEndEdit said yes is a contract
+ * breach, so it is logged, never swallowed.
+ *
+ * @return {boolean}
+ *   Whether the selection may move: true with the edit ended (or none
+ *   open), false when the open edit refused.
+ */
+export const leaveEdit = () => {
+  if (engine === null || !engine.isEditing()) {
+    return true;
+  }
+  if (!engine.canEndEdit()) {
+    return false;
+  }
+  engine.endEdit({ cancel: false }).catch((error) => {
+    console.error('Cannot end the edit the selection is leaving:', error);
+  });
+  return true;
+};
+
 const onTab = (direction) => (stroke) => {
   if (engine === null || stroke.consumed) {
     return false;
@@ -560,8 +624,9 @@ const onCommit = (stroke) => {
 };
 
 /**
- * The press decision while an edit is open, the ONE owner of "does this
- * press end the edit":
+ * The press decision while an edit is open: the press road of "does this
+ * end the edit" (the other road is the selection door, leaveEdit, for
+ * every selection write that is not a press):
  *
  * | Target                                              | Result        |
  * |-----------------------------------------------------|---------------|
@@ -656,10 +721,12 @@ const onClick = (event) => {
       if (engine.currentItem() === entry.item) {
         return;
       }
-      // Another editable leaf: one gesture — beginEdit commits the current
-      // edit itself, then opens the next. The selection grammar's own
-      // handler re-resolves the same key after this and finds it
-      // committed already.
+      // Another editable leaf: one gesture. editItem's select goes
+      // through the selection door, which commits the current edit
+      // before the selection moves (or refuses, and nothing opens); then
+      // beginEdit opens the next. The selection grammar's own handler
+      // re-resolves the same key after this and finds it committed
+      // already.
       editItem(entry).catch((error) => {
         console.error('Cannot edit element:', error);
       });

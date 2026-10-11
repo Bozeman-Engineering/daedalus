@@ -1,0 +1,17 @@
+label: 'Dangling icon file'
+description: 'Names an icon file the module does not ship.'
+icon: assets/missing.svg
+scope: block
+subject: 'entity_test:entity_test'
+layout:
+  -
+    kind: container
+    layout_id: layout_onecol
+    children:
+      -
+        kind: region
+        region: content
+        children:
+          -
+            kind: block
+            block_type: text

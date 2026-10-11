@@ -59,7 +59,7 @@ class BlueprintOperationsRegistryTest extends BlueprintKernelTestBase {
   public function testRegisteredOperationDispatches(): void {
     $entity = $this->createTestEntity();
 
-    $result = $this->operations->batchOperations($entity, [
+    $result = $this->operations->batchOperations($this->host($entity), [
       ['op' => 'test_set_name', 'properties' => ['name' => 'Renamed by handler']],
     ]);
 
@@ -77,7 +77,7 @@ class BlueprintOperationsRegistryTest extends BlueprintKernelTestBase {
   public function testRegisteredOperationJsonNormalization(): void {
     $entity = $this->createTestEntity();
 
-    $result = $this->operations->batchOperations($entity, [
+    $result = $this->operations->batchOperations($this->host($entity), [
       ['op' => 'test_set_name', 'properties' => '{"name": "From JSON string"}'],
     ]);
 
@@ -91,7 +91,7 @@ class BlueprintOperationsRegistryTest extends BlueprintKernelTestBase {
   public function testRegisteredOperationSemanticFailureRollsBack(): void {
     $entity = $this->createTestEntity(['name' => 'Original']);
 
-    $result = $this->operations->batchOperations($entity, [
+    $result = $this->operations->batchOperations($this->host($entity), [
       ['op' => 'test_set_name', 'properties' => ['name' => 'Changed first']],
       ['op' => 'test_set_name', 'properties' => ['name' => 'forbidden']],
     ]);
@@ -108,7 +108,7 @@ class BlueprintOperationsRegistryTest extends BlueprintKernelTestBase {
   public function testRegisteredOperationStructuralFailure(): void {
     $entity = $this->createTestEntity();
 
-    $result = $this->operations->batchOperations($entity, [
+    $result = $this->operations->batchOperations($this->host($entity), [
       ['op' => 'test_set_name', 'properties' => []],
     ]);
 
@@ -123,7 +123,7 @@ class BlueprintOperationsRegistryTest extends BlueprintKernelTestBase {
   public function testInvalidOperationListsRegisteredOperations(): void {
     $entity = $this->createTestEntity();
 
-    $result = $this->operations->batchOperations($entity, [
+    $result = $this->operations->batchOperations($this->host($entity), [
       ['op' => 'no_such_op'],
     ]);
 

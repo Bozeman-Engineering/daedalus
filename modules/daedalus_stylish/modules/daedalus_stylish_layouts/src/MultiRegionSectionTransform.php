@@ -6,12 +6,11 @@ namespace Drupal\daedalus_stylish_layouts;
 
 use Drupal\Component\Uuid\UuidInterface;
 use Drupal\Core\Entity\EntityInterface;
-use Drupal\Core\Entity\FieldableEntityInterface;
 use Drupal\Core\Logger\LoggerChannelFactoryInterface;
+use Drupal\daedalus_blueprint\Host\HostResolver;
 use Drupal\layout_builder\Section;
 use Drupal\daedalus_layout\ComponentTransform\SectionTransformInterface;
 use Drupal\daedalus_layout\Plugin\Block\SectionBlock;
-use Drupal\daedalus_stylish\Plugin\Field\FieldType\StyleMapItem;
 
 /**
  * Converts the four retired multi-region layouts to container sections.
@@ -44,6 +43,7 @@ class MultiRegionSectionTransform implements SectionTransformInterface {
     protected ContainerMigration $migration,
     protected UuidInterface $uuid,
     protected LoggerChannelFactoryInterface $loggerFactory,
+    protected HostResolver $hostResolver,
   ) {}
 
   /**
@@ -182,27 +182,24 @@ class MultiRegionSectionTransform implements SectionTransformInterface {
 
   /**
    * The host's style map, or NULL when the host cannot carry one.
+   *
+   * Read through the host (a content host's field, a display host's
+   * template setting), so a template's multi-region sections migrate
+   * their styles exactly as a page's do.
    */
   protected function hostStyleMap(EntityInterface $host): ?array {
-    if (!$host instanceof FieldableEntityInterface || !$host->hasField('daedalus_stylish_styles')) {
+    if (!$this->hostResolver->hosts($host)) {
       return NULL;
     }
-    $item = $host->get('daedalus_stylish_styles')->first();
-    return $item instanceof StyleMapItem ? $item->getStyleMap() : [];
+    $store = $this->hostResolver->fromEntity($host);
+    return $store->hasStyleStore() ? $store->styleMap() : NULL;
   }
 
   /**
    * Writes the host's style map back.
    */
   protected function writeHostStyleMap(EntityInterface $host, array $map): void {
-    /** @var \Drupal\Core\Entity\FieldableEntityInterface $host */
-    $item = $host->get('daedalus_stylish_styles')->first();
-    if ($item instanceof StyleMapItem) {
-      $item->setStyleMap($map);
-    }
-    elseif ($map !== []) {
-      $host->set('daedalus_stylish_styles', [['value' => json_encode($map, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)]]);
-    }
+    $this->hostResolver->fromEntity($host)->setStyleMap($map);
   }
 
   /**

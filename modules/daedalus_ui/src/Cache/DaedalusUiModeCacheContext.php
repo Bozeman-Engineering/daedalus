@@ -9,7 +9,7 @@ use Drupal\Core\Cache\Context\CacheContextInterface;
 use Drupal\daedalus_ui\ModeState;
 
 /**
- * Cache context for the EFFECTIVE daedalus_ui mode.
+ * Cache context for the EFFECTIVE mode of the page builder.
  *
  * Defines the daedalus_ui_mode cache context: the mode a request
  * actually renders under, resolved the same way every consumer reads it

@@ -14,14 +14,15 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  * Eb_edit leaves the page: pages are refused toward page_edit.
  *
  * On a site where the page language speaks for pages (the catalog
- * declares a container layout), any entity carrying the layout field is
- * page_edit's whole surface — structure, content, styling, variants,
- * stencil gestures — so eb_edit refuses it with one corrective naming
- * page_edit, before any operation runs. Entities the page language does
- * NOT speak for (no layout field on the bundle) keep the JSON door: the
- * same site still edits them through eb_edit. The predicate is the
- * entity's layout field plus the site's container layout, never the
- * presence of sections: an empty page is still a page.
+ * declares a container layout), a page (DaedalusBlueprintToolBase::
+ * isPage(): an entity whose render is a page document, its own or its
+ * template's) is page_edit's whole surface (structure, content, styling,
+ * variants, blueprint gestures), so eb_edit refuses it with one corrective
+ * naming page_edit, before any operation runs. Entities the page language
+ * does NOT speak for (no Layout Builder on the bundle's display) keep the
+ * JSON door: the same site still edits them through eb_edit. The
+ * predicate never reads the presence of sections: an empty page is still
+ * a page. The full host-state matrix is PageLanguageDoorsTest's.
  */
 #[CoversClass(Edit::class)]
 #[Group('daedalus_blueprint')]

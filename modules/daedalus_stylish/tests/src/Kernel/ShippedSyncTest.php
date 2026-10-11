@@ -28,10 +28,11 @@ use Symfony\Component\Console\Tester\CommandTester;
 /**
  * Tests the orchestrated sync of shipped definitions and its entries.
  *
- * The daedalus_stylish_shipped_sync_test module ships one self-referencing package: an
- * animation, a swatch, a skin token, and a variant wearing all three. On a
- * strict site the variant lands only after the materials it names are
- * published, so the package proves the orchestrator's order (animations,
+ * The daedalus_stylish_shipped_sync_test module ships one self-referencing package: a
+ * font, an animation, a swatch, a skin (a token, and a font token naming
+ * the font's family), and a variant wearing the other three. On a strict
+ * site the variant lands only after the materials it names are published,
+ * so the package proves the orchestrator's order (fonts, animations,
  * swatches, skins, variants) the way the old per-kind order failed. The
  * daedalus_stylish_design_system_test module packages the aurora design system (the same
  * four kinds as members, plus a variant on an axis only aurora's own law
@@ -85,12 +86,13 @@ class ShippedSyncTest extends KernelTestBase {
   /**
    * The orchestrator's kinds, in dependency order.
    */
-  protected const ORDER = ['animation', 'swatch', 'skin', 'variant'];
+  protected const ORDER = ['font', 'animation', 'swatch', 'skin', 'variant'];
 
   /**
    * The package's shipped definition per kind: kind => machine name.
    */
   protected const PACKAGE_NAMES = [
+    'font' => 'sync_test_font',
     'animation' => 'sync_test_fade',
     'swatch' => 'sync_test_accent',
     'skin' => 'sync_test_skin',
@@ -159,10 +161,20 @@ class ShippedSyncTest extends KernelTestBase {
     $this->installEntitySchema('daedalus_variant');
     $this->installEntitySchema('daedalus_swatch');
     $this->installEntitySchema('daedalus_animation');
+    $this->installEntitySchema('daedalus_font');
     $this->installEntitySchema('daedalus_skin');
-    // Saves mirror motion-* and --swatch-* references into the usage
-    // tables, and the shipped package wears both.
-    $this->installSchema('daedalus_stylish', ['daedalus_variant_usage', 'daedalus_swatch_usage', 'daedalus_animation_usage']);
+    // A shipped font lands its faces' files through the font store.
+    $this->installEntitySchema('file');
+    $this->installSchema('file', ['file_usage']);
+    // Saves mirror motion-*, --swatch-* and "family" references into the
+    // usage tables, and the shipped package wears all three.
+    $this->installSchema('daedalus_stylish', [
+      'daedalus_variant_usage',
+      'daedalus_swatch_usage',
+      'daedalus_animation_usage',
+      'daedalus_token_usage',
+      'daedalus_font_usage',
+    ]);
     $this->installConfig(['daedalus_stylish']);
     // The importers switch to an administrative account (shipped
     // definitions are code, not user input); give the switcher one.
@@ -327,6 +339,11 @@ class ShippedSyncTest extends KernelTestBase {
     $this->assertInstanceOf(DaedalusStylishVariantInterface::class, $variant);
     $this->assertTrue($variant->isPublished());
     $this->assertSame('var(--space-gutter)', $variant->getStyles()['']['default']['padding']);
+    // The font landed first, its face's bytes as a managed file the skin's
+    // font token names by family (the usage table saw the skin's save).
+    $font = $this->load('font', 'sync_test_font');
+    $this->assertSame('Sync Test Sans', $font->getFamily());
+    $this->assertSame(1, \Drupal::service('daedalus_stylish.font_usage')->countReferences($font));
 
     // A second run converges: every kind unchanged, nothing failed.
     $report = $this->sync()->sync([self::PACKAGE]);
@@ -865,6 +882,7 @@ class ShippedSyncTest extends KernelTestBase {
     }
     $this->assertNull($this->load('animation', 'fade_in'));
     $this->assertSame([
+      self::PACKAGE . ': font sync: 1 created',
       self::PACKAGE . ': animation sync: 1 created',
       self::PACKAGE . ': swatch sync: 1 created',
       self::PACKAGE . ': skin sync: 1 created',
@@ -985,7 +1003,7 @@ class ShippedSyncTest extends KernelTestBase {
 
     // A module shipping nothing is told which files it could ship.
     $this->assertSame(Command::SUCCESS, $tester->execute(['module' => 'system']));
-    $this->assertStringContainsString('system is not enabled or ships no daedalus_stylish definitions: no system.daedalus_stylish.animations.yml, system.daedalus_stylish.swatches.yml, system.daedalus_stylish.skins.yml, system.daedalus_stylish.variants.yml or a per-id file beside one (e.g. system.daedalus_stylish.variants.*.yml).', $tester->getDisplay());
+    $this->assertStringContainsString('system is not enabled or ships no daedalus_stylish definitions: no system.daedalus_stylish.fonts.yml, system.daedalus_stylish.animations.yml, system.daedalus_stylish.swatches.yml, system.daedalus_stylish.skins.yml, system.daedalus_stylish.variants.yml or a per-id file beside one (e.g. system.daedalus_stylish.variants.*.yml).', $tester->getDisplay());
 
     // A refused definition fails the run after the rest of its file lands,
     // printing its path, code, message, and hint.

@@ -4,9 +4,10 @@ declare(strict_types=1);
 
 namespace Drupal\daedalus_ai;
 
-use Drupal\Core\Entity\FieldableEntityInterface;
 use Drupal\daedalus_blueprint\BlueprintElementResolverInterface;
 use Drupal\daedalus_blueprint\EntityStorageHandler;
+use Drupal\daedalus_blueprint\Host\HostInterface;
+use Drupal\daedalus_blueprint\Host\HostResolver;
 use Drupal\daedalus_blueprint\Materials\ElementMaterials;
 use Drupal\daedalus_blueprint\Materials\MaterialsRoster;
 use Drupal\daedalus_blueprint\Materials\RelativeSelector;
@@ -19,7 +20,7 @@ use Drupal\daedalus_blueprint\ResolvedElement;
  * element arrives as {key, label, number}, where `key` is a selectable key
  * (the data-selectable vocabulary — the same string identity that syncs the
  * canvas, the panel, and the chat chips). This resolver parses the key and
- * resolves it against the ROOT entity's blueprint via the element resolver;
+ * resolves it against the route entity's HOST via the element resolver;
  * it never loads arbitrary entities from client-supplied identifiers, so a
  * crafted key can only ever describe what the root entity already reaches
  * (the element resolver access-gates field values itself). Keys that do not
@@ -34,26 +35,32 @@ use Drupal\daedalus_blueprint\ResolvedElement;
  * - block:{component_uuid}:{property} — an inline block field, or `label`:
  *   the placement's display label rendered as page content.
  *
- * A selection may carry a styling TARGET: the address styling acts at
- * when the user pointed below or above the selected element (a part, a
- * tag tier, a chain, an ancestor rule reaching it). The chips send it as
- * the address's own key plus a `selector` (the relative selector in its
- * canonical spelling; a `{key}::{selector}` key spells the same address).
- * The element described is the address's owner (the target's key), the
- * target rides the description as its own fact (`target`), and the worn
- * materials are read AT the address (ElementMaterials::worn() reads a
- * rule's own references beneath its root's), so a rule that wears a
- * variant is seen wearing it. A selector outside the grammar is dropped
- * and the owner described alone: a crafted selector never reaches the
- * stack read.
+ * A selection may carry two styling FACTS, as the selection spine does.
+ * The SUBJECT facet is what the user is looking at ON the selected
+ * element (a part, a tag tier, a chain): the chips send it as a
+ * `selector` beside the element's key (the relative selector in its
+ * canonical spelling; a `{key}::{selector}` key spells the same subject).
+ * It rides the description as `target`, and the worn materials are read
+ * AT the subject (ElementMaterials::worn() reads a rule's own references
+ * beneath its root's), so a rule that wears a variant is seen wearing it.
+ * The WRITE ADDRESS is where styling acts: a rule on the element or on an
+ * ancestor of it ("every list item in Welcome"), sent as `address`
+ * ({key, selector}) and riding the description as its own sentence
+ * (`address`) naming the rule, its owner and the style-map key, so the AI
+ * writes at the rule the user picked rather than on the element. The
+ * element described is ALWAYS the selection's own key: an address never
+ * takes its place. A selector outside the grammar is dropped (the subject
+ * alone, or the address alone), as is an address whose owner key is not
+ * in the vocabulary: nothing crafted reaches the stack read or the
+ * prompt.
  *
  * Beside its identity, each description names the materials the element
  * WEARS (its worn variants by label, each with the origin of the wearing,
- * read from its style stack) and the stencil it was PLACED FROM (the
+ * read from its style stack) and the blueprint it was PLACED FROM (the
  * placement's provenance stamp by id and label), both read from the
  * STAGED copy of the root entity, because the canvas shows staged state:
- * "the wide one", "what do these share" and "update the stencil this came
- * from" resolve through labels the print never carries and without a
+ * "the wide one", "what do these share" and "update the blueprint this
+ * came from" resolve through labels the print never carries and without a
  * print read. Labels and origins only, never values: what the stack
  * delivers is explain_element_styles' answer. Per-turn facts, allowed on
  * the message and barred from the cached prefix.
@@ -61,6 +68,7 @@ use Drupal\daedalus_blueprint\ResolvedElement;
 class ElementSelectionResolver {
 
   public function __construct(
+    protected HostResolver $hostResolver,
     protected ?BlueprintElementResolverInterface $elementResolver = NULL,
     protected ?ElementMaterials $elementMaterials = NULL,
     protected ?EntityStorageHandler $storageHandler = NULL,
@@ -71,18 +79,20 @@ class ElementSelectionResolver {
    *
    * @param array $selectedElements
    *   Raw selection data from the client, each with 'key' (a selectable
-   *   key, or a `{key}::{selector}` address), 'number', optionally
-   *   'label', and optionally 'selector' (a styling target's relative
-   *   selector under the key).
-   * @param \Drupal\Core\Entity\FieldableEntityInterface|null $rootEntity
-   *   The root entity from the current route.
+   *   key, or a `{key}::{selector}` subject), 'number', optionally
+   *   'label', optionally 'selector' (the subject facet's relative
+   *   selector under the key) and optionally 'address' (the write
+   *   address as {key, selector}, its key the element or an ancestor).
+   * @param \Drupal\daedalus_blueprint\Host\HostInterface|null $host
+   *   The route host (the owner of the canvas the selection was made on: a
+   *   page's entity or a template's display), or NULL for none.
    *
-   * @return array<int, array{description: string, target?: string, materials?: string, placed_from?: string}>
+   * @return array<int, array{description: string, target?: string, address?: string, materials?: string, placed_from?: string}>
    *   Resolved elements keyed by selection number.
    */
-  public function resolve(array $selectedElements, ?FieldableEntityInterface $rootEntity): array {
+  public function resolve(array $selectedElements, ?HostInterface $host): array {
     $resolved = [];
-    $staged = $this->stagedCopy($rootEntity);
+    $staged = $this->stagedCopy($host);
 
     foreach ($selectedElements as $element) {
       $key = $element['key'] ?? NULL;
@@ -92,12 +102,18 @@ class ElementSelectionResolver {
         continue;
       }
 
-      [$key, $selector] = $this->address($key, $element['selector'] ?? NULL);
-      $result = $this->resolveKey($key, $rootEntity);
+      [$key, $selector] = $this->subject($key, $element['selector'] ?? NULL);
+      $result = $this->resolveKey($key, $host);
       if ($result) {
         $address = $selector === NULL ? $key : $key . RelativeSelector::SUFFIX . $selector;
+        $write = $this->writeAddress($element['address'] ?? NULL, $key, $host);
         if ($selector !== NULL) {
-          $result['target'] = sprintf('the rule "%s" under it (style-map key %s): styling acts on every element the rule matches, not on this element alone', $selector, $address);
+          $result['target'] = $write === NULL
+            ? sprintf('the rule "%s" under it (style-map key %s): styling acts on every element the rule matches, not on this element alone', $selector, $address)
+            : sprintf('the rule "%s" under it (style-map key %s): the elements whose styles the user is reading; styling acts at the address below, not here', $selector, $address);
+        }
+        if ($write !== NULL) {
+          $result['address'] = $write;
         }
         $materials = $this->wornMaterials($staged, $address);
         if ($materials !== '') {
@@ -116,19 +132,19 @@ class ElementSelectionResolver {
   }
 
   /**
-   * The owner key and the target selector a selection entry spells.
+   * The element key and the subject facet's selector a selection entry spells.
    *
-   * Two spellings of one address: a `{key}::{selector}` key, or a bare
+   * Two spellings of one subject: a `{key}::{selector}` key, or a bare
    * key with a `selector` field (the chips' wire). The selector must be
    * a relative selector in the grammar (RelativeSelector::parse(),
-   * canonicalized); one outside it is dropped, so the owner is described
+   * canonicalized); one outside it is dropped, so the element is described
    * alone and nothing malformed reaches the stack read. A selector field
    * beside a `::` key would be two answers, so the key's own wins.
    *
    * @return array{0: string, 1: ?string}
-   *   The owner key and the canonical selector, or NULL for none.
+   *   The element key and the canonical selector, or NULL for none.
    */
-  protected function address(string $key, mixed $selector): array {
+  protected function subject(string $key, mixed $selector): array {
     $pos = strpos($key, RelativeSelector::SUFFIX);
     if ($pos !== FALSE) {
       $selector = substr($key, $pos + strlen(RelativeSelector::SUFFIX));
@@ -142,14 +158,58 @@ class ElementSelectionResolver {
   }
 
   /**
-   * The root entity's staged copy (the canvas state), or the entity itself.
+   * The write address sentence a selection entry's `address` spells.
+   *
+   * The address is {key, selector}: the rule styling acts at, on the
+   * element itself ("every paragraph here") or on an ancestor of it
+   * ("every list item in Welcome"). The selector must be in the grammar
+   * and the owner key in the vocabulary (resolveKey() answers for it, the
+   * same access net as the element's own: never a load from a
+   * client-supplied identifier); anything else drops the address, so a
+   * crafted one never reaches the prompt. The owner is named by the first
+   * clause of its own description (its kind and label; the style-map key
+   * carries its identity in full), so the AI knows WHOSE rule it writes
+   * at without the whole description repeated.
+   *
+   * @param mixed $address
+   *   The raw `address` field.
+   * @param string $key
+   *   The selected element's key (the owner of a same-key address).
+   * @param \Drupal\daedalus_blueprint\Host\HostInterface|null $host
+   *   The route host.
+   *
+   * @return string|null
+   *   The sentence, or NULL for no (usable) address.
    */
-  protected function stagedCopy(?FieldableEntityInterface $entity): ?FieldableEntityInterface {
-    if ($entity === NULL || $this->storageHandler === NULL) {
-      return $entity;
+  protected function writeAddress(mixed $address, string $key, ?HostInterface $host): ?string {
+    if (!is_array($address) || !is_string($address['key'] ?? NULL) || $address['key'] === '' || !is_string($address['selector'] ?? NULL) || $address['selector'] === '') {
+      return NULL;
     }
-    $staged = $this->storageHandler->load($entity->getEntityTypeId(), (string) $entity->id());
-    return $staged instanceof FieldableEntityInterface ? $staged : $entity;
+    $relative = RelativeSelector::parse($address['selector']);
+    if ($relative === NULL) {
+      return NULL;
+    }
+    $selector = (string) $relative;
+    $mapKey = $address['key'] . RelativeSelector::SUFFIX . $selector;
+    if ($address['key'] === $key) {
+      return sprintf('styling acts at the rule "%s" on this element (style-map key %s): every element it matches, this one included', $selector, $mapKey);
+    }
+    $owner = $this->resolveKey($address['key'], $host);
+    if ($owner === NULL) {
+      return NULL;
+    }
+    $ownerName = rtrim(explode('. ', $owner['description'], 2)[0], '.');
+    return sprintf('styling acts at the rule "%s" on its ancestor %s (style-map key %s): every element it matches, this one included', $selector, $ownerName, $mapKey);
+  }
+
+  /**
+   * The host's staged copy (the canvas state), or the host itself.
+   */
+  protected function stagedCopy(?HostInterface $host): ?HostInterface {
+    if ($host === NULL || $this->storageHandler === NULL) {
+      return $host;
+    }
+    return $this->storageHandler->load($host->entityTypeId(), (string) $host->id()) ?? $host;
   }
 
   /**
@@ -165,7 +225,7 @@ class ElementSelectionResolver {
    * elements are read (the style map is the root's), so a crafted key can
    * describe nothing the root does not already reach.
    */
-  protected function wornMaterials(?FieldableEntityInterface $staged, string $key): string {
+  protected function wornMaterials(?HostInterface $staged, string $key): string {
     if ($staged === NULL || $this->elementMaterials === NULL) {
       return '';
     }
@@ -192,41 +252,43 @@ class ElementSelectionResolver {
   }
 
   /**
-   * The stencil the element was placed from, as prose: id "Label".
+   * The blueprint the element was placed from, as prose: id "Label".
    *
    * Identity only, no spelling: provenance is a fact to target (update the
-   * stencil by id), never a placement to write back, and a stamp the roster
-   * no longer serves is not named (ElementMaterials::placedFrom()). Reads
-   * the same staged copy the worn materials do.
+   * blueprint by id), never a placement to write back, and a stamp the
+   * roster no longer serves is not named (ElementMaterials::placedFrom()).
+   * Reads the same staged copy the worn materials do.
    */
-  protected function placedFrom(?FieldableEntityInterface $staged, string $key): string {
+  protected function placedFrom(?HostInterface $staged, string $key): string {
     if ($staged === NULL || $this->elementMaterials === NULL) {
       return '';
     }
-    $stencil = $this->elementMaterials->placedFrom($staged, $key);
-    return $stencil === NULL ? '' : sprintf('%s "%s"', $stencil->id, $stencil->label);
+    $blueprint = $this->elementMaterials->placedFrom($staged, $key);
+    return $blueprint === NULL ? '' : sprintf('%s "%s"', $blueprint->id, $blueprint->label);
   }
 
   /**
-   * Resolves a single element key (an address's owner: never a `::` key).
+   * Resolves a single element key, never a `::` key.
+   *
+   * The key is the selection's own or a write address's owner.
    *
    * @param string $key
    *   The selectable key.
-   * @param \Drupal\Core\Entity\FieldableEntityInterface|null $entity
-   *   The root entity, or NULL when the route has none.
+   * @param \Drupal\daedalus_blueprint\Host\HostInterface|null $host
+   *   The route entity's host, or NULL when the route has none.
    *
    * @return array{description: string}|null
    *   The description array, or NULL for unusable keys.
    */
-  protected function resolveKey(string $key, ?FieldableEntityInterface $entity): ?array {
+  protected function resolveKey(string $key, ?HostInterface $host): ?array {
     $segments = explode(':', $key);
     $prefix = $segments[0];
 
     return match ($prefix) {
-      'entity' => isset($segments[1]) ? $this->resolveEntity($segments[1], $entity) : NULL,
-      'field' => isset($segments[1], $segments[2]) ? $this->resolveField($segments[1], $segments[2], $entity) : NULL,
-      'container' => isset($segments[1]) ? $this->resolveByUuid($segments[1], $entity, sprintf('Container (UUID: %s)', $segments[1])) : NULL,
-      'block' => isset($segments[1]) ? $this->resolveBlock($segments[1], $segments[2] ?? NULL, $entity) : NULL,
+      'entity' => isset($segments[1]) ? $this->resolveEntity($segments[1], $host) : NULL,
+      'field' => isset($segments[1], $segments[2]) ? $this->resolveField($segments[1], $segments[2], $host) : NULL,
+      'container' => isset($segments[1]) ? $this->resolveByUuid($segments[1], $host, sprintf('Container (UUID: %s)', $segments[1])) : NULL,
+      'block' => isset($segments[1]) ? $this->resolveBlock($segments[1], $segments[2] ?? NULL, $host) : NULL,
       default => NULL,
     };
   }
@@ -234,58 +296,58 @@ class ElementSelectionResolver {
   /**
    * Resolves an entity: key — the page root or a nested entity (paragraph).
    */
-  protected function resolveEntity(string $uuid, ?FieldableEntityInterface $entity): ?array {
-    if ($entity && $uuid === $entity->uuid()) {
+  protected function resolveEntity(string $uuid, ?HostInterface $host): ?array {
+    if ($host && $uuid === $host->uuid()) {
       return [
         'description' => sprintf(
           'The whole %s "%s" (ID: %s) — the page itself.',
-          $entity->getEntityTypeId(),
-          $entity->label(),
-          $entity->id(),
+          $host->entityTypeId(),
+          $host->label(),
+          $host->id(),
         ),
       ];
     }
 
-    return $this->resolveByUuid($uuid, $entity, sprintf('Element (UUID: %s)', $uuid));
+    return $this->resolveByUuid($uuid, $host, sprintf('Element (UUID: %s)', $uuid));
   }
 
   /**
    * Resolves a field: key — a field of the root entity or a paragraph.
    */
-  protected function resolveField(string $entityUuid, string $fieldName, ?FieldableEntityInterface $entity): ?array {
-    if ($entity && $entityUuid === $entity->uuid()) {
-      return $this->resolveNamed($fieldName, NULL, $entity, sprintf('Field "%s" on this page', $fieldName));
+  protected function resolveField(string $entityUuid, string $fieldName, ?HostInterface $host): ?array {
+    if ($host && $entityUuid === $host->uuid()) {
+      return $this->resolveNamed($fieldName, NULL, $host, sprintf('Field "%s" on this page', $fieldName));
     }
 
     // A paragraph's field: the qualifier is the paragraph's entity UUID,
     // which the locator resolves within the root entity.
-    return $this->resolveNamed($fieldName, $entityUuid, $entity, sprintf('Field "%s" (parent UUID: %s)', $fieldName, $entityUuid));
+    return $this->resolveNamed($fieldName, $entityUuid, $host, sprintf('Field "%s" (parent UUID: %s)', $fieldName, $entityUuid));
   }
 
   /**
    * Resolves a block: key — a placement or one of its named properties.
    */
-  protected function resolveBlock(string $componentUuid, ?string $property, ?FieldableEntityInterface $entity): ?array {
+  protected function resolveBlock(string $componentUuid, ?string $property, ?HostInterface $host): ?array {
     if ($property === NULL) {
-      return $this->resolveByUuid($componentUuid, $entity, $this->blockFallback($componentUuid, $entity));
+      return $this->resolveByUuid($componentUuid, $host, $this->blockFallback($componentUuid, $host));
     }
 
     // The placement's display label renders as page content (heading-style
     // blocks). It is component configuration, not a field, so describe
     // it against the resolved placement.
     if ($property === 'label') {
-      return $this->resolveBlockLabel($componentUuid, $entity);
+      return $this->resolveBlockLabel($componentUuid, $host);
     }
 
-    return $this->resolveNamed($property, $componentUuid, $entity, sprintf('Field "%s" on block (UUID: %s)', $property, $componentUuid));
+    return $this->resolveNamed($property, $componentUuid, $host, sprintf('Field "%s" on block (UUID: %s)', $property, $componentUuid));
   }
 
   /**
    * Resolves a UUID through the element resolver with a fallback description.
    */
-  protected function resolveByUuid(string $uuid, ?FieldableEntityInterface $entity, string $fallback): array {
-    if ($entity && $this->elementResolver) {
-      $resolved = $this->elementResolver->resolve($entity, $uuid);
+  protected function resolveByUuid(string $uuid, ?HostInterface $host, string $fallback): array {
+    if ($host && $this->elementResolver) {
+      $resolved = $this->elementResolver->resolve($host, $uuid);
       if ($resolved) {
         return $this->formatResolvedElement($resolved);
       }
@@ -296,9 +358,9 @@ class ElementSelectionResolver {
   /**
    * Resolves a named element (field/region) with a fallback description.
    */
-  protected function resolveNamed(string $name, ?string $parentUuid, ?FieldableEntityInterface $entity, string $fallback): array {
-    if ($entity && $this->elementResolver) {
-      $resolved = $this->elementResolver->resolve($entity, $name, $parentUuid);
+  protected function resolveNamed(string $name, ?string $parentUuid, ?HostInterface $host, string $fallback): array {
+    if ($host && $this->elementResolver) {
+      $resolved = $this->elementResolver->resolve($host, $name, $parentUuid);
       if ($resolved) {
         return $this->formatResolvedElement($resolved);
       }
@@ -309,9 +371,9 @@ class ElementSelectionResolver {
   /**
    * Describes a block placement's display label (block:{uuid}:label).
    */
-  protected function resolveBlockLabel(string $componentUuid, ?FieldableEntityInterface $entity): array {
-    if ($entity && $this->elementResolver) {
-      $resolved = $this->elementResolver->resolve($entity, $componentUuid);
+  protected function resolveBlockLabel(string $componentUuid, ?HostInterface $host): array {
+    if ($host && $this->elementResolver) {
+      $resolved = $this->elementResolver->resolve($host, $componentUuid);
       if ($resolved) {
         return [
           'description' => sprintf(
@@ -332,14 +394,14 @@ class ElementSelectionResolver {
   /**
    * Builds the fallback description for an unresolved block placement.
    */
-  protected function blockFallback(string $blockUuid, ?FieldableEntityInterface $entity): string {
-    if ($entity) {
+  protected function blockFallback(string $blockUuid, ?HostInterface $host): string {
+    if ($host) {
       return sprintf(
         'Block (UUID: %s) on %s "%s" (ID: %s)',
         $blockUuid,
-        $entity->getEntityTypeId(),
-        $entity->label(),
-        $entity->id(),
+        $host->entityTypeId(),
+        $host->label(),
+        $host->id(),
       );
     }
     return sprintf('Block (UUID: %s)', $blockUuid);

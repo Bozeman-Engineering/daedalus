@@ -4,18 +4,12 @@ declare(strict_types=1);
 
 namespace Drupal\daedalus_ai_anthropic\EventSubscriber;
 
-use Drupal\Core\Entity\FieldableEntityInterface;
 use Drupal\ai_agents\PluginInterfaces\AiAgentInterface;
 use Drupal\ai_assistant_api\Event\AiAssistantPassContextToAgentEvent;
 use Drupal\daedalus_ai\EventSubscriber\AgentUserMessageTrait;
 use Drupal\daedalus_ai\RouteEntityResolver;
-use Drupal\daedalus_blueprint\Dialect\DialectAliasMap;
-use Drupal\daedalus_blueprint\Dialect\DialectCatalogBuilder;
-use Drupal\daedalus_blueprint\Dialect\DialectPrinter;
-use Drupal\daedalus_blueprint\Dialect\DialectPrintException;
+use Drupal\daedalus_blueprint\Dialect\HostPrinter;
 use Drupal\daedalus_blueprint\EntityStorageHandler;
-use Drupal\daedalus_blueprint\Markup\MarkupProjection;
-use Drupal\daedalus_blueprint\NodeTree\NodeTreeBuilder;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 
 /**
@@ -34,7 +28,7 @@ use Symfony\Component\EventDispatcher\EventSubscriberInterface;
  * print rides the user message, never the system prompt; putting it there
  * would invalidate the cached prefix on every turn.
  *
- * The print reads the STAGED entity (the storage handler routes to the
+ * The print reads the STAGED host (the storage handler routes to the
  * tempstore copy when one exists), because the canvas shows staged state,
  * not the saved revision.
  *
@@ -46,15 +40,19 @@ use Symfony\Component\EventDispatcher\EventSubscriberInterface;
  * injects a print (no routed page, no access), so a stale print never
  * outlives its turn.
  *
- * Fallback: the dialect printer refuses, with DialectPrintException, any
- * structure it cannot print losslessly (multi-region layouts, field values
- * outside its grammar). Such a page gets the key-annotated markup print
- * instead, so the sidebar stays usable there and the DOM ops still address
- * every element by its key; the header names which print rides. With no
- * markup projector either, the subscriber is silent.
- *
  * Access rides on RouteEntityResolver: a path the current user cannot view
- * resolves to NULL and nothing is injected.
+ * resolves to NULL and nothing is injected. The resolver answers a host, so
+ * a template route (core's manage-display layout route) prints the
+ * display's document the same way a page prints its own.
+ *
+ * The print is HostPrinter's, the one composition every reader of a page
+ * shares: the tree stamped for the current user (an element the user
+ * cannot fully edit carries data-can), printed against the live catalog
+ * with the conversation's aliases. The host-level reason (a page
+ * rendering its template, a frozen translation) rides the "Current page"
+ * line. The print is total: whatever the page language cannot spell
+ * prints in the read-only register, and the print's own reading notes
+ * head the document, once, to say what those annotations mean.
  *
  * Ordering (all three daedalus_ai_anthropic pass-context subscribers PREPEND
  * to the same message, so later-running blocks land higher): selection
@@ -79,11 +77,7 @@ class CurrentPageMarkupContextSubscriber implements EventSubscriberInterface {
   public function __construct(
     protected RouteEntityResolver $routeEntityResolver,
     protected EntityStorageHandler $storageHandler,
-    protected MarkupProjection $markupProjection,
-    protected NodeTreeBuilder $treeBuilder,
-    protected DialectPrinter $dialectPrinter,
-    protected DialectCatalogBuilder $catalogBuilder,
-    protected DialectAliasMap $aliasMap,
+    protected HostPrinter $hostPrinter,
   ) {}
 
   /**
@@ -106,8 +100,8 @@ class CurrentPageMarkupContextSubscriber implements EventSubscriberInterface {
       return;
     }
 
-    $entity = $this->routeEntityResolver->resolve($context['current_route']);
-    if (!$entity) {
+    $host = $this->routeEntityResolver->resolve($context['current_route']);
+    if (!$host) {
       return;
     }
 
@@ -115,41 +109,28 @@ class CurrentPageMarkupContextSubscriber implements EventSubscriberInterface {
       return;
     }
 
-    // The canvas shows the staged state; print that, not the last-saved
-    // revision. The resolver already gated view access on the entity.
-    $staged = $this->storageHandler->load($entity->getEntityTypeId(), $entity->id()) ?? $entity;
-    if (!$staged instanceof FieldableEntityInterface) {
-      return;
+    // The canvas shows the staged state; print that host, not the
+    // last-saved one. The resolver already gated view access on the host.
+    $staged = $this->storageHandler->load($host->entityTypeId(), (string) $host->id()) ?? $host;
+    // A template prints as a page does, headed as a template: its field
+    // blocks are placements whose content is sample, and editing it
+    // reaches every entity of its kind without a layout of its own.
+    $template = $staged->fields() === NULL;
+
+    $print = $this->hostPrinter->print($staged, (string) ($event->getAgent()->getRunnerId() ?? ''));
+    $header = $template
+      ? ' (the template in the page language; field blocks show sample content):'
+      : ' (the page in the page language):';
+    if (trim($print->text) === '') {
+      $body = $template
+        ? '(the template is empty: no layout content yet)'
+        : '(the page is empty: no layout content yet)';
+    }
+    else {
+      $body = $print->forReader();
     }
 
-    $conversation = (string) ($event->getAgent()->getRunnerId() ?? '');
-    try {
-      $print = $this->dialectPrinter->print(
-        $this->treeBuilder->build($staged),
-        $this->catalogBuilder->build(),
-        $this->aliasMap->printAliases($staged, $conversation),
-      );
-      $header = ' (the page in the page language):';
-      if (trim($print) === '') {
-        $print = '(the page is empty: no layout content yet)';
-      }
-    }
-    catch (DialectPrintException $e) {
-      // A structure outside the dialect's print contract: fall back to the
-      // key-annotated markup print rather than going silent (the DOM ops
-      // still address every element by uuid).
-      if (!$this->markupProjection->hasProjector()) {
-        return;
-      }
-      $markup = $this->markupProjection->projectEntity($staged);
-      if ($markup === NULL) {
-        return;
-      }
-      $print = $markup;
-      $header = ' (this page holds structure outside the page language; key-annotated markup fallback — element data-key values are still valid refs):';
-    }
-
-    $this->injectIntoLastUserMessage($event->getAgent(), $header, $print);
+    $this->injectIntoLastUserMessage($event->getAgent(), $header, $body);
   }
 
   /**
@@ -164,8 +145,9 @@ class CurrentPageMarkupContextSubscriber implements EventSubscriberInterface {
    * Prepends the page print as a system-reminder to the last user message.
    *
    * The print's reading conventions live in the Context Tags protocol on
-   * the (cached) system prompt; this per-turn block carries only the
-   * header and the print itself.
+   * the (cached) system prompt; this per-turn block carries the header
+   * and the print as the model reads it (its reading notes first when
+   * the page holds anything the language cannot spell).
    */
   protected function injectIntoLastUserMessage(AiAgentInterface $agent, string $header, string $print): void {
     $message = $this->getLastUserMessage($agent);

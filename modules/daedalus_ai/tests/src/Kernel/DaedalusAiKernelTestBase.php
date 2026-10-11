@@ -267,6 +267,7 @@ abstract class DaedalusAiKernelTestBase extends KernelTestBase {
       $this->container->get('tempstore.private'),
       fn () => $this->container->get('daedalus_blueprint_api.target_key_mapper'),
       new DeferredProcessorManager(),
+      $this->container->get('daedalus_blueprint.host_resolver'),
     );
     $this->handler = new ImageGenerationHandler(
       $this->container->get('entity_type.manager'),

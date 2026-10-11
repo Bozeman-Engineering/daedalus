@@ -64,6 +64,7 @@ class SwatchAiMintingGateTest extends KernelTestBase {
     $this->installEntitySchema('user');
     $this->installEntitySchema('daedalus_swatch');
     $this->installEntitySchema('daedalus_animation');
+    $this->installEntitySchema('daedalus_font');
     // The roster's daedalus_stylish provider queries the variant and skin storages
     // unconditionally on the same schema alter.
     $this->installEntitySchema('daedalus_variant');
@@ -227,8 +228,8 @@ class SwatchAiMintingGateTest extends KernelTestBase {
     $alter = function (): array {
       $schema = [
         'fields' => [
-          'daedalus_stylish_styles' => ['type' => 'daedalus_stylish_styles', 'style_guide' => ['guidance' => 'x']],
         ],
+        'styles' => ['type' => 'daedalus_stylish_styles', 'style_guide' => ['guidance' => 'x']],
       ];
       $context = ['entity_type' => 'entity_test', 'bundle' => 'entity_test', 'view_mode' => 'full', 'cache_tags' => []];
       $this->container->get('module_handler')->alter('daedalus_blueprint_schema', $schema, $context);
@@ -242,7 +243,7 @@ class SwatchAiMintingGateTest extends KernelTestBase {
     $this->setAiMinting(FALSE);
     [$fragment] = $alter();
     $this->assertStringContainsString('AI minting is DISABLED', $fragment['guidance'], 'A closed gate is advertised, not discovered by refusal.');
-    $this->assertStringContainsString('never save_material a swatch', $fragment['guidance']);
+    $this->assertStringContainsString('never save_material a token, a swatch, an animation or a font', $fragment['guidance']);
   }
 
 }

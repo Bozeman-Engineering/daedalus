@@ -4,22 +4,30 @@ declare(strict_types=1);
 
 namespace Drupal\daedalus_layout\EventSubscriber;
 
-use Drupal\daedalus_layout\DaedalusLayoutEntityHelperTrait;
-use Drupal\Core\Config\ConfigFactoryInterface;
-use Drupal\Core\Entity\EntityDisplayRepositoryInterface;
-use Symfony\Component\EventDispatcher\EventSubscriberInterface;
+use Drupal\daedalus_blueprint\Host\HostResolver;
+use Drupal\daedalus_blueprint\LayoutBuilder\FrameHost;
 use Drupal\daedalus_ui\Event\EditableUiBuilder as EditableUiBuilderEvent;
+use Drupal\layout_builder\Entity\LayoutEntityDisplayInterface;
+use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 
 /**
- * Swaps a Layout Builder entity build for the Daedalus Layout editor.
+ * Builds a host's canvas: the layout_builder_plus element over its storage.
+ *
+ * On an entity view build (the route entity's own render, which already
+ * wears the main-entity wrapper) every field of the host leaves the build
+ * and the element takes their place, the entity view staying the canvas
+ * root. On an empty build (a host with no entity view: a template
+ * host, rendered for LoadEditablePage and the mutation re-render) the
+ * element is the canvas root itself. A plain host (no document) renders
+ * its display's document through the foreign owner's storage, read-only.
+ * The site frame (a host with no display and no entity view) is the same
+ * canvas-root case over its own frame storage: what FrameCanvas builds on
+ * the frame's route, this builds for the mutation re-render.
  */
 final class EditableUiBuilder implements EventSubscriberInterface {
 
-  use DaedalusLayoutEntityHelperTrait;
-
   public function __construct(
-    protected ConfigFactoryInterface $configFactory,
-    protected EntityDisplayRepositoryInterface $entityDisplayRepository,
+    protected HostResolver $hostResolver,
   ) {}
 
   /**
@@ -32,27 +40,45 @@ final class EditableUiBuilder implements EventSubscriberInterface {
     if ($event->getMode() !== 'edit') {
       return;
     }
-    $entity = $event->getEntity();
-    $view_mode = $event->getViewMode();
-    $display = _daedalus_ui_get_entity_view_display($entity, $view_mode);
-    if ($display && $display->getThirdPartySetting('layout_builder', 'enabled', FALSE)) {
-      $section_storage = $this->getSectionStorageForEntity($entity, $display->getMode());
-      if ($section_storage) {
-        $build = $event->getBuild();
-        $preserved_fields = $display->getThirdPartySetting('daedalus_layout', 'preserved_fields', []);
-
-        // Override the node build with the layout builder UI.
-        $field_names = array_keys($entity->getFieldDefinitions());
-        $field_names = array_diff($field_names, $preserved_fields);
-        $build = array_diff_key($build, array_flip($field_names));
-        unset($build['_layout_builder']);
-        $build['layout'] = [
-          '#type' => 'layout_builder_plus',
-          '#section_storage' => $section_storage,
-        ];
-        $event->setBuild($build);
+    $host = $event->getHost();
+    $display = $host->display();
+    if ($display !== NULL) {
+      if (!$display instanceof LayoutEntityDisplayInterface || !$display->isLayoutBuilderEnabled()) {
+        return;
       }
     }
+    elseif (!$host instanceof FrameHost) {
+      // A host with no display is the site frame (its document is its
+      // own, no display renders it) or nothing this element edits.
+      return;
+    }
+    // The canvas shows the document the host is rendered in: its own, or
+    // the owner's when the host is rendered inside a foreign one (a page
+    // of a locked bundle shows its template; what it owns inside it is
+    // reached through the template's slots, not through its own storage).
+    $section_storage = ($this->hostResolver->foreignOwner($host) ?? $host)->sectionStorage();
+    if ($section_storage === NULL) {
+      return;
+    }
+
+    $build = $event->getBuild();
+    // The entity view supplied the canvas root (DaedalusUiHooks::entityView
+    // stamps the route entity's build before the alter this event rides).
+    $entity_view = !empty($build['#attributes']['data-main-entity']);
+    $fields = $host->fields();
+    if ($entity_view && $fields !== NULL && $display !== NULL) {
+      // Override the entity build with the layout builder UI.
+      $field_names = array_keys($fields->getFieldDefinitions());
+      $build = array_diff_key($build, array_flip($field_names));
+      unset($build['_layout_builder']);
+    }
+    $build['layout'] = [
+      '#type' => 'layout_builder_plus',
+      '#section_storage' => $section_storage,
+      '#host' => $host,
+      '#canvas_root' => !$entity_view,
+    ];
+    $event->setBuild($build);
   }
 
   /**

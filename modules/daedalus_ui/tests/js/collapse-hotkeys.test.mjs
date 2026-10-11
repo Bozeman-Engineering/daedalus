@@ -85,6 +85,9 @@ const { registerCollapseHotkeys, collapseHotkeyIds } = await import(
   '../../js/outline/collapse-hotkeys.js'
 );
 const { collapseAll, expandAll } = await import('../../js/outline/collapse.js');
+const { outlineOf } = await import(
+  '../../js/edit_mode/components/page-elements/tree-outline.js'
+);
 
 initHotkeys();
 store.dispatch(setHotKey(true));
@@ -153,17 +156,53 @@ const OUTLINE = [
 ];
 
 /**
- * An adapter recording what the registrar asked of it: read() answers
- * its current posture over OUTLINE, apply() records the calls.
+ * The page elements tree's shape over the tree's own adapter
+ * (tree-outline.js): a section over a merged text block whose rows are
+ * a paragraph and a list of one item over its paragraph. The block and
+ * the list rows start collapsed (rich text), the section open.
  */
-const adapter = (folds = null) => {
+const instance = (id, children = []) => ({
+  pseudo: true,
+  id,
+  parentKey: 'block:text',
+  label: id,
+  source: 'instance',
+  children,
+});
+const TREE = {
+  key: 'entity:page',
+  kind: 'entity',
+  label: 'Page',
+  children: [
+    {
+      key: 'container:s1',
+      kind: 'container',
+      label: 'Section',
+      children: [
+        {
+          key: 'block:text',
+          kind: 'block',
+          label: 'Text',
+          children: [instance('.p'), instance('.ul', [instance('.li', [instance('.li-p')])])],
+        },
+      ],
+    },
+  ],
+};
+
+/**
+ * An adapter recording what the registrar asked of it: read() answers
+ * its current posture over OUTLINE (or the outline given), apply()
+ * records the calls.
+ */
+const adapter = (folds = null, outline = OUTLINE) => {
   const record = {
     folds,
     reads: 0,
     applied: [],
     read() {
       record.reads += 1;
-      return { folds: record.folds, outline: OUTLINE };
+      return { folds: record.folds, outline };
     },
     apply(next, gesture) {
       record.applied.push({ next, gesture });
@@ -264,6 +303,31 @@ test('the expand key applies expand-all over the posture the adapter answers now
     { next: expandAll({ root: true }, OUTLINE), gesture: 'expand_all' },
   ]);
   assert.deepEqual(outline.folds, { root: false, unit: false });
+});
+
+test('the expand key opens the tree\'s rich-text defaults: the text block, its list and the item', () => {
+  const outline = adapter(null, outlineOf(TREE));
+  unregister = registerCollapseHotkeys({
+    id: 'page_elements',
+    label: 'Page elements',
+    keys: { collapseAll: '3', expandAll: '4' },
+    ...outline,
+  });
+  assert.equal(keydown('4').handled, true);
+  assert.deepEqual(outline.folds, {
+    'block:text': false,
+    'pseudo:block:text:.ul': false,
+    'pseudo:block:text:.li': false,
+  }, 'every row collapsed by default got the word; the section, open by default, none');
+  // Collapse all from there closes the section too and the rich-text
+  // rows again, by word now.
+  assert.equal(keydown('3').handled, true);
+  assert.deepEqual(outline.folds, {
+    'container:s1': true,
+    'block:text': true,
+    'pseudo:block:text:.ul': true,
+    'pseudo:block:text:.li': true,
+  });
 });
 
 test('a gesture that changes nothing still applies, handing back the same posture object', () => {

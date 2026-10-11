@@ -1,0 +1,27 @@
+label: 'Shipped landing'
+description: 'A shipped landing page: a sampled text block over a basic block, with the page background and gap.'
+scope: page
+subject: 'node:page'
+layout:
+  -
+    kind: container
+    layout_id: layout_onecol
+    label: Opener
+    children:
+      -
+        kind: region
+        region: content
+        children:
+          -
+            kind: block
+            block_type: text
+          -
+            kind: block
+            block_type: basic
+styles:
+  'entity:':
+    default:
+      background-color: honeydew
+  'entity:::> *':
+    default:
+      gap: 2rem

@@ -58,6 +58,7 @@ class VariantAiSurfaceTest extends KernelTestBase {
     // alter.
     $this->installEntitySchema('daedalus_swatch');
     $this->installEntitySchema('daedalus_animation');
+    $this->installEntitySchema('daedalus_font');
     $this->installEntitySchema('daedalus_skin');
     $this->installConfig(['daedalus_stylish']);
   }
@@ -72,8 +73,8 @@ class VariantAiSurfaceTest extends KernelTestBase {
     $schema = [
       'fields' => [
         'name' => ['type' => 'string'],
-        'daedalus_stylish_styles' => ['type' => 'daedalus_stylish_styles', 'style_guide' => ['guidance' => 'x']],
       ],
+      'styles' => ['type' => 'daedalus_stylish_styles', 'style_guide' => ['guidance' => 'x']],
     ];
     $context = ['entity_type' => 'entity_test', 'bundle' => 'entity_test', 'view_mode' => 'full', 'cache_tags' => []];
     $this->container->get('module_handler')->alter('daedalus_blueprint_schema', $schema, $context);
@@ -129,10 +130,10 @@ class VariantAiSurfaceTest extends KernelTestBase {
     // The reference grammar rides the description, door-neutral: the page
     // language's wear spellings, never a JSON op (the creation recipe is
     // the brief's MINT line, not the schema's). The owned_by sentence is
-    // stencil vocabulary and rides only while the roster has stencils;
+    // blueprint vocabulary and rides only while the roster has blueprints;
     // this test runs without that module, so the guard must keep it out
     // (owned_by entries could not appear either: the ownership fields
-    // live on the stencil module).
+    // live on the blueprint library module).
     $this->assertStringContainsString('class="name"', $materials['guidance']);
     $this->assertStringNotContainsString('apply_variant', $materials['guidance']);
     $this->assertStringContainsString('machine name', $materials['guidance']);
@@ -174,7 +175,7 @@ class VariantAiSurfaceTest extends KernelTestBase {
 
     // The materials are the schema's own key; the field's style guide is
     // untouched.
-    $this->assertSame(['guidance'], array_keys($schema['fields']['daedalus_stylish_styles']['style_guide']));
+    $this->assertSame(['guidance'], array_keys($schema['styles']['style_guide']));
 
     // Non-styling fields are untouched.
     $this->assertArrayNotHasKey('style_guide', $schema['fields']['name']);

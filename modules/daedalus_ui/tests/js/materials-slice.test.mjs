@@ -28,7 +28,7 @@ import { createEnvelopeSync } from '../../js/edit_mode/utilities/settings-envelo
 
 const record = (fields) => ({
   kind: 'token', id: '', label: '', description: '', value: null, group: null, spellings: {}, scope: null, applies: [],
-  owned_by: null, published: true, weight: 0, icon: null, root_kind: null, origin: 'user', updatable: true, ...fields,
+  owned_by: null, published: true, weight: 0, icon: null, origin: 'user', updatable: true, ...fields,
 });
 
 /**
@@ -51,7 +51,7 @@ const rootState = (state) => ({ materials: state });
 
 test('the initial state is empty and unbooted; every kind reads as an empty list', () => {
   assert.equal(initial.booted, false);
-  assert.deepEqual(initial.records, { token: [], swatch: [], variant: [], stencil: [], animation: [] });
+  assert.deepEqual(initial.records, { token: [], swatch: [], variant: [], blueprint: [], animation: [], font: [] });
   assert.deepEqual(selectRecords(rootState(initial)), []);
   assert.equal(selectRoster(rootState(initial)).isEmpty(), true);
 });
@@ -62,11 +62,26 @@ test('a boot replaces the record set wholesale, per kind, in delivery order', ()
   assert.deepEqual(ids(state, 'token'), ['spacing/lg', 'color/accent']);
   assert.deepEqual(ids(state, 'swatch'), ['lime_green']);
   assert.deepEqual(ids(state, 'variant'), ['container_full', 'button', 'card']);
-  assert.deepEqual(ids(state, 'stencil'), []);
+  assert.deepEqual(ids(state, 'blueprint'), []);
   const rebooted = reducer(state, materialsBooted({ records: [RECORDS[2]] }));
   assert.deepEqual(ids(rebooted, 'token'), []);
   assert.deepEqual(ids(rebooted, 'swatch'), ['lime_green']);
   assert.deepEqual(ids(rebooted, 'variant'), []);
+});
+
+test('boots counts the whole-set replacements; a delta leaves it', () => {
+  // A subscriber tells a boot (the page's envelope, possibly carrying
+  // other editors' records) from a delta (this session's own landing) by
+  // the counter alone: the record set changes either way.
+  assert.equal(initial.boots, 0);
+  const state = booted();
+  assert.equal(state.boots, 1);
+  const minted = record({ kind: 'blueprint', id: 'hero', label: 'Hero', spellings: { blueprint: 'hero' } });
+  const landed = reducer(state, materialsDelta({ upsert: [minted], remove: [] }));
+  assert.equal(landed.boots, 1);
+  assert.notEqual(landed.records, state.records);
+  const rebooted = reducer(landed, materialsBooted({ records: RECORDS }));
+  assert.equal(rebooted.boots, 2);
 });
 
 test('a boot refuses a record of an unknown kind', () => {
@@ -114,9 +129,9 @@ test('the seat comparison is case-insensitive (the label sort of the roster quer
 
 test('a remove drops the record; removing an unknown id is a no-op', () => {
   const state = booted();
-  const next = reducer(state, materialsDelta({ upsert: [], remove: [{ kind: 'swatch', id: 'lime_green' }, { kind: 'stencil', id: 'never' }] }));
+  const next = reducer(state, materialsDelta({ upsert: [], remove: [{ kind: 'swatch', id: 'lime_green' }, { kind: 'blueprint', id: 'never' }] }));
   assert.deepEqual(ids(next, 'swatch'), []);
-  assert.deepEqual(ids(next, 'stencil'), []);
+  assert.deepEqual(ids(next, 'blueprint'), []);
   assert.equal(next.records.variant, state.records.variant);
 });
 
@@ -140,7 +155,7 @@ test('assertDelta refuses the wrong shape and an unknown kind, and accepts the c
   assert.throws(() => assertDelta(null), /A materials delta is/);
   assert.throws(() => assertDelta({ upsert: [record({ kind: 'texture', id: 'x' })], remove: [] }), /names a material kind and id/);
   assert.throws(() => assertDelta({ upsert: [], remove: [{ kind: 'swatch' }] }), /names a material kind and id/);
-  assert.doesNotThrow(() => assertDelta({ upsert: [RECORDS[2]], remove: [{ kind: 'stencil', id: 'hero' }] }));
+  assert.doesNotThrow(() => assertDelta({ upsert: [RECORDS[2]], remove: [{ kind: 'blueprint', id: 'hero' }] }));
   assert.doesNotThrow(() => assertDelta({ upsert: [], remove: [] }));
 });
 

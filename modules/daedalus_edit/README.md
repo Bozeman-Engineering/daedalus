@@ -6,6 +6,45 @@ select it and press Enter), it is replaced by the hidden form element. Doing it
 in this way means that all the back end is the same as the `/node/1/edit` page,
 so form_alters and what not still work.
 
+## One transport, every host
+
+Daedalus Edit commits through the blueprint spine against the page
+document's HOST (daedalus_blueprint's `HostInterface`), resolved once from
+the route: a page, or a template (a Layout Builder enabled entity view
+display on core's manage-display layout route). The routes address one
+host as `{entity_type}/{entity}`: the entity form at
+`/daedalus-edit/entity-form/{entity_type}/{entity}`, Save at
+`/daedalus-edit/tempstore/save/{entity_type}/{entity}` and Discard at
+`/daedalus-edit/tempstore/delete-confirm/{entity_type}/{entity}`, each
+requiring the entity's update access beside the permission; the block
+form endpoint (`/daedalus-edit/block-form/...`) asks update access on the
+storage's host and is forbidden for a storage no host owns. What a write
+may change is the spine's verdict, judged at the op door for the batch's
+actor: the Edit verb declares `capability: content`, like every verb in
+daedalus_ui's registry, and an element the actor cannot edit is not
+selectable at all. On a template the sidebar's root door is inert (a
+display has no entity form) and the field blocks show sample content
+that is never editable. On a page that renders a template it does not
+own, the template's elements cannot be selected, while a field block
+presenting one of the page's own fields carries that field's content
+verdict and edits in place; the notice at the top of the page elements
+panel names the template.
+
+## The Configure dialog
+
+Every block plugin's Configure dialog commits through the spine as an
+`update_element`: an inline block's form values ride as block fields, and
+a plugin block's (a field block's formatter, a view's display id, a menu's
+depth) as its configuration bag, derived from the plugin's own config
+schema and diffed so only what changed travels. Core's tempstore submit
+never runs on a hosted storage: the alters throw where they once fell
+back onto it (an inline block whose dialog built no block form, the
+add-section variant, a section without a uuid), since core's own Layout
+Builder write routes are closed for any storage Daedalus hosts; a storage
+with no host keeps core's path. A plugin that declares no config schema is
+placeable but not configurable: its dialog answers `NO_PLUGIN_SCHEMA`, and
+adding schema is how it joins.
+
 ## Editing the page title
 
 The entity's label field presents AS the page row in the element model, but
@@ -23,8 +62,8 @@ widget and the page elements tree's root rename are the title's other two
 doors, and all three commit the same `update_element` on the label. A
 label write from any road (the form, an AI turn, undo) re-renders the H1
 by its key through the mutation response. Attribution only happens when the page title is
-provably the label's ONE render (a node's non-configurable title, or an
-unpreserved label on a Layout Builder display); anything ambiguous stays
+provably the label's ONE render (a node's non-configurable title, or a
+label on a Layout Builder display); anything ambiguous stays
 inert so leaf identities never duplicate.
 
 # Troubleshooting

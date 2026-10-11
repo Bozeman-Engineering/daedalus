@@ -90,7 +90,7 @@ class DaedalusStylishVariant extends EditorialContentEntityBase implements Daeda
     // The description is the variant's AI-facing face: the style guide's
     // variants roster serves it as "when to reach for this look", so it is
     // written as advice to a future designer (human or model). Optional,
-    // unlike a stencil's (variants predate the roster), but every variant
+    // unlike a blueprint's (variants predate the roster), but every variant
     // should want one: an undescribed variant teaches nothing.
     $fields['description'] = BaseFieldDefinition::create('string_long')
       ->setLabel(new TranslatableMarkup('Description'))

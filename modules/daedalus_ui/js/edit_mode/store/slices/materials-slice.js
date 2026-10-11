@@ -13,10 +13,10 @@ import {
  * The materials store: the client copy of the site's materials roster.
  *
  * One record set (delivery shape, MaterialRecord::toArray(): tokens,
- * swatches, variants, stencils, animations) every widget reads through
+ * swatches, variants, blueprints, animations) every widget reads through
  * the facade:
  * pickers and wells offer its stops, the wear bar and palette list its
- * variants and stencils, code completions and lint know its spellings,
+ * variants and blueprints, code completions and lint know its spellings,
  * the value grammar resolves against it. Consumers project; nobody keeps
  * a roster of its own.
  *
@@ -30,11 +30,19 @@ import {
  * every window shares (materials/delta.js): a paired window without the
  * app bundle holds its own set over the same envelope and the relayed
  * deltas, and the two must agree record for record.
+ *
+ * `boots` counts the whole-set replacements, so a subscriber can tell a
+ * boot (the page's envelope, re-delivered on every editable-page render
+ * and carrying whatever other editors wrote since this window's last
+ * boot) from a delta (a record this session's own request, or a paired
+ * window's, just landed). The Add panel's creator mark reads the
+ * distinction through Materials.onChange.
  */
 const materialsSlice = createSlice({
   name: 'materials',
   initialState: {
     booted: false,
+    boots: 0,
     records: emptyRecords(),
   },
   reducers: {
@@ -43,6 +51,7 @@ const materialsSlice = createSlice({
      */
     materialsBooted: (state, action) => {
       state.booted = true;
+      state.boots += 1;
       state.records = recordsFromPayload(action.payload);
     },
     /**

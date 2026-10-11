@@ -115,37 +115,65 @@ guide_example:
       normal: '0'
       wide: '0.08em'
     # A geometric step ladder on a 0.25rem unit, plus the gutter and the
-    # three banded band-rhythm tokens.
+    # three banded band-rhythm tokens. A token is a record {value,
+    # description, offered}, a bare value the record with the defaults;
+    # `offered: false` keeps a token legal and referenceable while the
+    # basic rows bound to the scale (padding, gap, margin) lead with the
+    # everyday six alone: the quarter step and the three-quarter step are
+    # too fine for a chip row (a block type file curates 3 where it
+    # belongs), 24 is a band-scale distance, and the gutter and band
+    # tokens are worn by variants and defaults, never picked by hand.
     space:
-      '1': '0.25rem'
+      '1':
+        value: '0.25rem'
+        description: 'The unit step, for hairline gaps a row never offers.'
+        offered: false
       '2': '0.5rem'
-      '3': '0.75rem'
+      '3':
+        value: '0.75rem'
+        description: 'The three-quarter step, curated where a compact block wants it.'
+        offered: false
       '4': '1rem'
       '6': '1.5rem'
       '8': '2rem'
       '12': '3rem'
       '16': '4rem'
-      '24': '6rem'
+      '24':
+        value: '6rem'
+        description: 'A band-scale distance, beyond the everyday ladder.'
+        offered: false
       # The site gutter: the width variants' inset floor and the
       # container defaults' gap (--space-gutter, one gutter fact for
       # the whole site).
       gutter:
-        default: '1.5rem'
-        narrow: '1rem'
+        value:
+          default: '1.5rem'
+          narrow: '1rem'
+        description: 'The site gutter: the width variants'' inset floor and the container gap, not a padding step.'
+        offered: false
       # Band rhythm: the vertical padding a page band wears, worn
       # through the container rhythm axis (guide_rhythm_compact /
       # standard / spacious), banded so bands tighten on narrow screens.
       band-compact:
-        default: '3rem'
-        narrow: '2rem'
+        value:
+          default: '3rem'
+          narrow: '2rem'
+        description: 'Compact band rhythm, worn through the rhythm axis.'
+        offered: false
       band:
-        default: '5rem'
-        medium: '4rem'
-        narrow: '3rem'
+        value:
+          default: '5rem'
+          medium: '4rem'
+          narrow: '3rem'
+        description: 'Standard band rhythm, worn through the rhythm axis.'
+        offered: false
       band-spacious:
-        default: '8rem'
-        medium: '6rem'
-        narrow: '4rem'
+        value:
+          default: '8rem'
+          medium: '6rem'
+          narrow: '4rem'
+        description: 'Spacious band rhythm, worn through the rhythm axis.'
+        offered: false
     radius:
       sm: '0.25rem'
       md: '0.5rem'

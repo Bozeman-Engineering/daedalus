@@ -3,14 +3,14 @@
 namespace Drupal\daedalus_ui\Event;
 
 use Drupal\Component\EventDispatcher\Event;
-use Drupal\Core\Entity\EntityInterface;
+use Drupal\daedalus_blueprint\Host\HostInterface;
 
 /**
- * Lets subscribers veto Edit Mode for an entity.
+ * Lets subscribers veto Edit Mode for a route host.
  */
 class ShouldNotEditModeEvent extends Event {
 
-  public function __construct(protected ?EntityInterface $entity) {}
+  public function __construct(protected ?HostInterface $host) {}
 
   /**
    * Whether a subscriber vetoed Edit Mode.
@@ -34,13 +34,14 @@ class ShouldNotEditModeEvent extends Event {
   }
 
   /**
-   * Gets the entity, if the route has one.
+   * The route host, if the route has one.
    *
-   * @return \Drupal\Core\Entity\EntityInterface|null
-   *   The entity, or NULL.
+   * @return \Drupal\daedalus_blueprint\Host\HostInterface|null
+   *   The host (a content entity, or a Layout Builder display on its
+   *   manage-layout route), or NULL.
    */
-  public function getEntity(): ?EntityInterface {
-    return $this->entity;
+  public function getHost(): ?HostInterface {
+    return $this->host;
   }
 
 }

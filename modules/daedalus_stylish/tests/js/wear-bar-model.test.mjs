@@ -2,11 +2,11 @@
 /**
  * @file
  * Locks the wearing row's naming (wear-bar-model.js): the row label rule
- * (an axis's wearing reads its axis, a stencil-owned wearing reads its
+ * (an axis's wearing reads its axis, a blueprint-owned wearing reads its
  * owner), the origin sub-line's name (a distributed wearing names the
  * composition that put it there) and the right-click menu's headline
  * (identity facts, the owner said after the axis). The label and the
- * header read the owner through library-model.js stencilLabel over the
+ * header read the owner through library-model.js blueprintLabel over the
  * materials roster, both ownership lanes alike. The row roster, the
  * reach read and the menu roster are wear-bar.test.mjs's. Run with:
  * node --test tests/js/*.test.mjs
@@ -14,15 +14,15 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { wearOrigin, wearRowHeader, wearRowLabel } from '../../js/src/wear-bar-model.js';
-import { EMPTY_MATERIALS, roster, stencilRecord, variantRecord } from './materials-fixture.mjs';
+import { EMPTY_MATERIALS, roster, blueprintRecord, variantRecord } from './materials-fixture.mjs';
 
 const GUIDE = { axisLabels: { container_layout: 'Layout' } };
 const VOCABULARY = ['style', 'container_layout', 'animation'];
-// The owners: a content stencil and a file-shipped one, both named by
+// The owners: a content blueprint and a file-shipped one, both named by
 // their machine name in the roster (the two ownership lanes).
 const MATERIALS = roster(
-  stencilRecord('card', { label: 'Card' }),
-  stencilRecord('hero', { label: 'Hero banner', updatable: false }),
+  blueprintRecord('card', { label: 'Card' }),
+  blueprintRecord('hero', { label: 'Hero banner', updatable: false }),
 );
 
 const quiet = variantRecord('quiet', { label: 'Quiet' });
@@ -58,7 +58,7 @@ test('wearRowLabel: the one-axis scope says the view\'s word', () => {
 });
 
 test('wearRowLabel: an owned wearing reads its owner, both lanes', () => {
-  // The content stencil and the file-shipped one name their looks alike;
+  // The content blueprint and the file-shipped one name their looks alike;
   // the axis word is gone from the row (the menu header still says it).
   assert.equal(label('style', cardLook), 'Card');
   assert.equal(label('style', heroLook), 'Hero banner');
@@ -113,7 +113,7 @@ test('wearRowHeader: the menu headline carries the record\'s identity facts', ()
 
 test('wearRowHeader: an owned wearing says its owner after the axis', () => {
   // The row reads "Card"; the header is where the axis and the owner are
-  // both said, the owner by its stencil label (either lane).
+  // both said, the owner by its blueprint label (either lane).
   assert.equal(wearRowHeader(cardLook, GUIDE, MATERIALS), 'Soft · Style · owned by Card: Padded surface with a soft shadow.');
   assert.equal(wearRowHeader(heroLook, GUIDE, MATERIALS), 'Dark · Style · owned by Hero banner');
   assert.equal(wearRowHeader(cardStack, GUIDE, MATERIALS), 'Stacked · Layout · owned by Card');

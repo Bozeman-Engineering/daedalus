@@ -37,8 +37,17 @@ import { chipPlacement, chipFace, frameEditing } from './selection-frame-model';
  * breadcrumb, and the AI chips keep the content-derived labelForKey
  * read of the same projection. The primary's chip always carries the
  * verb face: the registry's `tab`-flagged verbs as icon buttons plus a
- * chevron opening the context menu with the rest. WHICH verbs it holds
- * is the registry's applies gate (verbs.js): selection verbs while no
+ * chevron opening the context menu with the rest. The face is read from
+ * chipFace's entries (selection-frame-model.js): a plain `{verb}` or a
+ * `{group, primary, rest}` folded by the registry's `group` key
+ * (verb-groups.js), the group seated where its lightest member sits.
+ * This host draws a group as ONE split control (GroupControl): the
+ * primary's verb button as the main half and a caret half that opens the
+ * shared menu over the rest, the same control and stylesheet as the top
+ * bar's Save (ButtonBuilderTrait::buildSplitButton(), split-button.css,
+ * which rides the modes library that edit_mode depends on), so the chip
+ * adds only the skin its halves need (selection-frame.css). WHICH verbs
+ * it holds is the registry's applies gate (verbs.js): selection verbs while no
  * live edit lands on the primary, edit-scoped verbs while the store's
  * editingKey IS it — so opening an edit swaps the face's contents
  * instead of hiding it, and the chip stays the one home of "what can I
@@ -52,8 +61,108 @@ import { chipPlacement, chipFace, frameEditing } from './selection-frame-model';
  * and markup swaps are all covered by one mechanism.
  */
 
-const CHEVRON =
+// The caret-down glyph (daedalus_ui/assets/caret-down.svg, the one the
+// top bar's Save caret draws through the icon pack): the chip's chevron
+// and a split control's caret are the same "more of this" gesture, so
+// they wear the same glyph.
+const CARET_DOWN =
   '<svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 256 256"><path d="M213.66,101.66l-80,80a8,8,0,0,1-11.32,0l-80-80A8,8,0,0,1,53.66,90.34L128,164.69l74.34-74.35a8,8,0,0,1,11.32,11.32Z"/></svg>';
+
+/**
+ * A verb's label on this chip: the single-selection menuLabel names the
+ * target ("Update blueprint 'X'"); a real set keeps the static label.
+ */
+const chipVerbLabel = (verb, selectedKeys) =>
+  verb.menuLabel && selectedKeys.length === 1
+    ? verb.menuLabel(selectedKeys[0])
+    : verb.label;
+
+/**
+ * One verb as a chip button: icon, and the text label at full density
+ * (or always, for a verb with no icon). `className` layers a split
+ * control's half modifier on the verb skin.
+ */
+const VerbButton = ({ verb, selectedKeys, labels, className = '' }) => {
+  const verbLabel = chipVerbLabel(verb, selectedKeys);
+  return (
+    <button
+      type="button"
+      className={`daedalus-ui-frame__verb${className ? ` ${className}` : ''}`}
+      data-daedalus-ui-tooltip={verbLabel}
+      data-daedalus-ui-tooltip-position="top"
+      aria-label={verbLabel}
+      onClick={(event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        runVerbOn(verb, selectedKeys);
+      }}
+    >
+      {verb.icon && (
+        <span
+          className="daedalus-ui-frame__icon"
+          aria-hidden="true"
+          dangerouslySetInnerHTML={{ __html: verb.icon }}
+        />
+      )}
+      {(labels || !verb.icon) && (
+        <span className="daedalus-ui-frame__label">{verbLabel}</span>
+      )}
+    </button>
+  );
+};
+
+/**
+ * A verb group as one split control (verb-groups.js: `{group, primary,
+ * rest}`). The main half IS the primary's verb button (the group's
+ * lightest member, which is why the fold seats the group where it sits);
+ * the caret half opens the shared menu over the rest, read through
+ * verbMenuItems at open time like every other face of the registry, so
+ * the menu lists the members flat in weight order with their menuLabels.
+ * The control's shape (one pill, a seam between the halves) is the top
+ * bar's split-button.css; the chip's own modifiers (`__verb--main`,
+ * `__verb--caret`) carry only what its blue chip needs over it
+ * (selection-frame.css). Group members are run verbs: a widget verb has
+ * no run to put behind a caret and never carries a group.
+ */
+const GroupControl = ({ entry, selectedKeys, labels }) => {
+  const { primary, rest } = entry;
+  const caretLabel = Drupal.t('More @label actions', {
+    '@label': primary.label,
+  });
+  return (
+    <div className="daedalus-ui-split-button daedalus-ui-frame__group">
+      <VerbButton
+        verb={primary}
+        selectedKeys={selectedKeys}
+        labels={labels}
+        className="daedalus-ui-split-button__main daedalus-ui-frame__verb--main"
+      />
+      <button
+        type="button"
+        className="daedalus-ui-frame__verb daedalus-ui-split-button__caret daedalus-ui-frame__verb--caret"
+        data-daedalus-ui-tooltip={caretLabel}
+        data-daedalus-ui-tooltip-position="top"
+        aria-label={caretLabel}
+        aria-haspopup="menu"
+        onClick={(event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          Drupal.Daedalus.menu.open({
+            anchor: event.currentTarget,
+            align: 'end',
+            items: verbMenuItems(selectedKeys, (verb) => rest.includes(verb)),
+          });
+        }}
+      >
+        <span
+          className="daedalus-ui-frame__icon"
+          aria-hidden="true"
+          dangerouslySetInnerHTML={{ __html: CARET_DOWN }}
+        />
+      </button>
+    </div>
+  );
+};
 
 /**
  * A widget verb's slot: an empty container the verb populates itself (a
@@ -305,10 +414,23 @@ const SelectionFrame = () => {
               <span className="daedalus-ui-frame__name">{label}</span>
               {(face.faceVerbs.length > 0 || face.overflow.length > 0) && (
                 <div className="daedalus-ui-frame__verbs">
-                  {face.faceVerbs.map((verb) => {
-                    // Widget verbs render their own DOM in a slot; they only
-                    // reach here for single selections (multi defaults false
-                    // and widget verbs never opt in).
+                  {face.faceVerbs.map((entry) => {
+                    // A group entry (verb-groups.js) is one split control
+                    // (GroupControl); a plain entry is one verb.
+                    if (entry.group) {
+                      return (
+                        <GroupControl
+                          key={`group:${entry.group}`}
+                          entry={entry}
+                          selectedKeys={selectedKeys}
+                          labels={face.labels}
+                        />
+                      );
+                    }
+                    const { verb } = entry;
+                    // Widget verbs render their own DOM in a slot; they
+                    // only reach here for single selections (multi
+                    // defaults false and widget verbs never opt in).
                     if (verb.widget) {
                       return (
                         <WidgetSlot
@@ -319,37 +441,13 @@ const SelectionFrame = () => {
                         />
                       );
                     }
-                    // A verb may name its single-selection target ("Update
-                    // stencil 'X'"); a set keeps the static label.
-                    const verbLabel =
-                      verb.menuLabel && selectedKeys.length === 1
-                        ? verb.menuLabel(key)
-                        : verb.label;
                     return (
-                      <button
+                      <VerbButton
                         key={verb.id}
-                        type="button"
-                        className="daedalus-ui-frame__verb"
-                        data-daedalus-ui-tooltip={verbLabel}
-                        data-daedalus-ui-tooltip-position="top"
-                        aria-label={verbLabel}
-                        onClick={(event) => {
-                          event.preventDefault();
-                          event.stopPropagation();
-                          runVerbOn(verb, selectedKeys);
-                        }}
-                      >
-                        {verb.icon && (
-                          <span
-                            className="daedalus-ui-frame__icon"
-                            aria-hidden="true"
-                            dangerouslySetInnerHTML={{ __html: verb.icon }}
-                          />
-                        )}
-                        {(face.labels || !verb.icon) && (
-                          <span className="daedalus-ui-frame__label">{verbLabel}</span>
-                        )}
-                      </button>
+                        verb={verb}
+                        selectedKeys={selectedKeys}
+                        labels={face.labels}
+                      />
                     );
                   })}
                   {face.overflow.length > 0 && (
@@ -377,7 +475,7 @@ const SelectionFrame = () => {
                       <span
                         className="daedalus-ui-frame__icon"
                         aria-hidden="true"
-                        dangerouslySetInnerHTML={{ __html: CHEVRON }}
+                        dangerouslySetInnerHTML={{ __html: CARET_DOWN }}
                       />
                     </button>
                   )}

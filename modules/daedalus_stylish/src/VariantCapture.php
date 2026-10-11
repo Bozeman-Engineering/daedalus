@@ -4,8 +4,7 @@ declare(strict_types=1);
 
 namespace Drupal\daedalus_stylish;
 
-use Drupal\Core\Entity\FieldableEntityInterface;
-use Drupal\daedalus_stylish\Plugin\Field\FieldType\StyleMapItem;
+use Drupal\daedalus_blueprint\Host\HostInterface;
 
 /**
  * Captures an element's look as variant styles, from the staged map.
@@ -57,8 +56,8 @@ final class VariantCapture {
   /**
    * The element-relative styles that reproduce an element's look.
    *
-   * @param \Drupal\Core\Entity\FieldableEntityInterface $entity
-   *   The host whose staged style map and layout answer for the element.
+   * @param \Drupal\daedalus_blueprint\Host\HostInterface $host
+   *   The host whose staged style map and document answer for the element.
    * @param string $key
    *   The element's selectable key (a ROOT element key: container:{uuid},
    *   block:{uuid}, entity:{uuid}).
@@ -68,8 +67,8 @@ final class VariantCapture {
    * @return array
    *   Relative key => style entry, [] when the element carries no look.
    */
-  public function capture(FieldableEntityInterface $entity, string $key, string $axis): array {
-    $map = $this->styleMap($entity);
+  public function capture(HostInterface $host, string $key, string $axis): array {
+    $map = $host->styleMap();
     $entries = [];
     foreach ($map as $map_key => $entry) {
       $map_key = (string) $map_key;
@@ -83,7 +82,7 @@ final class VariantCapture {
       }
     }
 
-    $paths = $this->slotKeys->slotPaths($entity, $key);
+    $paths = $this->slotKeys->slotPaths($host, $key);
     $direct = [];
     $captured_bases = [];
     foreach ($map as $map_key => $entry) {
@@ -259,17 +258,6 @@ final class VariantCapture {
         $entries[$relative] = isset($entries[$relative]) ? StyleEntry::merge($entries[$relative], $entry) : $entry;
       }
     }
-  }
-
-  /**
-   * The host's staged style map, [] without the styling field.
-   */
-  protected function styleMap(FieldableEntityInterface $entity): array {
-    if (!$entity->hasField(DaedalusStylishFieldManager::FIELD_NAME)) {
-      return [];
-    }
-    $item = $entity->get(DaedalusStylishFieldManager::FIELD_NAME)->first();
-    return $item instanceof StyleMapItem ? $item->getStyleMap() : [];
   }
 
 }

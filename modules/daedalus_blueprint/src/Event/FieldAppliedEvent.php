@@ -8,6 +8,7 @@ use Drupal\Component\EventDispatcher\Event;
 use Drupal\Core\Entity\FieldableEntityInterface;
 use Drupal\Core\Field\FieldItemListInterface;
 use Drupal\daedalus_blueprint\FieldValueKind;
+use Drupal\daedalus_blueprint\Host\HostInterface;
 
 /**
  * Fired after a field write lands on an entity mid-operation.
@@ -21,37 +22,48 @@ use Drupal\daedalus_blueprint\FieldValueKind;
  * stage-time identity seam minting s-* classes into text) has its rewrite
  * validated and staged exactly as the operation's own value is.
  *
- * The entity carried is the one the field was written on, which for a
- * block or paragraph is the nested entity and not the root; the element
- * uuid is the blueprint address of that entity (the root entity's uuid,
- * the Layout Builder component uuid, the paragraph uuid), the same uuid
- * the operation reports as the write's target. The applied field is
- * already a target of the operation, so a subscriber that rewrites it
- * declares nothing; a subscriber that writes some OTHER field has changed
- * something the operation cannot re-render, and this event carries no
- * target bag on purpose: rewrite the applied field, or use an operation.
+ * The host is the root the operation ran against. The entity carried is
+ * the one the field was written on: the host's fields entity for a root
+ * field, the nested block or paragraph otherwise; the element uuid is the
+ * blueprint address of that entity (the host's uuid, the Layout Builder
+ * component uuid, the paragraph uuid), the same uuid the operation reports
+ * as the write's target. The applied field is already a target of the
+ * operation, so a subscriber that rewrites it declares nothing; a
+ * subscriber that writes some OTHER field has changed something the
+ * operation cannot re-render, and this event carries no target bag on
+ * purpose: rewrite the applied field, or use an operation.
  */
 final class FieldAppliedEvent extends Event {
 
   /**
    * Constructs a FieldAppliedEvent.
    *
+   * @param \Drupal\daedalus_blueprint\Host\HostInterface $host
+   *   The host the operation ran against.
    * @param \Drupal\Core\Entity\FieldableEntityInterface $entity
    *   The entity the field was set on.
    * @param string $fieldName
    *   The field that was set.
    * @param string $elementUuid
-   *   The blueprint uuid of the element the entity is (root, component or
+   *   The blueprint uuid of the element the entity is (host, component or
    *   paragraph uuid).
    * @param \Drupal\daedalus_blueprint\FieldValueKind $valueKind
    *   Which kind of value landed.
    */
   public function __construct(
+    private readonly HostInterface $host,
     private readonly FieldableEntityInterface $entity,
     private readonly string $fieldName,
     private readonly string $elementUuid,
     private readonly FieldValueKind $valueKind,
   ) {}
+
+  /**
+   * The host the operation ran against.
+   */
+  public function getHost(): HostInterface {
+    return $this->host;
+  }
 
   /**
    * The entity the field was set on.

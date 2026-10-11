@@ -1,0 +1,9 @@
+name: Daedalus Blueprint Library File Owned Variant Test
+type: module
+description: Ships a variant owned by a module-shipped FILE blueprint (the cross-site package shape).
+package: Testing
+core_version_requirement: ^10.3 || ^11
+dependencies:
+  - daedalus:daedalus_blueprint_library
+  - daedalus:daedalus_blueprint_library_test
+  - daedalus:daedalus_stylish

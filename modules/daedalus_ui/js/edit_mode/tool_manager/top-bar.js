@@ -1,9 +1,56 @@
+import { verbsFor, onChange as onVerbsChange } from '../verbs/verbs';
+import { verbMenuItems } from '../verbs/verb-menu-items';
+
 /**
  * The Edit Mode top bar's save, discard, and refresh buttons.
  *
  * Part of the app bundle; behaviors only, so initTopBar() has no ordering
  * needs beyond running before the next attachBehaviors pass.
+ *
+ * Save is a split control (ButtonBuilderTrait::buildSplitButton()): the
+ * button commits the tempstore, and the caret beside it opens the DOCUMENT
+ * menu, the top bar's face of the verb registry. The menu lists the root
+ * entity's verbs flagged `document` (verbs.js register), adapted through
+ * the one verbs-to-items wire (verb-menu-items.js) into the shared menu
+ * primitive, so a whole-page gesture a module registers as a root verb
+ * (daedalus_layout's "Save page as blueprint…") shows up here with its
+ * capability gate and its keyboard contract intact, and the bar itself
+ * names no gesture. The caret renders hidden and reveals only while the
+ * root offers at least one document verb: honest chrome, never a caret
+ * that opens nothing.
  */
+
+/**
+ * Where Save and Discard land, percent-encoded for the query.
+ *
+ * The edited page's own path, unless this canvas was reached through a
+ * portal's leave (Drupal.Daedalus.Portal.leave), which put the page it
+ * left from on the URL as `destination`: then that page is where the
+ * editor returns, so a Save on a header or a footer never strands them on
+ * the block's root.
+ */
+const saveDestination = () =>
+  encodeURIComponent(
+    new URLSearchParams(window.location.search).get('destination') ||
+      window.location.pathname,
+  );
+
+/**
+ * The root entity's selectable key, or null before the mirror boots.
+ */
+const rootKey = () => {
+  const root = Drupal.Daedalus.Blueprint?.getRoot?.();
+  return root ? `entity:${root.uuid}` : null;
+};
+
+/**
+ * The document verbs the root currently offers, menu-ordered.
+ */
+const documentVerbKeys = () => {
+  const key = rootKey();
+  return key && verbsFor(key).some((verb) => verb.document) ? [key] : [];
+};
+
 export const initTopBar = () => {
   /**
    * Refresh button.
@@ -54,11 +101,43 @@ export const initTopBar = () => {
             }
 
             window.location = Drupal.Daedalus.ModePluginBase.url(
-              `/daedalus-edit/tempstore/save/${info.entityType}.${
+              `/daedalus-edit/tempstore/save/${info.entityType}/${
                 info.id
-              }?destination=${window.location.pathname}`,
+              }?destination=${saveDestination()}`,
             );
           };
+        },
+      );
+    },
+  };
+
+  /**
+   * The Save caret: the document menu over the root's `document` verbs.
+   *
+   * The caret follows the registry and the mirror: a verb registering
+   * later, or the root arriving with the mirror's boot, reveals it; a
+   * root the gate refuses every document verb on hides it. The items are
+   * read at open time, like every other face of the registry.
+   */
+  Drupal.behaviors.DaedalusUiSaveMenu = {
+    attach: (context, settings) => {
+      once('DaedalusUiSaveMenu', '#daedalus-ui-save-menu', context).forEach(
+        (caret) => {
+          const sync = () => {
+            caret.hidden = documentVerbKeys().length === 0;
+          };
+          sync();
+          onVerbsChange(sync);
+          Drupal.Daedalus.Blueprint.onBlueprintChange(sync);
+          caret.addEventListener('click', (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            Drupal.Daedalus.menu.open({
+              anchor: caret,
+              align: 'end',
+              items: verbMenuItems(documentVerbKeys(), (verb) => verb.document),
+            });
+          });
         },
       );
     },
@@ -87,9 +166,9 @@ export const initTopBar = () => {
             return;
           }
           Drupal.Daedalus.ModePluginBase.ajax({
-            url: `/daedalus-edit/tempstore/delete-confirm/${info.entityType}.${
+            url: `/daedalus-edit/tempstore/delete-confirm/${info.entityType}/${
               info.id
-            }?destination=${window.location.pathname}`,
+            }?destination=${saveDestination()}`,
             dialogType: 'modal',
             dialog: {
               title: Drupal.t('Discard changes?'),

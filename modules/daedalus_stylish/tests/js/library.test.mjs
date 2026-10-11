@@ -6,7 +6,7 @@
  * PrinterEquivalenceTest inside the PHPUnit suite. Locks the filter
  * vocabularies, the row roster with its honesty flags, the lifecycle
  * card's gesture roster over the per-open management read, the ownership
- * face over the stencil records, and the this-page wearer lookup behind
+ * face over the blueprint records, and the this-page wearer lookup behind
  * the card's "Edit styles". Exits non-zero on failure.
  */
 import { strict as assert } from 'node:assert';
@@ -16,11 +16,11 @@ import {
   libraryFilters,
   libraryRows,
   pageWearer,
-  stencilLabel,
-  stencilTargets,
+  blueprintLabel,
+  blueprintTargets,
   variantOwnership,
 } from '../../js/src/library-model.js';
-import { EMPTY_MATERIALS, roster, stencilRecord, variantRecord } from './materials-fixture.mjs';
+import { EMPTY_MATERIALS, roster, blueprintRecord, variantRecord } from './materials-fixture.mjs';
 
 const tests = [];
 const test = (name, run) => tests.push([name, run]);
@@ -175,23 +175,23 @@ test('cardGestures: delete carries the two permission grades', () => {
   assert.equal(cardGestures(LIBRARY[2], {}, UNWORN, EMPTY_MATERIALS).delete, false);
 });
 
-// The stencils as the store holds them: labels for the badge, updatable =
-// content stencils (transfer targets); the "save stencils" grant rides the
+// The blueprints as the store holds them: labels for the badge, updatable =
+// content blueprints (transfer targets); the library's ownership grant rides the
 // variant gates as canOwn.
 const MATERIALS = roster(
-  stencilRecord('call_to_action', { label: 'Call to action' }),
-  stencilRecord('hero', { label: 'Hero' }),
-  stencilRecord('promo', { label: 'Promo band', updatable: false }),
+  blueprintRecord('call_to_action', { label: 'Call to action' }),
+  blueprintRecord('hero', { label: 'Hero' }),
+  blueprintRecord('promo', { label: 'Promo band', updatable: false }),
 );
 const OWN = { ...ALL, canOwn: true };
 
 const OWNED = { ...LIBRARY[0], owned_by: 'call_to_action' };
 // An orphan owns by an id the roster no longer holds.
-const ORPHANED = { ...LIBRARY[0], owned_by: 'deleted_stencil' };
+const ORPHANED = { ...LIBRARY[0], owned_by: 'deleted_blueprint' };
 
-test('stencilLabel: the record\'s label, the id when the roster lacks it', () => {
-  assert.equal(stencilLabel('call_to_action', MATERIALS), 'Call to action');
-  assert.equal(stencilLabel('deleted_stencil', MATERIALS), 'deleted_stencil');
+test('blueprintLabel: the record\'s label, the id when the roster lacks it', () => {
+  assert.equal(blueprintLabel('call_to_action', MATERIALS), 'Call to action');
+  assert.equal(blueprintLabel('deleted_blueprint', MATERIALS), 'deleted_blueprint');
 });
 
 test('variantOwnership: the badge face (owner label, orphan flag, unowned null)', () => {
@@ -207,35 +207,35 @@ test('variantOwnership: the badge face (owner label, orphan flag, unowned null)'
     label: null,
     orphaned: true,
   });
-  // No stencils on the roster at all: every owner is an orphan.
+  // No blueprints on the roster at all: every owner is an orphan.
   assert.equal(variantOwnership(OWNED, EMPTY_MATERIALS).orphaned, true);
 });
 
-test('stencilTargets: updatable stencils minus the owner, sorted by label', () => {
-  // File-shipped stencils (updatable false) never target; the owner is out.
-  assert.deepEqual(stencilTargets(OWNED, MATERIALS), [
+test('blueprintTargets: updatable blueprints minus the owner, sorted by label', () => {
+  // File-shipped blueprints (updatable false) never target; the owner is out.
+  assert.deepEqual(blueprintTargets(OWNED, MATERIALS), [
     { id: 'hero', label: 'Hero' },
   ]);
-  // Unowned: every content stencil targets (adopt-later by transfer).
-  assert.deepEqual(stencilTargets(LIBRARY[0], MATERIALS), [
+  // Unowned: every content blueprint targets (adopt-later by transfer).
+  assert.deepEqual(blueprintTargets(LIBRARY[0], MATERIALS), [
     { id: 'call_to_action', label: 'Call to action' },
     { id: 'hero', label: 'Hero' },
   ]);
-  assert.deepEqual(stencilTargets(OWNED, EMPTY_MATERIALS), []);
+  assert.deepEqual(blueprintTargets(OWNED, EMPTY_MATERIALS), []);
 });
 
-test('cardGestures: the ownership gestures ride the stencil grant', () => {
+test('cardGestures: the ownership gestures ride the blueprint grant', () => {
   // Owned + the grant: release and transfer (a target exists).
   assert.equal(cardGestures(OWNED, OWN, WORN, MATERIALS).release, true);
   assert.equal(cardGestures(OWNED, OWN, WORN, MATERIALS).transfer, true);
   // Orphaned: release IS the cleanup gesture; transfer to a living
-  // stencil is legitimate too.
+  // blueprint is legitimate too.
   assert.equal(cardGestures(ORPHANED, OWN, WORN, MATERIALS).release, true);
   assert.equal(cardGestures(ORPHANED, OWN, WORN, MATERIALS).transfer, true);
   // Unowned: nothing to release; transfer doubles as assign (adopt-later).
   assert.equal(cardGestures(LIBRARY[0], OWN, WORN, MATERIALS).release, false);
   assert.equal(cardGestures(LIBRARY[0], OWN, WORN, MATERIALS).transfer, true);
-  // No "save stencils" grant: neither gesture, whatever the variant
+  // No ownership grant: neither gesture, whatever the variant
   // grants say.
   assert.equal(cardGestures(OWNED, ALL, WORN, MATERIALS).release, false);
   assert.equal(cardGestures(OWNED, ALL, WORN, MATERIALS).transfer, false);
@@ -244,8 +244,8 @@ test('cardGestures: the ownership gestures ride the stencil grant', () => {
   const shippedOwned = { ...LIBRARY[1], owned_by: 'call_to_action' };
   assert.equal(cardGestures(shippedOwned, OWN, WORN, MATERIALS).release, false);
   assert.equal(cardGestures(shippedOwned, OWN, WORN, MATERIALS).transfer, false);
-  // Nowhere to go: the owner is the only content stencil.
-  const oneTarget = roster(stencilRecord('call_to_action', { label: 'CTA' }));
+  // Nowhere to go: the owner is the only content blueprint.
+  const oneTarget = roster(blueprintRecord('call_to_action', { label: 'CTA' }));
   assert.equal(cardGestures(OWNED, OWN, WORN, oneTarget).transfer, false);
   assert.equal(cardGestures(LIBRARY[0], OWN, WORN, oneTarget).transfer, true);
 });
@@ -324,7 +324,7 @@ test('applyDoorway: the target may be a rule; its own wearing reads worn', () =>
 
 test('applyDoorway: ownership names its own unfit reasons', () => {
   const owned = { ...LIBRARY[1], owned_by: 'call_to_action' };
-  const orphaned = { ...LIBRARY[1], owned_by: 'deleted_stencil' };
+  const orphaned = { ...LIBRARY[1], owned_by: 'deleted_blueprint' };
   // Off the offer outside the owner's placements: the ownership story.
   assert.equal(applyDoorway(owned, MAP, 'container:root', [], null, MATERIALS), 'unfit-owned');
   assert.equal(applyDoorway(owned, MAP, 'container:root', [], 'hero', MATERIALS), 'unfit-owned');

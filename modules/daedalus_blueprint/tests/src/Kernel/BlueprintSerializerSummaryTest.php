@@ -68,7 +68,7 @@ class BlueprintSerializerSummaryTest extends BlueprintKernelTestBase {
       ],
     ]);
 
-    $result = $this->serializer->serializeSummary($entity);
+    $result = $this->serializer->serializeSummary($this->host($entity));
 
     $this->assertEquals('entity_test', $result['entity_type']);
     $this->assertEquals('entity_test', $result['bundle']);
@@ -127,7 +127,7 @@ class BlueprintSerializerSummaryTest extends BlueprintKernelTestBase {
       'field_ref' => ['target_id' => $referenced->id()],
     ]);
 
-    $result = $this->serializer->serializeSummary($entity);
+    $result = $this->serializer->serializeSummary($this->host($entity));
 
     // Entity reference should be present in summary with label.
     $this->assertArrayHasKey('field_ref', $result['fields']);
@@ -167,27 +167,33 @@ class BlueprintSerializerSummaryTest extends BlueprintKernelTestBase {
     ]);
     $entity->save();
 
-    $result = $this->serializer->serializeSummary($entity);
+    $result = $this->serializer->serializeSummary($this->host($entity));
 
-    $this->assertArrayHasKey('layout_builder__layout', $result);
-    $layout = $result['layout_builder__layout'];
+    $this->assertArrayHasKey('layout', $result);
+    $layout = $result['layout'];
     $this->assertCount(1, $layout);
 
+    // The summary is the same tree pared: the container, its region node,
+    // the block with its identity and words.
     $section_data = $layout[0];
+    $this->assertSame('container', $section_data['kind']);
     $this->assertEquals('layout_onecol', $section_data['layout_id']);
-    $this->assertArrayHasKey('regions', $section_data);
-    $this->assertCount(1, $section_data['regions']['content']);
+    $this->assertArrayNotHasKey('regions', $section_data);
+    $this->assertSame('region', $section_data['children'][0]['kind']);
+    $this->assertSame('content', $section_data['children'][0]['region']);
+    $this->assertCount(1, $section_data['children'][0]['children']);
 
-    $component = $section_data['regions']['content'][0];
+    $component = $section_data['children'][0]['children'][0];
+    $this->assertSame('block', $component['kind']);
     $this->assertEquals('152d9378-ad8f-1c16-1c35-cd161a184ec5', $component['uuid']);
     $this->assertEquals('text_section', $component['block_type']);
     $this->assertEquals('Hero Text', $component['label']);
+    $this->assertTrue($component['label_rendered']);
 
-    // block_fields should NOT be present in summary.
-    $this->assertArrayNotHasKey('block_fields', $component);
-    // view_mode and block_revision_id should NOT be present in summary.
-    $this->assertArrayNotHasKey('view_mode', $component);
-    $this->assertArrayNotHasKey('block_revision_id', $component);
+    // block_fields should NOT be present in summary, nor any residue.
+    foreach (['block_fields', 'configuration', 'view_mode', 'block_revision_id', 'label_display'] as $pared) {
+      $this->assertArrayNotHasKey($pared, $component);
+    }
   }
 
   /**
@@ -215,7 +221,7 @@ class BlueprintSerializerSummaryTest extends BlueprintKernelTestBase {
 
     $entity = $this->entityTypeManager->getStorage('entity_test')->load($entity->id());
 
-    $result = $this->serializer->serializeSummary($entity);
+    $result = $this->serializer->serializeSummary($this->host($entity));
 
     $this->assertArrayHasKey('fields', $result);
     $fields = $result['fields'];
@@ -274,7 +280,7 @@ class BlueprintSerializerSummaryTest extends BlueprintKernelTestBase {
 
     $entity = $this->entityTypeManager->getStorage('entity_test')->load($entity->id());
 
-    $result = $this->serializer->serializeSummary($entity);
+    $result = $this->serializer->serializeSummary($this->host($entity));
 
     $paragraph_summary = $result['fields']['field_paragraphs'][0];
 
@@ -337,7 +343,7 @@ class BlueprintSerializerSummaryTest extends BlueprintKernelTestBase {
 
     $entity = $this->entityTypeManager->getStorage('entity_test')->load($entity->id());
 
-    $result = $this->serializer->serializeSummary($entity);
+    $result = $this->serializer->serializeSummary($this->host($entity));
 
     // Navigate the hierarchy.
     $para = $result['fields']['field_paragraphs'][0];
@@ -408,19 +414,20 @@ class BlueprintSerializerSummaryTest extends BlueprintKernelTestBase {
     ]);
     $entity->save();
 
-    $result = $this->serializer->serializeSummary($entity);
+    $result = $this->serializer->serializeSummary($this->host($entity));
 
-    // The nested section summarizes as a section node with the same shape
-    // as a top-level section, recursively; no block facade.
-    $layout = $result['layout_builder__layout'];
-    $node = $layout[0]['regions']['content'][0];
+    // The nested section summarizes as a container node with the same
+    // shape as a top-level one, recursively; no block facade.
+    $layout = $result['layout'];
+    $node = $layout[0]['children'][0]['children'][0];
+    $this->assertSame('container', $node['kind']);
     $this->assertEquals('layout_onecol', $node['layout_id']);
     $this->assertEquals('98ecbc05-28b3-48c5-895e-86dfa276af6c', $node['uuid']);
     $this->assertEquals('Band', $node['label']);
     $this->assertArrayNotHasKey('block_type', $node);
     $this->assertArrayNotHasKey('block_fields', $node);
 
-    $nested_comp = $node['regions']['content'][0];
+    $nested_comp = $node['children'][0]['children'][0];
     $this->assertEquals('acab1f60-1b5a-4186-a39b-c2215857849e', $nested_comp['uuid']);
     $this->assertEquals('Nested Block', $nested_comp['label']);
     $this->assertArrayNotHasKey('block_fields', $nested_comp);
@@ -435,8 +442,8 @@ class BlueprintSerializerSummaryTest extends BlueprintKernelTestBase {
       'field_subtitle' => 'Sub',
     ]);
 
-    $full = $this->serializer->serialize($entity);
-    $summary = $this->serializer->serializeSummary($entity);
+    $full = $this->serializer->serialize($this->host($entity));
+    $summary = $this->serializer->serializeSummary($this->host($entity));
 
     // Headers should match.
     $this->assertEquals($full['entity_type'], $summary['entity_type']);
@@ -483,9 +490,9 @@ class BlueprintSerializerSummaryTest extends BlueprintKernelTestBase {
     ]);
     $entity->save();
 
-    $result = $this->serializer->serializeSummary($entity);
+    $result = $this->serializer->serializeSummary($this->host($entity));
 
-    $components = $result['layout_builder__layout'][0]['regions']['content'];
+    $components = $result['layout'][0]['children'][0]['children'];
     $this->assertCount(2, $components);
 
     // Index components by UUID for order-independent assertions.
@@ -507,7 +514,7 @@ class BlueprintSerializerSummaryTest extends BlueprintKernelTestBase {
   public function testSummaryEmptyEntity(): void {
     $entity = $this->createTestEntity(['name' => 'Empty']);
 
-    $result = $this->serializer->serializeSummary($entity);
+    $result = $this->serializer->serializeSummary($this->host($entity));
 
     $this->assertEquals('entity_test', $result['entity_type']);
     $this->assertEquals('entity_test', $result['bundle']);
@@ -543,11 +550,15 @@ class BlueprintSerializerSummaryTest extends BlueprintKernelTestBase {
     ]);
     $entity->save();
 
-    $result = $this->serializer->serializeSummary($entity);
+    $result = $this->serializer->serializeSummary($this->host($entity));
 
-    $component = $result['layout_builder__layout'][0]['regions']['content'][0];
+    $component = $result['layout'][0]['children'][0]['children'][0];
     $this->assertEquals('c578c767-7dac-a205-0c91-3fb82af82d46', $component['uuid']);
     $this->assertEquals('system_branding_block', $component['plugin_id']);
+    // A plugin with config schema keeps its words in the summary; its
+    // settings are pared.
+    $this->assertSame('Site branding', $component['label']);
+    $this->assertTrue($component['label_rendered']);
     $this->assertArrayNotHasKey('block_type', $component);
     $this->assertArrayNotHasKey('block_fields', $component);
     $this->assertArrayNotHasKey('configuration', $component);
@@ -578,7 +589,7 @@ class BlueprintSerializerSummaryTest extends BlueprintKernelTestBase {
 
     $entity = $this->entityTypeManager->getStorage('entity_test')->load($entity->id());
 
-    $result = $this->serializer->serializeSummary($entity);
+    $result = $this->serializer->serializeSummary($this->host($entity));
 
     $paragraph_summary = $result['fields']['field_paragraphs'][0];
     $this->assertArrayNotHasKey('children', $paragraph_summary);

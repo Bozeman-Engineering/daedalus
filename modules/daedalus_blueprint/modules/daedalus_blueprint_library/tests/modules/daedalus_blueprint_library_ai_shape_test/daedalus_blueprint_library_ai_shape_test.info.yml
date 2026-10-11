@@ -1,0 +1,8 @@
+name: Daedalus Blueprint Library AI Shape Test
+type: module
+description: 'Ships a blueprint fixture whose ai key spells the default (ai: true) for daedalus_blueprint_library kernel tests.'
+package: Testing
+core_version_requirement: ^10.3 || ^11
+hidden: true
+dependencies:
+  - daedalus:daedalus_blueprint_library

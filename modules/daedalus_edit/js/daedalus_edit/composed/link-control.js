@@ -525,6 +525,7 @@ export function create({ fieldName, applyLink, returnFocus }) {
     label: Drupal.t('Link'),
     icon: LINK_ICON,
     kinds: ['block'],
+    capability: 'content',
     editScoped: true,
     tab: true,
     weight: 10,

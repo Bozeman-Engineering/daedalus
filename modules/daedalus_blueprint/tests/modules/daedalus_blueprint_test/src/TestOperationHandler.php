@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace Drupal\daedalus_blueprint_test;
 
-use Drupal\Core\Entity\FieldableEntityInterface;
+use Drupal\daedalus_blueprint\Capability\Capability;
+use Drupal\daedalus_blueprint\Capability\Requirement;
+use Drupal\daedalus_blueprint\Host\HostInterface;
 use Drupal\daedalus_blueprint\OperationHandler\OperationHandlerInterface;
 use Drupal\daedalus_blueprint\Result\BlueprintError;
 use Drupal\daedalus_blueprint\Result\BlueprintResult;
@@ -27,8 +29,17 @@ class TestOperationHandler implements OperationHandlerInterface {
 
   /**
    * {@inheritdoc}
+   *
+   * The name is a field of the host: content at the root.
    */
-  public function apply(FieldableEntityInterface $entity, array $operation, array $options = []): BlueprintResult {
+  public function getRequirements(): array {
+    return ['test_set_name' => [Requirement::root(Capability::Content, 'properties')]];
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function apply(HostInterface $host, array $operation, array $options = []): BlueprintResult {
     $name = $operation['properties']['name'] ?? NULL;
 
     if (!is_string($name) || $name === '') {
@@ -51,10 +62,10 @@ class TestOperationHandler implements OperationHandlerInterface {
       ]);
     }
 
-    $entity->set('name', $name);
+    $host->fields()->set('name', $name);
 
-    return BlueprintResult::success($entity)
-      ->withTargetsFrom($entity->uuid(), ['name']);
+    return BlueprintResult::success($host)
+      ->withTargetsFrom($host->uuid(), ['name']);
   }
 
   /**

@@ -1,6 +1,0 @@
-label: 'Dangling icon file'
-description: 'Names an icon file the module does not ship.'
-icon: assets/missing.svg
-element:
-  kind: block
-  block_type: text

@@ -16,7 +16,7 @@ use Drupal\Core\Logger\LoggerChannelFactoryInterface;
  * and its `::>` children entries) have no element left, so every store
  * re-keys them onto the root: host style maps (the sweep), daedalus_variant
  * styles (all revisions, composition slot paths included), daedalus_skin
- * defaults, and stored stencils. When the root already carries an entry,
+ * defaults. When the root already carries an entry,
  * the two merge per condition with the ROOT's properties winning (the two
  * boxes are one now; a genuine property collision is reported loudly) and
  * variant reference lists concatenating.
@@ -74,8 +74,7 @@ class ContainerPartHoist {
    * styles join the box the root already styles, and where both spoke the
    * same property the root's word was the outer box's fact, kept and
    * reported loudly (any choice is lossy once two boxes are one). Variant
-   * reference lists concatenate, deduplicating by variant name; bare-name
-   * lists (stencils) concatenate the same way.
+   * reference lists concatenate, deduplicating by variant name.
    *
    * @param array $root
    *   The root's existing entry.
@@ -191,7 +190,7 @@ class ContainerPartHoist {
   }
 
   /**
-   * Hoists one element-relative styles array (variant/skin/stencil shape).
+   * Hoists one element-relative styles array (variant/skin shape).
    *
    * @param array $styles
    *   Styles keyed by element-relative key ('' the element itself).
@@ -285,24 +284,33 @@ class ContainerPartHoist {
     $ids = $storage->getQuery()->accessCheck(FALSE)->execute();
     foreach ($storage->loadMultiple($ids) as $skin) {
       /** @var \Drupal\daedalus_stylish\DaedalusStylishSkinInterface $skin */
-      if ($skin->isShipped() && !$skin->isModified()) {
-        continue;
-      }
+      // A shipped unmodified package layer is left to the sync lane; the
+      // site layer over it is the site's and is hoisted either way.
+      $package_swept = !($skin->isShipped() && !$skin->isModified());
       $revision_ids = array_keys($storage->getQuery()->allRevisions()->accessCheck(FALSE)->condition('id', $skin->id())->execute());
       foreach ($revision_ids as $revision_id) {
         /** @var \Drupal\daedalus_stylish\DaedalusStylishSkinInterface $revision */
         $revision = $storage->loadRevision($revision_id);
         $changed = FALSE;
         $context = sprintf('Skin "%s" (revision %s)', $skin->getMachineName(), $revision_id);
-        $defaults = $revision->getDefaults();
-        foreach ($defaults as $scope => $relatives) {
-          if (!is_array($relatives)) {
-            continue;
+        $layers = ['site' => [$revision->siteDefaults(), $revision->setSiteDefaults(...)]];
+        if ($package_swept) {
+          $layers['package'] = [$revision->packageDefaults(), $revision->setPackageDefaults(...)];
+        }
+        foreach ($layers as $layer => [$defaults, $write]) {
+          $layer_changed = FALSE;
+          foreach ($defaults as $scope => $relatives) {
+            if (!is_array($relatives)) {
+              continue;
+            }
+            $defaults[$scope] = $this->hoistRelativeStyles($relatives, "$context $layer defaults $scope", $lines, $layer_changed);
           }
-          $defaults[$scope] = $this->hoistRelativeStyles($relatives, "$context defaults $scope", $lines, $changed);
+          if ($layer_changed) {
+            $write($defaults);
+            $changed = TRUE;
+          }
         }
         if ($changed) {
-          $revision->setDefaults($defaults);
           $revision->setNewRevision(FALSE);
           $revision->save();
         }
@@ -311,55 +319,6 @@ class ContainerPartHoist {
     return $lines;
   }
 
-  /**
-   * Hoists every stored stencil's part-keyed styles, at every depth.
-   *
-   * File-shipped stencils are module code and cannot be rewritten here;
-   * one still carrying the part key fails loudly at instantiate time with
-   * the one-box correctives.
-   *
-   * @return string[]
-   *   Report lines.
-   */
-  public function hoistStencils(): array {
-    $lines = [];
-    if (!$this->entityTypeManager->hasDefinition('stencil')) {
-      return $lines;
-    }
-    $storage = $this->entityTypeManager->getStorage('stencil');
-    $ids = $storage->getQuery()->accessCheck(FALSE)->execute();
-    foreach ($storage->loadMultiple($ids) as $stencil) {
-      /** @var \Drupal\daedalus_blueprint_stencil\StencilInterface $stencil */
-      $changed = FALSE;
-      $element = $this->hoistStencilNode($stencil->getElement(), sprintf('Stencil "%s"', $stencil->getMachineName()), $lines, $changed);
-      if ($changed) {
-        $stencil->setElement($element);
-        $stencil->save();
-      }
-    }
-    return $lines;
-  }
 
-  /**
-   * Recursively hoists one stencil node's styles.
-   */
-  protected function hoistStencilNode(array $node, string $context, array &$lines, bool &$changed): array {
-    if (!empty($node['regions']) && is_array($node['regions'])) {
-      foreach ($node['regions'] as $region => $children) {
-        if (!is_array($children)) {
-          continue;
-        }
-        foreach ($children as $i => $child) {
-          if (is_array($child)) {
-            $node['regions'][$region][$i] = $this->hoistStencilNode($child, $context, $lines, $changed);
-          }
-        }
-      }
-    }
-    if (!empty($node['styles']) && is_array($node['styles'])) {
-      $node['styles'] = $this->hoistRelativeStyles($node['styles'], "$context styles", $lines, $changed);
-    }
-    return $node;
-  }
 
 }

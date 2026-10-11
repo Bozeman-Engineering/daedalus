@@ -94,6 +94,12 @@ const app = {
     registerSource: (type, spec) => sources.set(type, spec),
     builders: { newBlock: (target, options) => [{ target, options }] },
   },
+  // The one client gate, as the face asks it: content of the landing
+  // element's key. The stub refuses one key.
+  Selection: {
+    capable: (key, capability) =>
+      typeof key === 'string' && capability === 'content' && key !== 'block:refused',
+  },
 };
 window.DaedalusUiQueue.forEach((callback) => callback(app));
 
@@ -120,8 +126,15 @@ test('registration: ONE media_file source carries both faces', () => {
   assert.equal(typeof spec.elements.operations, 'function');
 });
 
+// A media element inside a selectable element: closest() answers the
+// element's key, as the canvas does.
+const mediaIn = (key, dataset = { acceptedFiles: '.JPG,.jpeg,png' }) => ({
+  dataset,
+  closest: (selector) => (selector === '[data-selectable]' ? { getAttribute: () => key } : null),
+});
+
 test('element face accepts: extension compatibility against the media constraint', () => {
-  const media = { dataset: { acceptedFiles: '.JPG,.jpeg,png' } };
+  const media = mediaIn('block:allowed');
   // Match is case-insensitive and dot-normalized on both sides.
   assert.equal(spec.elements.accepts(media, { fileExtensions: ['.png'] }), true);
   assert.equal(spec.elements.accepts(media, { fileExtensions: ['jpg'] }), true);
@@ -129,7 +142,17 @@ test('element face accepts: extension compatibility against the media constraint
   // A side without a declared constraint is compatible — the server
   // validates for real on upload.
   assert.equal(spec.elements.accepts(media, { fileExtensions: null }), true);
-  assert.equal(spec.elements.accepts({ dataset: {} }, { fileExtensions: ['.gif'] }), true);
+  assert.equal(spec.elements.accepts(mediaIn('block:allowed', {}), { fileExtensions: ['.gif'] }), true);
+});
+
+test('element face accepts: the one gate, content of the landing element', () => {
+  // A compatible file still lands nowhere the actor may not write: the
+  // face asks capable(key, "content") of the element the media belongs to.
+  assert.equal(spec.elements.accepts(mediaIn('block:refused'), { fileExtensions: ['.png'] }), false);
+  assert.equal(spec.elements.accepts(mediaIn('block:allowed'), { fileExtensions: ['.png'] }), true);
+  // Media outside any selectable element has no verdict: refused.
+  const stray = { dataset: { acceptedFiles: 'png' }, closest: () => null };
+  assert.equal(spec.elements.accepts(stray, { fileExtensions: ['.png'] }), false);
 });
 
 test('gap face operations: a drop that carried no file aborts', async () => {

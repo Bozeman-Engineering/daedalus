@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace Drupal\daedalus_stylish_layouts;
 
-use Drupal\Core\Entity\ContentEntityInterface;
+use Drupal\daedalus_blueprint\Host\HostInterface;
 use Drupal\Core\Entity\EntityFieldManagerInterface;
+use Drupal\Core\Entity\FieldableEntityInterface;
+use Drupal\layout_builder\Entity\LayoutEntityDisplayInterface;
 use Drupal\layout_builder\Section;
 use Drupal\daedalus_layout\Plugin\Block\SectionBlock;
 use Drupal\daedalus_stylish\StyleMapSweepBase;
@@ -21,8 +23,8 @@ use Drupal\daedalus_stylish\StyleMapSweepBase;
  * flex-grow overrides. The share half needs each container's children in
  * ORDER, which only the section tree knows - that is why this is its own
  * transform rather than more ContainerGrammarSweep: it reads the host's
- * layout fields and indexes every container section's ordered child
- * element keys first.
+ * layout store (a content host's layout fields, a display host's template)
+ * and indexes every container section's ordered child element keys first.
  *
  * Registered permanently (the LayoutBlockToSectionTransform posture): the
  * split ratios are frozen constants, so stale tempstore sessions carrying
@@ -39,32 +41,55 @@ class RowArrangementSweep extends StyleMapSweepBase {
   /**
    * {@inheritdoc}
    */
-  protected function sweep(array $map, ContentEntityInterface $host, string $context, array &$lines): ?array {
+  protected function sweep(array $map, HostInterface $host, string $context, array &$lines): ?array {
     return $this->migration->migrateArrangement($map, $this->childrenIndex($host), $context, $lines);
   }
 
   /**
    * Indexes every container section's ordered child element keys.
    *
+   * The store is read raw, never through the host's document door: a
+   * content host's sectionStorage() seeds an empty override from the
+   * template, and a migration walk must never instantiate documents.
+   *
    * @return array<string, string[]>
    *   container:{uuid} / block:{uuid} child keys in flow order, keyed by
    *   container section uuid. A container whose children cannot all be
    *   identified is left out (positions must never shift).
    */
-  protected function childrenIndex(ContentEntityInterface $host): array {
+  protected function childrenIndex(HostInterface $host): array {
     $index = [];
+    foreach ($this->rawSections($host) as $section) {
+      $this->indexSection($section, $index);
+    }
+    return $index;
+  }
+
+  /**
+   * The sections a host's store holds, read raw.
+   *
+   * @return \Drupal\layout_builder\Section[]
+   *   The root sections of every layout store the host carries.
+   */
+  protected function rawSections(HostInterface $host): array {
+    $entity = $host->entity();
+    if ($entity instanceof LayoutEntityDisplayInterface) {
+      return $entity->isLayoutBuilderEnabled() ? $entity->getSections() : [];
+    }
+    if (!$entity instanceof FieldableEntityInterface) {
+      return [];
+    }
+    $sections = [];
     $field_map = $this->entityFieldManager->getFieldMapByFieldType('layout_section');
-    foreach (array_keys($field_map[$host->getEntityTypeId()] ?? []) as $field_name) {
-      if (!$host->hasField($field_name) || $host->get($field_name)->isEmpty()) {
+    foreach (array_keys($field_map[$entity->getEntityTypeId()] ?? []) as $field_name) {
+      if (!$entity->hasField($field_name) || $entity->get($field_name)->isEmpty()) {
         continue;
       }
       /** @var \Drupal\layout_builder\Field\LayoutSectionItemList $field */
-      $field = $host->get($field_name);
-      foreach ($field->getSections() as $section) {
-        $this->indexSection($section, $index);
-      }
+      $field = $entity->get($field_name);
+      array_push($sections, ...array_values($field->getSections()));
     }
-    return $index;
+    return $sections;
   }
 
   /**

@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Drupal\daedalus_blueprint\Event;
 
-use Drupal\Core\Entity\FieldableEntityInterface;
+use Drupal\daedalus_blueprint\Host\HostInterface;
 use Drupal\layout_builder\Section;
 
 /**
@@ -31,8 +31,8 @@ class SectionCreatedEvent extends LifecycleEventBase {
   /**
    * Constructs a SectionCreatedEvent.
    *
-   * @param \Drupal\Core\Entity\FieldableEntityInterface $entity
-   *   The root entity the operation ran against.
+   * @param \Drupal\daedalus_blueprint\Host\HostInterface $host
+   *   The host the operation ran against.
    * @param \Drupal\layout_builder\Section $section
    *   The inserted section.
    * @param string|null $sectionUuid
@@ -42,12 +42,12 @@ class SectionCreatedEvent extends LifecycleEventBase {
    *   see LifecycleEventBase::dressed().
    */
   public function __construct(
-    FieldableEntityInterface $entity,
+    HostInterface $host,
     protected Section $section,
     protected ?string $sectionUuid = NULL,
     bool $dressed = FALSE,
   ) {
-    parent::__construct($entity, $dressed);
+    parent::__construct($host, $dressed);
   }
 
   /**

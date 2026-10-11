@@ -5,4 +5,5 @@ package: Daedalus
 core_version_requirement: '>=11.3 <11.5'
 dependencies:
   - daedalus:daedalus
+  - daedalus:daedalus_blueprint
   - drupal:layout_builder

@@ -50,7 +50,7 @@ class BlueprintOperationsReadTest extends BlueprintKernelTestBase {
       'field_subtitle' => 'A subtitle',
     ]);
 
-    $result = $this->operations->getBlueprint($entity);
+    $result = $this->operations->getBlueprint($this->host($entity));
 
     $this->assertEquals('entity_test', $result['entity_type']);
     $this->assertEquals('entity_test', $result['bundle']);
@@ -72,7 +72,7 @@ class BlueprintOperationsReadTest extends BlueprintKernelTestBase {
       ],
     ]);
 
-    $result = $this->operations->getBlueprintSummary($entity);
+    $result = $this->operations->getBlueprintSummary($this->host($entity));
 
     $this->assertEquals('entity_test', $result['entity_type']);
     $this->assertArrayHasKey('fields', $result);
@@ -87,7 +87,7 @@ class BlueprintOperationsReadTest extends BlueprintKernelTestBase {
   public function testGetComponentReturnsNull(): void {
     $entity = $this->createTestEntity(['name' => 'Test']);
 
-    $result = $this->operations->getElement($entity, 'c68c9561-d36d-b4fc-77ac-50039f354800');
+    $result = $this->operations->getElement($this->host($entity), 'c68c9561-d36d-b4fc-77ac-50039f354800');
 
     $this->assertNull($result);
   }
@@ -122,7 +122,7 @@ class BlueprintOperationsReadTest extends BlueprintKernelTestBase {
     ]);
     $entity->save();
 
-    $result = $this->operations->getElement($entity, 'faf95c53-35e7-74e1-184e-041152031df4');
+    $result = $this->operations->getElement($this->host($entity), 'faf95c53-35e7-74e1-184e-041152031df4');
 
     $this->assertNotNull($result);
     $this->assertEquals('faf95c53-35e7-74e1-184e-041152031df4', $result['uuid']);

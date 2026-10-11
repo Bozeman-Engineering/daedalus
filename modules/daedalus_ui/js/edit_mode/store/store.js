@@ -7,6 +7,9 @@ import blueprintReducer from './slices/blueprint-slice';
 import dragReducer from './slices/drag-slice';
 import viewReducer from './slices/view-slice';
 import materialsReducer from './slices/materials-slice';
+import { selectionGate } from './selection-gate';
+import { projectionIndex } from '../components/page-elements/projection-index';
+import { selectableIn } from '../selection/capable-model';
 
 const store = configureStore({
   reducer: {
@@ -19,6 +22,18 @@ const store = configureStore({
     view: viewReducer,
     materials: materialsReducer,
   },
+  // The selection gate (selection-gate.js): a selection action naming a
+  // key the actor can do nothing to drops that key, whoever dispatched
+  // it. The index module imports this store (a cycle, resolved by live
+  // bindings), so the gate receives thunks and dereferences the index
+  // reader at dispatch time, never while the modules are still loading.
+  middleware: (getDefaultMiddleware) =>
+    getDefaultMiddleware().concat(
+      selectionGate(
+        () => projectionIndex(),
+        (index, key) => selectableIn(index, key),
+      ),
+    ),
   devTools: process.env.DEV_MODE, // Enable DevTools only in dev mode
 });
 

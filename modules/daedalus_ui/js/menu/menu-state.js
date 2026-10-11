@@ -36,6 +36,14 @@
  *   lets the host derive one from the label. No dialog dependency.
  * - run: function, required unless disabled; perform the action. Opaque
  *   to the menu, exactly as verb run() is opaque to the verb registry.
+ * - preview: optional function(active). Called with true when the item
+ *   becomes the active item and false when it stops being it: another
+ *   item takes over (pointer enter or a keyboard move, one fact), or the
+ *   menu closes, which happens BEFORE the picked item runs, so a pick
+ *   reads preview(false) then run(). The first item previews on open,
+ *   the keyboard's focus already being there. Opaque like run: an
+ *   opener paints what the item would do (the stylish address chip
+ *   paints the hovered rule's reach on the canvas) and takes it down.
  * - {separator: true}: a rule between groups. Never focusable; never
  *   leads, trails, or doubles (open() trims them).
  *
@@ -111,7 +119,17 @@ const normalizeItem = (item, index) => {
     // one from the label (Drupal.t lives host-side, keeping this pure).
     confirmLabel: typeof item.confirm === 'string' ? item.confirm : null,
     run: item.run ?? null,
+    preview: typeof item.preview === 'function' ? item.preview : null,
   };
+};
+
+/**
+ * Tells one item it became (or stopped being) the active item. The
+ * state is already settled and notified when this runs, so a preview
+ * that reads getState() sees the item it is told about.
+ */
+const previewAt = (items, index, active) => {
+  items[index]?.preview?.(active);
 };
 
 /**
@@ -182,6 +200,7 @@ export const open = ({
     armedIndex: null,
   };
   notify();
+  previewAt(normalized, 0, true);
   return true;
 };
 
@@ -192,9 +211,10 @@ export const close = () => {
   if (!state) {
     return;
   }
-  const { onClose } = state;
+  const { onClose, items, activeIndex } = state;
   state = null;
   notify();
+  previewAt(items, activeIndex, false);
   onClose?.();
 };
 
@@ -212,8 +232,11 @@ export const setActive = (index) => {
   ) {
     return;
   }
+  const previous = state.activeIndex;
   state = { ...state, activeIndex: index };
   notify();
+  previewAt(state.items, previous, false);
+  previewAt(state.items, index, true);
 };
 
 /**
@@ -264,8 +287,12 @@ export const activate = (index) => {
   if (!item || item.separator || item.disabled) {
     return 'noop';
   }
+  // A click lands on the item it names whether or not a pointer enter
+  // made it active first (a synthetic click never did): the active item
+  // moves there, previews and all, before anything else happens.
+  setActive(index);
   if (item.confirm && state.armedIndex !== index) {
-    state = { ...state, activeIndex: index, armedIndex: index };
+    state = { ...state, armedIndex: index };
     notify();
     return 'armed';
   }

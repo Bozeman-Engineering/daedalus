@@ -1,6 +1,0 @@
-label: 'Bad icon shape'
-description: 'Ships a traversal icon path, violating the icon grammar.'
-icon: ../outside.svg
-element:
-  kind: block
-  block_type: text

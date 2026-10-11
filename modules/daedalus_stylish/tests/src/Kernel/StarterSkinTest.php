@@ -104,8 +104,15 @@ class StarterSkinTest extends KernelTestBase {
     $this->installEntitySchema('daedalus_variant');
     $this->installEntitySchema('daedalus_swatch');
     $this->installEntitySchema('daedalus_animation');
+    $this->installEntitySchema('daedalus_font');
     $this->installEntitySchema('daedalus_skin');
-    $this->installSchema('daedalus_stylish', ['daedalus_variant_usage', 'daedalus_swatch_usage', 'daedalus_animation_usage']);
+    $this->installSchema('daedalus_stylish', [
+      'daedalus_variant_usage',
+      'daedalus_swatch_usage',
+      'daedalus_animation_usage',
+      'daedalus_token_usage',
+      'daedalus_font_usage',
+    ]);
     $this->installConfig(['daedalus_stylish', 'daedalus_blueprint']);
     // The importers switch to an administrative account (shipped
     // definitions are code, not user input); give the switcher one.
@@ -167,12 +174,12 @@ class StarterSkinTest extends KernelTestBase {
   public function testBoundPropertiesResolveToMintedScales(): void {
     $skin = $this->container->get('daedalus_stylish.skin_manager')->loadActiveSkin();
     $this->assertNotNull($skin);
-    $tokens = $skin->getTokens();
+    $tokens = $skin->tokens();
     foreach ($this->styleGuide->getTokenScales(self::THEME) as $scale => $declaration) {
       $this->assertNotEmpty($tokens[$scale] ?? [], "the starter mints the declared $scale scale");
     }
     foreach (['bg', 'surface', 'text', 'border', 'accent'] as $role) {
-      $this->assertSame(['default', 'dark'], array_keys($tokens['color'][$role]), "the $role color role carries its dark pair");
+      $this->assertSame(['default', 'dark'], array_keys($tokens['color'][$role]['value']), "the $role color role carries its dark pair");
     }
     $this->assertSame(['sans-serif', 'serif', 'mono'], array_keys($tokens['font']));
     $this->assertSame(['caption', 'body', 'lead', 'title', 'headline', 'display'], array_keys($tokens['text']));
@@ -211,8 +218,8 @@ class StarterSkinTest extends KernelTestBase {
 
     $skin = $this->container->get('daedalus_stylish.skin_manager')->loadActiveSkin();
     $this->assertNotNull($skin);
-    $tokens = $skin->getTokens();
-    $defaults = $skin->getDefaults();
+    $tokens = $skin->tokens();
+    $defaults = $skin->defaults();
     foreach (['base:h1', 'base:h2', 'base:h3', 'base:h4', 'base:h5', 'base:h6', 'base:p', 'base:li', 'base:a', 'base:blockquote', 'base:code'] as $scope) {
       $this->assertArrayHasKey($scope, $defaults, "the starter carries a $scope default");
     }

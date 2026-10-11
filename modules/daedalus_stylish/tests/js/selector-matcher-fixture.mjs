@@ -1,6 +1,6 @@
 /**
  * The lean node tree the selector matcher specs read: the shape the
- * delivered blueprint's `_tree` carries (NodeTreeBuilder's kinds with
+ * delivered blueprint's `layout` carries (NodeTreeBuilder's kinds with
  * daedalus_ui's `_element` annotations), built by hand so the facts are
  * legible. SelectorMatcherTest (PHP) carries the same tree; the parity
  * lock pipes the PHP copy through selector-matcher-cases.mjs, this copy
@@ -33,7 +33,7 @@ export const TREE = [
     layout_id: 'daedalus_stylish_container',
     label: 'Hero',
     // The annotator's minted words ride the node beside its markup.
-    _element: { name: 'Hero', type: 'Section', ...markup('section') },
+    _element: { name: 'Hero', type: 'Section', icon: '/icons/section.svg', ...markup('section') },
     children: [
       { kind: 'block', uuid: 't1', block_type: 'text', label: 'Intro', _element: { name: 'Intro', type: 'Text', ...markup('p', ['a', 'strong']) } },
       { kind: 'block', uuid: 't2', block_type: 'text', _element: markup('h2') },

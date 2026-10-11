@@ -7,9 +7,18 @@
  * no projection row (a wrapper absorbed by a merged presentation, a shared
  * media entity's inner fields, a single-region section's region) can never
  * become the selection: selecting something the UI cannot name, label, or
- * traverse from leads nowhere. Before the mirror boots the filter is inert
- * for BOUNDARY and LEAF (their fallback is the raw chain); the editing gate
- * fails closed instead (see keyForEditableItem).
+ * traverse from leads nowhere. Within the universe, only a SELECTABLE key
+ * (capable-model.js selectableIn: the published verdict allows anything)
+ * is a stop: an element the actor can do nothing to (a template's
+ * elements on a page that renders but does not own them, a frozen
+ * translation's structure) is skipped the way an absorbed wrapper is, so
+ * a click resolves to the outermost selectable key in its chain, and a
+ * field block presenting one of the page's own fields resolves to the
+ * row that presents that field (the placement, merged into the field,
+ * which carries the field's content verdict and nothing else). Before
+ * the mirror boots the filter is inert for BOUNDARY and LEAF (their
+ * fallback is the raw chain); the editing gate fails closed instead (see
+ * keyForEditableItem).
  *
  * THE EDITING UNIVERSE IS THE PROJECTION PLUS THE MIRROR'S SUBJECTS.
  * Attribution is host-blind by design: a layout block hosted in a theme
@@ -67,6 +76,7 @@
 import store from '../store/store';
 import { projectionIndex } from '../components/page-elements/projection-index';
 import { isSubjectField } from '../blueprint/subject-field';
+import { selectableIn } from './capable-model';
 
 export const POLICY = {
   BOUNDARY: 'boundary',
@@ -208,26 +218,29 @@ const rootKeyForEditTarget = (key) => {
  * THE GATE: the key is null unless the key it would COMMIT passes one of
  * two doors, both read off the mirror: the projection index (the key
  * presents as a row) or the subject-field rule (the key names a known
- * field of a known subject, isSubjectField). This is the one seam every
+ * field of a known subject, isSubjectField), and is SELECTABLE through
+ * it (capable-model.js selectableIn: a row by its own verdict, a
+ * row-less subject field by its subject's, the root row for a root field
+ * and the placement for a block field). This is the one seam every
  * editing door passes through (the editor door's editItem and its Tab
  * traversal), so it is where the editing universe is enforced. The test is on the committed key, never
  * the raw wrapper key: inside a merged root the inner wrappers are absent
  * from the projection BY DESIGN (the root absorbed them), and so is the
  * root's label field; testing raw keys would drop every merged block and
  * the page title. Testing the promoted key keeps those editable while a
- * foreign host (a theme-region layout block's inner components, attributed
- * but outside this root's blueprint) drops out of both doors. The second
+ * foreign host (a linked blueprint's inner components, attributed but
+ * outside this root's blueprint) drops out of both doors. The second
  * door is rendered evidence beating display inference: a field the tree
- * folds (a non-preserved root field on a Layout Builder display that a
- * theme prints anyway, a display-hidden block field a template renders)
- * has no row, but a leaf carrying its key is proof it rendered, and the
- * mirror vouches the field is the subject's. A field block placement
- * takes the first door instead: it presents MERGED into the field it
- * renders (data-presentation on the placement), so the leaf promotes to
- * the placement key and edits in place under one row. When one field
- * renders twice (preserved on the display AND placed as a field block),
- * both leaves pass and each commits its own key; elementForKey answers
- * with the first element in document order, the accepted resolution.
+ * folds (a root field on a Layout Builder display that a theme prints
+ * anyway, a display-hidden block field a template renders) has no row, but
+ * a leaf carrying its key is proof it rendered, and the mirror vouches the
+ * field is the subject's. A field block placement takes the first door
+ * instead: it presents MERGED into the field it renders (data-presentation
+ * on the placement), so the leaf promotes to the placement key and edits
+ * in place under one row. When one field renders twice (core's own display
+ * rendering it beside a field block placing it), both leaves pass and each
+ * commits its own key; elementForKey answers with the first element in
+ * document order, the accepted resolution.
  * Fails CLOSED before the mirror boots: the mirror boots synchronously
  * from drupalSettings on the first behavior attach, before any handler is
  * armed, so a null mirror only ever means "no editing universe on this
@@ -251,11 +264,18 @@ export const keyForEditableItem = (item) => {
     key = root.getAttribute('data-selectable') || key;
   }
   key = rootKeyForEditTarget(key);
-  if (projectionIndex()?.has(key)) {
-    return key;
+  const index = projectionIndex();
+  if (index?.has(key)) {
+    return selectableIn(index, key) ? key : null;
   }
+  // A row-less field answers its subject's verdict at the gate
+  // (capable-model.js subjectKeyOf), the same inheritance the index
+  // applies to the field rows it does place.
   const mirror = store.getState().blueprint;
-  return isSubjectField(mirror.blueprint, mirror.root, key) ? key : null;
+  return isSubjectField(mirror.blueprint, mirror.root, key) &&
+    selectableIn(index, key)
+    ? key
+    : null;
 };
 
 /**
@@ -306,15 +326,17 @@ export const chainKeys = (target) => {
 };
 
 /**
- * Collects the presented selectable keys above (and including) a target:
- * the raw chain, each key promoted to the row that presents it
+ * Collects the presented, selectable keys above (and including) a
+ * target: the raw chain, each key promoted to the row that presents it
  * (rootKeyForEditTarget: the root's label leaf presents AS the root row),
- * then filtered to the projection universe. Every pointer policy picks
- * its stop from THIS list, so a key the panel cannot show never becomes
- * the selection, and the promotion runs BEFORE the filter for the same
- * reason keyForEditableItem promotes first: the absorbed label leaf has
- * no row of its own, but the row it presents under does. Unfiltered
- * before the mirror boots.
+ * then filtered to the projection universe and to what the actor may
+ * act on (selectableIn: a presented row whose verdict refuses everything
+ * is no stop either). Every pointer policy picks its stop from THIS
+ * list, so a key the panel cannot show, or the actor cannot touch, never
+ * becomes the selection, and the promotion runs BEFORE the filter for
+ * the same reason keyForEditableItem promotes first: the absorbed label
+ * leaf has no row of its own, but the row it presents under does.
+ * Unfiltered before the mirror boots.
  *
  * @return {string[]}
  *   Presented selectable keys, innermost first.
@@ -322,7 +344,13 @@ export const chainKeys = (target) => {
 export const representedChainKeys = (target) => {
   const index = projectionIndex();
   const keys = chainKeys(target).map(rootKeyForEditTarget);
-  return index ? keys.filter((key) => index.has(key)) : keys;
+  // Represented (the projection places a row for the key) AND selectable
+  // (its verdict allows something): a row-less field the gate answers
+  // through its subject is still no pointer stop of its own (the leaf
+  // promotes to the row that presents it, or the subject's own row).
+  return index
+    ? keys.filter((key) => index.has(key) && selectableIn(index, key))
+    : keys;
 };
 
 /**

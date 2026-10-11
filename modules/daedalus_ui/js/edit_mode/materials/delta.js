@@ -25,7 +25,7 @@ import { MATERIAL_KINDS } from './roster.js';
 
 /**
  * A fresh per-kind record set: {token: [], swatch: [], variant: [],
- * stencil: [], animation: []}.
+ * blueprint: [], animation: []}.
  */
 export const emptyRecords = () =>
   Object.fromEntries(MATERIAL_KINDS.map((kind) => [kind, []]));

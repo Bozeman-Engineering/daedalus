@@ -1,11 +1,12 @@
 import store from '../store/store';
 import {
   setHover,
-  setSelected,
   setSelectedSet,
   setTarget,
+  setAddress,
   clearSelection,
 } from '../store/slices/selection-slice';
+import { selectKey, selectKeys } from '../selection/select-door';
 import { blueprintReplaced } from '../store/slices/blueprint-slice';
 import { elementForKey } from '../selection/resolver';
 import { canonicalSelector } from '../materials/relative-selector';
@@ -146,6 +147,15 @@ const swapMarkup = (markup) => {
   // removed component). Stale keys must not linger in the store: prune the
   // set to the surviving members; the primary follows (or hands off to the
   // most recent survivor) and an emptied set clears.
+  //
+  // The ONE selection write that bypasses the selection door
+  // (selection/select-door.js), on purpose: this is the slice's repair of
+  // a selection whose element is gone, not a gesture that leaves an edit.
+  // If the removed element was the edited one, that edit's end belongs
+  // to the engine's mutationApplied (a cancel, never a commit: the
+  // element the commit would write to no longer exists), which runs at
+  // the end of applyResponse, after this prune. Going through the door
+  // here would commit the edit a microtask before the engine cancels it.
   const { hoverKey, selectedKey, selectedKeys } = store.getState().selection;
   const surviving = selectedKeys.filter((key) => elementForKey(key));
   if (surviving.length !== selectedKeys.length) {
@@ -157,18 +167,22 @@ const swapMarkup = (markup) => {
   } else if (hoverKey && !elementForKey(hoverKey)) {
     store.dispatch(setHover(null));
   }
-  // The styling target is revalidated the same way (a selection write
-  // above already cleared it): a target whose key no longer has an
-  // element (an ancestor rule's container removed under the selection)
-  // or whose selector the grammar no longer reads points at nothing and
-  // clears, so no surface keeps painting or writing at a vanished
-  // address.
-  const { target } = store.getState().selection;
-  if (
-    target &&
-    (!elementForKey(target.key) || canonicalSelector(target.selector) === null)
-  ) {
+  // The two styling facts are revalidated the same way (a selection
+  // write above already cleared both): a pair whose key no longer has an
+  // element or whose selector the grammar no longer reads points at
+  // nothing and clears, so no surface keeps painting or writing at a
+  // vanished address. The facet's key is the selected key, which the
+  // prune just kept; the address's key may be an ancestor the swap
+  // removed (a container deleted around the selection). The facet goes
+  // first, since dropping it drops the address with it.
+  const vanished = (pair) =>
+    pair &&
+    (!elementForKey(pair.key) || canonicalSelector(pair.selector) === null);
+  if (vanished(store.getState().selection.target)) {
     store.dispatch(setTarget(null));
+  }
+  if (vanished(store.getState().selection.address)) {
+    store.dispatch(setAddress(null));
   }
 };
 
@@ -179,7 +193,14 @@ const swapMarkup = (markup) => {
  * container); values whose element never landed drop out, so a structural
  * blind spot skips selection instead of pointing at nothing. A landing is
  * a plain selection: no request opens an editor (editing is the user's
- * next, explicit gesture through edit-session.js openEditor).
+ * next, explicit gesture through edit-session.js openEditor), and like
+ * every selection write it goes through the selection door
+ * (selection/select-door.js): a placement made while an edit is open on
+ * another element (a block dragged in from the Add panel mid-edit) ends
+ * that edit, commit first, then the selection lands on what was placed;
+ * the engine refusing the leave (an invalid panel widget) keeps the
+ * selection on the widget the user must fix, the placement itself
+ * having landed already.
  */
 const applySelect = (select) => {
   const keys = (Array.isArray(select) ? select : [select])
@@ -191,9 +212,9 @@ const applySelect = (select) => {
     )
     .filter(Boolean);
   if (keys.length === 1) {
-    store.dispatch(setSelected(keys[0]));
+    selectKey(keys[0]);
   } else if (keys.length > 1) {
-    store.dispatch(setSelectedSet({ keys }));
+    selectKeys(keys);
   }
 };
 
@@ -232,7 +253,12 @@ export const applyResponse = async (payload) => {
   if (payload.blueprint) {
     const rootUuid = store.getState().blueprint.root?.uuid;
     if (!payload.entity_uuid || !rootUuid || payload.entity_uuid === rootUuid) {
-      store.dispatch(blueprintReplaced(payload.blueprint));
+      store.dispatch(
+        blueprintReplaced({
+          blueprint: payload.blueprint,
+          verdict: payload.verdict,
+        }),
+      );
     }
   }
   await playCommands(payload.drupal_commands);

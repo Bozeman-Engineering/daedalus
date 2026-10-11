@@ -8,7 +8,9 @@ use Drupal\KernelTests\KernelTestBase;
 use Drupal\daedalus_stylish\CssPrinter;
 use Drupal\daedalus_stylish\Entity\DaedalusStylishSkin;
 use Drupal\daedalus_stylish\Exception\StyleGuideException;
+use Drupal\daedalus_stylish\Plugin\Field\FieldType\SkinTokensItem;
 use Drupal\daedalus_stylish\DefaultsStylesheet;
+use Drupal\daedalus_stylish\SkinDefaultsFieldHandler;
 use Drupal\daedalus_blueprint\Materials\Address;
 use Drupal\daedalus_ui\Render\ElementAddress;
 use Drupal\Tests\daedalus\Traits\DesignSystemActivationTrait;
@@ -69,6 +71,7 @@ class SkinDefaultsTest extends KernelTestBase {
     // consumer needs the swatch entity schema.
     $this->installEntitySchema('daedalus_swatch');
     $this->installEntitySchema('daedalus_animation');
+    $this->installEntitySchema('daedalus_font');
     $this->installEntitySchema('user');
     $this->installEntitySchema('daedalus_skin');
     // Material references resolve through the materials roster, whose
@@ -79,7 +82,13 @@ class SkinDefaultsTest extends KernelTestBase {
     // definitions (ShippedSync::onDesignSystemActivated()): the importers
     // mirror motion-* and --swatch-* references into the usage tables and
     // switch to an administrative account, so the fixture carries both.
-    $this->installSchema('daedalus_stylish', ['daedalus_variant_usage', 'daedalus_swatch_usage', 'daedalus_animation_usage']);
+    $this->installSchema('daedalus_stylish', [
+      'daedalus_variant_usage',
+      'daedalus_swatch_usage',
+      'daedalus_animation_usage',
+      'daedalus_token_usage',
+      'daedalus_font_usage',
+    ]);
     $this->setUpCurrentUser([], [], TRUE);
     $this->container->get('state')->set('daedalus_stylish_control_test.site', [
       'token_scales' => [
@@ -134,7 +143,9 @@ class SkinDefaultsTest extends KernelTestBase {
 
     $errors = $this->container->get('daedalus_stylish.style_map_validator')->validateDefaults($defaults, [
       'theme' => self::THEME,
-      'skin_tokens' => ['space' => ['4' => '1rem']],
+      // The context is the skin's stored shape: records, as the doors
+      // canonicalize them.
+      'skin_tokens' => SkinTokensItem::canonicalizeTokens(['space' => ['4' => '1rem']]),
     ]);
     $this->assertSame([], $errors);
   }
@@ -272,7 +283,7 @@ class SkinDefaultsTest extends KernelTestBase {
    */
   public function testDefaultsDelivery(): void {
     $skin = DaedalusStylishSkin::create(['label' => 'aurora', 'machine_name' => 'aurora', 'status' => TRUE]);
-    $skin->setDefaults([
+    $skin->setPackageDefaults([
       // Stored deliberately OUT of rank order: refinement first.
       'layout:layout_onecol' => ['' => ['default' => ['padding' => '3rem']]],
       'kind:container' => [
@@ -350,7 +361,7 @@ class SkinDefaultsTest extends KernelTestBase {
    */
   public function testChildrenDefaultsDelivery(): void {
     $skin = DaedalusStylishSkin::create(['label' => 'aurora', 'machine_name' => 'aurora', 'status' => TRUE]);
-    $skin->setDefaults([
+    $skin->setPackageDefaults([
       'kind:container' => [
         '::> *' => ['default' => ['min-width' => '0']],
         '::.band-inner > *' => ['default' => ['flex' => '1']],
@@ -366,7 +377,12 @@ class SkinDefaultsTest extends KernelTestBase {
   }
 
   /**
-   * The blueprint lane: the defaults field handler rides the seam.
+   * The blueprint lane: the defaults field handler is the read alone.
+   *
+   * It serializes the package layer as the scope-keyed map and projects
+   * the grammar onto the schema; every write refuses and names
+   * update_default, the one door (the site's layer on a consuming site),
+   * valid payload or not.
    */
   public function testFieldHandler(): void {
     $handler = $this->container->get('daedalus_stylish.field_handler.skin_defaults');
@@ -374,21 +390,21 @@ class SkinDefaultsTest extends KernelTestBase {
       ->getFieldDefinitions('daedalus_skin', 'daedalus_skin')['defaults'];
     $this->assertTrue($handler->applies($definition));
 
-    // A valid write stores canonical JSON with normalized compound
-    // spellings ('dark+narrow' canonicalizes to 'narrow+dark').
-    $result = $handler->deserialize([
-      'base:h2' => ['' => ['dark+narrow' => ['font-size' => '1.5rem'], 'default' => ['font-size' => '2rem']]],
-    ], $definition);
-    $this->assertFalse($result->hasErrors());
-    $this->assertStringContainsString('narrow+dark', $result->getValue());
+    $skin = DaedalusStylishSkin::create(['label' => 'aurora', 'machine_name' => 'aurora', 'status' => TRUE]);
+    $defaults = ['base:h2' => ['' => ['default' => ['font-size' => '2rem']]]];
+    $skin->setPackageDefaults($defaults)->save();
+    $this->assertSame($defaults, $handler->serialize($skin->get('defaults'), $definition), 'The read serializes the package layer as the scope-keyed map.');
 
-    // Errors re-root under the field.
-    $errors = $handler->deserialize(['kind:region' => ['' => ['default' => ['padding' => '1rem']]]], $definition)->getErrors();
-    $this->assertSame('SKIN_DEFAULT_SCOPE_INVALID', $errors[0]->getCode());
-    $this->assertSame('fields.defaults.kind:region', $errors[0]->getPath());
-
-    // Not an object of scopes at all.
-    $this->assertSame('INVALID_SKIN_DEFAULTS', $handler->deserialize('nope', $definition)->getErrors()[0]->getCode());
+    // A valid write refuses exactly as an invalid one: the field has no
+    // write path, and the refusal points at the op.
+    foreach ([$defaults, ['kind:region' => ['' => ['default' => ['padding' => '1rem']]]], 'nope'] as $payload) {
+      $errors = $handler->deserialize($payload, $definition)->getErrors();
+      $this->assertCount(1, $errors);
+      $this->assertSame(SkinDefaultsFieldHandler::OP_ONLY, $errors[0]->getCode());
+      $this->assertSame('fields.defaults', $errors[0]->getPath());
+      $this->assertStringContainsString('update_default', $errors[0]->getHint());
+    }
+    $this->assertStringContainsString('update_default', (string) $handler->getGuidance(), 'The guidance names the one write door.');
 
     // The schema catalog: the bare key list in every posture (no
     // kind:region, base tags listed), and what each scope's element may
@@ -419,7 +435,7 @@ class SkinDefaultsTest extends KernelTestBase {
 
     $skin = DaedalusStylishSkin::create(['label' => 'aurora', 'machine_name' => 'aurora', 'status' => TRUE]);
     $defaults = ['kind:container' => ['' => ['default' => ['padding' => '2rem']]]];
-    $skin->setDefaults($defaults)->save();
+    $skin->setPackageDefaults($defaults)->save();
     $this->activateSkin($skin);
     $payload = $this->container->get('daedalus_stylish.client_style_guide')->build(self::THEME);
     $this->assertSame($defaults, $payload['skinDefaults']);
@@ -455,8 +471,8 @@ class SkinDefaultsTest extends KernelTestBase {
     $skin = $this->container->get('daedalus_stylish.skin_manager')->loadActiveSkin();
     $this->assertNotNull($skin, 'the carbon skin landed and is the active skin');
     $this->assertSame('carbon', $skin->getMachineName());
-    $tokens = $skin->getTokens();
-    $defaults = $skin->getDefaults();
+    $tokens = $skin->tokens();
+    $defaults = $skin->defaults();
 
     $errors = $this->container->get('daedalus_stylish.style_map_validator')->validateDefaults($defaults, ['theme' => self::THEME, 'skin_tokens' => $tokens]);
     $this->assertSame([], array_map(static fn (BlueprintError $error): string => $error->getPath() . ' [' . $error->getCode() . ']: ' . $error->getMessage(), $errors), 'the carbon skin\'s defaults validate empty under strict law');

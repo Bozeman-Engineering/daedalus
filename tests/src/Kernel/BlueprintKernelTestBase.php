@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Drupal\Tests\daedalus\Kernel;
 
 use Drupal\Component\Uuid\Php;
+use Drupal\Core\Entity\FieldableEntityInterface;
+use Drupal\daedalus_blueprint\Host\HostInterface;
 use Drupal\field\Entity\FieldConfig;
 use Drupal\field\Entity\FieldStorageConfig;
 use Drupal\block_content\BlockContentInterface;
@@ -83,6 +85,22 @@ abstract class BlueprintKernelTestBase extends KernelTestBase {
     $this->fieldHandlerManager = $this->container->get('daedalus_blueprint.field_handler_manager');
 
     $this->createTestFields();
+  }
+
+  /**
+   * The host of an entity, as the spine's doors resolve it.
+   *
+   * Every public spine method takes the host; tests that hold an entity
+   * resolve it here.
+   *
+   * @param \Drupal\Core\Entity\FieldableEntityInterface $entity
+   *   The entity.
+   *
+   * @return \Drupal\daedalus_blueprint\Host\HostInterface
+   *   Its host.
+   */
+  protected function host(FieldableEntityInterface $entity): HostInterface {
+    return $this->container->get('daedalus_blueprint.host_resolver')->fromEntity($entity);
   }
 
   /**

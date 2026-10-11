@@ -99,7 +99,7 @@ class FormCommitTest extends FormCommitTestBase {
     $this->assertTrue($form_state->hasAnyErrors(), 'The title length constraint failed the form.');
     $this->assertNull($form_state->getTemporaryValue(FormCommit::OUTCOME), 'The submit handler never ran.');
     $this->assertSame('Saved', $this->working($node)->getTitle(), 'Nothing was staged.');
-    $this->assertSame([], $this->container->get('daedalus_tempstore.history_manager')->metadata($node)['entries'], 'No history entry was produced.');
+    $this->assertSame([], $this->container->get('daedalus_tempstore.history_manager')->metadata($this->workingHost($node))['entries'], 'No history entry was produced.');
 
     $commands = $response->getCommands();
     $names = array_column($commands, 'command');

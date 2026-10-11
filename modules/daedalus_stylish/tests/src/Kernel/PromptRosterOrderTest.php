@@ -66,6 +66,7 @@ class PromptRosterOrderTest extends KernelTestBase {
     $this->installEntitySchema('daedalus_swatch');
     // The materials provider reads all four storages on every build.
     $this->installEntitySchema('daedalus_animation');
+    $this->installEntitySchema('daedalus_font');
     $this->installEntitySchema('daedalus_skin');
     $this->installConfig(['daedalus_stylish']);
   }

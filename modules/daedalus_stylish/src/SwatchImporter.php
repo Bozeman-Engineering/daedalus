@@ -241,7 +241,9 @@ class SwatchImporter extends ShippedDefinitionsImporter {
     // shipped_sync: disk is the one author the distro lock protects, so the
     // importer's own writes pass the value field handler's read-only gate
     // (SwatchValueFieldHandler); every other blueprint write refuses.
-    $result = $this->deserializer->deserialize($blueprint, ['shipped_sync' => TRUE]);
+    // A shipped sync acts for the site (files on disk are the author), so
+    // the capability gate is not asked: the system posture.
+    $result = $this->deserializer->deserialize($blueprint, ['shipped_sync' => TRUE, 'system' => TRUE]);
     if (!$result->isSuccess()) {
       throw new ShippedSwatchException($module, $name, $result->getErrors());
     }

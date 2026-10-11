@@ -448,11 +448,17 @@ import { createUploadProgress } from './upload-progress.js';
         });
       },
       // Element face: land on compatible media already on the page and
-      // replace its file.
+      // replace its file. Replacing is a content write on the element
+      // the media belongs to, so the face asks the one gate (the gap
+      // face is judged by the drag controller at the destination).
       elements: {
         selector: '[data-media-reference]',
         accepts: (element, data) =>
-          fileIsCompatibleWithMedia(data.fileExtensions, element),
+          fileIsCompatibleWithMedia(data.fileExtensions, element) &&
+          app.Selection.capable(
+            element.closest('[data-selectable]')?.getAttribute('data-selectable') ?? null,
+            'content',
+          ),
         label: Drupal.t('Replace media'),
         operations: (target, data) =>
           replaceMedia(target.element, data.files?.[0]),

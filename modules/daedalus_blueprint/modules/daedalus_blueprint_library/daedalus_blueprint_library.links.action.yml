@@ -1,0 +1,9 @@
+# The listing's other door into direct editing: compose a blueprint from
+# scratch. The add page picks the type (one card per type the actor may
+# create, skipped when there is one) and lands on the add form (label,
+# description, scope, subject), which lands on the empty canvas.
+entity.blueprint.add_page:
+  route_name: entity.blueprint.add_page
+  title: 'Add blueprint'
+  appears_on:
+    - entity.blueprint.collection

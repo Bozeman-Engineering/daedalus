@@ -11,12 +11,16 @@
  * ONE value space per property: the space is a function of the guide,
  * the materials roster, the property (its definition and resolved
  * constraints) and the editing condition — never of the surface asking.
- * Stops come from the constraints (scale / allowed), then the materials
- * store (color and gradient swatches for color- and image-shaped
- * properties, the published animations for the keyframes-name property),
- * then the property's one built-in table (widget-values.js fallbackFor);
- * Basic and Advanced read the same derivation, so a gap that is detented
- * in one mode is detented in the other.
+ * Stops come from the constraints (scale / allowed; a scale's row is the
+ * element's curated stops, else the tokens the skin marks offered, with
+ * site-minted tokens following a curated row on open and guarded
+ * systems and withheld on strict: style-guide.js scaleRow, the roster's
+ * scaleStops() twin), then the materials store (color and gradient
+ * swatches for color- and image-shaped properties, the published
+ * animations for the keyframes-name property), then the property's one
+ * built-in table (widget-values.js fallbackFor); Basic and Advanced
+ * read the same derivation, so a gap that is detented in one mode is
+ * detented in the other.
  *
  * A property's value space has one of three kinds, and the KIND (never
  * the site's enforcement mode) is what drives the widgets:

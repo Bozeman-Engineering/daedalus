@@ -14,6 +14,7 @@ import { failureText, gesture } from '../../js/src/gesture-transport.js';
 
 const ember = { kind: 'swatch', id: 'ember', label: 'Ember', group: 'color', value: '#ff5a1f' };
 const band = { kind: 'variant', id: 'band', label: 'Band', group: 'style', value: {} };
+const hero = { kind: 'token', id: 'space/hero', label: 'hero', group: 'space', value: '3rem', description: '', offered: true };
 
 /**
  * A source whose commitBatch records the batch and answers a scripted
@@ -36,7 +37,7 @@ test('respondedMaterial reads the delta by kind, and by id when named', () => {
   assert.equal(respondedMaterial(payload, 'swatch'), ember);
   assert.equal(respondedMaterial(payload, 'variant', 'band'), band);
   assert.equal(respondedMaterial(payload, 'variant', 'other'), null);
-  assert.equal(respondedMaterial(payload, 'stencil'), null);
+  assert.equal(respondedMaterial(payload, 'blueprint'), null);
   assert.equal(respondedMaterial({ deleted: true }, 'swatch'), null);
   assert.equal(respondedMaterial(null, 'swatch'), null);
 });
@@ -60,6 +61,29 @@ test('updateMaterial submits one update_material op and resolves with the record
   assert.deepEqual(source.batches[0].operations, [
     { op: 'update_material', kind: 'variant', id: 'band', styles: { '': { default: { padding: '1rem' } } } },
   ]);
+});
+
+test('a token mints and updates through the same two ops: the label IS the name, the group the scale', async () => {
+  const source = createSource({ success: true, materials: { upsert: [hero], remove: [] } });
+  const minted = await saveMaterial(source, { kind: 'token', group: 'space', label: 'hero', value: '3rem', description: undefined, offered: undefined }, 'Minted the token space/hero');
+  assert.equal(minted, hero);
+  assert.deepEqual(source.batches[0].operations, [
+    { op: 'save_material', kind: 'token', group: 'space', label: 'hero', value: '3rem' },
+  ]);
+  // The site's override of a package token, a description, the offered
+  // flag: one op each, by the roster id.
+  const paired = { ...hero, id: 'color/bg', label: 'bg', group: 'color', value: { default: '#fdfdf6', dark: '#0b0d0f' } };
+  const edits = createSource({ success: true, materials: { upsert: [paired], remove: [] } });
+  const record = await updateMaterial(edits, { kind: 'token', id: 'color/bg', value: paired.value }, 'Updated the token color/bg');
+  assert.equal(record, paired);
+  await updateMaterial(edits, { kind: 'token', id: 'color/bg', offered: false }, 'Withheld the token color/bg');
+  await updateMaterial(edits, { kind: 'token', id: 'color/bg', description: 'The page.' }, 'Described the token color/bg');
+  assert.deepEqual(edits.batches.map((batch) => batch.operations[0]), [
+    { op: 'update_material', kind: 'token', id: 'color/bg', value: { default: '#fdfdf6', dark: '#0b0d0f' } },
+    { op: 'update_material', kind: 'token', id: 'color/bg', offered: false },
+    { op: 'update_material', kind: 'token', id: 'color/bg', description: 'The page.' },
+  ]);
+  assert.equal(respondedMaterial({ materials: { upsert: [hero, paired] } }, 'token', 'color/bg'), paired);
 });
 
 test('a settled write without its record is a contract break, loud', async () => {

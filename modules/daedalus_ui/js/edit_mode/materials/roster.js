@@ -7,12 +7,12 @@
  * (MaterialRecord::toArray(): snake_case keys, every field present). It
  * is the lookup the value grammar resolves through and the ONE
  * applicability predicate ("may this element wear this variant", "may
- * this stencil land here") the pickers, the wear bar and the palette
+ * this blueprint land here") the pickers, the wear bar and the palette
  * share with the server, locked together by
  * ValueGrammarTest::testClientTwinEquivalence through
  * tests/js/materials-cases.mjs. Change MaterialsRoster's predicate and
  * this module in the same commit, or the lock fails. The predicate is a
- * roster method on both sides: a stencil's band fact resolves its root's
+ * roster method on both sides: a blueprint's band fact resolves its root's
  * wearings against the variant records of the same roster.
  *
  * No entity is read here: the records arrive on the page-load payload
@@ -30,8 +30,9 @@ export const MATERIAL_KINDS = [
   'token',
   'swatch',
   'variant',
-  'stencil',
+  'blueprint',
   'animation',
+  'font',
 ];
 
 /**
@@ -41,7 +42,7 @@ export const APPLIES_DEPTH = 'depth';
 export const DEPTH_ROOT = 'root';
 
 /**
- * The applies key carrying a stencil root's captured wearings.
+ * The applies key carrying a blueprint root's captured wearings.
  */
 export const APPLIES_WEARS = 'wears';
 
@@ -56,7 +57,7 @@ export const rootOnly = (record) =>
   record.applies?.[APPLIES_DEPTH] === DEPTH_ROOT;
 
 /**
- * The variant ids a stencil record's root wears (MaterialRecord::wears()).
+ * The variant ids a blueprint record's root wears (MaterialRecord::wears()).
  *
  * @param {object} record
  *   A record in the delivery shape.
@@ -117,8 +118,8 @@ export const scopesPair = (variantScope, elementScope) => {
  * @return {object}
  *   The roster: all(), ofKind(kind), get(kind, id), has(kind, id),
  *   isEmpty(), bySpelling(slot, spelling), spellings(slot),
- *   applicable(record, elementScope, topLevel, withinStencil),
- *   isBand(stencil), rootOnlyWears(stencil).
+ *   applicable(record, elementScope, topLevel, withinBlueprint),
+ *   isBand(blueprint), rootOnlyWears(blueprint).
  */
 export const createRoster = (records) => {
   const byKind = new Map(MATERIAL_KINDS.map((kind) => [kind, new Map()]));
@@ -161,23 +162,23 @@ export const createRoster = (records) => {
   const get = (kind, id) => byKind.get(kind)?.get(id) ?? null;
 
   /**
-   * The root-only variant records a stencil's root wears, keyed by id.
+   * The root-only variant records a blueprint's root wears, keyed by id.
    *
-   * The twin of MaterialsRoster::rootOnlyWears(): what makes a stencil a
+   * The twin of MaterialsRoster::rootOnlyWears(): what makes a blueprint a
    * band, named, so a corrective can spell the variant and its axis. The
    * record's captured wearings resolve against the variant records of
    * THIS roster; a wearing that names no record here (a variant
    * unpublished since the capture, or one outside the active design
    * system) has no opinion. Empty for every other kind.
    *
-   * @param {object} stencil
+   * @param {object} blueprint
    *   A record in the delivery shape.
    * @return {Map<string, object>}
-   *   The root-only records among the stencil's wearings, in wearing order.
+   *   The root-only records among the blueprint's wearings, in wearing order.
    */
-  const rootOnlyWears = (stencil) => {
+  const rootOnlyWears = (blueprint) => {
     const records = new Map();
-    for (const id of wears(stencil)) {
+    for (const id of wears(blueprint)) {
       const variant = get('variant', id);
       if (variant !== null && rootOnly(variant)) {
         records.set(id, variant);
@@ -187,46 +188,46 @@ export const createRoster = (records) => {
   };
 
   /**
-   * Whether a stencil is a page band: its root wears a root-only variant.
+   * Whether a blueprint is a page band: its root wears a root-only variant.
    *
    * The twin of MaterialsRoster::isBand(), the one derivation behind every
    * "band" word the client speaks (the palette's absent caret, the
    * click-to-place refusal).
    *
-   * @param {object} stencil
+   * @param {object} blueprint
    *   A record in the delivery shape.
    * @return {boolean}
    */
-  const isBand = (stencil) => rootOnlyWears(stencil).size > 0;
+  const isBand = (blueprint) => rootOnlyWears(blueprint).size > 0;
 
   /**
    * Whether a material may be worn by an element in a given situation.
    *
    * The twin of MaterialsRoster::applicable(): variants gate on scope
-   * pairing, root-only depth and stencil ownership; a stencil gates on
+   * pairing, root-only depth and blueprint ownership; a blueprint gates on
    * one derived fact (a band places at top level only, every other
-   * stencil anywhere the placement grammar allows); every other kind
+   * blueprint anywhere the placement grammar allows); every other kind
    * applies everywhere.
    *
    * @param {object} record
    *   A record in the delivery shape.
    * @param {string} elementScope
    *   The element's own scope ("block_type:text", "kind:container"); for
-   *   a stencil, the scope its root lands as.
+   *   a blueprint, the scope its root lands as.
    * @param {boolean} [topLevel=true]
-   *   Whether the element sits at top level (a page band); for a stencil,
+   *   Whether the element sits at top level (a page band); for a blueprint,
    *   where it would land.
-   * @param {string|null} [withinStencil=null]
-   *   The id of the stencil whose placement the element sits inside.
+   * @param {string|null} [withinBlueprint=null]
+   *   The id of the blueprint whose placement the element sits inside.
    * @return {boolean}
    */
   const applicable = (
     record,
     elementScope,
     topLevel = true,
-    withinStencil = null,
+    withinBlueprint = null,
   ) => {
-    if (record.kind === 'stencil') {
+    if (record.kind === 'blueprint') {
       return topLevel || !isBand(record);
     }
     if (record.kind !== 'variant') {
@@ -238,7 +239,7 @@ export const createRoster = (records) => {
     if (rootOnly(record) && !topLevel) {
       return false;
     }
-    if (record.owned_by != null && record.owned_by !== withinStencil) {
+    if (record.owned_by != null && record.owned_by !== withinBlueprint) {
       return false;
     }
     return true;

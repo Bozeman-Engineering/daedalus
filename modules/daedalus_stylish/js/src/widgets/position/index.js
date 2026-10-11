@@ -108,12 +108,12 @@ const Position = ({
     }
     return blocked
       ? Drupal.t(
-          'The surrounding @parent lays out its contents in plain flow, so there is no position to pick for this element inside it.',
-          { '@parent': parentName(matcher, parent) },
+          'The surrounding !parent lays out its contents in plain flow, so there is no position to pick for this element inside it.',
+          { '!parent': parentName(matcher, parent) },
         )
       : Drupal.t(
-          "The surrounding @parent arranges its contents along this axis; change that with the @parent's Layout section.",
-          { '@parent': parentName(matcher, parent) },
+          "The surrounding !parent arranges its contents along this axis; change that with the !parent's Layout section.",
+          { '!parent': parentName(matcher, parent) },
         );
   };
 

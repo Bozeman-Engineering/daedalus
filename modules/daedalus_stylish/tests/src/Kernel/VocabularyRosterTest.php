@@ -7,6 +7,7 @@ namespace Drupal\Tests\daedalus_stylish\Kernel;
 // cspell:ignore zzzzqx
 use Drupal\daedalus_blueprint\DesignSystem\ActiveDesignSystem;
 use Drupal\daedalus_blueprint\Materials\Address;
+use Drupal\daedalus_blueprint\Materials\MaterialRecord;
 use Drupal\daedalus_blueprint\Materials\RelativeSelector;
 use Drupal\KernelTests\KernelTestBase;
 use Drupal\daedalus_ui\ElementModel\PageBuilderDeclarations;
@@ -86,12 +87,19 @@ class VocabularyRosterTest extends KernelTestBase {
     $this->installEntitySchema('daedalus_skin');
     $this->installEntitySchema('daedalus_swatch');
     $this->installEntitySchema('daedalus_animation');
+    $this->installEntitySchema('daedalus_font');
     $this->installConfig(['daedalus_stylish']);
     // Activating a design system syncs every enabled module's shipped
     // definitions (ShippedSync::onDesignSystemActivated()): the importers
     // mirror motion-* and --swatch-* references into the usage tables and
     // switch to an administrative account, so the fixture carries both.
-    $this->installSchema('daedalus_stylish', ['daedalus_variant_usage', 'daedalus_swatch_usage', 'daedalus_animation_usage']);
+    $this->installSchema('daedalus_stylish', [
+      'daedalus_variant_usage',
+      'daedalus_swatch_usage',
+      'daedalus_animation_usage',
+      'daedalus_token_usage',
+      'daedalus_font_usage',
+    ]);
     $this->setUpCurrentUser([], [], TRUE);
     $this->container->get('theme_installer')->install([self::THEME]);
     $this->builder = $this->container->get('daedalus_stylish.vocabulary_roster');
@@ -463,7 +471,7 @@ class VocabularyRosterTest extends KernelTestBase {
     $this->assertSame([], $block->scaleValues('margin'), 'Not scale-constrained: no closed list.');
 
     $skin = DaedalusStylishSkin::create(['label' => 'Aurora']);
-    $skin->setTokens(['space' => ['4' => '1rem', 'gutter' => '1.5rem']])->save();
+    $skin->setPackageTokens(['space' => ['4' => '1rem', 'gutter' => '1.5rem']])->save();
     $this->activateSkin($skin);
     $this->assertSame(['var(--space-4)', 'var(--space-gutter)'], $this->roster('kind:block')->scaleValues('padding'));
   }
@@ -488,7 +496,7 @@ class VocabularyRosterTest extends KernelTestBase {
       $this->assertSame([], $block->scaleValues($side), "no skin, so $side's closed list is honestly empty");
     }
     $skin = DaedalusStylishSkin::create(['label' => 'Aurora']);
-    $skin->setTokens(['space' => ['4' => '1rem', 'gutter' => '1.5rem']])->save();
+    $skin->setPackageTokens(['space' => ['4' => '1rem', 'gutter' => '1.5rem']])->save();
     $this->activateSkin($skin);
     $this->assertSame(['var(--space-4)', 'var(--space-gutter)'], $this->roster('kind:block')->scaleValues('padding-left'), 'the minted tokens are padding-left\'s closed list through the expanded block');
 
@@ -506,6 +514,113 @@ class VocabularyRosterTest extends KernelTestBase {
     foreach ($corners as $corner) {
       $this->assertSame(['scale' => 'space', 'allowed' => ['0']], $paragraph->valueSpace($corner), "the site's border-radius binding is $corner's value space where the node is silent");
     }
+  }
+
+  /**
+   * The row a scale-bound property offers: curated stops, else offered tokens.
+   *
+   * The offer half of scaleValues(): scaleStops() is the server twin of
+   * the client's stopsFor (style-guide.js scaleRow): the element's
+   * curated stops in list order where its block declares them, else the
+   * scale's tokens the skin marks offered, in stored order (a shipped
+   * token opted out of the rows stays legal and referenceable); on a
+   * curated row the site-minted tokens (origin user: the skin's site
+   * layer minted them, the package ships none by that name) follow the
+   * curated ones while offered on open and guarded systems and are
+   * withheld on strict; the allowed literals append after the tokens.
+   * Site-wide stops left the guide (a build error there), so an
+   * uncurated row on every posture is the offered flag alone.
+   */
+  public function testScaleStops(): void {
+    $this->enableModules(['daedalus_stylish_control_test']);
+    $this->container->get('state')->set('daedalus_stylish_control_test.site_layer', [
+      'token_contract' => ['space' => ['8', '4']],
+    ]);
+    $this->container->get('state')->set('daedalus_stylish_guide_test_extra.kinds', [
+      'block' => [
+        'property_groups' => [
+          'spacing' => ['constraints' => ['padding-left' => ['scale' => 'space', 'stops' => ['8', '4']]]],
+        ],
+      ],
+    ]);
+    $this->container->get('daedalus_stylish.style_guide')->resetCache();
+    $this->builder = $this->container->get('daedalus_stylish.vocabulary_roster');
+
+    // No skin: the rows are honestly empty but for the literal.
+    $this->assertSame([], $this->roster('kind:block')->scaleStops('padding'));
+    $this->assertSame([], $this->roster('kind:block')->scaleStops('padding-left'));
+    $this->assertSame(['0'], $this->roster('kind:container')->scaleStops('gap'), 'the suite\'s gap binding keeps its zero literal');
+    $this->assertSame([], $this->roster('kind:block')->scaleStops('margin'), 'not scale-bound: no row');
+
+    // A shipped skin: two package steps offered, the gutter opted out of
+    // the rows, and a site layer minting one offered token and one not.
+    $skin = DaedalusStylishSkin::create(['label' => 'Aurora']);
+    $skin->setPackageTokens([
+      'space' => ['4' => '1rem', 'gutter' => ['value' => '1.5rem', 'offered' => FALSE], '8' => '2rem'],
+    ]);
+    $skin->setSiteTokens([
+      'space' => ['hero' => ['value' => '6rem'], 'quiet' => ['value' => '7rem', 'offered' => FALSE]],
+    ]);
+    $skin->setShippedSource('daedalus_stylish_guide_test', [
+      'tokens' => $skin->packageTokens(),
+      'defaults' => $skin->packageDefaults(),
+    ]);
+    $skin->save();
+    $this->activateSkin($skin);
+    $records = $this->roster('kind:block')->materialsRoster()->tokens();
+    $this->assertSame(MaterialRecord::ORIGIN_SHIPPED, $records['space/4']->origin, 'a package token is shipped');
+    $this->assertSame(MaterialRecord::ORIGIN_SHIPPED, $records['space/gutter']->origin);
+    $this->assertSame(MaterialRecord::ORIGIN_USER, $records['space/hero']->origin, 'a site-minted token is the site\'s');
+    $this->assertFalse($records['space/gutter']->offered);
+    $this->assertFalse($records['space/quiet']->offered);
+
+    $offered = ['var(--space-4)', 'var(--space-8)', 'var(--space-hero)'];
+    $curated = ['var(--space-8)', 'var(--space-4)'];
+    // Guarded (the fixture's mode): the uncurated row is the offered
+    // tokens in stored order, the curated row its list with the
+    // site-minted offered token after it.
+    $block = $this->roster('kind:block');
+    $this->assertSame($offered, $block->scaleStops('padding'), 'uncurated: the offered flag alone, stored order');
+    $this->assertSame([...$curated, 'var(--space-hero)'], $block->scaleStops('padding-left'), 'curated: the list, then the site-minted offered token');
+    $this->assertSame([...$offered, '0'], $this->roster('kind:container')->scaleStops('gap'), 'the allowed literal appends after the tokens');
+    $this->assertSame(
+      ['var(--space-4)', 'var(--space-gutter)', 'var(--space-8)', 'var(--space-hero)', 'var(--space-quiet)'],
+      $block->scaleValues('padding'),
+      'legality is the whole scale, offered or not',
+    );
+
+    $this->enforce('strict');
+    $block = $this->roster('kind:block');
+    $this->assertSame($offered, $block->scaleStops('padding'), 'strict, uncurated: the offered flag still decides');
+    $this->assertSame($curated, $block->scaleStops('padding-left'), 'strict, curated: site-minted tokens are withheld from the row');
+
+    $this->enforce('open');
+    $block = $this->roster('kind:block');
+    $this->assertSame($offered, $block->scaleStops('padding'));
+    $this->assertSame([...$curated, 'var(--space-hero)'], $block->scaleStops('padding-left'), 'open, curated: the site-minted offered token follows');
+
+    // A curated row none of whose names are minted falls back to the
+    // offered tokens; a curated name the skin does not mint drops.
+    $this->container->get('state')->set('daedalus_stylish_control_test.site_layer', [
+      'token_contract' => ['space' => ['8', '4', 'xl']],
+    ]);
+    $this->container->get('state')->set('daedalus_stylish_guide_test_extra.kinds', [
+      'block' => [
+        'property_groups' => [
+          'spacing' => [
+            'constraints' => [
+              'padding-left' => ['scale' => 'space', 'stops' => ['xl']],
+              'padding-top' => ['scale' => 'space', 'stops' => ['xl', '4']],
+            ],
+          ],
+        ],
+      ],
+    ]);
+    $this->container->get('daedalus_stylish.style_guide')->resetCache();
+    $this->builder->reset();
+    $block = $this->roster('kind:block');
+    $this->assertSame($offered, $block->scaleStops('padding-left'), 'no curated name minted: the offered tokens stand in');
+    $this->assertSame(['var(--space-4)', 'var(--space-hero)'], $block->scaleStops('padding-top'), 'the unminted name drops, the minted one leads');
   }
 
   /**
@@ -586,7 +701,7 @@ class VocabularyRosterTest extends KernelTestBase {
       DaedalusStylishVariant::create(['label' => $name, 'machine_name' => $name, 'scope' => $scope])->save();
     }
     $skin = DaedalusStylishSkin::create(['label' => 'Aurora']);
-    $skin->setTokens(['space' => ['4' => '1rem']])->save();
+    $skin->setPackageTokens(['space' => ['4' => '1rem']])->save();
     $this->activateSkin($skin);
 
     // The kind pairs with every container variant; the tag treatment
@@ -761,7 +876,14 @@ class VocabularyRosterTest extends KernelTestBase {
     // exercises every lane the payload serves.
     $this->container->get('state')->set('daedalus_stylish_guide_test_extra.kinds', [
       'container' => [
-        'property_groups' => ['spacing' => ['properties' => ['padding-top', 'padding-bottom', 'row-gap', 'column-gap']]],
+        'property_groups' => [
+          'spacing' => [
+            'properties' => ['padding-top', 'padding-bottom', 'row-gap', 'column-gap'],
+            // A curated row beside the uncurated ones, so the battery
+            // locks the row resolution (scaleStops) in both shapes.
+            'constraints' => ['padding-top' => ['scale' => 'space', 'stops' => ['4']]],
+          ],
+        ],
         'pseudo' => [
           'before' => [
             'property_groups' => [
@@ -791,8 +913,24 @@ class VocabularyRosterTest extends KernelTestBase {
         'property_groups' => ['typography' => ['properties' => ['font-size', 'color']]],
       ],
     ]);
+    // The curated scale's contract, and a shipped skin whose rows the
+    // battery resolves: two package steps offered, the gutter opted out
+    // of the rows, and a site-minted token (withheld from the curated
+    // row under strict, on the uncurated rows by its own flag).
+    $this->container->get('state')->set('daedalus_stylish_control_test.site_layer', ['token_contract' => ['space' => ['4']]]);
     $this->container->get('daedalus_stylish.style_guide')->resetCache();
     $this->builder = $this->container->get('daedalus_stylish.vocabulary_roster');
+    $skin = DaedalusStylishSkin::create(['label' => 'Aurora']);
+    $skin->setPackageTokens([
+      'space' => ['4' => '1rem', 'gutter' => ['value' => '1.5rem', 'offered' => FALSE], '8' => '2rem'],
+    ]);
+    $skin->setSiteTokens(['space' => ['hero' => ['value' => '6rem']]]);
+    $skin->setShippedSource('daedalus_stylish_guide_test', [
+      'tokens' => $skin->packageTokens(),
+      'defaults' => $skin->packageDefaults(),
+    ]);
+    $skin->save();
+    $this->activateSkin($skin);
     $this->enforce('strict');
 
     $uuid = '11111111-1111-1111-1111-111111111111';
@@ -857,14 +995,17 @@ class VocabularyRosterTest extends KernelTestBase {
     foreach ($battery as [$address]) {
       $roster = $this->roster($address);
       $spaces = [];
+      $stops = [];
       foreach ($properties as $property) {
         $spaces[$property] = $roster->valueSpace($property) ?: NULL;
+        $stops[$property] = isset($spaces[$property]['scale']) ? $roster->scaleStops($property) : NULL;
       }
       $php[] = [
         'declared' => $roster->declared(),
         'groups' => $roster->groups(),
         'granted' => array_values(array_filter($properties, $roster->grantsProperty(...))),
         'spaces' => $spaces,
+        'stops' => $stops,
         'axes' => $roster->axisNames(),
         'rootOnly' => $roster->rootOnlyAxes(),
         'descriptions' => $roster->axisDescriptions(),
@@ -875,6 +1016,7 @@ class VocabularyRosterTest extends KernelTestBase {
     $payload = $this->container->get('daedalus_stylish.client_style_guide')->build(self::THEME);
     $input = json_encode([
       'guide' => $payload,
+      'materials' => array_values(array_map(static fn (MaterialRecord $record): array => $record->toArray(), $this->roster('kind:block')->materialsRoster()->tokens())),
       'cases' => array_map(static fn (array $case): array => [
         'key' => $case[1],
         'bundle' => $case[2],
@@ -896,6 +1038,18 @@ class VocabularyRosterTest extends KernelTestBase {
     // space, a site value space, an instance grant, a root-only axis and
     // an undeclared place all answered.
     $this->assertSame(['padding-top', 'gap', 'background-color'], $php[0]['granted']);
+    // The rows answered on both sides: the curated padding-top exact
+    // under strict (the site-minted token withheld), the uncurated
+    // block padding and the site's gap the offered tokens in stored
+    // order (the gutter opted out, the site-minted token on by its
+    // flag) with gap's zero literal after them, and no row where no
+    // scale binds.
+    $this->assertSame(['var(--space-4)'], $php[0]['stops']['padding-top']);
+    $this->assertSame(['var(--space-4)', 'var(--space-8)', 'var(--space-hero)', '0'], $php[0]['stops']['gap']);
+    $this->assertSame(['var(--space-4)', 'var(--space-8)', 'var(--space-hero)'], $php[2]['stops']['padding']);
+    $this->assertNull($php[2]['stops']['display']);
+    $this->assertNull($php[2]['stops']['font-size'], 'ungranted: no value space, no row');
+    $this->assertSame([], $php[16]['stops']['font-size'], 'a bound scale minting nothing is the honest empty row');
     $this->assertSame('1.75rem', $php[7]['spaces']['font-size']['max']);
     $this->assertSame(['scale' => 'space', 'allowed' => ['0']], $php[19]['spaces']['border-radius']);
     $this->assertSame(['font-size', 'color'], $php[16]['granted']);

@@ -1,12 +1,12 @@
-# A stencil-owned variant (the stencil: key names the owning content
-# stencil). Syncing this without daedalus_blueprint_stencil — the module that
-# provides the ownership field on daedalus_variant — is a loud developer
+# A blueprint-owned variant (the blueprint: key names the owning content
+# blueprint). Syncing this without daedalus_blueprint_library, the module that
+# provides the ownership field on daedalus_variant, is a loud developer
 # error; the styles validate against daedalus_stylish_guide_test's guide like the
 # other shipped fixtures.
 owned_wide_section:
   label: 'Owned wide section'
   scope: 'kind:container'
-  stencil: 'cta_card'
+  blueprint: 'cta_card'
   styles:
     '':
       default:

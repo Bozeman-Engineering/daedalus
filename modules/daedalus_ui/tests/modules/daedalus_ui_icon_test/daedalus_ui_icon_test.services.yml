@@ -1,0 +1,11 @@
+services:
+  # Declared FIRST at the lower priority, so an answer from the leading
+  # provider proves the collector orders by priority, not by declaration.
+  daedalus_ui_icon_test.trailing:
+    class: Drupal\daedalus_ui_icon_test\TrailingIconProvider
+    tags:
+      - { name: daedalus_ui.element_icon_provider, priority: 0 }
+  daedalus_ui_icon_test.leading:
+    class: Drupal\daedalus_ui_icon_test\LeadingIconProvider
+    tags:
+      - { name: daedalus_ui.element_icon_provider, priority: 10 }

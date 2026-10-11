@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace Drupal\Tests\daedalus_blueprint\Kernel\LayoutBuilder;
 
-use Drupal\daedalus_blueprint\LayoutBuilder\LayoutDeserializer;
+use Drupal\daedalus_blueprint\BlueprintDeserializer;
 use Drupal\daedalus_blueprint\LayoutBuilder\LayoutSerializer;
-use Drupal\language\Entity\ConfigurableLanguage;
+use Drupal\daedalus_blueprint\NodeTree\NodeTreeBuilder;
 use Drupal\layout_builder\Section;
 use Drupal\daedalus_layout\Plugin\Block\SectionBlock;
 use Drupal\Tests\daedalus\Kernel\BlueprintKernelTestBase;
@@ -15,16 +15,18 @@ use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 
 /**
- * Tests native nested-section serialization and deserialization.
+ * Tests native nested-section serialization and the nested tree write.
  *
  * Sections nest natively: a nested section is a container component
  * (daedalus_layout_section) whose configuration embeds one Section::toArray() value,
  * and it serializes as a section node with the exact same shape as a
  * top-level section, recursively (storage shape == sugar shape). The
  * container component is invisible plumbing: component uuid == embedded
- * section uuid, and no block facade ever appears.
+ * section uuid, and no block facade ever appears. On the write side a
+ * nested container is a container node in a created entity's layout
+ * tree, at any depth, and a read's tree creates an equal entity.
  */
-#[CoversClass(LayoutDeserializer::class)]
+#[CoversClass(BlueprintDeserializer::class)]
 #[CoversClass(LayoutSerializer::class)]
 #[Group('daedalus_blueprint')]
 #[RunTestsInSeparateProcesses]
@@ -41,16 +43,12 @@ class NestedLayoutTest extends BlueprintKernelTestBase {
     'filter',
     'entity_test',
     'daedalus_blueprint',
-    'language',
-    'content_translation',
   ];
 
   /**
-   * The layout deserializer.
-   *
-   * @var \Drupal\daedalus_blueprint\LayoutBuilder\LayoutDeserializer
+   * The blueprint deserializer.
    */
-  protected LayoutDeserializer $layoutDeserializer;
+  protected BlueprintDeserializer $deserializer;
 
   /**
    * The layout serializer.
@@ -58,6 +56,11 @@ class NestedLayoutTest extends BlueprintKernelTestBase {
    * @var \Drupal\daedalus_blueprint\LayoutBuilder\LayoutSerializer
    */
   protected LayoutSerializer $layoutSerializer;
+
+  /**
+   * The lean node tree builder: the read of the tree.
+   */
+  protected NodeTreeBuilder $treeBuilder;
 
   /**
    * The daedalus_layout uuid of the nested section in the fixture.
@@ -104,32 +107,35 @@ class NestedLayoutTest extends BlueprintKernelTestBase {
     $this->createBlockContentType('card', 'Card');
     $this->createBlockField('field_heading', 'string', 'card', ['max_length' => 255]);
 
-    $this->layoutDeserializer = $this->container->get('daedalus_blueprint.layout_deserializer');
+    $this->deserializer = $this->container->get('daedalus_blueprint.deserializer');
     $this->layoutSerializer = $this->container->get('daedalus_blueprint.layout_serializer');
+    $this->treeBuilder = $this->container->get('daedalus_blueprint.node_tree_builder');
   }
 
   /**
    * Tests serializing an entity with a nested section.
    *
-   * A container component serializes as a section node (layout_id, uuid,
-   * label, regions) inside its parent region, not as a block node.
+   * A container component serializes as a container node (layout_id, uuid,
+   * label, children) inside its parent's region node, not as a block node.
    */
   public function testSerializeNestedSection(): void {
     $entity = $this->createEntityWithNestedSection();
-    $result = $this->layoutSerializer->serialize($entity);
+    $result = $this->layoutSerializer->serialize($this->host($entity));
 
     $this->assertCount(1, $result);
     $this->assertSame($this->rootSectionUuid, $result[0]['uuid']);
 
-    $node = $result[0]['regions']['content'][0];
+    $node = $result[0]['children'][0]['children'][0];
+    $this->assertSame('container', $node['kind']);
     $this->assertSame('layout_onecol', $node['layout_id']);
     $this->assertSame($this->nestedSectionUuid, $node['uuid']);
     $this->assertSame('Layout Container', $node['label']);
     $this->assertArrayNotHasKey('block_type', $node);
     $this->assertArrayNotHasKey('plugin_id', $node);
     $this->assertArrayNotHasKey('section_index', $node);
+    $this->assertArrayNotHasKey('regions', $node);
 
-    $nested_comp = $node['regions']['content'][0];
+    $nested_comp = $node['children'][0]['children'][0];
     $this->assertSame($this->nestedBlockUuid, $nested_comp['uuid']);
     $this->assertSame('text_section', $nested_comp['block_type']);
     $this->assertSame('<p>Nested content</p>', $nested_comp['block_fields']['body']['value']);
@@ -137,44 +143,58 @@ class NestedLayoutTest extends BlueprintKernelTestBase {
   }
 
   /**
-   * Tests deserializing a nested section node into a container component.
+   * Tests a nested container node lands as a container component.
    */
-  public function testDeserializeNestedSectionCreate(): void {
-    $entity = $this->createTestEntity();
-
+  public function testCreateWithNestedContainerNode(): void {
     $nested_uuid = '98ecbc05-28b3-48c5-895e-86dfa276af6c';
     $left_uuid = 'cc544f3a-04ed-4129-9b53-a527929550ca';
     $right_uuid = 'dd544f3a-04ed-4129-9b53-a527929550cb';
-    $new_layout = [
+    $result = $this->create([
       [
+        'kind' => 'container',
         'layout_id' => 'layout_onecol',
-        'regions' => [
-          'content' => [
-            [
-              'layout_id' => 'layout_twocol_section',
-              'uuid' => $nested_uuid,
-              'label' => 'Split',
-              'regions' => [
-                'first' => [
+        'children' => [
+          [
+            'kind' => 'region',
+            'region' => 'content',
+            'children' => [
+              [
+                'kind' => 'container',
+                'layout_id' => 'layout_twocol_section',
+                'uuid' => $nested_uuid,
+                'label' => 'Split',
+                'children' => [
                   [
-                    'uuid' => $left_uuid,
-                    'block_type' => 'text_section',
-                    'label' => 'Left',
-                    'block_fields' => [
-                      'body' => [
-                        'value' => '<p>Left column</p>',
-                        'format' => 'plain_text',
+                    'kind' => 'region',
+                    'region' => 'first',
+                    'children' => [
+                      [
+                        'kind' => 'block',
+                        'uuid' => $left_uuid,
+                        'block_type' => 'text_section',
+                        'label' => 'Left',
+                        'block_fields' => [
+                          'body' => [
+                            'value' => '<p>Left column</p>',
+                            'format' => 'plain_text',
+                          ],
+                        ],
                       ],
                     ],
                   ],
-                ],
-                'second' => [
                   [
-                    'uuid' => $right_uuid,
-                    'block_type' => 'card',
-                    'label' => 'Right',
-                    'block_fields' => [
-                      'field_heading' => 'A heading',
+                    'kind' => 'region',
+                    'region' => 'second',
+                    'children' => [
+                      [
+                        'kind' => 'block',
+                        'uuid' => $right_uuid,
+                        'block_type' => 'card',
+                        'label' => 'Right',
+                        'block_fields' => [
+                          'field_heading' => 'A heading',
+                        ],
+                      ],
                     ],
                   ],
                 ],
@@ -183,10 +203,9 @@ class NestedLayoutTest extends BlueprintKernelTestBase {
           ],
         ],
       ],
-    ];
-
-    $result = $this->layoutDeserializer->deserialize($new_layout, $entity);
-    $this->assertFalse($result->hasErrors(), 'Expected no errors. Got: ' . json_encode(array_map(fn($e) => $e->toArray(), $result->getErrors())));
+    ]);
+    $this->assertTrue($result->isSuccess(), 'Expected no errors. Got: ' . json_encode(array_map(fn($e) => $e->toArray(), $result->getErrors())));
+    $entity = $result->getEntity();
 
     $sections = $entity->get('layout_builder__layout')->getSections();
     $this->assertCount(1, $sections);
@@ -218,68 +237,45 @@ class NestedLayoutTest extends BlueprintKernelTestBase {
   }
 
   /**
-   * Tests nested round-trip: serialize, modify nested content, deserialize.
+   * Tests a read's tree creates an equal entity, identity included.
    *
-   * Storage shape == sugar shape: what the serializer emits deserializes
-   * back with no reshaping, and a nested edit lands in the embedded value.
+   * The tree of a nested document (the one shape) is the write grammar:
+   * a nested edit made on the tree lands in the embedded value of the
+   * created copy, under the same identity.
    */
-  public function testNestedSectionRoundTrip(): void {
+  public function testReadTreeCreatesAnEqualEntity(): void {
     $entity = $this->createEntityWithNestedSection();
 
-    $serialized = $this->layoutSerializer->serialize($entity);
-    $serialized[0]['regions']['content'][0]['regions']['content'][0]['block_fields']['body'] = [
+    $tree = $this->treeBuilder->build($this->host($entity));
+    $this->assertSame($this->rootSectionUuid, $tree[0]['uuid']);
+    $nested = &$tree[0]['children'][0]['children'][0];
+    $this->assertSame('container', $nested['kind']);
+    $this->assertSame($this->nestedSectionUuid, $nested['uuid']);
+    $nested['children'][0]['children'][0]['block_fields']['body'] = [
       'value' => '<p>Modified nested content</p>',
       'format' => 'plain_text',
     ];
+    unset($nested);
 
-    $result = $this->layoutDeserializer->deserialize($serialized, $entity);
-    $this->assertFalse($result->hasErrors(), 'Expected no errors. Got: ' . json_encode(array_map(fn($e) => $e->toArray(), $result->getErrors())));
+    $result = $this->create($tree);
+    $this->assertTrue($result->isSuccess(), 'Expected no errors. Got: ' . json_encode(array_map(fn($e) => $e->toArray(), $result->getErrors())));
+    $copy = $result->getEntity();
 
-    $sections = $entity->get('layout_builder__layout')->getSections();
+    $sections = $copy->get('layout_builder__layout')->getSections();
+    $this->assertSame($this->rootSectionUuid, $sections[0]->getThirdPartySetting('daedalus_layout', 'uuid'));
     $container = $sections[0]->getComponent($this->nestedSectionUuid);
     $embedded = SectionBlock::embeddedSection($container);
     $nested_block = $this->unserializeBlock($embedded->getComponent($this->nestedBlockUuid)->get('configuration')['block_serialized']);
-
     $this->assertSame('<p>Modified nested content</p>', $nested_block->get('body')->value);
     $this->assertSame('Layout Container', $embedded->getLayoutSettings()['label']);
 
-    // Re-serializing yields the identical structural node.
-    $again = $this->layoutSerializer->serialize($entity);
-    $node = $again[0]['regions']['content'][0];
+    // The copy reads the tree it was written from.
+    $again = $this->treeBuilder->build($this->host($copy));
+    $node = $again[0]['children'][0]['children'][0];
     $this->assertSame('layout_onecol', $node['layout_id']);
     $this->assertSame($this->nestedSectionUuid, $node['uuid']);
     $this->assertSame('Layout Container', $node['label']);
-  }
-
-  /**
-   * Tests opaque data is preserved on matched nested sections.
-   *
-   * The recursive previous-state walk matches nested sections and their
-   * container components by uuid: third-party settings on the embedded
-   * section and additional data on the container (stencil provenance)
-   * survive an echo-back deserialize, and the provenance surfaces as the
-   * read-only stencil key on the serialized node.
-   */
-  public function testNestedSectionOpaquePreservation(): void {
-    $entity = $this->createEntityWithNestedSection(
-      section_tps: ['daedalus_stylish' => ['tone' => 'bold']],
-      additional: [LayoutSerializer::STENCIL_PROVENANCE_KEY => 'hero_split'],
-    );
-
-    $serialized = $this->layoutSerializer->serialize($entity);
-    $node = $serialized[0]['regions']['content'][0];
-    $this->assertSame('hero_split', $node['stencil']);
-
-    $result = $this->layoutDeserializer->deserialize($serialized, $entity);
-    $this->assertFalse($result->hasErrors(), 'Expected no errors. Got: ' . json_encode(array_map(fn($e) => $e->toArray(), $result->getErrors())));
-
-    $sections = $entity->get('layout_builder__layout')->getSections();
-    $container = $sections[0]->getComponent($this->nestedSectionUuid);
-    $this->assertSame('hero_split', $container->toArray()['additional'][LayoutSerializer::STENCIL_PROVENANCE_KEY]);
-
-    $embedded = SectionBlock::embeddedSection($container);
-    $this->assertSame(['tone' => 'bold'], $embedded->getThirdPartySettings('daedalus_stylish'));
-    $this->assertSame($this->nestedSectionUuid, $embedded->getThirdPartySetting('daedalus_layout', 'uuid'));
+    $this->assertSame('<p>Modified nested content</p>', $node['children'][0]['children'][0]['block_fields']['body']['value']);
   }
 
   /**
@@ -291,7 +287,7 @@ class NestedLayoutTest extends BlueprintKernelTestBase {
 
     $card_uuid = '763163bd-a9d4-43ac-9bee-280ecae80ed6';
     $result = $operations->addElement(
-      $entity,
+      $this->host($entity),
       ['anchor' => $this->nestedSectionUuid, 'placement' => 'inside'],
       [
         'uuid' => $card_uuid,
@@ -302,12 +298,13 @@ class NestedLayoutTest extends BlueprintKernelTestBase {
     );
     $this->assertTrue($result->isSuccess(), 'Expected success. Got: ' . json_encode(array_map(fn($e) => $e->toArray(), $result->getErrors())));
 
-    $serialized = $this->layoutSerializer->serialize($entity);
-    $node = $serialized[0]['regions']['content'][0];
-    $this->assertCount(2, $node['regions']['content']);
-    $this->assertSame($card_uuid, $node['regions']['content'][1]['uuid']);
-    $this->assertSame('card', $node['regions']['content'][1]['block_type']);
-    $this->assertSame('New Card Title', $node['regions']['content'][1]['block_fields']['field_heading']);
+    $serialized = $this->layoutSerializer->serialize($this->host($entity));
+    $node = $serialized[0]['children'][0]['children'][0];
+    $nested_blocks = $node['children'][0]['children'];
+    $this->assertCount(2, $nested_blocks);
+    $this->assertSame($card_uuid, $nested_blocks[1]['uuid']);
+    $this->assertSame('card', $nested_blocks[1]['block_type']);
+    $this->assertSame('New Card Title', $nested_blocks[1]['block_fields']['field_heading']);
   }
 
   /**
@@ -320,7 +317,7 @@ class NestedLayoutTest extends BlueprintKernelTestBase {
     $entity = $this->createEntityWithNestedSection();
     $operations = $this->container->get('daedalus_blueprint.operations');
 
-    $result = $operations->removeElement($entity, $this->nestedSectionUuid);
+    $result = $operations->removeElement($this->host($entity), $this->nestedSectionUuid);
     $this->assertTrue($result->isSuccess(), 'Expected success. Got: ' . json_encode(array_map(fn($e) => $e->toArray(), $result->getErrors())));
 
     $sections = $entity->get('layout_builder__layout')->getSections();
@@ -329,145 +326,94 @@ class NestedLayoutTest extends BlueprintKernelTestBase {
   }
 
   /**
-   * Tests a block node carrying layout_builder__layout is refused.
+   * Tests a block node carrying layout is refused.
    */
   public function testBlockNodeWithNestedLayoutRefused(): void {
-    $entity = $this->createTestEntity();
-
-    $new_layout = [
-      [
-        'layout_id' => 'layout_onecol',
-        'regions' => [
-          'content' => [
-            [
-              'uuid' => 'e205fed4-94ae-4238-b6f7-33b3a89bf137',
-              'block_type' => 'text_section',
-              'label' => 'Text Block',
-              'block_fields' => [],
-              'layout_builder__layout' => [
-                ['layout_id' => 'layout_onecol', 'regions' => []],
-              ],
-            ],
+    $result = $this->create([
+      $this->onecol([
+        [
+          'kind' => 'block',
+          'uuid' => 'e205fed4-94ae-4238-b6f7-33b3a89bf137',
+          'block_type' => 'text_section',
+          'label' => 'Text Block',
+          'block_fields' => [],
+          'layout' => [
+            ['kind' => 'container', 'layout_id' => 'layout_onecol', 'children' => []],
           ],
         ],
-      ],
-    ];
+      ]),
+    ]);
 
-    $result = $this->layoutDeserializer->deserialize($new_layout, $entity);
-
-    $this->assertTrue($result->hasErrors());
+    $this->assertFalse($result->isSuccess());
     $error = $result->getErrors()[0];
-    $this->assertSame('NO_LAYOUT', $error->getCode());
-    $this->assertSame('layout_builder__layout[0].regions.content[0].layout_builder__layout', $error->getPath());
+    $this->assertSame('INVALID_NODE', $error->getCode());
+    $this->assertSame('layout[0].children[0].children[0].layout', $error->getPath());
+    $this->assertStringContainsString('kind: container', $error->getHint());
   }
 
   /**
-   * Tests error paths inside nested sections carry the nested prefix.
+   * Tests error paths inside nested containers carry the nested prefix.
    */
   public function testNestedSectionErrorPaths(): void {
-    $entity = $this->createTestEntity();
-
-    $new_layout = [
-      [
-        'layout_id' => 'layout_onecol',
-        'regions' => [
-          'content' => [
+    $result = $this->create([
+      $this->onecol([
+        [
+          'kind' => 'container',
+          'layout_id' => 'layout_twocol_section',
+          'uuid' => '98ecbc05-28b3-48c5-895e-86dfa276af6c',
+          'children' => [
             [
-              'layout_id' => 'layout_twocol_section',
-              'uuid' => '98ecbc05-28b3-48c5-895e-86dfa276af6c',
-              'regions' => [
-                'first' => [
-                  [
-                    'uuid' => 'not-a-uuid',
-                    'block_type' => 'text_section',
-                    'block_fields' => [],
-                  ],
+              'kind' => 'region',
+              'region' => 'first',
+              'children' => [
+                [
+                  'kind' => 'block',
+                  'uuid' => 'not-a-uuid',
+                  'block_type' => 'text_section',
+                  'block_fields' => [],
                 ],
               ],
             ],
           ],
         ],
+      ]),
+    ]);
+
+    $this->assertFalse($result->isSuccess());
+    $error = $result->getErrors()[0];
+    $this->assertSame('INVALID_NODE', $error->getCode());
+    $this->assertSame('layout[0].children[0].children[0].children[0].children[0].uuid', $error->getPath());
+  }
+
+  /**
+   * Creates an entity_test from a layout tree through the deserializer.
+   *
+   * @param array $layout
+   *   The tree.
+   *
+   * @return \Drupal\daedalus_blueprint\Result\BlueprintResult
+   *   The result.
+   */
+  protected function create(array $layout): object {
+    return $this->deserializer->deserialize([
+      'entity_type' => 'entity_test',
+      'bundle' => 'entity_test',
+      'fields' => ['name' => 'Nested'],
+      'layout' => $layout,
+    ]);
+  }
+
+  /**
+   * A onecol container node holding nodes in its content region.
+   */
+  protected function onecol(array $children): array {
+    return [
+      'kind' => 'container',
+      'layout_id' => 'layout_onecol',
+      'children' => [
+        ['kind' => 'region', 'region' => 'content', 'children' => $children],
       ],
     ];
-
-    $result = $this->layoutDeserializer->deserialize($new_layout, $entity);
-
-    $this->assertTrue($result->hasErrors());
-    $error = $result->getErrors()[0];
-    $this->assertSame('INVALID_UUID', $error->getCode());
-    $this->assertSame('layout_builder__layout[0].regions.content[0].regions.first[0].uuid', $error->getPath());
-  }
-
-  /**
-   * Tests the full blueprint pipeline round-trips nested sections.
-   */
-  public function testBlueprintPipelineNestedRoundTrip(): void {
-    $entity = $this->createEntityWithNestedSection();
-
-    $serializer = $this->container->get('daedalus_blueprint.serializer');
-    $deserializer = $this->container->get('daedalus_blueprint.deserializer');
-
-    $blueprint = $serializer->serialize($entity);
-    $this->assertArrayHasKey('layout_builder__layout', $blueprint);
-    $node = $blueprint['layout_builder__layout'][0]['regions']['content'][0];
-    $this->assertSame('layout_onecol', $node['layout_id']);
-    $this->assertSame($this->nestedSectionUuid, $node['uuid']);
-
-    $blueprint['layout_builder__layout'][0]['regions']['content'][0]['regions']['content'][0]['block_fields']['body'] = [
-      'value' => '<p>Modified via pipeline</p>',
-      'format' => 'plain_text',
-    ];
-
-    $result = $deserializer->deserialize($blueprint);
-    $this->assertTrue($result->isSuccess(), 'Deserialization should succeed. Errors: ' . json_encode(array_map(fn($e) => $e->toArray(), $result->getErrors())));
-
-    $updated = $result->getEntity();
-    $sections = $updated->get('layout_builder__layout')->getSections();
-    $container = $sections[0]->getComponent($this->nestedSectionUuid);
-    $embedded = SectionBlock::embeddedSection($container);
-    $nested_block = $this->unserializeBlock($embedded->getComponent($this->nestedBlockUuid)->get('configuration')['block_serialized']);
-
-    $this->assertSame('<p>Modified via pipeline</p>', $nested_block->get('body')->value);
-  }
-
-  /**
-   * Tests layout writes on non-default translations are refused.
-   *
-   * The layout is one structure shared by every translation; a
-   * langcode-scoped write would silently mutate it for all languages, so
-   * the deserializer refuses it, mirroring core's access rule.
-   */
-  public function testTranslationGuardRefusesLayoutWrites(): void {
-    $this->installEntitySchema('entity_test_mul');
-    $this->installConfig(['language']);
-    ConfigurableLanguage::createFromLangcode('es')->save();
-    $this->enableLayoutBuilder('entity_test_mul', 'entity_test_mul');
-
-    $storage = $this->entityTypeManager->getStorage('entity_test_mul');
-    $entity = $storage->create(['name' => 'Host', 'langcode' => 'en']);
-    $entity->save();
-
-    $deserializer = $this->container->get('daedalus_blueprint.deserializer');
-    $layout = [['layout_id' => 'layout_onecol', 'regions' => []]];
-
-    $blueprint = [
-      'entity_type' => 'entity_test_mul',
-      'bundle' => 'entity_test_mul',
-      'langcode' => 'es',
-      '_root_entity' => ['field' => 'id', 'value' => (int) $entity->id()],
-      'fields' => [],
-      'layout_builder__layout' => $layout,
-    ];
-
-    $result = $deserializer->deserialize($blueprint);
-    $this->assertFalse($result->isSuccess());
-    $codes = array_map(fn($e) => $e->getCode(), $result->getErrors());
-    $this->assertContains('LAYOUT_NOT_TRANSLATABLE', $codes);
-
-    // The same write through the default translation succeeds.
-    $blueprint['langcode'] = 'en';
-    $result = $deserializer->deserialize($blueprint);
-    $this->assertTrue($result->isSuccess(), 'Default-translation layout write should succeed. Errors: ' . json_encode(array_map(fn($e) => $e->toArray(), $result->getErrors())));
   }
 
   /**
@@ -477,15 +423,10 @@ class NestedLayoutTest extends BlueprintKernelTestBase {
    * component (uuid == nested section uuid) embedding a layout_onecol
    * section labeled "Layout Container" holding one text_section block.
    *
-   * @param array $section_tps
-   *   Extra third-party settings for the nested section, keyed by provider.
-   * @param array $additional
-   *   Additional data for the container component.
-   *
    * @return \Drupal\Core\Entity\FieldableEntityInterface
    *   The saved entity, reloaded from storage.
    */
-  protected function createEntityWithNestedSection(array $section_tps = [], array $additional = []): object {
+  protected function createEntityWithNestedSection(): object {
     $entity = $this->createTestEntity();
     $block_storage = $this->entityTypeManager->getStorage('block_content');
 
@@ -505,15 +446,10 @@ class NestedLayoutTest extends BlueprintKernelTestBase {
       ],
     ], ['label' => 'Layout Container']);
     $nested_section->setThirdPartySetting('daedalus_layout', 'uuid', $this->nestedSectionUuid);
-    foreach ($section_tps as $provider => $settings) {
-      foreach ($settings as $key => $value) {
-        $nested_section->setThirdPartySetting($provider, $key, $value);
-      }
-    }
 
     $root_section = $this->createSection('layout_onecol');
     $root_section->setThirdPartySetting('daedalus_layout', 'uuid', $this->rootSectionUuid);
-    $root_section->appendComponent(SectionBlock::createComponent($nested_section, 'content', 0, $additional));
+    $root_section->appendComponent(SectionBlock::createComponent($nested_section, 'content', 0));
 
     $entity->get('layout_builder__layout')->appendSection($root_section);
     $entity->save();

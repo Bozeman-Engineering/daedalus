@@ -8,8 +8,8 @@ use Drupal\daedalus_ai\Ajax\TriggerDeferredCommand;
 use Drupal\daedalus_ai\DeferredProcessor\DeferredProcessorManager;
 use Drupal\daedalus_ai\DeferredProcessor\ImageGenerationProcessor;
 use Drupal\Component\Serialization\Json;
-use Drupal\Core\Entity\FieldableEntityInterface;
 use Drupal\Core\TempStore\PrivateTempStoreFactory;
+use Drupal\daedalus_blueprint\Host\HostInterface;
 use Symfony\Component\HttpFoundation\Request;
 
 /**
@@ -35,11 +35,12 @@ use Symfony\Component\HttpFoundation\Request;
  * media uuid's generation job from the GenerationJobStore and refreshes
  * the targets when the pixels land.
  *
- * The AiToolActionSubscriber binds the persisted entity: the batch needs an
- * entity route for the trigger POST and the completion re-render. A
- * registration that never gets an entity bound (a lane with no processing
- * trigger, e.g. the HTTP API) is dropped at flush; its minted media keeps
- * the placeholder file until a trigger lane exists for it.
+ * The AiToolActionSubscriber binds the persisted host (a page's entity or
+ * a template's display): the batch needs a host route for the trigger POST
+ * and the completion re-render. A registration that never gets a host
+ * bound (a lane with no processing trigger, e.g. the HTTP API) is dropped
+ * at flush; its minted media keeps the placeholder file until a trigger
+ * lane exists for it.
  */
 class PendingTargetCollector {
 
@@ -51,9 +52,9 @@ class PendingTargetCollector {
   protected array $pending = [];
 
   /**
-   * The entity whose persistence carried the minted references.
+   * The host whose persistence carried the minted references.
    */
-  protected ?FieldableEntityInterface $entity = NULL;
+  protected ?HostInterface $host = NULL;
 
   public function __construct(
     protected PrivateTempStoreFactory $tempStoreFactory,
@@ -106,18 +107,18 @@ class PendingTargetCollector {
   }
 
   /**
-   * Binds the persisted entity the batch will be processed against.
+   * Binds the persisted host the batch will be processed against.
    *
-   * Called by the tool-action subscriber on every entity persistence; the
-   * last persisted entity of the turn hosts the batch (generation itself is
-   * entity-independent, the entity only routes the trigger POST and scopes
-   * the completion re-render).
+   * Called by the tool-action subscriber on every host persistence; the
+   * last persisted host of the turn carries the batch (generation itself is
+   * host-independent, the host only routes the trigger POST and scopes the
+   * completion re-render).
    *
-   * @param \Drupal\Core\Entity\FieldableEntityInterface $entity
-   *   The persisted working copy.
+   * @param \Drupal\daedalus_blueprint\Host\HostInterface $host
+   *   The persisted working copy's host.
    */
-  public function bindEntity(FieldableEntityInterface $entity): void {
-    $this->entity = $entity;
+  public function bindHost(HostInterface $host): void {
+    $this->host = $host;
   }
 
   /**
@@ -133,23 +134,23 @@ class PendingTargetCollector {
    *   mode the client displays.
    *
    * @return \Drupal\daedalus_ai\Ajax\TriggerDeferredCommand|null
-   *   The command to queue, or NULL when nothing is pending or no entity was
+   *   The command to queue, or NULL when nothing is pending or no host was
    *   bound.
    */
   public function flush(Request $request): ?TriggerDeferredCommand {
     $pending = $this->pending;
-    $entity = $this->entity;
+    $host = $this->host;
     $this->pending = [];
-    $this->entity = NULL;
+    $this->host = NULL;
 
-    if ($pending === [] || $entity === NULL) {
+    if ($pending === [] || $host === NULL) {
       return NULL;
     }
 
     $contexts = Json::decode($request->getContent())['contexts'] ?? [];
     $view_mode = is_string($contexts['view_mode'] ?? NULL) ? $contexts['view_mode'] : 'full';
 
-    $batch_id = $entity->getEntityTypeId() . ':' . $entity->id() . ':' . uniqid('', TRUE);
+    $batch_id = $host->entityTypeId() . ':' . $host->id() . ':' . uniqid('', TRUE);
     $this->tempStoreFactory->get('daedalus_ai_deferred')->set($batch_id, [
       'type' => ImageGenerationProcessor::TYPE,
       'jobs' => $pending,
@@ -176,14 +177,14 @@ class PendingTargetCollector {
         $target_keys[] = $target;
       }
     }
-    $target_keys = array_merge(($this->targetKeyMapper)()->map($entity, $field_targets), $target_keys);
+    $target_keys = array_merge(($this->targetKeyMapper)()->map($host, $field_targets), $target_keys);
 
     $messages = $this->processorManager->getProcessor(ImageGenerationProcessor::TYPE)?->getMessages() ?? [];
 
     return new TriggerDeferredCommand(
       batchId: $batch_id,
-      entityType: $entity->getEntityTypeId(),
-      entityId: (string) $entity->id(),
+      entityType: $host->entityTypeId(),
+      entityId: (string) $host->id(),
       viewMode: $view_mode,
       targetKeys: array_values(array_unique($target_keys)),
       messages: $messages,

@@ -47,6 +47,11 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  * pins RouteEntityResolver's own contract. A fresh subscriber + context per
  * scenario keeps the subscriber's request-scoped captured state isolated.
  *
+ * Scenario A's token assertion is the only exhaustive pin of
+ * RouteEntityResolver::describe()'s key set (the two readers of the token read
+ * named keys), so a task that adds a host fact to describe() owes this class
+ * in its verify: every new key reds it and nothing else.
+ *
  * @group daedalus_ai
  */
 #[Group('daedalus_ai')]
@@ -129,12 +134,24 @@ class TokenPropagationSubscriberTest extends KernelTestBase {
     $subscriber->onBuildSystemPrompt($prompt);
     $tokens = $prompt->getTokens();
     $this->assertSame('teaser', $tokens['current_view_mode']);
+    // The host's facts (RouteEntityResolver::describe()): identity as the
+    // tools address it, the document's kind, neither a template, a saved
+    // blueprint nor the site frame for a page, and the root verdict (an admin
+    // on a page with no layout: nothing refused).
     $this->assertSame([
       'entity_type' => 'entity_test',
-      'entity_id' => $entity->id(),
+      'entity_id' => (string) $entity->id(),
       'uuid' => $entity->uuid(),
       'bundle' => 'entity_test',
       'label' => 'Routed Page',
+      'kind' => ['entity_type' => 'entity_test', 'bundle' => 'entity_test'],
+      'template' => NULL,
+      'blueprint' => NULL,
+      'frame' => NULL,
+      'verdict' => [
+        'can' => ['content' => TRUE, 'configure' => TRUE, 'style' => TRUE, 'arrange' => TRUE, 'insert' => TRUE],
+        'refused' => [],
+      ],
     ], $tokens['current_entity_context']);
 
     // Scenario B: a fresh subscriber captured nothing (empty context is a safe
@@ -205,6 +222,7 @@ class TokenPropagationSubscriberTest extends KernelTestBase {
         $this->container->get('daedalus_blueprint.access_checker'),
         $this->container->get('router.no_access_checks'),
         $this->container->get('daedalus_ui.ui'),
+        $this->container->get('daedalus_blueprint.verdict_stamper'),
       ),
       $context,
     );

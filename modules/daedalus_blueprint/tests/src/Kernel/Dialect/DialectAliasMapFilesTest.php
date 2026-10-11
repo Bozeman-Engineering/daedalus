@@ -193,14 +193,14 @@ class DialectAliasMapFilesTest extends BlueprintKernelTestBase {
     $file = $this->uuid();
 
     // The same word in both namespaces of one conversation.
-    $this->map->record($this->entity, 'conv-1', 'hero', $element);
+    $this->map->record($this->host($this->entity), 'conv-1', 'hero', $element);
     $this->map->recordFile('conv-1', 'hero', $file);
 
-    $this->assertSame(['hero' => $element], $this->map->aliases($this->entity, 'conv-1'));
+    $this->assertSame(['hero' => $element], $this->map->aliases($this->host($this->entity), 'conv-1'));
     $this->assertSame(['hero' => $file], $this->map->fileAliases('conv-1'));
-    $this->assertSame($element, $this->map->resolve($this->entity, 'conv-1', 'hero'));
+    $this->assertSame($element, $this->map->resolve($this->host($this->entity), 'conv-1', 'hero'));
     $this->assertSame($file, $this->map->resolveFile('conv-1', 'hero'));
-    $this->assertSame([$element => 'hero'], $this->map->printAliases($this->entity, 'conv-1'));
+    $this->assertSame([$element => 'hero'], $this->map->printAliases($this->host($this->entity), 'conv-1'));
 
     // One persist settles both, each under its own key.
     $this->map->persist();
@@ -210,15 +210,15 @@ class DialectAliasMapFilesTest extends BlueprintKernelTestBase {
     // A file removal never reaches the element map, nor the reverse, even
     // when the uuid were the same.
     $shared = $this->uuid();
-    $this->map->record($this->entity, 'conv-1', 'twin', $shared);
+    $this->map->record($this->host($this->entity), 'conv-1', 'twin', $shared);
     $this->map->recordFile('conv-1', 'twin.png', $shared);
     $this->map->forgetFile('conv-1', $shared);
-    $this->assertSame($shared, $this->map->resolve($this->entity, 'conv-1', 'twin'));
+    $this->assertSame($shared, $this->map->resolve($this->host($this->entity), 'conv-1', 'twin'));
     $this->assertNull($this->map->resolveFile('conv-1', 'twin.png'));
 
     $this->map->recordFile('conv-1', 'twin.png', $shared);
-    $this->map->forget($this->entity, 'conv-1', $shared);
-    $this->assertNull($this->map->resolve($this->entity, 'conv-1', 'twin'));
+    $this->map->forget($this->host($this->entity), 'conv-1', $shared);
+    $this->assertNull($this->map->resolve($this->host($this->entity), 'conv-1', 'twin'));
     $this->assertSame($shared, $this->map->resolveFile('conv-1', 'twin.png'));
 
     $this->map->persist();

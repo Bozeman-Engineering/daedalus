@@ -49,6 +49,9 @@ let delegate = null;
  * @return {?Element}
  *   A block-placement or section element, or null when nothing movable
  *   encloses the key (fields of the root entity, regions at the boundary).
+ *   Whether the element MAY move is not answered here: the drag
+ *   controller asks arrange of the drag data's key when the gesture
+ *   starts (makeDragDelegate / makeDraggable), one gate for every source.
  *
  * Exported for the keyboard lift: Space on a selection lifts exactly
  * what a drag on it would grab.
@@ -56,7 +59,8 @@ let delegate = null;
 export const movableFor = (key) => {
   let element = elementForKey(key);
   while (element && !element.hasAttribute('data-main-entity')) {
-    const parts = element.getAttribute('data-selectable').split(':');
+    const selectable = element.getAttribute('data-selectable');
+    const parts = selectable.split(':');
     if (
       parts[0] === 'container' ||
       (parts[0] === 'block' && parts.length === 2)
@@ -75,10 +79,13 @@ const resolveArmed = () => {
   if (!armed?.isConnected) {
     return null;
   }
-  const parts = armed.getAttribute('data-selectable').split(':');
+  const key = armed.getAttribute('data-selectable');
+  const parts = key.split(':');
   return {
     type: parts[0] === 'container' ? 'move_section' : 'move_block',
-    data: { uuid: parts[1], element: armed },
+    // `key` names the element the drag MOVES: the controller asks arrange
+    // of it at dragstart (the one gate for every source).
+    data: { uuid: parts[1], element: armed, key },
     element: armed,
   };
 };
@@ -115,11 +122,11 @@ const arm = (element) => {
 };
 
 // Arming follows the store: the hover key names WHAT the drag layer means,
-// the mode gates WHETHER dragging is on, and a blueprint replacement means
-// a markup swap may have recreated the armed key's element — re-resolve.
-// Memoized on those three inputs so the per-dispatch cost is comparisons,
-// not DOM queries.
-let last = { mode: null, hoverKey: null, blueprint: null };
+// the mode gates WHETHER dragging is on, an open edit suspends it, and a
+// blueprint replacement means a markup swap may have recreated the armed
+// key's element: re-resolve. Memoized on those four inputs so the
+// per-dispatch cost is comparisons, not DOM queries.
+let last = { mode: null, hoverKey: null, editingKey: null, blueprint: null };
 
 const syncArming = () => {
   const state = store.getState();
@@ -132,17 +139,35 @@ const syncArming = () => {
   const next = {
     mode: state.mode.mode,
     hoverKey: state.selection.hoverKey,
+    editingKey: state.selection.editingKey,
     blueprint: state.blueprint.blueprint,
   };
   if (
     next.mode === last.mode &&
     next.hoverKey === last.hoverKey &&
+    next.editingKey === last.editingKey &&
     next.blueprint === last.blueprint
   ) {
     return;
   }
   last = next;
   if (next.mode !== 'edit') {
+    disarm();
+    return;
+  }
+  // No canvas drag while ANY edit is open. The edited element is the
+  // selection and hover on the selection resolves to the selection, so
+  // hover-only arming would keep the wrapper draggable for the whole
+  // edit; and WebKit lets a draggable ancestor win the mousedown over an
+  // editable descendant (Chrome lets the descendant win it as a text
+  // selection), so selecting text inside the typing surface would start
+  // a native drag of the wrapper, reinterpreted here as a block move.
+  // Editing and moving are sequential (the edit commits, then the block
+  // moves), so the rule is the open edit itself, not whether the armed
+  // movable contains it; arming resumes from the hover key when the edit
+  // closes. (The page-elements tree's rows drop their own `draggable`
+  // while renaming for the same reason.)
+  if (next.editingKey !== null) {
     disarm();
     return;
   }

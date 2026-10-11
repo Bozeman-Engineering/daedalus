@@ -15,13 +15,14 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 /**
  * Tests the lean node tree — the spine's canonical page representation.
  *
- * The tree is derived from LayoutSerializer's output: kind-discriminated
+ * The tree is LayoutSerializer's output: kind-discriminated
  * container/region/block nodes with ONE child axis at every depth (no
- * regions map, no section_index, no view_mode/block_revision_id/
- * label_display residue) and the entity's flat style map distributed onto
- * the nodes its keys address. It is what the model-facing dialect prints
- * from and what the blueprint mirror delivers, so the shape is locked
- * here at the spine.
+ * regions map, no section_index, no block_revision_id/label_display
+ * residue, the default view_mode implied) and the flat style map
+ * distributed onto the nodes its keys address. It is what the model-facing
+ * dialect prints from and what the blueprint's `layout` delivers, so the
+ * shape is locked here at the spine, with the builder's reads over it
+ * (build(), the style map order, nodelessStyles(), find()).
  */
 #[CoversClass(NodeTreeBuilder::class)]
 #[Group('daedalus_blueprint')]
@@ -138,7 +139,7 @@ class NodeTreeBuilderTest extends BlueprintKernelTestBase {
       'entity:99999999-9999-4999-8999-999999999999' => ['default' => ['margin' => '0']],
     ];
 
-    $tree = $this->builder->fromSections($this->layoutSerializer->serialize($entity), $style_map);
+    $tree = $this->layoutSerializer->serialize($this->host($entity), $style_map);
 
     // One top-level container node, kind-discriminated, no residue.
     $this->assertCount(1, $tree);
@@ -183,6 +184,23 @@ class NodeTreeBuilderTest extends BlueprintKernelTestBase {
     $this->assertArrayNotHasKey('styles', $nested_node);
     $this->assertSame(['block'], array_column($nested_node['children'], 'kind'));
     $this->assertSame($inner_uuid, $nested_node['children'][0]['uuid']);
+
+    // What no node carries is the map's node-less remainder, in stored
+    // order; the tree plus the remainder is the whole map, in the
+    // document's order.
+    $this->assertSame(
+      ['entity:99999999-9999-4999-8999-999999999999' => ['default' => ['margin' => '0']]],
+      NodeTreeBuilder::nodelessStyles($tree, $style_map),
+    );
+    $this->assertSame([
+      'entity:99999999-9999-4999-8999-999999999999',
+      "container:$root_uuid",
+      "container:$root_uuid::> *",
+      "block:$block_uuid",
+      "block:$block_uuid::.text-block-link",
+      "block:$block_uuid:body",
+    ], array_keys(NodeTreeBuilder::styleMapOf($tree, NodeTreeBuilder::nodelessStyles($tree, $style_map))));
+    $this->assertSame($nested_node, NodeTreeBuilder::find($tree, $nested_uuid));
   }
 
   /**
@@ -205,7 +223,7 @@ class NodeTreeBuilderTest extends BlueprintKernelTestBase {
     $entity->save();
     $entity = $this->entityTypeManager->getStorage('entity_test')->load($entity->id());
 
-    $tree = $this->builder->fromSections($this->layoutSerializer->serialize($entity));
+    $tree = $this->layoutSerializer->serialize($this->host($entity));
 
     $container = $tree[0];
     $this->assertSame('container', $container['kind']);
@@ -240,9 +258,9 @@ class NodeTreeBuilderTest extends BlueprintKernelTestBase {
     $entity->save();
     $entity = $this->entityTypeManager->getStorage('entity_test')->load($entity->id());
 
-    $this->assertSame([], $this->builder->styleMap($entity));
+    $this->assertSame([], $this->builder->styleMap($this->host($entity)));
 
-    $tree = $this->builder->build($entity);
+    $tree = $this->builder->build($this->host($entity));
     $this->assertSame('container', $tree[0]['kind']);
     $this->assertSame('cccccccc-3333-4444-8888-000000000001', $tree[0]['children'][0]['uuid']);
     $this->assertArrayNotHasKey('styles', $tree[0]);

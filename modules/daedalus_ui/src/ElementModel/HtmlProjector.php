@@ -5,10 +5,12 @@ declare(strict_types=1);
 namespace Drupal\daedalus_ui\ElementModel;
 
 use Drupal\Component\Utility\Html;
-use Drupal\Core\Entity\FieldableEntityInterface;
 use Drupal\Core\Entity\TranslatableInterface;
 use Drupal\daedalus_blueprint\Dispatch\BlueprintBackendResolver;
+use Drupal\daedalus_blueprint\Host\HostInterface;
+use Drupal\daedalus_blueprint\Host\HostResolver;
 use Drupal\daedalus_blueprint\Markup\MarkupProjectorInterface;
+use Drupal\daedalus_blueprint\NodeTree\NodeTreeBuilder;
 
 /**
  * Prints the annotated blueprint as key-annotated HTML — the print format.
@@ -16,8 +18,10 @@ use Drupal\daedalus_blueprint\Markup\MarkupProjectorInterface;
  * The canonical instance model is the `_element.markup` annotation the
  * BlueprintElementAnnotator stamps on delivered blueprints: the element
  * resolver's concrete tree for each owning node's data. This projector is
- * a PRINTER of that one model for the AI read boundary — the same trees
- * the client mirror consumes, spelled as HTML because markup competence
+ * a PRINTER of that one model for the AI read boundary — it walks the
+ * delivered lean tree (the blueprint's `layout`: container, region and
+ * block nodes), the same tree the client mirror consumes, spelled as HTML
+ * because markup competence
  * in LLM training is inseparable from markup: delivered structure turns
  * memorized prose rules into visible elements. Never a scrape of rendered
  * output, never a second model; it plugs into daedalus_blueprint's
@@ -84,10 +88,11 @@ final class HtmlProjector implements MarkupProjectorInterface {
   public function __construct(
     private readonly BlueprintBackendResolver $backendResolver,
     private readonly BlueprintElementAnnotator $annotator,
+    private readonly HostResolver $hostResolver,
   ) {}
 
   /**
-   * Prints the entity's page: the root box, its parts, fields and sections.
+   * Prints the host's page: the root box, its parts, fields and sections.
    *
    * The root's field comments carry the private `__field_comment` token
    * (no part can claim them, so they always print at the entity box) and
@@ -97,32 +102,39 @@ final class HtmlProjector implements MarkupProjectorInterface {
    * inside the entity box, the same mounting rule the markup view's root
    * composition follows for the same declaration.
    *
-   * @param \Drupal\Core\Entity\FieldableEntityInterface $entity
-   *   The root entity.
+   * @param \Drupal\daedalus_blueprint\Host\HostInterface $host
+   *   The host.
    * @param string|null $langcode
-   *   The translation to print, or NULL for the entity's own language.
+   *   The translation to print, or NULL for the host's own language.
    *
    * @return string|null
    *   The page's printed lines, or NULL when no blueprint backend serves
-   *   the entity type.
+   *   the host.
    */
-  public function projectEntity(FieldableEntityInterface $entity, ?string $langcode = NULL): ?string {
-    $blueprint = $this->annotatedBlueprint($entity, $langcode);
+  public function projectHost(HostInterface $host, ?string $langcode = NULL): ?string {
+    $blueprint = $this->annotatedBlueprint($host, $langcode);
     if ($blueprint === NULL) {
       return NULL;
     }
     $items = [];
-    foreach ($this->rootFieldComments($blueprint, $entity) as $comment) {
+    foreach ($this->rootFieldComments($blueprint, $host) as $comment) {
       $items[] = ['token' => '__field_comment', 'lines' => [$comment]];
     }
-    foreach ($blueprint['layout_builder__layout'] ?? [] as $section) {
-      $items[] = ['token' => 'sections', 'lines' => $this->sectionLines($section, 0)];
+    foreach ($blueprint['layout'] ?? [] as $container) {
+      $items[] = ['token' => 'sections', 'lines' => $this->containerLines($container, 0)];
     }
     $markup = $blueprint['_element']['markup'] ?? $this->emptyMarkup();
+    // The document's kind (a template host prints its target type and
+    // bundle, a content host its own), read through the host's display; a
+    // host with no display (the site frame) prints its type and id, the
+    // theme.
+    $display = $host->display();
     return implode("\n", $this->boxLines(
       $markup,
-      'entity:' . $entity->uuid(),
-      $entity->getEntityTypeId() . '/' . $entity->bundle(),
+      'entity:' . $host->uuid(),
+      $display === NULL
+        ? $host->entityTypeId() . '/' . $host->id()
+        : $display->getTargetEntityTypeId() . '/' . $display->getTargetBundle(),
       $items,
       0,
     ));
@@ -131,13 +143,13 @@ final class HtmlProjector implements MarkupProjectorInterface {
   /**
    * {@inheritdoc}
    */
-  public function projectElement(FieldableEntityInterface $entity, string $uuid, ?string $langcode = NULL): ?string {
-    $blueprint = $this->annotatedBlueprint($entity, $langcode);
+  public function projectElement(HostInterface $host, string $uuid, ?string $langcode = NULL): ?string {
+    $blueprint = $this->annotatedBlueprint($host, $langcode);
     if ($blueprint === NULL) {
       return NULL;
     }
-    $lines = $this->findElement($blueprint['layout_builder__layout'] ?? [], $uuid);
-    return $lines === NULL ? NULL : implode("\n", $lines);
+    $node = NodeTreeBuilder::find($blueprint['layout'] ?? [], $uuid);
+    return $node === NULL ? NULL : implode("\n", $this->nodeLines($node, 0));
   }
 
   /**
@@ -191,148 +203,105 @@ final class HtmlProjector implements MarkupProjectorInterface {
   }
 
   /**
-   * Serializes and annotates the entity's blueprint, or NULL if no backend.
+   * Serializes and annotates the host's blueprint, or NULL if no backend.
+   *
+   * A named translation prints the host of the translated fields entity:
+   * the document is one storage shared by every translation.
    */
-  private function annotatedBlueprint(FieldableEntityInterface $entity, ?string $langcode): ?array {
-    $backend = $this->backendResolver->resolve($entity->getEntityTypeId());
+  private function annotatedBlueprint(HostInterface $host, ?string $langcode): ?array {
+    $backend = $this->backendResolver->resolveFor($host->entity());
     if ($backend === NULL) {
       return NULL;
     }
-    if ($langcode !== NULL && $entity instanceof TranslatableInterface) {
-      $entity = $entity->getTranslation($langcode);
+    $fields = $host->fields();
+    if ($langcode !== NULL && $fields instanceof TranslatableInterface) {
+      $host = $this->hostResolver->fromEntity($fields->getTranslation($langcode));
     }
-    return $this->annotator->annotate($backend->serialize($entity, $langcode), $entity, self::VIEW_MODE);
+    return $this->annotator->annotate($backend->serialize($host->entity(), $langcode), $host, self::VIEW_MODE);
   }
 
   /**
-   * Searches serialized sections (recursively) for the element to print.
+   * Prints one container node.
    *
-   * @return string[]|null
-   *   The element's printed lines, or NULL when no node carries the UUID.
-   */
-  private function findElement(array $sections, string $uuid): ?array {
-    foreach ($sections as $section) {
-      if (($section['uuid'] ?? NULL) === $uuid) {
-        return $this->sectionLines($section, 0);
-      }
-      foreach ($this->sectionComponentLists($section) as $components) {
-        foreach ($components as $component) {
-          if (!is_array($component)) {
-            continue;
-          }
-          if (isset($component['layout_id'])) {
-            $found = $this->findElement([$component], $uuid);
-            if ($found !== NULL) {
-              return $found;
-            }
-            continue;
-          }
-          if (($component['uuid'] ?? NULL) === $uuid) {
-            return $this->componentLines($component, 0);
-          }
-        }
-      }
-    }
-    return NULL;
-  }
-
-  /**
-   * The section's component lists (regions map, or the container children).
-   *
-   * @return array[]
-   *   Component lists, keyed by region name ('' for a container's ordered
-   *   children list).
-   */
-  private function sectionComponentLists(array $section): array {
-    $lists = [];
-    if (!empty($section['regions']) && is_array($section['regions'])) {
-      foreach ($section['regions'] as $region => $components) {
-        $lists[(string) $region] = is_array($components) ? $components : [];
-      }
-    }
-    if (!empty($section['children']) && is_array($section['children'])) {
-      $lists[''] = $section['children'];
-    }
-    return $lists;
-  }
-
-  /**
-   * Prints one section node.
-   *
-   * The section's components mount under the 'regions' token: inside the
-   * part whose contains: claims it, or directly inside the section box
+   * The container's children mount under the 'regions' token: inside the
+   * part whose contains: claims it, or directly inside the container box
    * when nothing does (the one-box container), exactly as the render
-   * mounts them. Multi-region layouts get a region comment per
-   * region so the grouping stays visible without inventing region
-   * elements (regions are not addressable).
+   * mounts them. A container holding more than one region node gets a
+   * region comment per region so the grouping stays visible without
+   * inventing region elements (regions are not addressable); a lone
+   * region (core's one-column layouts) is the flow itself and prints no
+   * comment.
    *
    * @return string[]
    *   The printed lines.
    */
-  private function sectionLines(array $section, int $indent): array {
-    $lists = $this->sectionComponentLists($section);
+  private function containerLines(array $container, int $indent): array {
+    $children = array_values(array_filter($container['children'] ?? [], 'is_array'));
+    $regions = array_filter($children, static fn (array $child): bool => ($child['kind'] ?? NULL) === 'region');
     $content = [];
-    foreach ($lists as $region => $components) {
-      if ($region !== '' && count($lists) > 1) {
-        $content[] = ['token' => 'regions', 'lines' => ['<!-- region: ' . Html::escape($region) . ' -->']];
-      }
-      foreach ($components as $component) {
-        $lines = $this->componentEntryLines($component, 0);
-        if ($lines !== []) {
-          $content[] = ['token' => 'regions', 'lines' => $lines];
+    foreach ($children as $child) {
+      if (($child['kind'] ?? NULL) === 'region') {
+        if (count($regions) > 1) {
+          $comment = '<!-- region: ' . Html::escape((string) ($child['region'] ?? '')) . ' -->';
+          $content[] = ['token' => 'regions', 'lines' => [$comment]];
         }
+        foreach ($child['children'] ?? [] as $member) {
+          if (is_array($member)) {
+            $content[] = ['token' => 'regions', 'lines' => $this->nodeLines($member, 0)];
+          }
+        }
+        continue;
       }
+      $content[] = ['token' => 'regions', 'lines' => $this->nodeLines($child, 0)];
     }
-    $markup = $section['_element']['markup'] ?? $this->emptyMarkup();
+    $markup = $container['_element']['markup'] ?? $this->emptyMarkup();
     return $this->boxLines(
       $markup,
-      'container:' . (string) ($section['uuid'] ?? ''),
-      (string) ($section['layout_id'] ?? ''),
+      'container:' . (string) ($container['uuid'] ?? ''),
+      (string) ($container['layout_id'] ?? ''),
       $content,
       $indent,
     );
   }
 
   /**
-   * Prints one component-list entry (a component or a nested section).
+   * Prints one element node: a container or a block.
    *
    * @return string[]
    *   The printed lines (indent 0; the mounting box re-indents).
    */
-  private function componentEntryLines(array|string $component, int $indent): array {
-    if (!is_array($component)) {
-      // Bare-UUID relocation strings carry no node to print.
-      return [];
-    }
-    if (isset($component['layout_id'])) {
-      return $this->sectionLines($component, $indent);
-    }
-    return $this->componentLines($component, $indent);
+  private function nodeLines(array $node, int $indent): array {
+    return ($node['kind'] ?? NULL) === 'container'
+      ? $this->containerLines($node, $indent)
+      : $this->blockLines($node, $indent);
   }
 
   /**
-   * Prints one component node.
+   * Prints one block node.
    *
    * @return string[]
    *   The printed lines.
    */
-  private function componentLines(array $component, int $indent): array {
+  private function blockLines(array $component, int $indent): array {
     $pad = str_repeat('  ', $indent);
     $uuid = (string) ($component['uuid'] ?? '');
     $label = (string) ($component['label'] ?? '');
     $block_type = $component['block_type'] ?? NULL;
 
-    // A plugin component renders bespoke markup the model describes
-    // nowhere; the comment keeps its key and identity visible without
-    // inventing elements.
+    // A plugin component (a field node included: it names the page's field,
+    // not a plugin id) renders bespoke markup the model describes nowhere;
+    // the comment keeps its key and identity visible without inventing
+    // elements.
     if ($block_type === NULL) {
-      $plugin_id = (string) ($component['plugin_id'] ?? '');
+      $identity = isset($component['field'])
+        ? 'field ' . (string) $component['field']
+        : 'plugin ' . (string) ($component['plugin_id'] ?? '');
       return [
         sprintf(
-          '%s<!-- block:%s — plugin %s%s: bespoke markup (not modeled) -->',
+          '%s<!-- block:%s — %s%s: bespoke markup (not modeled) -->',
           $pad,
           $uuid,
-          Html::escape($plugin_id),
+          Html::escape($identity),
           $label !== '' ? ' "' . Html::escape($label) . '"' : '',
         ),
       ];
@@ -555,7 +524,7 @@ final class HtmlProjector implements MarkupProjectorInterface {
    * @return string[]
    *   One comment line per open root field.
    */
-  private function rootFieldComments(array $blueprint, FieldableEntityInterface $entity): array {
+  private function rootFieldComments(array $blueprint, HostInterface $host): array {
     $comments = [];
     $facts = $blueprint['_element']['fields'] ?? [];
     foreach ($blueprint['fields'] ?? [] as $name => $value) {
@@ -563,7 +532,7 @@ final class HtmlProjector implements MarkupProjectorInterface {
         continue;
       }
       $excerpt = is_string($value) && trim($value) !== '' ? ' — "' . $this->excerpt($value) . '"' : '';
-      $comments[] = sprintf('<!-- field:%s:%s%s -->', $entity->uuid(), $name, $excerpt);
+      $comments[] = sprintf('<!-- field:%s:%s%s -->', $host->uuid(), $name, $excerpt);
     }
     return $comments;
   }

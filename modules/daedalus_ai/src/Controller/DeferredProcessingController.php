@@ -10,9 +10,10 @@ use Drupal\daedalus_ai\MutatedTurn;
 use Drupal\Component\Serialization\Json;
 use Drupal\Core\Controller\ControllerBase;
 use Drupal\Core\Entity\EntityInterface;
-use Drupal\Core\Entity\FieldableEntityInterface;
 use Drupal\Core\TempStore\PrivateTempStoreFactory;
 use Drupal\daedalus_blueprint\EntityStorageHandler;
+use Drupal\daedalus_blueprint\Host\HostInterface;
+use Drupal\daedalus_blueprint\Host\HostResolver;
 use Drupal\daedalus_blueprint_api\Controller\AjaxPageStateRequestTrait;
 use Drupal\daedalus_ui\DaedalusUi;
 use Symfony\Component\DependencyInjection\ContainerInterface;
@@ -43,6 +44,7 @@ class DeferredProcessingController extends ControllerBase {
     protected MutatedTurn $mutatedTurn,
     protected EntityStorageHandler $entityStorageHandler,
     protected DaedalusUi $daedalusUi,
+    protected HostResolver $hostResolver,
   ) {}
 
   /**
@@ -55,6 +57,7 @@ class DeferredProcessingController extends ControllerBase {
       $container->get('daedalus_ai.mutated_turn'),
       $container->get('daedalus_blueprint.storage_handler'),
       $container->get('daedalus_ui.ui'),
+      $container->get('daedalus_blueprint.host_resolver'),
     );
   }
 
@@ -76,7 +79,8 @@ class DeferredProcessingController extends ControllerBase {
    *   the batch.
    */
   public function process(Request $request, string $entity_type, EntityInterface $entity, string $view_mode): Response {
-    $this->assertValidViewMode($entity, $view_mode);
+    $host = $this->hostOf($entity);
+    $this->assertValidViewMode($host, $view_mode);
 
     $body = Json::decode($request->getContent()) ?? [];
     $this->applyAjaxPageState($request, $body);
@@ -96,7 +100,7 @@ class DeferredProcessingController extends ControllerBase {
       if (isset($batch_data['result'])) {
         // Processing finished: render refresh from stored result and clean up.
         $store->delete($batch_id);
-        return $this->buildResponseFromResult($batch_data['result'], $request, $entity, $view_mode);
+        return $this->buildResponseFromResult($batch_data['result'], $request, $host, $view_mode);
       }
       return new JsonResponse(['processing' => TRUE]);
     }
@@ -105,7 +109,7 @@ class DeferredProcessingController extends ControllerBase {
     $batch_data['processing'] = time();
     $store->set($batch_id, $batch_data);
 
-    [$success_targets, $failures] = $this->executeJobs($batch_data['type'], $batch_data['jobs'], $entity_type, $entity, $view_mode);
+    [$success_targets, $failures] = $this->executeJobs($batch_data['type'], $batch_data['jobs'], $host, $view_mode);
 
     // Store result for any subsequent request that finds this batch.
     $batch_data['result'] = [
@@ -116,7 +120,7 @@ class DeferredProcessingController extends ControllerBase {
 
     // Render and return the response (it may not reach the client if a
     // navigation killed the XHR).
-    return $this->buildResponseFromResult($batch_data['result'], $request, $entity, $view_mode);
+    return $this->buildResponseFromResult($batch_data['result'], $request, $host, $view_mode);
   }
 
   /**
@@ -135,7 +139,8 @@ class DeferredProcessingController extends ControllerBase {
    *   JSON: the mutation-response payload plus {failures: [...]}.
    */
   public function retry(Request $request, string $entity_type, EntityInterface $entity, string $view_mode): Response {
-    $this->assertValidViewMode($entity, $view_mode);
+    $host = $this->hostOf($entity);
+    $this->assertValidViewMode($host, $view_mode);
 
     $body = Json::decode($request->getContent()) ?? [];
     $this->applyAjaxPageState($request, $body);
@@ -180,7 +185,7 @@ class DeferredProcessingController extends ControllerBase {
         ],
         $media_uuids,
       );
-      [$type_successes, $type_failures] = $this->executeJobs($type, $jobs, $entity_type, $entity, $view_mode);
+      [$type_successes, $type_failures] = $this->executeJobs($type, $jobs, $host, $view_mode);
       array_push($success_targets, ...$type_successes);
       array_push($new_failures, ...$type_failures);
     }
@@ -194,7 +199,29 @@ class DeferredProcessingController extends ControllerBase {
     return $this->buildResponseFromResult([
       'success_targets' => $success_targets,
       'failures' => $new_failures,
-    ], $request, $entity, $view_mode);
+    ], $request, $host, $view_mode);
+  }
+
+  /**
+   * The host the route's upcast entity is (a page's entity, a display).
+   *
+   * The route upcasts any entity type; only a host carries a document to
+   * refresh, so a config entity that hosts nothing is a bad request.
+   *
+   * @param \Drupal\Core\Entity\EntityInterface $entity
+   *   The upcast route entity.
+   *
+   * @return \Drupal\daedalus_blueprint\Host\HostInterface
+   *   Its host.
+   *
+   * @throws \Symfony\Component\HttpKernel\Exception\BadRequestHttpException
+   *   When nothing hosts the entity.
+   */
+  protected function hostOf(EntityInterface $entity): HostInterface {
+    if (!$this->hostResolver->hosts($entity)) {
+      throw new BadRequestHttpException(sprintf('%s %s hosts no page document.', $entity->getEntityTypeId(), $entity->id()));
+    }
+    return $this->hostResolver->fromEntity($entity);
   }
 
   /**
@@ -206,20 +233,20 @@ class DeferredProcessingController extends ControllerBase {
    * when it loads the editable page, so the deferred render path behaves
    * identically to a normal Edit Mode load.
    *
-   * @param \Drupal\Core\Entity\EntityInterface $entity
-   *   The entity the view mode applies to.
+   * @param \Drupal\daedalus_blueprint\Host\HostInterface $host
+   *   The host the view mode applies to.
    * @param string $view_mode
    *   The client-supplied view mode.
    *
    * @throws \Symfony\Component\HttpKernel\Exception\BadRequestHttpException
-   *   When the view mode is not configured for the entity type.
+   *   When the view mode is not configured for the host.
    */
-  protected function assertValidViewMode(EntityInterface $entity, string $view_mode): void {
-    if (!$this->daedalusUi->isValidViewMode($entity, $view_mode)) {
+  protected function assertValidViewMode(HostInterface $host, string $view_mode): void {
+    if (!$this->daedalusUi->isValidViewMode($host, $view_mode)) {
       throw new BadRequestHttpException(sprintf(
         'Invalid view mode "%s" for %s.',
         $view_mode,
-        $entity->getEntityTypeId(),
+        $host->entityTypeId(),
       ));
     }
   }
@@ -231,10 +258,8 @@ class DeferredProcessingController extends ControllerBase {
    *   The batch type, naming the processor.
    * @param array $jobs
    *   Job entries: each {media_uuid: string, target: array|string|null}.
-   * @param string $entity_type
-   *   The entity type ID.
-   * @param \Drupal\Core\Entity\EntityInterface $entity
-   *   The entity.
+   * @param \Drupal\daedalus_blueprint\Host\HostInterface $host
+   *   The host the batch rides.
    * @param string $view_mode
    *   The view mode.
    *
@@ -244,10 +269,10 @@ class DeferredProcessingController extends ControllerBase {
    *   (the subtrees to re-render); failures carry the media uuid, reason,
    *   retryability, the processor's retry data, and the original target.
    */
-  protected function executeJobs(string $type, array $jobs, string $entity_type, EntityInterface $entity, string $view_mode): array {
+  protected function executeJobs(string $type, array $jobs, HostInterface $host, string $view_mode): array {
     $context = [
-      'entity_type' => $entity_type,
-      'entity_id' => $entity->id(),
+      'entity_type' => $host->entityTypeId(),
+      'entity_id' => $host->id(),
       'view_mode' => $view_mode,
     ];
 
@@ -298,8 +323,8 @@ class DeferredProcessingController extends ControllerBase {
    *   Array with 'success_targets' and 'failures' keys.
    * @param \Symfony\Component\HttpFoundation\Request $request
    *   The current request.
-   * @param \Drupal\Core\Entity\EntityInterface $entity
-   *   The entity.
+   * @param \Drupal\daedalus_blueprint\Host\HostInterface $host
+   *   The host.
    * @param string $view_mode
    *   The view mode for rendering.
    *
@@ -308,18 +333,19 @@ class DeferredProcessingController extends ControllerBase {
    *   working copy render, highlight riding drupal_commands) merged with
    *   {failures: [...]}.
    */
-  protected function buildResponseFromResult(array $result, Request $request, EntityInterface $entity, string $view_mode): JsonResponse {
+  protected function buildResponseFromResult(array $result, Request $request, HostInterface $host, string $view_mode): JsonResponse {
     $success_targets = $result['success_targets'] ?? [];
     $failures = $result['failures'] ?? [];
 
     $payload = [];
-    if (!empty($success_targets) && $entity instanceof FieldableEntityInterface) {
-      $fresh_entity = $this->entityStorageHandler->load(
-        $entity->getEntityTypeId(),
-        $entity->id(),
-      );
-      $fresh_entity = $fresh_entity instanceof FieldableEntityInterface ? $fresh_entity : $entity;
-      $payload = $this->mutatedTurn->buildPayloadFor($request, $fresh_entity, $success_targets, $view_mode);
+    if (!empty($success_targets)) {
+      // The staged working copy, when one exists: that is what the canvas
+      // shows and what the completed targets re-render against.
+      $fresh = $this->entityStorageHandler->load($host->entityTypeId(), (string) $host->id()) ?? $host;
+      // The route host is the canvas: the client applies this response
+      // only on the page whose entity the route names (a batch for another
+      // entity is fired headless and its response discarded).
+      $payload = $this->mutatedTurn->buildPayloadFor($request, $fresh, $success_targets, $view_mode, $fresh);
     }
 
     return new JsonResponse($payload + ['failures' => $failures]);

@@ -14,6 +14,7 @@ import {
   endExternalDrag,
   setCurrentDrop,
   commitCurrentDrop,
+  dropAllowed,
 } from './drag-controller';
 
 /**
@@ -225,7 +226,9 @@ export const lift = (
   if (!spec) {
     return false;
   }
-  let gaps = enumerateGapTargets(spec.targets);
+  // The controller's gate first (insert of each gap's container), then
+  // the source's own legality, exactly as the pointer's updateDrop.
+  let gaps = enumerateGapTargets(spec.targets).filter(dropAllowed);
   if (spec.acceptsTarget) {
     gaps = gaps.filter((gap) => spec.acceptsTarget(gap, data));
   }

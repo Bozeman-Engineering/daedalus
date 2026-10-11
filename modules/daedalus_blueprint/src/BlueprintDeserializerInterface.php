@@ -19,13 +19,16 @@ interface BlueprintDeserializerInterface {
    *
    * @param array $data
    *   The blueprint data with keys: entity_type, bundle, fields, and
-   *   optionally _root_entity, langcode, layout_builder__layout.
+   *   optionally _root_entity, langcode, layout, styles.
    * @param array $options
    *   Options controlling deserialization behavior:
-   *   - validate_only (bool): Run structural validation only, do not hydrate
-   *     the entity. Default FALSE.
-   *   - view_mode (string): The view mode for layout_builder_restrictions
-   *     enforcement. Defaults to 'full'.
+   *   - validate_only (bool): Judge the whole blueprint (a create's layout
+   *     expanded on the unsaved host included) without answering an
+   *     entity; nothing persists. Default FALSE.
+   *   - actor (AccountInterface): the account the write is judged for;
+   *     the current user by default.
+   *   - system (bool): TRUE skips the capability gate, as a system batch
+   *     does.
    *
    * @return \Drupal\daedalus_blueprint\Result\BlueprintResult
    *   The result containing the unsaved entity on success, or errors on

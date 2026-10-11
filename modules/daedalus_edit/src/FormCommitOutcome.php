@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Drupal\daedalus_edit;
 
-use Drupal\Core\Entity\FieldableEntityInterface;
+use Drupal\daedalus_blueprint\Host\HostInterface;
 use Drupal\daedalus_blueprint\Result\BlueprintResult;
 
 /**
@@ -20,8 +20,8 @@ final class FormCommitOutcome {
   /**
    * Constructs the outcome.
    *
-   * @param \Drupal\Core\Entity\FieldableEntityInterface $root
-   *   The subject's root entity, the working copy the batch ran on.
+   * @param \Drupal\daedalus_blueprint\Host\HostInterface $root
+   *   The subject's root host, the working copy the batch ran on.
    * @param \Drupal\daedalus_blueprint\Result\BlueprintResult $result
    *   The batch result, success or failure.
    * @param string|null $langcode
@@ -31,7 +31,7 @@ final class FormCommitOutcome {
    *   NULL for a failed one.
    */
   public function __construct(
-    public readonly FieldableEntityInterface $root,
+    public readonly HostInterface $root,
     public readonly BlueprintResult $result,
     public readonly ?string $langcode,
     public readonly ?string $persisted,

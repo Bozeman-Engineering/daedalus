@@ -74,11 +74,14 @@ class CssFragmentDoorTest extends BlueprintKernelTestBase {
     $this->installEntitySchema('daedalus_variant');
     $this->installEntitySchema('daedalus_swatch');
     $this->installEntitySchema('daedalus_animation');
+    $this->installEntitySchema('daedalus_font');
     $this->installEntitySchema('daedalus_skin');
     $this->installSchema('daedalus_stylish', [
       'daedalus_variant_usage',
       'daedalus_swatch_usage',
       'daedalus_animation_usage',
+      'daedalus_token_usage',
+      'daedalus_font_usage',
     ]);
     $this->installConfig(['daedalus_stylish']);
     $this->container->get('daedalus_stylish.field_manager')->enable('entity_test', 'entity_test');
@@ -118,7 +121,7 @@ class CssFragmentDoorTest extends BlueprintKernelTestBase {
    */
   public function testNestingStatesAndWrappers(): void {
     $key = "container:{$this->section}";
-    $parsed = $this->door->parse($this->entity, $key, "color: red;\n&:hover { color: blue; }\n@container (max-width: 767px) {\n  &:hover { color: green; }\n}\n> pb-container { gap: 1rem; }\n> * { margin: 0; }");
+    $parsed = $this->door->parse($this->host($this->entity), $key, "color: red;\n&:hover { color: blue; }\n@container (max-width: 767px) {\n  &:hover { color: green; }\n}\n> pb-container { gap: 1rem; }\n> * { margin: 0; }");
     $this->assertSame([], $parsed['errors']);
     $this->assertSame([], $parsed['wear']);
     $this->assertSame([
@@ -131,7 +134,7 @@ class CssFragmentDoorTest extends BlueprintKernelTestBase {
 
     $storage = $this->entityTypeManager->getStorage('entity_test');
     $storage->resetCache([$this->entity->id()]);
-    $this->assertSame([], $this->container->get('daedalus_blueprint.node_tree_builder')->styleMap($storage->load($this->entity->id())), 'The door writes nothing.');
+    $this->assertSame([], $this->container->get('daedalus_blueprint.node_tree_builder')->styleMap($this->host($storage->load($this->entity->id()))), 'The door writes nothing.');
   }
 
   /**
@@ -144,7 +147,7 @@ class CssFragmentDoorTest extends BlueprintKernelTestBase {
    */
   public function testRuleKeyAndItsWear(): void {
     $key = "container:{$this->section}::> pb-container";
-    $parsed = $this->door->parse($this->entity, $key, "class: band;\ngap: 2rem;\n&:hover { gap: 3rem; }");
+    $parsed = $this->door->parse($this->host($this->entity), $key, "class: band;\ngap: 2rem;\n&:hover { gap: 3rem; }");
     $this->assertSame([], $parsed['errors']);
     $this->assertSame([['key' => $key, 'variant' => 'band']], $parsed['wear']);
     $this->assertSame([
@@ -158,7 +161,7 @@ class CssFragmentDoorTest extends BlueprintKernelTestBase {
    */
   public function testRuleWearUnderAnElementKey(): void {
     $key = "container:{$this->section}";
-    $parsed = $this->door->parse($this->entity, $key, "> pb-container { class: band; gap: 1rem; }");
+    $parsed = $this->door->parse($this->host($this->entity), $key, "> pb-container { class: band; gap: 1rem; }");
     $this->assertSame([], $parsed['errors']);
     $this->assertSame([['key' => "$key::> pb-container", 'variant' => 'band']], $parsed['wear']);
     $this->assertSame([
@@ -167,7 +170,7 @@ class CssFragmentDoorTest extends BlueprintKernelTestBase {
 
     // The element wears on its own tag, never in its block: the parser's
     // rule, answered as a corrective and the rest of the text still read.
-    $parsed = $this->door->parse($this->entity, $key, "class: band;\ncolor: red;");
+    $parsed = $this->door->parse($this->host($this->entity), $key, "class: band;\ncolor: red;");
     $this->assertSame(['WEAR_ON_ELEMENT'], array_column($parsed['errors'], 'code'));
     $this->assertSame([], $parsed['wear']);
     $this->assertSame([['key' => $key, 'condition' => 'default', 'properties' => ['color' => 'red']]], $parsed['entries']);
@@ -184,7 +187,7 @@ class CssFragmentDoorTest extends BlueprintKernelTestBase {
   public function testRerootsCopiedBlocks(): void {
     $key = "container:{$this->section}";
     $other = self::OTHER;
-    $parsed = $this->door->parse($this->entity, $key, "/* Section: Other */\n#$other { padding: 0; }\n#$other:hover { padding: 1rem; }\n@container (max-width: 767px) {\n  #$other > * { margin: 0; }\n}");
+    $parsed = $this->door->parse($this->host($this->entity), $key, "/* Section: Other */\n#$other { padding: 0; }\n#$other:hover { padding: 1rem; }\n@container (max-width: 767px) {\n  #$other > * { margin: 0; }\n}");
     $this->assertSame([], $parsed['errors']);
     $this->assertSame([
       ['key' => $key, 'condition' => 'default', 'properties' => ['padding' => '0']],
@@ -198,7 +201,7 @@ class CssFragmentDoorTest extends BlueprintKernelTestBase {
    */
   public function testUnknownStateCorrectiveCarriesItsLine(): void {
     $key = "container:{$this->section}";
-    $parsed = $this->door->parse($this->entity, $key, "color: red;\n\n&:sparkle { color: blue; }");
+    $parsed = $this->door->parse($this->host($this->entity), $key, "color: red;\n\n&:sparkle { color: blue; }");
     $this->assertCount(1, $parsed['errors']);
     $error = $parsed['errors'][0];
     $this->assertSame('css', $error['path']);
@@ -213,18 +216,18 @@ class CssFragmentDoorTest extends BlueprintKernelTestBase {
    * A key naming no element, the wrong kind, or no key at all is refused.
    */
   public function testRefusesStrangersAndMalformedKeys(): void {
-    $parsed = $this->door->parse($this->entity, 'container:' . self::OTHER, 'color: red;');
+    $parsed = $this->door->parse($this->host($this->entity), 'container:' . self::OTHER, 'color: red;');
     $this->assertSame(['ELEMENT_NOT_FOUND'], array_column($parsed['errors'], 'code'));
     $this->assertSame([], $parsed['entries']);
 
-    $parsed = $this->door->parse($this->entity, "block:{$this->section}", 'color: red;');
+    $parsed = $this->door->parse($this->host($this->entity), "block:{$this->section}", 'color: red;');
     $this->assertSame(['BAD_KEY'], array_column($parsed['errors'], 'code'));
     $this->assertStringContainsString('is a container', $parsed['errors'][0]['message']);
 
-    $parsed = $this->door->parse($this->entity, "container:{$this->section}::>>", 'color: red;');
+    $parsed = $this->door->parse($this->host($this->entity), "container:{$this->section}::>>", 'color: red;');
     $this->assertSame(['BAD_KEY'], array_column($parsed['errors'], 'code'));
 
-    $parsed = $this->door->parse($this->entity, 'entity:' . $this->entity->uuid(), 'color: red;');
+    $parsed = $this->door->parse($this->host($this->entity), 'entity:' . $this->entity->uuid(), 'color: red;');
     $this->assertSame(['BAD_KEY'], array_column($parsed['errors'], 'code'));
   }
 

@@ -210,19 +210,19 @@ export const useColorField = ({
           },
         );
       case 'reference':
-        return Drupal.t('@name (@reference): pick a palette value', {
-          '@name': face.token.name,
-          '@reference': shown.trim(),
+        return Drupal.t('!name (!reference): pick a palette value', {
+          '!name': face.token.name,
+          '!reference': shown.trim(),
         });
       case 'literal':
         return Drupal.t(
-          'A custom color: @value. Pick a palette value to replace it, or open the well for the color picker.',
-          { '@value': face.text },
+          'A custom color: !value. Pick a palette value to replace it, or open the well for the color picker.',
+          { '!value': face.text },
         );
       case 'unknown':
         return Drupal.t(
-          'A reference the palette does not know: @value. Pick a palette value to replace it.',
-          { '@value': face.text },
+          'A reference the palette does not know: !value. Pick a palette value to replace it.',
+          { '!value': face.text },
         );
       default:
         return Drupal.t('Pick a palette value');

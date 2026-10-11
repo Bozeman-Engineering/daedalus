@@ -10,13 +10,16 @@ use Drupal\ai\Attribute\FunctionCall;
 use Drupal\daedalus_blueprint_ai\DaedalusBlueprintToolBase;
 
 /**
- * Validates an entity blueprint without creating an entity.
+ * Validates a NON-PAGE entity blueprint without creating an entity.
+ *
+ * A page bundle is refused toward page_create, which judges the whole page
+ * before anything is built.
  */
 #[FunctionCall(
   id: 'daedalus_blueprint:validate_blueprint',
   function_name: 'eb_validate',
   name: 'Validate Blueprint',
-  description: 'Validates an entity blueprint without creating an entity. Works with both content entities and config entities. Returns validation errors if the blueprint is invalid, or success if valid. Use this to check a blueprint before creating an entity.',
+  description: 'Validates a NON-PAGE entity blueprint without creating an entity; pages are page_create\'s job (it judges the whole page before anything is built), never this tool\'s. Works with both content entities and config entities. Returns validation errors if the blueprint is invalid, or success if valid. Use this to check a blueprint before creating an entity.',
   group: 'information_tools',
   context_definitions: [
     'blueprint' => new ContextDefinition(
@@ -45,6 +48,16 @@ class ValidateBlueprint extends DaedalusBlueprintToolBase {
     }
 
     if (!$this->requireVisibleEntityType($entity_type)) {
+      return;
+    }
+
+    // A page bundle is page_create's, which judges the whole page itself;
+    // refused before the deserializer runs (a missing bundle falls to the
+    // deserializer's own INVALID_BUNDLE, and a config type has no page
+    // bundle: PageHosts::bundleHost() answers NULL for it).
+    $bundle = $data['bundle'] ?? NULL;
+    if (is_string($bundle) && $bundle !== '' && $this->pageHosts->isPageBundle($entity_type, $bundle)) {
+      $this->output = $this->pageCreateCorrective($entity_type, $bundle);
       return;
     }
 

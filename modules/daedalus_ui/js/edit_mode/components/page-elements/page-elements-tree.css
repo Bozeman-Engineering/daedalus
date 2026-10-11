@@ -1,3 +1,17 @@
+/**
+ * @file
+ * The page elements tree's own rules.
+ *
+ * A tree row wears the outline row grammar (panel-controls.css,
+ * .daedalus-ui-outline__row: the four zones, the depth step, the voice and
+ * the hover, selection and mark states) beside its own identity class
+ * (.daedalus-ui-tree__row, the treeitem's state for its tests and this
+ * file). What is here is what only a TREE row has: real focusable
+ * treeitems, an inert posture, an inline rename input, a pinned head row
+ * with the outline's tools, and the Show kebab in the panel header. Each
+ * rule says why it is not the grammar's.
+ */
+
 .daedalus-ui-tree,
 .daedalus-ui-tree__children {
   margin: 0;
@@ -5,105 +19,43 @@
   list-style: none;
 }
 
-/* The row's radius, type size, and line-height come from the shared
-   disclosure grammar (panel-controls.css), which names .daedalus-ui-tree__row as
-   a carrier. Here: the tree-only structure and behavior. */
-.daedalus-ui-tree__row {
-  display: flex;
-  overflow: hidden;
-  align-items: center;
-  padding-inline-end: 0.5rem;
-  cursor: pointer;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-  gap: 0.25rem;
-}
-
-.daedalus-ui-tree__row--hovered {
-  background-color: var(--daedalus-selection-background);
-}
-
-.daedalus-ui-tree__row--selected {
-  background-color: var(--daedalus-selection-background);
-}
-
-.daedalus-ui-tree__row--selected > .daedalus-ui-tree__label {
-  color: var(--daedalus-selection);
-  font-weight: 600;
-}
-
-/**
- * The PRIMARY of the multi-select set: every member row highlights
- * via --selected; the primary additionally carries the inset ring so it
- * reads as the anchor, mirroring the canvas outline's primary/secondary
- * split.
- */
-.daedalus-ui-tree__row--primary {
-  border: 1px solid var(--daedalus-selection);
-}
-
+/* Not the grammar's: an INERT row (tree-row-model.js rowInert: keyless,
+   or an element the actor can do nothing to) is a tree posture; code
+   mode and the Add panel have no inert rows. Muted and no pointer. */
 .daedalus-ui-tree__row--unselectable {
   cursor: default;
   color: var(--daedalus-text-muted);
 }
 
-/**
- * A row mark (app.tree.setRowMarks): another module's coverage outline in
- * the shared focus treatment — the same wash-plus-stripe carrier the
- * focused wear-bar row wears, so "outlined" reads as one treatment on the
- * canvas and in this tree.
- */
-.daedalus-ui-tree__row--marked {
-  background-color: var(--daedalus-focus-background);
-  box-shadow: inset 2px 0 0 var(--daedalus-focus);
+/* Not the grammar's: a shown-document row (shown-rows.js, ShownRow) is
+   neither inert nor a selection: it names the blueprint a door shows by
+   reference and offers its doorways on right-click. The grammar's hover
+   wash rides the spine's hover facet, which this row never sets (it has
+   no key), so the pointer's own hover paints the lighter wash here to say
+   the row answers a gesture. */
+.daedalus-ui-tree__row--shown {
+  cursor: context-menu;
+}
+
+.daedalus-ui-tree__row--shown:hover {
+  background-color: color-mix(in sRGB, var(--daedalus-selection-background) 55%, transparent);
 }
 
 /**
- * Rows are REAL focusable treeitems: keyboard traversal moves DOM
- * focus row to row while the panel holds it, so the focus ring must be
- * visible against the selection highlight it usually coincides with.
+ * Not the grammar's: tree rows are REAL focusable treeitems (roving
+ * tabindex, keyboard traversal moving DOM focus row to row while the
+ * panel holds it), so the focus ring must be visible against the
+ * selection wash it usually coincides with. Code mode's rows are mouse
+ * chrome (tabIndex -1) and the Add panel's headings focus as buttons.
  */
 .daedalus-ui-tree__row:focus-visible {
   outline: 2px solid var(--daedalus-selection);
   outline-offset: -2px;
 }
 
-/* The disclosure button. The triangle inside it
-   (.daedalus-ui-tree__disclosure-marker, an inner span) and its open rotation are
-   the shared disclosure grammar's (panel-controls.css). Centered in the
-   1rem hit target, the button's trailing quarter plus the row's 0.25rem
-   flex gap add up to the disclosure-gap distance — keep that sum in
-   step with the token. */
-.daedalus-ui-tree__disclosure {
-  display: flex;
-  flex: 0 0 auto;
-  align-items: center;
-  justify-content: center;
-  width: 1rem;
-  padding: 0;
-  cursor: pointer;
-  border: 0;
-  background: none;
-}
-
-/* Rows without children keep their labels aligned with sibling rows. */
-.daedalus-ui-tree__row > .daedalus-ui-tree__label:first-child {
-  margin-inline-start: 1.25rem;
-}
-
-/* The root row has no disclosure and no siblings to align with: its label
-   anchors the tree at the panel's left edge. */
-.daedalus-ui-tree__row--root > .daedalus-ui-tree__label:first-child {
-  margin-inline-start: 0;
-}
-
-.daedalus-ui-tree__label {
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-/* The inline rename input (sections): sized like the label it replaces so
-   the row doesn't jump while editing. */
+/* Not the grammar's: the inline rename input (containers, blocks, the
+   root's title) lives in the name zone of a tree row alone. Sized like
+   the name it replaces so the row doesn't jump while editing. */
 .daedalus-ui-tree__rename {
   flex: 1 1 auto;
   min-width: 0;
@@ -115,73 +67,13 @@
   font: inherit;
 }
 
-/* A provider's secondary identity for a model row (view-registry.js
-   sublabel) — e.g. the markup class a field row's element wears in the
-   markup view. Muted and smaller, yielding to the label when space runs
-   out. */
-.daedalus-ui-tree__sublabel {
-  overflow: hidden;
-  flex: 0 1 auto;
-  text-overflow: ellipsis;
-  color: var(--daedalus-text-muted);
-  font-size: var(--daedalus-font-size-caption);
-}
-
-/* The markup view's tag chip: the element tag a row rendered as (`<img>`,
-   `<a>`, `<div>`), resolved from the markup annotation with the declared
-   tag as the degrade path. Dim monospace, upright even on italic part
-   rows, and never truncated: the chip is short and carries the row's
-   markup story (a linked image reads "Image <a>" over "Image <img>"). */
-.daedalus-ui-tree__tag {
-  flex: 0 0 auto;
-  opacity: 0.8;
-  color: var(--daedalus-text-muted);
-  font-family: ui-monospace, "SF Mono", Menlo, monospace;
-  font-size: var(--daedalus-font-size-caption);
-  font-style: normal;
-}
-
-.daedalus-ui-tree__row--section > .daedalus-ui-tree__label,
-.daedalus-ui-tree__row--entity > .daedalus-ui-tree__label {
-  font-weight: 600;
-}
-
-.daedalus-ui-tree__row--field > .daedalus-ui-tree__label,
-.daedalus-ui-tree__row--region > .daedalus-ui-tree__label {
-  color: var(--daedalus-text-muted);
-}
-
-/* Part rows: pseudo-selection entries a provider contributed — no verb
-   menu, visually apart from model rows. No margin of their own: part rows
-   collapse now, so the generic :first-child rule aligns leaf rows and the
-   disclosure button occupies the column otherwise. */
-.daedalus-ui-tree__row--part > .daedalus-ui-tree__label {
-  color: var(--daedalus-text-muted);
-  font-style: italic;
-}
-
-/* The provider says canvas markup under the pointer matches this part. */
-.daedalus-ui-tree__row--part-hot {
-  border-color: var(--daedalus-selection);
-  background-color: var(--daedalus-selection-background);
-}
-
-/* The provider's current drill target (inspector breadcrumb). */
-.daedalus-ui-tree__row--part-active {
-  background-color: rgb(0, 113, 227, 0.22);
-}
-
-.daedalus-ui-tree__row--part-active > .daedalus-ui-tree__label {
-  color: var(--daedalus-selection);
-  font-weight: 600;
-}
-
-/* The title's header anatomy comes from the shared .daedalus-ui-panel__header
-   recipe in sidebar.css; the Show kebab sits in the header's action
-   cluster (the #page-elements-show-menu slot, show-menu.js) and rides the
-   kit icon button (transparent ground, hover wash, focus ring). Only the
-   1.75rem hit box and the glyph size are local, keyed at two-class
-   specificity so they win over the kit by specificity, not load order. */
+/* Not the grammar's: the Show kebab is the tree's panel-header control
+   (the #page-elements-show-menu slot, show-menu.js). The title's header
+   anatomy comes from the shared .daedalus-ui-panel__header recipe in
+   sidebar.css; the kebab rides the kit icon button (transparent ground,
+   hover wash, focus ring). Only the 1.75rem hit box and the glyph size
+   are local, keyed at two-class specificity so they win over the kit by
+   specificity, not load order. */
 .daedalus-ui-icon-button.daedalus-ui-show-menu__button {
   padding: 0;
   font-size: var(--daedalus-icon-size-large);
@@ -196,12 +88,16 @@
   background-color: var(--daedalus-selection-background);
 }
 
-/* The outline's head: the root row stays pinned to the top of the
-   panel's scrollport, so the tools at its end are in reach however far
-   the tree has scrolled. Rows pass beneath it, so it paints an opaque
-   ground and its washes ride above that ground as an image layer
-   instead of replacing it. The row gives up its end padding: the last
-   tool's hit box ends where the header's close control does. */
+/* Not the grammar's: the outline's head. The root row (the whole page)
+   stays pinned to the top of the panel's scrollport, so the tools at its
+   end are in reach however far the tree has scrolled; the other two
+   outlines have no pinned row. Rows pass beneath it, so it paints an
+   opaque ground and the grammar's washes ride above that ground as an
+   image layer instead of replacing it. The row gives up its end padding:
+   the last tool's hit box ends where the header's close control does.
+   It renders no chevron column (there is nothing outside the page to
+   reveal by collapsing it), so its icon anchors the tree at the panel's
+   left edge with a hair of room. */
 .daedalus-ui-tree {
   --daedalus-ui-tree-head-size: 1.5rem;
 }
@@ -210,31 +106,36 @@
   position: sticky;
   inset-block-start: 0;
   min-block-size: var(--daedalus-ui-tree-head-size);
-  padding-inline-end: 0;
+  padding-inline: 0.25rem 0;
   background-color: var(--daedalus-background);
 }
 
-.daedalus-ui-tree__row--root:is(.daedalus-ui-tree__row--hovered, .daedalus-ui-tree__row--selected) {
+.daedalus-ui-tree__row--root.daedalus-ui-outline__row--hovered {
+  background-color: var(--daedalus-background);
+  background-image: linear-gradient(color-mix(in sRGB, var(--daedalus-selection-background) 55%, transparent), color-mix(in sRGB, var(--daedalus-selection-background) 55%, transparent));
+}
+
+.daedalus-ui-tree__row--root.daedalus-ui-outline__row--selected {
   background-color: var(--daedalus-background);
   background-image: linear-gradient(var(--daedalus-selection-background), var(--daedalus-selection-background));
 }
 
-.daedalus-ui-tree__row--root.daedalus-ui-tree__row--marked {
+.daedalus-ui-tree__row--root.daedalus-ui-outline__row--marked {
   background-color: var(--daedalus-background);
   background-image: linear-gradient(var(--daedalus-focus-background), var(--daedalus-focus-background));
 }
 
 /* A revealed row (Drupal.Daedalus.scrollReveal) clears the pinned head:
-   the margin is the head's height plus the primary row's ring, and the
-   reveal rule reads it for "fully in view" as scrollIntoView does for
-   the alignment. The head itself never scrolls, so it carries none. */
+   the margin is the head's height plus the focus ring, and the reveal
+   rule reads it for "fully in view" as scrollIntoView does for the
+   alignment. The head itself never scrolls, so it carries none. */
 .daedalus-ui-tree__row:not(.daedalus-ui-tree__row--root) {
   scroll-margin-top: calc(var(--daedalus-ui-tree-head-size) + 2px);
 }
 
 /* The outline's tools (OutlineTools in page-elements-tree.js): the
    collapse controls (outline/collapse-controls.js), then the element
-   picker (picker-toggle.js), at the end of the root row, the label
+   picker (picker-toggle.js), at the end of the root row, the name
    truncating before they give way. Each rides the kit icon button, so
    the muted variant, the hover wash, the disabled state and the kit's
    pressed rule (.daedalus-ui-icon-button[aria-pressed="true"],
@@ -258,4 +159,52 @@
 .daedalus-ui-tree__tools svg {
   inline-size: var(--daedalus-icon-size);
   block-size: var(--daedalus-icon-size);
+}
+
+/**
+ * The document notice: one line above the rows explaining a host-level
+ * refusal (the layout belongs to a template, a frozen translation, a
+ * required workspace), with "Edit the template" when the verdict carries
+ * a portal. Muted like an inert row: it explains, it does not alarm.
+ */
+.daedalus-ui-document-notice {
+  margin: 0 0 0.5rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: var(--daedalus-border-radius);
+  background-color: var(--daedalus-selection-background);
+  color: var(--daedalus-text-muted);
+  font-size: 0.875rem;
+}
+
+.daedalus-ui-document-notice__line {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  margin: 0;
+  gap: 0.5rem;
+}
+
+.daedalus-ui-document-notice__portal {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  color: var(--daedalus-selection);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.daedalus-ui-document-notice__portal:hover,
+.daedalus-ui-document-notice__portal:focus-visible {
+  text-decoration: underline;
+}
+
+.daedalus-ui-document-notice__icon {
+  display: inline-flex;
+  width: 1em;
+  height: 1em;
+}
+
+.daedalus-ui-document-notice__icon svg {
+  width: 100%;
+  height: 100%;
 }

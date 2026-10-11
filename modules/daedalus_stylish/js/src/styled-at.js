@@ -35,8 +35,8 @@ export const StyledAt = ({ stack, condition, onDrive }) => {
             key={name}
             type="button"
             className={`daedalus-stylish-inspector__styled-chip daedalus-ui-chip${name === condition ? ' daedalus-ui-chip--active' : ''}`}
-            title={Drupal.t('Drive the canvas to "@condition"', {
-              '@condition': name,
+            title={Drupal.t('Drive the canvas to "!condition"', {
+              '!condition': name,
             })}
             onClick={() => onDrive(name)}
           >

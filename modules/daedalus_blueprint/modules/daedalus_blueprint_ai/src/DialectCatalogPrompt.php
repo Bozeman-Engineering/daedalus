@@ -38,10 +38,13 @@ use Drupal\daedalus_blueprint\OperationHandler\OperationHandlerRegistry;
  * preference and stack sentences, then the roster projected in the
  * system's own structure: per element kind its axes (each with its
  * description, the properties it owns and its values), its class looks
- * and its birth line, then the stencils by root kind, each with the
- * looks it owns beneath it (the schema prints each stencil as a
- * page-language fragment; the block line above the brief states the
- * placement contract), the named
+ * and its birth line, then the favorite block blueprints, each with the
+ * looks it owns beneath it, and the group index of the rest (the schema
+ * prints a favorite as a page-language fragment and a group in full on
+ * demand; the block line above the brief states the placement contract;
+ * a page blueprint is a start, not a placement, and reaches the model on
+ * demand through a bundle's schema read, never through this cached
+ * prefix, which has no bundle dimension), the named
  * values (swatches with their descriptions), the animations, the tags
  * the skin dresses, and one mint line. Every description is clipped to
  * its first sentence: the prefix pays for what a material is and when
@@ -85,6 +88,7 @@ class DialectCatalogPrompt {
     $lines[] = '';
     $lines[] = 'ELEMENTS (attr(allowed values); (link) takes a path or URL, (ref) an id or exact label of existing content; file takes the name of a file this conversation holds, generate a prompt for a new image):';
     $lines[] = $this->containerLine($catalog);
+    $lines[] = $this->slotLine();
     foreach ($catalog->blockTypes() as $type => $spec) {
       $lines[] = $this->blockTypeLine($catalog, $type, $spec);
     }
@@ -115,26 +119,31 @@ class DialectCatalogPrompt {
   }
 
   /**
-   * The block element line, with the stencil sentence where stencils exist.
+   * The block element line, with the blueprint sentence where blueprints exist.
    *
-   * The stencil sentence is the ONE model-facing statement of the stencil
-   * contract: the two ways to place one (<pb-stencil name="id"/> for a
-   * copy as is, or the stencil's printed fragment written with the
-   * author's own content and stencil="id" on the root, the label being
-   * what makes an element a placement), where a placement lands (a page
-   * band at the top level only, anything else wherever a container or
-   * block sits), that the reference tag itself takes no style or class,
-   * that the owned looks are wearable inside a placement and address its
-   * children by position, and that stencils are pre-approved blocks and
-   * examples, never a boundary. The capture and update keys ride the
-   * MINT line; the stencils and their owned looks ride the STENCILS
-   * lines, and their printed fragments the schema.
+   * The blueprint sentence is the ONE model-facing statement of the
+   * blueprint contract: the two ways to copy one (<pb-blueprint
+   * name="id"/> for a copy as is, or the blueprint's printed fragment
+   * written with the author's own content and blueprint="id" on the root,
+   * the label being what makes an element a placement), the one way to
+   * link one (<pb-linked blueprint="id"/>, a block showing the saved
+   * blueprint's live document), where a placement
+   * lands (a page band at the top level only, anything else wherever a
+   * container or block sits), that the reference tag itself takes no
+   * style or class, that the owned looks are wearable inside a placement
+   * and address its children by position, that a saved blueprint is a
+   * page of its own (its body read and edited on demand through page_read
+   * and page_edit as entity_type blueprint, never guessed from the
+   * placement), and that blueprints are pre-approved blocks and examples,
+   * never a boundary. The capture and update keys ride the MINT line; the
+   * blueprints and their owned looks ride the BLUEPRINTS lines, and their
+   * printed fragments the schema.
    */
   protected function blockLine(DialectCatalog $catalog): string {
     $block_axes = $this->axesProse($catalog->axesFor(FALSE, NULL, NULL));
-    $line = sprintf('- <pb-block plugin="plugin_id"%s/> renders an existing plugin block. An undeclared block type is <pb-block type="x"%s><pb-field name="field_y">value</pb-field></pb-block>.', $block_axes, $block_axes);
-    if ($catalog->roster()->stencils() !== []) {
-      $line .= ' <pb-stencil name="stencil_id"/> places a saved stencil (the design system\'s STENCILS below) as is, where the element sits: a page band (top-level only) at the document\'s top level, never inside a container; any other stencil wherever a container or block may sit; the reference tag itself takes no style or class. To place one with your own content, write its printed fragment (the schema shows each in full) with your content and stencil="stencil_id" on the root: that label is what makes the element a placement, so keep it when you rewrite one. Inside a placement the stencil\'s owned looks (listed under it) are wearable; they address the placement\'s children by position, so keep the shape where you keep the look. Stencils are pre-approved blocks and examples to build with or beside, never a boundary: hand-rolled work from the same materials is as on brand.';
+    $line = sprintf('- <pb-block field="name"%s/> renders one of the page\'s own fields (name is a field machine name of the page; the page supplies the block, so the same element fits any page that has the field). <pb-block plugin="plugin_id"%s/> renders an existing plugin block. An undeclared block type is <pb-block type="x"%s><pb-field name="field_y">value</pb-field></pb-block>.', $block_axes, $block_axes, $block_axes);
+    if ($catalog->roster()->blueprints(MaterialRecord::SCOPE_BLOCK) !== []) {
+      $line .= ' <pb-blueprint name="blueprint_id"/> places a saved blueprint (the design system\'s BLUEPRINTS below) as is, where the element sits: a page band (top-level only) at the document\'s top level, never inside a container; any other blueprint wherever a container or block may sit; the reference tag itself takes no style or class. To place one with your own content, write its printed fragment (the schema prints the favorites in full, a group with its group parameter) with your content and blueprint="blueprint_id" on the root: that label is what makes the element a placement, so keep it when you rewrite one. Inside a placement the blueprint\'s owned looks (listed under it) are wearable; they address the placement\'s children by position, so keep the shape where you keep the look. A blueprint saved on this site is a page of its own: page_read (entity_type blueprint, its entity_id) prints its body with ids and page_edit changes it for every later placement; a shipped one is read-only. <pb-linked blueprint="blueprint_id"/> shows a saved blueprint by reference instead of copying it: one block, inside a container, whose content is the blueprint\'s live document (a field block in it shows this page\'s own field) and follows every later edit of the blueprint; it takes no children and no content of its own (edit the blueprint), only its own box styles; a shipped file cannot be linked. Blueprints are pre-approved blocks and examples to build with or beside, never a boundary: hand-rolled work from the same materials is as on brand.';
     }
     return $line;
   }
@@ -171,6 +180,23 @@ class DialectCatalogPrompt {
       $classes === [] ? '' : ' class(' . implode('|', $classes) . ')',
       $this->totalStatementProse($axes),
     );
+  }
+
+  /**
+   * The slot section line: the one grammar of a page inside a locked template.
+   *
+   * The ONE model-facing statement of the slot contract (the schema's
+   * pb-slot entry teaches the element; this line teaches the page): what
+   * a locked page's print is (the template read-only, then the page's own
+   * slot sections writable), where the door is (the template's slot block,
+   * data-can="insert"), how a slot is filled (insert inside the door; the
+   * slot section is born with the first fill) and where <pb-slot> is
+   * authored directly (the top level of a document the page owns whole:
+   * a page blueprint of slot fills, the start of a locked bundle's page).
+   * Static text: the dialect has the tag whatever the site's rosters hold.
+   */
+  protected function slotLine(): string {
+    return '- <pb-slot name="slot_id"> — a top-level container filling a slot of the document around this page (a locked bundle\'s template); its children are the page\'s own content, shown where the slot sits. A locked page prints its template read-only (data-can="") followed by its own <pb-slot> sections, writable: each slot block in the template (<pb-block plugin="daedalus_slot:slot_id" data-can="insert"/>) is the door, so insert with at: {ref: that block\'s id, position: beforeend} lands in the page\'s <pb-slot name="slot_id"> (born with the first fill); an existing <pb-slot> is edited like any container, and the page\'s root takes no insert. Author <pb-slot> yourself only at the top level of a document the page owns whole (a page blueprint of slot fills, the start of a locked bundle\'s page).';
   }
 
   /**
@@ -447,16 +473,7 @@ class DialectCatalogPrompt {
     $lines[] = $doctrine;
     array_push($lines, ...$this->elementLines($catalog));
     array_push($lines, ...$this->otherLookLines($catalog));
-    if ($roster->stencils() !== []) {
-      $lines[] = 'STENCILS (id "Label" (root; a page band says top-level only); the schema prints each one in full; the looks beneath a stencil are its own, wearable inside its placements):';
-      $owned = $this->ownedLooks($roster);
-      foreach ($roster->stencils() as $record) {
-        $lines[] = '- ' . $this->materialLine($record, (string) $record->rootKind . ($roster->isBand($record) ? ', top-level only' : ''));
-        foreach ($owned[$record->id] ?? [] as $look) {
-          $lines[] = '  - ' . $this->materialLine($look, $this->spellingProse($look));
-        }
-      }
-    }
+    array_push($lines, ...$this->blueprintLines($catalog));
     $named = [...$this->tokenLines($roster), ...$this->swatchLines($roster)];
     if ($named !== []) {
       $lines[] = 'NAMED VALUES (var(--name)):';
@@ -465,6 +482,12 @@ class DialectCatalogPrompt {
     if ($roster->animations() !== []) {
       $lines[] = 'ANIMATIONS (id "Label" (animation-name: spelling)):';
       foreach ($roster->animations() as $record) {
+        $lines[] = '- ' . $this->materialLine($record, $this->spellingProse($record));
+      }
+    }
+    if ($roster->fonts() !== []) {
+      $lines[] = 'FONTS (id "Label" (font-family: spelling); self-hosted faces, use the family in a font-family stack):';
+      foreach ($roster->fonts() as $record) {
         $lines[] = '- ' . $this->materialLine($record, $this->spellingProse($record));
       }
     }
@@ -479,6 +502,84 @@ class DialectCatalogPrompt {
       $lines[] = sprintf('MINT (save_material {kind, label, ...}; %s): %s.', rtrim(MaterialsProse::mintGateSentence(), '.'), implode('; ', $gestures));
     }
     return $lines;
+  }
+
+  /**
+   * The BLUEPRINTS block: the site favorites in full, then the group index.
+   *
+   * Block scope only: a page blueprint is a start, never a placement,
+   * and the bundle's schema read lists it under starts; scopes never mix
+   * on a surface, so no line explains a scope. The prefix is one cached
+   * text for every page and user, so one line per blueprint is affordable
+   * for a short list and not for the hundred a site is designed for:
+   * the lines are the SITE favorites (MaterialRecord::$favorite, the
+   * default the Add panel lists for everyone; an editor's own marks never
+   * reach a text cached for every user), each with the looks it owns
+   * beneath it, as before. The rest ride as an index in the neighbours'
+   * shape: one line per declared group that holds an offered block
+   * blueprint, in declaration order (id, label, how many, the
+   * description's first sentence), then the reserved bucket for the
+   * offered ones in no declared group (DialectCatalog::UNGROUPED, a count
+   * alone), and the header says how a group is read in full
+   * (eb_read_schema's group). Flat by construction: the block's size
+   * follows the favorites and the vocabulary, never the library.
+   *
+   * @return string[]
+   *   The lines; [] while the roster offers no block blueprint.
+   */
+  protected function blueprintLines(DialectCatalog $catalog): array {
+    $roster = $catalog->roster();
+    $blueprints = $roster->blueprints(MaterialRecord::SCOPE_BLOCK);
+    if ($blueprints === []) {
+      return [];
+    }
+    $lines = ['BLUEPRINTS (the site favorites; id "Label" (a page band says top-level only; a saved one names the entity_id page_read and page_edit take as entity_type blueprint, a shipped one is read-only); the schema prints each in full; the looks beneath a blueprint are its own, wearable inside its placements):'];
+    $owned = $this->ownedLooks($roster);
+    foreach ($blueprints as $record) {
+      if (!$record->favorite) {
+        continue;
+      }
+      $details = [];
+      if ($roster->isBand($record)) {
+        $details[] = 'top-level only';
+      }
+      if ($record->entityId !== NULL) {
+        $details[] = 'entity_id ' . $record->entityId;
+      }
+      $lines[] = '- ' . $this->materialLine($record, implode('; ', $details));
+      foreach ($owned[$record->id] ?? [] as $look) {
+        $lines[] = '  - ' . $this->materialLine($look, $this->spellingProse($look));
+      }
+    }
+    $lines[] = sprintf('GROUPS (every offered blueprint, favorites included, by group: id "Label" (how many): what the group is for; %s holds the ones in no group; eb_read_schema with group: id prints a group in full in place of the favorites):', DialectCatalog::UNGROUPED);
+    $vocabulary = $catalog->groups();
+    $counts = array_fill_keys(array_keys($vocabulary), 0);
+    $ungrouped = 0;
+    foreach ($blueprints as $record) {
+      $declared = array_intersect($record->groups, array_keys($vocabulary));
+      if ($declared === []) {
+        $ungrouped++;
+      }
+      foreach ($declared as $id) {
+        $counts[$id]++;
+      }
+    }
+    foreach ($counts as $id => $count) {
+      if ($count > 0) {
+        $lines[] = '- ' . $this->indexLine($id, $vocabulary[$id]['label'], $this->countProse($count), $vocabulary[$id]['description']);
+      }
+    }
+    if ($ungrouped > 0) {
+      $lines[] = sprintf('- %s (%s)', DialectCatalog::UNGROUPED, $this->countProse($ungrouped));
+    }
+    return $lines;
+  }
+
+  /**
+   * A count of blueprints, as prose.
+   */
+  protected function countProse(int $count): string {
+    return $count === 1 ? '1 blueprint' : $count . ' blueprints';
   }
 
   /**
@@ -633,9 +734,9 @@ class DialectCatalogPrompt {
   /**
    * The variants outside every element roster, in roster order.
    *
-   * A look a stencil owns is never "elsewhere": it is wearable only
-   * inside that stencil's placements and lists under the stencil (the
-   * STENCILS lines, the schema's stencil entries), so it is left out
+   * A look a blueprint owns is never "elsewhere": it is wearable only
+   * inside that blueprint's placements and lists under the blueprint (the
+   * BLUEPRINTS lines, the schema's blueprint entries), so it is left out
    * here exactly as the element rosters leave it out.
    *
    * @return \Drupal\daedalus_blueprint\Materials\MaterialRecord[]
@@ -658,14 +759,14 @@ class DialectCatalogPrompt {
   }
 
   /**
-   * The looks each stencil owns, keyed by stencil id, in roster order.
+   * The looks each blueprint owns, keyed by blueprint id, in roster order.
    *
-   * The same grouping the schema's stencil entries carry ("looks"): a
+   * The same grouping the schema's blueprint entries carry ("looks"): a
    * look whose owner is not on the roster lists nowhere, since no
    * placement on this site may wear it.
    *
    * @return array<string,\Drupal\daedalus_blueprint\Materials\MaterialRecord[]>
-   *   The owned looks, keyed by the owning stencil's id.
+   *   The owned looks, keyed by the owning blueprint's id.
    */
   protected function ownedLooks(MaterialsRoster $roster): array {
     $owned = [];
@@ -682,12 +783,17 @@ class DialectCatalogPrompt {
    *
    * Projected from the roster's token records: the scale is the record's
    * group, the custom property the var() spelling's argument (what the
-   * value grammar resolves), the value the record's.
+   * value grammar resolves), the value the record's. A token's
+   * description (why it exists and when to reach for it, the skin
+   * author's reasoning) rides as its first sentence in parentheses after
+   * the property, the swatch line's rule; the schema keeps the whole
+   * text.
    */
   protected function tokenLines(MaterialsRoster $roster): array {
     $by_scale = [];
     foreach ($roster->tokens() as $record) {
-      $by_scale[(string) $record->group][] = MaterialsSchema::customProperty($record) . ': ' . MaterialsRoster::valueProse($record->value, self::VALUE_CLIP);
+      $sentence = $this->firstSentence($record->description);
+      $by_scale[(string) $record->group][] = sprintf('%s%s: %s', MaterialsSchema::customProperty($record), $sentence === '' ? '' : ' (' . $sentence . ')', MaterialsRoster::valueProse($record->value, self::VALUE_CLIP));
     }
     $lines = [];
     foreach ($by_scale as $scale => $entries) {
@@ -720,11 +826,20 @@ class DialectCatalogPrompt {
    * One material's line: id "Label" (detail): the description's first sentence.
    */
   protected function materialLine(MaterialRecord $record, string $detail): string {
-    $line = sprintf('%s "%s"', $record->id, $record->label);
+    return $this->indexLine($record->id, $record->label, $detail, $record->description);
+  }
+
+  /**
+   * One indexed thing's line: id "Label" (detail): the description's first sentence.
+   *
+   * The shape every material line and every group line share.
+   */
+  protected function indexLine(string $id, string $label, string $detail, string $description): string {
+    $line = sprintf('%s "%s"', $id, $label);
     if ($detail !== '') {
       $line .= ' (' . $detail . ')';
     }
-    $description = $this->firstSentence($record->description);
+    $description = $this->firstSentence($description);
     return $description === '' ? $line : $line . ': ' . $description;
   }
 

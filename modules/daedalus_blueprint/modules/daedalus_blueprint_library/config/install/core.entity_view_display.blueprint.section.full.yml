@@ -1,0 +1,21 @@
+langcode: en
+status: true
+dependencies:
+  config:
+    - core.entity_view_mode.blueprint.full
+    - daedalus_blueprint_library.blueprint_type.section
+    - field.field.blueprint.section.layout_builder__layout
+  module:
+    - layout_builder
+third_party_settings:
+  layout_builder:
+    enabled: true
+    allow_custom: true
+    sections: {  }
+id: blueprint.section.full
+targetEntityType: blueprint
+bundle: section
+mode: full
+content: {  }
+hidden:
+  layout_builder__layout: true

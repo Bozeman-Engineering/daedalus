@@ -256,11 +256,11 @@ class ContainerBehaviorTest extends WebDriverTestBase {
       'machine_name' => 'scenario_skin',
       'status' => TRUE,
     ]);
-    $skin->setTokens([
+    $skin->setPackageTokens([
       'space' => ['sm' => '8px', 'md' => '16px', 'lg' => '48px', 'gutter' => '32px'],
       'layout' => ['max-width' => '1024px'],
     ]);
-    $skin->setDefaults([
+    $skin->setPackageDefaults([
       'kind:container' => ['' => ['default' => ['gap' => 'var(--space-gutter)']]],
     ]);
     $skin->save();
@@ -347,11 +347,13 @@ class ContainerBehaviorTest extends WebDriverTestBase {
         }
       })();
       JS);
-    // The item is a drag source only once the add-panel behavior armed it
+    // The Container's row under Favorites (the one set open by default;
+    // the Container is a favorite by the panel's own word) is a drag
+    // source only once the bundle's row mounted and armed it
     // (makeDraggable assigns the handler property); waiting on that is the
     // deterministic "palette is live" signal.
     $this->assertJsCondition(
-      "(() => { const item = document.getElementById('empty-section');"
+      "(() => { const item = document.querySelector('#place_block [data-daedalus-layout-add-panel-in=\"favorites\"][data-daedalus-layout-add-panel-row=\"daedalus_layout_section\"]');"
       . " return !!item && typeof item.ondragstart === 'function'; })()",
       20000,
       'The Add panel rendered the Container item and the drag layer armed it.',
@@ -364,7 +366,7 @@ class ContainerBehaviorTest extends WebDriverTestBase {
     $session->executeScript(<<<JS
       (() => {
         const dt = new DataTransfer();
-        document.getElementById('empty-section').dispatchEvent(
+        document.querySelector('#place_block [data-daedalus-layout-add-panel-in="favorites"][data-daedalus-layout-add-panel-row="daedalus_layout_section"]').dispatchEvent(
           new DragEvent('dragstart', { bubbles: true, cancelable: true, dataTransfer: dt }),
         );
         const target = document.querySelector('[data-main-entity]');
@@ -397,7 +399,7 @@ class ContainerBehaviorTest extends WebDriverTestBase {
         const y = rect.top + rect.height / 2;
         target.dispatchEvent(new DragEvent('dragover', { bubbles: true, cancelable: true, dataTransfer: dt, clientX: x, clientY: y }));
         target.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: dt, clientX: x, clientY: y }));
-        document.getElementById('empty-section').dispatchEvent(
+        document.querySelector('#place_block [data-daedalus-layout-add-panel-in="favorites"][data-daedalus-layout-add-panel-row="daedalus_layout_section"]').dispatchEvent(
           new DragEvent('dragend', { bubbles: true, cancelable: true, dataTransfer: dt }),
         );
       })();
@@ -736,7 +738,7 @@ class ContainerBehaviorTest extends WebDriverTestBase {
     // block (one POST), `justify-content: space-between` alone, computed
     // on the root and laid out: the first block hugs the content box's
     // left edge and the second its right edge.
-    $band_entry = "(Drupal.Daedalus.Blueprint.getBlueprint()?.fields?.daedalus_stylish_styles ?? {})['container:$section_uuid']";
+    $band_entry = $this->styleMapJs() . "['container:$section_uuid']";
     $posts = (int) $session->evaluateScript('window.__blueprintPosts');
     $this->clickByXpath("{$horizontal_row}//button[contains(@class,'daedalus-stylish-inspector__segment')][@aria-label='Spread']");
     $this->assertJsCondition(
@@ -1124,7 +1126,7 @@ class ContainerBehaviorTest extends WebDriverTestBase {
       $session->evaluateScript($gap_row_reads('32px from Columns at Base')),
       'Posed Narrow, the Gap row reads the worn variant\'s gutter default resolved through the skin to 32 px (the number on the input, the unit on the static label: the value\'s own px, which is also the scenario skin\'s space unit, so no select), lit as a token reference (blessed) with the mark naming its delivering layer and condition ("32px from Columns at Base": the layer stack read at the pose, the delivering condition not the pose). Read: ' . json_encode($session->evaluateScript($gap_row_state)),
     );
-    $map_entry = "(Drupal.Daedalus.Blueprint.getBlueprint()?.fields?.daedalus_stylish_styles ?? {})['container:$section_uuid']";
+    $map_entry = $this->styleMapJs() . "['container:$section_uuid']";
     $session->executeScript(
       '(() => {'
       . ' const input = document.querySelector(' . json_encode($gap_input) . ');'
@@ -1384,7 +1386,7 @@ class ContainerBehaviorTest extends WebDriverTestBase {
       'The Bottom click dispatched exactly one update_style on the block\'s key carrying `margin-top: auto` and nothing else (margin-bottom absent: the pair write through the op door). Op log: '
       . $session->evaluateScript("JSON.stringify($op_log)"),
     );
-    $pinned_entry = "(Drupal.Daedalus.Blueprint.getBlueprint()?.fields?.daedalus_stylish_styles ?? {})['block:$pinned_uuid']";
+    $pinned_entry = $this->styleMapJs() . "['block:$pinned_uuid']";
     $this->assertJsCondition(
       "(() => { const entry = $pinned_entry?.default ?? {};"
       . " return entry['margin-top'] === 'auto' && entry['margin-bottom'] === undefined; })()",
@@ -1437,7 +1439,7 @@ class ContainerBehaviorTest extends WebDriverTestBase {
     $session->executeScript("Drupal.Daedalus.Selection.select('container:$tall_uuid');");
     $center_chip = "{$horizontal_row}//button[contains(@class,'daedalus-stylish-inspector__segment')][@aria-label='Center']";
     $right_chip = "{$horizontal_row}//button[contains(@class,'daedalus-stylish-inspector__segment')][@aria-label='Right']";
-    $tall_entry = "(Drupal.Daedalus.Blueprint.getBlueprint()?.fields?.daedalus_stylish_styles ?? {})['container:$tall_uuid']";
+    $tall_entry = $this->styleMapJs() . "['container:$tall_uuid']";
     $this->assertNotNull(
       $assert_session->waitForElement('xpath', "{$layout_mode}//button[normalize-space(.)='Stack'][@aria-pressed='true']", 20000),
       'Re-selected, the tall band\'s Layout widget reads Stack (born stacked, nothing worn), so the section offers the Horizontal row.',
@@ -1657,7 +1659,7 @@ class ContainerBehaviorTest extends WebDriverTestBase {
         });
       })();
       JS);
-    $empty_entry = "(Drupal.Daedalus.Blueprint.getBlueprint()?.fields?.daedalus_stylish_styles ?? {})[" . json_encode($empty_box_key) . ']';
+    $empty_entry = $this->styleMapJs() . "[" . json_encode($empty_box_key) . ']';
     $this->assertJsCondition(
       "window.__emptyBoxError !== undefined || ($empty_entry)?.default?.['background-color'] === '#ff0000'",
       20000,

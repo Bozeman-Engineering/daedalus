@@ -86,7 +86,7 @@ const deliverSelection = (response) =>
  */
 const createApp = () => {
   root = createRoot();
-  const blueprint = { fields: { daedalus_stylish_styles: {} } };
+  const blueprint = { styles: {} };
   const app = {
     mutations: [],
     failures: [],

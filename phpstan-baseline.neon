@@ -3,7 +3,7 @@ parameters:
 		-
 			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:get\(\)\.$#'
 			identifier: method.notFound
-			count: 2
+			count: 1
 			path: modules/daedalus_ai/modules/daedalus_ai_memory/src/Service/AgentMemoryRunner.php
 
 		-
@@ -157,6 +157,12 @@ parameters:
 			path: modules/daedalus_ai/tests/src/Kernel/DaedalusAiKernelTestBase.php
 
 		-
+			message: '#^Class Drupal\\daedalus_ai\\PendingMedia\\PendingTargetCollector constructor invoked with 4 parameters, 3 required\.$#'
+			identifier: arguments.count
+			count: 1
+			path: modules/daedalus_ai/tests/src/Kernel/DaedalusAiKernelTestBase.php
+
+		-
 			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:getFieldDefinition\(\)\.$#'
 			identifier: method.notFound
 			count: 1
@@ -247,6 +253,42 @@ parameters:
 			path: modules/daedalus_blueprint/modules/daedalus_blueprint_ai/tests/src/Kernel/HiddenTypeToolGateTest.php
 
 		-
+			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:get\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: modules/daedalus_blueprint/modules/daedalus_blueprint_ai/tests/src/Kernel/PageCreateValidationTest.php
+
+		-
+			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:getMachineName\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: modules/daedalus_blueprint/modules/daedalus_blueprint_ai/tests/src/Kernel/PageCreateValidationTest.php
+
+		-
+			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:getScope\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: modules/daedalus_blueprint/modules/daedalus_blueprint_ai/tests/src/Kernel/PageCreateValidationTest.php
+
+		-
+			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:getSubjectBundle\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: modules/daedalus_blueprint/modules/daedalus_blueprint_ai/tests/src/Kernel/PageCreateValidationTest.php
+
+		-
+			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:getSubjectType\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: modules/daedalus_blueprint/modules/daedalus_blueprint_ai/tests/src/Kernel/PageCreateValidationTest.php
+
+		-
+			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:isPublished\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: modules/daedalus_blueprint/modules/daedalus_blueprint_ai/tests/src/Kernel/PageCreateValidationTest.php
+
+		-
 			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:set\(\)\.$#'
 			identifier: method.notFound
 			count: 2
@@ -283,6 +325,24 @@ parameters:
 			path: modules/daedalus_blueprint/modules/daedalus_blueprint_ai/tests/src/Kernel/PageEditGateTest.php
 
 		-
+			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:get\(\)\.$#'
+			identifier: method.notFound
+			count: 5
+			path: modules/daedalus_blueprint/modules/daedalus_blueprint_ai/tests/src/Kernel/PageLanguageDoorsTest.php
+
+		-
+			message: '#^Call to an undefined method Drupal\\ai\\Service\\FunctionCalling\\FunctionCallInterface\:\:execute\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: modules/daedalus_blueprint/modules/daedalus_blueprint_ai/tests/src/Kernel/PageLanguageDoorsTest.php
+
+		-
+			message: '#^Call to an undefined method Drupal\\ai\\Service\\FunctionCalling\\FunctionCallInterface\:\:getReadableOutput\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: modules/daedalus_blueprint/modules/daedalus_blueprint_ai/tests/src/Kernel/PageLanguageDoorsTest.php
+
+		-
 			message: '#^Call to an undefined method Drupal\\ai\\Service\\FunctionCalling\\FunctionCallInterface\:\:execute\(\)\.$#'
 			identifier: method.notFound
 			count: 1
@@ -293,6 +353,18 @@ parameters:
 			identifier: method.notFound
 			count: 1
 			path: modules/daedalus_blueprint/modules/daedalus_blueprint_ai/tests/src/Kernel/PageReadTest.php
+
+		-
+			message: '#^Call to an undefined method Drupal\\ai\\Service\\FunctionCalling\\FunctionCallInterface\:\:execute\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: modules/daedalus_blueprint/modules/daedalus_blueprint_ai/tests/src/Kernel/PageToolsTemplateTest.php
+
+		-
+			message: '#^Call to an undefined method Drupal\\ai\\Service\\FunctionCalling\\FunctionCallInterface\:\:getReadableOutput\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: modules/daedalus_blueprint/modules/daedalus_blueprint_ai/tests/src/Kernel/PageToolsTemplateTest.php
 
 		-
 			message: '#^Call to an undefined method Drupal\\ai\\Service\\FunctionCalling\\FunctionCallInterface\:\:execute\(\)\.$#'
@@ -359,12 +431,6 @@ parameters:
 			identifier: method.notFound
 			count: 1
 			path: modules/daedalus_blueprint/modules/daedalus_blueprint_ai/tests/src/Kernel/WriteEchoWithoutProjectorTest.php
-
-		-
-			message: '#^Call to an undefined method Drupal\\Core\\Field\\FieldItemListInterface\<Drupal\\Core\\Field\\FieldItemInterface\>\:\:getSections\(\)\.$#'
-			identifier: method.notFound
-			count: 1
-			path: modules/daedalus_blueprint/modules/daedalus_blueprint_ai_dev_tools/src/Drush/Commands/PromptAuditCommands.php
 
 		-
 			message: '#^Parameter \$input of method Drupal\\daedalus_blueprint_ai_dev_tools\\Plugin\\AiProvider\\PromptCaptureProvider\:\:chat\(\) has invalid type Drupal\\ai\\Operation\\Chat\\ChatInput\.$#'
@@ -427,6 +493,12 @@ parameters:
 			path: modules/daedalus_blueprint/modules/daedalus_blueprint_config/src/PropertyHandler/PropertyHandlerResult.php
 
 		-
+			message: '#^Unsafe usage of new static\(\)\.$#'
+			identifier: new.static
+			count: 1
+			path: modules/daedalus_blueprint/modules/daedalus_blueprint_config/src/Result/ConfigBlueprintResult.php
+
+		-
 			message: '#^Call to an undefined method Drupal\\Core\\Config\\Entity\\ConfigEntityInterface\:\:getComponent\(\)\.$#'
 			identifier: method.notFound
 			count: 1
@@ -465,163 +537,175 @@ parameters:
 		-
 			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:get\(\)\.$#'
 			identifier: method.notFound
-			count: 2
-			path: modules/daedalus_blueprint/modules/daedalus_blueprint_stencil/daedalus_blueprint_stencil.post_update.php
-
-		-
-			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:getElement\(\)\.$#'
-			identifier: method.notFound
-			count: 2
-			path: modules/daedalus_blueprint/modules/daedalus_blueprint_stencil/daedalus_blueprint_stencil.post_update.php
-
-		-
-			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:setElement\(\)\.$#'
-			identifier: method.notFound
-			count: 3
-			path: modules/daedalus_blueprint/modules/daedalus_blueprint_stencil/daedalus_blueprint_stencil.post_update.php
+			count: 1
+			path: modules/daedalus_blueprint/modules/daedalus_blueprint_library/src/BlueprintManager.php
 
 		-
 			message: '#^Call to an undefined method Drupal\\Core\\Entity\\ContentEntityInterface\:\:getMachineName\(\)\.$#'
 			identifier: method.notFound
 			count: 1
-			path: modules/daedalus_blueprint/modules/daedalus_blueprint_stencil/src/StencilShipper.php
+			path: modules/daedalus_blueprint/modules/daedalus_blueprint_library/src/BlueprintShipper.php
 
 		-
 			message: '#^Call to an undefined method Drupal\\Core\\Entity\\ContentEntityInterface\:\:getProvider\(\)\.$#'
 			identifier: method.notFound
 			count: 1
-			path: modules/daedalus_blueprint/modules/daedalus_blueprint_stencil/src/StencilShipper.php
+			path: modules/daedalus_blueprint/modules/daedalus_blueprint_library/src/BlueprintShipper.php
 
 		-
 			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:getMachineName\(\)\.$#'
 			identifier: method.notFound
 			count: 1
-			path: modules/daedalus_blueprint/modules/daedalus_blueprint_stencil/src/StencilShipper.php
+			path: modules/daedalus_blueprint/modules/daedalus_blueprint_library/src/BlueprintShipper.php
 
 		-
-			message: '#^Call to an undefined method Drupal\\Core\\Field\\FieldItemListInterface\<Drupal\\Core\\Field\\FieldItemInterface\>\:\:getSection\(\)\.$#'
+			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:validate\(\)\.$#'
 			identifier: method.notFound
 			count: 1
-			path: modules/daedalus_blueprint/modules/daedalus_blueprint_stencil/tests/src/Kernel/DressedStencilInstantiateTest.php
+			path: modules/daedalus_blueprint/modules/daedalus_blueprint_library/src/Form/BlueprintAddForm.php
+
+		-
+			message: '#^Unsafe usage of new static\(\)\.$#'
+			identifier: new.static
+			count: 1
+			path: modules/daedalus_blueprint/modules/daedalus_blueprint_library/src/Form/BlueprintAddForm.php
+
+		-
+			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:getBundles\(\)\.$#'
+			identifier: method.notFound
+			count: 3
+			path: modules/daedalus_blueprint/modules/daedalus_blueprint_library/tests/src/Kernel/BlueprintApiTest.php
 
 		-
 			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:getIcon\(\)\.$#'
 			identifier: method.notFound
 			count: 5
-			path: modules/daedalus_blueprint/modules/daedalus_blueprint_stencil/tests/src/Kernel/StencilApiTest.php
+			path: modules/daedalus_blueprint/modules/daedalus_blueprint_library/tests/src/Kernel/BlueprintApiTest.php
+
+		-
+			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:getRevisionLogMessage\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: modules/daedalus_blueprint/modules/daedalus_blueprint_library/tests/src/Kernel/BlueprintApiTest.php
+
+		-
+			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:getSubjectBundle\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: modules/daedalus_blueprint/modules/daedalus_blueprint_library/tests/src/Kernel/BlueprintApiTest.php
+
+		-
+			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:getSubjectType\(\)\.$#'
+			identifier: method.notFound
+			count: 3
+			path: modules/daedalus_blueprint/modules/daedalus_blueprint_library/tests/src/Kernel/BlueprintApiTest.php
 
 		-
 			message: '#^Call to an undefined method Drupal\\block_content\\Entity\\BlockContent\:\:getDescription\(\)\.$#'
 			identifier: method.notFound
 			count: 1
-			path: modules/daedalus_blueprint/modules/daedalus_blueprint_stencil/tests/src/Kernel/StencilApiTest.php
+			path: modules/daedalus_blueprint/modules/daedalus_blueprint_library/tests/src/Kernel/BlueprintApiTest.php
 
 		-
 			message: '#^Call to an undefined method Drupal\\block_content\\Entity\\BlockContent\:\:isOffered\(\)\.$#'
 			identifier: method.notFound
 			count: 1
-			path: modules/daedalus_blueprint/modules/daedalus_blueprint_stencil/tests/src/Kernel/StencilApiTest.php
+			path: modules/daedalus_blueprint/modules/daedalus_blueprint_library/tests/src/Kernel/BlueprintApiTest.php
 
 		-
-			message: '#^Access to an undefined property Drupal\\Core\\Field\\FieldItemInterface\:\:\$section\.$#'
-			identifier: property.notFound
-			count: 1
-			path: modules/daedalus_blueprint/modules/daedalus_blueprint_stencil/tests/src/Kernel/StencilGestureAliasTest.php
-
-		-
-			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:getElement\(\)\.$#'
+			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:get\(\)\.$#'
 			identifier: method.notFound
 			count: 1
-			path: modules/daedalus_blueprint/modules/daedalus_blueprint_stencil/tests/src/Kernel/StencilGestureAliasTest.php
+			path: modules/daedalus_blueprint/modules/daedalus_blueprint_library/tests/src/Kernel/BlueprintDoorsTest.php
 
 		-
-			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:isOffered\(\)\.$#'
+			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:getMachineName\(\)\.$#'
 			identifier: method.notFound
-			count: 2
-			path: modules/daedalus_blueprint/modules/daedalus_blueprint_stencil/tests/src/Kernel/StencilGestureAliasTest.php
-
-		-
-			message: '#^Cannot call method getMachineName\(\) on Drupal\\Core\\Entity\\EntityInterface\|false\.$#'
-			identifier: method.nonObject
-			count: 2
-			path: modules/daedalus_blueprint/modules/daedalus_blueprint_stencil/tests/src/Kernel/StencilGestureAliasTest.php
+			count: 1
+			path: modules/daedalus_blueprint/modules/daedalus_blueprint_library/tests/src/Kernel/BlueprintDoorsTest.php
 
 		-
 			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:getOrigin\(\)\.$#'
 			identifier: method.notFound
 			count: 1
-			path: modules/daedalus_blueprint/modules/daedalus_blueprint_stencil/tests/src/Kernel/StencilManagerTest.php
+			path: modules/daedalus_blueprint/modules/daedalus_blueprint_library/tests/src/Kernel/BlueprintDoorsTest.php
 
 		-
-			message: '#^Call to an undefined method Drupal\\block_content\\Entity\\BlockContent\:\:getDescription\(\)\.$#'
+			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:getScope\(\)\.$#'
 			identifier: method.notFound
 			count: 1
-			path: modules/daedalus_blueprint/modules/daedalus_blueprint_stencil/tests/src/Kernel/StencilManagerTest.php
+			path: modules/daedalus_blueprint/modules/daedalus_blueprint_library/tests/src/Kernel/BlueprintDoorsTest.php
 
 		-
-			message: '#^Cannot call method getOrigin\(\) on Drupal\\Core\\Entity\\EntityInterface\|false\.$#'
-			identifier: method.nonObject
+			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:getSubjectBundle\(\)\.$#'
+			identifier: method.notFound
 			count: 1
-			path: modules/daedalus_blueprint/modules/daedalus_blueprint_stencil/tests/src/Kernel/StencilManagerTest.php
+			path: modules/daedalus_blueprint/modules/daedalus_blueprint_library/tests/src/Kernel/BlueprintDoorsTest.php
+
+		-
+			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:getSubjectType\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: modules/daedalus_blueprint/modules/daedalus_blueprint_library/tests/src/Kernel/BlueprintDoorsTest.php
+
+		-
+			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:isPublished\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: modules/daedalus_blueprint/modules/daedalus_blueprint_library/tests/src/Kernel/BlueprintDoorsTest.php
 
 		-
 			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:get\(\)\.$#'
 			identifier: method.notFound
-			count: 2
-			path: modules/daedalus_blueprint/modules/daedalus_blueprint_stencil/tests/src/Kernel/StencilOwnedVariantTest.php
-
-		-
-			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:set\(\)\.$#'
-			identifier: method.notFound
 			count: 1
-			path: modules/daedalus_blueprint/modules/daedalus_blueprint_stencil/tests/src/Kernel/StencilOwnedVariantTest.php
-
-		-
-			message: '#^Call to an undefined method Drupal\\Core\\Field\\FieldDefinitionInterface\:\:getProvider\(\)\.$#'
-			identifier: method.notFound
-			count: 2
-			path: modules/daedalus_blueprint/modules/daedalus_blueprint_stencil/tests/src/Kernel/StencilOwnedVariantTest.php
-
-		-
-			message: '#^Call to an undefined method Drupal\\Core\\Field\\FieldDefinitionInterface\:\:isRevisionable\(\)\.$#'
-			identifier: method.notFound
-			count: 2
-			path: modules/daedalus_blueprint/modules/daedalus_blueprint_stencil/tests/src/Kernel/StencilOwnedVariantTest.php
-
-		-
-			message: '#^Call to an undefined method Drupal\\Core\\Field\\FieldItemListInterface\<Drupal\\Core\\Field\\FieldItemInterface\>\:\:getSection\(\)\.$#'
-			identifier: method.notFound
-			count: 1
-			path: modules/daedalus_blueprint/modules/daedalus_blueprint_stencil/tests/src/Kernel/StencilOwnedVariantTest.php
-
-		-
-			message: '#^Cannot call method get\(\) on Drupal\\Core\\Entity\\EntityInterface\|false\.$#'
-			identifier: method.nonObject
-			count: 3
-			path: modules/daedalus_blueprint/modules/daedalus_blueprint_stencil/tests/src/Kernel/StencilOwnedVariantTest.php
-
-		-
-			message: '#^Call to an undefined method Drupal\\Core\\Field\\FieldItemListInterface\<Drupal\\Core\\Field\\FieldItemInterface\>\:\:getSection\(\)\.$#'
-			identifier: method.notFound
-			count: 1
-			path: modules/daedalus_blueprint/modules/daedalus_blueprint_stencil/tests/src/Kernel/StencilShipperTest.php
-
-		-
-			message: '#^Access to an undefined property Drupal\\Core\\Field\\FieldItemInterface\:\:\$entity\.$#'
-			identifier: property.notFound
-			count: 3
-			path: modules/daedalus_blueprint/src/BlueprintOperations.php
+			path: modules/daedalus_blueprint/modules/daedalus_blueprint_library/tests/src/Kernel/BlueprintFitsTest.php
 
 		-
 			message: '#^Access to an undefined property Drupal\\Core\\Field\\FieldItemInterface\:\:\$section\.$#'
 			identifier: property.notFound
 			count: 1
-			path: modules/daedalus_blueprint/src/BlueprintOperations.php
+			path: modules/daedalus_blueprint/modules/daedalus_blueprint_library/tests/src/Kernel/BlueprintGestureAliasTest.php
 
 		-
-			message: '#^Call to an undefined method Drupal\\Core\\Field\\FieldItemListInterface\<Drupal\\Core\\Field\\FieldItemInterface\>\:\:appendSection\(\)\.$#'
+			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:isPublished\(\)\.$#'
 			identifier: method.notFound
 			count: 1
+			path: modules/daedalus_blueprint/modules/daedalus_blueprint_library/tests/src/Kernel/BlueprintManagerTest.php
+
+		-
+			message: '#^Call to an undefined method Drupal\\Core\\Field\\FieldItemListInterface\<Drupal\\Core\\Field\\FieldItemInterface\>\:\:getSections\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: modules/daedalus_blueprint/modules/daedalus_blueprint_library/tests/src/Kernel/BlueprintManagerTest.php
+
+		-
+			message: '#^Call to an undefined method Drupal\\Core\\Field\\FieldDefinitionInterface\:\:getProvider\(\)\.$#'
+			identifier: method.notFound
+			count: 2
+			path: modules/daedalus_blueprint/modules/daedalus_blueprint_library/tests/src/Kernel/BlueprintOwnedVariantTest.php
+
+		-
+			message: '#^Call to an undefined method Drupal\\Core\\Field\\FieldDefinitionInterface\:\:isRevisionable\(\)\.$#'
+			identifier: method.notFound
+			count: 2
+			path: modules/daedalus_blueprint/modules/daedalus_blueprint_library/tests/src/Kernel/BlueprintOwnedVariantTest.php
+
+		-
+			message: '#^Call to an undefined method Drupal\\Core\\Field\\FieldItemListInterface\<Drupal\\Core\\Field\\FieldItemInterface\>\:\:getSection\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: modules/daedalus_blueprint/modules/daedalus_blueprint_library/tests/src/Kernel/BlueprintOwnedVariantTest.php
+
+		-
+			message: '#^Call to an undefined method Drupal\\Core\\Field\\FieldItemListInterface\<Drupal\\Core\\Field\\FieldItemInterface\>\:\:getSection\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: modules/daedalus_blueprint/modules/daedalus_blueprint_library/tests/src/Kernel/DressedBlueprintInstantiateTest.php
+
+		-
+			message: '#^Access to an undefined property Drupal\\Core\\Field\\FieldItemInterface\:\:\$entity\.$#'
+			identifier: property.notFound
+			count: 3
 			path: modules/daedalus_blueprint/src/BlueprintOperations.php
 
 		-
@@ -655,13 +739,19 @@ parameters:
 			path: modules/daedalus_blueprint/src/DesignSystem/DesignSystemListBuilder.php
 
 		-
-			message: '#^Access to an undefined property Drupal\\Core\\Field\\FieldItemInterface\:\:\$entity\.$#'
-			identifier: property.notFound
+			message: '#^PHPDoc tag @param for parameter \$host with type Drupal\\Core\\Entity\\HostInterface is not subtype of native type Drupal\\daedalus_blueprint\\Host\\HostInterface\.$#'
+			identifier: parameter.phpDocType
 			count: 1
-			path: modules/daedalus_blueprint/src/ElementLocator.php
+			path: modules/daedalus_blueprint/src/Dialect/DomOperationHandler.php
 
 		-
-			message: '#^Access to an undefined property Drupal\\Core\\Field\\FieldItemInterface\:\:\$section\.$#'
+			message: '#^Parameter \$host of method Drupal\\daedalus_blueprint\\Dialect\\DomOperationHandler\:\:runTranslated\(\) has invalid type Drupal\\Core\\Entity\\HostInterface\.$#'
+			identifier: class.notFound
+			count: 1
+			path: modules/daedalus_blueprint/src/Dialect/DomOperationHandler.php
+
+		-
+			message: '#^Access to an undefined property Drupal\\Core\\Field\\FieldItemInterface\:\:\$entity\.$#'
 			identifier: property.notFound
 			count: 1
 			path: modules/daedalus_blueprint/src/ElementLocator.php
@@ -727,34 +817,22 @@ parameters:
 			path: modules/daedalus_blueprint/src/IconResolver.php
 
 		-
-			message: '#^Access to an undefined property Drupal\\Core\\Field\\FieldItemInterface\:\:\$section\.$#'
-			identifier: property.notFound
-			count: 2
-			path: modules/daedalus_blueprint/src/LayoutBuilder/LayoutDeserializer.php
-
-		-
-			message: '#^Call to an undefined method Drupal\\Core\\Entity\\FieldableEntityInterface\:\:setInfo\(\)\.$#'
-			identifier: method.notFound
-			count: 1
-			path: modules/daedalus_blueprint/src/LayoutBuilder/LayoutDeserializer.php
-
-		-
-			message: '#^Call to an undefined method Drupal\\Core\\Field\\FieldItemListInterface\<Drupal\\Core\\Field\\FieldItemInterface\>\:\:appendSection\(\)\.$#'
-			identifier: method.notFound
-			count: 1
-			path: modules/daedalus_blueprint/src/LayoutBuilder/LayoutDeserializer.php
-
-		-
 			message: '#^Access to an undefined property Drupal\\Core\\Field\\FieldItemInterface\:\:\$entity\.$#'
 			identifier: property.notFound
 			count: 2
 			path: modules/daedalus_blueprint/src/LayoutBuilder/LayoutSerializer.php
 
 		-
-			message: '#^Access to an undefined property Drupal\\Core\\Field\\FieldItemInterface\:\:\$section\.$#'
-			identifier: property.notFound
+			message: '#^Class Drupal\\daedalus_blueprint\\Plugin\\SectionStorage\\BlueprintSectionStorage extends @internal class Drupal\\layout_builder\\Plugin\\SectionStorage\\OverridesSectionStorage\.$#'
+			identifier: classExtendsInternalClass.classExtendsInternalClass
 			count: 1
-			path: modules/daedalus_blueprint/src/LayoutBuilder/LayoutSerializer.php
+			path: modules/daedalus_blueprint/src/Plugin/SectionStorage/BlueprintSectionStorage.php
+
+		-
+			message: '#^Unsafe usage of new static\(\)\.$#'
+			identifier: new.static
+			count: 1
+			path: modules/daedalus_blueprint/src/Plugin/SectionStorage/BlueprintSectionStorage.php
 
 		-
 			message: '#^Unsafe usage of new static\(\)\.$#'
@@ -765,13 +843,13 @@ parameters:
 		-
 			message: '#^Unsafe usage of new static\(\)\.$#'
 			identifier: new.static
-			count: 1
+			count: 2
 			path: modules/daedalus_blueprint/src/Result/BlueprintResult.php
 
 		-
 			message: '#^Unsafe usage of new static\(\)\.$#'
 			identifier: new.static
-			count: 4
+			count: 3
 			path: modules/daedalus_blueprint/src/Result/BlueprintResultBase.php
 
 		-
@@ -811,13 +889,37 @@ parameters:
 			path: modules/daedalus_blueprint/tests/src/Kernel/Access/TextFormatWriteAccessTest.php
 
 		-
-			message: '#^Access to an undefined property Drupal\\Core\\Field\\FieldItemInterface\:\:\$value\.$#'
-			identifier: property.notFound
-			count: 1
+			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:get\(\)\.$#'
+			identifier: method.notFound
+			count: 28
 			path: modules/daedalus_blueprint/tests/src/Kernel/BlueprintDeserializerTest.php
 
 		-
 			message: '#^Call to an undefined method Drupal\\Core\\Field\\FieldItemListInterface\<Drupal\\Core\\Field\\FieldItemInterface\>\:\:getSections\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: modules/daedalus_blueprint/tests/src/Kernel/BlueprintHostTest.php
+
+		-
+			message: '#^Call to an undefined method Drupal\\ai\\Service\\FunctionCalling\\FunctionCallInterface\:\:execute\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: modules/daedalus_blueprint/tests/src/Kernel/BlueprintHostTest.php
+
+		-
+			message: '#^Call to an undefined method Drupal\\ai\\Service\\FunctionCalling\\FunctionCallInterface\:\:getReadableOutput\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: modules/daedalus_blueprint/tests/src/Kernel/BlueprintHostTest.php
+
+		-
+			message: '#^Call to an undefined method Drupal\\layout_builder\\SectionStorageInterface\:\:getTempstoreKey\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: modules/daedalus_blueprint/tests/src/Kernel/BlueprintHostTest.php
+
+		-
+			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:get\(\)\.$#'
 			identifier: method.notFound
 			count: 1
 			path: modules/daedalus_blueprint/tests/src/Kernel/BlueprintOperationsAddParityTest.php
@@ -825,42 +927,30 @@ parameters:
 		-
 			message: '#^Access to an undefined property Drupal\\Core\\Field\\FieldItemInterface\:\:\$entity\.$#'
 			identifier: property.notFound
-			count: 5
-			path: modules/daedalus_blueprint/tests/src/Kernel/BlueprintOperationsAddRemoveTest.php
-
-		-
-			message: '#^Access to an undefined property Drupal\\Core\\Field\\FieldItemInterface\:\:\$section\.$#'
-			identifier: property.notFound
 			count: 2
 			path: modules/daedalus_blueprint/tests/src/Kernel/BlueprintOperationsAddRemoveTest.php
 
 		-
 			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:get\(\)\.$#'
 			identifier: method.notFound
-			count: 10
+			count: 14
 			path: modules/daedalus_blueprint/tests/src/Kernel/BlueprintOperationsAddRemoveTest.php
 
 		-
 			message: '#^Call to an undefined method Drupal\\Core\\Field\\FieldItemListInterface\<Drupal\\Core\\Field\\FieldItemInterface\>\:\:getSections\(\)\.$#'
 			identifier: method.notFound
-			count: 6
+			count: 7
 			path: modules/daedalus_blueprint/tests/src/Kernel/BlueprintOperationsAddSectionLayoutTest.php
 
 		-
-			message: '#^Access to an undefined property Drupal\\Core\\Field\\FieldItemInterface\:\:\$section\.$#'
-			identifier: property.notFound
-			count: 1
+			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:get\(\)\.$#'
+			identifier: method.notFound
+			count: 10
 			path: modules/daedalus_blueprint/tests/src/Kernel/BlueprintOperationsBatchTest.php
 
 		-
 			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:get\(\)\.$#'
 			identifier: method.notFound
-			count: 9
-			path: modules/daedalus_blueprint/tests/src/Kernel/BlueprintOperationsBatchTest.php
-
-		-
-			message: '#^Access to an undefined property Drupal\\Core\\Field\\FieldItemInterface\:\:\$section\.$#'
-			identifier: property.notFound
 			count: 2
 			path: modules/daedalus_blueprint/tests/src/Kernel/BlueprintOperationsDuplicateTest.php
 
@@ -871,6 +961,36 @@ parameters:
 			path: modules/daedalus_blueprint/tests/src/Kernel/BlueprintOperationsElementTest.php
 
 		-
+			message: '#^Access to an undefined property Drupal\\daedalus_blueprint\\FieldHandler\\TextFieldHandler\:\:\$deserialized\.$#'
+			identifier: property.notFound
+			count: 3
+			path: modules/daedalus_blueprint/tests/src/Kernel/BlueprintOperationsExtractedValueTest.php
+
+		-
+			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:addTranslation\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: modules/daedalus_blueprint/tests/src/Kernel/BlueprintOperationsExtractedValueTest.php
+
+		-
+			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:get\(\)\.$#'
+			identifier: method.notFound
+			count: 8
+			path: modules/daedalus_blueprint/tests/src/Kernel/BlueprintOperationsExtractedValueTest.php
+
+		-
+			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:getTranslation\(\)\.$#'
+			identifier: method.notFound
+			count: 4
+			path: modules/daedalus_blueprint/tests/src/Kernel/BlueprintOperationsExtractedValueTest.php
+
+		-
+			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:get\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: modules/daedalus_blueprint/tests/src/Kernel/BlueprintOperationsMintedUuidTest.php
+
+		-
 			message: '#^Access to an undefined property Drupal\\Core\\Field\\FieldItemInterface\:\:\$entity\.$#'
 			identifier: property.notFound
 			count: 2
@@ -901,22 +1021,28 @@ parameters:
 			path: modules/daedalus_blueprint/tests/src/Kernel/BlueprintOperationsPlacementTest.php
 
 		-
-			message: '#^Access to an undefined property Drupal\\Core\\Field\\FieldItemInterface\:\:\$entity\.$#'
-			identifier: property.notFound
-			count: 3
-			path: modules/daedalus_blueprint/tests/src/Kernel/BlueprintOperationsRestructureTest.php
-
-		-
-			message: '#^Access to an undefined property Drupal\\Core\\Field\\FieldItemInterface\:\:\$section\.$#'
-			identifier: property.notFound
-			count: 2
-			path: modules/daedalus_blueprint/tests/src/Kernel/BlueprintOperationsRestructureTest.php
+			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:get\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: modules/daedalus_blueprint/tests/src/Kernel/BlueprintOperationsReadTest.php
 
 		-
 			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:get\(\)\.$#'
 			identifier: method.notFound
-			count: 19
-			path: modules/daedalus_blueprint/tests/src/Kernel/BlueprintOperationsRestructureTest.php
+			count: 2
+			path: modules/daedalus_blueprint/tests/src/Kernel/BlueprintOperationsSampleFillTest.php
+
+		-
+			message: '#^Call to an undefined method Drupal\\field\\FieldConfigInterface\:\:setDefaultValue\(\)\.$#'
+			identifier: method.notFound
+			count: 3
+			path: modules/daedalus_blueprint/tests/src/Kernel/BlueprintOperationsSampleFillTest.php
+
+		-
+			message: '#^Call to an undefined method Drupal\\field\\FieldConfigInterface\:\:setSetting\(\)\.$#'
+			identifier: method.notFound
+			count: 2
+			path: modules/daedalus_blueprint/tests/src/Kernel/BlueprintOperationsSampleFillTest.php
 
 		-
 			message: '#^Access to an undefined property Drupal\\Core\\Field\\FieldItemInterface\:\:\$section\.$#'
@@ -931,21 +1057,21 @@ parameters:
 			path: modules/daedalus_blueprint/tests/src/Kernel/BlueprintOperationsSectionEventsTest.php
 
 		-
-			message: '#^Access to an undefined property Drupal\\Core\\Field\\FieldItemInterface\:\:\$entity\.$#'
-			identifier: property.notFound
+			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:get\(\)\.$#'
+			identifier: method.notFound
 			count: 1
-			path: modules/daedalus_blueprint/tests/src/Kernel/BlueprintOperationsUpdateTest.php
+			path: modules/daedalus_blueprint/tests/src/Kernel/BlueprintOperationsSubtreeAddTest.php
 
 		-
-			message: '#^Access to an undefined property Drupal\\Core\\Field\\FieldItemInterface\:\:\$section\.$#'
-			identifier: property.notFound
+			message: '#^Call to an undefined method Drupal\\layout_builder\\SectionStorageInterface\:\:getSectionByUuid\(\)\.$#'
+			identifier: method.notFound
 			count: 1
-			path: modules/daedalus_blueprint/tests/src/Kernel/BlueprintOperationsUpdateTest.php
+			path: modules/daedalus_blueprint/tests/src/Kernel/BlueprintOperationsSubtreeAddTest.php
 
 		-
 			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:get\(\)\.$#'
 			identifier: method.notFound
-			count: 12
+			count: 15
 			path: modules/daedalus_blueprint/tests/src/Kernel/BlueprintOperationsUpdateTest.php
 
 		-
@@ -967,16 +1093,76 @@ parameters:
 			path: modules/daedalus_blueprint/tests/src/Kernel/BlueprintSerializerElementTest.php
 
 		-
+			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:addTranslation\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: modules/daedalus_blueprint/tests/src/Kernel/Capability/CapabilityGateTest.php
+
+		-
+			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:getTranslation\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: modules/daedalus_blueprint/tests/src/Kernel/Capability/CapabilityGateTest.php
+
+		-
 			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:set\(\)\.$#'
 			identifier: method.notFound
 			count: 2
 			path: modules/daedalus_blueprint/tests/src/Kernel/Dialect/DomStyleOperationsTest.php
 
 		-
+			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:getThirdPartySetting\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: modules/daedalus_blueprint/tests/src/Kernel/DisplayHostTest.php
+
+		-
+			message: '#^Call to an undefined method Drupal\\Core\\Entity\\RevisionableInterface\:\:get\(\)\.$#'
+			identifier: method.notFound
+			count: 2
+			path: modules/daedalus_blueprint/tests/src/Kernel/DisplayHostTest.php
+
+		-
+			message: '#^Call to an undefined method Drupal\\Core\\Field\\FieldItemListInterface\<Drupal\\Core\\Field\\FieldItemInterface\>\:\:getSections\(\)\.$#'
+			identifier: method.notFound
+			count: 3
+			path: modules/daedalus_blueprint/tests/src/Kernel/DisplayHostTest.php
+
+		-
+			message: '#^Call to static method encode\(\) on an unknown class Drupal\\Core\\Serialization\\Yaml\.$#'
+			identifier: class.notFound
+			count: 1
+			path: modules/daedalus_blueprint/tests/src/Kernel/DisplayHostTest.php
+
+		-
+			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:get\(\)\.$#'
+			identifier: method.notFound
+			count: 4
+			path: modules/daedalus_blueprint/tests/src/Kernel/EndToEndTest.php
+
+		-
 			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:get\(\)\.$#'
 			identifier: method.notFound
 			count: 2
 			path: modules/daedalus_blueprint/tests/src/Kernel/EntityStorageAndBundleListTest.php
+
+		-
+			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:getRevisionId\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: modules/daedalus_blueprint/tests/src/Kernel/EntityStorageHandlerCommitTest.php
+
+		-
+			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:getTitle\(\)\.$#'
+			identifier: method.notFound
+			count: 2
+			path: modules/daedalus_blueprint/tests/src/Kernel/EntityStorageHandlerCommitTest.php
+
+		-
+			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:setTitle\(\)\.$#'
+			identifier: method.notFound
+			count: 3
+			path: modules/daedalus_blueprint/tests/src/Kernel/EntityStorageHandlerCommitTest.php
 
 		-
 			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:getFieldDefinition\(\)\.$#'
@@ -997,13 +1183,25 @@ parameters:
 			path: modules/daedalus_blueprint/tests/src/Kernel/FieldHandler/InlineEntityFieldHandlerTest.php
 
 		-
-			message: '#^Call to an undefined method Drupal\\Core\\Field\\FieldItemListInterface\<Drupal\\Core\\Field\\FieldItemInterface\>\:\:appendSection\(\)\.$#'
+			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:get\(\)\.$#'
+			identifier: method.notFound
+			count: 4
+			path: modules/daedalus_blueprint/tests/src/Kernel/FieldHandler/LinkFieldHandlerTest.php
+
+		-
+			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:get\(\)\.$#'
 			identifier: method.notFound
 			count: 3
+			path: modules/daedalus_blueprint/tests/src/Kernel/FormOnlyStubTest.php
+
+		-
+			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:get\(\)\.$#'
+			identifier: method.notFound
+			count: 2
 			path: modules/daedalus_blueprint/tests/src/Kernel/LayoutBuilder/ContainerSectionTest.php
 
 		-
-			message: '#^Call to an undefined method Drupal\\Core\\Field\\FieldItemListInterface\<Drupal\\Core\\Field\\FieldItemInterface\>\:\:getSections\(\)\.$#'
+			message: '#^Call to an undefined method Drupal\\Core\\Field\\FieldItemListInterface\<Drupal\\Core\\Field\\FieldItemInterface\>\:\:appendSection\(\)\.$#'
 			identifier: method.notFound
 			count: 2
 			path: modules/daedalus_blueprint/tests/src/Kernel/LayoutBuilder/ContainerSectionTest.php
@@ -1011,26 +1209,20 @@ parameters:
 		-
 			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:get\(\)\.$#'
 			identifier: method.notFound
-			count: 12
-			path: modules/daedalus_blueprint/tests/src/Kernel/LayoutBuilder/LayoutDeserializerTest.php
-
-		-
-			message: '#^Call to an undefined method Drupal\\Core\\Field\\FieldItemListInterface\<Drupal\\Core\\Field\\FieldItemInterface\>\:\:appendSection\(\)\.$#'
-			identifier: method.notFound
-			count: 13
-			path: modules/daedalus_blueprint/tests/src/Kernel/LayoutBuilder/LayoutDeserializerTest.php
-
-		-
-			message: '#^Call to an undefined method Drupal\\Core\\Field\\FieldItemListInterface\<Drupal\\Core\\Field\\FieldItemInterface\>\:\:getSections\(\)\.$#'
-			identifier: method.notFound
-			count: 9
-			path: modules/daedalus_blueprint/tests/src/Kernel/LayoutBuilder/LayoutDeserializerTest.php
-
-		-
-			message: '#^Call to an undefined method Drupal\\Core\\Field\\FieldItemListInterface\<Drupal\\Core\\Field\\FieldItemInterface\>\:\:appendSection\(\)\.$#'
-			identifier: method.notFound
-			count: 13
+			count: 1
 			path: modules/daedalus_blueprint/tests/src/Kernel/LayoutBuilder/LayoutSerializerTest.php
+
+		-
+			message: '#^Call to an undefined method Drupal\\Core\\Field\\FieldItemListInterface\<Drupal\\Core\\Field\\FieldItemInterface\>\:\:appendSection\(\)\.$#'
+			identifier: method.notFound
+			count: 16
+			path: modules/daedalus_blueprint/tests/src/Kernel/LayoutBuilder/LayoutSerializerTest.php
+
+		-
+			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:get\(\)\.$#'
+			identifier: method.notFound
+			count: 2
+			path: modules/daedalus_blueprint/tests/src/Kernel/LayoutBuilder/NestedLayoutTest.php
 
 		-
 			message: '#^Call to an undefined method Drupal\\Core\\Field\\FieldItemListInterface\<Drupal\\Core\\Field\\FieldItemInterface\>\:\:appendSection\(\)\.$#'
@@ -1041,11 +1233,17 @@ parameters:
 		-
 			message: '#^Call to an undefined method Drupal\\Core\\Field\\FieldItemListInterface\<Drupal\\Core\\Field\\FieldItemInterface\>\:\:getSections\(\)\.$#'
 			identifier: method.notFound
-			count: 5
+			count: 1
 			path: modules/daedalus_blueprint/tests/src/Kernel/LayoutBuilder/NestedLayoutTest.php
 
 		-
-			message: '#^Call to an undefined method Drupal\\Core\\Entity\\FieldableEntityInterface\:\:getUntranslated\(\)\.$#'
+			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:get\(\)\.$#'
+			identifier: method.notFound
+			count: 12
+			path: modules/daedalus_blueprint/tests/src/Kernel/MultilingualTest.php
+
+		-
+			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:getUntranslated\(\)\.$#'
 			identifier: method.notFound
 			count: 1
 			path: modules/daedalus_blueprint/tests/src/Kernel/MultilingualTest.php
@@ -1105,27 +1303,39 @@ parameters:
 			path: modules/daedalus_edit/modules/daedalus_edit_image_block/tests/src/FunctionalJavascript/ImageBlockBlueprintEditBehaviorTest.php
 
 		-
+			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:get\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: modules/daedalus_edit/modules/daedalus_edit_image_block/tests/src/Kernel/ImageBlockComposedRenderTest.php
+
+		-
+			message: '#^Call to an undefined method Drupal\\field\\FieldConfigInterface\:\:setDefaultValue\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: modules/daedalus_edit/modules/daedalus_edit_text_block/daedalus_edit_text_block.post_update.php
+
+		-
 			message: '#^Drupal\\Tests\\BrowserTestBase\:\:\$defaultTheme is required\. See https\://www\.drupal\.org/node/3083055, which includes recommendations on which theme to use\.$#'
 			identifier: BrowserTestBase.defaultThemeRequired
 			count: 1
 			path: modules/daedalus_edit/modules/daedalus_edit_text_block/tests/src/FunctionalJavascript/TextBlockBlueprintEditBehaviorTest.php
 
 		-
+			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:get\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: modules/daedalus_edit/modules/daedalus_edit_text_block/tests/src/Kernel/TextBlockComposedRenderTest.php
+
+		-
 			message: '#^Access to an undefined property Drupal\\daedalus_edit\\Controller\\MultipleEntityFormController\:\:\$requestStack\.$#'
 			identifier: property.notFound
-			count: 1
+			count: 2
 			path: modules/daedalus_edit/src/Controller/MultipleEntityFormController.php
 
 		-
 			message: '#^Access to an undefined property Drupal\\daedalus_edit\\Controller\\MultipleEntityFormController\:\:\$sectionStorage\.$#'
 			identifier: property.notFound
 			count: 1
-			path: modules/daedalus_edit/src/Controller/MultipleEntityFormController.php
-
-		-
-			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:get\(\)\.$#'
-			identifier: method.notFound
-			count: 2
 			path: modules/daedalus_edit/src/Controller/MultipleEntityFormController.php
 
 		-
@@ -1137,7 +1347,7 @@ parameters:
 		-
 			message: '#^Call to an undefined method Drupal\\daedalus_edit\\Controller\\MultipleEntityFormController\:\:getFormEntity\(\)\.$#'
 			identifier: method.notFound
-			count: 6
+			count: 4
 			path: modules/daedalus_edit/src/Controller/MultipleEntityFormController.php
 
 		-
@@ -1147,46 +1357,22 @@ parameters:
 			path: modules/daedalus_edit/src/Controller/MultipleEntityFormController.php
 
 		-
-			message: '#^Call to an undefined method Drupal\\daedalus_edit\\Controller\\MultipleEntityFormController\:\:getUserInput\(\)\.$#'
-			identifier: method.notFound
-			count: 2
-			path: modules/daedalus_edit/src/Controller/MultipleEntityFormController.php
-
-		-
-			message: '#^Call to an undefined method Drupal\\daedalus_edit\\Controller\\MultipleEntityFormController\:\:setUserInput\(\)\.$#'
-			identifier: method.notFound
-			count: 1
-			path: modules/daedalus_edit/src/Controller/MultipleEntityFormController.php
-
-		-
-			message: '#^Call to an undefined method Drupal\\daedalus_edit\\Controller\\MultipleEntityFormController\:\:updateFormState\(\)\.$#'
-			identifier: method.notFound
-			count: 1
-			path: modules/daedalus_edit/src/Controller/MultipleEntityFormController.php
-
-		-
-			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:getFields\(\)\.$#'
-			identifier: method.notFound
-			count: 1
-			path: modules/daedalus_edit/src/Controller/Tempstore.php
-
-		-
-			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:hasField\(\)\.$#'
-			identifier: method.notFound
-			count: 1
-			path: modules/daedalus_edit/src/Controller/Tempstore.php
-
-		-
-			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:set\(\)\.$#'
-			identifier: method.notFound
-			count: 1
-			path: modules/daedalus_edit/src/Controller/Tempstore.php
-
-		-
 			message: '#^Unsafe usage of new static\(\)\.$#'
 			identifier: new.static
 			count: 1
 			path: modules/daedalus_edit/src/Controller/Tempstore.php
+
+		-
+			message: '#^Access to an undefined property Drupal\\Core\\Field\\FieldItemInterface\:\:\$format\.$#'
+			identifier: property.notFound
+			count: 1
+			path: modules/daedalus_edit/src/EntityIdentityMinting.php
+
+		-
+			message: '#^Access to an undefined property Drupal\\Core\\Field\\FieldItemInterface\:\:\$value\.$#'
+			identifier: property.notFound
+			count: 2
+			path: modules/daedalus_edit/src/EntityIdentityMinting.php
 
 		-
 			message: '#^Call to an undefined method Drupal\\Core\\Entity\\FieldableEntityInterface\:\:getTranslation\(\)\.$#'
@@ -1201,54 +1387,6 @@ parameters:
 			path: modules/daedalus_edit/src/EntityIdentityMinting.php
 
 		-
-			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:get\(\)\.$#'
-			identifier: method.notFound
-			count: 2
-			path: modules/daedalus_edit/src/EventSubscriber/DaedalusUiReplaceMediaClearForm.php
-
-		-
-			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:getFieldDefinitions\(\)\.$#'
-			identifier: method.notFound
-			count: 2
-			path: modules/daedalus_edit/src/EventSubscriber/DaedalusUiReplaceMediaClearForm.php
-
-		-
-			message: '#^Call to an undefined method Drupal\\daedalus_edit\\EventSubscriber\\DaedalusUiReplaceMediaClearForm\:\:getFormEntity\(\)\.$#'
-			identifier: method.notFound
-			count: 6
-			path: modules/daedalus_edit/src/EventSubscriber/DaedalusUiReplaceMediaClearForm.php
-
-		-
-			message: '#^Call to an undefined method Drupal\\daedalus_edit\\EventSubscriber\\DaedalusUiReplaceMediaClearForm\:\:getMainEntity\(\)\.$#'
-			identifier: method.notFound
-			count: 1
-			path: modules/daedalus_edit/src/EventSubscriber/DaedalusUiReplaceMediaClearForm.php
-
-		-
-			message: '#^Call to an undefined method Drupal\\daedalus_edit\\EventSubscriber\\DaedalusUiReplaceMediaClearForm\:\:getUserInput\(\)\.$#'
-			identifier: method.notFound
-			count: 2
-			path: modules/daedalus_edit/src/EventSubscriber/DaedalusUiReplaceMediaClearForm.php
-
-		-
-			message: '#^Call to an undefined method Drupal\\daedalus_edit\\EventSubscriber\\DaedalusUiReplaceMediaClearForm\:\:setUserInput\(\)\.$#'
-			identifier: method.notFound
-			count: 1
-			path: modules/daedalus_edit/src/EventSubscriber/DaedalusUiReplaceMediaClearForm.php
-
-		-
-			message: '#^Call to an undefined method Drupal\\daedalus_edit\\EventSubscriber\\DaedalusUiReplaceMediaClearForm\:\:t\(\)\.$#'
-			identifier: method.notFound
-			count: 1
-			path: modules/daedalus_edit/src/EventSubscriber/DaedalusUiReplaceMediaClearForm.php
-
-		-
-			message: '#^Call to an undefined method Drupal\\daedalus_edit\\EventSubscriber\\DaedalusUiReplaceMediaClearForm\:\:updateFormState\(\)\.$#'
-			identifier: method.notFound
-			count: 1
-			path: modules/daedalus_edit/src/EventSubscriber/DaedalusUiReplaceMediaClearForm.php
-
-		-
 			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:getFieldDefinition\(\)\.$#'
 			identifier: method.notFound
 			count: 2
@@ -1259,6 +1397,12 @@ parameters:
 			identifier: method.notFound
 			count: 1
 			path: modules/daedalus_edit/src/EventSubscriber/FormHandleFieldAttribute.php
+
+		-
+			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:getFieldDefinition\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: modules/daedalus_edit/src/EventSubscriber/FormMediaFieldAttributes.php
 
 		-
 			message: '#^Unsafe usage of new static\(\)\.$#'
@@ -1273,52 +1417,46 @@ parameters:
 			path: modules/daedalus_edit/src/Form/EntityEditFormAlter.php
 
 		-
-			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:get\(\)\.$#'
+			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:getFieldDefinitions\(\)\.$#'
 			identifier: method.notFound
 			count: 2
 			path: modules/daedalus_edit/src/Form/InlineEntityFormAlter.php
 
 		-
-			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:getFieldDefinitions\(\)\.$#'
+			message: '#^Call to an undefined method Drupal\\Core\\Entity\\FieldableEntityInterface\:\:getTranslation\(\)\.$#'
 			identifier: method.notFound
-			count: 2
+			count: 1
+			path: modules/daedalus_edit/src/Form/InlineEntityFormAlter.php
+
+		-
+			message: '#^Call to an undefined method Drupal\\Core\\Entity\\FieldableEntityInterface\:\:hasTranslation\(\)\.$#'
+			identifier: method.notFound
+			count: 1
 			path: modules/daedalus_edit/src/Form/InlineEntityFormAlter.php
 
 		-
 			message: '#^Call to an undefined method Drupal\\Core\\Form\\FormInterface\:\:getEntity\(\)\.$#'
 			identifier: method.notFound
-			count: 3
-			path: modules/daedalus_edit/src/Form/InlineEntityFormAlter.php
-
-		-
-			message: '#^Call to an undefined method Drupal\\Core\\Form\\FormInterface\:\:getFormDisplay\(\)\.$#'
-			identifier: method.notFound
-			count: 1
-			path: modules/daedalus_edit/src/Form/InlineEntityFormAlter.php
-
-		-
-			message: '#^Call to an undefined method Drupal\\Core\\Form\\FormInterface\:\:setEntity\(\)\.$#'
-			identifier: method.notFound
-			count: 1
+			count: 2
 			path: modules/daedalus_edit/src/Form/InlineEntityFormAlter.php
 
 		-
 			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:get\(\)\.$#'
 			identifier: method.notFound
-			count: 2
-			path: modules/daedalus_edit/src/Form/UpdateBlockFormForEditTool.php
+			count: 1
+			path: modules/daedalus_edit/src/Form/PanelUpdateBlockForm.php
 
 		-
 			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:getFieldDefinitions\(\)\.$#'
 			identifier: method.notFound
 			count: 2
-			path: modules/daedalus_edit/src/Form/UpdateBlockFormForEditTool.php
+			path: modules/daedalus_edit/src/Form/PanelUpdateBlockForm.php
 
 		-
-			message: '#^Class Drupal\\daedalus_edit\\Form\\UpdateBlockFormForEditTool extends @internal class Drupal\\layout_builder\\Form\\UpdateBlockForm\.$#'
+			message: '#^Class Drupal\\daedalus_edit\\Form\\PanelUpdateBlockForm extends @internal class Drupal\\layout_builder\\Form\\UpdateBlockForm\.$#'
 			identifier: classExtendsInternalClass.classExtendsInternalClass
 			count: 1
-			path: modules/daedalus_edit/src/Form/UpdateBlockFormForEditTool.php
+			path: modules/daedalus_edit/src/Form/PanelUpdateBlockForm.php
 
 		-
 			message: '#^Call to an undefined method Drupal\\Core\\Form\\FormInterface\:\:updateWidget\(\)\.$#'
@@ -1347,7 +1485,7 @@ parameters:
 		-
 			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:get\(\)\.$#'
 			identifier: method.notFound
-			count: 3
+			count: 7
 			path: modules/daedalus_edit/tests/src/FunctionalJavascript/InlineEditBehaviorTest.php
 
 		-
@@ -1363,16 +1501,52 @@ parameters:
 			path: modules/daedalus_edit/tests/src/FunctionalJavascript/InlineEditBehaviorTest.php
 
 		-
+			message: '#^Access to an undefined property Drupal\\Core\\Field\\FieldItemInterface\:\:\$section\.$#'
+			identifier: property.notFound
+			count: 4
+			path: modules/daedalus_edit/tests/src/Kernel/ConfigureDialogCommitTest.php
+
+		-
+			message: '#^Call to static method wrap\(\) on an unknown class Drupal\\daedalus_layout\\NestedAwareSectionStorage\.$#'
+			identifier: class.notFound
+			count: 1
+			path: modules/daedalus_edit/tests/src/Kernel/ConfigureDialogCommitTest.php
+
+		-
 			message: '#^Call to an undefined method Drupal\\Core\\Access\\AccessResultInterface\:\:getReason\(\)\.$#'
 			identifier: method.notFound
 			count: 1
 			path: modules/daedalus_edit/tests/src/Kernel/DaedalusEditMediaLibraryOpenerTest.php
 
 		-
+			message: '#^Access to an undefined property Drupal\\Core\\Field\\FieldItemInterface\:\:\$section\.$#'
+			identifier: property.notFound
+			count: 1
+			path: modules/daedalus_edit/tests/src/Kernel/FormCommitTestBase.php
+
+		-
+			message: '#^Call to static method wrap\(\) on an unknown class Drupal\\daedalus_layout\\NestedAwareSectionStorage\.$#'
+			identifier: class.notFound
+			count: 1
+			path: modules/daedalus_edit/tests/src/Kernel/FormCommitTestBase.php
+
+		-
 			message: '#^Call to an undefined method Drupal\\Core\\Entity\\Entity\\EntityViewDisplay\:\:enableLayoutBuilder\(\)\.$#'
 			identifier: method.notFound
 			count: 1
 			path: modules/daedalus_edit/tests/src/Kernel/PageTitleEditingTest.php
+
+		-
+			message: '#^Drupal\\Tests\\BrowserTestBase\:\:\$defaultTheme is required\. See https\://www\.drupal\.org/node/3083055, which includes recommendations on which theme to use\.$#'
+			identifier: BrowserTestBase.defaultThemeRequired
+			count: 1
+			path: modules/daedalus_explode/tests/src/FunctionalJavascript/ExplodeBehaviorTest.php
+
+		-
+			message: '#^Missing call to parent\:\:setUp\(\) method\.$#'
+			identifier: phpunit.callParent
+			count: 1
+			path: modules/daedalus_explode/tests/src/FunctionalJavascript/ExplodeBehaviorTest.php
 
 		-
 			message: '#^Access to an undefined property Drupal\\block_content\\BlockContentInterface\:\:\$layout_builder__layout\.$#'
@@ -1420,7 +1594,7 @@ parameters:
 			message: '#^Unsafe usage of new static\(\)\.$#'
 			identifier: new.static
 			count: 1
-			path: modules/daedalus_layout/src/Controller/StencilSaveDialog.php
+			path: modules/daedalus_layout/src/Controller/BlueprintSaveDialog.php
 
 		-
 			message: '#^Unsafe usage of new static\(\)\.$#'
@@ -1433,24 +1607,6 @@ parameters:
 			identifier: globalDrupalDependencyInjection.useDependencyInjection
 			count: 1
 			path: modules/daedalus_layout/src/Element/LayoutBuilderPlus.php
-
-		-
-			message: '#^Call to an undefined method Drupal\\layout_builder\\SectionStorageInterface\:\:getBlockContentFromPlugin\(\)\.$#'
-			identifier: method.notFound
-			count: 1
-			path: modules/daedalus_layout/src/EventSubscriber/DaedalusUiReplaceMedia.php
-
-		-
-			message: '#^Call to an undefined method Drupal\\layout_builder\\SectionStorageInterface\:\:getComponent\(\)\.$#'
-			identifier: method.notFound
-			count: 1
-			path: modules/daedalus_layout/src/EventSubscriber/DaedalusUiReplaceMedia.php
-
-		-
-			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:getFieldDefinitions\(\)\.$#'
-			identifier: method.notFound
-			count: 1
-			path: modules/daedalus_layout/src/EventSubscriber/EditableUiBuilder.php
 
 		-
 			message: '#^Class Drupal\\daedalus_layout\\EventSubscriber\\SetInlineBlockDependency extends @internal class Drupal\\layout_builder\\EventSubscriber\\SetInlineBlockDependency\.$#'
@@ -1495,12 +1651,6 @@ parameters:
 			path: modules/daedalus_layout/src/Form/OverridesEntityForm.php
 
 		-
-			message: '#^Unsafe usage of new static\(\)\.$#'
-			identifier: new.static
-			count: 1
-			path: modules/daedalus_layout/src/Form/PromotedBlocksForm.php
-
-		-
 			message: '#^Call to an undefined method Drupal\\Core\\Form\\FormInterface\:\:getEntity\(\)\.$#'
 			identifier: method.notFound
 			count: 2
@@ -1523,6 +1673,18 @@ parameters:
 			identifier: new.static
 			count: 1
 			path: modules/daedalus_layout/src/InlineBlockEntityOperations.php
+
+		-
+			message: '#^Class Drupal\\daedalus_layout\\Plugin\\Block\\InlineBlock extends @internal class Drupal\\layout_builder\\Plugin\\Block\\InlineBlock\.$#'
+			identifier: classExtendsInternalClass.classExtendsInternalClass
+			count: 1
+			path: modules/daedalus_layout/src/Plugin/Block/InlineBlock.php
+
+		-
+			message: '#^Unsafe usage of new static\(\)\.$#'
+			identifier: new.static
+			count: 1
+			path: modules/daedalus_layout/src/Plugin/Block/InlineBlock.php
 
 		-
 			message: '#^\\Drupal calls should be avoided in classes, use dependency injection instead$#'
@@ -1651,6 +1813,36 @@ parameters:
 			path: modules/daedalus_layout/src/SectionStorage/NestedAwareSectionStorage.php
 
 		-
+			message: '#^Call to an undefined method Drupal\\Core\\Field\\FieldItemListInterface\<Drupal\\Core\\Field\\FieldItemInterface\>\:\:getSections\(\)\.$#'
+			identifier: method.notFound
+			count: 2
+			path: modules/daedalus_layout/tests/src/FunctionalJavascript/BlueprintPlacementBehaviorTest.php
+
+		-
+			message: '#^Drupal\\Tests\\BrowserTestBase\:\:\$defaultTheme is required\. See https\://www\.drupal\.org/node/3083055, which includes recommendations on which theme to use\.$#'
+			identifier: BrowserTestBase.defaultThemeRequired
+			count: 1
+			path: modules/daedalus_layout/tests/src/FunctionalJavascript/BlueprintPlacementBehaviorTest.php
+
+		-
+			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:get\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: modules/daedalus_layout/tests/src/FunctionalJavascript/LiveTemplateBehaviorTest.php
+
+		-
+			message: '#^Drupal\\Tests\\BrowserTestBase\:\:\$defaultTheme is required\. See https\://www\.drupal\.org/node/3083055, which includes recommendations on which theme to use\.$#'
+			identifier: BrowserTestBase.defaultThemeRequired
+			count: 1
+			path: modules/daedalus_layout/tests/src/FunctionalJavascript/LiveTemplateBehaviorTest.php
+
+		-
+			message: '#^Missing call to parent\:\:setUp\(\) method\.$#'
+			identifier: phpunit.callParent
+			count: 1
+			path: modules/daedalus_layout/tests/src/FunctionalJavascript/LiveTemplateBehaviorTest.php
+
+		-
 			message: '#^Drupal\\Tests\\BrowserTestBase\:\:\$defaultTheme is required\. See https\://www\.drupal\.org/node/3083055, which includes recommendations on which theme to use\.$#'
 			identifier: BrowserTestBase.defaultThemeRequired
 			count: 1
@@ -1666,13 +1858,25 @@ parameters:
 			message: '#^Drupal\\Tests\\BrowserTestBase\:\:\$defaultTheme is required\. See https\://www\.drupal\.org/node/3083055, which includes recommendations on which theme to use\.$#'
 			identifier: BrowserTestBase.defaultThemeRequired
 			count: 1
-			path: modules/daedalus_layout/tests/src/FunctionalJavascript/StencilPlacementBehaviorTest.php
+			path: modules/daedalus_layout/tests/src/FunctionalJavascript/TemplateEditBehaviorTest.php
+
+		-
+			message: '#^Missing call to parent\:\:setUp\(\) method\.$#'
+			identifier: phpunit.callParent
+			count: 1
+			path: modules/daedalus_layout/tests/src/FunctionalJavascript/TemplateEditBehaviorTest.php
 
 		-
 			message: '#^Call to an undefined method Drupal\\Core\\Field\\FieldItemListInterface\<Drupal\\Core\\Field\\FieldItemInterface\>\:\:getSections\(\)\.$#'
 			identifier: method.notFound
 			count: 1
 			path: modules/daedalus_layout/tests/src/Kernel/AddSectionExplicitLayoutTest.php
+
+		-
+			message: '#^Call to an undefined method Drupal\\Core\\Access\\AccessResultInterface\:\:getReason\(\)\.$#'
+			identifier: method.notFound
+			count: 2
+			path: modules/daedalus_layout/tests/src/Kernel/CoreLayoutRoutesClosedTest.php
 
 		-
 			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:get\(\)\.$#'
@@ -1725,7 +1929,7 @@ parameters:
 		-
 			message: '#^Call to an undefined method DOMNameSpaceNode\|DOMNode\:\:getAttribute\(\)\.$#'
 			identifier: method.notFound
-			count: 3
+			count: 12
 			path: modules/daedalus_layout/tests/src/Kernel/LayoutRootTest.php
 
 		-
@@ -1753,10 +1957,34 @@ parameters:
 			path: modules/daedalus_layout/tests/src/Kernel/PresaveSafetyNetTest.php
 
 		-
+			message: '#^Access to an undefined property Drupal\\Core\\Field\\FieldItemInterface\:\:\$section\.$#'
+			identifier: property.notFound
+			count: 1
+			path: modules/daedalus_layout/tests/src/Kernel/ReplaceMediaOperationTest.php
+
+		-
 			message: '#^Call to an undefined method Drupal\\Core\\Field\\FieldItemListInterface\<Drupal\\Core\\Field\\FieldItemInterface\>\:\:getSections\(\)\.$#'
 			identifier: method.notFound
 			count: 2
 			path: modules/daedalus_layout/tests/src/Kernel/SectionTransformSpineTest.php
+
+		-
+			message: '#^Call to an undefined method Drupal\\Core\\Entity\\RevisionableInterface\:\:get\(\)\.$#'
+			identifier: method.notFound
+			count: 2
+			path: modules/daedalus_layout/tests/src/Kernel/ValueBlockTransformTest.php
+
+		-
+			message: '#^Call to an undefined method Drupal\\Core\\Field\\FieldItemListInterface\<Drupal\\Core\\Field\\FieldItemInterface\>\:\:getSections\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: modules/daedalus_layout/tests/src/Kernel/ValueBlockTransformTest.php
+
+		-
+			message: '#^Call to static method encode\(\) on an unknown class Drupal\\Core\\Serialization\\Yaml\.$#'
+			identifier: class.notFound
+			count: 1
+			path: modules/daedalus_layout/tests/src/Kernel/ValueBlockTransformTest.php
 
 		-
 			message: '#^Call to an undefined method Prophecy\\Prophecy\\ObjectProphecy\<Drupal\\Core\\Block\\BlockPluginInterface\>\:\:getPluginId\(\)\.$#'
@@ -1993,12 +2221,6 @@ parameters:
 			path: modules/daedalus_layout/tests/src/Unit/SectionStorage/NestedAwareSectionStorageTest.php
 
 		-
-			message: '#^Call to an undefined method Drupal\\Core\\Field\\FieldItemInterface\:\:getStyleMap\(\)\.$#'
-			identifier: method.notFound
-			count: 3
-			path: modules/daedalus_stylish/daedalus_stylish.module
-
-		-
 			message: '#^Call to an undefined method Drupal\\field\\FieldConfigInterface\:\:setTranslatable\(\)\.$#'
 			identifier: method.notFound
 			count: 1
@@ -2021,6 +2243,12 @@ parameters:
 			identifier: globalDrupalDependencyInjection.useDependencyInjection
 			count: 3
 			path: modules/daedalus_stylish/modules/daedalus_stylish_layouts/src/Drush/Commands/MigrateContainersCommand.php
+
+		-
+			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityStorageInterface\:\:loadRevision\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: modules/daedalus_stylish/modules/daedalus_stylish_layouts/src/VariantRename.php
 
 		-
 			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:set\(\)\.$#'
@@ -2071,14 +2299,38 @@ parameters:
 			path: modules/daedalus_stylish/src/DaedalusStylishAnimationAccessControlHandler.php
 
 		-
-			message: '#^Call to an undefined method Drupal\\Core\\Field\\FieldItemInterface\:\:getStyleMap\(\)\.$#'
-			identifier: method.notFound
-			count: 1
-			path: modules/daedalus_stylish/src/DaedalusStylishLiveAttribution.php
+			message: '#^PHPDoc tag @param for parameter \$host with type Drupal\\Core\\Entity\\HostInterface is not subtype of native type Drupal\\daedalus_blueprint\\Host\\HostInterface\.$#'
+			identifier: parameter.phpDocType
+			count: 5
+			path: modules/daedalus_stylish/src/DaedalusStylishOperationHandler.php
 
 		-
-			message: '#^Call to an undefined method Drupal\\Core\\Field\\FieldItemInterface\:\:setStyleMap\(\)\.$#'
-			identifier: method.notFound
+			message: '#^Parameter \$host of method Drupal\\daedalus_stylish\\DaedalusStylishOperationHandler\:\:distributeVariant\(\) has invalid type Drupal\\Core\\Entity\\HostInterface\.$#'
+			identifier: class.notFound
+			count: 1
+			path: modules/daedalus_stylish/src/DaedalusStylishOperationHandler.php
+
+		-
+			message: '#^Parameter \$host of method Drupal\\daedalus_stylish\\DaedalusStylishOperationHandler\:\:removeDistributedReferences\(\) has invalid type Drupal\\Core\\Entity\\HostInterface\.$#'
+			identifier: class.notFound
+			count: 1
+			path: modules/daedalus_stylish/src/DaedalusStylishOperationHandler.php
+
+		-
+			message: '#^Parameter \$host of method Drupal\\daedalus_stylish\\DaedalusStylishOperationHandler\:\:setStyleMap\(\) has invalid type Drupal\\Core\\Entity\\HostInterface\.$#'
+			identifier: class.notFound
+			count: 1
+			path: modules/daedalus_stylish/src/DaedalusStylishOperationHandler.php
+
+		-
+			message: '#^Parameter \$host of method Drupal\\daedalus_stylish\\DaedalusStylishOperationHandler\:\:updateDefault\(\) has invalid type Drupal\\Core\\Entity\\HostInterface\.$#'
+			identifier: class.notFound
+			count: 1
+			path: modules/daedalus_stylish/src/DaedalusStylishOperationHandler.php
+
+		-
+			message: '#^Parameter \$host of method Drupal\\daedalus_stylish\\DaedalusStylishOperationHandler\:\:updateStyle\(\) has invalid type Drupal\\Core\\Entity\\HostInterface\.$#'
+			identifier: class.notFound
 			count: 1
 			path: modules/daedalus_stylish/src/DaedalusStylishOperationHandler.php
 
@@ -2104,25 +2356,19 @@ parameters:
 			message: '#^\\Drupal calls should be avoided in classes, use dependency injection instead$#'
 			identifier: globalDrupalDependencyInjection.useDependencyInjection
 			count: 2
-			path: modules/daedalus_stylish/src/Drush/Commands/MigrateWidthBandsCommand.php
+			path: modules/daedalus_stylish/src/Drush/Commands/ConvergeSelectorsCommand.php
 
 		-
-			message: '#^Call to an undefined method Drupal\\Core\\Field\\FieldItemInterface\:\:setStyleMap\(\)\.$#'
-			identifier: method.notFound
-			count: 1
-			path: modules/daedalus_stylish/src/EventSubscriber/ElementStylesSubscriber.php
+			message: '#^\\Drupal calls should be avoided in classes, use dependency injection instead$#'
+			identifier: globalDrupalDependencyInjection.useDependencyInjection
+			count: 2
+			path: modules/daedalus_stylish/src/Drush/Commands/MigrateWidthBandsCommand.php
 
 		-
 			message: '#^Call to an undefined method Drupal\\Core\\Form\\FormInterface\:\:getEntity\(\)\.$#'
 			identifier: method.notFound
 			count: 1
 			path: modules/daedalus_stylish/src/Form/BundleEditFormAlter.php
-
-		-
-			message: '#^Method Drupal\\Core\\Entity\\EditorialContentEntityBase\:\:setPublished\(\) invoked with 1 parameter, 0 required\.$#'
-			identifier: arguments.count
-			count: 1
-			path: modules/daedalus_stylish/src/Form/DaedalusStylishSkinForm.php
 
 		-
 			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:get\(\)\.$#'
@@ -2137,12 +2383,6 @@ parameters:
 			path: modules/daedalus_stylish/src/Materials/DaedalusStylishMaterialsProvider.php
 
 		-
-			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:get\(\)\.$#'
-			identifier: method.notFound
-			count: 1
-			path: modules/daedalus_stylish/src/Plugin/Sidebar/InspectorSidebar.php
-
-		-
 			message: '#^Unsafe usage of new static\(\)\.$#'
 			identifier: new.static
 			count: 1
@@ -2151,14 +2391,32 @@ parameters:
 		-
 			message: '#^Call to an undefined method Drupal\\daedalus_stylish\\PropertyGroupInterface\:\:getPluginDefinition\(\)\.$#'
 			identifier: method.notFound
-			count: 1
+			count: 3
 			path: modules/daedalus_stylish/src/PropertyGroupPluginManager.php
+
+		-
+			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityStorageInterface\:\:loadRevision\(\)\.$#'
+			identifier: method.notFound
+			count: 2
+			path: modules/daedalus_stylish/src/RelativeSelectorConvergence.php
+
+		-
+			message: '#^Call to an undefined method Drupal\\Core\\Field\\FieldItemListInterface\<Drupal\\Core\\Field\\FieldItemInterface\>\:\:getSections\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: modules/daedalus_stylish/src/RenderStyles.php
 
 		-
 			message: '#^Call to an undefined method Drupal\\daedalus_stylish\\ShippedDefinitionsShipper\:\:definition\(\)\.$#'
 			identifier: method.notFound
 			count: 1
 			path: modules/daedalus_stylish/src/ShippedDefinitionsShipper.php
+
+		-
+			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityStorageInterface\:\:loadRevision\(\)\.$#'
+			identifier: method.notFound
+			count: 2
+			path: modules/daedalus_stylish/src/SkinManager.php
 
 		-
 			message: '#^Unsafe usage of new static\(\)\.$#'
@@ -2185,19 +2443,31 @@ parameters:
 			path: modules/daedalus_stylish/src/ValueUsageBase.php
 
 		-
-			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:getDefaults\(\)\.$#'
-			identifier: method.notFound
-			count: 1
-			path: modules/daedalus_stylish/src/ValueUsageBase.php
-
-		-
 			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:getStyles\(\)\.$#'
 			identifier: method.notFound
 			count: 1
 			path: modules/daedalus_stylish/src/ValueUsageBase.php
 
 		-
-			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:getTokens\(\)\.$#'
+			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:packageDefaults\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: modules/daedalus_stylish/src/ValueUsageBase.php
+
+		-
+			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:packageTokens\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: modules/daedalus_stylish/src/ValueUsageBase.php
+
+		-
+			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:siteDefaults\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: modules/daedalus_stylish/src/ValueUsageBase.php
+
+		-
+			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:siteTokens\(\)\.$#'
 			identifier: method.notFound
 			count: 1
 			path: modules/daedalus_stylish/src/ValueUsageBase.php
@@ -2227,6 +2497,12 @@ parameters:
 			path: modules/daedalus_stylish/tests/src/FunctionalJavascript/AdvancedSectionsBehaviorTest.php
 
 		-
+			message: '#^Cannot access property \$uri on object\|false\.$#'
+			identifier: property.nonObject
+			count: 1
+			path: modules/daedalus_stylish/tests/src/FunctionalJavascript/AdvancedSectionsBehaviorTest.php
+
+		-
 			message: '#^Drupal\\Tests\\BrowserTestBase\:\:\$defaultTheme is required\. See https\://www\.drupal\.org/node/3083055, which includes recommendations on which theme to use\.$#'
 			identifier: BrowserTestBase.defaultThemeRequired
 			count: 1
@@ -2272,6 +2548,12 @@ parameters:
 			message: '#^Missing call to parent\:\:setUp\(\) method\.$#'
 			identifier: phpunit.callParent
 			count: 1
+			path: modules/daedalus_stylish/tests/src/FunctionalJavascript/CodeModeBehaviorTest.php
+
+		-
+			message: '#^You should use assertNull\(\) instead of assertSame\(null, \$actual\)\.$#'
+			identifier: phpunit.assertNull
+			count: 4
 			path: modules/daedalus_stylish/tests/src/FunctionalJavascript/CodeModeBehaviorTest.php
 
 		-
@@ -2335,6 +2617,60 @@ parameters:
 			path: modules/daedalus_stylish/tests/src/FunctionalJavascript/MotionBehaviorTest.php
 
 		-
+			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:getFaces\(\)\.$#'
+			identifier: method.notFound
+			count: 2
+			path: modules/daedalus_stylish/tests/src/FunctionalJavascript/SkinAuthoringBehaviorTest.php
+
+		-
+			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:getFamily\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: modules/daedalus_stylish/tests/src/FunctionalJavascript/SkinAuthoringBehaviorTest.php
+
+		-
+			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:packageTokens\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: modules/daedalus_stylish/tests/src/FunctionalJavascript/SkinAuthoringBehaviorTest.php
+
+		-
+			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:siteTokens\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: modules/daedalus_stylish/tests/src/FunctionalJavascript/SkinAuthoringBehaviorTest.php
+
+		-
+			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:tokens\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: modules/daedalus_stylish/tests/src/FunctionalJavascript/SkinAuthoringBehaviorTest.php
+
+		-
+			message: '#^Cannot call method defaults\(\) on Drupal\\Core\\Entity\\EntityInterface\|false\.$#'
+			identifier: method.nonObject
+			count: 1
+			path: modules/daedalus_stylish/tests/src/FunctionalJavascript/SkinAuthoringBehaviorTest.php
+
+		-
+			message: '#^Cannot call method packageDefaults\(\) on Drupal\\Core\\Entity\\EntityInterface\|false\.$#'
+			identifier: method.nonObject
+			count: 1
+			path: modules/daedalus_stylish/tests/src/FunctionalJavascript/SkinAuthoringBehaviorTest.php
+
+		-
+			message: '#^Cannot call method siteDefaults\(\) on Drupal\\Core\\Entity\\EntityInterface\|false\.$#'
+			identifier: method.nonObject
+			count: 1
+			path: modules/daedalus_stylish/tests/src/FunctionalJavascript/SkinAuthoringBehaviorTest.php
+
+		-
+			message: '#^Cannot call method siteTokens\(\) on Drupal\\Core\\Entity\\EntityInterface\|false\.$#'
+			identifier: method.nonObject
+			count: 3
+			path: modules/daedalus_stylish/tests/src/FunctionalJavascript/SkinAuthoringBehaviorTest.php
+
+		-
 			message: '#^Call to an undefined method Drupal\\Core\\Entity\\ContentEntityInterface\:\:getOrigin\(\)\.$#'
 			identifier: method.notFound
 			count: 2
@@ -2347,13 +2683,13 @@ parameters:
 			path: modules/daedalus_stylish/tests/src/Kernel/AnimationManagerTest.php
 
 		-
-			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:getDefaults\(\)\.$#'
+			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:getStyles\(\)\.$#'
 			identifier: method.notFound
 			count: 1
 			path: modules/daedalus_stylish/tests/src/Kernel/AnimationManagerTest.php
 
 		-
-			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:getStyles\(\)\.$#'
+			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:packageDefaults\(\)\.$#'
 			identifier: method.notFound
 			count: 1
 			path: modules/daedalus_stylish/tests/src/Kernel/AnimationManagerTest.php
@@ -2371,13 +2707,13 @@ parameters:
 			path: modules/daedalus_stylish/tests/src/Kernel/AnimationUsageTest.php
 
 		-
-			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:getDefaults\(\)\.$#'
+			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:getStyles\(\)\.$#'
 			identifier: method.notFound
 			count: 1
 			path: modules/daedalus_stylish/tests/src/Kernel/AnimationUsageTest.php
 
 		-
-			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:getStyles\(\)\.$#'
+			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:packageDefaults\(\)\.$#'
 			identifier: method.notFound
 			count: 1
 			path: modules/daedalus_stylish/tests/src/Kernel/AnimationUsageTest.php
@@ -2395,16 +2731,58 @@ parameters:
 			path: modules/daedalus_stylish/tests/src/Kernel/ClientStyleGuideTest.php
 
 		-
+			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:getAxis\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: modules/daedalus_stylish/tests/src/Kernel/ColumnsRenameTest.php
+
+		-
+			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:getProvider\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: modules/daedalus_stylish/tests/src/Kernel/ColumnsRenameTest.php
+
+		-
+			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:getStyles\(\)\.$#'
+			identifier: method.notFound
+			count: 2
+			path: modules/daedalus_stylish/tests/src/Kernel/ColumnsRenameTest.php
+
+		-
+			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:isModified\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: modules/daedalus_stylish/tests/src/Kernel/ColumnsRenameTest.php
+
+		-
+			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:isShipped\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: modules/daedalus_stylish/tests/src/Kernel/ColumnsRenameTest.php
+
+		-
+			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityStorageInterface\:\:createRevision\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: modules/daedalus_stylish/tests/src/Kernel/ColumnsRenameTest.php
+
+		-
+			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityStorageInterface\:\:loadRevision\(\)\.$#'
+			identifier: method.notFound
+			count: 6
+			path: modules/daedalus_stylish/tests/src/Kernel/ColumnsRenameTest.php
+
+		-
+			message: '#^Call to an undefined method Drupal\\Core\\Field\\FieldItemInterface\:\:getStyleMap\(\)\.$#'
+			identifier: method.notFound
+			count: 2
+			path: modules/daedalus_stylish/tests/src/Kernel/ColumnsRenameTest.php
+
+		-
 			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:set\(\)\.$#'
 			identifier: method.notFound
 			count: 2
 			path: modules/daedalus_stylish/tests/src/Kernel/ComposedBlockSchemaTest.php
-
-		-
-			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:getElement\(\)\.$#'
-			identifier: method.notFound
-			count: 1
-			path: modules/daedalus_stylish/tests/src/Kernel/ContainerModelMigrationTest.php
 
 		-
 			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:getScope\(\)\.$#'
@@ -2437,18 +2815,6 @@ parameters:
 			path: modules/daedalus_stylish/tests/src/Kernel/ContainerPartHoistTest.php
 
 		-
-			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:getDefaults\(\)\.$#'
-			identifier: method.notFound
-			count: 2
-			path: modules/daedalus_stylish/tests/src/Kernel/ContainerPartHoistTest.php
-
-		-
-			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:getElement\(\)\.$#'
-			identifier: method.notFound
-			count: 2
-			path: modules/daedalus_stylish/tests/src/Kernel/ContainerPartHoistTest.php
-
-		-
 			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:getStyles\(\)\.$#'
 			identifier: method.notFound
 			count: 2
@@ -2456,6 +2822,12 @@ parameters:
 
 		-
 			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:isModified\(\)\.$#'
+			identifier: method.notFound
+			count: 2
+			path: modules/daedalus_stylish/tests/src/Kernel/ContainerPartHoistTest.php
+
+		-
+			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:packageDefaults\(\)\.$#'
 			identifier: method.notFound
 			count: 2
 			path: modules/daedalus_stylish/tests/src/Kernel/ContainerPartHoistTest.php
@@ -2587,19 +2959,13 @@ parameters:
 			path: modules/daedalus_stylish/tests/src/Kernel/DeclaredDefaultsTest.php
 
 		-
-			message: '#^Call to an undefined method DOMNameSpaceNode\|DOMNode\:\:getAttribute\(\)\.$#'
-			identifier: method.notFound
-			count: 5
-			path: modules/daedalus_stylish/tests/src/Kernel/DefaultsStylesheetTest.php
-
-		-
 			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:set\(\)\.$#'
 			identifier: method.notFound
 			count: 2
 			path: modules/daedalus_stylish/tests/src/Kernel/DefaultsStylesheetTest.php
 
 		-
-			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:setTokens\(\)\.$#'
+			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:setPackageTokens\(\)\.$#'
 			identifier: method.notFound
 			count: 1
 			path: modules/daedalus_stylish/tests/src/Kernel/DefaultsStylesheetTest.php
@@ -2607,6 +2973,12 @@ parameters:
 		-
 			message: '#^Access to an undefined property Drupal\\Core\\Field\\FieldItemInterface\:\:\$section\.$#'
 			identifier: property.notFound
+			count: 1
+			path: modules/daedalus_stylish/tests/src/Kernel/ElementStylesTest.php
+
+		-
+			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:getThirdPartySetting\(\)\.$#'
+			identifier: method.notFound
 			count: 1
 			path: modules/daedalus_stylish/tests/src/Kernel/ElementStylesTest.php
 
@@ -2627,6 +2999,30 @@ parameters:
 			identifier: method.notFound
 			count: 4
 			path: modules/daedalus_stylish/tests/src/Kernel/EmptyContainerAffordanceTest.php
+
+		-
+			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:get\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: modules/daedalus_stylish/tests/src/Kernel/FontUsageTest.php
+
+		-
+			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:getStyles\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: modules/daedalus_stylish/tests/src/Kernel/FontUsageTest.php
+
+		-
+			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:packageDefaults\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: modules/daedalus_stylish/tests/src/Kernel/FontUsageTest.php
+
+		-
+			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:packageTokens\(\)\.$#'
+			identifier: method.notFound
+			count: 2
+			path: modules/daedalus_stylish/tests/src/Kernel/FontUsageTest.php
 
 		-
 			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:getDesignSystem\(\)\.$#'
@@ -2695,6 +3091,42 @@ parameters:
 			path: modules/daedalus_stylish/tests/src/Kernel/PropertyGroupTest.php
 
 		-
+			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:get\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: modules/daedalus_stylish/tests/src/Kernel/RelativeSelectorSweepTest.php
+
+		-
+			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:getStyles\(\)\.$#'
+			identifier: method.notFound
+			count: 2
+			path: modules/daedalus_stylish/tests/src/Kernel/RelativeSelectorSweepTest.php
+
+		-
+			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:isModified\(\)\.$#'
+			identifier: method.notFound
+			count: 2
+			path: modules/daedalus_stylish/tests/src/Kernel/RelativeSelectorSweepTest.php
+
+		-
+			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:packageDefaults\(\)\.$#'
+			identifier: method.notFound
+			count: 2
+			path: modules/daedalus_stylish/tests/src/Kernel/RelativeSelectorSweepTest.php
+
+		-
+			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityStorageInterface\:\:loadRevision\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: modules/daedalus_stylish/tests/src/Kernel/RelativeSelectorSweepTest.php
+
+		-
+			message: '#^Call to an undefined method Drupal\\Core\\Field\\FieldItemInterface\:\:getStyleMap\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: modules/daedalus_stylish/tests/src/Kernel/RelativeSelectorSweepTest.php
+
+		-
 			message: '#^Call to an undefined method Drupal\\Core\\Field\\FieldItemInterface\:\:getStyleMap\(\)\.$#'
 			identifier: method.notFound
 			count: 1
@@ -2702,12 +3134,6 @@ parameters:
 
 		-
 			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:getAxis\(\)\.$#'
-			identifier: method.notFound
-			count: 2
-			path: modules/daedalus_stylish/tests/src/Kernel/RowArrangementMigrationTest.php
-
-		-
-			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:getElement\(\)\.$#'
 			identifier: method.notFound
 			count: 2
 			path: modules/daedalus_stylish/tests/src/Kernel/RowArrangementMigrationTest.php
@@ -2791,10 +3217,52 @@ parameters:
 			path: modules/daedalus_stylish/tests/src/Kernel/SkinImporterTest.php
 
 		-
+			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:defaults\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: modules/daedalus_stylish/tests/src/Kernel/SkinLayerTest.php
+
+		-
+			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:set\(\)\.$#'
+			identifier: method.notFound
+			count: 2
+			path: modules/daedalus_stylish/tests/src/Kernel/SkinLayerTest.php
+
+		-
+			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:tokens\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: modules/daedalus_stylish/tests/src/Kernel/SkinLayerTest.php
+
+		-
+			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityStorageInterface\:\:loadRevision\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: modules/daedalus_stylish/tests/src/Kernel/SkinLayerTest.php
+
+		-
+			message: '#^Call to an undefined method Drupal\\Core\\Field\\FieldDefinitionInterface\:\:isRevisionable\(\)\.$#'
+			identifier: method.notFound
+			count: 2
+			path: modules/daedalus_stylish/tests/src/Kernel/SkinLayerTest.php
+
+		-
 			message: '#^Cannot call method id\(\) on null\.$#'
 			identifier: method.nonObject
 			count: 1
 			path: modules/daedalus_stylish/tests/src/Kernel/SkinManagerTest.php
+
+		-
+			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:set\(\)\.$#'
+			identifier: method.notFound
+			count: 2
+			path: modules/daedalus_stylish/tests/src/Kernel/StackEquivalenceTest.php
+
+		-
+			message: '#^Call to an undefined method Drupal\\Core\\Field\\FieldItemInterface\:\:getStyleMap\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: modules/daedalus_stylish/tests/src/Kernel/StackEquivalenceTest.php
 
 		-
 			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:get\(\)\.$#'
@@ -2830,12 +3298,6 @@ parameters:
 			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:set\(\)\.$#'
 			identifier: method.notFound
 			count: 2
-			path: modules/daedalus_stylish/tests/src/Kernel/StyleGuideTokenScalesTest.php
-
-		-
-			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:set\(\)\.$#'
-			identifier: method.notFound
-			count: 2
 			path: modules/daedalus_stylish/tests/src/Kernel/StyleMapFieldHandlerTest.php
 
 		-
@@ -2843,6 +3305,12 @@ parameters:
 			identifier: method.notFound
 			count: 2
 			path: modules/daedalus_stylish/tests/src/Kernel/StyleMapValidatorTest.php
+
+		-
+			message: '#^Call to an undefined method Drupal\\Core\\Field\\FieldItemInterface\:\:getStyleMap\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: modules/daedalus_stylish/tests/src/Kernel/StylePermissionTest.php
 
 		-
 			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:set\(\)\.$#'
@@ -2853,7 +3321,13 @@ parameters:
 		-
 			message: '#^Call to an undefined method Drupal\\Core\\Field\\FieldItemInterface\:\:getStyleMap\(\)\.$#'
 			identifier: method.notFound
-			count: 2
+			count: 1
+			path: modules/daedalus_stylish/tests/src/Kernel/StyleStackToolTest.php
+
+		-
+			message: '#^Call to an undefined method Drupal\\Core\\Field\\FieldItemListInterface\<Drupal\\Core\\Field\\FieldItemInterface\>\:\:getSection\(\)\.$#'
+			identifier: method.notFound
+			count: 1
 			path: modules/daedalus_stylish/tests/src/Kernel/StyleStackToolTest.php
 
 		-
@@ -2867,6 +3341,12 @@ parameters:
 			identifier: method.notFound
 			count: 1
 			path: modules/daedalus_stylish/tests/src/Kernel/StyleStackToolTest.php
+
+		-
+			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:get\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: modules/daedalus_stylish/tests/src/Kernel/StyleValueResolverTest.php
 
 		-
 			message: '#^Call to an undefined method Drupal\\Core\\Field\\FieldItemInterface\:\:getStyleMap\(\)\.$#'
@@ -2887,19 +3367,19 @@ parameters:
 			path: modules/daedalus_stylish/tests/src/Kernel/SwatchManagerTest.php
 
 		-
-			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:getDefaults\(\)\.$#'
-			identifier: method.notFound
-			count: 1
-			path: modules/daedalus_stylish/tests/src/Kernel/SwatchManagerTest.php
-
-		-
 			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:getStyles\(\)\.$#'
 			identifier: method.notFound
 			count: 1
 			path: modules/daedalus_stylish/tests/src/Kernel/SwatchManagerTest.php
 
 		-
-			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:getTokens\(\)\.$#'
+			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:packageDefaults\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: modules/daedalus_stylish/tests/src/Kernel/SwatchManagerTest.php
+
+		-
+			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:packageTokens\(\)\.$#'
 			identifier: method.notFound
 			count: 1
 			path: modules/daedalus_stylish/tests/src/Kernel/SwatchManagerTest.php
@@ -2927,6 +3407,36 @@ parameters:
 			identifier: method.notFound
 			count: 2
 			path: modules/daedalus_stylish/tests/src/Kernel/TokenConsumptionTest.php
+
+		-
+			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:set\(\)\.$#'
+			identifier: method.notFound
+			count: 2
+			path: modules/daedalus_stylish/tests/src/Kernel/TokenContractTest.php
+
+		-
+			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:get\(\)\.$#'
+			identifier: method.notFound
+			count: 2
+			path: modules/daedalus_stylish/tests/src/Kernel/TokenManagerTest.php
+
+		-
+			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:getStyles\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: modules/daedalus_stylish/tests/src/Kernel/TokenManagerTest.php
+
+		-
+			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:set\(\)\.$#'
+			identifier: method.notFound
+			count: 2
+			path: modules/daedalus_stylish/tests/src/Kernel/TokenManagerTest.php
+
+		-
+			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:set\(\)\.$#'
+			identifier: method.notFound
+			count: 2
+			path: modules/daedalus_stylish/tests/src/Kernel/TokenOpsTest.php
 
 		-
 			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:set\(\)\.$#'
@@ -2989,12 +3499,6 @@ parameters:
 			path: modules/daedalus_stylish/tests/src/Kernel/WidePropertyGroupTest.php
 
 		-
-			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:getElement\(\)\.$#'
-			identifier: method.notFound
-			count: 1
-			path: modules/daedalus_stylish/tests/src/Kernel/WidthBandMigrationTest.php
-
-		-
 			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityStorageInterface\:\:loadRevision\(\)\.$#'
 			identifier: method.notFound
 			count: 2
@@ -3007,8 +3511,44 @@ parameters:
 			path: modules/daedalus_stylish/tests/src/Kernel/WidthBandMigrationTest.php
 
 		-
+			message: '#^Method Drupal\\daedalus_stylish\\Selector\\SelectorMatcher\:\:ancestors\(\) invoked with 2 parameters, 1 required\.$#'
+			identifier: arguments.count
+			count: 1
+			path: modules/daedalus_stylish/tests/src/Unit/SelectorMatcherTest.php
+
+		-
+			message: '#^Method Drupal\\daedalus_stylish\\Selector\\SelectorMatcher\:\:facts\(\) invoked with 2 parameters, 1 required\.$#'
+			identifier: arguments.count
+			count: 1
+			path: modules/daedalus_stylish/tests/src/Unit/SelectorMatcherTest.php
+
+		-
+			message: '#^Method Drupal\\daedalus_stylish\\Selector\\SelectorMatcher\:\:has\(\) invoked with 2 parameters, 1 required\.$#'
+			identifier: arguments.count
+			count: 1
+			path: modules/daedalus_stylish/tests/src/Unit/SelectorMatcherTest.php
+
+		-
+			message: '#^Method Drupal\\daedalus_stylish\\Selector\\SelectorMatcher\:\:matches\(\) invoked with 2 parameters, 3 required\.$#'
+			identifier: arguments.count
+			count: 1
+			path: modules/daedalus_stylish/tests/src/Unit/SelectorMatcherTest.php
+
+		-
+			message: '#^Method Drupal\\daedalus_stylish\\Selector\\SelectorMatcher\:\:reaches\(\) invoked with 2 parameters, 3\-4 required\.$#'
+			identifier: arguments.count
+			count: 1
+			path: modules/daedalus_stylish/tests/src/Unit/SelectorMatcherTest.php
+
+		-
 			message: '#^Call to an undefined method Drupal\\layout_builder\\SectionStorageInterface\:\:bubbleChangesToRoot\(\)\.$#'
 			identifier: method.notFound
+			count: 1
+			path: modules/daedalus_tempstore/src/Strategy/LayoutTempstoreStrategy.php
+
+		-
+			message: '#^\\Drupal calls should be avoided in classes, use dependency injection instead$#'
+			identifier: globalDrupalDependencyInjection.useDependencyInjection
 			count: 1
 			path: modules/daedalus_tempstore/src/Strategy/LayoutTempstoreStrategy.php
 
@@ -3019,22 +3559,22 @@ parameters:
 			path: modules/daedalus_tempstore/tests/src/Kernel/HistoryTest.php
 
 		-
+			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:getSections\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: modules/daedalus_tempstore/tests/src/Kernel/HistoryTest.php
+
+		-
+			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:getSections\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: modules/daedalus_tempstore/tests/src/Kernel/PlainHostStagingTest.php
+
+		-
 			message: '#^Access to an undefined property Drupal\\daedalus_tempstore\\ParamConverter\\TempstoreActivationVoterInterface\:\:\$swapped\.$#'
 			identifier: property.notFound
 			count: 2
 			path: modules/daedalus_tempstore/tests/src/Unit/ActivationVotersTest.php
-
-		-
-			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:get\(\)\.$#'
-			identifier: method.notFound
-			count: 1
-			path: modules/daedalus_ui/src/Controller/MediaUpload.php
-
-		-
-			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:hasField\(\)\.$#'
-			identifier: method.notFound
-			count: 1
-			path: modules/daedalus_ui/src/Controller/MediaUpload.php
 
 		-
 			message: '#^Call to an undefined method Drupal\\daedalus_ui\\SidebarInterface\:\:getPluginDefinition\(\)\.$#'
@@ -3053,12 +3593,6 @@ parameters:
 			identifier: staticMethod.notFound
 			count: 1
 			path: modules/daedalus_ui/src/Element/ComposedContainer.php
-
-		-
-			message: '#^Access to an undefined property Drupal\\Core\\Field\\FieldItemInterface\:\:\$section\.$#'
-			identifier: property.notFound
-			count: 1
-			path: modules/daedalus_ui/src/ElementModel/BlueprintElementAnnotator.php
 
 		-
 			message: '#^Access to an undefined property Drupal\\Core\\Field\\FieldItemInterface\:\:\$value\.$#'
@@ -3081,7 +3615,7 @@ parameters:
 		-
 			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:getThirdPartySetting\(\)\.$#'
 			identifier: method.notFound
-			count: 2
+			count: 1
 			path: modules/daedalus_ui/src/EventSubscriber/InitialMode.php
 
 		-
@@ -3159,7 +3693,7 @@ parameters:
 		-
 			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:getThirdPartySetting\(\)\.$#'
 			identifier: method.notFound
-			count: 2
+			count: 1
 			path: modules/daedalus_ui/src/Plugin/Mode/Edit.php
 
 		-
@@ -3169,40 +3703,10 @@ parameters:
 			path: modules/daedalus_ui/src/Plugin/Mode/Edit.php
 
 		-
-			message: '#^Call to an undefined method Drupal\\daedalus_ui\\ToolInterface\:\:hotKey\(\)\.$#'
-			identifier: method.notFound
-			count: 1
-			path: modules/daedalus_ui/src/Plugin/Mode/Edit.php
-
-		-
-			message: '#^Variable \$bundle_entity might not be defined\.$#'
-			identifier: variable.undefined
-			count: 2
-			path: modules/daedalus_ui/src/Plugin/Mode/Edit.php
-
-		-
-			message: '#^\\Drupal calls should be avoided in classes, use dependency injection instead$#'
-			identifier: globalDrupalDependencyInjection.useDependencyInjection
-			count: 1
-			path: modules/daedalus_ui/src/Plugin/Mode/Edit.php
-
-		-
 			message: '#^\\Drupal calls should be avoided in classes, use dependency injection instead$#'
 			identifier: globalDrupalDependencyInjection.useDependencyInjection
 			count: 1
 			path: modules/daedalus_ui/src/Routing/BeforeEntityWorkflowEnhancer.php
-
-		-
-			message: '#^Constructor of class Drupal\\daedalus_ui\\ToolPluginBase has an unused parameter \$container\.$#'
-			identifier: constructor.unusedParameter
-			count: 1
-			path: modules/daedalus_ui/src/ToolPluginBase.php
-
-		-
-			message: '#^Unsafe usage of new static\(\)\.$#'
-			identifier: new.static
-			count: 1
-			path: modules/daedalus_ui/src/ToolPluginBase.php
 
 		-
 			message: '#^Drupal\\Tests\\BrowserTestBase\:\:\$defaultTheme is required\. See https\://www\.drupal\.org/node/3083055, which includes recommendations on which theme to use\.$#'
@@ -3214,7 +3718,7 @@ parameters:
 			message: '#^Drupal\\Tests\\BrowserTestBase\:\:\$defaultTheme is required\. See https\://www\.drupal\.org/node/3083055, which includes recommendations on which theme to use\.$#'
 			identifier: BrowserTestBase.defaultThemeRequired
 			count: 1
-			path: modules/daedalus_ui/tests/src/Functional/ToolCursorTest.php
+			path: modules/daedalus_ui/tests/src/Functional/PopoutDocumentTest.php
 
 		-
 			message: '#^Drupal\\Tests\\BrowserTestBase\:\:\$defaultTheme is required\. See https\://www\.drupal\.org/node/3083055, which includes recommendations on which theme to use\.$#'
@@ -3245,4 +3749,22 @@ parameters:
 			identifier: method.notFound
 			count: 2
 			path: modules/daedalus_ui/tests/src/Kernel/ElementModelTest.php
+
+		-
+			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityInterface\:\:get\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: modules/daedalus_ui/tests/src/Kernel/ReplaceMediaPlainHostTest.php
+
+		-
+			message: '#^Call to an undefined method DOMNameSpaceNode\|DOMNode\:\:getAttribute\(\)\.$#'
+			identifier: method.notFound
+			count: 4
+			path: modules/daedalus_ui/tests/src/Kernel/RouteHostTest.php
+
+		-
+			message: '#^Call to an undefined method DOMNameSpaceNode\|DOMNode\:\:hasAttribute\(\)\.$#'
+			identifier: method.notFound
+			count: 2
+			path: modules/daedalus_ui/tests/src/Kernel/RouteHostTest.php
 

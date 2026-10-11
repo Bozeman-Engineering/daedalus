@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Drupal\daedalus_blueprint_api\Render;
 
-use Drupal\Core\Entity\FieldableEntityInterface;
+use Drupal\daedalus_blueprint\Host\HostInterface;
 use Drupal\daedalus_blueprint\ElementLocator;
 use Drupal\daedalus_blueprint\LayoutBuilder\DaedalusLayoutAdapter;
 use Drupal\daedalus_blueprint\Result\TargetType;
@@ -49,8 +49,8 @@ class TargetKeyMapper {
   /**
    * Maps change targets to the selectable keys of the subtrees to re-render.
    *
-   * @param \Drupal\Core\Entity\FieldableEntityInterface $root
-   *   The root entity the mutation was applied to.
+   * @param \Drupal\daedalus_blueprint\Host\HostInterface $host
+   *   The host the mutation was applied to.
    * @param array<int, array{uuid: string, field_name: string}|string> $targets
    *   The change targets from the blueprint result. A string target is
    *   already a selectable key (a style write names the styled element
@@ -61,12 +61,12 @@ class TargetKeyMapper {
    *   Deduplicated selectable keys. May contain the root entity key, which
    *   subsumes all others.
    */
-  public function map(FieldableEntityInterface $root, array $targets): array {
+  public function map(HostInterface $host, array $targets): array {
     $keys = [];
     foreach ($targets as $target) {
       $keys[] = is_string($target)
         ? $target
-        : $this->mapTarget($root, (string) $target['uuid'], (string) $target['field_name']);
+        : $this->mapTarget($host, (string) $target['uuid'], (string) $target['field_name']);
     }
     return array_values(array_unique($keys));
   }
@@ -74,8 +74,8 @@ class TargetKeyMapper {
   /**
    * Maps a single target to a selectable key.
    *
-   * @param \Drupal\Core\Entity\FieldableEntityInterface $root
-   *   The root entity.
+   * @param \Drupal\daedalus_blueprint\Host\HostInterface $host
+   *   The host.
    * @param string $uuid
    *   The target UUID.
    * @param string $field_name
@@ -84,14 +84,14 @@ class TargetKeyMapper {
    * @return string
    *   The selectable key of the subtree to re-render.
    */
-  protected function mapTarget(FieldableEntityInterface $root, string $uuid, string $field_name): string {
-    $fallback = SelectableKey::entity($root->uuid());
+  protected function mapTarget(HostInterface $host, string $uuid, string $field_name): string {
+    $fallback = SelectableKey::entity($host->uuid());
 
-    if ($uuid === $root->uuid()) {
+    if ($uuid === $host->uuid()) {
       return TargetType::isSentinel($field_name) ? $fallback : SelectableKey::field($uuid, $field_name);
     }
 
-    $context = $this->elementLocator->locate($root, $uuid);
+    $context = $this->elementLocator->locate($host, $uuid);
     if ($context === NULL) {
       return $fallback;
     }
@@ -129,7 +129,8 @@ class TargetKeyMapper {
       }
       if (in_array($field_name, [TargetType::ADDED, TargetType::REORDERED], TRUE)
         && $context->fieldName !== NULL
-        && $context->parentEntity->uuid() === $root->uuid()
+        && $context->parentEntity !== NULL
+        && $context->parentEntity === $host->fields()
       ) {
         // Only root-level host fields map cleanly: paragraphs nested inside
         // inline blocks address their host field by component UUID, which

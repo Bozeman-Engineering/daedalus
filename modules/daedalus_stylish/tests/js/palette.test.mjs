@@ -3,10 +3,11 @@
  *
  * Run directly (`node tests/js/palette.test.mjs`) or via
  * PrinterEquivalenceTest inside the PHPUnit suite. Locks the kind filter
- * vocabulary, the row roster with its honesty flags, the lifecycle card's
- * gesture roster (the shipped-state split, the delete grades), the
- * condition-honest editor split, and the read-only skin grouping. Exits
- * non-zero on failure.
+ * vocabulary, the row roster with its honesty flags, the two cards'
+ * gesture rosters (the shipped-state split and the delete grades for a
+ * swatch; the layer, the lock and the grades for a token), the
+ * condition-honest editor split, the token name grammar and the skin
+ * grouping with its editable facts. Exits non-zero on failure.
  */
 import { strict as assert } from 'node:assert';
 import {
@@ -18,9 +19,12 @@ import {
   paletteRows,
   skinGroups,
   swatchCardGestures,
+  tokenCardGestures,
+  tokenLayer,
+  tokenNameError,
 } from '../../js/src/palette-model.js';
 import { facePair } from '../../js/src/materials.js';
-import { EMPTY_MATERIALS, materialsFrom, swatchRecord } from './materials-fixture.mjs';
+import { EMPTY_MATERIALS, materialsFrom, roster, swatchRecord, tokenRecord } from './materials-fixture.mjs';
 
 const tests = [];
 const test = (name, run) => tests.push([name, run]);
@@ -228,7 +232,7 @@ test('mergedPair: the editablePair round trip is the identity', () => {
   }
 });
 
-test('skinGroups: tokens grouped per scale label, shapes and scheme pairs carried', () => {
+test('skinGroups: tokens grouped per scale label, shapes, scheme pairs, facts and layers carried', () => {
   const guide = {
     conditions: {
       dark: { label: 'Dark', axis: 'scheme' },
@@ -238,21 +242,118 @@ test('skinGroups: tokens grouped per scale label, shapes and scheme pairs carrie
       space: { label: 'Spacing', shape: 'dimension', prefix: 'space' },
       empty: { label: 'Empty', shape: 'color', prefix: 'empty' },
     },
-    tokens: {
-      color: { accent: '#1a1a2e', bg: { default: '#fff', dark: '#111' } },
-      space: { 4: '1rem' },
-    },
   };
-  assert.deepEqual(skinGroups(guide, materialsFrom(guide)), [
+  // The package ships accent and bg (a site override keeps bg shipped);
+  // the site minted 4, described and withheld from the rows.
+  const materials = roster(
+    tokenRecord('color', 'accent', '#1a1a2e'),
+    tokenRecord('color', 'bg', { default: '#fff', dark: '#111' }),
+    tokenRecord('space', '4', '1rem', 'space', { origin: 'user', description: 'The step.', offered: false }),
+  );
+  const record = (id) => materials.get('token', id);
+  assert.deepEqual(skinGroups(guide, materials), [
     ['Colors', [
-      { name: 'accent', ref: 'var(--color-accent)', value: '#1a1a2e', valueDark: null, shape: 'color' },
-      { name: 'bg', ref: 'var(--color-bg)', value: '#fff', valueDark: '#111', shape: 'color' },
+      { scale: 'color', name: 'accent', ref: 'var(--color-accent)', value: '#1a1a2e', valueDark: null, shape: 'color', description: '', offered: true, layer: 'package', record: record('color/accent') },
+      { scale: 'color', name: 'bg', ref: 'var(--color-bg)', value: '#fff', valueDark: '#111', shape: 'color', description: '', offered: true, layer: 'package', record: record('color/bg') },
     ]],
     ['Spacing', [
-      { name: '4', ref: 'var(--space-4)', value: '1rem', valueDark: null, shape: 'dimension' },
+      { scale: 'space', name: '4', ref: 'var(--space-4)', value: '1rem', valueDark: null, shape: 'dimension', description: 'The step.', offered: false, layer: 'site', record: record('space/4') },
     ]],
   ]);
   assert.deepEqual(skinGroups({}, EMPTY_MATERIALS), []);
+});
+
+test('tokenLayer: the record\'s origin names the layer the row lists', () => {
+  assert.equal(tokenLayer(tokenRecord('space', '4', '1rem')), 'package');
+  assert.equal(tokenLayer(tokenRecord('space', '4', '1rem', 'space', { origin: 'user' })), 'site');
+  assert.equal(tokenLayer(tokenRecord('space', '4', '1rem', 'space', { origin: 'ai' })), 'site');
+});
+
+test('tokenNameError: the grammar, then the roster', () => {
+  const materials = roster(tokenRecord('space', '4', '1rem'), tokenRecord('color', 'accent', '#000'));
+  assert.equal(tokenNameError('', 'space', materials), 'missing');
+  for (const bad of ['Wide', 'hero gap', '-lead', 'lead-', 'a_b', 'é']) {
+    assert.equal(tokenNameError(bad, 'space', materials), 'invalid', bad);
+  }
+  assert.equal(tokenNameError('4', 'space', materials), 'taken');
+  // Names are per scale: the same name on another scale is free.
+  assert.equal(tokenNameError('4', 'color', materials), null);
+  for (const good of ['4', '2xl', 'accent-hover', 'a']) {
+    assert.equal(tokenNameError(good, 'color', materials), null, good);
+  }
+});
+
+// The token card's subjects: a package token (the olivero gutter), the
+// same token overridden by the site, a site-minted token, and the
+// management read for each on a consuming site and under the gate.
+const PACKAGE_TOKEN = tokenRecord('space', 'gutter', '2rem');
+const SITE_TOKEN = tokenRecord('space', 'hero', '3rem', 'space', { origin: 'user' });
+const TOKEN_GRANTS = { canCreate: true, canUpdate: true, canDelete: true, canDeleteInUse: true };
+const CONSUMING = { usages: 0, layer: 'package', locked: true, provider: 'olivero', shipped_state: 'unmodified' };
+const OVERRIDDEN = { ...CONSUMING, layer: 'both', shipped_state: 'modified' };
+const MINTED = { usages: 0, layer: 'site', locked: true, provider: 'olivero', shipped_state: null };
+const GATED = { ...CONSUMING, locked: false };
+
+test('tokenCardGestures: the update grade opens the value, description and offered editors on every token', () => {
+  assert.deepEqual(tokenCardGestures(PACKAGE_TOKEN, TOKEN_GRANTS, CONSUMING), {
+    editValue: true,
+    editDescription: true,
+    offer: true,
+    rename: false,
+    revert: false,
+    delete: false,
+  });
+  // Without it the card is read-only, whatever the layer.
+  assert.deepEqual(tokenCardGestures(SITE_TOKEN, { canDelete: true }, MINTED), {
+    editValue: false,
+    editDescription: false,
+    offer: false,
+    rename: false,
+    revert: false,
+    delete: true,
+  });
+  assert.deepEqual(tokenCardGestures(PACKAGE_TOKEN, {}, CONSUMING), {
+    editValue: false,
+    editDescription: false,
+    offer: false,
+    rename: false,
+    revert: false,
+    delete: false,
+  });
+});
+
+test('tokenCardGestures: identity is the site\'s own on site-minted tokens and where the lock is lifted', () => {
+  assert.equal(tokenCardGestures(SITE_TOKEN, TOKEN_GRANTS, MINTED).rename, true);
+  assert.equal(tokenCardGestures(SITE_TOKEN, TOKEN_GRANTS, MINTED).delete, true);
+  // The record alone already says so: the read in flight withholds nothing
+  // the origin grants.
+  assert.equal(tokenCardGestures(SITE_TOKEN, TOKEN_GRANTS, null).rename, true);
+  assert.equal(tokenCardGestures(SITE_TOKEN, TOKEN_GRANTS, null).delete, true);
+  // A package token: never on a consuming site, even overridden...
+  assert.equal(tokenCardGestures(PACKAGE_TOKEN, TOKEN_GRANTS, OVERRIDDEN).rename, false);
+  assert.equal(tokenCardGestures(PACKAGE_TOKEN, TOKEN_GRANTS, OVERRIDDEN).delete, false);
+  assert.equal(tokenCardGestures(PACKAGE_TOKEN, TOKEN_GRANTS, null).rename, false);
+  // ...and the site's own under the developer gate.
+  assert.equal(tokenCardGestures(PACKAGE_TOKEN, TOKEN_GRANTS, GATED).rename, true);
+  assert.equal(tokenCardGestures(PACKAGE_TOKEN, TOKEN_GRANTS, GATED).delete, true);
+});
+
+test('tokenCardGestures: revert follows the shipped state, the unset gesture on a consuming site', () => {
+  assert.equal(tokenCardGestures(PACKAGE_TOKEN, TOKEN_GRANTS, CONSUMING).revert, false);
+  assert.equal(tokenCardGestures(PACKAGE_TOKEN, TOKEN_GRANTS, OVERRIDDEN).revert, true);
+  assert.equal(tokenCardGestures(PACKAGE_TOKEN, { canDelete: true }, OVERRIDDEN).revert, false, 'the update grade, like the override itself');
+  assert.equal(tokenCardGestures(PACKAGE_TOKEN, TOKEN_GRANTS, { ...GATED, shipped_state: 'modified' }).revert, true);
+  assert.equal(tokenCardGestures(SITE_TOKEN, TOKEN_GRANTS, MINTED).revert, false, 'no disk file ships it');
+  assert.equal(tokenCardGestures(PACKAGE_TOKEN, TOKEN_GRANTS, null).revert, false, 'the state is unknown while the read is in flight');
+});
+
+test('tokenCardGestures: delete carries the two permission grades', () => {
+  const used = { ...MINTED, usages: 3 };
+  assert.equal(tokenCardGestures(SITE_TOKEN, { canDelete: true }, used).delete, false);
+  assert.equal(tokenCardGestures(SITE_TOKEN, { canDeleteInUse: true }, used).delete, true);
+  assert.equal(tokenCardGestures(SITE_TOKEN, { canDelete: true }, MINTED).delete, true);
+  assert.equal(tokenCardGestures(SITE_TOKEN, { canDeleteInUse: true }, MINTED).delete, true);
+  assert.equal(tokenCardGestures(SITE_TOKEN, {}, MINTED).delete, false);
 });
 
 // The face pair's guide: a scheme axis in the conditions table (without

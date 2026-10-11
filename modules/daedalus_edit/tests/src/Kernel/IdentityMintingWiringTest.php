@@ -123,10 +123,14 @@ class IdentityMintingWiringTest extends KernelTestBase {
       'bundle' => 'page',
     ])->save();
 
-    // The blueprint handler enforces the 'use' permission on deserialize.
+    // The blueprint handler enforces the 'use' permission on deserialize,
+    // and the op door judges update access on the host before any field
+    // (the stage-time seam runs through batchOperations()).
     $this->setUpCurrentUser([], [
       $this->identity->getPermissionName(),
       $this->broken->getPermissionName(),
+      'access content',
+      'edit any page content',
     ]);
   }
 
@@ -205,7 +209,7 @@ class IdentityMintingWiringTest extends KernelTestBase {
    *   A grammar value or an ExtractedValue for field_body.
    */
   protected function stage(NodeInterface $node, mixed $value): void {
-    $result = $this->container->get('daedalus_blueprint.operations')->batchOperations($node, [
+    $result = $this->container->get('daedalus_blueprint.operations')->batchOperations($this->container->get('daedalus_blueprint.host_resolver')->fromEntity($node), [
       ['op' => 'update_element', 'element' => $node->uuid(), 'properties' => ['field_body' => $value]],
     ]);
     $this->assertTrue($result->isSuccess(), print_r($result->toArray(), TRUE));

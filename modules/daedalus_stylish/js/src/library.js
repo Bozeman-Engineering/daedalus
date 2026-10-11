@@ -20,7 +20,7 @@ import {
   libraryFilters,
   libraryRows,
   pageWearer,
-  stencilTargets,
+  blueprintTargets,
   variantOwnership,
 } from './library-model.js';
 import { useMenu } from './menu.js';
@@ -64,12 +64,12 @@ import { RevisionList, revisionDate } from './revision-list.js';
  * carries the materials delta, and source.applyResponse lands it on the
  * store in both windows.
  *
- * Stencil ownership renders honestly: an owned variant's card wears an
+ * Blueprint ownership renders honestly: an owned variant's card wears an
  * owned-by badge (orphaned owners flag loudly), the apply doorway's
  * unfit title names the owner when ownership is the reason, and the
  * ownership gestures (Release, Transfer/Assign) ride
- * daedalus_blueprint_stencil's routes behind the variant gates' `canOwn`
- * (the "save stencils" grant); the stencils themselves are the store's
+ * daedalus_blueprint_library's routes behind the variant gates' `canOwn`
+ * (the library's ownership grant); the blueprints themselves are the store's
  * records, the same in both windows.
  */
 const VariantCard = ({
@@ -178,7 +178,7 @@ const VariantCard = ({
     }
     commitDetails(
       { label },
-      Drupal.t('Renamed to "@label".', { '@label': label }),
+      Drupal.t('Renamed to "!label".', { '!label': label }),
     );
   };
   const describe = (value) => {
@@ -206,8 +206,8 @@ const VariantCard = ({
         .then(() => {
           source.notify?.(
             'status',
-            Drupal.t('Applied "@label" at the styling target.', {
-              '@label': variant.label,
+            Drupal.t('Applied "!label" at the styling target.', {
+              '!label': variant.label,
             }),
           );
           return null;
@@ -223,9 +223,9 @@ const VariantCard = ({
       fetchUsage(reference).then(async ({ usages }) => {
         const confirmed = await Drupal.Daedalus.dialog.confirm({
           title: Drupal.t('Restore revision'),
-          message: Drupal.t('Restore "@label" to its revision of @date?', {
-            '@label': variant.label,
-            '@date': revisionDate(revision.created),
+          message: Drupal.t('Restore "!label" to its revision of !date?', {
+            '!label': variant.label,
+            '!date': revisionDate(revision.created),
           }),
           detail:
             usages === 0
@@ -247,11 +247,11 @@ const VariantCard = ({
             source.applyResponse(response);
             source.notify?.(
               'status',
-              Drupal.t('Restored "@label" from its revision of @date.', {
-                '@label':
+              Drupal.t('Restored "!label" from its revision of !date.', {
+                '!label':
                   respondedMaterial(response, 'variant', reference)?.label ??
                   variant.label,
-                '@date': revisionDate(revision.created),
+                '!date': revisionDate(revision.created),
               }),
             );
             return null;
@@ -266,10 +266,10 @@ const VariantCard = ({
   // variants, a plain duplicate elsewhere). The new card opens.
   const duplicate = async () => {
     const label = await Drupal.Daedalus.dialog.prompt({
-      message: Drupal.t('Name for your copy of "@label":', {
-        '@label': variant.label,
+      message: Drupal.t('Name for your copy of "!label":', {
+        '!label': variant.label,
       }),
-      defaultValue: Drupal.t('@label (copy)', { '@label': variant.label }),
+      defaultValue: Drupal.t('!label (copy)', { '!label': variant.label }),
       confirmLabel: Drupal.t('Copy'),
     });
     if (label === null || label.trim() === '') {
@@ -283,8 +283,8 @@ const VariantCard = ({
         onCard(copy?.id ?? null);
         source.notify?.(
           'status',
-          Drupal.t('Copied to "@label".', {
-            '@label': copy?.label ?? label.trim(),
+          Drupal.t('Copied to "!label".', {
+            '!label': copy?.label ?? label.trim(),
           }),
         );
         return null;
@@ -299,8 +299,8 @@ const VariantCard = ({
           source.applyResponse(result);
           source.notify?.(
             'status',
-            Drupal.t('Reverted "@label" to its built-in defaults.', {
-              '@label':
+            Drupal.t('Reverted "!label" to its built-in defaults.', {
+              '!label':
                 respondedMaterial(result, 'variant', reference)?.label ??
                 variant.label,
             }),
@@ -320,12 +320,12 @@ const VariantCard = ({
         const confirmed = await Drupal.Daedalus.dialog.confirm({
           title: Drupal.t('Release variant'),
           message: ownership.orphaned
-            ? Drupal.t('Release "@label" from its former stencil?', {
-                '@label': variant.label,
+            ? Drupal.t('Release "!label" from its former blueprint?', {
+                '!label': variant.label,
               })
-            : Drupal.t('Release "@label" from the stencil "@stencil"?', {
-                '@label': variant.label,
-                '@stencil': ownership.label,
+            : Drupal.t('Release "!label" from the blueprint "!blueprint"?', {
+                '!label': variant.label,
+                '!blueprint': ownership.label,
               }),
           detail: Drupal.t(
             'It becomes general-purpose: offered wherever its scope fits, on any placement. Nothing wearing it changes.',
@@ -339,8 +339,8 @@ const VariantCard = ({
           source.applyResponse(response);
           source.notify?.(
             'status',
-            Drupal.t('Released "@label"; it is general-purpose now.', {
-              '@label': variant.label,
+            Drupal.t('Released "!label"; it is general-purpose now.', {
+              '!label': variant.label,
             }),
           );
           return null;
@@ -349,7 +349,7 @@ const VariantCard = ({
     );
   };
 
-  // Transfer / Assign: ownership to a content stencil, one atomic route
+  // Transfer / Assign: ownership to a content blueprint, one atomic route
   // gesture (adopt-later when the variant was unowned). The target comes
   // off the popup menu; picking it IS the confirmation.
   const transferTo = (target) => {
@@ -359,13 +359,13 @@ const VariantCard = ({
         source.notify?.(
           'status',
           ownership
-            ? Drupal.t('Transferred "@label" to the stencil "@stencil".', {
-                '@label': variant.label,
-                '@stencil': target.label,
+            ? Drupal.t('Transferred "!label" to the blueprint "!blueprint".', {
+                '!label': variant.label,
+                '!blueprint': target.label,
               })
             : Drupal.t(
-                'Assigned "@label" to the stencil "@stencil"; it offers only on its placements now.',
-                { '@label': variant.label, '@stencil': target.label },
+                'Assigned "!label" to the blueprint "!blueprint"; it offers only on its placements now.',
+                { '!label': variant.label, '!blueprint': target.label },
               ),
         );
         return null;
@@ -376,7 +376,7 @@ const VariantCard = ({
   const openTransferMenu = (event) => {
     menu.open({
       anchor: event.currentTarget,
-      items: stencilTargets(variant, materials).map((target) => ({
+      items: blueprintTargets(variant, materials).map((target) => ({
         label: target.label,
         run: () => transferTo(target),
       })),
@@ -394,7 +394,7 @@ const VariantCard = ({
         const confirmed = await Drupal.Daedalus.dialog.confirm({
           danger: true,
           title: Drupal.t('Delete variant'),
-          message: Drupal.t('Delete "@label"?', { '@label': variant.label }),
+          message: Drupal.t('Delete "!label"?', { '!label': variant.label }),
           detail:
             usages === 0
               ? Drupal.t('Nothing wears it; it is deleted immediately.')
@@ -426,7 +426,7 @@ const VariantCard = ({
           onCard(null);
           source.notify?.(
             'status',
-            Drupal.t('Deleted "@label".', { '@label': variant.label }),
+            Drupal.t('Deleted "!label".', { '!label': variant.label }),
           );
           return null;
         });
@@ -480,7 +480,7 @@ const VariantCard = ({
               "The variant's weight: lists and pickers order by weight, then label.",
             )}
           >
-            {Drupal.t('weight @weight', { '@weight': variant.weight })}
+            {Drupal.t('weight !weight', { '!weight': variant.weight })}
           </span>
         )}
         {ownership && (
@@ -489,17 +489,17 @@ const VariantCard = ({
             title={
               ownership.orphaned
                 ? Drupal.t(
-                    'Belonged to a stencil that no longer exists: offered nowhere, though everything wearing it keeps its look. Release it to make it general-purpose.',
+                    'Belonged to a blueprint that no longer exists: offered nowhere, though everything wearing it keeps its look. Release it to make it general-purpose.',
                   )
                 : Drupal.t(
-                    'One of the stencil "@stencil"\'s switchable looks: offered only inside its placements.',
-                    { '@stencil': ownership.label },
+                    'One of the blueprint "!blueprint"\'s switchable looks: offered only inside its placements.',
+                    { '!blueprint': ownership.label },
                   )
             }
           >
             {ownership.orphaned
               ? Drupal.t('owner gone')
-              : Drupal.t('owned by @stencil', { '@stencil': ownership.label })}
+              : Drupal.t('owned by !blueprint', { '!blueprint': ownership.label })}
           </span>
         )}
       </div>
@@ -516,11 +516,11 @@ const VariantCard = ({
             commitDetails(
               { offered: next },
               next
-                ? Drupal.t('Offered "@label" to the AI.', {
-                    '@label': variant.label,
+                ? Drupal.t('Offered "!label" to the AI.', {
+                    '!label': variant.label,
                   })
-                : Drupal.t('Kept "@label" from the AI.', {
-                    '@label': variant.label,
+                : Drupal.t('Kept "!label" from the AI.', {
+                    '!label': variant.label,
                   }),
             )
           }
@@ -601,8 +601,8 @@ const VariantCard = ({
       )}
       {progress && (
         <div className="daedalus-stylish-library-card__progress">
-          {Drupal.t('Detaching… @percent%', {
-            '@percent': progress.percentage ?? '0',
+          {Drupal.t('Detaching… !percent%', {
+            '!percent': progress.percentage ?? '0',
           })}
         </div>
       )}
@@ -627,11 +627,11 @@ const VariantCard = ({
                   'The variant does not offer at the styling target.',
                 ),
                 'unfit-owned': Drupal.t(
-                  'Belongs to the stencil "@stencil": it only offers inside that stencil\'s placements.',
-                  { '@stencil': ownership?.label ?? '' },
+                  'Belongs to the blueprint "!blueprint": it only offers inside that blueprint\'s placements.',
+                  { '!blueprint': ownership?.label ?? '' },
                 ),
                 'unfit-orphaned': Drupal.t(
-                  'Its owning stencil no longer exists, so it offers nowhere. Release it to make it general-purpose.',
+                  'Its owning blueprint no longer exists, so it offers nowhere. Release it to make it general-purpose.',
                 ),
               }[doorway]
             }
@@ -712,16 +712,16 @@ const VariantCard = ({
             disabled={busy}
             title={
               ownership
-                ? Drupal.t("Move it into another stencil's switchable looks.")
+                ? Drupal.t("Move it into another blueprint's switchable looks.")
                 : Drupal.t(
-                    "Make it one of a stencil's switchable looks, offered only on that stencil's placements.",
+                    "Make it one of a blueprint's switchable looks, offered only on that blueprint's placements.",
                   )
             }
             onClick={openTransferMenu}
           >
             {ownership
-              ? Drupal.t('Transfer to stencil…')
-              : Drupal.t('Assign to stencil…')}
+              ? Drupal.t('Transfer to blueprint…')
+              : Drupal.t('Assign to blueprint…')}
           </button>
         )}
         {gestures.delete && (

@@ -6,6 +6,7 @@ namespace Drupal\daedalus_stylish;
 
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\Logger\LoggerChannelFactoryInterface;
+use Drupal\daedalus_stylish\Plugin\Field\FieldType\SkinTokensItem;
 
 /**
  * The base-at-top width-band style migration: fold wide into base.
@@ -40,10 +41,10 @@ use Drupal\Core\Logger\LoggerChannelFactoryInterface;
  * the presave/load-time safety net, so stale tempstore sessions keep
  * converging), daedalus_variant styles across ALL revisions, daedalus_skin
  * tokens and defaults across ALL revisions (the container migration never
- * covered skins; skins CAN store width-conditioned tokens and defaults),
- * and stored stencils. Entity view displays hold layout structure only,
+ * covered skins; skins CAN store width-conditioned tokens and defaults).
+ * Entity view displays hold layout structure only,
  * never style data, so there is no display walk. File-shipped variants,
- * skins, and stencils are module code and never migrate; none ship "wide"
+ * skins and blueprints are module code and never migrate; none ship "wide"
  * data. Unmigrated "wide" entries are inert, never fatal (the emit gate
  * skips unknown conditions), so partially-migrated data degrades
  * gracefully.
@@ -299,34 +300,46 @@ class WidthBandMigration {
         $changed = FALSE;
         $context = sprintf('Skin "%s" (revision %s)', $skin->getMachineName(), $revision_id);
 
-        $tokens = $revision->getTokens();
-        foreach ($tokens as $scale => $names) {
-          if (!is_array($names)) {
-            continue;
-          }
-          foreach ($names as $name => $value) {
-            if (is_array($value)) {
-              $tokens[$scale][$name] = $this->migrateTokenConditions($value, "$context token $scale.$name", $lines, $changed);
+        // Both layers as stored: the package's and the site's over it (a
+        // site record states only the facts it changes, so the values it
+        // states are the ones to migrate).
+        $token_layers = [
+          'package' => [$revision->packageTokens(), $revision->setPackageTokens(...)],
+          'site' => [$revision->siteTokens(), $revision->setSiteTokens(...)],
+        ];
+        foreach ($token_layers as $layer => [$tokens, $write]) {
+          $stored = $tokens;
+          foreach (SkinTokensItem::statedValues($tokens) as $scale => $values) {
+            foreach ($values as $name => $value) {
+              if (is_array($value)) {
+                $tokens[$scale][$name]['value'] = $this->migrateTokenConditions($value, "$context $layer token $scale.$name", $lines, $changed);
+              }
             }
           }
-        }
-        if ($tokens !== $revision->getTokens()) {
-          $revision->setTokens($tokens);
+          if ($tokens !== $stored) {
+            $write($tokens);
+          }
         }
 
-        $defaults = $revision->getDefaults();
-        foreach ($defaults as $scope => $relatives) {
-          if (!is_array($relatives)) {
-            continue;
-          }
-          foreach ($relatives as $relative => $entry) {
-            if (is_array($entry)) {
-              $defaults[$scope][$relative] = $this->migrateEntryConditions($entry, "$context defaults $scope $relative", $lines, $changed);
+        $defaults_layers = [
+          'package' => [$revision->packageDefaults(), $revision->setPackageDefaults(...)],
+          'site' => [$revision->siteDefaults(), $revision->setSiteDefaults(...)],
+        ];
+        foreach ($defaults_layers as $layer => [$defaults, $write]) {
+          $stored = $defaults;
+          foreach ($defaults as $scope => $relatives) {
+            if (!is_array($relatives)) {
+              continue;
+            }
+            foreach ($relatives as $relative => $entry) {
+              if (is_array($entry)) {
+                $defaults[$scope][$relative] = $this->migrateEntryConditions($entry, "$context $layer defaults $scope $relative", $lines, $changed);
+              }
             }
           }
-        }
-        if ($defaults !== $revision->getDefaults()) {
-          $revision->setDefaults($defaults);
+          if ($defaults !== $stored) {
+            $write($defaults);
+          }
         }
 
         if ($changed) {
@@ -338,59 +351,6 @@ class WidthBandMigration {
     return $lines;
   }
 
-  /**
-   * Folds every stored stencil's style conditions.
-   *
-   * File-shipped stencils are module code and cannot be rewritten here;
-   * one carrying the retired condition would fail loudly at instantiate
-   * time with the width-vocabulary correctives (none ship wide data).
-   *
-   * @return string[]
-   *   Report lines.
-   */
-  public function migrateStencils(): array {
-    $lines = [];
-    if (!$this->entityTypeManager->hasDefinition('stencil')) {
-      return $lines;
-    }
-    $storage = $this->entityTypeManager->getStorage('stencil');
-    $ids = $storage->getQuery()->accessCheck(FALSE)->execute();
-    foreach ($storage->loadMultiple($ids) as $stencil) {
-      /** @var \Drupal\daedalus_blueprint_stencil\StencilInterface $stencil */
-      $changed = FALSE;
-      $element = $this->migrateStencilNode($stencil->getElement(), sprintf('Stencil "%s"', $stencil->getMachineName()), $lines, $changed);
-      if ($changed) {
-        $stencil->setElement($element);
-        $stencil->save();
-      }
-    }
-    return $lines;
-  }
 
-  /**
-   * Recursively folds one stencil node's styles (section or block).
-   */
-  protected function migrateStencilNode(array $node, string $context, array &$lines, bool &$changed): array {
-    if (!empty($node['regions']) && is_array($node['regions'])) {
-      foreach ($node['regions'] as $region => $children) {
-        if (!is_array($children)) {
-          continue;
-        }
-        foreach ($children as $i => $child) {
-          if (is_array($child)) {
-            $node['regions'][$region][$i] = $this->migrateStencilNode($child, $context, $lines, $changed);
-          }
-        }
-      }
-    }
-    if (!empty($node['styles']) && is_array($node['styles'])) {
-      foreach ($node['styles'] as $relative => $entry) {
-        if (is_array($entry)) {
-          $node['styles'][$relative] = $this->migrateEntryConditions($entry, "$context styles $relative", $lines, $changed);
-        }
-      }
-    }
-    return $node;
-  }
 
 }

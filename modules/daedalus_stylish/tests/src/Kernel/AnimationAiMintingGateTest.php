@@ -61,6 +61,7 @@ class AnimationAiMintingGateTest extends KernelTestBase {
     parent::setUp();
     $this->installEntitySchema('user');
     $this->installEntitySchema('daedalus_animation');
+    $this->installEntitySchema('daedalus_font');
     // The roster's daedalus_stylish provider queries the swatch, variant and skin
     // storages unconditionally on the same schema alter.
     $this->installEntitySchema('daedalus_swatch');
@@ -249,12 +250,12 @@ class AnimationAiMintingGateTest extends KernelTestBase {
     $this->setAiMinting(FALSE);
     $schema = [
       'fields' => [
-        'daedalus_stylish_styles' => ['type' => 'daedalus_stylish_styles', 'style_guide' => ['guidance' => 'x']],
       ],
+      'styles' => ['type' => 'daedalus_stylish_styles', 'style_guide' => ['guidance' => 'x']],
     ];
     $context = ['entity_type' => 'entity_test', 'bundle' => 'entity_test', 'view_mode' => 'full', 'cache_tags' => []];
     $this->container->get('module_handler')->alter('daedalus_blueprint_schema', $schema, $context);
-    $this->assertStringContainsString('never save_material a swatch or an animation', $schema['materials']['guidance']);
+    $this->assertStringContainsString('never save_material a token, a swatch, an animation or a font', $schema['materials']['guidance']);
   }
 
 }

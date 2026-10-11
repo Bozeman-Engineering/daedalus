@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Drupal\daedalus_stylish;
 
-use Drupal\Core\Entity\FieldableEntityInterface;
+use Drupal\daedalus_blueprint\Host\HostInterface;
 use Drupal\daedalus_blueprint\ElementLocator;
 use Drupal\daedalus_blueprint\Materials\MaterialKind;
 use Drupal\daedalus_blueprint\Materials\MaterialsRosterBuilder;
@@ -58,7 +58,7 @@ class RootOnlyVariantChecker implements VariantApplicabilityCheckerInterface {
   /**
    * {@inheritdoc}
    */
-  public function check(DaedalusStylishVariantInterface $variant, FieldableEntityInterface $entity, string $key): array {
+  public function check(DaedalusStylishVariantInterface $variant, HostInterface $host, string $key): array {
     $parsed = $this->validator->parseKey($key);
     if ($parsed === NULL || ($parsed['selector'] === NULL && $parsed['kind'] !== 'container')) {
       return [];
@@ -77,7 +77,7 @@ class RootOnlyVariantChecker implements VariantApplicabilityCheckerInterface {
         new BlueprintError('variant', 'VARIANT_ROOT_ONLY', sprintf('The "%s" variant applies to top-level containers only, and "%s" is a rule: a rule\'s matches are never top-level.', $name, $key), $context, 'Set it on the outermost container itself (its key without "::"), or wear a variant on an axis the container offers at every depth at the rule.'),
       ];
     }
-    if (!$this->elementLocator->isNestedSection($entity, $parsed['uuid'])) {
+    if (!$this->elementLocator->isNestedSection($host, $parsed['uuid'])) {
       return [];
     }
     return [

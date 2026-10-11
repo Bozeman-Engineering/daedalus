@@ -14,7 +14,7 @@ use PHPUnit\Framework\Attributes\Group;
  * The selector matcher over a fixture tree, and its client twin.
  *
  * The fixture is the lean node tree the delivered blueprint carries
- * (`_tree`), built by hand: a container section holding two text blocks
+ * (the blueprint's `layout`), built by hand: a container section holding two text blocks
  * (a paragraph root whose prose links and emphasizes, a heading root), a
  * formatted text block (a div root holding paragraphs and links, three
  * minted instances: a paragraph, a heading, a list carrying a list
@@ -247,6 +247,17 @@ class SelectorMatcherTest extends UnitTestCase {
     // transparent as a parent.
     $this->assertSame('block_plugin:system_menu_block', $matcher->facts('block:p')['address']);
     $this->assertNull($matcher->facts('block:p')['tag']);
+    // A field node names the page's field, never a per-bundle plugin id:
+    // its address is the field_block base plugin, read off the node alone.
+    $fielded = SelectorMatcher::fromTree([
+      [
+        'kind' => 'container',
+        'uuid' => 'sec-f',
+        'layout_id' => 'daedalus_stylish_container',
+        'children' => [['kind' => 'block', 'uuid' => 'fb', 'field' => 'body']],
+      ],
+    ]);
+    $this->assertSame('block_plugin:field_block', $fielded->facts('block:fb')['address']);
     $this->assertSame(['a', 'p'], $matcher->facts('block:t6')['tags']);
     $this->assertSame(['.s-q1' => 'p'], $matcher->facts('block:t6')['parts']);
     $this->assertSame('container:sec-c', $matcher->facts('block:t4')['parent']);

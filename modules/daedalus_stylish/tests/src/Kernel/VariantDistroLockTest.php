@@ -66,6 +66,7 @@ class VariantDistroLockTest extends KernelTestBase {
     // every build, and every compile and validation builds it.
     $this->installEntitySchema('daedalus_swatch');
     $this->installEntitySchema('daedalus_animation');
+    $this->installEntitySchema('daedalus_font');
     $this->installEntitySchema('daedalus_skin');
     $this->installSchema('daedalus_stylish', ['daedalus_variant_usage']);
     $this->installConfig(['daedalus_stylish']);
@@ -215,7 +216,8 @@ class VariantDistroLockTest extends KernelTestBase {
    * On a development site (`$settings['daedalus_blueprint_developer'] =
    * TRUE`, read live by DistroLock) the package author edits shipped
    * variants in place; the entity then reads as modified against the
-   * disk, exactly the state `drush daedalus_stylish:ship` carries back. Revert
+   * disk, exactly the state `drush daedalus-blueprint:design-system:ship`
+   * carries back. Revert
    * stays available (it still converges toward the disk).
    */
   public function testPushLandsUnderTheDeveloperGate(): void {

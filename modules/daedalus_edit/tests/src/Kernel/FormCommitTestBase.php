@@ -20,6 +20,7 @@ use Drupal\daedalus_layout\NestedSectionStorageInterface;
 use Drupal\field\Entity\FieldConfig;
 use Drupal\field\Entity\FieldStorageConfig;
 use Drupal\KernelTests\KernelTestBase;
+use Drupal\daedalus_blueprint\Host\HostInterface;
 use Drupal\language\Entity\ConfigurableLanguage;
 use Drupal\layout_builder\Entity\LayoutBuilderEntityViewDisplay;
 use Drupal\layout_builder\Plugin\SectionStorage\OverridesSectionStorage;
@@ -109,12 +110,6 @@ abstract class FormCommitTestBase extends KernelTestBase {
     $this->installConfig(['system', 'language', 'block_content']);
     ConfigurableLanguage::createFromLangcode('es')->save();
 
-    // The inline-editing permission gates the forms' route and the H1
-    // attribution; the block form builds its widgets for block editors; the
-    // edit-mode permission stamps the placements' selectable keys on the
-    // response render (daedalus_layout's LayoutBuilderBlockAttributes).
-    $this->setUpCurrentUser([], ['access inline editing', 'create and edit custom blocks', 'use daedalus ui edit mode']);
-
     // The root form subject: a bundle without Layout Builder, translatable.
     // Every bundle gets a form display naming its widgets: a runtime display
     // hides configurable fields by default, and a field with no widget is
@@ -137,6 +132,25 @@ abstract class FormCommitTestBase extends KernelTestBase {
     $this->createStringField('block_content', 'form_block', 'field_fb_text', 'Text');
     $this->createStringField('block_content', 'form_block', 'field_fb_other', 'Other');
     $this->formDisplay('block_content', 'form_block', ['info', 'field_fb_text', 'field_fb_other']);
+
+    // The editor, created after the bundles so their per-bundle permissions
+    // exist: the inline-editing permission gates the forms' route and the H1
+    // attribution; the edit-mode permission stamps the placements'
+    // selectable keys on the response render (daedalus_layout's
+    // LayoutBuilderBlockAttributes). What the forms write is judged at the
+    // op door by the capability resolver: update access on the host (node
+    // edit), the inline block's fields behind core's `create and edit
+    // custom blocks`, its label behind core's override permission for the
+    // page bundle (the role policy).
+    $this->setUpCurrentUser([], [
+      'access inline editing',
+      'use daedalus ui edit mode',
+      'access content',
+      'edit any plain content',
+      'edit any page content',
+      'create and edit custom blocks',
+      'configure editable page node layout overrides',
+    ]);
   }
 
   /**
@@ -228,6 +242,13 @@ abstract class FormCommitTestBase extends KernelTestBase {
    */
   protected function working(NodeInterface $node): NodeInterface {
     /** @var \Drupal\node\NodeInterface */
+    return $this->workingHost($node)->entity();
+  }
+
+  /**
+   * The node's working copy's host, as the storage handler serves it.
+   */
+  protected function workingHost(NodeInterface $node): HostInterface {
     return $this->container->get('daedalus_blueprint.storage_handler')->load('node', $node->id());
   }
 
@@ -334,7 +355,7 @@ abstract class FormCommitTestBase extends KernelTestBase {
     }
     finally {
       $request_stack->pop();
-      $this->container->get('daedalus_ui.ui')->clearDerivedEntity();
+      $this->container->get('daedalus_ui.ui')->clearDerivedHost();
     }
     $this->assertInstanceOf(AjaxResponse::class, $response);
     return $response;

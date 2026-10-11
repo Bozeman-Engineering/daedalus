@@ -1,4 +1,4 @@
-import { isSectionNode, sectionChildNodes } from '../style-guide.js';
+import { isContainerNode, nodeChildren } from '../style-guide.js';
 import {
   elementEntries,
   entryRefs,
@@ -14,49 +14,61 @@ import { variantLayerId } from './layers.js';
  * The page tree is the whole-layout surface of the islands architecture:
  * one chrome row per selectable element in LAYOUT ORDER — the root entity,
  * then containers, their blocks, nested containers recursively — each row
- * hosting the element's islands. Structure comes from the staged layout tree the source
- * serves (style-guide.js layoutTree(), broadcast to the satellite), never
- * from the style map: the map only says which of the structure's elements
- * carry styles. Everything here is data-in/data-out so the same logic
- * serves both hosts and gets node-test backpressure.
+ * hosting the element's islands. Structure comes from the lean node tree
+ * the source serves (source.getTree(), the blueprint's `layout`, broadcast
+ * to the satellite), never from the style map: the map only says which
+ * of the structure's elements carry styles. Everything here is
+ * data-in/data-out so the same logic serves both hosts and gets node-test
+ * backpressure.
  */
 
 /**
  * The ordered element tree the page view renders.
  *
- * Walks the pared layout tree into nodes of {key, kind, type, name,
- * depth, children}; `type` and `name` are the element-naming spine's
- * two words the pared layout carries (style-guide.js layoutTree, from
- * the annotator's `_element.type` / `_element.name`: a page band
+ * Walks the lean node tree into nodes of {key, kind, type, name, icon,
+ * depth, children}; `type`, `name` and `icon` are the element-naming
+ * spine's three minted words each node carries (the annotator's
+ * `_element.type` / `_element.name` / `_element.icon`: a page band
  * "Section" named by its label, a nested one "Container", a block its
  * type's label named by its content excerpt; an unrenamed element's name
- * is its type word), the page view's row title. No machine id rides a
- * node: the layout id and block type are the guide's business, never a
- * row's word. A container's
- * children land directly under its row — regions have no keys (nothing
- * could select or style them), so a multi-region section's children
- * flatten under the section row in stored region order. Nested containers
- * recurse in place of components. Nodes without a uuid are skipped.
- * With a root uuid the whole layout nests under one entity node (the
- * "Page" row), so the tree reads Page{container{block}}.
+ * is its type word; the icon a URL, or null when nothing answered the
+ * icon collector). The row reads the icon then the name and speaks the
+ * type as its tooltip, the outline row grammar every outline in the rail
+ * wears. No machine id rides a node: the layout id and block type are the
+ * guide's business, never a row's word. A container's children land
+ * directly under its row — regions have no keys (nothing could select or
+ * style them), so a multi-region container's region nodes unwrap under
+ * the section row in stored region order. Nested containers recurse in
+ * place of components. Nodes without a uuid are skipped. With a root uuid
+ * the whole layout nests under one entity node (the page's row, worded
+ * by the root's own three words when the source carries them), so the
+ * tree reads Page{container{block}}.
  *
- * @param {Array} layout
- *   The staged layout tree (source.getLayout()).
+ * @param {Array} tree
+ *   The lean node tree (source.getTree()).
  * @param {?string} rootUuid
  *   The root entity's uuid (source.getRootUuid()), or null to render the
  *   sections bare.
+ * @param {?{type: ?string, name: ?string, icon: ?string}} root
+ *   The root's minted words (source.getRootElement()), or null: the lean
+ *   tree holds the layout elements alone, so the page row's words arrive
+ *   beside it.
  *
  * @return {Array<object>}
  *   The node tree, layout order preserved at every depth.
  */
-export const pageNodes = (layout, rootUuid = null) => {
+export const pageNodes = (tree, rootUuid = null, root = null) => {
+  const words = (element) => ({
+    type: element?.type ?? null,
+    name: element?.name ?? null,
+    icon: element?.icon ?? null,
+  });
   const componentNode = (node, depth) =>
     node?.uuid
       ? {
           key: `block:${node.uuid}`,
           kind: 'block',
-          type: node.type ?? null,
-          name: node.name ?? null,
+          ...words(node._element),
           depth,
           children: [],
         }
@@ -65,9 +77,9 @@ export const pageNodes = (layout, rootUuid = null) => {
     if (!section?.uuid) {
       return null;
     }
-    const children = sectionChildNodes(section)
+    const children = nodeChildren(section)
       .map((node) =>
-        isSectionNode(node)
+        isContainerNode(node)
           ? sectionNode(node, depth + 1)
           : componentNode(node, depth + 1),
       )
@@ -75,49 +87,27 @@ export const pageNodes = (layout, rootUuid = null) => {
     return {
       key: `container:${section.uuid}`,
       kind: 'container',
-      type: section.type ?? null,
-      name: section.name ?? null,
+      ...words(section._element),
       depth,
       children,
     };
   };
   const depth = rootUuid ? 1 : 0;
-  const sections = (Array.isArray(layout) ? layout : [])
+  const sections = (Array.isArray(tree) ? tree : [])
     .map((section) => sectionNode(section, depth))
     .filter(Boolean);
   if (!rootUuid) {
     return sections;
   }
   return [
-    { key: `entity:${rootUuid}`, kind: 'entity', depth: 0, children: sections },
+    {
+      key: `entity:${rootUuid}`,
+      kind: 'entity',
+      ...words(root),
+      depth: 0,
+      children: sections,
+    },
   ];
-};
-
-/**
- * A row's two words: the element's type word and, beside it, its name.
- *
- * The one spelling of "what this row is" for every chrome row over an
- * element (the page tree's rows, the variant document's slot headers,
- * both hosts): the minted type word first ("Section", "Text"), the
- * minted name after it ("Welcome", "Welcome!") ONLY when it says more
- * than the type does. The annotator names an unrenamed element with its
- * type word, so an equal name is no name: the row reads "Section", never
- * "Section Section". A node without a type word falls back to the
- * caller's word (the row must say something); a node without a name
- * carries none.
- *
- * @param {?{type: ?string, name: ?string}} node
- *   Anything carrying the spine's two words (a pageNodes() node, the
- *   matcher's facts).
- * @param {string} fallback
- *   The word for a node the spine never named.
- *
- * @return {{word: string, name: ?string}}
- */
-export const rowWords = (node, fallback = '') => {
-  const word = typeof node?.type === 'string' && node.type !== '' ? node.type : fallback;
-  const name = typeof node?.name === 'string' ? node.name.trim() : '';
-  return { word, name: name !== '' && name !== word ? name : null };
 };
 
 /**
@@ -146,7 +136,7 @@ export const findNode = (nodes, key) => {
  *
  * The anchor's own node with its descendants intact, wherever it sits in
  * the layout walk — the page tree pruned to one element and everything
- * under it. An anchor the layout tree does not carry (a field key, an
+ * under it. An anchor the node tree does not carry (a field key, an
  * element the walk skips) still answers: a synthetic childless node, so
  * membership is decidable for every selectable key.
  *

@@ -5,7 +5,7 @@
  * Hooks provided by the Daedalus Blueprint AI module.
  */
 
-use Drupal\Core\Entity\FieldableEntityInterface;
+use Drupal\daedalus_blueprint\Host\HostInterface;
 
 /**
  * @addtogroup hooks
@@ -21,15 +21,15 @@ use Drupal\Core\Entity\FieldableEntityInterface;
  * invocations. Use it for AI-tool-specific side effects such as generating
  * open links or triggering instant refresh.
  *
- * @param \Drupal\Core\Entity\FieldableEntityInterface $entity
- *   The entity that was persisted.
+ * @param \Drupal\daedalus_blueprint\Host\HostInterface $host
+ *   The host that was persisted.
  * @param bool $is_new
  *   TRUE if this is a newly created entity.
  * @param string[] $element_uuids
  *   UUIDs of elements affected by the operation. Empty when no
  *   element-level operations were performed (e.g., updateFields).
  */
-function hook_daedalus_blueprint_ai_tool_persisted(FieldableEntityInterface $entity, bool $is_new, array $element_uuids): void {
+function hook_daedalus_blueprint_ai_tool_persisted(HostInterface $host, bool $is_new, array $element_uuids): void {
 }
 
 /**

@@ -46,10 +46,10 @@ class LayoutSchemaBuilderTest extends BlueprintKernelTestBase {
   public function testLayoutBuilderSchemaPresent(): void {
     $schema = $this->schemaBuilder->getSchema('entity_test', 'entity_test');
 
-    $this->assertArrayHasKey('layout_builder__layout', $schema);
-    $this->assertArrayHasKey('guidance', $schema['layout_builder__layout']);
-    $this->assertArrayHasKey('available_layouts', $schema['layout_builder__layout']);
-    $this->assertArrayHasKey('available_block_types', $schema['layout_builder__layout']);
+    $this->assertArrayHasKey('layout', $schema);
+    $this->assertArrayHasKey('guidance', $schema['layout']);
+    $this->assertArrayHasKey('available_layouts', $schema['layout']);
+    $this->assertArrayHasKey('available_block_types', $schema['layout']);
   }
 
   /**
@@ -59,7 +59,7 @@ class LayoutSchemaBuilderTest extends BlueprintKernelTestBase {
     // entity_test_rev does not have LB enabled.
     $schema = $this->schemaBuilder->getSchema('entity_test_rev', 'entity_test_rev');
 
-    $this->assertArrayNotHasKey('layout_builder__layout', $schema);
+    $this->assertArrayNotHasKey('layout', $schema);
   }
 
   /**
@@ -67,7 +67,7 @@ class LayoutSchemaBuilderTest extends BlueprintKernelTestBase {
    */
   public function testAvailableLayouts(): void {
     $schema = $this->schemaBuilder->getSchema('entity_test', 'entity_test');
-    $layouts = $schema['layout_builder__layout']['available_layouts'];
+    $layouts = $schema['layout']['available_layouts'];
 
     $this->assertNotEmpty($layouts);
 
@@ -110,7 +110,7 @@ class LayoutSchemaBuilderTest extends BlueprintKernelTestBase {
    */
   public function testAvailableBlockTypes(): void {
     $schema = $this->schemaBuilder->getSchema('entity_test', 'entity_test');
-    $block_types = $schema['layout_builder__layout']['available_block_types'];
+    $block_types = $schema['layout']['available_block_types'];
 
     // Should include our created block types.
     $this->assertArrayHasKey('text_section', $block_types);
@@ -142,7 +142,7 @@ class LayoutSchemaBuilderTest extends BlueprintKernelTestBase {
     \Drupal::cache()->deleteAll();
     $schema = $this->container->get('daedalus_blueprint.schema_builder')->getSchema('entity_test', 'entity_test');
 
-    $body = $schema['layout_builder__layout']['available_block_types']['text_section']['block_fields']['body'];
+    $body = $schema['layout']['available_block_types']['text_section']['block_fields']['body'];
     $this->assertSame('Custom guidance from hook.', $body['guidance']);
   }
 
@@ -151,7 +151,7 @@ class LayoutSchemaBuilderTest extends BlueprintKernelTestBase {
    */
   public function testBlockTypeFieldsExcludeInternal(): void {
     $schema = $this->schemaBuilder->getSchema('entity_test', 'entity_test');
-    $text_fields = $schema['layout_builder__layout']['available_block_types']['text_section']['block_fields'];
+    $text_fields = $schema['layout']['available_block_types']['text_section']['block_fields'];
 
     // Internal block_content fields should not appear.
     $this->assertArrayNotHasKey('id', $text_fields);
@@ -188,10 +188,10 @@ class LayoutSchemaBuilderTest extends BlueprintKernelTestBase {
     $schema = $schema_builder->getSchema('entity_test', 'entity_test');
 
     // No standalone managed_keys dump.
-    $this->assertArrayNotHasKey('managed_keys', $schema['layout_builder__layout']);
+    $this->assertArrayNotHasKey('managed_keys', $schema['layout']);
 
     // Layout settings inlined in available_layouts.
-    $layouts = $schema['layout_builder__layout']['available_layouts'];
+    $layouts = $schema['layout']['available_layouts'];
     $onecol = NULL;
     foreach ($layouts as $layout) {
       if ($layout['id'] === 'layout_onecol') {
@@ -212,7 +212,7 @@ class LayoutSchemaBuilderTest extends BlueprintKernelTestBase {
     $schema = $this->schemaBuilder->getSchema('entity_test', 'entity_test');
 
     // Without test module registering keys, managed_keys should be absent.
-    $this->assertArrayNotHasKey('managed_keys', $schema['layout_builder__layout']);
+    $this->assertArrayNotHasKey('managed_keys', $schema['layout']);
   }
 
   /**
@@ -242,7 +242,7 @@ class LayoutSchemaBuilderTest extends BlueprintKernelTestBase {
     $schema_builder = $this->container->get('daedalus_blueprint.schema_builder');
     $schema = $schema_builder->getSchema('entity_test', 'entity_test');
 
-    $block_types = $schema['layout_builder__layout']['available_block_types'];
+    $block_types = $schema['layout']['available_block_types'];
 
     // text_section should have configuration.
     $this->assertArrayHasKey('configuration', $block_types['text_section']);
@@ -284,13 +284,13 @@ class LayoutSchemaBuilderTest extends BlueprintKernelTestBase {
     $schema_builder = $this->container->get('daedalus_blueprint.schema_builder');
     $schema = $schema_builder->getSchema('entity_test', 'entity_test');
 
-    $text_section = $schema['layout_builder__layout']['available_block_types']['text_section'];
+    $text_section = $schema['layout']['available_block_types']['text_section'];
     $this->assertSame('Rich text block for body content.', $text_section['guidance']);
     $this->assertSame(['configuration' => ['body_format' => 'full_html']], $text_section['defaults']);
 
     // Card should not have context.
-    $this->assertArrayNotHasKey('guidance', $schema['layout_builder__layout']['available_block_types']['card']);
-    $this->assertArrayNotHasKey('defaults', $schema['layout_builder__layout']['available_block_types']['card']);
+    $this->assertArrayNotHasKey('guidance', $schema['layout']['available_block_types']['card']);
+    $this->assertArrayNotHasKey('defaults', $schema['layout']['available_block_types']['card']);
   }
 
   /**
@@ -313,7 +313,7 @@ class LayoutSchemaBuilderTest extends BlueprintKernelTestBase {
     $schema = $schema_builder->getSchema('entity_test', 'entity_test');
 
     $onecol = NULL;
-    foreach ($schema['layout_builder__layout']['available_layouts'] as $layout) {
+    foreach ($schema['layout']['available_layouts'] as $layout) {
       if ($layout['id'] === 'layout_onecol') {
         $onecol = $layout;
         break;
@@ -354,13 +354,13 @@ class LayoutSchemaBuilderTest extends BlueprintKernelTestBase {
     $this->assertArrayNotHasKey('defaults', $schema);
 
     // Check block types have no context.
-    foreach ($schema['layout_builder__layout']['available_block_types'] as $block_type) {
+    foreach ($schema['layout']['available_block_types'] as $block_type) {
       $this->assertArrayNotHasKey('guidance', $block_type);
       $this->assertArrayNotHasKey('defaults', $block_type);
     }
 
     // Check layouts have no context.
-    foreach ($schema['layout_builder__layout']['available_layouts'] as $layout) {
+    foreach ($schema['layout']['available_layouts'] as $layout) {
       $this->assertArrayNotHasKey('guidance', $layout);
       $this->assertArrayNotHasKey('defaults', $layout);
     }
@@ -379,7 +379,7 @@ class LayoutSchemaBuilderTest extends BlueprintKernelTestBase {
     // Both universal and scoped YAML exist for entity_test.entity_test.
     // Scoped YAML overrides universal for layout_onecol guidance.
     $onecol = NULL;
-    foreach ($schema['layout_builder__layout']['available_layouts'] as $layout) {
+    foreach ($schema['layout']['available_layouts'] as $layout) {
       if ($layout['id'] === 'layout_onecol') {
         $onecol = $layout;
         break;
@@ -414,7 +414,7 @@ class LayoutSchemaBuilderTest extends BlueprintKernelTestBase {
     $schema = $schema_builder->getSchema('entity_test', 'entity_test');
 
     $onecol = NULL;
-    foreach ($schema['layout_builder__layout']['available_layouts'] as $layout) {
+    foreach ($schema['layout']['available_layouts'] as $layout) {
       if ($layout['id'] === 'layout_onecol') {
         $onecol = $layout;
         break;
@@ -440,7 +440,7 @@ class LayoutSchemaBuilderTest extends BlueprintKernelTestBase {
     // Scoped YAML provides layout_onecol guidance for entity_test.entity_test.
     // This should override the universal YAML guidance.
     $onecol = NULL;
-    foreach ($schema['layout_builder__layout']['available_layouts'] as $layout) {
+    foreach ($schema['layout']['available_layouts'] as $layout) {
       if ($layout['id'] === 'layout_onecol') {
         $onecol = $layout;
         break;
@@ -465,7 +465,7 @@ class LayoutSchemaBuilderTest extends BlueprintKernelTestBase {
     $schema = $schema_builder->getSchema('entity_test_rev', 'entity_test_rev');
 
     $onecol = NULL;
-    foreach ($schema['layout_builder__layout']['available_layouts'] as $layout) {
+    foreach ($schema['layout']['available_layouts'] as $layout) {
       if ($layout['id'] === 'layout_onecol') {
         $onecol = $layout;
         break;

@@ -73,13 +73,20 @@ class DaedalusStylishMaterialsProviderTest extends KernelTestBase {
     $this->installEntitySchema('daedalus_skin');
     $this->installEntitySchema('daedalus_swatch');
     $this->installEntitySchema('daedalus_animation');
+    $this->installEntitySchema('daedalus_font');
     $this->installEntitySchema('daedalus_variant');
     $this->installConfig(['daedalus_stylish']);
     // Activating a design system syncs every enabled module's shipped
     // definitions (ShippedSync::onDesignSystemActivated()): the importers
     // mirror motion-* and --swatch-* references into the usage tables and
     // switch to an administrative account, so the fixture carries both.
-    $this->installSchema('daedalus_stylish', ['daedalus_variant_usage', 'daedalus_swatch_usage', 'daedalus_animation_usage']);
+    $this->installSchema('daedalus_stylish', [
+      'daedalus_variant_usage',
+      'daedalus_swatch_usage',
+      'daedalus_animation_usage',
+      'daedalus_token_usage',
+      'daedalus_font_usage',
+    ]);
     $this->setUpCurrentUser([], [], TRUE);
     $this->container->get('state')->set('daedalus_stylish_control_test.site', [
       'token_scales' => [
@@ -130,7 +137,7 @@ class DaedalusStylishMaterialsProviderTest extends KernelTestBase {
     $this->installConfig(['daedalus_blueprint']);
     DesignSystem::create(['id' => 'aurora', 'label' => 'Aurora', 'default_skin' => 'aurora'])->save();
     $skin = DaedalusStylishSkin::create(['label' => 'Aurora', 'machine_name' => 'aurora', 'design_system' => 'aurora']);
-    $skin->setTokens(['space' => ['gutter' => '2rem']])->save();
+    $skin->setPackageTokens(['space' => ['gutter' => '2rem']])->save();
     $swatch = DaedalusStylishSwatch::create(['label' => 'Aurora accent', 'kind' => 'color', 'design_system' => 'aurora']);
     $swatch->setSwatchValue('#6941c6');
     $swatch->save();
@@ -196,13 +203,20 @@ class DaedalusStylishMaterialsProviderTest extends KernelTestBase {
 
   /**
    * Tokens: the active skin on declared scales, spelled through var().
+   *
+   * The record carries the stored token's facts: a bare-minted token has
+   * no description and is offered; a token minted as a record carries
+   * what its record says.
    */
   public function testTokens(): void {
     $this->assertSame([], $this->roster()->tokens(), 'No active skin, no tokens.');
 
     $skin = DaedalusStylishSkin::create(['label' => 'Aurora']);
-    $skin->setTokens([
-      'space' => ['4' => '1rem', 'gutter' => '1.5rem'],
+    $skin->setPackageTokens([
+      'space' => [
+        '4' => '1rem',
+        'gutter' => ['value' => '1.5rem', 'description' => 'The band gutter.', 'offered' => FALSE],
+      ],
       'color' => ['accent' => ['default' => '#1a1a2e', 'dark' => '#e8e8f0']],
       // Not a declared scale: never a material.
       'radius' => ['sm' => '2px'],
@@ -215,8 +229,15 @@ class DaedalusStylishMaterialsProviderTest extends KernelTestBase {
     $this->assertSame('4', $four->label);
     $this->assertSame('space', $four->group);
     $this->assertSame('1rem', $four->value);
+    $this->assertSame('', $four->description);
+    $this->assertTrue($four->offered);
     $this->assertSame(['style' => 'var(--space-4)'], $four->spellings);
     $this->assertSame(MaterialRecord::ORIGIN_USER, $four->origin);
+    $gutter = $tokens['space/gutter'];
+    $this->assertSame('1.5rem', $gutter->value);
+    $this->assertSame('The band gutter.', $gutter->description);
+    $this->assertFalse($gutter->offered);
+    $this->assertSame(['space/4', 'color/accent'], array_keys($this->roster()->offered()->tokens()), 'the offered view leaves the unoffered token out');
     $accent = $tokens['color/accent'];
     $this->assertSame(['default' => '#1a1a2e', 'dark' => '#e8e8f0'], $accent->value);
     $this->assertSame('var(--color-accent)', $accent->spelling('style'));
@@ -498,7 +519,7 @@ class DaedalusStylishMaterialsProviderTest extends KernelTestBase {
     $this->createVariant(['label' => 'Button', 'machine_name' => 'button', 'scope' => 'block_type:text']);
     $this->assertSame(['button'], array_keys($builder->build()->variants()));
     $skin = DaedalusStylishSkin::create(['label' => 'Aurora']);
-    $skin->setTokens(['space' => ['4' => '1rem']])->save();
+    $skin->setPackageTokens(['space' => ['4' => '1rem']])->save();
     $this->assertSame([], $builder->build()->tokens(), 'A saved skin is not the active one yet.');
     $this->activateSkin($skin);
     $this->assertSame(['space/4'], array_keys($builder->build()->tokens()), 'Activating a skin resets the memo.');

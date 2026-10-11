@@ -8,17 +8,15 @@ use Drupal\ai\Attribute\FunctionCall;
 use Drupal\ai\Base\FunctionCallBase;
 use Drupal\ai\Service\FunctionCalling\ExecutableFunctionCallInterface;
 use Drupal\ai\Service\FunctionCalling\FunctionCallInterface;
-use Drupal\Core\Entity\EntityInterface;
+use Drupal\daedalus_blueprint\Host\HostInterface;
 use Drupal\Core\Plugin\Context\ContextDefinition;
 use Drupal\Core\StringTranslation\TranslatableMarkup;
 use Drupal\daedalus_blueprint\BundleListBuilder;
 use Drupal\daedalus_blueprint\Dispatch\BlueprintBackendResolver;
 use Drupal\daedalus_blueprint\EntityStorageHandler;
 use Drupal\daedalus_blueprint\Materials\RelativeSelector;
-use Drupal\daedalus_stylish\Plugin\Field\FieldType\StyleMapItem;
 use Drupal\daedalus_stylish\StyleMapValidator;
 use Drupal\daedalus_stylish\StyleStack;
-use Drupal\daedalus_stylish\DaedalusStylishFieldManager;
 use Drupal\daedalus_ui\ElementModel\BlueprintElementAnnotator;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 
@@ -152,21 +150,21 @@ final class ExplainElementStyles extends FunctionCallBase implements ExecutableF
       $this->setOutput('An active workspace is required. Switch to one with tool__workspace_switch, or create one with tool__workspace_create_and_switch; ask the user which.');
       return;
     }
-    $entity = $this->storageHandler->load($entity_type, $entity_id);
-    if (!$entity) {
+    $host = $this->storageHandler->load($entity_type, $entity_id);
+    if ($host === NULL) {
       $this->setOutput("Entity $entity_type:$entity_id not found.");
       return;
     }
-    if ($this->bundleListBuilder->isHidden($entity_type, $entity->bundle())) {
-      $this->setOutput('Unknown or hidden bundle: ' . $entity_type . '/' . $entity->bundle() . '.');
+    if ($this->bundleListBuilder->isHidden($entity_type, $host->bundle())) {
+      $this->setOutput('Unknown or hidden bundle: ' . $entity_type . '/' . $host->bundle() . '.');
       return;
     }
-    if (!$entity->access('view')) {
+    if (!$host->entity()->access('view')) {
       $this->setOutput("Access denied for 'view' on $entity_type:$entity_id.");
       return;
     }
-    if (!$entity->hasField(DaedalusStylishFieldManager::FIELD_NAME)) {
-      $this->setOutput(sprintf('Styling is not enabled for %s %s entities.', $entity->bundle(), $entity_type));
+    if (!$host->hasStyleStore()) {
+      $this->setOutput(sprintf('Styling is not enabled for %s %s entities.', $host->bundle(), $entity_type));
       return;
     }
     if ($this->validator->parseKey($key) === NULL) {
@@ -174,31 +172,31 @@ final class ExplainElementStyles extends FunctionCallBase implements ExecutableF
       return;
     }
 
-    $item = $entity->get(DaedalusStylishFieldManager::FIELD_NAME)->first();
-    $map = $item instanceof StyleMapItem ? $item->getStyleMap() : [];
+    $map = $host->styleMap();
 
-    // The host entity resolves the key's scope (a block's bundle, a
-    // container's layout) for the floor, the way validation resolves it;
-    // its annotated tree answers which ancestor rules reach the key.
-    $this->setOutput($this->explain($map, $key, ['entity' => $entity], $this->tree($entity)));
+    // The host resolves the key's scope (a block's bundle, a container's
+    // layout) for the floor, the way validation resolves it; its annotated
+    // tree answers which ancestor rules reach the key.
+    $this->setOutput($this->explain($map, $key, ['host' => $host], $this->tree($host)));
   }
 
   /**
-   * The entity's lean node tree, annotated: the selector matcher's input.
+   * The host's lean node tree, annotated: the selector matcher's input.
    *
    * The same tree the edit-mode client boots with (BlueprintMirror): the
    * backend's serialized blueprint through daedalus_ui's annotator,
-   * whose `_tree` carries each node's kind, address facts and resolved
+   * whose `layout` carries each node's kind, address facts and resolved
    * markup (the root tag a tag compound matches, the tags the prose
-   * carries). [] for an entity no backend serializes.
+   * carries). [] for a host no backend serializes.
    */
-  protected function tree(EntityInterface $entity): array {
-    $backend = $this->backendResolver->resolve($entity->getEntityTypeId());
+  protected function tree(HostInterface $host): array {
+    $entity = $host->entity();
+    $backend = $this->backendResolver->resolveFor($entity);
     if ($backend === NULL) {
       return [];
     }
-    $blueprint = $this->annotator->annotate($backend->serialize($entity), $entity, 'full');
-    return is_array($blueprint['_tree'] ?? NULL) ? $blueprint['_tree'] : [];
+    $blueprint = $this->annotator->annotate($backend->serialize($entity), $host, 'full');
+    return is_array($blueprint['layout'] ?? NULL) ? $blueprint['layout'] : [];
   }
 
   /**

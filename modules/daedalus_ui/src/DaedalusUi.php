@@ -4,31 +4,37 @@ declare(strict_types=1);
 
 namespace Drupal\daedalus_ui;
 
-use Drupal\block\Entity\Block;
 use Drupal\Core\Url;
-use Drupal\Core\Access\AccessResult;
-use Drupal\Core\Access\AccessResultInterface;
 use Drupal\Core\Routing\AdminContext;
 use Drupal\Core\Entity\EntityInterface;
 use Drupal\Core\Routing\RouteMatchInterface;
+use Drupal\Core\Routing\RouteProviderInterface;
+use Drupal\layout_builder\Entity\LayoutEntityDisplayInterface;
 use Drupal\Core\Entity\FieldableEntityInterface;
 use Drupal\Core\Security\TrustedCallbackInterface;
 use Drupal\Core\Session\AccountProxyInterface;
 use Drupal\Core\Config\ConfigFactoryInterface;
 use Drupal\Core\Extension\ExtensionPathResolver;
 use Symfony\Component\HttpFoundation\RequestStack;
+use Drupal\Core\Entity\EntityTypeBundleInfoInterface;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\Entity\EntityDisplayRepositoryInterface;
 use Drupal\Core\StringTranslation\StringTranslationTrait;
+use Drupal\daedalus_blueprint\Entity\FrameInterface;
 use Drupal\daedalus_blueprint_api\Render\SelectableKey;
 use Drupal\daedalus_ui\Event\EditableFieldAttributes;
 use Drupal\daedalus_ui\Presentation\Presentation;
 use Drupal\daedalus_ui\ElementModel\ElementModel;
 use Drupal\daedalus_ui\Render\ElementAddress;
 use Drupal\daedalus_ui\Render\LiveAttributionDemand;
-use Drupal\layout_builder\OverridesSectionStorageInterface;
-use Drupal\layout_builder\Plugin\SectionStorage\OverridesSectionStorage;
-use Drupal\daedalus_layout\SectionStorage\NestedAwareSectionStorage;
+use Drupal\daedalus_blueprint\Host\BlueprintHost;
+use Drupal\daedalus_blueprint\Host\HostInterface;
+use Drupal\daedalus_blueprint\Host\HostResolver;
+use Drupal\daedalus_blueprint\LayoutBuilder\DaedalusLayoutAdapter;
+use Drupal\daedalus_blueprint\LayoutBuilder\DisplayHost;
+use Drupal\daedalus_blueprint\LayoutBuilder\FrameHost;
+use Drupal\daedalus_layout\RootEntityRegistry;
+use Drupal\layout_builder\SectionStorageInterface;
 use Symfony\Contracts\EventDispatcher\EventDispatcherInterface;
 
 /**
@@ -58,13 +64,16 @@ final class DaedalusUi implements TrustedCallbackInterface {
   private const RAIL_DEFAULT_WIDTH = '17rem';
 
   /**
-   * The entity derived from the route.
+   * Whether the route host has been derived for the current route.
    *
-   * @var \Drupal\Core\Entity\EntityInterface|null
-   *
-   * @see deriveEntityFromRoute()
+   * @see deriveHostFromRoute()
    */
-  private ?EntityInterface $entity = NULL;
+  private bool $hostDerived = FALSE;
+
+  /**
+   * The host derived from the current route, once derived.
+   */
+  private ?HostInterface $host = NULL;
 
   public function __construct(
     private readonly RequestStack $requestStack,
@@ -78,9 +87,14 @@ final class DaedalusUi implements TrustedCallbackInterface {
     private readonly EventDispatcherInterface $eventDispatcher,
     private readonly ExtensionPathResolver $extensionPathResolver,
     private readonly EntityTypeManagerInterface $entityTypeManager,
+    private readonly EntityTypeBundleInfoInterface $bundleInfo,
     private readonly EntityDisplayRepositoryInterface $entityDisplayRepository,
     private readonly LiveAttributionDemand $liveAttribution,
     private readonly ElementModel $elementModel,
+    private readonly HostResolver $hostResolver,
+    private readonly RouteProviderInterface $routeProvider,
+    private readonly DaedalusLayoutAdapter $layoutAdapter,
+    private readonly ?RootEntityRegistry $rootEntityRegistry = NULL,
   ) {}
 
   /**
@@ -138,28 +152,36 @@ final class DaedalusUi implements TrustedCallbackInterface {
       return;
     }
 
+    // Editable attribution follows the host: only a field of the route
+    // host's own fields entity, or of a block placed in the host's document,
+    // is stamped (ownsFields()). Any other rendered entity (core's sample
+    // entity on a template canvas, a media entity a formatter renders, a
+    // foreign document's blocks on a plain host) is inert by construction:
+    // no selection identity, no load metadata, no editor attributes.
+    if (!$entity instanceof FieldableEntityInterface || empty($element['#field_name']) || !$this->ownsFields($entity)) {
+      return;
+    }
+
     // Stamp the field's selection identity (selectable key) and the entity
     // metadata the form based editing path loads entities by. These ride the
     // field template's attributes; SelectableFieldDelivery guarantees they
     // reach the page even when a theme's field template does not print
     // {{ attributes }}.
-    if ($entity instanceof FieldableEntityInterface && !empty($element['#field_name'])) {
-      $variables['attributes'][SelectableKey::ATTRIBUTE] = SelectableKey::field($entity->uuid(), $element['#field_name']);
-      $variables['attributes']['data-entity-type'] = $entity->getEntityTypeId();
-      $variables['attributes']['data-entity-id'] = daedalus_ui_entity_identifier($entity);
-      // The field tier of the presentation chain: the ONE element
-      // model decides. A media reference renders a whole entity whose
-      // parts the user means as ONE thing ("the image"), so selection and
-      // armed editing stop at the reference field rather than the media
-      // entity's inner fields; a FieldConfig third-party setting overrides
-      // the declaration tier and the field-type default. OPEN stamps
-      // nothing. Modules can mark additional fields via the
-      // EditableFieldAttributes event below.
-      $definition = $entity->get($element['#field_name'])->getFieldDefinition();
-      $field_mode = $this->elementModel->fieldPresentation($definition);
-      if ($field_mode !== Presentation::OPEN) {
-        $variables['attributes'][Presentation::ATTRIBUTE] = $field_mode;
-      }
+    $variables['attributes'][SelectableKey::ATTRIBUTE] = SelectableKey::field($entity->uuid(), $element['#field_name']);
+    $variables['attributes']['data-entity-type'] = $entity->getEntityTypeId();
+    $variables['attributes']['data-entity-id'] = daedalus_ui_entity_identifier($entity);
+    // The field tier of the presentation chain: the ONE element
+    // model decides. A media reference renders a whole entity whose
+    // parts the user means as ONE thing ("the image"), so selection and
+    // armed editing stop at the reference field rather than the media
+    // entity's inner fields; a FieldConfig third-party setting overrides
+    // the declaration tier and the field-type default. OPEN stamps
+    // nothing. Modules can mark additional fields via the
+    // EditableFieldAttributes event below.
+    $definition = $entity->get($element['#field_name'])->getFieldDefinition();
+    $field_mode = $this->elementModel->fieldPresentation($definition);
+    if ($field_mode !== Presentation::OPEN) {
+      $variables['attributes'][Presentation::ATTRIBUTE] = $field_mode;
     }
 
     if (!empty($variables['items'])) {
@@ -518,19 +540,34 @@ final class DaedalusUi implements TrustedCallbackInterface {
   }
 
   /**
-   * Is valid view mode.
+   * Whether a view mode is one the host's canvas can render.
+   *
+   * A content host renders in any of its entity type's view modes; a
+   * template host renders in the one view mode its display is for.
    *
    * @return bool
-   *   Whether the view_mode is a valid view mode.
+   *   Whether the view_mode is a valid view mode for the host.
    */
-  public function isValidViewMode(EntityInterface $entity, string $view_mode): bool {
-    $valid_view_modes = $this->entityDisplayRepository->getViewModes($entity->getEntityTypeId());
+  public function isValidViewMode(HostInterface $host, string $view_mode): bool {
+    if ($host->fields() === NULL) {
+      return $view_mode === $host->viewMode();
+    }
+    $valid_view_modes = $this->entityDisplayRepository->getViewModes($host->entityTypeId());
     $valid_view_modes['default'] = TRUE;
     return !empty($valid_view_modes[$view_mode]);
   }
 
   /**
-   * Derive entity from route.
+   * The host the route is about.
+   *
+   * The route host is the owner of the canvas: a content entity on its
+   * canonical page (a node, a saved blueprint), the entity an overrides
+   * storage on the route belongs to (core's manage-layout route of an
+   * entity), or the display a defaults storage on the route belongs to
+   * (core's manage-display layout route, `layout_builder.defaults.*.view`).
+   * Route parameters that host nothing
+   * (a bundle config entity beside the storage, a view mode name) are
+   * passed over; two different hosts on one route derive none.
    *
    * @param \Drupal\Core\Routing\RouteMatchInterface|null $route_match
    *   (optional) A route match to derive from instead of the current route,
@@ -538,105 +575,126 @@ final class DaedalusUi implements TrustedCallbackInterface {
    *   page the user is on this way). Only the current-route result is
    *   memoized; an explicit route match is derived fresh every call.
    *
-   * @return \Drupal\Core\Entity\EntityInterface|null
-   *   Returns the entity for this route or NULL if there isn't one or there is
-   *   more than one.
+   * @return \Drupal\daedalus_blueprint\Host\HostInterface|null
+   *   The route host, or NULL if there is none or more than one.
    */
-  public function deriveEntityFromRoute(?RouteMatchInterface $route_match = NULL) {
+  public function deriveHostFromRoute(?RouteMatchInterface $route_match = NULL): ?HostInterface {
     if ($route_match !== NULL) {
-      return $this->doDeriveEntityFromRoute($route_match);
+      return $this->doDeriveHostFromRoute($route_match);
     }
-    if (empty($this->entity)) {
-      $this->entity = $this->doDeriveEntityFromRoute($this->routeMatch);
+    if (!$this->hostDerived) {
+      $this->host = $this->doDeriveHostFromRoute($this->routeMatch);
+      $this->hostDerived = TRUE;
     }
-    return $this->entity;
+    return $this->host;
   }
 
   /**
-   * Derives the single top-level entity a route match is about.
+   * Derives the single host a route match is about.
    *
    * @param \Drupal\Core\Routing\RouteMatchInterface $route_match
    *   The route match to inspect.
    *
-   * @return \Drupal\Core\Entity\EntityInterface|null
-   *   The entity, or NULL if there isn't one or there is more than one.
+   * @return \Drupal\daedalus_blueprint\Host\HostInterface|null
+   *   The host, or NULL if there is none or more than one.
    */
-  private function doDeriveEntityFromRoute(RouteMatchInterface $route_match): ?EntityInterface {
-    $parameters = $route_match->getParameters()->all();
-    $top_level_entity = NULL;
-    foreach ($parameters as $parameter) {
-      $entity = NULL;
-      if ($parameter instanceof EntityInterface) {
-        $entity = $parameter;
+  private function doDeriveHostFromRoute(RouteMatchInterface $route_match): ?HostInterface {
+    $host = NULL;
+    foreach ($route_match->getParameters()->all() as $parameter) {
+      $candidate = NULL;
+      if ($parameter instanceof EntityInterface && $this->hostResolver->hosts($parameter)) {
+        $candidate = $this->hostResolver->fromEntity($parameter);
       }
-      if ($parameter instanceof OverridesSectionStorageInterface) {
-        $entity = $parameter->getContextValue('entity');
+      elseif ($parameter instanceof SectionStorageInterface) {
+        $candidate = $this->hostResolver->fromSectionStorage($parameter);
       }
-      if ($parameter instanceof NestedAwareSectionStorage && $parameter->getRootStorage() instanceof OverridesSectionStorageInterface) {
-        $entity = $parameter->getContextValue('entity');
+      if ($candidate === NULL) {
+        continue;
       }
-      if (!empty($entity) && is_null($top_level_entity)) {
-        $top_level_entity = $entity;
+      if ($host === NULL) {
+        $host = $candidate;
+        continue;
       }
-      elseif (!empty($entity) && !is_null($top_level_entity)) {
-        if (
-          $top_level_entity instanceof EntityInterface &&
-          $entity instanceof EntityInterface &&
-          $entity->bundle() === $top_level_entity->bundle() &&
-          $entity->id() === $top_level_entity->id()
-        ) {
-          // These are the same entity. That's okay.
-          continue;
-        }
-        // If there is more than one entity it's not obvious which one is the
-        // parent, so we should probably not try to edit.
-        return NULL;
+      if ($candidate->entityTypeId() === $host->entityTypeId() && $candidate->id() === $host->id()) {
+        // The same host twice (an entity and its own storage). That's okay.
+        continue;
       }
+      // Two different hosts on one route: it is not obvious which one is
+      // the canvas, so none is.
+      return NULL;
     }
-
-    // If the entity is a Block Config Entity, load its Block Content Entity.
-    if ($top_level_entity instanceof Block) {
-      $top_level_entity = $this->getBlockPluginEntity($top_level_entity) ?? $top_level_entity;
-    }
-
-    return $top_level_entity;
+    return $host;
   }
 
   /**
-   * The content entity a block config entity's plugin wraps, if any.
+   * Whether the route host's canvas edits an entity's fields in place.
    *
-   * Derivative block plugin IDs carry the wrapped entity as
-   * {entity_type}:{uuid} (e.g. block_content:{uuid}); a base plugin ID wraps
-   * no entity.
+   * Editable attribution follows the host: a rendered entity's fields are
+   * stamped editable only when it is the host's own fields entity or a
+   * block placed in the host's own document. A render is a stack of
+   * hosts (the template around a locked page, the page's own slot
+   * sections inside it), and every inline block in it renders under the
+   * page as the root (daedalus_layout's root entity registry forwards the
+   * outer subject through every join), so the root alone says only that
+   * the block is on this canvas: which document holds it is the host's
+   * own sections' answer. A block in the host's own document edits in
+   * place; a block of the template it renders inside is foreign, like the
+   * template's other elements; a host with no document places nothing.
+   * Core's sample entity on a template canvas, a media entity a formatter
+   * renders and a linked blueprint's content are inert by construction,
+   * not by a preview flag.
    *
-   * @param \Drupal\block\Entity\Block $block
-   *   The block config entity.
+   * @param \Drupal\Core\Entity\FieldableEntityInterface $entity
+   *   A rendered entity.
    *
-   * @return \Drupal\Core\Entity\EntityInterface|null
-   *   The wrapped content entity, or NULL when the plugin does not wrap one.
+   * @return bool
+   *   TRUE when the entity's fields edit on this canvas.
    */
-  public function getBlockPluginEntity(Block $block): ?EntityInterface {
-    $plugin_id = $block->getPluginId();
-    if (!str_contains($plugin_id, ':')) {
-      return NULL;
+  public function ownsFields(FieldableEntityInterface $entity): bool {
+    $host = $this->deriveHostFromRoute();
+    if ($host === NULL) {
+      return FALSE;
     }
-    [$entity_type, $uuid] = explode(':', $plugin_id);
-    if (!$this->entityTypeManager->hasDefinition($entity_type)) {
-      return NULL;
+    $fields = $host->fields();
+    if ($fields !== NULL && $fields->uuid() === $entity->uuid()) {
+      return TRUE;
     }
-    $entities = $this->entityTypeManager->getStorage($entity_type)->loadByProperties(['uuid' => $uuid]);
-    return !empty($entities) ? reset($entities) : NULL;
+    if (!$host->hasDocument() || $this->rootEntityRegistry === NULL) {
+      return FALSE;
+    }
+    $root = $this->rootEntityRegistry->getRoot($entity);
+    $subject = $host->subject();
+    if ($root === NULL || $subject === NULL || $root->uuid() !== $subject->uuid()) {
+      return FALSE;
+    }
+    if ($this->hostResolver->foreignOwner($host) === NULL) {
+      // The host owns the whole document it renders: every block rooted
+      // on it is its own.
+      return TRUE;
+    }
+    // The host is rendered inside a foreign document: of the blocks rooted
+    // on it, only those its own document holds (its slot sections, at any
+    // depth) are its own. Identity is the block's uuid, since an inline
+    // block is a fresh instance at every extraction.
+    foreach ($this->layoutAdapter->getBlockContentEntities($host) as $placed) {
+      if ($placed['entity']->uuid() === $entity->uuid()) {
+        return TRUE;
+      }
+    }
+    return FALSE;
   }
 
   /**
    * The URL where an entity is edited with the page builder.
    *
-   * Most content entities are edited in place on their canonical route (the
-   * edit mode chrome renders over the live page). A block_content entity has
-   * no public page of its own; its editing surface is the standalone
-   * daedalus_ui.block_content.edit canvas. Consumers that send users "to
-   * where this entity is edited" (AI new-entity open, listing operations)
-   * must go through this one derivation rather than hand-rolling toUrl().
+   * A content entity is edited in place on its canonical route (the edit
+   * mode chrome renders over the live page; a saved blueprint's canonical
+   * route IS its canvas); a template on core's manage-display layout
+   * route; a site frame on its canonical route too, the frame canvas
+   * (FrameInterface::CANVAS_ROUTE, daedalus_layout's). Consumers that send
+   * users "to where this entity is edited" (AI new-entity open, the portal
+   * stamp, the Open blueprint verb) must go through this one derivation
+   * rather than hand-rolling toUrl().
    *
    * @param \Drupal\Core\Entity\EntityInterface $entity
    *   The entity to edit.
@@ -645,59 +703,83 @@ final class DaedalusUi implements TrustedCallbackInterface {
    *   The editing surface URL.
    */
   public function getEditingUrl(EntityInterface $entity): Url {
-    if ($entity->getEntityTypeId() === 'block_content') {
-      return Url::fromRoute('daedalus_ui.block_content.edit', ['block_content' => $entity->id()]);
+    if ($entity instanceof LayoutEntityDisplayInterface) {
+      // A template is edited on core's manage-display layout route, the
+      // defaults storage's own URL (field_ui builds the route).
+      $storage = $this->hostResolver->fromEntity($entity)->sectionStorage();
+      if ($storage === NULL) {
+        throw new \LogicException(sprintf('%s has no template to edit.', $entity->id()));
+      }
+      return $storage->getLayoutBuilderUrl();
     }
     return $entity->toUrl();
   }
 
   /**
-   * Whether a block_content entity is a page-builder entity the user may edit.
-   *
-   * A page-builder block_content carries the Layout Builder overrides field
-   * (its bundle's display has overrides enabled), so it has a layout of its
-   * own and an editing surface (getEditingUrl()); the current user must also
-   * be allowed to update it. Every consumer that offers a way into that
-   * surface (the block layout listing's "Edit layout" operation, the portal
-   * stamp on a theme-region placement) asks here, so the one definition of
-   * "editable page-builder block_content" never forks.
-   *
-   * @param \Drupal\Core\Entity\EntityInterface $block_content
-   *   The block_content entity a placement wraps.
-   *
-   * @return \Drupal\Core\Access\AccessResultInterface
-   *   Allowed when the entity carries the layout field and the user may
-   *   update it, with the update check's cacheability; neutral otherwise.
-   */
-  public function pageBuilderBlockContentAccess(EntityInterface $block_content): AccessResultInterface {
-    if (
-      $block_content->getEntityTypeId() !== 'block_content' ||
-      !$block_content instanceof FieldableEntityInterface ||
-      !$block_content->hasField(OverridesSectionStorage::FIELD_NAME)
-    ) {
-      return AccessResult::neutral();
-    }
-    return $block_content->access('update', NULL, TRUE);
-  }
-
-  /**
    * Whether an entity has an editing surface getEditingUrl() can name.
    *
-   * A page (an entity with a canonical route, or a block_content item with
-   * the standalone editing route) does; a non-page entity (a swatch, a
-   * variant, a skin: site-wide material with no page of its own) does not,
-   * and a caller that would navigate to it asks here first instead of
-   * catching the missing link template.
+   * A page (an entity with a canonical route) does; a non-page entity (a
+   * swatch, a variant, a skin: site-wide material with no page of its own)
+   * does not, and a caller that would navigate to it asks here first instead
+   * of catching the missing link template. A site frame's canonical link
+   * names daedalus_layout's canvas route, so a frame has an editing
+   * surface exactly when that route exists.
    */
   public function hasEditingUrl(EntityInterface $entity): bool {
-    return $entity->getEntityTypeId() === 'block_content' || $entity->hasLinkTemplate('canonical');
+    if ($entity instanceof LayoutEntityDisplayInterface) {
+      return $entity->isLayoutBuilderEnabled()
+        && $this->routeProvider->getRoutesByNames(["layout_builder.defaults.{$entity->getTargetEntityTypeId()}.view"]) !== [];
+    }
+    if ($entity instanceof FrameInterface) {
+      return $this->routeProvider->getRoutesByNames([FrameInterface::CANVAS_ROUTE]) !== [];
+    }
+    return $entity->hasLinkTemplate('canonical');
   }
 
   /**
-   * Forgets the entity derived from the route so the next read derives again.
+   * The word for what a host's document is to the editor.
+   *
+   * One rule for every surface that names a document's kind: the element
+   * annotation's root type (BlueprintElementAnnotator::annotate()) and the
+   * type word a portal stamp carries for the chip
+   * (LayoutBuilderBlockAttributes::stampShowing()). A saved blueprint is a
+   * "Blueprint" (what it IS to the editor: a document shown by reference
+   * elsewhere), never its blueprint type's bundle label, which words the
+   * kind of blueprint in the library's listing; the site frame is the
+   * "Site frame", a Layout Builder display the "Template" it hosts, and
+   * a content host its bundle's label ("Page").
    */
-  public function clearDerivedEntity() {
-    $this->entity = NULL;
+  public function hostKind(HostInterface $host): string {
+    if ($host instanceof BlueprintHost) {
+      return (string) $this->t('Blueprint');
+    }
+    if ($host instanceof FrameHost) {
+      return (string) $this->t('Site frame');
+    }
+    if ($host instanceof DisplayHost) {
+      return (string) $this->t('Template');
+    }
+    return $this->bundleLabel($host->entityTypeId(), $host->bundle());
+  }
+
+  /**
+   * A bundle's label as a type word, translated config cast to a string.
+   *
+   * A bundle the info service no longer knows (its type deleted under a
+   * placed block) still needs a word: the machine name, the one fact left.
+   */
+  public function bundleLabel(string $entity_type_id, string $bundle): string {
+    $label = $this->bundleInfo->getBundleInfo($entity_type_id)[$bundle]['label'] ?? NULL;
+    $label = $label === NULL ? '' : (string) $label;
+    return $label !== '' ? $label : $bundle;
+  }
+
+  /**
+   * Forgets the host derived from the route so the next read derives again.
+   */
+  public function clearDerivedHost(): void {
+    $this->host = NULL;
+    $this->hostDerived = FALSE;
   }
 
   /**

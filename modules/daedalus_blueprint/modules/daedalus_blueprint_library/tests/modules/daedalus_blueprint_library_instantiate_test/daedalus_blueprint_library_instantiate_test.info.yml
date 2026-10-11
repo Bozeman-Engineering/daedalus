@@ -1,0 +1,8 @@
+name: Daedalus Blueprint Library Instantiate Test
+type: module
+description: Fixtures for blueprint instantiate tests.
+package: Testing
+core_version_requirement: ^10.3 || ^11
+hidden: true
+dependencies:
+  - daedalus:daedalus_blueprint_library

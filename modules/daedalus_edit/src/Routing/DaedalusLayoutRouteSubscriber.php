@@ -22,6 +22,12 @@ use Drupal\daedalus_edit\Controller\BlockFormController;
  * BlockFormController derives the section delta and region from the
  * storage, and daedalus_layout's NestedRouteEnhancer scopes the storage for
  * nested placements.
+ *
+ * Access is the entity form endpoint's: the surface permission beside
+ * update access on the storage's host (BlockFormController::access). What
+ * the form may then write is the spine's capability verdict at the op
+ * door (core's Layout Builder permissions through the role policy), the
+ * one grammar; the route carries no second one.
  */
 final class DaedalusLayoutRouteSubscriber extends RouteSubscriberBase {
 
@@ -36,8 +42,8 @@ final class DaedalusLayoutRouteSubscriber extends RouteSubscriberBase {
         '_title' => 'Block form',
       ],
       [
-        '_layout_builder_access' => 'view',
         '_permission' => 'access inline editing',
+        '_custom_access' => BlockFormController::class . '::access',
       ],
       [
         'parameters' => [

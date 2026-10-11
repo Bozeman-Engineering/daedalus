@@ -50,7 +50,7 @@ class FileFieldHandler extends FieldHandlerBase {
    * {@inheritdoc}
    */
   public function getGuidance(): ?string {
-    return 'Accepts {target_id: N} or {_label: "filename.ext"} to reference existing files. Image fields also accept alt and title properties; file fields accept description and display (0 hides the file when the field shows attached files).';
+    return 'Accepts {target_id: N}, {uuid: "..."} or {_label: "filename.ext"} to reference existing files. Image fields also accept alt and title properties; file fields accept description and display (0 hides the file when the field shows attached files).';
   }
 
   /**
@@ -139,8 +139,8 @@ class FileFieldHandler extends FieldHandlerBase {
         $errors[] = new BlueprintError(
           path: $path,
           code: 'INVALID_REFERENCE_FORMAT',
-          message: 'Expected object with target_id or _label.',
-          hint: 'Provide {target_id: N} or {_label: "filename.ext"}.',
+          message: 'Expected object with target_id, uuid or _label.',
+          hint: 'Provide {target_id: N}, {uuid: "..."} or {_label: "filename.ext"}.',
         );
         continue;
       }
@@ -184,7 +184,7 @@ class FileFieldHandler extends FieldHandlerBase {
   }
 
   /**
-   * Resolves a file reference by target_id or _label.
+   * Resolves a file reference by target_id, uuid or _label.
    *
    * Delegates to the shared ReferenceResolverTrait methods for the 'file'
    * entity type with no bundle constraints.
@@ -207,6 +207,10 @@ class FileFieldHandler extends FieldHandlerBase {
       );
     }
 
+    if (isset($item['uuid'])) {
+      return $this->resolveByUuid((string) $item['uuid'], 'file', NULL, $path);
+    }
+
     if (isset($item['_label'])) {
       return $this->resolveByLabel(
         (string) $item['_label'], 'file', NULL, $path,
@@ -216,8 +220,8 @@ class FileFieldHandler extends FieldHandlerBase {
     return new BlueprintError(
       path: $path,
       code: 'INVALID_REFERENCE_FORMAT',
-      message: 'File reference must include target_id or _label.',
-      hint: 'Provide {target_id: N} or {_label: "filename.ext"}.',
+      message: 'File reference must include target_id, uuid or _label.',
+      hint: 'Provide {target_id: N}, {uuid: "..."} or {_label: "filename.ext"}.',
     );
   }
 

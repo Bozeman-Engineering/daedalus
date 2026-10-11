@@ -95,7 +95,7 @@ class MutationRenderScopeTest extends BlueprintKernelTestBase {
     $request_stack->push($request);
     try {
       $this->assertFalse(MutationRenderScope::isActive($request));
-      $render = $this->container->get('daedalus_blueprint_api.subtree_renderer')->render($entity, [], 'full');
+      $render = $this->container->get('daedalus_blueprint_api.subtree_renderer')->render($this->host($entity), [], 'full');
       $this->assertArrayHasKey('entity:' . $entity->uuid(), $render['markup'], 'The entity rendered.');
       $this->assertSame([TRUE], RenderProbe::$seen, 'The render saw the flag raised.');
       $this->assertFalse(MutationRenderScope::isActive($request));
@@ -104,7 +104,7 @@ class MutationRenderScopeTest extends BlueprintKernelTestBase {
       // the flag must not survive it into the rest of the request.
       RenderProbe::$seen = [];
       RenderProbe::$throw = TRUE;
-      $response = $builder->build($request, $entity, BlueprintResult::success($entity), NULL, [], 'full');
+      $response = $builder->build($request, $entity, BlueprintResult::success($this->host($entity)), NULL, [], 'full');
       $payload = Json::decode($response->getContent());
       $this->assertSame(200, $response->getStatusCode());
       $this->assertSame('RENDER_FAILED', $payload['warnings'][0]['code']);
@@ -113,7 +113,7 @@ class MutationRenderScopeTest extends BlueprintKernelTestBase {
 
       // The next render of the request starts clean.
       RenderProbe::$seen = [];
-      $payload = Json::decode($builder->build($request, $entity, BlueprintResult::success($entity), NULL, [], 'full')->getContent());
+      $payload = Json::decode($builder->build($request, $entity, BlueprintResult::success($this->host($entity)), NULL, [], 'full')->getContent());
       $this->assertSame([], $payload['warnings']);
       $this->assertArrayHasKey('entity:' . $entity->uuid(), $payload['markup']);
       $this->assertSame([TRUE], RenderProbe::$seen);

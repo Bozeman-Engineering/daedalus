@@ -17,9 +17,12 @@ use Drupal\Core\Session\AccountProxyInterface;
 use Drupal\daedalus_blueprint\Access\BlueprintAccessChecker;
 use Drupal\daedalus_blueprint\Exception\BlueprintException;
 use Drupal\daedalus_blueprint\FieldHandler\FieldHandlerManager;
+use Drupal\daedalus_blueprint\Host\ContentHost;
 use Drupal\daedalus_blueprint\LayoutBuilder\AvailableLayouts;
 use Drupal\daedalus_blueprint\LayoutBuilder\ContainerLayout;
+use Drupal\daedalus_blueprint\LayoutBuilder\FieldBlock;
 use Drupal\daedalus_blueprint\LayoutBuilder\PlacementRestrictionsInterface;
+use Drupal\daedalus_blueprint\LayoutBuilder\PluginBlockConfiguration;
 
 /**
  * Builds descriptive schemas for entity type + bundle combinations.
@@ -72,6 +75,9 @@ class BlueprintSchemaBuilder implements BlueprintSchemaBuilderInterface {
    * @param \Drupal\Core\Extension\ModuleHandlerInterface $moduleHandler
    *   The module handler, for the schema alter seam (see
    *   hook_daedalus_blueprint_schema_alter()).
+   * @param \Drupal\daedalus_blueprint\LayoutBuilder\PluginBlockConfiguration $pluginBlockConfiguration
+   *   A plugin block's property bag, schema and validation, from its config
+   *   schema.
    * @param \Drupal\Core\Layout\LayoutPluginManagerInterface|null $layoutPluginManager
    *   The layout plugin manager (NULL when layout_discovery is not installed).
    */
@@ -88,6 +94,7 @@ class BlueprintSchemaBuilder implements BlueprintSchemaBuilderInterface {
     protected BlueprintAccessChecker $accessChecker,
     protected CacheContextsManager $cacheContextsManager,
     protected ModuleHandlerInterface $moduleHandler,
+    protected PluginBlockConfiguration $pluginBlockConfiguration,
     protected ?LayoutPluginManagerInterface $layoutPluginManager = NULL,
   ) {}
 
@@ -131,14 +138,21 @@ class BlueprintSchemaBuilder implements BlueprintSchemaBuilderInterface {
       'entity_type' => $entity_type,
       'bundle' => $bundle,
       'label' => $bundle_label,
-      '_structure' => 'Place all entity field values inside the "fields" object — never at the top level. "layout_builder__layout" is the one exception: a separate top-level key, not inside "fields".',
+      '_structure' => 'Place all entity field values inside the "fields" object — never at the top level. The document is the exception: the layout rides the top-level "layout" key (the node tree, each node\'s styles on the node) and the style keys no node owns ("entity:", "field:" keys and their rule forms) the top-level "styles" key, neither inside "fields".',
       'fields' => $fields,
     ];
 
-    // Add Layout Builder schema if LB is enabled for this bundle.
+    // The document: the layout schema when the bundle carries a document,
+    // the style map schema when it carries a style store.
     $layout_builder_schema = $this->buildLayoutBuilderSchema($entity_type, $bundle, $view_mode);
     if ($layout_builder_schema !== NULL) {
-      $schema['layout_builder__layout'] = $layout_builder_schema;
+      $schema['layout'] = $layout_builder_schema;
+    }
+    foreach ($this->filterAccessibleFields($field_definitions) as $definition) {
+      if ($definition->getType() === ContentHost::STYLE_MAP_FIELD_TYPE) {
+        $schema['styles'] = $this->buildFieldSchema($definition);
+        break;
+      }
     }
 
     $context = $this->contextResolver->getContext($entity_type, $bundle);
@@ -198,8 +212,8 @@ class BlueprintSchemaBuilder implements BlueprintSchemaBuilderInterface {
       if (!empty($schema['fields'])) {
         $this->applyFieldTypeGuidance($schema['fields'], $context['field_types']);
       }
-      if (!empty($schema['layout_builder__layout']['available_block_types'])) {
-        foreach ($schema['layout_builder__layout']['available_block_types'] as &$block_type_schema) {
+      if (!empty($schema['layout']['available_block_types'])) {
+        foreach ($schema['layout']['available_block_types'] as &$block_type_schema) {
           if (!empty($block_type_schema['block_fields'])) {
             $this->applyFieldTypeGuidance($block_type_schema['block_fields'], $context['field_types']);
           }
@@ -209,17 +223,17 @@ class BlueprintSchemaBuilder implements BlueprintSchemaBuilderInterface {
     }
 
     // Block type context.
-    if (!empty($context['block_types']) && isset($schema['layout_builder__layout']['available_block_types'])) {
+    if (!empty($context['block_types']) && isset($schema['layout']['available_block_types'])) {
       foreach ($context['block_types'] as $block_type => $block_context) {
-        if (isset($schema['layout_builder__layout']['available_block_types'][$block_type])) {
-          $this->mergeContextKeys($schema['layout_builder__layout']['available_block_types'][$block_type], $block_context);
+        if (isset($schema['layout']['available_block_types'][$block_type])) {
+          $this->mergeContextKeys($schema['layout']['available_block_types'][$block_type], $block_context);
         }
       }
     }
 
     // Layout context.
-    if (!empty($context['layouts']) && isset($schema['layout_builder__layout']['available_layouts'])) {
-      foreach ($schema['layout_builder__layout']['available_layouts'] as &$layout) {
+    if (!empty($context['layouts']) && isset($schema['layout']['available_layouts'])) {
+      foreach ($schema['layout']['available_layouts'] as &$layout) {
         $layout_id = $layout['id'] ?? NULL;
         if ($layout_id && isset($context['layouts'][$layout_id])) {
           $this->mergeContextKeys($layout, $context['layouts'][$layout_id]);
@@ -497,12 +511,20 @@ class BlueprintSchemaBuilder implements BlueprintSchemaBuilderInterface {
    *   The view mode for block type restriction filtering.
    *
    * @return array|null
-   *   The layout_builder schema or NULL.
+   *   The layout schema or NULL.
    */
   protected function buildLayoutBuilderSchema(string $entity_type, string $bundle, string $view_mode = 'full'): ?array {
-    // Check if this entity type + bundle has a layout_builder__layout field.
+    // A bundle carries a document when its entities carry a section list
+    // (core's field type; a content host's own storage).
     $field_definitions = $this->entityFieldManager->getFieldDefinitions($entity_type, $bundle);
-    if (!isset($field_definitions['layout_builder__layout'])) {
+    $has_document = FALSE;
+    foreach ($field_definitions as $definition) {
+      if ($definition->getType() === 'layout_section') {
+        $has_document = TRUE;
+        break;
+      }
+    }
+    if (!$has_document) {
       return NULL;
     }
 
@@ -511,27 +533,59 @@ class BlueprintSchemaBuilder implements BlueprintSchemaBuilderInterface {
     // Node-shape FACTS only (schema = facts, skills = mechanics): the
     // container doctrine (default to the container layout, arrangement is
     // styling, grouping is nesting) lives in the create_entity skill for
-    // the blueprint door and in the eb_edit op grammar for the op door;
-    // nesting capability is carried by the children/regions facts
-    // themselves (an entry with layout_id is a nested section, recursive;
-    // blocks never hold layouts, stated on add_element).
+    // the blueprint door and in the eb_edit op grammar for the op door.
+    // The one grammar is the lean node tree: kind-declared nodes, one
+    // children axis, styles on the node. A read answers the same tree, so
+    // a read is a write; a whole layout is written once, at creation (an
+    // existing entity's document changes through operations), so no node
+    // key speaks of updates.
     $schema = [
-      'guidance' => 'Array of sections in display order.',
+      'guidance' => 'The document as a tree: a list of container nodes in display order. Every node declares its kind ("container", "block", "linked" for a blueprint shown by reference, or "region" for a multi-region layout\'s slots). A read answers this same tree (each node\'s styles on the node, the top-level "styles" holding only keys no node owns), so a full read with its _root_entity removed is a valid create; the keys a read adds (_verdict, _element) are ignored on write. Written at creation only; an existing entity\'s document is changed through operations.',
       'section_structure' => [
+        'kind' => 'Required: "container".',
         'layout_id' => 'Layout plugin ID from available_layouts.',
-        'uuid' => 'Optional. Section UUID for targeting in operations.',
-        'label' => 'Optional. The section\'s user-facing name (defaults from the layout until renamed).',
-        'layout_settings' => 'Optional. Only managed keys for this layout plugin (structural settings, not styling). Omitted keys keep their current values; an explicit null clears a key.',
-        'children' => 'Required for container layouts (available_layouts entries marked container: true): ONE ordered array of blocks AND nested sections — container sections have no addressable regions. Never combine with regions.',
-        'regions' => 'Required for multi-region layouts only. Object keyed by region name. Each value is an array of blocks AND nested sections in display order (an entry with layout_id is a nested section, same structure, recursive).',
+        'uuid' => 'Optional. The container\'s UUID (a UUID v4 you mint), kept as its identity for styling keys and later operations; minted when omitted.',
+        'label' => 'Optional. The container\'s user-facing name (defaults from the layout until renamed).',
+        'slot' => 'Optional, top-level containers only. The id of the slot this section fills in the document around this one (a locked bundle\'s template, the site frame): a slot fills once per document (BLUEPRINT_SLOT_DUPLICATE), the id is fixed for the section\'s life, and a nested container carries none.',
+        'layout_settings' => 'Optional. Only managed keys for this layout plugin (structural settings, not styling); omitted keys use the plugin defaults.',
+        'children' => 'Required. ONE ordered list. For a container layout (available_layouts entries marked container: true): the block and container nodes in display order. For a multi-region layout: region nodes only, {"kind": "region", "region": "<name from the layout\'s regions>", "children": [block and container nodes]}, one per slot in use. The two never mix in one list; a container node nests at any depth.',
+        'styles' => 'Optional. The container\'s own styles keyed by element-relative key: "" for the container itself, "::" plus a relative selector for what is inside it (e.g. "::> *"); each value a style entry (an optional "variants" list of machine names plus condition-keyed property maps).',
       ],
       'block_structure' => [
-        'uuid' => 'Optional for new blocks, required for updates.',
+        'kind' => 'Required: "block".',
+        'uuid' => 'Optional. The block\'s UUID (a UUID v4 you mint), kept as its identity; minted when omitted.',
         'block_type' => 'Required. Block content type from available_block_types.',
         'label' => 'Optional. Block display label (e.g. heading text).',
-        'view_mode' => 'Optional. Defaults to "full".',
+        'label_rendered' => 'Optional. true renders the label; absent or false hides it.',
+        'view_mode' => 'Optional. The block\'s render view mode; defaults to "full".',
         'block_fields' => 'Required. Field values for this block type.',
-        'configuration' => 'Optional. Only managed keys for this block type. Omitted keys keep their current values; an explicit null clears a key.',
+        'configuration' => 'Optional. Only managed keys for this block type; omit a key to leave it unset.',
+        'styles' => 'Optional. The block\'s own styles keyed by element-relative key: "" for the block itself, ":field_name" for a field, "::" plus a relative selector for what is inside it (e.g. "::p"); each value a style entry.',
+      ],
+      'plugin_block_structure' => [
+        'kind' => 'Required: "block".',
+        'uuid' => 'Optional. The block\'s UUID (a UUID v4 you mint), kept as its identity; minted when omitted.',
+        'plugin_id' => 'Required. Block plugin from available_block_plugins (a view, a menu, the site branding). One of the page\'s own fields is a field block node (field_block_structure), never a plugin_id.',
+        'slot' => 'Read-only, on a slot block (plugin daedalus_slot:{id}) alone: the slot id it declares. A slot block placed in a locked bundle\'s template is the door the page fills: on the page, add_element or add_section anchored on this node with placement inside lands in the page\'s own slot section (a top-level container carrying the same slot id), minted when the slot is empty; removing the last element of that section empties the slot again.',
+        'label' => 'Optional. Block display label.',
+        'label_rendered' => 'Optional. true renders the label; absent or false hides it.',
+        'configuration' => 'Optional. The plugin\'s own settings, exactly the keys available_block_plugins[plugin_id].configuration declares (its config schema); the resulting settings are validated against the schema. update_element takes the same keys flat beside label and label_display. A plugin marked configurable: false declares no schema and takes no configuration.',
+        'styles' => 'Optional. The block\'s own styles keyed by element-relative key, as for an inline block.',
+      ],
+      'linked_structure' => [
+        'kind' => 'Required: "linked".',
+        'uuid' => 'Optional. The node\'s UUID (a UUID v4 you mint), kept as its identity; minted when omitted.',
+        'blueprint' => 'Required. The machine name of a published block blueprint saved on this site (materials.blueprints): the node renders that blueprint\'s document live, under this page\'s own fields, and follows every later edit of the blueprint. Fixed for the node\'s life. A shipped file cannot be linked, and the blueprint must fit this page (BLUEPRINT_DOES_NOT_FIT names what is missing). The node holds no children and no content of its own: edit the blueprint (page_read and page_edit with entity_type blueprint); a copy to adapt is {"kind": "blueprint", "name": "<id>"} instead.',
+        'styles' => 'Optional. The placement\'s own box styles keyed by element-relative key ("" for the node itself), as for any block; the blueprint\'s elements keep the blueprint\'s styles.',
+      ],
+      'field_block_structure' => [
+        'kind' => 'Required: "block".',
+        'uuid' => 'Optional. The block\'s UUID (a UUID v4 you mint), kept as its identity; minted when omitted.',
+        'field' => 'Required. One of the page\'s own fields, by machine name from available_fields: the block renders that field\'s value with a formatter. The node names the field only, never a per-bundle plugin id, so the same node lands on any page that has the field; a field this bundle lacks is refused FIELD_NOT_ON_HOST with the fields it has.',
+        'label' => 'Optional. Block display label.',
+        'label_rendered' => 'Optional. true renders the label; absent or false hides it.',
+        'configuration' => 'Optional. The formatter settings, exactly the keys available_fields[field].configuration declares (formatter: {type, label, settings, third_party_settings}); omitted, the field\'s default formatter renders it. update_element takes the same keys flat beside label and label_display.',
+        'styles' => 'Optional. The block\'s own styles keyed by element-relative key, as for an inline block.',
       ],
     ];
 
@@ -550,8 +604,84 @@ class BlueprintSchemaBuilder implements BlueprintSchemaBuilderInterface {
       $managed_keys['inline_block_configuration'] ?? [],
       $storage,
     );
+    $allowed = $this->placementRestrictions->allowedBlockDefinitions($storage);
+    $schema['available_block_plugins'] = $this->buildAvailableBlockPlugins($allowed, $entity_type, $bundle);
+    $schema['available_fields'] = $this->buildAvailableFields($allowed, $entity_type, $bundle);
 
     return $schema;
+  }
+
+  /**
+   * Builds the available block plugins schema with their configuration keys.
+   *
+   * The same placement-restriction projection as the block types (inline
+   * block derivatives are block types and this bundle's field blocks are
+   * available_fields, so both are left out here). Each plugin with config
+   * schema of its own advertises its settings keys as the schema definition
+   * spells them (PluginBlockConfiguration::describe); a plugin without one
+   * is marked not configurable.
+   *
+   * @param array $allowed
+   *   The block definitions the placement spine allows on the display.
+   * @param string $entity_type
+   *   The bundle's entity type id.
+   * @param string $bundle
+   *   The bundle.
+   *
+   * @return array
+   *   Plugins keyed by plugin id with label, category and either
+   *   configuration (the own keys' schema) or configurable: false.
+   */
+  protected function buildAvailableBlockPlugins(array $allowed, string $entity_type, string $bundle): array {
+    $plugins = [];
+    foreach ($allowed as $plugin_id => $definition) {
+      if (str_starts_with($plugin_id, 'inline_block:') || FieldBlock::fieldFor($plugin_id, $entity_type, $bundle) !== NULL) {
+        continue;
+      }
+      $entry = [
+        'label' => (string) ($definition['admin_label'] ?? $plugin_id),
+        'category' => (string) ($definition['category'] ?? ''),
+      ];
+      if ($this->pluginBlockConfiguration->hasSchema($plugin_id)) {
+        $entry['configuration'] = $this->pluginBlockConfiguration->describe($plugin_id);
+      }
+      else {
+        $entry['configurable'] = FALSE;
+      }
+      $plugins[$plugin_id] = $entry;
+    }
+    return $plugins;
+  }
+
+  /**
+   * Builds the bundle's placeable fields: the field block nodes it takes.
+   *
+   * The same placement-restriction projection, read by field name: a field
+   * is placeable when core derived a field block for it on this bundle and
+   * the display allows that block. Each entry carries the field's label
+   * and the formatter configuration schema the node's configuration takes
+   * (PluginBlockConfiguration::describe over the derivative; every field
+   * block shares core's schema).
+   *
+   * @param array $allowed
+   *   The block definitions the placement spine allows on the display.
+   * @param string $entity_type
+   *   The bundle's entity type id.
+   * @param string $bundle
+   *   The bundle.
+   *
+   * @return array
+   *   Fields keyed by field name with label and configuration.
+   */
+  protected function buildAvailableFields(array $allowed, string $entity_type, string $bundle): array {
+    $fields = [];
+    foreach (FieldBlock::fieldsIn($allowed, $entity_type, $bundle) as $field => $definition) {
+      $fields[$field] = [
+        'label' => (string) ($definition['admin_label'] ?? $field),
+        'configuration' => $this->pluginBlockConfiguration->describe(FieldBlock::pluginId($entity_type, $bundle, $field)),
+      ];
+    }
+    return $fields;
   }
 
   /**

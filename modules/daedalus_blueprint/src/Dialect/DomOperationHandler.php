@@ -5,11 +5,12 @@ declare(strict_types=1);
 namespace Drupal\daedalus_blueprint\Dialect;
 
 use Drupal\Component\Uuid\UuidInterface;
-use Drupal\Core\Entity\FieldableEntityInterface;
-use Drupal\daedalus_blueprint\LayoutBuilder\LayoutSerializer;
+use Drupal\daedalus_blueprint\Host\HostInterface;
 use Drupal\daedalus_blueprint\Materials\MaterialRecord;
 use Drupal\daedalus_blueprint\Materials\ValueKind;
+use Drupal\daedalus_blueprint\NodeTree\DocumentInstantiator;
 use Drupal\daedalus_blueprint\NodeTree\NodeTreeBuilder;
+use Drupal\daedalus_blueprint\Plugin\Block\LinkedBlueprintBlock;
 use Drupal\daedalus_blueprint\Result\BlueprintError;
 use Drupal\daedalus_blueprint\Result\BlueprintResult;
 
@@ -25,14 +26,14 @@ use Drupal\daedalus_blueprint\Result\BlueprintResult;
  * the payload. Each op TRANSLATES into the batch operations that already exist
  * on the spine (add_section/add_element/update_element/move_element/
  * remove_element and the registered style ops) and executes them as a
- * nested batch (the stencil handler's precedent) so everything the spine
+ * nested batch (the blueprint handler's precedent) so everything the spine
  * already enforces (placement, field validation, style-guide validation)
  * applies with no second validation path, and batch rollback semantics
  * hold.
  *
  * Identity: `ref` is a printed uuid or a live alias. Author-chosen ids on
  * inserted elements become aliases over minted uuids (DialectAliasMap,
- * per entity per conversation via $options['conversation']); results echo
+ * per host per conversation via $options['conversation']); results echo
  * the pairings and the printer echoes `data-alias`.
  *
  * The `style` op's CSS rides DialectCssParser (the same instance grammar
@@ -90,6 +91,8 @@ class DomOperationHandler implements PageLanguageOperationsInterface {
    *   Service closure resolving daedalus_blueprint.operations. A closure
    *   because the dependency is circular by construction: operations owns
    *   the handler registry that collects this handler.
+   * @param \Drupal\daedalus_blueprint\NodeTree\DocumentInstantiator $instantiator
+   *   The one placement machinery: a fragment or document lands through it.
    */
   public function __construct(
     protected DialectParser $parser,
@@ -97,6 +100,7 @@ class DomOperationHandler implements PageLanguageOperationsInterface {
     protected NodeTreeBuilder $treeBuilder,
     protected UuidInterface $uuid,
     protected \Closure $operations,
+    protected DocumentInstantiator $instantiator,
   ) {}
 
   /**
@@ -122,6 +126,18 @@ class DomOperationHandler implements PageLanguageOperationsInterface {
 
   /**
    * {@inheritdoc}
+   *
+   * The dialect's ops are not judged: each expands into the spine ops it
+   * means (add_section, update_element, update_style and the rest) and
+   * runs them as a nested batch, where every real write passes the gate
+   * once. A file op declares bytes and touches no element.
+   */
+  public function getRequirements(): array {
+    return array_fill_keys(self::OPS, []);
+  }
+
+  /**
+   * {@inheritdoc}
    */
   public function getGuidance(): array {
     // Terse router lines on purpose: the page-language op set is taught in
@@ -142,7 +158,7 @@ class DomOperationHandler implements PageLanguageOperationsInterface {
   /**
    * {@inheritdoc}
    */
-  public function apply(FieldableEntityInterface $entity, array $operation, array $options = []): BlueprintResult {
+  public function apply(HostInterface $host, array $operation, array $options = []): BlueprintResult {
     $catalog = $options['dialect_catalog'] ?? NULL;
     if (!$catalog instanceof DialectCatalog) {
       return BlueprintResult::structuralFailure([
@@ -150,29 +166,29 @@ class DomOperationHandler implements PageLanguageOperationsInterface {
       ]);
     }
     $conversation = (string) ($options['conversation'] ?? '');
-    $tree = $this->treeBuilder->build($entity);
+    $tree = $this->treeBuilder->build($host);
     $index = $this->elementIndex($tree);
-    $aliases = $this->aliasMap->aliases($entity, $conversation);
+    $aliases = $this->aliasMap->aliases($host, $conversation);
 
     return match ($operation['op']) {
-      'insert' => $this->applyInsert($entity, $operation, $options, $catalog, $conversation, $index, $aliases),
-      'replace' => $this->applyReplace($entity, $operation, $options, $catalog, $conversation, $index, $aliases),
-      'remove' => $this->applyRemove($entity, $operation, $options, $conversation, $index, $aliases),
-      'move' => $this->applyMove($entity, $operation, $options, $conversation, $index, $aliases),
-      'set' => $this->applySet($entity, $operation, $options, $catalog, $conversation, $index, $aliases),
-      'style' => $this->applyStyle($entity, $operation, $options, $catalog, $conversation, $index, $aliases),
-      'file' => $this->applyFile($entity, $operation, $conversation),
+      'insert' => $this->applyInsert($host, $operation, $options, $catalog, $conversation, $index, $aliases),
+      'replace' => $this->applyReplace($host, $operation, $options, $catalog, $conversation, $index, $aliases),
+      'remove' => $this->applyRemove($host, $operation, $options, $conversation, $index, $aliases),
+      'move' => $this->applyMove($host, $operation, $options, $conversation, $index, $aliases),
+      'set' => $this->applySet($host, $operation, $options, $catalog, $conversation, $index, $aliases),
+      'style' => $this->applyStyle($host, $operation, $options, $catalog, $conversation, $index, $aliases),
+      'file' => $this->applyFile($host, $operation, $conversation),
     };
   }
 
   /**
    * Applies a file op: the declared bytes saved and named for the batch.
    *
-   * Not a page mutation: the entity is untouched and the result carries
+   * Not a page mutation: the host is untouched and the result carries
    * no target. The op's whole effect is the file the conversation now
    * holds under name, which the ops after it place.
    */
-  protected function applyFile(FieldableEntityInterface $entity, array $operation, string $conversation): BlueprintResult {
+  protected function applyFile(HostInterface $host, array $operation, string $conversation): BlueprintResult {
     $errors = [];
     foreach (['name', 'type', 'content'] as $key) {
       $value = $operation[$key] ?? NULL;
@@ -194,7 +210,7 @@ class DomOperationHandler implements PageLanguageOperationsInterface {
       ]);
     }
     $error = $this->declareFile($conversation, $name, trim($operation['type']), trim($operation['content']), 'content');
-    return $error === NULL ? BlueprintResult::success($entity) : BlueprintResult::structuralFailure([$error]);
+    return $error === NULL ? BlueprintResult::success($host) : BlueprintResult::structuralFailure([$error]);
   }
 
   /**
@@ -250,8 +266,8 @@ class DomOperationHandler implements PageLanguageOperationsInterface {
   /**
    * Applies an insert op: parse the fragment, expand, run the batch.
    */
-  protected function applyInsert(FieldableEntityInterface $entity, array $operation, array $options, DialectCatalog $catalog, string $conversation, array $index, array $aliases): BlueprintResult {
-    $at = $this->requireAt($operation, $entity, $index, $aliases, $errors);
+  protected function applyInsert(HostInterface $host, array $operation, array $options, DialectCatalog $catalog, string $conversation, array $index, array $aliases): BlueprintResult {
+    $at = $this->requireAt($operation, $host, $index, $aliases, $errors);
     $html = $operation['html'] ?? NULL;
     if (!is_string($html) || trim($html) === '') {
       $errors[] = new BlueprintError('html', 'MISSING_PARAMETER', 'insert needs "html": a dialect fragment.', [], 'Write the elements to insert in the dialect (<pb-container>, <pb-text ...>, ...).');
@@ -259,9 +275,9 @@ class DomOperationHandler implements PageLanguageOperationsInterface {
     if ($errors) {
       return BlueprintResult::structuralFailure($errors);
     }
-    [$anchor, $position] = $at;
+    [$anchor, $position, $region] = $at;
 
-    $root_anchor = $anchor === $entity->uuid();
+    $root_anchor = $anchor === $host->uuid();
     if ($root_anchor && in_array($position, ['beforebegin', 'afterend'], TRUE)) {
       return BlueprintResult::structuralFailure([
         new BlueprintError('at.position', 'BAD_OP', 'The page has no outside: root takes afterbegin or beforeend.', [], 'Use beforeend to append to the page, afterbegin to prepend, or anchor an element for beforebegin/afterend.'),
@@ -278,7 +294,7 @@ class DomOperationHandler implements PageLanguageOperationsInterface {
     }
     if ($root_anchor) {
       foreach ($parse->tree as $node) {
-        if (!in_array($node['kind'] ?? '', ['container', 'stencil'], TRUE)) {
+        if (!in_array($node['kind'] ?? '', ['container', 'blueprint'], TRUE)) {
           return BlueprintResult::structuralFailure([
             new BlueprintError('html', 'ILLEGAL_CONTAINMENT', 'The top level of a page holds <pb-container> elements; wrap the fragment in one.', [], 'Blocks live inside containers; insert into a container, or wrap the blocks in <pb-container>.'),
           ]);
@@ -286,25 +302,23 @@ class DomOperationHandler implements PageLanguageOperationsInterface {
       }
     }
 
-    $first_location = $this->firstLocation($entity, $anchor, $position, $index);
-    $ops = [];
-    $style_ops = [];
+    $first_location = $this->firstLocation($host, $anchor, $position, $index, $region);
     $minted = [];
     $errors = [];
-    $this->expandNodes($parse->tree, $first_location, $catalog, $ops, $style_ops, $minted, $errors);
+    $ops = $this->expandFragment($host, $parse->tree, $first_location, $catalog, $minted, $errors);
     if ($errors) {
       return BlueprintResult::structuralFailure($errors);
     }
 
-    return $this->runTranslated($entity, array_merge($ops, $style_ops), $options, $conversation, $minted);
+    return $this->runTranslated($host, $ops, $options, $conversation, $minted);
   }
 
   /**
    * Applies a replace op: insert the fragment beside, remove the target.
    */
-  protected function applyReplace(FieldableEntityInterface $entity, array $operation, array $options, DialectCatalog $catalog, string $conversation, array $index, array $aliases): BlueprintResult {
+  protected function applyReplace(HostInterface $host, array $operation, array $options, DialectCatalog $catalog, string $conversation, array $index, array $aliases): BlueprintResult {
     $errors = [];
-    $target = $this->requireRef($operation, $entity, $index, $aliases, $errors);
+    $target = $this->requireRef($operation, $host, $index, $aliases, $errors);
     $html = $operation['html'] ?? NULL;
     if (!is_string($html) || trim($html) === '') {
       $errors[] = new BlueprintError('html', 'MISSING_PARAMETER', 'replace needs "html": the replacement dialect fragment.', [], 'To delete an element use the remove op; to edit it in place prefer set.');
@@ -319,58 +333,70 @@ class DomOperationHandler implements PageLanguageOperationsInterface {
       return BlueprintResult::structuralFailure($this->toBlueprintErrors($parse->errors, 'html'));
     }
 
-    $ops = [];
-    $style_ops = [];
     $minted = [];
     $errors = [];
-    $this->expandNodes($parse->tree, ['anchor' => $target, 'placement' => 'before'], $catalog, $ops, $style_ops, $minted, $errors);
-    if ($errors) {
-      return BlueprintResult::structuralFailure($errors);
+    $remove = ['op' => 'remove_element', 'element' => $target];
+    if (is_string($index[$target]['node']['slot'] ?? NULL)) {
+      // A slot fills once, and the replacement of a slot section is the
+      // same slot written again: the old section goes first and the new
+      // one lands at the root (the one anchor a slot section takes; its
+      // place on the page is the slot's), so the op door sees one fill.
+      $ops = $this->expandFragment($host, $parse->tree, ['anchor' => $host->uuid(), 'placement' => 'inside'], $catalog, $minted, $errors);
+      if ($errors) {
+        return BlueprintResult::structuralFailure($errors);
+      }
+      array_unshift($ops, $remove);
     }
-    $ops[] = ['op' => 'remove_element', 'element' => $target];
+    else {
+      $ops = $this->expandFragment($host, $parse->tree, ['anchor' => $target, 'placement' => 'before'], $catalog, $minted, $errors);
+      if ($errors) {
+        return BlueprintResult::structuralFailure($errors);
+      }
+      $ops[] = $remove;
+    }
 
-    $result = $this->runTranslated($entity, array_merge($ops, $style_ops), $options, $conversation, $minted, forget: [$target]);
+    $result = $this->runTranslated($host, $ops, $options, $conversation, $minted, forget: [$target]);
     return $result;
   }
 
   /**
    * Applies a remove op.
    */
-  protected function applyRemove(FieldableEntityInterface $entity, array $operation, array $options, string $conversation, array $index, array $aliases): BlueprintResult {
+  protected function applyRemove(HostInterface $host, array $operation, array $options, string $conversation, array $index, array $aliases): BlueprintResult {
     $errors = [];
-    $target = $this->requireRef($operation, $entity, $index, $aliases, $errors);
+    $target = $this->requireRef($operation, $host, $index, $aliases, $errors);
     if ($errors) {
       return BlueprintResult::structuralFailure($errors);
     }
-    return $this->runTranslated($entity, [['op' => 'remove_element', 'element' => $target]], $options, $conversation, [], forget: [$target]);
+    return $this->runTranslated($host, [['op' => 'remove_element', 'element' => $target]], $options, $conversation, [], forget: [$target]);
   }
 
   /**
    * Applies a move op.
    */
-  protected function applyMove(FieldableEntityInterface $entity, array $operation, array $options, string $conversation, array $index, array $aliases): BlueprintResult {
+  protected function applyMove(HostInterface $host, array $operation, array $options, string $conversation, array $index, array $aliases): BlueprintResult {
     $errors = [];
-    $target = $this->requireRef($operation, $entity, $index, $aliases, $errors);
-    $at = $this->requireAt($operation, $entity, $index, $aliases, $errors);
+    $target = $this->requireRef($operation, $host, $index, $aliases, $errors);
+    $at = $this->requireAt($operation, $host, $index, $aliases, $errors);
     if ($errors) {
       return BlueprintResult::structuralFailure($errors);
     }
-    [$anchor, $position] = $at;
-    if ($anchor === $entity->uuid() && in_array($position, ['beforebegin', 'afterend'], TRUE)) {
+    [$anchor, $position, $region] = $at;
+    if ($anchor === $host->uuid() && in_array($position, ['beforebegin', 'afterend'], TRUE)) {
       return BlueprintResult::structuralFailure([
         new BlueprintError('at.position', 'BAD_OP', 'The page has no outside: root takes afterbegin or beforeend.', [], 'Use beforeend to move to the end of the page, afterbegin for the start.'),
       ]);
     }
-    $location = $this->firstLocation($entity, $anchor, $position, $index);
-    return $this->runTranslated($entity, [['op' => 'move_element', 'element' => $target, 'location' => $location]], $options, $conversation, []);
+    $location = $this->firstLocation($host, $anchor, $position, $index, $region);
+    return $this->runTranslated($host, [['op' => 'move_element', 'element' => $target, 'location' => $location]], $options, $conversation, []);
   }
 
   /**
    * Applies a set op: patch fields, the element's variant axes, class, style.
    */
-  protected function applySet(FieldableEntityInterface $entity, array $operation, array $options, DialectCatalog $catalog, string $conversation, array $index, array $aliases): BlueprintResult {
+  protected function applySet(HostInterface $host, array $operation, array $options, DialectCatalog $catalog, string $conversation, array $index, array $aliases): BlueprintResult {
     $errors = [];
-    $target = $this->requireRef($operation, $entity, $index, $aliases, $errors);
+    $target = $this->requireRef($operation, $host, $index, $aliases, $errors);
     $attrs = $operation['attrs'] ?? NULL;
     $detach = $operation['detach'] ?? NULL;
     if ($attrs !== NULL && (!is_array($attrs) || array_is_list($attrs))) {
@@ -392,13 +418,13 @@ class DomOperationHandler implements PageLanguageOperationsInterface {
 
     // The root: the page's own fields, JSON values under the field
     // handlers (what page_create's "fields" takes). No styles, no wear.
-    if ($target === $entity->uuid()) {
+    if ($target === $host->uuid()) {
       if ($detach !== [] || isset($attrs['class']) || isset($attrs['style'])) {
         return BlueprintResult::structuralFailure([
           new BlueprintError('attrs', 'ILLEGAL_ATTR', 'The page itself has no class, style, or variants; style its containers.', [], 'ref "root" takes the page\'s own fields (title, ...), the ones page_create\'s "fields" takes.'),
         ]);
       }
-      return $this->runTranslated($entity, [['op' => 'update_element', 'element' => $target, 'properties' => $attrs]], $options, $conversation, []);
+      return $this->runTranslated($host, [['op' => 'update_element', 'element' => $target, 'properties' => $attrs]], $options, $conversation, []);
     }
 
     $info = $index[$target] ?? NULL;
@@ -409,11 +435,14 @@ class DomOperationHandler implements PageLanguageOperationsInterface {
     }
 
     $is_container = $info['kind'] === 'container';
+    $is_slot = $is_container && is_string($info['node']['slot'] ?? NULL) && $info['node']['slot'] !== '';
+    $is_linked = $info['kind'] === LinkedBlueprintBlock::KIND;
     $block_type = $info['block_type'];
     $spec = $is_container ? NULL : ($block_type !== NULL ? $catalog->blockType($block_type) : NULL);
     // The tag the correctives name is the one the print uses: an undeclared
-    // type and a plugin block are the generic <pb-block> form.
-    $tag = $is_container ? 'pb-container' : ($spec !== NULL ? DialectCatalog::tagForBlockType($block_type) : 'pb-block');
+    // type and a plugin block are the generic <pb-block> form, a slot
+    // section its <pb-slot> form, a linked placement <pb-linked>.
+    $tag = $is_container ? ($is_slot ? DialectWalk::SLOT_TAG : 'pb-container') : ($is_linked ? DialectWalk::LINKED_TAG : ($spec !== NULL ? DialectCatalog::tagForBlockType($block_type) : 'pb-block'));
     $key_prefix = $is_container ? 'container:' : 'block:';
     $css = new DialectCssParser($catalog);
     $own = $info['node']['styles'][''] ?? [];
@@ -430,12 +459,18 @@ class DomOperationHandler implements PageLanguageOperationsInterface {
         $errors[] = new BlueprintError("attrs.$name", 'SERVER_DERIVED_ATTR', sprintf('%s is server-derived and never authored.', $name), [], 'Identity is minted; aliases come from ids on inserted elements.');
         continue;
       }
-      if ($name === 'stencil') {
-        $errors[] = new BlueprintError('attrs.stencil', 'READONLY_ATTR', 'stencil is placement provenance, fixed when the element is created; set cannot patch it.', [], 'Provenance rides the element in an insert/replace fragment (stencil="id" as printed); a fresh copy is <pb-stencil name="id" />.');
+      if ($name === 'blueprint') {
+        $errors[] = $is_linked
+          ? new BlueprintError('attrs.blueprint', 'READONLY_ATTR', sprintf('blueprint on <%s> is the blueprint the element shows, fixed when the element is created; set cannot patch it.', DialectWalk::LINKED_TAG), [], sprintf('Link another blueprint with its own <%s blueprint="..."/> inserted beside this one, and remove this one.', DialectWalk::LINKED_TAG))
+          : new BlueprintError('attrs.blueprint', 'READONLY_ATTR', 'blueprint is placement provenance, fixed when the element is created; set cannot patch it.', [], 'Provenance rides the element in an insert/replace fragment (blueprint="id" as printed); a fresh copy is <pb-blueprint name="id" />.');
         continue;
       }
       if ($tag === 'pb-image' && $name === 'src') {
         $errors[] = new BlueprintError('attrs.src', 'ILLEGAL_SRC', 'src is not writable on <pb-image>.', [], 'Reference existing media with media="id or label" or mint one with generate="prompt" + alt.');
+        continue;
+      }
+      if ($is_slot && $name === DialectWalk::NAME_ATTR) {
+        $errors[] = new BlueprintError('attrs.name', 'READONLY_ATTR', sprintf('name on <%s> is the slot the section fills, fixed when the section is created; set cannot patch it.', DialectWalk::SLOT_TAG), [], 'A slot section fills one slot for life: fill another slot with its own <pb-slot name="..."> inserted at the root, and remove this one.');
         continue;
       }
       if ($is_container && $name === DialectWalk::NAME_ATTR) {
@@ -537,7 +572,7 @@ class DomOperationHandler implements PageLanguageOperationsInterface {
         new BlueprintError('attrs', 'MISSING_PARAMETER', 'The operation changes nothing.', [], 'Provide attribute values to set or null to clear.'),
       ]);
     }
-    return $this->runTranslated($entity, $ops, $options, $conversation, []);
+    return $this->runTranslated($host, $ops, $options, $conversation, []);
   }
 
   /**
@@ -603,7 +638,7 @@ class DomOperationHandler implements PageLanguageOperationsInterface {
    * read from the rule's staged entry), the twin of the set op's class
    * restatement and {axis: null} on an element.
    */
-  protected function applyStyle(FieldableEntityInterface $entity, array $operation, array $options, DialectCatalog $catalog, string $conversation, array $index, array $aliases): BlueprintResult {
+  protected function applyStyle(HostInterface $host, array $operation, array $options, DialectCatalog $catalog, string $conversation, array $index, array $aliases): BlueprintResult {
     $css_text = $operation['css'] ?? NULL;
     $remove = $operation['remove'] ?? [];
     if (($css_text === NULL || $css_text === '') && ($remove === [] || $remove === NULL)) {
@@ -762,7 +797,7 @@ class DomOperationHandler implements PageLanguageOperationsInterface {
         new BlueprintError('css', 'MISSING_PARAMETER', 'The operation changes nothing.', [], 'Provide rules with declarations, or remove entries with property names.'),
       ]);
     }
-    return $this->runTranslated($entity, $ops, $options, $conversation, []);
+    return $this->runTranslated($host, $ops, $options, $conversation, []);
   }
 
   /**
@@ -787,7 +822,7 @@ class DomOperationHandler implements PageLanguageOperationsInterface {
    * element's vocabulary roster, an unknown variant) come back beside the
    * grammar errors instead of one round later on the same bytes.
    */
-  public function applyDocument(FieldableEntityInterface $entity, string $html, array $options = []): BlueprintResult {
+  public function applyDocument(HostInterface $host, string $html, array $options = []): BlueprintResult {
     $catalog = $options['dialect_catalog'] ?? NULL;
     if (!$catalog instanceof DialectCatalog) {
       return BlueprintResult::structuralFailure([
@@ -799,19 +834,17 @@ class DomOperationHandler implements PageLanguageOperationsInterface {
     $parse = $this->parser->parseDocument($html, $catalog);
     $parse_errors = $this->toBlueprintErrors($parse->errors, 'layout');
 
-    $tree = $this->treeBuilder->build($entity);
+    $tree = $this->treeBuilder->build($host);
     $index = $this->elementIndex($tree);
-    $first_location = $this->firstLocation($entity, (string) $entity->uuid(), 'beforeend', $index);
+    $first_location = $this->firstLocation($host, (string) $host->uuid(), 'beforeend', $index);
 
-    $ops = [];
-    $style_ops = [];
     $minted = [];
     $errors = [];
-    $this->expandNodes($parse->tree, $first_location, $catalog, $ops, $style_ops, $minted, $errors);
+    $ops = $this->expandFragment($host, $parse->tree, $first_location, $catalog, $minted, $errors);
     if ($errors) {
       return BlueprintResult::structuralFailure(array_merge($parse_errors, $errors));
     }
-    if ($ops === [] && $style_ops === []) {
+    if ($ops === []) {
       return BlueprintResult::structuralFailure($parse_errors ?: [
         new BlueprintError('layout', 'MISSING_PARAMETER', 'The document holds no elements.', [], 'A page document is one or more <pb-container> elements, with an optional <style> block and <pb-file> declarations.'),
       ]);
@@ -829,140 +862,68 @@ class DomOperationHandler implements PageLanguageOperationsInterface {
       }
     }
 
-    return $this->runTranslated($entity, array_merge($ops, $style_ops), $options, $conversation, $minted, judge: $parse_errors);
+    return $this->runTranslated($host, $ops, $options, $conversation, $minted, judge: $parse_errors);
   }
 
   /**
-   * Expands parsed fragment nodes into spine ops, chaining sibling order.
+   * Expands parsed fragment nodes into spine ops through the instantiator.
    *
-   * The first node takes the position-mapped location; each following
-   * sibling anchors after the previous node, so document order survives
-   * any insertion position.
+   * The one placement machinery (DocumentInstantiator) expands the tree:
+   * the first node takes the position-mapped location, each following
+   * sibling anchors after the previous node, containers are born as the
+   * catalog's container layout, and the style ops trail the structural
+   * ones. What is the dialect's stays here: an author-chosen id mints its
+   * uuid ahead of the expansion (the alias layer records the pairing) and
+   * a <pb-blueprint> reference takes no styles (place it, then style the
+   * placed elements once they print with ids).
    *
+   * @param \Drupal\daedalus_blueprint\Host\HostInterface $host
+   *   The host the fragment lands on (its subject spells a field block's
+   *   derivative).
    * @param array $nodes
    *   The parsed fragment nodes, in document order.
    * @param array $first_location
    *   The location the first node lands at.
    * @param \Drupal\daedalus_blueprint\Dialect\DialectCatalog $catalog
    *   The dialect catalog.
-   * @param array $ops
-   *   Collector for the structural ops (by reference).
-   * @param array $style_ops
-   *   Collector for the style ops that follow the batch (by reference).
    * @param array $minted
    *   Collector: alias => uuid for author-chosen ids in the fragment.
    * @param array $errors
    *   Collector for dialect errors (by reference).
-   */
-  protected function expandNodes(array $nodes, array $first_location, DialectCatalog $catalog, array &$ops, array &$style_ops, array &$minted, array &$errors): void {
-    $previous = NULL;
-    foreach ($nodes as $node) {
-      $location = $previous === NULL ? $first_location : ['anchor' => $previous, 'placement' => 'after'];
-      $previous = $this->expandNode($node, $location, $catalog, $ops, $style_ops, $minted, $errors);
-    }
-  }
-
-  /**
-   * Expands one parsed node into spine ops; returns its uuid.
-   */
-  protected function expandNode(array $node, array $location, DialectCatalog $catalog, array &$ops, array &$style_ops, array &$minted, array &$errors): string {
-    $uuid = $node['uuid'] ?? $this->uuid->generate();
-    if (isset($node['id'])) {
-      $minted[(string) $node['id']] = $uuid;
-    }
-    $kind = $node['kind'] ?? '';
-
-    switch ($kind) {
-      case 'container':
-        $op = [
-          'op' => 'add_section',
-          'location' => $location,
-          'uuid' => $uuid,
-          'layout' => $catalog->containerLayoutId(),
-        ];
-        // Provenance is a birth fact: the stencil="" the parser accepted
-        // rides the root create op exactly as instantiate_stencil stamps
-        // it, so the trailing style ops and the ownership rule see it.
-        if (isset($node['stencil'])) {
-          $op['stencil'] = $node['stencil'];
-        }
-        // So is the name: a born container's name="" lands in the
-        // section's label slot (layout_settings.label, the slot the
-        // tree's rename and set {name} write), never as a second op.
-        if (isset($node['label'])) {
-          $op['layout_settings'] = ['label' => $node['label']];
-        }
-        $ops[] = $op;
-        foreach ($node['children'] ?? [] as $child) {
-          // 'inside' appends: sequential appends into the fresh container
-          // preserve document order.
-          $this->expandNode($child, ['anchor' => $uuid, 'placement' => 'inside'], $catalog, $ops, $style_ops, $minted, $errors);
-        }
-        $this->expandNodeStyles($node, 'container:' . $uuid, $style_ops);
-        return $uuid;
-
-      case 'block':
-        $op = ['op' => 'add_element', 'uuid' => $uuid, 'location' => $location];
-        if (isset($node['plugin_id'])) {
-          $op['plugin_id'] = $node['plugin_id'];
-        }
-        else {
-          $op['block_type'] = $node['block_type'] ?? NULL;
-          $op['properties'] = $node['block_fields'] ?? [];
-        }
-        if (isset($node['stencil'])) {
-          $op['additional'][LayoutSerializer::STENCIL_PROVENANCE_KEY] = $node['stencil'];
-        }
-        $ops[] = $op;
-        $this->expandNodeStyles($node, 'block:' . $uuid, $style_ops);
-        return $uuid;
-
-      case 'stencil':
-        if (($node['styles'] ?? []) !== []) {
-          $errors[] = new BlueprintError('html', 'ILLEGAL_ATTR', 'style/class on a <pb-stencil> reference is not supported.', [], 'Place the stencil, then style the placed elements (they come back with ids).');
-        }
-        $ops[] = [
-          'op' => 'instantiate_stencil',
-          'stencil' => (string) ($node['name'] ?? ''),
-          'location' => $location,
-          'uuid' => $uuid,
-        ];
-        return $uuid;
-    }
-
-    $errors[] = new BlueprintError('html', 'ILLEGAL_CONTAINMENT', sprintf('A %s node is not insertable here.', $kind === '' ? 'malformed' : $kind), [], 'Fragments hold containers, blocks, and stencil references.');
-    return $uuid;
-  }
-
-  /**
-   * Expands a parsed node's style entries into trailing style ops.
    *
-   * Fragment nodes only ever carry the '' entry (style="" defaults plus
-   * variant wear; conditions and parts ride the style op, spec section
-   * 7). Document nodes (applyDocument) additionally carry the entries the
-   * document's <style> block injected — selector locals ('::.class',
-   * '::> *', '::p') and condition-keyed maps — so the walk covers every
-   * local and every condition.
+   * @return array[]
+   *   The spine ops, structural first, then every style op.
    */
-  protected function expandNodeStyles(array $node, string $key, array &$style_ops): void {
-    foreach ($node['styles'] ?? [] as $local => $entry) {
-      if (!is_array($entry)) {
-        continue;
-      }
-      foreach ($entry['variants'] ?? [] as $reference) {
-        $style_ops[] = ['op' => 'apply_variant', 'key' => $key . $local, 'variant' => $reference['variant']];
-      }
-      foreach ($entry as $condition => $properties) {
-        if ($condition === 'variants' || !is_array($properties) || $properties === []) {
+  protected function expandFragment(HostInterface $host, array $nodes, array $first_location, DialectCatalog $catalog, array &$minted, array &$errors): array {
+    $prepare = function (array $nodes) use (&$prepare, &$minted, &$errors): array {
+      foreach ($nodes as $index => $node) {
+        if (!is_array($node)) {
           continue;
         }
-        $op = ['op' => 'update_style', 'key' => $key . $local, 'properties' => $properties];
-        if ($condition !== 'default') {
-          $op['condition'] = (string) $condition;
+        $node['uuid'] ??= $this->uuid->generate();
+        if (isset($node['id'])) {
+          $minted[(string) $node['id']] = $node['uuid'];
+          unset($node['id']);
         }
-        $style_ops[] = $op;
+        if (($node['kind'] ?? '') === 'blueprint' && ($node['styles'] ?? []) !== []) {
+          $errors[] = new BlueprintError('html', 'ILLEGAL_ATTR', 'style/class on a <pb-blueprint> reference is not supported.', [], 'Place the blueprint, then style the placed elements (they come back with ids).');
+          unset($node['styles']);
+        }
+        if (isset($node['children']) && is_array($node['children'])) {
+          $node['children'] = $prepare($node['children']);
+        }
+        $nodes[$index] = $node;
       }
-    }
+      return $nodes;
+    };
+    $expansion = $this->instantiator->expand($host, $prepare($nodes), $first_location, [
+      // The author's identity is the identity: every node was minted above.
+      'mint' => fn (?string $source): string => $source ?? $this->uuid->generate(),
+      'container_layout' => $catalog->containerLayoutId(),
+      'path' => 'html',
+    ]);
+    $errors = array_merge($errors, $expansion->errors);
+    return $expansion->operations;
   }
 
   /**
@@ -1099,7 +1060,7 @@ class DomOperationHandler implements PageLanguageOperationsInterface {
    * is safe: a failed batch discards the overlay at settlement, so no
    * alias ever outlives identity that was never born.
    *
-   * @param \Drupal\Core\Entity\FieldableEntityInterface $entity
+   * @param \Drupal\Core\Entity\HostInterface $host
    *   The root entity.
    * @param array $ops
    *   The translated spine ops, in batch order.
@@ -1118,21 +1079,21 @@ class DomOperationHandler implements PageLanguageOperationsInterface {
    *   and the result is a structural failure carrying these errors first
    *   and the batch's (re-addressed) errors after them.
    */
-  protected function runTranslated(FieldableEntityInterface $entity, array $ops, array $options, string $conversation, array $minted, array $forget = [], array $judge = []): BlueprintResult {
+  protected function runTranslated(HostInterface $host, array $ops, array $options, string $conversation, array $minted, array $forget = [], array $judge = []): BlueprintResult {
     if ($judge !== []) {
-      $result = ($this->operations)()->batchOperations($entity, $ops, ['dressed' => TRUE, 'judge' => TRUE] + $options);
-      $verdicts = $result->isSuccess() ? [] : $this->addressErrors($result->getErrors(), $ops, $minted + $this->aliasMap->aliases($entity, $conversation));
+      $result = ($this->operations)()->batchOperations($host, $ops, ['dressed' => TRUE, 'judge' => TRUE] + $options);
+      $verdicts = $result->isSuccess() ? [] : $this->addressErrors($result->getErrors(), $ops, $minted + $this->aliasMap->aliases($host, $conversation));
       return BlueprintResult::structuralFailure(array_merge($judge, $verdicts));
     }
     foreach ($forget as $uuid) {
-      $this->aliasMap->forget($entity, $conversation, $uuid);
+      $this->aliasMap->forget($host, $conversation, $uuid);
     }
     foreach ($minted as $alias => $uuid) {
-      $this->aliasMap->record($entity, $conversation, $alias, $uuid);
+      $this->aliasMap->record($host, $conversation, $alias, $uuid);
     }
-    $result = ($this->operations)()->batchOperations($entity, $ops, ['dressed' => TRUE] + $options);
+    $result = ($this->operations)()->batchOperations($host, $ops, ['dressed' => TRUE] + $options);
     if (!$result->isSuccess()) {
-      return $result->withErrors($this->addressErrors($result->getErrors(), $ops, $minted + $this->aliasMap->aliases($entity, $conversation)));
+      return $result->withErrors($this->addressErrors($result->getErrors(), $ops, $minted + $this->aliasMap->aliases($host, $conversation)));
     }
     return $minted === [] ? $result : $result->withAliases($minted);
   }
@@ -1147,7 +1108,9 @@ class DomOperationHandler implements PageLanguageOperationsInterface {
    * or the uuid the print showed; the error is re-addressed to that, and a
    * style op's "properties.X" path is restated as "style.X" (or
    * "<condition>.X" under a condition), the attribute grammar the author
-   * used. Errors without an index (batch-level) pass through.
+   * used, and a placing op's "location.region" as "at.region", where the
+   * author wrote the region. Errors without an index (batch-level) pass
+   * through.
    *
    * @param \Drupal\daedalus_blueprint\Result\BlueprintError[] $errors
    *   The nested batch's errors.
@@ -1193,6 +1156,9 @@ class DomOperationHandler implements PageLanguageOperationsInterface {
         $condition = (string) ($op['condition'] ?? 'default');
         $path = ($condition === 'default' ? 'style' : $condition) . substr($error->getPath(), strlen('properties'));
       }
+      elseif (isset($op['location']) && $error->getPath() === 'location.region') {
+        $path = 'at.region';
+      }
       return $error->withElement($element, $path);
     }, $errors);
   }
@@ -1200,24 +1166,34 @@ class DomOperationHandler implements PageLanguageOperationsInterface {
   /**
    * Resolves the required ref (or id) parameter of an op.
    */
-  protected function requireRef(array $operation, FieldableEntityInterface $entity, array $index, array $aliases, ?array &$errors): ?string {
+  protected function requireRef(array $operation, HostInterface $host, array $index, array $aliases, ?array &$errors): ?string {
     $errors ??= [];
     $ref = $operation['ref'] ?? $operation['id'] ?? NULL;
     if (!is_string($ref) || $ref === '') {
       $errors[] = new BlueprintError('ref', 'MISSING_PARAMETER', sprintf('%s needs "ref": a uuid or alias from the page print.', $operation['op'] ?? 'the op'), [], 'Refs are the ids in the page print (uuids or data-alias values).');
       return NULL;
     }
-    return $this->resolveRef($ref, $entity, $index, $aliases, $errors);
+    return $this->resolveRef($ref, $host, $index, $aliases, $errors);
   }
 
   /**
-   * Resolves the required at parameter, returning [anchor uuid, position].
+   * Resolves the required at parameter: [anchor uuid, position, region].
+   *
+   * A region is an address, never an element: `at.region` names a region
+   * of the anchored section for afterbegin/beforeend, the one place it
+   * means anything. This door refuses it anywhere else (on root, beside
+   * an element, inside a section whose children flow directly) and
+   * refuses an insert or move INTO a multi-region section that names no
+   * region (REGION_REQUIRED, the regions listed), because the spine's
+   * default would land it in the first region silently. Whether the name
+   * is a region of the layout stays the spine's call (INVALID_REGION,
+   * re-addressed to at.region by addressErrors()).
    */
-  protected function requireAt(array $operation, FieldableEntityInterface $entity, array $index, array $aliases, ?array &$errors): ?array {
+  protected function requireAt(array $operation, HostInterface $host, array $index, array $aliases, ?array &$errors): ?array {
     $errors ??= [];
     $at = $operation['at'] ?? NULL;
     if (!is_array($at) || !isset($at['ref']) || !isset($at['position'])) {
-      $errors[] = new BlueprintError('at', 'BAD_OP', '"at" must be {ref, position}.', [], 'ref anchors an element (or "root" for the page); position is beforebegin, afterbegin, beforeend, or afterend.');
+      $errors[] = new BlueprintError('at', 'BAD_OP', '"at" must be {ref, position} with an optional region.', [], 'ref anchors an element (or "root" for the page); position is beforebegin, afterbegin, beforeend, or afterend; region names a region of a multi-region section (the print\'s data-regions) for afterbegin/beforeend inside it.');
       return NULL;
     }
     $position = $at['position'];
@@ -1225,19 +1201,46 @@ class DomOperationHandler implements PageLanguageOperationsInterface {
       $errors[] = new BlueprintError('at.position', 'BAD_OP', sprintf('position "%s"; legal: %s.', (string) $position, implode(', ', self::POSITIONS)), [], 'The DOM insertion vocabulary: beforebegin/afterend beside the anchor, afterbegin/beforeend inside it.');
       return NULL;
     }
-    $anchor = $this->resolveRef((string) $at['ref'], $entity, $index, $aliases, $errors, 'at.ref');
+    $region = $at['region'] ?? NULL;
+    if ($region !== NULL && (!is_string($region) || $region === '')) {
+      $errors[] = new BlueprintError('at.region', 'BAD_OP', 'region is a region name of the anchored section.', [], 'The print lists a section\'s regions in data-regions; name one, or omit region.');
+      return NULL;
+    }
+    $anchor = $this->resolveRef((string) $at['ref'], $host, $index, $aliases, $errors, 'at.ref');
     if ($anchor === NULL) {
       return NULL;
     }
-    return [$anchor, $position];
+    $inside = in_array($position, ['afterbegin', 'beforeend'], TRUE);
+    $root = $anchor === $host->uuid();
+    if (!$root && !isset($index[$anchor])) {
+      // An anchor the page does not hold is the spine's refusal
+      // (ANCHOR_NOT_FOUND); nothing here can judge a region on it.
+      return [$anchor, $position, $region];
+    }
+    $regions = $root ? NULL : $index[$anchor]['regions'];
+    if ($region !== NULL && ($root || !$inside || $regions === NULL)) {
+      $message = match (TRUE) {
+        $root => 'The page has no regions; region names a region of a multi-region section.',
+        !$inside => sprintf('region means nothing beside #%s: %s places in the flow the anchor already lives in.', $anchor, $position),
+        default => sprintf('#%s has no regions: its children flow directly, so afterbegin/beforeend need no region.', $anchor),
+      };
+      $errors[] = new BlueprintError('at.region', 'REGION_NOT_APPLICABLE', $message, ['region' => $region], 'Drop region, or anchor a section the print marks with data-regions and use afterbegin/beforeend inside it.');
+      return NULL;
+    }
+    if ($region === NULL && $inside && $regions !== NULL && count($regions) > 1) {
+      $names = array_keys($regions);
+      $errors[] = new BlueprintError('at.region', 'REGION_REQUIRED', sprintf('#%s has regions %s; %s inside it names one.', $anchor, implode(', ', $names), $position), ['regions' => $names], sprintf('Write at: {ref, position, region: "%s"} (one of %s); the print marks each child\'s region as data-region.', $names[0], implode(', ', $names)));
+      return NULL;
+    }
+    return [$anchor, $position, $region];
   }
 
   /**
    * Resolves a ref spelling to a uuid: root, printed uuid, or alias.
    */
-  protected function resolveRef(string $ref, FieldableEntityInterface $entity, array $index, array $aliases, array &$errors, string $path = 'ref'): ?string {
-    if ($ref === self::ROOT_REF || $ref === $entity->uuid()) {
-      return (string) $entity->uuid();
+  protected function resolveRef(string $ref, HostInterface $host, array $index, array $aliases, array &$errors, string $path = 'ref'): ?string {
+    if ($ref === self::ROOT_REF || $ref === $host->uuid()) {
+      return (string) $host->uuid();
     }
     if (DialectParser::isUuid($ref)) {
       return $ref;
@@ -1256,10 +1259,14 @@ class DomOperationHandler implements PageLanguageOperationsInterface {
    * Beforebegin/afterend are before/after in the anchor's flow; beforeend
    * appends inside; afterbegin is before the anchor's first child (inside
    * when it has none). The root entity anchors afterbegin/beforeend over
-   * its top-level flow.
+   * its top-level flow. A region (requireAt() vouched for it) narrows
+   * the inside: beforeend appends inside that region, afterbegin is
+   * before the region's own first child, inside the region when it is
+   * empty. An unknown region name has no first child and rides the
+   * inside location to the spine, which answers INVALID_REGION.
    */
-  protected function firstLocation(FieldableEntityInterface $entity, string $anchor, string $position, array $index): array {
-    if ($anchor === $entity->uuid()) {
+  protected function firstLocation(HostInterface $host, string $anchor, string $position, array $index, ?string $region = NULL): array {
+    if ($anchor === $host->uuid()) {
       if ($position === 'afterbegin') {
         $first = $this->firstTopLevelUuid($index);
         if ($first !== NULL) {
@@ -1268,13 +1275,14 @@ class DomOperationHandler implements PageLanguageOperationsInterface {
       }
       return ['anchor' => $anchor, 'placement' => 'inside'];
     }
+    $inside = ['anchor' => $anchor, 'placement' => 'inside'] + ($region === NULL ? [] : ['region' => $region]);
     return match ($position) {
       'beforebegin' => ['anchor' => $anchor, 'placement' => 'before'],
       'afterend' => ['anchor' => $anchor, 'placement' => 'after'],
-      'beforeend' => ['anchor' => $anchor, 'placement' => 'inside'],
-      'afterbegin' => ($first = $index[$anchor]['children'][0] ?? NULL) !== NULL
+      'beforeend' => $inside,
+      'afterbegin' => ($first = ($region === NULL ? $index[$anchor]['children'][0] ?? NULL : $index[$anchor]['regions'][$region][0] ?? NULL)) !== NULL
         ? ['anchor' => $first, 'placement' => 'before']
-        : ['anchor' => $anchor, 'placement' => 'inside'],
+        : $inside,
     };
   }
 
@@ -1294,12 +1302,17 @@ class DomOperationHandler implements PageLanguageOperationsInterface {
    * Flattens the lean node tree into a uuid-keyed element index.
    *
    * Region nodes (multi-region layouts) are transparent: their children
-   * index as the containing element's children.
+   * index as the containing element's children, in the layout's region
+   * order. The element also records its regions by name (every region
+   * the serializer emits, empty ones included) so `at.region` can
+   * address one; an element whose children flow directly records none.
    *
    * @return array
-   *   uuid => ['kind', 'block_type' => ?string, 'plugin_id' => ?string,
-   *   'top_level' => bool,
-   *   'children' => [child uuids], 'node' => the lean node].
+   *   uuid => ['kind', 'block_type' => ?string, 'plugin_id' => ?string (the
+   *   BASE plugin id, field_block for a field node), 'top_level' => bool,
+   *   'children' => [child uuids], 'regions' => ?array (region name =>
+   *   [child uuids], NULL when the children are not region nodes),
+   *   'node' => the lean node].
    */
   protected function elementIndex(array $tree): array {
     $index = [];
@@ -1309,19 +1322,31 @@ class DomOperationHandler implements PageLanguageOperationsInterface {
         if (!is_array($node)) {
           continue;
         }
-        if (($node['kind'] ?? '') === 'region') {
-          array_push($uuids, ...$walk($node['children'] ?? [], FALSE));
-          continue;
-        }
         $uuid = $node['uuid'] ?? NULL;
-        $children = $walk($node['children'] ?? [], FALSE);
+        $children = [];
+        $regions = NULL;
+        foreach ($node['children'] ?? [] as $child) {
+          if (!is_array($child)) {
+            continue;
+          }
+          if (($child['kind'] ?? '') === 'region') {
+            $in_region = $walk($child['children'] ?? [], FALSE);
+            $regions[(string) ($child['region'] ?? '')] = $in_region;
+            array_push($children, ...$in_region);
+            continue;
+          }
+          array_push($children, ...$walk([$child], FALSE));
+        }
         if ($uuid !== NULL) {
           $index[$uuid] = [
             'kind' => $node['kind'] ?? '',
             'block_type' => $node['block_type'] ?? NULL,
-            'plugin_id' => isset($node['plugin_id']) ? (string) $node['plugin_id'] : NULL,
+            // The base plugin the element wears under: a field node's is
+            // field_block (NodeTreeBuilder::pluginBase, the one derivation).
+            'plugin_id' => NodeTreeBuilder::pluginBase($node),
             'top_level' => $top_level,
             'children' => $children,
+            'regions' => $regions,
             'node' => $node,
           ];
           $uuids[] = (string) $uuid;
@@ -1393,6 +1418,9 @@ class DomOperationHandler implements PageLanguageOperationsInterface {
         }
         elseif (!in_array($at['position'], self::POSITIONS, TRUE)) {
           $op_errors[] = new DialectError('BAD_OP', sprintf('position "%s"; legal: %s', (string) $at['position'], implode(', ', self::POSITIONS)));
+        }
+        elseif (isset($at['region']) && (!is_string($at['region']) || $at['region'] === '')) {
+          $op_errors[] = new DialectError('BAD_OP', sprintf('%s "at.region" is a region name of the anchored section', $name));
         }
       }
       if (in_array($name, ['replace', 'remove', 'move', 'set'], TRUE) && empty($op['ref']) && empty($op['id'])) {

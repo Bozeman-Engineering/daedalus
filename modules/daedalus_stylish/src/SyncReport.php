@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Drupal\daedalus_stylish;
 
-use Drupal\daedalus_blueprint\Result\BlueprintError;
+use Drupal\daedalus_blueprint\DesignSystem\ShipReport;
 
 /**
  * What one sync of shipped definitions did, per module and machine name.
@@ -180,7 +180,8 @@ final class SyncReport {
    *
    * Per failure one header line (`MODULE: KIND NAME failed`), then one line per
    * error (`  PATH [CODE]: MESSAGE`) and its hint when it carries one
-   * (`    Hint: ...`).
+   * (`    Hint: ...`): ShipReport::failureLinesFor(), the one formatter both
+   * directions of the disk lane print through.
    *
    * @return string[]
    *   The lines, empty when nothing failed.
@@ -189,34 +190,7 @@ final class SyncReport {
     $lines = [];
     foreach ($this->errors as $module => $failures) {
       foreach ($failures as $name => $errors) {
-        $lines = array_merge($lines, static::failureLinesFor($module, $this->kind, (string) $name, $errors));
-      }
-    }
-    return $lines;
-  }
-
-  /**
-   * One failure as lines: the grammar's one owner, shared with ShipReport.
-   *
-   * @param string $module
-   *   The module the failure is recorded under.
-   * @param string $kind
-   *   The kind, as ShippedDefinitionsImporter::kind() names it.
-   * @param string $name
-   *   The machine name, or the file's base name.
-   * @param \Drupal\daedalus_blueprint\Result\BlueprintError[] $errors
-   *   The structured errors behind the failure.
-   *
-   * @return string[]
-   *   The header line, then one line per error and its hint when present.
-   */
-  public static function failureLinesFor(string $module, string $kind, string $name, array $errors): array {
-    $lines = [sprintf('%s: %s %s failed', $module, $kind, $name)];
-    foreach ($errors as $error) {
-      assert($error instanceof BlueprintError);
-      $lines[] = sprintf('  %s [%s]: %s', $error->getPath(), $error->getCode(), $error->getMessage());
-      if ($error->getHint() !== '') {
-        $lines[] = sprintf('    Hint: %s', $error->getHint());
+        $lines = array_merge($lines, ShipReport::failureLinesFor($module, $this->kind, (string) $name, $errors));
       }
     }
     return $lines;

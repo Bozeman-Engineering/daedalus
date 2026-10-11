@@ -10,16 +10,28 @@ use Drupal\Tests\daedalus\Traits\DaedalusFixtureTrait;
 use PHPUnit\Framework\Attributes\Group;
 
 /**
- * Chromeless documents: pop-out routes and preview mode carry no chrome.
+ * Chromeless documents: pop-outs, bare documents and preview carry no chrome.
  *
  * One spine (Chromeless) decides which documents render without page
  * chrome, and DaedalusUiHooks::preprocessHtml drops page_top and
  * page_bottom for them: core navigation's rail and top bar, daedalus_ui's
  * mode bars, sidebars and fabs, and everything those attach. Preview mode
- * (?navigationMode=preview, the responsive preview's iframe) additionally
- * vetoes the Edit mode (ShouldNotEditMode), so no mode-bound panel or
- * setting ships there either. This tier sees both directly in the served
- * html; no browser is needed.
+ * (?navigationMode=preview, the responsive preview's iframe) and a bare
+ * route (the _daedalus_ui.bare option) additionally veto the Edit mode
+ * (ShouldNotEditMode), so no mode-bound panel or setting ships there
+ * either. This tier sees all three directly in the served html; no
+ * browser is needed.
+ *
+ * The bare site document is the third kind: one piece of site content
+ * rendered alone in the skin. It takes core's simple_page variant, so
+ * the site frame does not render around the content (the frame's header
+ * and footer slot doors are the pin), keeps the skin as
+ * preview mode does, wears nothing of the pop-out document chrome, and
+ * builds no Edit Mode even when the request names the edit mode: the
+ * peek door posts from the editing page, and the cookie is domain-wide in
+ * this tier. The probe route is the daedalus_ui_bare_test module's, a
+ * node's full view under the option, since the one consumer of the option
+ * is daedalus_blueprint_api's peek door, whose own tier pins it.
  *
  * A pop-out route also wears the pop-out document chrome: the
  * daedalus-ui-popout class on the html element (the same preprocess hook),
@@ -65,7 +77,18 @@ use PHPUnit\Framework\Attributes\Group;
 #[Group('daedalus_ui')]
 class PopoutDocumentTest extends BrowserTestBase {
 
-  use DaedalusFixtureTrait;
+  use DaedalusFixtureTrait {
+    setUp as daedalusSetUp;
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  protected function setUp(): void {
+    $this->daedalusSetUp();
+    \Drupal::service('module_installer')->install(['daedalus_ui_bare_test']);
+    $this->rebuildContainer();
+  }
 
   /**
    * The chrome and the edit bundle on the editing page, and nowhere else.
@@ -77,6 +100,31 @@ class PopoutDocumentTest extends BrowserTestBase {
       'title' => 'Pop-out document page',
     ]);
     $node->save();
+    // One text block on the page, so a document of the page has content
+    // to find (the recipe's Page template is blank and the bundle has no
+    // body field): written as a capture writes a document, then committed.
+    $host = \Drupal::service('daedalus_blueprint.host_resolver')->fromEntity($node);
+    $result = \Drupal::service('daedalus_blueprint.document_instantiator')->instantiateDocument($host, [
+      [
+        'kind' => 'container',
+        'layout_id' => 'layout_onecol',
+        'children' => [
+          [
+            'kind' => 'region',
+            'region' => 'content',
+            'children' => [
+              [
+                'kind' => 'block',
+                'block_type' => 'text',
+                'block_fields' => ['field_text_text' => ['value' => 'Bare probe text']],
+              ],
+            ],
+          ],
+        ],
+      ],
+    ], [], ['indexed' => TRUE, 'batch' => ['system' => TRUE, 'admitted' => TRUE]]);
+    $this->assertTrue($result->isSuccess(), implode("\n", array_map(static fn ($error) => $error->getPath() . ': ' . $error->getMessage(), $result->getErrors())));
+    \Drupal::service('daedalus_blueprint.storage_handler')->commit($host);
 
     $assert_session = $this->assertSession();
 
@@ -100,6 +148,34 @@ class PopoutDocumentTest extends BrowserTestBase {
     $this->assertSame(['url'], array_keys($settings['daedalusStylish']['popout']));
     $this->assertStringContainsString('scope=' . rawurlencode($scope), $settings['daedalusStylish']['popout']['url']);
     $this->assertArrayNotHasKey('popout', $settings['daedalusUi']);
+    // The site frame on the editing page: the header and footer slot doors
+    // the recipe's frame places (SlotBlock::DOOR_ATTRIBUTE, stamped for the
+    // editor's permission), which the bare document must not carry.
+    $assert_session->elementExists('css', '[data-daedalus-slot="header"]');
+    $assert_session->elementExists('css', '[data-daedalus-slot="footer"]');
+    $assert_session->pageTextContains('Bare probe text');
+
+    // A bare route, with the edit cookie still set: the page's content in
+    // the skin and nothing else. No chrome and no frame slot door (core's
+    // simple_page variant), the skin kept (the token scope and the
+    // defaults link), nothing of the pop-out chrome, no Edit Mode (no top
+    // bar, no edit bundle, no density stamp, no session identity of either
+    // kind, no pop-out settings), and no heading, since the route declares
+    // no title.
+    $this->drupalGet('/daedalus-ui-bare-test/' . $node->id());
+    $assert_session->statusCodeEquals(200);
+    $assert_session->pageTextContains('Bare probe text');
+    $this->assertPageChrome(FALSE);
+    $this->assertPopoutDocument(FALSE);
+    $this->assertSkin(TRUE);
+    $assert_session->elementNotExists('css', '[data-daedalus-slot]');
+    $assert_session->elementNotExists('css', '#edit-mode-top-bar');
+    $assert_session->elementNotExists('css', 'html[data-daedalus-ui-chrome-density]');
+    $assert_session->elementNotExists('css', 'h1.page-title');
+    $settings = $this->getDrupalSettings();
+    $this->assertArrayNotHasKey('popout', $settings['daedalusStylish'] ?? []);
+    $this->assertArrayNotHasKey('editSession', $settings['daedalusUi'] ?? []);
+    $this->assertArrayNotHasKey('popout', $settings['daedalusUi'] ?? []);
     $this->getSession()->setCookie('navigationMode', NULL);
 
     // Preview mode: a site page (the node still renders in the theme) with
@@ -134,6 +210,8 @@ class PopoutDocumentTest extends BrowserTestBase {
     $this->assertPopoutDocument(TRUE);
     $this->assertSkin(FALSE);
     $assert_session->elementExists('css', '.daedalus-ui-popout__mount #daedalus-ui-responsive-preview-root');
+    // A pop-out is a bare document too: no frame slot door around the mount.
+    $assert_session->elementNotExists('css', '[data-daedalus-slot]');
     // The stylish satellite's stylesheet is that consumer's own column
     // layout, not the pop-out chrome: it never rides another pop-out.
     $assert_session->elementNotExists('css', 'link[rel="stylesheet"][href*="daedalus_stylish/css/satellite.css"]');
@@ -155,6 +233,7 @@ class PopoutDocumentTest extends BrowserTestBase {
     $this->assertPopoutDocument(TRUE);
     $this->assertSkin(FALSE);
     $assert_session->elementExists('css', '.daedalus-ui-popout__mount #daedalus-stylish-inspector-root');
+    $assert_session->elementNotExists('css', '[data-daedalus-slot]');
     $assert_session->elementExists('css', 'link[rel="stylesheet"][href*="daedalus_stylish/css/satellite.css"]');
     $assert_session->elementNotExists('css', 'h1.page-title');
     $assert_session->titleEquals('Styles | Drupal');

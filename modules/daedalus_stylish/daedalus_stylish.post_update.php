@@ -146,17 +146,6 @@ function daedalus_stylish_post_update_width_bands_0003_skins() {
 }
 
 /**
- * Folds "wide" style conditions into base in stored stencils.
- *
- * File-shipped stencils are module code and are not touched (none ship
- * wide data).
- */
-function daedalus_stylish_post_update_width_bands_0004_stencils() {
-  $lines = \Drupal::service('daedalus_stylish.width_band_migration')->migrateStencils();
-  return t('Folded wide style conditions into base on stored stencils (@count report lines logged to the daedalus_stylish channel).', ['@count' => count($lines)]);
-}
-
-/**
  * Seeds the ai_minting governance default for the palette.
  *
  * Existing sites predate the key; an explicit TRUE preserves their
@@ -230,16 +219,4 @@ function daedalus_stylish_post_update_relative_selector_0003_variants() {
 function daedalus_stylish_post_update_relative_selector_0004_skins() {
   $lines = \Drupal::service('daedalus_stylish.relative_selector_convergence')->convergeSkins();
   return t('Converged skin defaults onto the relative selector grammar (@count report lines logged to the daedalus_stylish channel).', ['@count' => count($lines)]);
-}
-
-/**
- * Converges stored stencils onto the relative selector grammar.
- *
- * At every node depth. File-shipped stencils are module code and are not
- * touched; one still carrying the retired spelling fails loudly at
- * instantiate time.
- */
-function daedalus_stylish_post_update_relative_selector_0005_stencils() {
-  $lines = \Drupal::service('daedalus_stylish.relative_selector_convergence')->convergeStencils();
-  return t('Converged stored stencils onto the relative selector grammar (@count report lines logged to the daedalus_stylish channel).', ['@count' => count($lines)]);
 }

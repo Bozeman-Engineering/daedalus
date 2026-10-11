@@ -5,12 +5,11 @@ declare(strict_types=1);
 namespace Drupal\daedalus_stylish;
 
 use Drupal\Core\Entity\EntityInterface;
-use Drupal\Core\Entity\FieldableEntityInterface;
 use Drupal\Core\Entity\RevisionLogInterface;
 use Drupal\Core\Entity\RevisionableInterface;
 use Drupal\Core\StringTranslation\TranslatableMarkup;
 use Drupal\daedalus_stylish\Entity\MachineNameInterface;
-use Drupal\daedalus_stylish\Plugin\Field\FieldType\StyleMapItem;
+use Drupal\daedalus_stylish\Plugin\Field\FieldType\SkinTokensItem;
 
 /**
  * The rewrite-then-delete Batch API job behind a value material's deletion.
@@ -40,12 +39,18 @@ use Drupal\daedalus_stylish\Plugin\Field\FieldType\StyleMapItem;
  *
  * A twin names its entity type and usage table, binds its rewrite to one
  * material (rewriter()), words its messages, and exposes the delete
- * operation under the name its manager stages.
+ * operation under the name its manager stages. The material the batch
+ * carries between requests is its SUBJECT: the material's entity for the
+ * entity twins (loaded by entity id), or the token's handle (SkinToken,
+ * loaded by its batch id) for the twin whose material is a fact of a skin
+ * rather than an entity; the subject hooks (load(), nameOf(), labelOf(),
+ * remove()) default to the entity reading and the token twin overrides
+ * them.
  */
 abstract class ValueDeleteBatchBase {
 
   /**
-   * The material's entity type id, what the batch loads by id.
+   * The material's entity type id, what the entity twins load by id.
    */
   abstract protected static function entityTypeId(): string;
 
@@ -57,12 +62,15 @@ abstract class ValueDeleteBatchBase {
   /**
    * The value rewrite bound to one material.
    *
+   * @param object $material
+   *   The subject (see load()).
+   *
    * @return \Closure
    *   fn (string $property, string $value): string, the twin's
    *   rewriteValue() with the material's name (and whatever else the
    *   substitution needs) resolved once per source rather than per value.
    */
-  abstract protected static function rewriter(MachineNameInterface $material): \Closure;
+  abstract protected static function rewriter(object $material): \Closure;
 
   /**
    * The revision log line a rewritten source carries.
@@ -91,6 +99,51 @@ abstract class ValueDeleteBatchBase {
   }
 
   /**
+   * Rewrites a skin's token values through a property-blind rewrite.
+   *
+   * The var() twins' rewriteTokens(): token values are scalars or
+   * condition-keyed scalar maps inside the stored records ({scale: {name:
+   * {value, ...}}}), one level flatter than style entries; a token has no
+   * property, and a var() needs none. The record's other facts
+   * (description, offered) are untouched, and a site record that states
+   * no value contributes nothing (SkinTokensItem::statedValues()).
+   */
+  protected static function rewriteTokenValues(array $tokens, \Closure $rewrite, bool &$changed): array {
+    foreach (SkinTokensItem::statedValues($tokens) as $scale => $values) {
+      foreach ($values as $token => $token_value) {
+        if (is_array($token_value)) {
+          foreach ($token_value as $condition => $conditioned) {
+            $rewritten = static::rewriteScalar('', $conditioned, $rewrite);
+            if ($rewritten !== NULL) {
+              $changed = TRUE;
+              $tokens[$scale][$token]['value'][$condition] = $rewritten;
+            }
+          }
+          continue;
+        }
+        $rewritten = static::rewriteScalar('', $token_value, $rewrite);
+        if ($rewritten !== NULL) {
+          $changed = TRUE;
+          $tokens[$scale][$token]['value'] = $rewritten;
+        }
+      }
+    }
+    return $tokens;
+  }
+
+  /**
+   * Rewrites the material's references in one defaults layer.
+   */
+  protected static function rewriteDefaults(array $defaults, \Closure $rewrite, bool &$changed): array {
+    foreach ($defaults as $scope => $styles) {
+      if (is_array($styles)) {
+        $defaults[$scope] = static::rewriteEntries($styles, $rewrite, $changed);
+      }
+    }
+    return $defaults;
+  }
+
+  /**
    * Batch operation: rewrites the material's references in one source.
    *
    * The source save is an ordinary default-revision save (a new revision
@@ -98,12 +151,12 @@ abstract class ValueDeleteBatchBase {
    * which re-enters the usage table's chokepoint and drops the source's
    * rows.
    */
-  public static function rewriteSource(int $id, string $source, string $entity_type, string $entity_id, array &$context): void {
+  public static function rewriteSource(int|string $id, string $source, string $entity_type, string $entity_id, array &$context): void {
     $material = static::load($id);
     if ($material === NULL) {
       return;
     }
-    $context['message'] = new TranslatableMarkup('Rewriting %label references…', ['%label' => (string) $material->label()]);
+    $context['message'] = new TranslatableMarkup('Rewriting %label references…', ['%label' => static::labelOf($material)]);
     if (static::rewrite($material, $source, $entity_type, $entity_id)) {
       $context['results']['rewritten'] = ($context['results']['rewritten'] ?? 0) + 1;
     }
@@ -114,19 +167,30 @@ abstract class ValueDeleteBatchBase {
    *
    * Each twin exposes it under the operation name its manager stages.
    */
-  protected static function deleteMaterial(int $id, array &$context): void {
+  protected static function deleteMaterial(int|string $id, array &$context): void {
     $material = static::load($id);
     if ($material === NULL) {
       return;
     }
-    foreach (static::usage()->references($material) as $reference) {
+    static::sweep($material, $context);
+    $label = static::labelOf($material);
+    static::remove($material);
+    $context['results']['deleted'] = $label;
+  }
+
+  /**
+   * Rewrites the references that appeared after the batch was staged.
+   *
+   * The late work list, re-read from the usage table at the batch's tail
+   * so its final operation never strands a reference it could still
+   * rewrite.
+   */
+  protected static function sweep(object $material, array &$context): void {
+    foreach (static::usage()->referencesTo(static::nameOf($material)) as $reference) {
       if (static::rewrite($material, $reference['source'], $reference['entity_type'], $reference['entity_id'])) {
         $context['results']['rewritten'] = ($context['results']['rewritten'] ?? 0) + 1;
       }
     }
-    $label = (string) $material->label();
-    $material->delete();
-    $context['results']['deleted'] = $label;
   }
 
   /**
@@ -142,27 +206,58 @@ abstract class ValueDeleteBatchBase {
   }
 
   /**
-   * Loads the material, or NULL when it is gone.
+   * Loads the subject, or NULL when it is gone.
+   *
+   * The entity reading: the material's entity by id.
+   *
+   * @return object|null
+   *   The subject the other hooks read.
    */
-  protected static function load(int $id): ?MachineNameInterface {
+  protected static function load(int|string $id): ?object {
     $material = \Drupal::entityTypeManager()->getStorage(static::entityTypeId())->load($id);
     return $material instanceof MachineNameInterface ? $material : NULL;
+  }
+
+  /**
+   * The subject's name as the usage table's column spells it.
+   */
+  protected static function nameOf(object $material): string {
+    assert($material instanceof MachineNameInterface);
+    return $material->getMachineName();
+  }
+
+  /**
+   * The subject's human label, for the batch's messages.
+   */
+  protected static function labelOf(object $material): string {
+    assert($material instanceof MachineNameInterface);
+    return (string) $material->label();
+  }
+
+  /**
+   * Removes the subject once every reference is rewritten.
+   */
+  protected static function remove(object $material): void {
+    assert($material instanceof MachineNameInterface);
+    $material->delete();
   }
 
   /**
    * Rewrites every reference in one source entity's store and saves.
    *
    * The source kind (the usage table's column) picks the store: 'map' the
-   * host's style map, 'variant' the variant's styles, 'skin' the skin's
-   * defaults and (rewriteTokens()) its tokens, one entity, both fields
-   * swept in one save. A store the rewrite did not change is never set.
+   * host's style map (wherever the host keeps it: a content host's field, a
+   * display host's template setting), 'variant' the variant's styles,
+   * 'skin' the skin's defaults and (rewriteTokens()) its tokens, one
+   * entity, both fields swept in one save. A store the rewrite did not
+   * change is never set.
    *
    * @return bool
    *   TRUE when the source carried references and was saved rewritten;
    *   FALSE when there was nothing to do (source gone, no longer
    *   referencing).
    */
-  protected static function rewrite(MachineNameInterface $material, string $source, string $entity_type, string $entity_id): bool {
+  protected static function rewrite(object $material, string $source, string $entity_type, string $entity_id): bool {
     $entity = \Drupal::entityTypeManager()->getStorage($entity_type)->load($entity_id);
     if (!$entity instanceof EntityInterface) {
       return FALSE;
@@ -172,16 +267,22 @@ abstract class ValueDeleteBatchBase {
     $changed = FALSE;
     switch ($source) {
       case ValueUsageBase::SOURCE_MAP:
-        if (!$entity instanceof FieldableEntityInterface || !$entity->hasField(DaedalusStylishFieldManager::FIELD_NAME)) {
+        $resolver = \Drupal::service('daedalus_blueprint.host_resolver');
+        if (!$resolver->hosts($entity)) {
           return FALSE;
         }
-        $item = $entity->get(DaedalusStylishFieldManager::FIELD_NAME)->first();
-        if (!$item instanceof StyleMapItem) {
+        $host = $resolver->fromEntity($entity);
+        if (!$host->hasStyleStore()) {
           return FALSE;
         }
-        $map = static::rewriteEntries($item->getStyleMap(), $rewrite, $changed);
+        // The batch rewrites stored references and saves the host: the
+        // read declines the template seed a content host runs on the
+        // first read of either document door, or the save would persist a
+        // never-edited page's seed beside the rewrite.
+        $host->declineSeed();
+        $map = static::rewriteEntries($host->styleMap(), $rewrite, $changed);
         if ($changed) {
-          $item->setStyleMap($map);
+          $host->setStyleMap($map);
         }
         break;
 
@@ -199,21 +300,28 @@ abstract class ValueDeleteBatchBase {
         if (!$entity instanceof DaedalusStylishSkinInterface) {
           return FALSE;
         }
+        // Each layer is rewritten as stored: a package value a site
+        // override hides is a reference too (ValueUsageBase::sourceNames()).
         $tokens_changed = FALSE;
-        $tokens = static::rewriteTokens($entity->getTokens(), $rewrite, $tokens_changed);
+        $tokens = static::rewriteTokens($entity->packageTokens(), $rewrite, $tokens_changed);
         if ($tokens_changed) {
-          $entity->setTokens($tokens);
+          $entity->setPackageTokens($tokens);
         }
-        $defaults = $entity->getDefaults();
-        foreach ($defaults as $scope => $styles) {
-          if (is_array($styles)) {
-            $defaults[$scope] = static::rewriteEntries($styles, $rewrite, $changed);
-          }
+        $site_tokens_changed = FALSE;
+        $tokens = static::rewriteTokens($entity->siteTokens(), $rewrite, $site_tokens_changed);
+        if ($site_tokens_changed) {
+          $entity->setSiteTokens($tokens);
         }
+        $defaults = static::rewriteDefaults($entity->packageDefaults(), $rewrite, $changed);
         if ($changed) {
-          $entity->setDefaults($defaults);
+          $entity->setPackageDefaults($defaults);
         }
-        $changed = $changed || $tokens_changed;
+        $site_changed = FALSE;
+        $defaults = static::rewriteDefaults($entity->siteDefaults(), $rewrite, $site_changed);
+        if ($site_changed) {
+          $entity->setSiteDefaults($defaults);
+        }
+        $changed = $changed || $site_changed || $tokens_changed || $site_tokens_changed;
         break;
 
       default:
@@ -226,7 +334,7 @@ abstract class ValueDeleteBatchBase {
     if ($entity instanceof RevisionableInterface && $entity->getEntityType()->isRevisionable()) {
       $entity->setNewRevision(TRUE);
       if ($entity instanceof RevisionLogInterface) {
-        $entity->setRevisionLogMessage(static::revisionLogMessage($material->getMachineName()));
+        $entity->setRevisionLogMessage(static::revisionLogMessage(static::nameOf($material)));
       }
     }
     $entity->save();

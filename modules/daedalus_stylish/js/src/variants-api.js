@@ -118,43 +118,43 @@ export const deleteVariant = (reference) =>
   send('DELETE', `daedalus_stylish/variants/${encodeURIComponent(reference)}`);
 
 /**
- * Releases a stencil-owned variant back to general purpose.
+ * Releases a blueprint-owned variant back to general purpose.
  *
- * This and transferVariant ride daedalus_blueprint_stencil's ownership
- * routes, not daedalus_stylish's own: ownership is the stencil side's vocabulary
- * (the fields it provides on daedalus_variant), enforced by its "save
- * stencils" permission. The calls are never blind: the library card
+ * This and transferVariant ride daedalus_blueprint_library's ownership
+ * routes, not daedalus_stylish's own: ownership is the blueprint side's vocabulary
+ * (the fields it provides on daedalus_variant), enforced by the
+ * library's own ownership permission. The calls are never blind: the library card
  * offers the gestures only under the variant gates' `canOwn` (the grant,
- * present only with the stencil module and its routes). Shipped variants
+ * present only with the blueprint module and its routes). Shipped variants
  * refuse server-side (the disk lane re-adopts at the next import); unowned
  * variants refuse (nothing to release).
  *
  * @return {Promise<{variant: {machine_name: string, uuid: string,
- *   stencil: ?string}}>}
+ *   blueprint: ?string}}>}
  */
 export const releaseVariant = (reference) =>
   post(
-    `daedalus-blueprint/stencil-variant/${encodeURIComponent(reference)}/release`,
+    `daedalus-blueprint/blueprint-variant/${encodeURIComponent(reference)}/release`,
     {},
   );
 
 /**
- * Transfers a variant's ownership to a content stencil: one atomic
+ * Transfers a variant's ownership to a content blueprint: one atomic
  * gesture, release + adopt with no intermediate unowned state. On an
- * UNOWNED variant this is adopt-later: the stencil takes the variant
+ * UNOWNED variant this is adopt-later: the blueprint takes the variant
  * into its curated switchable looks.
  *
  * @param {string} reference
  *   The variant's machine name.
- * @param {string} stencil
- *   The content stencil taking ownership (its id); file-shipped targets
+ * @param {string} blueprint
+ *   The content blueprint taking ownership (its id); file-shipped targets
  *   refuse server-side.
  *
  * @return {Promise<{variant: {machine_name: string, uuid: string,
- *   stencil: ?string}}>}
+ *   blueprint: ?string}}>}
  */
-export const transferVariant = (reference, stencil) =>
+export const transferVariant = (reference, blueprint) =>
   post(
-    `daedalus-blueprint/stencil-variant/${encodeURIComponent(reference)}/transfer`,
-    { stencil },
+    `daedalus-blueprint/blueprint-variant/${encodeURIComponent(reference)}/transfer`,
+    { blueprint },
   );

@@ -127,6 +127,22 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  *   the skin line with the "this element" chip; deleting the typed
  *   line lifts the override through islandDelta's UNSET rule and the
  *   skin line stands unstruck.
+ * - The printed skin line's doorway (seam: a PRINTED line's contextmenu
+ *   with no editor awake, element-view.js openPrintLineMenu resolving
+ *   the line from the target's data-line into the print's stored
+ *   shapes, line-menu.js lineMenuItems answering the floor's item set,
+ *   the pick riding the Inspector's openDocument with code/layers.js
+ *   skinDocument at the delivering scope into the skin session): with
+ *   the container island parked, right-clicking the printed skin gap
+ *   line opens the shared menu offering exactly "Move to this element"
+ *   and "Edit skin…" (never Unset: nothing in the map holds a floor
+ *   line) and wakes no editor; the pick mounts the session frame
+ *   "Editing the skin" on the "container kind" document with the gap
+ *   line printed, and the frame's back control parks it with the skin
+ *   line still delivered and unstruck. The live posture shares
+ *   lineMenuItems and the run-label legs prove the live contextmenu
+ *   bubbling; the printed road is the one with its own index
+ *   arithmetic.
  * - A rule's worn variant on the Page lens (seam: ONE apply_variant at
  *   the band's `pb-text` rule through the op spine, the rule-wear lane
  *   delivering the variant's link fragment by descent inside the band's
@@ -139,6 +155,19 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  *   continued position `pb-text .text-block-link` as a part row whose
  *   every line is delivered in Primary's hue, titled
  *   'Supplied by the variant "Primary".', printed, no editor live.
+ * - A canvas seat mints the seated part's island (seam: the selection
+ *   spine's styling target, a modifier click on a canvas paragraph
+ *   resolving its minted instance part, reaching the selected row's
+ *   targetSelector and the code view's seat effect, element-view.js
+ *   materializeSelector without the cursor, and the drafts' honesty rule
+ *   dropping the draft when the selection leaves, the row going sparse):
+ *   block A at the Page lens, its paragraph unstyled and rowless,
+ *   Cmd-clicked on the canvas, grows a lit part row worded "Paragraph"
+ *   over one printed island holding no own line (the skin's base:p tier
+ *   prints under its run, every line delivered; the placeholder is for
+ *   a print with no text), no editor live and the focus untouched, the
+ *   map still empty at the part key; selecting block B removes it, and
+ *   reselecting block A without a seat does not bring it back.
  * - A generated box typed on the root island, born with its seed (seam:
  *   the `&::before {` gesture on the element's own island,
  *   element-model.js bracedSelector through the completion machinery,
@@ -157,6 +186,42 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  *   the missing line read as a deletion and the box vanished on park).
  *   The system is opened server-side first: guide_example declares no
  *   `pseudo:` section, the offer is universal, the grant the server's.
+ * - A generated box typed INSIDE a rule island (seam: the same
+ *   `&::before {` gesture in the container's `p` row, element-model.js
+ *   composeUnder nesting the line under the island's rule by CSS
+ *   nesting's relative rule so the brace mints `p::before`,
+ *   materializeSelector seating the box as the subject facet through
+ *   source.target and drafting its island with the cursor, the first
+ *   declaration committing at the composed key, the box computing on
+ *   the paragraph the `p` rule reaches): the `p::before` row mints lit
+ *   with its empty island live and focused, the target is the
+ *   container's `p::before` with no address and the chip reading the
+ *   box, the map still empty at the key, no `&::before` text left in
+ *   the `p` island; a typed background lands at container::p::before
+ *   beside the op spine's `content: ""` seed and the paragraph inside
+ *   block A renders the box wearing it. The typed facet survives the
+ *   mode switch (seam: the facet on the spine, the code view unmounted
+ *   by pickMode, the Advanced Sections mounting for the box): Advanced
+ *   keeps the target and the chip and its Generated content row reads
+ *   the seeded `""`; back
+ *   in code the `p::before` row stands lit, the `p` row dark. An empty
+ *   minted island drops when the selection leaves (seam: select()
+ *   clearing the target, the drafts keyed to the element): `&::after {`
+ *   mints and seats `p::after`, selecting the band leaves no `p::after`
+ *   row anywhere and no map entry, and reselecting the container does
+ *   not revive it. The band is then reselected with its root island
+ *   woken, the posture the next leg starts from.
+ * - A row typed inside the seated ancestor rule island (seam: the same
+ *   gesture in the band's seated `> pb-text` island on the linked
+ *   paragraph, composeUnder giving `> pb-text::before`, the island's
+ *   owner an ancestor so element-view.js seatMinted seats the composed
+ *   rule as the WRITE ADDRESS through source.address with no draft,
+ *   placeEditable's virtual layer and rulesFor's wake): the chip lights
+ *   at container::> pb-text::before worded "Text blocks directly in
+ *   Section › Before", the placed rule row is lit with its empty island
+ *   live and focused while the `> pb-text` row goes dark, no row of the
+ *   paragraph's own carries the selector, and the map is untouched at
+ *   both keys.
  * - The paste door (seam: the ClipboardEvent on the live island's
  *   content -> paste-door.js structuralChunks refusing the insertion ->
  *   the source's parseCss POST to the parse-css route, the one parser
@@ -202,10 +267,11 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  *   the doorway anchors where the wear is.
  * - The satellite's row words (seam: style-guide.js layoutTree carrying
  *   the naming spine's `name` into the pared tree the pop-out reads,
- *   page-model.js rowWords over it, no relay): the first section
- *   renamed "Welcome" through update_element, a satellite mounted
- *   afterwards prints its row as "Section" + "Welcome" cold, and the
- *   leader's row reads the same.
+ *   page-model.js pageNodes over it into the outline row grammar's name
+ *   zone, no relay): the first section renamed "Welcome" through
+ *   update_element, a satellite mounted afterwards prints its row as
+ *   "Welcome" cold with "Section" as its tooltip, and the leader's row
+ *   reads the same.
  * - The bare rows (seam: page-model.js visibleTree's `styled` annotation
  *   through page-view.js to the rendered bare face, hasBody deciding the
  *   chevron): at Subtree over the band every child is a row, the three
@@ -523,7 +589,7 @@ class CodeModeBehaviorTest extends WebDriverTestBase {
         });
       })();
       JS);
-    $map = "(Drupal.Daedalus.Blueprint.getBlueprint()?.fields?.daedalus_stylish_styles ?? {})";
+    $map = $this->styleMapJs();
     $this->assertJsCondition(
       "window.__styleError !== undefined"
       . " || ((" . $map . "[" . json_encode($block_a_key) . "]?.default?.['background-image'] ?? '').includes('135deg')"
@@ -1019,7 +1085,7 @@ class CodeModeBehaviorTest extends WebDriverTestBase {
     $variant_id = (string) $session->evaluateScript('window.__fjs2');
     $this->assertSame('relay_smoke', $variant_id, 'The variant minted under its derived machine name.');
     $this->assertJsCondition(
-      "JSON.stringify(Drupal.Daedalus.Blueprint.getBlueprint()?.fields?.daedalus_stylish_styles?.[" . json_encode($block_a_key) . "]?.variants ?? []).includes('relay_smoke')",
+      "JSON.stringify(" . $this->styleMapJs() . "[" . json_encode($block_a_key) . "]?.variants ?? []).includes('relay_smoke')",
       20000,
       'Block A wears the new variant on the leader.',
     );
@@ -1115,8 +1181,18 @@ class CodeModeBehaviorTest extends WebDriverTestBase {
       20000,
       'The leader reported the same refusal in its own window (it owns the queue): each window reports once.',
     );
+    // The history keeps the text each window handed the messenger, HTML by
+    // the messenger's contract, and the two reports arrive by two roads:
+    // the leader's through daedalus_ui's edit-mode plugin (the queue
+    // owner's report, the server's text as it came), the satellite's
+    // through stylish's notify(), which escapes once at its HTML boundary,
+    // so the quoted name reads " in the one entry and &quot; in the other
+    // (and " in both toasts' text).
+    $not_found_html = htmlspecialchars($not_found, ENT_QUOTES);
+    $history_errors = "Drupal.Daedalus.messenger.history().filter((entry) => entry.type === 'error')";
     $this->assertJsCondition(
-      "Drupal.Daedalus.messenger.history().filter((entry) => entry.type === 'error' && entry.message.includes(" . json_encode($not_found) . ")).length === 2",
+      "$history_errors.filter((entry) => entry.message.includes(" . json_encode($not_found) . ")).length === 1"
+      . " && $history_errors.filter((entry) => entry.message.includes(" . json_encode($not_found_html) . ")).length === 1",
       20000,
       'The shared history holds two entries for the one refusal: the leader\'s report and the satellite\'s, by design.',
     );
@@ -1148,7 +1224,7 @@ class CodeModeBehaviorTest extends WebDriverTestBase {
       "window.__st.scope() === 'page'"
       . " && window.__st.rows().includes(" . json_encode($entity_key) . ")"
       . " && window.__st.rows().includes(" . json_encode($container_key) . ")"
-      . " && document.querySelector('.daedalus-stylish-page-tree__header--selected')?.dataset.daedalusStylishPageKey === " . json_encode($container_key),
+      . " && document.querySelector('.daedalus-stylish-page-tree__header.daedalus-ui-outline__row--selected')?.dataset.daedalusStylishPageKey === " . json_encode($container_key),
       20000,
       'Page scope: the tree prints the entity root above the selected container (the whole page, every element a row), the container\'s row selected.',
     );
@@ -1298,6 +1374,88 @@ class CodeModeBehaviorTest extends WebDriverTestBase {
       'Deleting the typed line lifts the override (islandDelta\'s UNSET): the map holds no gap for the container and the skin line stands unstruck, no chip, still supplied by the floor.',
     );
 
+    // ——— Edit skin… from a printed skin line. ———
+    // Seam: a PRINTED line's contextmenu, no editor awake, reaching
+    // element-view.js openPrintLineMenu (the line resolved from the
+    // target's data-line into the print's stored shapes), line-menu.js
+    // lineMenuItems answering the floor's item set (the lift and the
+    // skin doorway, never Unset: nothing in the map holds a floor line),
+    // the pick riding the Inspector's openDocument (code/layers.js
+    // skinDocument at the delivering scope) into the skin session over
+    // the kind:container document, and the frame's back control parking
+    // it with the floor line untouched. The live CodeMirror posture
+    // shares lineMenuItems and the run-label legs below prove the live
+    // contextmenu bubbling; the printed road is the one with its own
+    // index arithmetic. The island woken above is still live, so it is
+    // parked first through the blur (the seated-rule leg's explicit
+    // park; a canvas click would move the selection off the container
+    // whose island holds the skin line).
+    $session->executeScript('document.activeElement.blur();');
+    $this->assertJsCondition(
+      "window.__st.editors() === 0"
+      . " && !!document.querySelector('.daedalus-stylish-page-tree .daedalus-stylish-island__line')"
+      . " && (() => { const line = window.__st.floorLine(); return !!line && line.delivered && !line.lost && line.chip === null; })()",
+      10000,
+      'The blur parked the container island back to print: zero editors, the skin line printed, delivered and unstruck.',
+    );
+    // The scroll rides its own round trip and the dispatch waits two
+    // rendered frames, as the run-label leg below: the floating surface
+    // leaves on an outside scroll, and a late scroll event would close
+    // the menu the next round trip opened.
+    $skin_line_js = "Array.from(document.querySelectorAll('.daedalus-stylish-page-tree .daedalus-stylish-island__line'))"
+      . ".find((line) => (line.textContent ?? '').startsWith('gap: var(--space-gutter);')) ?? null";
+    $session->executeScript(
+      "($skin_line_js).scrollIntoView({ block: 'center', behavior: 'instant' });"
+      . " window.__scrollSettled = false; requestAnimationFrame(() => requestAnimationFrame(() => { window.__scrollSettled = true; }));"
+    );
+    $this->assertJsCondition('window.__scrollSettled === true', 10000, 'Two frames rendered after the scroll to the printed skin line (its scroll event has fired).');
+    $session->executeScript(<<<JS
+      (() => {
+        const line = $skin_line_js;
+        const rect = line.getBoundingClientRect();
+        line.dispatchEvent(new MouseEvent('contextmenu', {
+          bubbles: true,
+          cancelable: true,
+          clientX: rect.left + rect.width / 2,
+          clientY: rect.top + rect.height / 2,
+        }));
+      })();
+      JS);
+    $line_menu_labels_js = "Array.from(document.querySelectorAll('.daedalus-ui-menu .daedalus-ui-menu__item .daedalus-ui-menu__label')).map((label) => label.textContent.trim())";
+    $line_menu_labels = json_encode(json_encode(['Move to this element', 'Edit skin…'], JSON_UNESCAPED_UNICODE));
+    $this->assertJsCondition(
+      "!!document.querySelector('.daedalus-ui-menu') && JSON.stringify($line_menu_labels_js) === $line_menu_labels",
+      20000,
+      'Right-clicking the printed skin line opened the shared menu with exactly the floor\'s items, "Move to this element" then "Edit skin…", never Unset: openPrintLineMenu resolved the line from its data-line and lineMenuItems read its skin layer.',
+    );
+    $this->assertSame(
+      0,
+      (int) $session->evaluateScript('window.__st.editors()'),
+      'The line menu opened without waking the island: zero editors while the menu stands.',
+    );
+    $session->executeScript(
+      "Array.from(document.querySelectorAll('.daedalus-ui-menu .daedalus-ui-menu__item'))"
+      . ".find((item) => item.querySelector('.daedalus-ui-menu__label')?.textContent.trim() === 'Edit skin…').click();"
+    );
+    $this->assertJsCondition(
+      "!document.querySelector('.daedalus-ui-menu')"
+      . " && !!document.querySelector('#daedalus_stylish_inspector .daedalus-stylish-inspector--session')"
+      . " && document.querySelector('#daedalus_stylish_inspector .daedalus-stylish-session__posture')?.textContent.trim() === 'Editing the skin'"
+      . " && document.querySelector('#daedalus_stylish_inspector .daedalus-stylish-session__label')?.textContent.trim() === 'container kind'"
+      . " && Array.from(document.querySelectorAll('#daedalus_stylish_inspector .daedalus-stylish-document .daedalus-stylish-island__line, #daedalus_stylish_inspector .daedalus-stylish-document .cm-line')).some((line) => line.textContent.startsWith('gap: var(--space-gutter)'))",
+      20000,
+      'Picking "Edit skin…" on the printed skin line closed the menu and mounted the skin session frame, "Editing the skin" on the "container kind" document (skinScopeLabel\'s word for kind:container), its gap: var(--space-gutter) line printed in the document: the line menu\'s doorway rides the Inspector\'s openDocument at the delivering scope.',
+    );
+    $this->clickPanelXpath('//div[contains(@class, "daedalus-stylish-session__top")]//button[contains(@class, "daedalus-stylish-session__back")]');
+    $this->assertJsCondition(
+      "!document.querySelector('#daedalus_stylish_inspector .daedalus-stylish-inspector--session')"
+      . " && !!document.querySelector('.daedalus-stylish-page-tree__showing')"
+      . " && window.__st.editors() === 0"
+      . " && (() => { const line = window.__st.floorLine(); return !!line && line.delivered && !line.lost && line.chip === null; })()",
+      20000,
+      'The session\'s back control (.daedalus-stylish-session__back) parked the frame opened from the printed skin line: the code body is back with its showing row, no editor live, and the skin line still prints delivered and unstruck, no chip (the doorway staged nothing).',
+    );
+
     // A satellite mounted now reads the same store, with nothing relayed
     // but the selection it mirrors: its pressed segment and its tree (the
     // mirrored container, one row) say Element too. The mount is the one
@@ -1318,7 +1476,7 @@ class CodeModeBehaviorTest extends WebDriverTestBase {
       . " && document.querySelector('.daedalus-stylish-page-tree__scope')?.dataset.scope === 'element'"
       . " && JSON.stringify(Array.from(document.querySelectorAll('.daedalus-stylish-page-tree [data-daedalus-stylish-page-key]')).map((header) => header.dataset.daedalusStylishPageKey)) === " . json_encode(json_encode([$container_key])),
       20000,
-      'A satellite mounted after the scope clicks reads the same scope store: its showing row reads this element and its tree prints the mirrored container\'s row alone, no relay involved.',
+      'A satellite mounted after the scope clicks reads the same scope store: its showing row sits at the Element scope and its tree prints the mirrored container\'s row alone, no relay involved.',
     );
     $session->switchToIFrame(NULL);
 
@@ -2103,9 +2261,133 @@ class CodeModeBehaviorTest extends WebDriverTestBase {
       'The worn position prints, no editor live: a delivered row reads like any other until woken.',
     );
 
+    // ----- A canvas seat mints the seated part's island. -----
+    // Seam: the selection spine's styling target (a modifier click on a
+    // canvas paragraph resolving its minted instance part through the
+    // registered part behavior, committed by commit-address.js) -> the
+    // inspector's targetSelector prop on the selected row -> the code
+    // view's seat effect drafting the part's island (element-view.js
+    // materializeSelector without the cursor) -> the drafts' own honesty
+    // rule dropping it when the selection leaves. Before the seat an
+    // unstyled paragraph has no island by construction: a part island
+    // exists only by delivery or by draft, and a seat was neither. Block
+    // A at the Page lens, its own gradient island delivered, its one
+    // paragraph's minted identity read from the canvas (the stage-time
+    // minter is the authority, the DOM its projection).
+    $a_paragraph_js = "document.querySelector(\"[data-selectable='$block_a_key'] p\")";
+    $a_part_header_js = "(Array.from(document.querySelectorAll('.daedalus-stylish-page-tree [data-daedalus-stylish-part-owner=" . json_encode($block_a_key) . "]'))"
+      . ".find((header) => header.dataset.daedalusStylishPart === window.__aPart) ?? null)";
+    $session->executeScript("Drupal.Daedalus.Selection.select('$block_a_key');");
+    $session->executeScript("window.__st.clickScope('page');");
+    $this->assertJsCondition(
+      "window.__st.scope() === 'page' && Drupal.Daedalus.Selection.getSelected() === " . json_encode($block_a_key)
+      . ' && Drupal.Daedalus.Selection.getTarget() === null'
+      . " && !!window.__st.island('135deg')",
+      20000,
+      'Block A selected at the Page lens in code mode: its delivered gradient island prints, no target seated.',
+    );
+    $a_identity = (string) $session->evaluateScript(
+      "Array.from($a_paragraph_js.classList).find((name) => /^s-[a-z0-9]+$/.test(name)) ?? ''"
+    );
+    $this->assertMatchesRegularExpression('/^s-[a-z0-9]+$/', $a_identity, 'Block A\'s paragraph carries its minted identity class on the canvas.');
+    $a_part = ".$a_identity";
+    $a_part_key = "$block_a_key::$a_part";
+    $session->executeScript('window.__aPart = ' . json_encode($a_part) . ';');
+    $this->assertNull(
+      $session->evaluateScript($a_part_header_js),
+      'Before the seat no row prints for the paragraph under block A: an unstyled instance part has no island by delivery, and nothing drafted one.',
+    );
+    $this->assertSame(
+      NULL,
+      json_decode((string) $session->evaluateScript('JSON.stringify((' . $map . ')[' . json_encode($a_part_key) . '] ?? null)'), TRUE),
+      'The map holds no entry at the paragraph\'s part key (the leg\'s control).',
+    );
+    // The seat: a modifier click on the paragraph (synthetic, because the
+    // OS modifier state cannot ride a Mink click; it runs the same
+    // capture-phase document listener a real click does) resolves the
+    // instance part and commits it as the target, the selection staying
+    // on block A. The focused element is remembered first: the seat must
+    // leave it alone.
+    $session->executeScript(
+      "window.__seatFocus = document.activeElement;"
+      . " $a_paragraph_js.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, metaKey: true }));"
+    );
+    $this->assertJsCondition(
+      'Drupal.Daedalus.Selection.getSelected() === ' . json_encode($block_a_key)
+      . ' && Drupal.Daedalus.Selection.getTarget()?.key === ' . json_encode($block_a_key)
+      . ' && Drupal.Daedalus.Selection.getTarget()?.selector === ' . json_encode($a_part),
+      20000,
+      'The modifier click seated the paragraph\'s instance part as the styling target under block A, the selection unmoved.',
+    );
+    // The seat minted the part's island: a part header under block A
+    // carrying the instance selector, lit as the target, worded with the
+    // facet's own word (the annotation's stamped "Paragraph", never the
+    // class), its body one printed island holding no own line, no editor
+    // live in it and the focus where it was: a seat is a selection
+    // gesture, so the draft took no cursor. "Empty" is the roster's
+    // word (no declaration at the part key), not the placeholder's:
+    // the print includes the delivered tier, and guide_example's skin
+    // styles `p` (its `base:p` rule), so the drafted island prints the
+    // skin's lines under the skin run, every one delivered and none
+    // own; the placeholder line is for an island whose print has no
+    // text at all.
+    $this->assertJsCondition(
+      "(() => { const header = $a_part_header_js; if (!header) { return false; }"
+      . ' const body = header.nextElementSibling;'
+      . " if (!body) { return false; }"
+      . " const lines = Array.from(body.querySelectorAll('.daedalus-stylish-island__line'));"
+      . " return header.classList.contains('daedalus-stylish-islands__part--active')"
+      . "   && header.querySelector('.daedalus-stylish-islands__part-select')?.getAttribute('aria-pressed') === 'true'"
+      . "   && header.querySelector('.daedalus-stylish-islands__part-label')?.textContent === 'Paragraph'"
+      . "   && body.classList.contains('daedalus-stylish-islands__part-body')"
+      . "   && body.querySelectorAll('.daedalus-stylish-island__editor').length === 1"
+      . "   && body.querySelectorAll('.daedalus-stylish-island__run[data-layer=\"skin:base:p\"]').length === 1"
+      . "   && lines.length > 0"
+      . "   && lines.every((line) => line.classList.contains('daedalus-stylish-island__line--delivered'))"
+      . "   && body.querySelectorAll('.daedalus-stylish-island__line--placeholder').length === 0"
+      . "   && body.querySelectorAll('.cm-editor').length === 0"
+      . '   && document.activeElement === window.__seatFocus; })()',
+      20000,
+      'The seat minted the paragraph\'s island under block A: a lit part header worded "Paragraph" over one printed island whose every line is delivered (the skin\'s base:p tier under its run, no own line, no placeholder), no editor live in it and the focus untouched.',
+    );
+    $this->assertSame(
+      NULL,
+      json_decode((string) $session->evaluateScript('JSON.stringify((' . $map . ')[' . json_encode($a_part_key) . '] ?? null)'), TRUE),
+      'The minted island is a draft: the map still holds no entry at the part key.',
+    );
+    // The seat moves on: selecting block B nulls the target and block
+    // A's row goes sparse, which sheds its drafts (a tree row keeps its
+    // key across selections, so sparse is the selection leaving) and
+    // prunes the roster to occupied islands, so the empty island the
+    // seat minted is gone by the drafts' one rule; block A's delivered
+    // gradient island still prints.
+    $session->executeScript("Drupal.Daedalus.Selection.select('$block_b_key');");
+    $this->assertJsCondition(
+      'Drupal.Daedalus.Selection.getSelected() === ' . json_encode($block_b_key)
+      . ' && Drupal.Daedalus.Selection.getTarget() === null'
+      . " && !!window.__st.island('135deg') && $a_part_header_js === null",
+      20000,
+      'Selecting block B dropped the seat-minted island: block A\'s row keeps its gradient island and lists no row for the paragraph.',
+    );
+    // Back on block A with no target, nothing re-mints: the island
+    // existed by the seat alone, and the seat is gone.
+    $session->executeScript("Drupal.Daedalus.Selection.select('$block_a_key');");
+    $this->assertJsCondition(
+      'Drupal.Daedalus.Selection.getSelected() === ' . json_encode($block_a_key)
+      . ' && Drupal.Daedalus.Selection.getTarget() === null'
+      . " && !!window.__st.island('135deg')",
+      20000,
+      'Block A reselected without a seat, its gradient island printing.',
+    );
+    $this->assertNull(
+      $session->evaluateScript($a_part_header_js),
+      'Reselecting block A without a seat lists no row for the paragraph: the draft was the seat\'s, not the element\'s.',
+    );
+
     // ----- An ancestor rule seated from the chip, in code mode. -----
-    // Seam: the subject line's chip (the write-address switcher, one
-    // spine target) -> the code view printing the seated rule as an
+    // Seam: the subject line's chip (the write-address switcher seating
+    // the spine's `address`, the facet and the selection standing) ->
+    // the code view printing the seated rule as an
     // editable island of its own under the selected element's rows
     // (DevTools' rule: the element's own islands, then one island per
     // ancestor rule reaching it), lit under the inspector's address ->
@@ -2152,8 +2434,9 @@ class CodeModeBehaviorTest extends WebDriverTestBase {
       "Array.from(document.querySelectorAll('.daedalus-ui-menu .daedalus-ui-menu__item'))"
       . ".find((item) => item.querySelector('.daedalus-ui-menu__label')?.textContent.trim() === 'Text blocks directly in Section').click();"
     );
-    // The pick seats the rule as the styling target (the selection stays
-    // on the paragraph), lights the chip at the rule's key, and the code
+    // The pick seats the rule as the write address (the selection stays
+    // on the paragraph and no facet stands: the bare element is the
+    // subject), lights the chip at the rule's key, and the code
     // view mounts the rule's row under the paragraph's own rows: a
     // header carrying the band's key and the rule's selector, lit
     // (--active, aria-pressed), worded as the chip's entry, its body
@@ -2163,14 +2446,15 @@ class CodeModeBehaviorTest extends WebDriverTestBase {
     $this->assertJsCondition(
       "!document.querySelector('.daedalus-ui-menu')"
       . " && Drupal.Daedalus.Selection.getSelected() === " . json_encode($p2_key)
-      . " && Drupal.Daedalus.Selection.getTarget()?.key === " . json_encode($band_key)
-      . " && Drupal.Daedalus.Selection.getTarget()?.selector === '> pb-text'"
+      . " && Drupal.Daedalus.Selection.getTarget() === null"
+      . " && Drupal.Daedalus.Selection.getAddress()?.key === " . json_encode($band_key)
+      . " && Drupal.Daedalus.Selection.getAddress()?.selector === '> pb-text'"
       . " && (() => { const chip = document.querySelector('$address_chip'); return !!chip"
       . '   && chip.dataset.daedalusStylishAddress === ' . json_encode($seated_rule_key)
       . "   && chip.querySelector('.daedalus-stylish-inspector__address-label')?.textContent.trim() === 'Text blocks directly in Section'"
       . "   && chip.classList.contains('daedalus-stylish-chip--lit'); })()",
       20000,
-      'The pick closed the menu, seated the band\'s `> pb-text` rule as the styling target with the selection still on the paragraph, and lit the chip at container::> pb-text.',
+      'The pick closed the menu, seated the band\'s `> pb-text` rule as the write address with the selection still on the paragraph and no facet standing, and lit the chip at container::> pb-text.',
     );
     $this->assertJsCondition(
       "(() => { const header = window.__rel.header('> pb-text'); const facts = window.__rel.facts('> pb-text'); if (!header || !facts) { return false; }"
@@ -2222,9 +2506,67 @@ class CodeModeBehaviorTest extends WebDriverTestBase {
       "(() => { const header = window.__rel.header('> pb-text'); if (!header) { return false; }"
       . " const own = ($own_lines_js).filter((line) => line.textContent.includes('color: var(--color-muted)'));"
       . " const inRule = Array.from(header.nextElementSibling.querySelectorAll('.cm-line, .daedalus-stylish-island__line')).filter((line) => line.textContent.includes('color: var(--color-muted)'));"
-      . " return own.length === 0 && inRule.length === 1 && Drupal.Daedalus.Selection.getTarget()?.selector === '> pb-text'; })()",
+      . " return own.length === 0 && inRule.length === 1 && Drupal.Daedalus.Selection.getAddress()?.selector === '> pb-text'; })()",
       20000,
-      'The declaration prints once, in the seated rule\'s island; the paragraph\'s own islands carry no line from the rule, and the target still stands on the rule after the write.',
+      'The declaration prints once, in the seated rule\'s island; the paragraph\'s own islands carry no line from the rule, and the address still stands at the rule after the write.',
+    );
+
+    // ----- A row typed INSIDE the seated ancestor rule island. -----
+    // Seam: the `&::before {` gesture typed in the band's seated
+    // `> pb-text` island (still the one live editor) -> element-model.js
+    // composeUnder nesting the line under the island's rule
+    // (`> pb-text::before`) -> the island's owner being an ANCESTOR of
+    // the selection, so the minted row is a rule on the band, an
+    // ADDRESS, seated through source.address and never drafted under the
+    // paragraph (element-view.js seatMinted: a draft would be a second
+    // island for one spine fact) -> the chip turning to the rule's box,
+    // the `> pb-text` row going dark, and the placed `> pb-text::before`
+    // rule row lit (placeEditable's virtual layer, `existing` false) with
+    // its empty island taking the cursor through rulesFor's wake, the
+    // map untouched at both keys. Only a browser runs the gesture inside
+    // a rule island through the spine's address and the view's
+    // placement in order; the node specs pin the composition.
+    $nested_rule_key = "$band_key::> pb-text::before";
+    $session->executeScript("document.execCommand('insertText', false, '\\n&::before ');");
+    $session->executeScript("document.execCommand('insertText', false, '{');");
+    $this->assertJsCondition(
+      "Drupal.Daedalus.Selection.getSelected() === " . json_encode($p2_key)
+      . " && Drupal.Daedalus.Selection.getTarget() === null"
+      . " && Drupal.Daedalus.Selection.getAddress()?.key === " . json_encode($band_key)
+      . " && Drupal.Daedalus.Selection.getAddress()?.selector === '> pb-text::before'"
+      . " && (() => { const chip = document.querySelector('$address_chip'); return !!chip"
+      . '   && chip.dataset.daedalusStylishAddress === ' . json_encode($nested_rule_key)
+      . "   && chip.querySelector('.daedalus-stylish-inspector__address-label')?.textContent.trim() === 'Text blocks directly in Section › Before'"
+      . "   && chip.classList.contains('daedalus-stylish-chip--lit'); })()",
+      20000,
+      'Typing `&::before {` inside the seated `> pb-text` island seated the composed rule as the write address: the selection still the paragraph, no facet, the address the band\'s `> pb-text::before`, the chip lit at container::> pb-text::before reading the rule\'s box.',
+    );
+    $this->assertJsCondition(
+      "(() => { const header = window.__rel.header('> pb-text::before'); const facts = window.__rel.facts('> pb-text::before'); if (!header || !facts) { return false; }"
+      . " return header.classList.contains('daedalus-stylish-islands__part--rule') && header.classList.contains('daedalus-stylish-islands__part--active')"
+      . "   && header.querySelector('.daedalus-stylish-islands__part-select')?.getAttribute('aria-pressed') === 'true'"
+      . "   && header.querySelector('.daedalus-stylish-islands__part-label')?.textContent === 'Text blocks directly in Section › Before'"
+      . "   && facts.code === '> pb-text::before' && facts.chips === 1"
+      . "   && facts.liveInBody === 1 && facts.focusedInBody && window.__st.editors() === 1"
+      . "   && !window.__rel.header('> pb-text').classList.contains('daedalus-stylish-islands__part--active'); })()",
+      20000,
+      'The seated `> pb-text::before` rule mounted as the lit rule row under the paragraph (the band\'s key and the composed selector on the header, --active and aria-pressed, worded as the chip\'s entry with the one `>` chip) with its empty island live and focused, the one editor on the tree; the `> pb-text` row went dark.',
+    );
+    $this->assertJsCondition(
+      "!Array.from(document.querySelectorAll('.daedalus-stylish-page-tree [data-daedalus-stylish-part-owner=" . json_encode($p2_key) . "]')).some((header) => header.dataset.daedalusStylishPart === '> pb-text::before')"
+      . " && !Array.from(window.__rel.header('> pb-text').nextElementSibling.querySelectorAll('.cm-line, .daedalus-stylish-island__line')).some((line) => line.textContent.includes('&::before'))",
+      10000,
+      'The minted rule drafted nothing under the paragraph (no row of the paragraph\'s own carries the selector: the seat is the whole gesture) and the typed anchor left the `> pb-text` island with the brace.',
+    );
+    $this->assertSame(
+      NULL,
+      json_decode((string) $session->evaluateScript('JSON.stringify((' . $map . ')[' . json_encode($nested_rule_key) . '] ?? null)'), TRUE),
+      'The mint wrote nothing: the map holds no entry at the composed rule key until the first declaration.',
+    );
+    $this->assertSame(
+      ['default' => ['color' => 'var(--color-muted)']],
+      json_decode((string) $session->evaluateScript('JSON.stringify((' . $map . ')[' . json_encode($seated_rule_key) . '] ?? null)'), TRUE),
+      'The `> pb-text` entry is untouched by the mint: the typed anchor never reached it as a declaration.',
     );
 
     // ----- A generated box typed on the root island, born with its seed. -----
@@ -2266,17 +2608,17 @@ class CodeModeBehaviorTest extends WebDriverTestBase {
     // not the posture this leg starts from.
     $session->executeScript('document.activeElement.blur();');
     $this->assertJsCondition(
-      "window.__st.editors() === 0 && Drupal.Daedalus.Selection.getTarget()?.selector === '> pb-text'",
+      "window.__st.editors() === 0 && Drupal.Daedalus.Selection.getAddress()?.selector === '> pb-text::before'",
       10000,
-      'The blur parked the seated rule\'s island: zero editors, the target still standing on the rule.',
+      'The blur parked the seated rule\'s empty island: zero editors, the address still standing at the typed `> pb-text::before` rule.',
     );
     $session->executeScript("Drupal.Daedalus.Selection.select('$band_key');");
     $this->assertJsCondition(
       "window.__st.scope() === 'element' && JSON.stringify(window.__st.rows()) === " . json_encode(json_encode([$band_key]))
-      . " && Drupal.Daedalus.Selection.getTarget() === null && window.__st.editors() === 0"
+      . " && Drupal.Daedalus.Selection.getTarget() === null && Drupal.Daedalus.Selection.getAddress() === null && window.__st.editors() === 0"
       . " && window.__rel.header('&::before') === null && !!window.__sel.rootIsland()",
       20000,
-      'The band lists alone at Element scope with no target (the select dropped the rule) and no editor live, no box row yet, its root island printing the skin gap floor line.',
+      'The band lists alone at Element scope with no target and no address (the select dropped the rule) and no editor live, no box row yet, its root island printing the skin gap floor line.',
     );
     $session->executeScript("window.__sel.wakeAtEnd(window.__sel.rootIsland());");
     $this->assertJsCondition(
@@ -2343,6 +2685,201 @@ class CodeModeBehaviorTest extends WebDriverTestBase {
       'The box still exists on the canvas after the park.',
     );
 
+    // ----- A generated box typed INSIDE a rule island: nesting. -----
+    // Seam: the same `&::before {` gesture typed in the container's `p`
+    // row (the tag island the `p {` leg minted) -> element-model.js
+    // composeUnder nesting the line under the island's rule by CSS
+    // nesting's relative rule (`&` is the rule, so the brace mints
+    // `p::before`, the substitution the dialect parser and the paste
+    // door already make) -> materializeSelector seating the box as the
+    // SUBJECT FACET through source.target (the chip turns to the box,
+    // the `p::before` row lit, the `p` row dark) and drafting its
+    // island with the cursor -> the first typed declaration committing
+    // at the composed key (container::p::before) -> the box computing
+    // on the paragraph inside block A, the element the container's `p`
+    // rule reaches. Only a browser runs the gesture through CodeMirror's
+    // input handler on a non-root island, the spine seat and the
+    // canvas landing in order; the node specs pin the composition. The
+    // system is still open from the previous leg (the grant is the
+    // op's). The container is reached through the facade after the
+    // band's live root island is parked explicitly (the canvas click's
+    // blur, as the previous leg explains).
+    $nested_box_key = "$container_key::p::before";
+    $p_island_js = "window.__sel.header('p')?.nextElementSibling?.querySelector('.daedalus-stylish-island__editor') ?? null";
+    $a_paragraph_before_js = "getComputedStyle(document.querySelector(\"{$text_selector($block_a_uuid)} p\"), '::before')";
+    $session->executeScript('document.activeElement.blur();');
+    $session->executeScript("Drupal.Daedalus.Selection.select('$container_key');");
+    $this->assertJsCondition(
+      "window.__st.scope() === 'element' && JSON.stringify(window.__st.rows()) === " . json_encode(json_encode([$container_key]))
+      . " && Drupal.Daedalus.Selection.getTarget() === null && Drupal.Daedalus.Selection.getAddress() === null && window.__st.editors() === 0"
+      . " && !!window.__sel.header('p') && window.__sel.header('p::before') === null && !!($p_island_js)",
+      20000,
+      'The container lists alone at Element scope with no target, no address and no editor live; its `p` row stands from the tag leg with its printed island, and no `p::before` row exists.',
+    );
+    $session->executeScript("window.__sel.wakeAtEnd($p_island_js);");
+    $this->assertJsCondition(
+      "(() => { const facts = window.__sel.headerFacts('p'); return !!facts && facts.liveInBody === 1 && facts.focusedInBody && window.__st.editors() === 1; })()",
+      10000,
+      'The `p` island woke for the nested box gesture: the one live editor, focused, inside the `p` row.',
+    );
+    $session->executeScript("document.execCommand('insertText', false, '\\n&::before ');");
+    $session->executeScript("document.execCommand('insertText', false, '{');");
+    $this->assertJsCondition(
+      "(() => { const facts = window.__sel.headerFacts('p::before'); if (!facts) { return false; }"
+      . " return facts.label.endsWith('Before') && facts.code === 'p::before' && facts.chips === 0"
+      . "   && facts.liveInBody === 1 && facts.focusedInBody && window.__st.editors() === 1; })()",
+      20000,
+      'Typing `&::before {` inside the `p` island minted the composed box row (the brace swallowed with the anchor): `p::before` on the header, worded as the paragraph\'s Before, no combinator chip, its empty island live and focused as the one editor.',
+    );
+    $this->assertJsCondition(
+      'Drupal.Daedalus.Selection.getSelected() === ' . json_encode($container_key)
+      . ' && Drupal.Daedalus.Selection.getTarget()?.key === ' . json_encode($container_key)
+      . " && Drupal.Daedalus.Selection.getTarget()?.selector === 'p::before'"
+      . ' && Drupal.Daedalus.Selection.getAddress() === null'
+      . " && document.querySelector('$address_chip')?.dataset.daedalusStylishAddress === " . json_encode($nested_box_key)
+      . " && window.__sel.header('p::before').classList.contains('daedalus-stylish-islands__part--active')"
+      . " && !window.__sel.header('p').classList.contains('daedalus-stylish-islands__part--active')",
+      20000,
+      'The mint seated the box as the subject facet: the target is the container\'s `p::before`, no address stands, the chip reads the box at container::p::before, and the `p::before` row is the lit one (the `p` row dark).',
+    );
+    $this->assertSame(
+      NULL,
+      json_decode((string) $session->evaluateScript('JSON.stringify((' . $map . ')[' . json_encode($nested_box_key) . '] ?? null)'), TRUE),
+      'The mint wrote nothing: the map holds no entry at the composed box key until the first declaration.',
+    );
+    $this->assertJsCondition(
+      "!Array.from(window.__sel.header('p').nextElementSibling.querySelectorAll('.cm-line, .daedalus-stylish-island__line')).some((line) => line.textContent.includes('&::before'))",
+      10000,
+      'The typed anchor left the `p` island with the brace: no `&::before` text remains among its lines.',
+    );
+    // The first declaration is a background, the band's box leg's
+    // gesture: `content` is the box's existence switch with the closed
+    // grammar `"" | none | one media reference` (GeneratedContent), so a
+    // typed string like `content: "★";` is held by the lint and never
+    // commits; the op spine seeds `content: ""` at birth instead.
+    $session->executeScript("document.execCommand('insertText', false, 'background-color: var(--color-accent);');");
+    $this->assertJsCondition(
+      '(' . $map . ')[' . json_encode($nested_box_key) . "]?.default?.['background-color'] === 'var(--color-accent)'"
+      . ' && (' . $map . ')[' . json_encode($nested_box_key) . "]?.default?.content === '\"\"'",
+      20000,
+      'The declaration committed at the composed key (container::p::before): the typed background is the entry\'s own, and the entry was born with the op spine\'s seed, `content: ""` at default.',
+    );
+    $this->assertJsCondition(
+      "($a_paragraph_before_js).content === '\"\"' && ($a_paragraph_before_js).backgroundColor === " . json_encode($accent),
+      20000,
+      'The paragraph inside block A, reached by the container\'s `p` rule, renders the generated box on the canvas: the seeded content makes it exist and it wears the accent (CSS landing is a browser fact).',
+    );
+
+    // ----- The typed facet survives the mode switch. -----
+    // Seam: the typed box lives on the spine, not in the code view
+    // (the facet is the thing being styled, never a code-mode artefact):
+    // the Advanced pick unmounts the code view (inspector.js pickMode)
+    // while the target stands, so the chip still reads the box and the
+    // Advanced Sections mount for it (the box's derived roster carries
+    // the Generated content group, its Content row reading the typed
+    // content at the composed key); back in code mode the roster rows
+    // the `p::before` entry the map now holds and the targetSelector
+    // prop lights it, the `p` row dark. A browser is the one tier where
+    // the mode switch, the spine and the two surfaces agree.
+    $content_field = "#daedalus_stylish_inspector details.daedalus-stylish-inspector__section [aria-label='Content']";
+    $this->clickPanelXpath('//div[contains(@class, "daedalus-stylish-inspector__ui-mode")]/button[normalize-space() = "Advanced"]');
+    $this->assertJsCondition(
+      "(() => { const active = document.querySelector('.daedalus-stylish-inspector__ui-mode button[aria-pressed=\"true\"]'); return !!active && active.textContent.trim() === 'Advanced'; })()"
+      . " && !document.querySelector('.daedalus-stylish-page-tree')"
+      . ' && Drupal.Daedalus.Selection.getSelected() === ' . json_encode($container_key)
+      . " && Drupal.Daedalus.Selection.getTarget()?.selector === 'p::before'"
+      . " && document.querySelector('$address_chip')?.dataset.daedalusStylishAddress === " . json_encode($nested_box_key),
+      20000,
+      'The inspector is in Advanced mode on the container with the code view unmounted, the typed box still the target and the chip still reading container::p::before.',
+    );
+    $session->executeScript(
+      "(() => { const section = Array.from(document.querySelectorAll('#daedalus_stylish_inspector details.daedalus-stylish-inspector__section')).find((details) => details.querySelector('summary')?.textContent.trim() === 'Generated content');"
+      . ' if (section && !section.open) { section.querySelector(\'summary\').click(); } })();'
+    );
+    $this->assertJsCondition(
+      '(() => { const field = document.querySelector(' . json_encode($content_field) . '); return !!field && field.value === ' . json_encode('""') . '; })()',
+      20000,
+      'Advanced shows the box\'s rows: the Generated content section\'s Content row reads the seeded `""` the entry at the composed key was born with.',
+    );
+    $this->clickPanelXpath('//button[contains(@class, "daedalus-stylish-inspector__ui-mode-button--code")]');
+    $this->assertJsCondition(
+      "window.__st.scope() === 'element' && JSON.stringify(window.__st.rows()) === " . json_encode(json_encode([$container_key]))
+      . " && Drupal.Daedalus.Selection.getTarget()?.selector === 'p::before'"
+      . " && document.querySelector('$address_chip')?.dataset.daedalusStylishAddress === " . json_encode($nested_box_key)
+      . " && !!window.__sel.header('p::before')?.classList.contains('daedalus-stylish-islands__part--active')"
+      . " && !!window.__sel.header('p::before').nextElementSibling?.querySelector('.daedalus-stylish-island__editor')"
+      . " && !window.__sel.header('p').classList.contains('daedalus-stylish-islands__part--active')",
+      20000,
+      'Back in code mode the `p::before` island stands lit under the container with the target and the chip unchanged, the `p` row dark.',
+    );
+
+    // ----- An empty minted island drops when the selection leaves. -----
+    // Seam: `&::after {` typed in the `p` island mints and seats `p::after`
+    // the same way (every typed row alike) and nothing is typed into it;
+    // the facade's select() collapses the set and clears the target
+    // (selection-facade.js) and the drafts are view state keyed to the
+    // element (element-view.js ElementIslands), so leaving the container
+    // drops the island and the facet together, the map untouched, and
+    // coming back does not revive it. The spine's rules, seen through
+    // the gesture only in a browser.
+    $nested_after_key = "$container_key::p::after";
+    $session->executeScript("window.__sel.wakeAtEnd($p_island_js);");
+    $this->assertJsCondition(
+      "(() => { const facts = window.__sel.headerFacts('p'); return !!facts && facts.liveInBody === 1 && facts.focusedInBody && window.__st.editors() === 1; })()",
+      10000,
+      'The `p` island woke again for the empty-mint gesture.',
+    );
+    $session->executeScript("document.execCommand('insertText', false, '\\n&::after ');");
+    $session->executeScript("document.execCommand('insertText', false, '{');");
+    $this->assertJsCondition(
+      "(() => { const facts = window.__sel.headerFacts('p::after'); if (!facts) { return false; }"
+      . " return facts.liveInBody === 1 && facts.focusedInBody && window.__st.editors() === 1"
+      . "   && window.__sel.header('p::after').classList.contains('daedalus-stylish-islands__part--active'); })()"
+      . " && Drupal.Daedalus.Selection.getTarget()?.selector === 'p::after'"
+      . " && document.querySelector('$address_chip')?.dataset.daedalusStylishAddress === " . json_encode($nested_after_key),
+      20000,
+      'Typing `&::after {` inside the `p` island minted and seated the composed `p::after`: the row lit with its empty island live and focused, the target and the chip at container::p::after.',
+    );
+    $session->executeScript('document.activeElement.blur();');
+    $session->executeScript("Drupal.Daedalus.Selection.select('$band_key');");
+    $this->assertJsCondition(
+      "Drupal.Daedalus.Selection.getSelected() === " . json_encode($band_key)
+      . " && Drupal.Daedalus.Selection.getTarget() === null"
+      . " && document.querySelectorAll('[data-daedalus-stylish-part=\"p::after\"]').length === 0"
+      . " && window.__st.editors() === 0",
+      20000,
+      'Selecting the band dropped the empty minted island with its facet: the target is null and no `p::after` row exists anywhere on the tree.',
+    );
+    $this->assertSame(
+      NULL,
+      json_decode((string) $session->evaluateScript('JSON.stringify((' . $map . ')[' . json_encode($nested_after_key) . '] ?? null)'), TRUE),
+      'The map is untouched: no entry at container::p::after was ever written.',
+    );
+    $session->executeScript("Drupal.Daedalus.Selection.select('$container_key');");
+    $this->assertJsCondition(
+      "Drupal.Daedalus.Selection.getSelected() === " . json_encode($container_key)
+      . " && Drupal.Daedalus.Selection.getTarget() === null"
+      . " && !!window.__sel.header('p::before') && window.__sel.header('p::after') === null",
+      20000,
+      'Reselecting the container does not revive the dropped island: the written `p::before` row stands, no `p::after` row returns.',
+    );
+    // Back to the band's posture the paste leg starts from: its root
+    // island the one live editor.
+    $session->executeScript('document.activeElement.blur();');
+    $session->executeScript("Drupal.Daedalus.Selection.select('$band_key');");
+    $this->assertJsCondition(
+      "window.__st.scope() === 'element' && JSON.stringify(window.__st.rows()) === " . json_encode(json_encode([$band_key]))
+      . " && Drupal.Daedalus.Selection.getTarget() === null && window.__st.editors() === 0 && !!window.__sel.rootIsland()",
+      20000,
+      'The band lists alone again with no target (the select dropped the container\'s facet) and no editor live.',
+    );
+    $session->executeScript("window.__sel.wakeAtEnd(window.__sel.rootIsland());");
+    $this->assertJsCondition(
+      "window.__st.editors() === 1 && window.__sel.rootIsland().querySelectorAll('.cm-editor').length === 1",
+      10000,
+      'The band\'s root island woke again: the one live editor, the paste leg\'s starting posture.',
+    );
+
     // ----- The paste door, end to end. -----
     // Seam: the ClipboardEvent on the live island's content ->
     // paste-door.js structuralChunks refusing the insertion (the text
@@ -2406,21 +2943,102 @@ class CodeModeBehaviorTest extends WebDriverTestBase {
       'The root island stayed the one live editor, its buffer holding the spliced padding line and no trace of the nested block: structure is chrome, the chunk left as a gesture.',
     );
 
+    // ----- The clipboard withheld on plain http. -----
+    // Seam: the test origin is plain http (no secure context), where the
+    // browser exposes neither navigator.clipboard nor ClipboardItem (both
+    // [SecureContext]), the origin Lily edits on in Safari -> the
+    // clipboard door's presence probe (clipboard.js clipboardAvailable,
+    // read at every render of the cluster and at every call) -> the
+    // header's Copy CSS and Paste CSS rendered disabled wearing the
+    // door's one sentence as their pill tooltip (the pill's text is in
+    // the DOM without a hover), Save as variant untouched by it (it
+    // needs no clipboard) -> the address chip's "Copy key" item, never
+    // withheld (the menu is the only road to the key and nothing on the
+    // line can wear the reason), whose click the door rejects with the
+    // same sentence, toasted through the messenger as one error entry
+    // and never thrown to the console. The stub below is what the
+    // secure-origin shape looks like to the cluster; nothing is mounted
+    // yet, so this is the real http browser check.
+    $no_clipboard = 'Copying and pasting CSS needs a secure (https) page. Open this site over https, or use the Copy styles and Paste styles shortcuts within the page.';
+    $cluster_js = "(() => { const actions = document.querySelector('.daedalus-stylish-inspector__actions');"
+      . " const read = (label) => { const button = actions?.querySelector('button[aria-label=\"' + label + '\"]'); if (!button) { return null; }"
+      . "   return { disabled: button.disabled, tooltip: button.closest('.daedalus-ui-tooltip-host')?.querySelector('.daedalus-ui-tooltip')?.textContent.trim() ?? null }; };"
+      . " return { copy: read('Copy CSS'), paste: read('Paste CSS'), save: read('Save as variant') }; })()";
+    $sentence_errors_js = "Drupal.Daedalus.messenger.history().filter((entry) => entry.type === 'error' && entry.message === " . json_encode($no_clipboard) . ").length";
+    $copied_key_js = "Drupal.Daedalus.messenger.history().filter((entry) => entry.type === 'status' && entry.message === 'Copied key').length";
+    $this->assertTrue(
+      (bool) $session->evaluateScript("!window.isSecureContext && !navigator.clipboard && typeof ClipboardItem === 'undefined'"),
+      'The test origin is plain http: no secure context, no navigator.clipboard, no ClipboardItem. The leg below is the real http browser check of the withheld cluster.',
+    );
+    $this->assertJsCondition(
+      "(() => { const cluster = $cluster_js; return !!cluster.copy && !!cluster.paste && cluster.copy.disabled && cluster.paste.disabled; })()",
+      20000,
+      'With no clipboard API the header\'s Copy CSS and Paste CSS render disabled (the door\'s presence probe, read at render).',
+    );
+    $cluster = json_decode((string) $session->evaluateScript("JSON.stringify($cluster_js)"), TRUE);
+    $this->assertSame(
+      ['disabled' => TRUE, 'tooltip' => $no_clipboard],
+      $cluster['copy'],
+      'Copy CSS is withheld wearing the door\'s sentence as its pill tooltip, in the DOM without a hover (the reason shows before the click, never a toast after it).',
+    );
+    $this->assertSame(
+      ['disabled' => TRUE, 'tooltip' => $no_clipboard],
+      $cluster['paste'],
+      'Paste CSS is withheld wearing the same sentence: a click is impossible, so no read can strand the cluster\'s busy flag (the stuck state on the http origin).',
+    );
+    if ($cluster['save'] !== NULL) {
+      $this->assertSame(
+        ['disabled' => FALSE, 'tooltip' => 'Save as variant'],
+        $cluster['save'],
+        'Save as variant stays enabled with its own label as the pill: it needs no clipboard, so the withheld state is the two clipboard buttons\' alone.',
+      );
+    }
+    $sentence_errors = (int) $session->evaluateScript($sentence_errors_js);
+    $copied_keys = (int) $session->evaluateScript($copied_key_js);
+    $this->clickPanelXpath('//button[contains(@class, "daedalus-stylish-inspector__address")]');
+    $this->assertJsCondition(
+      "!!document.querySelector('.daedalus-ui-menu') && document.querySelector('.daedalus-ui-menu .daedalus-ui-menu__header')?.textContent.trim() === 'Style this at'",
+      20000,
+      'No clipboard: the chip opened the shared menu headed "Style this at".',
+    );
+    $this->assertSame(
+      ['Copy key', NULL, NULL],
+      json_decode((string) $session->evaluateScript("JSON.stringify(($menu_items_js).at(-1))"), TRUE),
+      'No clipboard: "Copy key" still closes the menu, never withheld (the toast after the click is the refusal, there is no face before it to wear one).',
+    );
+    $session->executeScript(
+      "Array.from(document.querySelectorAll('.daedalus-ui-menu .daedalus-ui-menu__item'))"
+      . ".find((item) => item.querySelector('.daedalus-ui-menu__label')?.textContent.trim() === 'Copy key').click();"
+    );
+    $this->assertJsCondition(
+      "!document.querySelector('.daedalus-ui-menu') && $sentence_errors_js === " . ($sentence_errors + 1),
+      20000,
+      'No clipboard: the "Copy key" click closed the menu and the door\'s rejection reached the messenger as exactly one error entry carrying the sentence (the editor\'s words, never the browser\'s TypeError, and never the console).',
+    );
+    $this->assertSame(
+      $copied_keys,
+      (int) $session->evaluateScript($copied_key_js),
+      'No clipboard: no "Copied key" status joined the history: the door rejected before any write.',
+    );
+
     // ----- Copy CSS: the route's print reaches the clipboard in the gesture. -----
     // Seam: the header's Copy CSS -> the source's readCss GET of the read
     // route at mode=css for the write target -> a promise-backed
     // ClipboardItem handed to navigator.clipboard.write inside the click
     // -> the "CSS copied" flash on the button's own tooltip. Webdriver
     // grants no clipboard permission, so the write is stubbed by
-    // injected script; the fetch and the print are real. The test origin
-    // is plain http (no secure context), where the browser exposes
-    // neither navigator.clipboard nor ClipboardItem, so the stub mounts
-    // the clipboard itself with both roads: writeText, the fallback the
-    // gesture takes without ClipboardItem (the road this run drives),
-    // and write, resolving the item's text as the platform would (the
-    // secure-origin road, a hand pass). The band is the selected element
-    // with no target, so the write key is its own and the print carries
-    // its own entry beside its rules.
+    // injected script; the fetch and the print are real. The stub mounts
+    // the clipboard the http origin lacks (the leg above pinned its
+    // absence) with both roads: writeText, the fallback the gesture
+    // takes without ClipboardItem (the road this run drives), and write,
+    // resolving the item's text as the platform would (the secure-origin
+    // road, a hand pass). The cluster re-probes the door on every render
+    // and nothing re-renders it for a stub mounted by script, so the
+    // selection bounces through the linked paragraph and back to the
+    // band: the next render sees the clipboard and the two buttons come
+    // back enabled. The band is the selected element with no target, so
+    // the write key is its own and the print carries its own entry
+    // beside its rules.
     $session->executeScript(<<<'JS'
       (() => {
         window.__copied = null;
@@ -2437,6 +3055,21 @@ class CodeModeBehaviorTest extends WebDriverTestBase {
         }
       })();
       JS);
+    $session->executeScript("Drupal.Daedalus.Selection.select('$p2_key');");
+    $this->assertJsCondition(
+      "window.__st.scope() === 'element' && JSON.stringify(window.__st.rows()) === " . json_encode(json_encode([$p2_key])),
+      20000,
+      'The selection left the band for the linked paragraph (the bounce that re-renders the cluster after the stub mounted).',
+    );
+    $session->executeScript("Drupal.Daedalus.Selection.select('$band_key');");
+    $this->assertJsCondition(
+      "window.__st.scope() === 'element' && JSON.stringify(window.__st.rows()) === " . json_encode(json_encode([$band_key]))
+      . " && window.__st.editors() === 0"
+      . " && (() => { const cluster = $cluster_js; return !!cluster.copy && !!cluster.paste && !cluster.copy.disabled && !cluster.paste.disabled"
+      . "   && cluster.copy.tooltip === 'Copy CSS' && cluster.paste.tooltip === 'Paste CSS'; })()",
+      20000,
+      'The band is selected again at Element scope with no editor live, and the cluster\'s next render saw the stubbed clipboard: Copy CSS and Paste CSS are enabled again, each pill back to its label.',
+    );
     $this->clickPanelXpath('//div[contains(@class, "daedalus-stylish-inspector__actions")]//button[@aria-label="Copy CSS"]');
     $this->assertJsCondition(
       "typeof window.__copied === 'string'"
@@ -2565,12 +3198,14 @@ class CodeModeBehaviorTest extends WebDriverTestBase {
     // ----- The satellite's row words, cold. -----
     // Seam: the naming spine's `name` (the section's label, minted by
     // the annotator) -> style-guide.js layoutTree carrying it into the
-    // pared tree -> page-model.js rowWords -> the row's kind and name
-    // spans, in the leader and in a satellite mounted AFTER the rename
-    // with no relay of it (its pared tree arrives with the snapshot, so
-    // the words are a pure function of broadcastable data). The first
-    // section is renamed through the op spine's update_element (its
-    // label property), then read in both windows.
+    // pared tree -> page-model.js pageNodes -> the row's name zone (the
+    // outline row grammar: the icon says what the row is, the name is
+    // the row's one word, the type its tooltip), in the leader and in a
+    // satellite mounted AFTER the rename with no relay of it (its pared
+    // tree arrives with the snapshot, so the words are a pure function
+    // of broadcastable data). The first section is renamed through the
+    // op spine's update_element (its label property), then read in both
+    // windows.
     $session->executeScript(<<<JS
       (() => {
         const Blueprint = Drupal.Daedalus.Blueprint;
@@ -2582,13 +3217,13 @@ class CodeModeBehaviorTest extends WebDriverTestBase {
       })();
       JS);
     $row_words_js = 'Array.from(document.querySelectorAll(' . json_encode(".daedalus-stylish-page-tree [data-daedalus-stylish-page-key=\"$container_key\"]") . '))'
-      . ".map((header) => [header.querySelector('.daedalus-stylish-page-tree__kind')?.textContent.trim() ?? null, header.querySelector('.daedalus-stylish-page-tree__name')?.textContent.trim() ?? null])";
+      . ".map((header) => [header.querySelector('.daedalus-stylish-page-tree__select')?.title ?? null, header.querySelector('.daedalus-ui-outline__name')?.textContent.trim() ?? null])";
     $section_words = json_encode(json_encode([['Section', 'Welcome']]));
     $session->executeScript("Drupal.Daedalus.Selection.select('$container_key');");
     $this->assertJsCondition(
       "window.__renameError !== undefined || (window.__st.scope() === 'element' && JSON.stringify($row_words_js) === $section_words)",
       20000,
-      'The leader\'s tree row reads the renamed section as "Section" + "Welcome" at Element scope: the type word and the minted name, no machine id.',
+      'The leader\'s tree row reads the renamed section as "Welcome" at Element scope, the minted name alone in the name zone with the type word "Section" as the row\'s tooltip, no machine id.',
     );
     $this->assertNull($session->evaluateScript('window.__renameError ?? null'), 'The rename failed: ' . ($session->evaluateScript('window.__renameError ?? null') ?? ''));
     $session->executeScript(<<<'JS'
@@ -2608,7 +3243,7 @@ class CodeModeBehaviorTest extends WebDriverTestBase {
     $this->assertJsCondition(
       "!document.querySelector('.daedalus-stylish-satellite__banner') && JSON.stringify($row_words_js) === $section_words",
       20000,
-      'The satellite\'s row reads "Section" + "Welcome" cold: layoutTree carries the naming spine\'s name into the pared tree the pop-out renders from, no relay of the rename involved.',
+      'The satellite\'s row reads "Welcome" cold (its tooltip "Section"): layoutTree carries the naming spine\'s name into the pared tree the pop-out renders from, no relay of the rename involved.',
     );
     $session->switchToIFrame(NULL);
     $session->executeScript("document.querySelector('iframe[name=\"daedalus_stylish_satellite\"]').remove();");
@@ -2712,9 +3347,9 @@ class CodeModeBehaviorTest extends WebDriverTestBase {
           return {
             key: header.dataset.daedalusStylishPageKey,
             bare: node.classList.contains('daedalus-stylish-page-tree__node--bare'),
-            words: (header.querySelector('.daedalus-stylish-page-tree__kind')?.textContent ?? '').trim(),
-            spacer: !!header.querySelector('.daedalus-stylish-page-tree__chevron-spacer'),
-            chevron: !!header.querySelector('.daedalus-stylish-page-tree__chevron'),
+            type: header.querySelector('.daedalus-stylish-page-tree__select')?.title ?? '',
+            spacer: !!header.querySelector('span.daedalus-ui-outline__chevron'),
+            chevron: !!header.querySelector('button.daedalus-ui-outline__chevron'),
             islands: node.querySelectorAll(':scope > .daedalus-stylish-page-tree__islands .daedalus-stylish-island').length,
             placeholders: node.querySelectorAll(':scope > .daedalus-stylish-page-tree__islands .daedalus-stylish-island__line--placeholder').length,
             editors: node.querySelectorAll('.cm-editor').length,
@@ -2728,9 +3363,9 @@ class CodeModeBehaviorTest extends WebDriverTestBase {
       . " && (() => { const faces = window.__st.rowFaces();"
       . "   const styled = [faces[0], faces[4]]; const bare = faces.slice(1, 4);"
       . "   return styled.every((face) => !face.bare && face.chevron && !face.spacer && face.islands > 0)"
-      . "     && bare.every((face) => face.bare && face.words === 'Text' && face.spacer && !face.chevron && face.islands === 0 && face.editors === 0); })()",
+      . "     && bare.every((face) => face.bare && face.type === 'Text' && face.spacer && !face.chevron && face.islands === 0 && face.editors === 0); })()",
       20000,
-      'Subtree over the band prints the band\'s row and ALL four of its blocks\' rows in layout order: the band and the worn image block styled (chevron, islands), each unstyled text block a bare row reading its words with the chevron\'s spacer in its place and neither an island nor an editor beneath it.',
+      'Subtree over the band prints the band\'s row and ALL four of its blocks\' rows in layout order: the band and the worn image block styled (chevron, islands), each unstyled text block a bare row speaking its type word as its tooltip with the chevron column\'s footprint in its place and neither an island nor an editor beneath it.',
     );
     $session->executeScript("Drupal.Daedalus.Selection.select('block:$band_p1');");
     $this->assertJsCondition(
@@ -2738,7 +3373,7 @@ class CodeModeBehaviorTest extends WebDriverTestBase {
       . " && JSON.stringify(window.__st.rows()) === " . json_encode(json_encode(["block:$band_p1"]))
       . " && (() => { const face = window.__st.rowFaces()[0];"
       . "   return !face.bare && face.chevron && !face.spacer && face.islands > 0 && face.editors === 0; })()"
-      . " && document.querySelector('.daedalus-stylish-page-tree__header--selected')?.dataset.daedalusStylishPageKey === " . json_encode("block:$band_p1"),
+      . " && document.querySelector('.daedalus-stylish-page-tree__header.daedalus-ui-outline__row--selected')?.dataset.daedalusStylishPageKey === " . json_encode("block:$band_p1"),
       20000,
       'Selecting the bare first paragraph mounts its real islands (the Subtree now anchored at it: its row alone, no longer bare, the chevron back, the root island printed with the skin\'s kind:block floor lines delivered) with still no editor live: selection mounts islands, only a wake mounts an editor.',
     );
@@ -3015,8 +3650,8 @@ class CodeModeBehaviorTest extends WebDriverTestBase {
             .map((header) => ({
               key: header.dataset.daedalusStylishPageKey,
               collapsed: header.parentElement.classList.contains('daedalus-stylish-page-tree__node--collapsed'),
-              chevron: header.querySelector('.daedalus-stylish-page-tree__chevron')?.getAttribute('aria-expanded') ?? null,
-              count: Number(header.querySelector('.daedalus-stylish-page-tree__summary .daedalus-stylish-page-tree__count')?.textContent ?? 0),
+              chevron: header.querySelector('button.daedalus-ui-outline__chevron')?.getAttribute('aria-expanded') ?? null,
+              count: Number(header.querySelector('.daedalus-ui-outline__facts .daedalus-ui-outline__count')?.textContent ?? 0),
               islands: !!header.parentElement.querySelector(':scope > .daedalus-stylish-page-tree__islands'),
             }));
         },
@@ -3029,7 +3664,7 @@ class CodeModeBehaviorTest extends WebDriverTestBase {
           return collapse && expand ? { collapse: collapse.disabled, expand: expand.disabled } : null;
         },
         chevron(key) {
-          document.querySelector('.daedalus-stylish-page-tree [data-daedalus-stylish-page-key="' + key + '"] .daedalus-stylish-page-tree__chevron').click();
+          document.querySelector('.daedalus-stylish-page-tree [data-daedalus-stylish-page-key="' + key + '"] button.daedalus-ui-outline__chevron').click();
         },
         state() {
           return JSON.stringify({ faces: this.faces(), pair: this.pair() });

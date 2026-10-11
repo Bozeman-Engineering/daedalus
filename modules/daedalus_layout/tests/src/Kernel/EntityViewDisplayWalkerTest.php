@@ -4,11 +4,14 @@ declare(strict_types=1);
 
 namespace Drupal\Tests\daedalus_layout\Kernel;
 
+use Drupal\block_content\Entity\BlockContentType;
+use Drupal\daedalus_blueprint\LayoutBuilder\InlineBlockValues;
 use Drupal\layout_builder\SectionComponent;
 use Drupal\daedalus_layout_transform_test\TransformLog;
 use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 use Drupal\daedalus_layout\ComponentTransform\ComponentTransformRegistry;
 use Drupal\daedalus_layout\ComponentTransform\EntityViewDisplayWalker;
+use Drupal\daedalus_layout_transform_test\LegacyNameHostTransform;
 use Drupal\layout_builder\Entity\LayoutBuilderEntityViewDisplay;
 use Drupal\Tests\daedalus\Kernel\NestedStorageKernelTestBase;
 
@@ -43,9 +46,26 @@ class EntityViewDisplayWalkerTest extends NestedStorageKernelTestBase {
   protected const DIRTY_DISPLAY_ID = 'entity_test.entity_test.default';
 
   /**
-   * The ID of the Layout Builder enabled layout_block display.
+   * The ID of a second Layout Builder enabled display, kept clean.
    */
-  protected const CLEAN_DISPLAY_ID = 'block_content.layout_block.default';
+  protected const CLEAN_DISPLAY_ID = 'block_content.clean.default';
+
+  /**
+   * {@inheritdoc}
+   */
+  protected function setUp(): void {
+    parent::setUp();
+    // A second Layout Builder enabled display the walk must queue but
+    // never re-save: a block type of this test's own, carrying no legacy
+    // component.
+    BlockContentType::create(['id' => 'clean', 'label' => 'Clean', 'revision' => FALSE])->save();
+    LayoutBuilderEntityViewDisplay::create([
+      'targetEntityType' => 'block_content',
+      'bundle' => 'clean',
+      'mode' => 'default',
+      'status' => TRUE,
+    ])->enableLayoutBuilder()->save();
+  }
 
   /**
    * Loads a display bypassing the static cache.
@@ -79,8 +99,8 @@ class EntityViewDisplayWalkerTest extends NestedStorageKernelTestBase {
 
     // The entity_test default layout carries a legacy component, a clean
     // component, and a real inline block still in its serialized (unsaved)
-    // form, proving the walker's save runs layout_builder's inline block
-    // presave machinery.
+    // form, proving the walker's save runs the inline block presave
+    // machinery (which stores a display's blocks as values).
     $dirty = $this->loadDisplay(static::DIRTY_DISPLAY_ID);
     $dirty->appendSection($this->createSection('layout_onecol', [
       new SectionComponent($uuid_legacy, 'content', [
@@ -92,6 +112,9 @@ class EntityViewDisplayWalkerTest extends NestedStorageKernelTestBase {
       ]),
       $this->createBasicBlockComponent($uuid_serialized),
     ]));
+    // The display is a legacy HOST too: the host transform receives it as
+    // the display host after its section walk.
+    $dirty->setThirdPartySetting(LegacyNameHostTransform::PROVIDER, 'legacy', TRUE);
     // A syncing save keeps the serialized inline block serialized (core's
     // InlineBlockEntityOperations::handlePreSave() skips syncing saves), so
     // the walker's own save is what must persist it.
@@ -103,7 +126,7 @@ class EntityViewDisplayWalkerTest extends NestedStorageKernelTestBase {
       ->count()
       ->execute());
 
-    // The layout_block display stays clean and must never be re-saved. The
+    // The clean display stays clean and must never be re-saved. The
     // basic block display is not Layout Builder enabled and must not even be
     // queued.
     TransformLog::reset();
@@ -134,16 +157,25 @@ class EntityViewDisplayWalkerTest extends NestedStorageKernelTestBase {
     $this->assertTrue($configs[$uuid_legacy]['annotated']);
     $this->assertSame('system_powered_by_block', $configs[$uuid_clean]['id'], 'The clean component is untouched.');
 
-    // The display save was not a syncing save: core converted the serialized
-    // inline block into a saved, usage-tracked block content revision.
-    $this->assertNotEmpty($configs[$uuid_serialized]['block_revision_id']);
-    $this->assertNull($configs[$uuid_serialized]['block_serialized']);
+    // The host transform ran over the display as a host, once, and its
+    // rewrite was persisted by the same save.
+    $this->assertSame(['host:' . static::DIRTY_DISPLAY_ID], array_values(array_filter(TransformLog::$calls, fn (string $call) => str_starts_with($call, 'host:'))));
+    $this->assertNull($this->loadDisplay(static::DIRTY_DISPLAY_ID)->getThirdPartySetting(LegacyNameHostTransform::PROVIDER, 'legacy'));
+
+    // The display save was not a syncing save: the inline block machinery
+    // stored the serialized inline block as values (a display host's
+    // shape: the block's fields under block_values, no entity, no revision
+    // id), so no block content entity exists.
+    $this->assertNotEmpty($configs[$uuid_serialized][InlineBlockValues::KEY]['info']);
+    foreach (InlineBlockValues::ENTITY_KEYS as $key) {
+      $this->assertArrayNotHasKey($key, $configs[$uuid_serialized], "The display names no block entity ($key).");
+    }
     $block_count = $this->entityTypeManager->getStorage('block_content')->getQuery()
       ->accessCheck(FALSE)
       ->condition('type', 'basic')
       ->count()
       ->execute();
-    $this->assertSame(1, (int) $block_count);
+    $this->assertSame(0, (int) $block_count);
 
     // The clean Layout Builder display kept its configuration.
     $clean_configs = $this->componentConfigs(static::CLEAN_DISPLAY_ID);

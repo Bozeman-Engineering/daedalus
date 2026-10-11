@@ -8,13 +8,13 @@ use Drupal\Core\Ajax\AjaxResponse;
 use Drupal\Core\Ajax\CloseDialogCommand;
 use Drupal\Core\Ajax\ReplaceCommand;
 use Drupal\Core\DependencyInjection\DependencySerializationTrait;
-use Drupal\Core\Entity\FieldableEntityInterface;
+use Drupal\daedalus_blueprint\Host\HostInterface;
+use Drupal\daedalus_blueprint\Host\HostResolver;
 use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\StringTranslation\StringTranslationTrait;
 use Drupal\daedalus_edit\FormCommit;
 use Drupal\daedalus_edit\FormCommitOutcome;
 use Drupal\daedalus_layout\NestedSectionStorageInterface;
-use Drupal\layout_builder\OverridesSectionStorageInterface;
 use Drupal\layout_builder\SectionStorageInterface;
 use Symfony\Component\HttpFoundation\RequestStack;
 
@@ -39,8 +39,9 @@ use Symfony\Component\HttpFoundation\RequestStack;
  * the ops around it.
  *
  * Only in Edit Mode (daedalus_edit_form_alter() gates on the mode) and only
- * over an overrides storage (the page's own layout): the stock Layout
- * Builder admin UI is not this dialog and keeps core's path.
+ * over a storage with a host (an entity's overrides, a display's defaults:
+ * the template's Configure dialog is this dialog too); a storage with no
+ * host keeps core's path.
  */
 abstract class ConfigureDialogFormAlterBase {
 
@@ -73,6 +74,7 @@ abstract class ConfigureDialogFormAlterBase {
   public function __construct(
     protected FormCommit $formCommit,
     protected RequestStack $requestStack,
+    protected HostResolver $hostResolver,
   ) {}
 
   /**
@@ -141,22 +143,20 @@ abstract class ConfigureDialogFormAlterBase {
   }
 
   /**
-   * The root entity a storage's layout belongs to, or NULL off the page.
+   * The host a storage's layout belongs to, or NULL off the page.
    *
    * @param \Drupal\layout_builder\SectionStorageInterface $storage
    *   The section storage, nested-scoped or not.
    *
-   * @return \Drupal\Core\Entity\FieldableEntityInterface|null
-   *   The overrides storage's entity; NULL for any other storage (a
-   *   display's defaults, the stock admin UI), which is not this dialog.
+   * @return \Drupal\daedalus_blueprint\Host\HostInterface|null
+   *   The storage's host (an entity for its overrides, a display for its
+   *   defaults: the template's dialog is this dialog too); NULL for a
+   *   storage with no host (core's navigation layout), which keeps core's
+   *   path.
    */
-  protected function rootOf(SectionStorageInterface $storage): ?FieldableEntityInterface {
+  protected function rootOf(SectionStorageInterface $storage): ?HostInterface {
     $root = $storage instanceof NestedSectionStorageInterface ? $storage->getRootStorage() : $storage;
-    if (!$root instanceof OverridesSectionStorageInterface) {
-      return NULL;
-    }
-    $entity = $root->getContextValue('entity');
-    return $entity instanceof FieldableEntityInterface ? $entity : NULL;
+    return $this->hostResolver->fromSectionStorage($root);
   }
 
   /**

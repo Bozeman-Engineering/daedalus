@@ -1,0 +1,4 @@
+label: 'Broken blueprint'
+description: 'Ships without a layout, violating the file grammar.'
+scope: block
+subject: 'entity_test:entity_test'

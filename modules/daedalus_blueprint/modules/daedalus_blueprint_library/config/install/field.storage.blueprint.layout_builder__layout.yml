@@ -1,0 +1,18 @@
+langcode: en
+status: true
+dependencies:
+  module:
+    - daedalus_blueprint_library
+    - layout_builder
+id: blueprint.layout_builder__layout
+field_name: layout_builder__layout
+entity_type: blueprint
+type: layout_section
+settings: {  }
+module: layout_builder
+locked: true
+cardinality: 1
+translatable: false
+indexes: {  }
+persist_with_no_fields: false
+custom_storage: false

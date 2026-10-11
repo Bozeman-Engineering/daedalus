@@ -1,28 +1,34 @@
 /**
- * Self-asserting tests for the selection spine's styling target.
+ * Self-asserting tests for the selection spine's two styling facts: the
+ * subject facet (`target`, keyed by the selected element) and the write
+ * address (`address`, keyed by the selection or an ancestor).
  *
- * The slice half locks the reducer invariants: a target is only ever
- * valid with a single selection (every selection write clears it, and
- * setTarget under a multi-select or no selection drops to null),
- * setHoverSelector writes only the hover facet, and clearSelection
- * resets the target and the hover facet. The facade half locks the
- * change-firing granularity decided with the target: onChange stays
- * KEY-only (element-scoped clear-on-change consumers must not be
- * disturbed by target moves), while onTargetChange fires on a selection
- * or target change and onHoverSelectorChange on any selector-hover value
- * change; and the facade's gates: every public write canonicalizes the
- * selector through the relative-selector grammar and refuses text outside
- * it, and target() refuses a key that is neither the selection nor an
- * ancestor of it.
+ * The slice half locks the reducer invariants: each fact is only ever
+ * valid with a single selection (every selection write clears both, and
+ * a write under a multi-select or no selection drops to null), setTarget
+ * nulls a key other than the selected key (an ancestor's rule is an
+ * address, never a facet) and clears the address, setAddress leaves the
+ * facet alone, setHoverSelector writes only the hover facet, and
+ * clearSelection resets both facts and the hover facet. The facade half
+ * locks the change-firing granularity: onChange stays KEY-only
+ * (element-scoped clear-on-change consumers must not be disturbed by
+ * styling moves), while onTargetChange is the one wire carrying
+ * {selected, target, address} and fires on any of the three changing,
+ * and onHoverSelectorChange fires on any selector-hover value change;
+ * and the facade's gates: every public write canonicalizes the selector
+ * through the relative-selector grammar and refuses text outside it,
+ * target() refuses any key but the selection (an ancestor included, over
+ * a booted index), and address() admits the selection and its
+ * projection-index ancestors and refuses the rest.
  *
  * The ancestry half locks the breadcrumb's trail (ancestry.js) over the
  * two-tier selection index read through reach (reach.js): a drawn part
- * target climbs its markup parents to the owner and on through the row
+ * facet climbs its markup parents to the owner and on through the row
  * parents to the root, every crumb carries the (key, selector) the
- * tree's rows commit, a target the index does not place (a hoisted part,
- * a tag tier, a chain, an ancestor rule) or places on a row the Markup
- * view is not drawing ends the trail as one target crumb after the
- * element's, and the trail never names an undrawn shell.
+ * tree's rows commit, a facet the index does not place (a hoisted part,
+ * a tag tier, a chain) or places on a row the Markup view is not drawing
+ * ends the trail as one target crumb after the element's, the trail
+ * never names an undrawn shell, and the write address is never a crumb.
  *
  * The traversal half locks the arrow grammar (traversal.js) over the same
  * index and reach: Up/Down walk the drawn row parent's drawn `rows`
@@ -49,6 +55,7 @@ import reducer, {
   setHoverSelector,
   setSelected,
   setTarget,
+  setAddress,
   toggleSelected,
   removeSelected,
   setSelectedSet,
@@ -74,22 +81,89 @@ test('setSelected commits a single selection; setTarget seats the target under i
   assert.deepEqual(state.selectedKeys, ['A']);
 });
 
-test('a target may sit on an ancestor of the selection (the slice holds no tree; the facade judges ancestry)', () => {
+test('setTarget nulls a key other than the selected key: a facet names something ON the selection, an ancestor\'s rule is an address', () => {
   const state = run(setSelected('A'), setTarget({ key: 'P', selector: '> pb-text' }));
   assert.equal(state.selectedKey, 'A');
-  assert.deepEqual(state.target, { key: 'P', selector: '> pb-text' });
+  assert.equal(state.target, null);
+  // A standing facet is replaced by the null, not left in place: the
+  // write was a facet write and the facet is now "the element itself".
+  const replaced = run(setSelected('A'), setTarget({ key: 'A', selector: '.icon' }), setTarget({ key: 'P', selector: 'p' }));
+  assert.equal(replaced.target, null);
 });
 
-test('setSelected of another key clears the target (a selection write is element-only)', () => {
-  const state = run(setSelected('A'), setTarget({ key: 'A', selector: '.icon' }), setSelected('B'));
+test('setAddress seats the write address under the single selection, on the selection or an ancestor (the slice holds no tree; the facade judges ancestry)', () => {
+  const own = run(setSelected('A'), setAddress({ key: 'A', selector: 'li' }));
+  assert.deepEqual(own.address, { key: 'A', selector: 'li' });
+  const above = run(setSelected('A'), setAddress({ key: 'P', selector: '> pb-text' }));
+  assert.equal(above.selectedKey, 'A');
+  assert.deepEqual(above.address, { key: 'P', selector: '> pb-text' });
+  assert.equal(above.target, null, 'an address write leaves the facet alone');
+});
+
+test('setAddress leaves the facet alone: the two facts stand together', () => {
+  const state = run(
+    setSelected('A'),
+    setTarget({ key: 'A', selector: '.s-abc' }),
+    setAddress({ key: 'P', selector: 'li' }),
+  );
+  assert.deepEqual(state.target, { key: 'A', selector: '.s-abc' });
+  assert.deepEqual(state.address, { key: 'P', selector: 'li' });
+});
+
+test('setTarget clears the address: a new subject has no address picked yet, and setTarget(null) drops both', () => {
+  const moved = run(
+    setSelected('A'),
+    setTarget({ key: 'A', selector: '.s-abc' }),
+    setAddress({ key: 'P', selector: 'li' }),
+    setTarget({ key: 'A', selector: 'li' }),
+  );
+  assert.deepEqual(moved.target, { key: 'A', selector: 'li' });
+  assert.equal(moved.address, null);
+  const dropped = run(
+    setSelected('A'),
+    setTarget({ key: 'A', selector: '.s-abc' }),
+    setAddress({ key: 'P', selector: 'li' }),
+    setTarget(null),
+  );
+  assert.equal(dropped.selectedKey, 'A');
+  assert.equal(dropped.target, null);
+  assert.equal(dropped.address, null);
+});
+
+test('setAddress(null) drops the address and leaves the facet and the selection', () => {
+  const state = run(
+    setSelected('A'),
+    setTarget({ key: 'A', selector: '.s-abc' }),
+    setAddress({ key: 'P', selector: 'li' }),
+    setAddress(null),
+  );
+  assert.equal(state.selectedKey, 'A');
+  assert.deepEqual(state.target, { key: 'A', selector: '.s-abc' });
+  assert.equal(state.address, null);
+});
+
+test('setSelected of another key clears the facet and the address (a selection write is element-only)', () => {
+  const state = run(
+    setSelected('A'),
+    setTarget({ key: 'A', selector: '.icon' }),
+    setAddress({ key: 'P', selector: 'li' }),
+    setSelected('B'),
+  );
   assert.equal(state.selectedKey, 'B');
   assert.equal(state.target, null);
+  assert.equal(state.address, null);
 });
 
-test('re-selecting the same key clears the target (the reclick shape)', () => {
-  const state = run(setSelected('A'), setTarget({ key: 'A', selector: '.icon' }), setSelected('A'));
+test('re-selecting the same key clears the facet and the address (the reclick shape)', () => {
+  const state = run(
+    setSelected('A'),
+    setTarget({ key: 'A', selector: '.icon' }),
+    setAddress({ key: 'P', selector: 'li' }),
+    setSelected('A'),
+  );
   assert.equal(state.selectedKey, 'A');
   assert.equal(state.target, null);
+  assert.equal(state.address, null);
 });
 
 test('setTarget(null) drops the target and leaves the selection', () => {
@@ -98,38 +172,56 @@ test('setTarget(null) drops the target and leaves the selection', () => {
   assert.equal(state.target, null);
 });
 
-test('a target without a selection, or without a key or selector, drops to null', () => {
+test('a target or an address without a selection, or without a key or selector, drops to null', () => {
   assert.equal(run(setTarget({ key: 'A', selector: '.icon' })).target, null);
   assert.equal(run(setSelected('A'), setTarget({ key: null, selector: '.icon' })).target, null);
   assert.equal(run(setSelected('A'), setTarget({ key: 'A', selector: null })).target, null);
+  assert.equal(run(setAddress({ key: 'A', selector: 'li' })).address, null);
+  assert.equal(run(setSelected('A'), setAddress({ key: null, selector: 'li' })).address, null);
+  assert.equal(run(setSelected('A'), setAddress({ key: 'P', selector: null })).address, null);
 });
 
-test('toggleSelected is element-only: any toggle clears the target, and a set carries none', () => {
-  const state = run(setSelected('A'), setTarget({ key: 'A', selector: '.icon' }), toggleSelected('B'));
-  assert.deepEqual(state.selectedKeys, ['A', 'B']);
-  assert.equal(state.selectedKey, 'B');
-  assert.equal(state.target, null);
-  assert.equal(reducer(state, setTarget({ key: 'B', selector: '.icon' })).target, null);
-});
-
-test('removeSelected of the primary clears the target; a non-member remove is a no-op', () => {
-  const selected = run(setSelected('A'), setTarget({ key: 'A', selector: '.icon' }));
-  const removed = reducer(selected, removeSelected('A'));
-  assert.equal(removed.selectedKey, null);
-  assert.equal(removed.target, null);
-  const noop = reducer(selected, removeSelected('B'));
-  assert.equal(noop.selectedKey, 'A');
-  assert.deepEqual(noop.target, { key: 'A', selector: '.icon' });
-});
-
-test('setSelectedSet is element-only: replacing the set clears the target', () => {
+test('toggleSelected is element-only: any toggle clears the facet and the address, and a set carries neither', () => {
   const state = run(
     setSelected('A'),
     setTarget({ key: 'A', selector: '.icon' }),
+    setAddress({ key: 'P', selector: 'li' }),
+    toggleSelected('B'),
+  );
+  assert.deepEqual(state.selectedKeys, ['A', 'B']);
+  assert.equal(state.selectedKey, 'B');
+  assert.equal(state.target, null);
+  assert.equal(state.address, null);
+  assert.equal(reducer(state, setTarget({ key: 'B', selector: '.icon' })).target, null);
+  assert.equal(reducer(state, setAddress({ key: 'P', selector: 'li' })).address, null);
+});
+
+test('removeSelected of the primary clears the facet and the address; a non-member remove is a no-op', () => {
+  const selected = run(
+    setSelected('A'),
+    setTarget({ key: 'A', selector: '.icon' }),
+    setAddress({ key: 'P', selector: 'li' }),
+  );
+  const removed = reducer(selected, removeSelected('A'));
+  assert.equal(removed.selectedKey, null);
+  assert.equal(removed.target, null);
+  assert.equal(removed.address, null);
+  const noop = reducer(selected, removeSelected('B'));
+  assert.equal(noop.selectedKey, 'A');
+  assert.deepEqual(noop.target, { key: 'A', selector: '.icon' });
+  assert.deepEqual(noop.address, { key: 'P', selector: 'li' });
+});
+
+test('setSelectedSet is element-only: replacing the set clears the facet and the address', () => {
+  const state = run(
+    setSelected('A'),
+    setTarget({ key: 'A', selector: '.icon' }),
+    setAddress({ key: 'P', selector: 'li' }),
     setSelectedSet({ keys: ['A', 'B'], primary: 'A' }),
   );
   assert.equal(state.selectedKey, 'A');
   assert.equal(state.target, null);
+  assert.equal(state.address, null);
 });
 
 test('setHover with a selector sets both hover halves; a bare key clears the facet', () => {
@@ -156,15 +248,17 @@ test('setHoverSelector writes only the facet, leaving the element hover alone', 
   assert.equal(invalid.hoverSelector, null);
 });
 
-test('clearSelection resets the target and the hover facet with the rest of the spine', () => {
+test('clearSelection resets the target, the address and the hover facet with the rest of the spine', () => {
   const state = run(
     setSelected('A'),
     setTarget({ key: 'A', selector: '.icon' }),
+    setAddress({ key: 'P', selector: 'li' }),
     setHoverSelector({ key: 'A', selector: '.label' }),
     clearSelection(),
   );
   assert.equal(state.selectedKey, null);
   assert.equal(state.target, null);
+  assert.equal(state.address, null);
   assert.equal(state.hoverKey, null);
   assert.equal(state.hoverSelector, null);
   assert.deepEqual(state.selectedKeys, []);
@@ -213,6 +307,9 @@ globalThis.document = {
   documentElement: { addEventListener: () => {} },
 };
 globalThis.Drupal = { t: (string) => string };
+// The projection index composes shells from the anatomy payload; the
+// booted-index facade cases at the end of this file read it empty.
+globalThis.drupalSettings = {};
 
 const { labelFor, fallbackLabel } = await import('../../js/edit_mode/selection/label-for-key.js');
 const { typeFor } = await import('../../js/edit_mode/selection/type-for-key.js');
@@ -220,6 +317,7 @@ const { ancestryOf } = await import('../../js/edit_mode/selection/ancestry.js');
 const { seatOf, siblingOf, parentOf, firstRowOf } = await import('../../js/edit_mode/selection/traversal.js');
 const { selectorAddress, splitAddress } = await import('../../js/edit_mode/components/page-elements/projection-index.js');
 const { reachOver, seatAddress } = await import('../../js/edit_mode/components/page-elements/reach.js');
+const { reseatAddress } = await import('../../js/edit_mode/components/page-elements/reseat.js');
 const { MARKUP_VIEW_ID } = await import('../../js/edit_mode/components/page-elements/markup-view.js');
 
 // ---------------------------------------------------------------------------
@@ -260,8 +358,8 @@ test('labelFor labels a placed part address from the index, and any other addres
     ['container:c', { label: 'Welcome', tier: 'element' }],
   ]);
   assert.equal(labelFor(index, selectorAddress('block:u1', '.image-block-image')), 'Raster');
-  // An unplaced address (a tag tier, a chain, an ancestor rule) is its
-  // owner's other name, never the key's kind.
+  // An unplaced address (a tag tier, a chain) is its owner's other
+  // name, never the key's kind.
   assert.equal(labelFor(index, selectorAddress('container:c', 'a')), 'Welcome');
   assert.equal(labelFor(index, selectorAddress('container:c', '> pb-text .quote')), 'Welcome');
   assert.equal(labelFor(null, selectorAddress('block:u2:hero_banner', 'p')), 'Hero banner');
@@ -275,10 +373,16 @@ test('splitAddress is selectorAddress\'s inverse; an element key splits to a nul
   assert.deepEqual(splitAddress('block:u1:field_image'), { key: 'block:u1:field_image', selector: null });
 });
 
+// Reach is gated on the actor too (a row whose verdict allows nothing is
+// drawn but never reachable), so every hand-built entry the walks read
+// through reach carries an open verdict; the not-selectable suite covers
+// the refused shapes.
+const OPEN = { content: true, configure: true, style: true, arrange: true, insert: true };
+
 test('seatAddress seats a placed, drawn part on its address and an unplaced one on its owner', () => {
   const index = new Map([
-    ['block:u1', { label: 'Image', tier: 'element', source: 'element' }],
-    [selectorAddress('block:u1', '.image-block-image'), { label: 'Raster', tier: 'part', source: MARKUP_VIEW_ID }],
+    ['block:u1', { label: 'Image', tier: 'element', source: 'element', can: OPEN }],
+    [selectorAddress('block:u1', '.image-block-image'), { label: 'Raster', tier: 'part', source: MARKUP_VIEW_ID, can: OPEN }],
   ]);
   const on = reachOver(index, { [MARKUP_VIEW_ID]: true });
   assert.equal(seatAddress(index, on, 'block:u1', '.image-block-image'), selectorAddress('block:u1', '.image-block-image'));
@@ -291,9 +395,9 @@ test('seatAddress seats a placed shell part on its owner while the Markup view i
   // The seat never validates the target (the facade's target() can stand
   // it whatever the view); it says which drawn row stands for it now.
   const index = new Map([
-    ['block:u1', { label: 'Image', tier: 'element', source: 'element' }],
-    [selectorAddress('block:u1', '.image-block-image'), { label: 'Raster', tier: 'part', source: MARKUP_VIEW_ID }],
-    [selectorAddress('block:u1', '.s-l1'), { label: 'List', tier: 'part', source: 'instance' }],
+    ['block:u1', { label: 'Image', tier: 'element', source: 'element', can: OPEN }],
+    [selectorAddress('block:u1', '.image-block-image'), { label: 'Raster', tier: 'part', source: MARKUP_VIEW_ID, can: OPEN }],
+    [selectorAddress('block:u1', '.s-l1'), { label: 'List', tier: 'part', source: 'instance', can: OPEN }],
   ]);
   const off = reachOver(index, {});
   const on = reachOver(index, { [MARKUP_VIEW_ID]: true });
@@ -342,7 +446,7 @@ const ancestryIndex = () => new Map([
   [TEXT, { label: 'Formatted text', tier: 'element', source: 'element', parent: 'container:s', rowParent: 'container:s', rows: [UL] }],
   [UL, { label: 'Bulleted list', tier: 'part', source: 'instance', owner: TEXT, parent: TEXT, rowParent: TEXT, rows: [LI] }],
   [LI, { label: 'List item', tier: 'part', source: 'instance', owner: TEXT, parent: UL, rowParent: UL, rows: [] }],
-]);
+].map(([address, entry]) => [address, { can: OPEN, ...entry }]));
 const ON = reachOver(ancestryIndex(), { [MARKUP_VIEW_ID]: true });
 const OFF = reachOver(ancestryIndex(), {});
 
@@ -397,21 +501,20 @@ test('a target the index does not place ends the trail as a target crumb after i
   assert.deepEqual(labels(ancestryOf(ancestryIndex(), ON, TEXT, target(TEXT, '> pb-text .quote'))), ['Page', 'Container', 'Formatted text', '> pb-text .quote']);
 });
 
-test('an ancestor-rule target sits on the selected element and ends the trail with the rule\'s crumb', () => {
-  // The selection is the image; the target is a rule on its container.
-  // The trail is the image's, and the target crumb carries the CONTAINER
-  // key with the rule's selector: what the crumb addresses is the rule.
-  const trail = ancestryOf(ancestryIndex(), ON, IMAGE, target('container:s', '> pb-image'));
-  assert.deepEqual(labels(trail), ['Page', 'Container', 'Image', '> pb-image']);
-  assert.deepEqual(trail.at(-1), {
-    address: selectorAddress('container:s', '> pb-image'),
-    key: 'container:s',
-    selector: '> pb-image',
-    label: '> pb-image',
-  });
-  // A placed part of an ANCESTOR is not the selection's row either: it
-  // sits on the selected element like any ancestor target.
-  assert.deepEqual(labels(ancestryOf(ancestryIndex(), ON, FIELD, target(IMAGE, '.image-block-image'))), ['Page', 'Container', 'Image', 'Raster', 'Field image', '.image-block-image']);
+test('the trail reads the facet alone: a rule on an ancestor is a write address, never a crumb', () => {
+  // ancestryOf takes the selected key and its facet and nothing else:
+  // the slice's `address` (a rule on the selection or an ancestor, "every
+  // list item in Welcome") has no crumb, the inspector's chip is its
+  // readout. The trail for a selected list item styled at its container's
+  // `li` rule is exactly the item's own trail.
+  const facetOnly = ancestryOf(ancestryIndex(), ON, TEXT, target(TEXT, '.s-i1'));
+  assert.deepEqual(labels(facetOnly), ['Page', 'Container', 'Formatted text', 'Bulleted list', 'List item']);
+  // A tag-tier facet on the same item: one target crumb, keyed by the
+  // SELECTED element, whatever address the write lands at.
+  const tier = ancestryOf(ancestryIndex(), ON, TEXT, target(TEXT, 'li'));
+  assert.deepEqual(labels(tier), ['Page', 'Container', 'Formatted text', 'li']);
+  assert.deepEqual(tier.at(-1), { address: selectorAddress(TEXT, 'li'), key: TEXT, selector: 'li', label: 'li' });
+  assert.equal(tier.some((crumb) => crumb.key === 'container:s' && crumb.selector !== null), false, 'no crumb names a rule on an ancestor');
 });
 
 test('an element the index cannot place is its own one-crumb trail', () => {
@@ -540,14 +643,21 @@ test('a shell target seats on the owner with the Markup view off and on its row 
   assert.equal(firstRowOf(ancestryIndex(), OFF, IMAGE, '.image-block-image').address, FIELD);
 });
 
-test('the breadcrumb omits undrawn shells and ends an unreachable placed target with a target crumb', () => {
+test('the breadcrumb omits undrawn shells; a shell target the view flip undrew is re-seated on its owner, and a seat made while off keeps its target crumb', () => {
   // The claimed field's trail names its owner directly with the shell
   // undrawn, the shell between them with it drawn.
   assert.deepEqual(labels(ancestryOf(ancestryIndex(), OFF, FIELD)), ['Page', 'Container', 'Image', 'Field image']);
   assert.deepEqual(labels(ancestryOf(ancestryIndex(), ON, FIELD)), ['Page', 'Container', 'Image', 'Raster', 'Field image']);
-  // A standing shell target the view flip made unreachable degrades to a
-  // doorway seat: the owner's trail plus one target crumb committing the
-  // target itself, exactly as a tag tier does.
+  // A standing shell target the view flip made unreachable is moved by
+  // the re-seat (reseat.js) to the nearest drawn row, its owner: the
+  // trail after the flip is the owner's, with no target crumb.
+  const standing = { selectedKey: IMAGE, selectedKeys: [IMAGE], target: target(IMAGE, '.image-block-image') };
+  assert.equal(reseatAddress(ancestryIndex(), OFF, standing), IMAGE);
+  assert.deepEqual(labels(ancestryOf(ancestryIndex(), OFF, IMAGE)), ['Page', 'Container', 'Image']);
+  // The same seat MADE while the view is off stands (the re-seat fires
+  // on the flip alone): the trail degrades to a doorway seat, the owner's
+  // trail plus one target crumb committing the target itself, exactly as
+  // a tag tier does.
   const trail = ancestryOf(ancestryIndex(), OFF, IMAGE, target(IMAGE, '.image-block-image'));
   assert.deepEqual(labels(trail), ['Page', 'Container', 'Image', '.image-block-image']);
   assert.deepEqual(trail.at(-2), { address: IMAGE, key: IMAGE, selector: null, label: 'Image' });
@@ -559,6 +669,72 @@ test('the breadcrumb omits undrawn shells and ends an unreachable placed target 
   });
   // An instance carrier trails through its rows in every view.
   assert.deepEqual(labels(ancestryOf(ancestryIndex(), OFF, TEXT, target(TEXT, '.s-i1'))), ['Page', 'Container', 'Formatted text', 'Bulleted list', 'List item']);
+});
+
+// ---------------------------------------------------------------------------
+// The re-seat rule (reseat.js reseatAddress): what the selection moves to
+// when a view flip undraws its row. Pure over the index and reach; the
+// live subscriber over the store is driven in reach.test.mjs.
+// ---------------------------------------------------------------------------
+
+const selection = (selectedKey, selector = null, selectedKeys = [selectedKey]) => ({
+  selectedKey,
+  selectedKeys,
+  target: selector === null ? null : target(selectedKey, selector),
+});
+
+test('a shell target climbs to its owner on the flip; a target still drawn stands', () => {
+  // The shell's row is the Markup view's: off, the target's row is gone
+  // and the climb from it lands on the owner.
+  assert.equal(reseatAddress(ancestryIndex(), OFF, selection(IMAGE, '.image-block-image')), IMAGE);
+  // On, the row is drawn: nothing moves.
+  assert.equal(reseatAddress(ancestryIndex(), ON, selection(IMAGE, '.image-block-image')), null);
+  // An instance row is drawn in every view: its target stands either way.
+  assert.equal(reseatAddress(ancestryIndex(), OFF, selection(TEXT, '.s-i1')), null);
+  assert.equal(reseatAddress(ancestryIndex(), ON, selection(TEXT, '.s-i1')), null);
+});
+
+test('a target with no row in any view stands: a tag tier, a chain, the children selector', () => {
+  for (const selector of ['a', '> pb-text .quote', '> *']) {
+    assert.equal(reseatAddress(ancestryIndex(), OFF, selection(IMAGE, selector)), null, selector);
+    assert.equal(reseatAddress(ancestryIndex(), ON, selection(IMAGE, selector)), null, selector);
+  }
+  // A bare element selection has nothing to move.
+  assert.equal(reseatAddress(ancestryIndex(), OFF, selection(IMAGE)), null);
+  assert.equal(reseatAddress(ancestryIndex(), OFF, selection('entity:r')), null);
+});
+
+test('the re-seat ignores the write address: it seats by the facet alone', () => {
+  // An address on the container's rule stands through a flip with a bare
+  // element or an unplaced facet (nothing to move), and does not stop the
+  // shell facet's climb either.
+  const address = { key: 'container:s', selector: '> pb-image' };
+  assert.equal(reseatAddress(ancestryIndex(), OFF, { ...selection(IMAGE), address }), null);
+  assert.equal(reseatAddress(ancestryIndex(), OFF, { ...selection(IMAGE, 'a'), address }), null);
+  assert.equal(reseatAddress(ancestryIndex(), OFF, { ...selection(IMAGE, '.image-block-image'), address }), IMAGE);
+});
+
+test('a selected key in no index falls to its subject: an absorbed block field to its placement, a root field to the root', () => {
+  assert.equal(reseatAddress(ancestryIndex(), OFF, selection(`${IMAGE}:field_caption`)), IMAGE);
+  assert.equal(reseatAddress(ancestryIndex(), ON, selection(`${IMAGE}:field_caption`)), IMAGE);
+  assert.equal(reseatAddress(ancestryIndex(), OFF, selection('field:r:title')), 'entity:r');
+  // A key with no subject (not a field key) or a subject the index does
+  // not place moves nowhere.
+  assert.equal(reseatAddress(ancestryIndex(), OFF, selection('block:nowhere')), null);
+  assert.equal(reseatAddress(ancestryIndex(), OFF, selection('block:nowhere:field_x')), null);
+  // The subject must be reachable: a refused placement cannot be landed
+  // on, so its absorbed field key stays where it is (the gate would have
+  // refused the key in the first place).
+  const refused = new Map(ancestryIndex());
+  refused.set(IMAGE, { ...refused.get(IMAGE), can: { content: false, configure: false, style: false, arrange: false, insert: false } });
+  assert.equal(reseatAddress(refused, reachOver(refused, {}), selection(`${IMAGE}:field_caption`)), null);
+});
+
+test('only a single selection re-seats, and nothing moves before the mirror boots', () => {
+  assert.equal(reseatAddress(ancestryIndex(), OFF, selection(IMAGE, null, [IMAGE, TEXT])), null);
+  assert.equal(reseatAddress(ancestryIndex(), OFF, selection(`${IMAGE}:field_caption`, null, [`${IMAGE}:field_caption`, TEXT])), null);
+  assert.equal(reseatAddress(ancestryIndex(), OFF, { selectedKey: null, selectedKeys: [], target: null }), null);
+  assert.equal(reseatAddress(null, OFF, selection(IMAGE, '.image-block-image')), null);
 });
 
 // ---------------------------------------------------------------------------
@@ -655,18 +831,64 @@ test('facade select is bare, target seats the styling target and the getters rea
   assert.equal(Selection.getTarget(), null);
 });
 
-test('facade target refuses a key that is neither the selection nor an ancestor, and needs a single selection', () => {
+test('facade target refuses any key but the selection, and needs a single selection', () => {
   Selection.clear();
-  // No projection index boots in this suite, so no key has ancestry:
-  // only the selected key itself may carry a target.
   assert.throws(() => Selection.target('A', '.icon'), TypeError);
   Selection.select('A');
-  assert.throws(() => Selection.target('P', '> pb-text'), TypeError);
+  assert.throws(() => Selection.target('P', '> pb-text'), /not the selected element/);
   assert.equal(Selection.getTarget(), null);
   Selection.selectSet(['A', 'B'], 'A');
   assert.throws(() => Selection.target('A', '.icon'), TypeError);
   assert.equal(Selection.getTarget(), null);
   Selection.clear();
+});
+
+test('facade address seats the write address on the selection, refuses a key with no ancestry, and needs a single selection', () => {
+  Selection.clear();
+  assert.throws(() => Selection.address('A', 'li'), TypeError);
+  Selection.select('A');
+  // The selection itself is admitted (a tag rule at the own key).
+  Selection.address('A', 'li');
+  assert.deepEqual(Selection.getAddress(), { key: 'A', selector: 'li' });
+  // No projection index has booted yet in this suite, so no other key
+  // has ancestry: refused, and the standing address untouched.
+  assert.throws(() => Selection.address('P', '> pb-text'), /neither the selected element/);
+  assert.deepEqual(Selection.getAddress(), { key: 'A', selector: 'li' });
+  // address(null) drops it; the facet and the selection stay.
+  Selection.target('A', '.s-abc');
+  Selection.address('A', 'li');
+  Selection.address(null);
+  assert.equal(Selection.getAddress(), null);
+  assert.deepEqual(Selection.getTarget(), { key: 'A', selector: '.s-abc' });
+  assert.equal(Selection.getSelected(), 'A');
+  Selection.selectSet(['A', 'B'], 'A');
+  assert.throws(() => Selection.address('A', 'li'), TypeError);
+  assert.equal(Selection.getAddress(), null);
+  Selection.clear();
+});
+
+test('facade target() drops a standing address; address() leaves the facet; every selection write drops both', () => {
+  Selection.clear();
+  Selection.select('A');
+  Selection.target('A', '.s-abc');
+  Selection.address('A', 'li');
+  assert.deepEqual(Selection.getTarget(), { key: 'A', selector: '.s-abc' });
+  assert.deepEqual(Selection.getAddress(), { key: 'A', selector: 'li' });
+  Selection.target('A', 'li');
+  assert.equal(Selection.getAddress(), null, 'a facet write drops the address picked for the old subject');
+  Selection.address('A', 'p');
+  assert.deepEqual(Selection.getTarget(), { key: 'A', selector: 'li' }, 'an address write leaves the facet');
+  Selection.select('A');
+  assert.equal(Selection.getTarget(), null);
+  assert.equal(Selection.getAddress(), null);
+  Selection.target('A', 'li');
+  Selection.address('A', 'p');
+  Selection.toggle('B');
+  assert.equal(Selection.getAddress(), null);
+  Selection.select('A');
+  Selection.address('A', 'p');
+  Selection.clear();
+  assert.equal(Selection.getAddress(), null);
 });
 
 test('facade hover and hoverSelector drive the two hover halves independently', () => {
@@ -703,7 +925,7 @@ test('onChange fires on key changes only, never on target changes under the same
   ]);
 });
 
-test('onTargetChange fires on a selection or target change and is value-compared on the target', () => {
+test('onTargetChange is the one wire: it carries {selected, target, address}, fires on any of the three changing, value-compared on the pairs', () => {
   Selection.clear();
   const calls = record(Selection.onTargetChange, () => {
     Selection.select('A');
@@ -711,14 +933,37 @@ test('onTargetChange fires on a selection or target change and is value-compared
     Selection.target('A', '.label');
     // The same target re-asserted does not fire.
     Selection.target('A', '.label');
+    // An address pick fires with the facet unchanged; re-asserted, silent.
+    Selection.address('A', 'li');
+    Selection.address('A', 'li');
+    // A facet write drops the address: one delivery carrying both moves.
+    Selection.target('A', 'li');
+    Selection.address('A', 'p');
     Selection.select('B');
   });
+  const icon = { key: 'A', selector: '.icon' };
+  const label = { key: 'A', selector: '.label' };
+  const li = { key: 'A', selector: 'li' };
+  const p = { key: 'A', selector: 'p' };
   assert.deepEqual(calls, [
-    { current: { selected: 'A', target: null }, previous: { selected: null, target: null } },
-    { current: { selected: 'A', target: { key: 'A', selector: '.icon' } }, previous: { selected: 'A', target: null } },
-    { current: { selected: 'A', target: { key: 'A', selector: '.label' } }, previous: { selected: 'A', target: { key: 'A', selector: '.icon' } } },
-    { current: { selected: 'B', target: null }, previous: { selected: 'A', target: { key: 'A', selector: '.label' } } },
+    { current: { selected: 'A', target: null, address: null }, previous: { selected: null, target: null, address: null } },
+    { current: { selected: 'A', target: icon, address: null }, previous: { selected: 'A', target: null, address: null } },
+    { current: { selected: 'A', target: label, address: null }, previous: { selected: 'A', target: icon, address: null } },
+    { current: { selected: 'A', target: label, address: li }, previous: { selected: 'A', target: label, address: null } },
+    { current: { selected: 'A', target: li, address: null }, previous: { selected: 'A', target: label, address: li } },
+    { current: { selected: 'A', target: li, address: p }, previous: { selected: 'A', target: li, address: null } },
+    { current: { selected: 'B', target: null, address: null }, previous: { selected: 'A', target: li, address: p } },
   ]);
+});
+
+test('onChange stays silent on address changes under the same key', () => {
+  Selection.clear();
+  const calls = record(Selection.onChange, () => {
+    Selection.select('A');
+    Selection.address('A', 'li');
+    Selection.address(null);
+  });
+  assert.deepEqual(calls, [{ current: 'A', previous: null }]);
 });
 
 test('onHoverSelectorChange fires on selector-hover value changes, from either writer', () => {
@@ -782,4 +1027,96 @@ test('the facade refuses a selector outside the grammar instead of seating it', 
   // A refused write leaves the committed target untouched.
   assert.deepEqual(Selection.getTarget(), { key: 'A', selector: '.icon' });
   Selection.clear();
+});
+
+test('the facade canonicalizes an address selector and refuses one outside the grammar', () => {
+  Selection.clear();
+  Selection.select('A');
+  Selection.address('A', ' > pb-text ');
+  assert.deepEqual(Selection.getAddress(), { key: 'A', selector: '> pb-text' });
+  for (const bad of ['div > .loose', '.two.classes', 'a:hover', '*', '::p', '']) {
+    assert.throws(() => Selection.address('A', bad), TypeError);
+  }
+  // address('A') with no selector is not the drop (address(null) is): a
+  // key without a rule is a caller bug.
+  assert.throws(() => Selection.address('A'), TypeError);
+  assert.deepEqual(Selection.getAddress(), { key: 'A', selector: '> pb-text' });
+  Selection.clear();
+});
+
+// ---------------------------------------------------------------------------
+// The facade over a BOOTED projection index: ancestry. Last in the file on
+// purpose: once the mirror boots, the store's selection gate judges every
+// key against the index, so the bare 'A' / 'B' keys above would be dropped.
+// ---------------------------------------------------------------------------
+
+const { default: store } = await import('../../js/edit_mode/store/store.js');
+const { blueprintBooted } = await import('../../js/edit_mode/store/slices/blueprint-slice.js');
+
+const ROOT_UUID = '99999999-1111-2222-3333-444444444444';
+const SECTION_UUID = 'aaaaaaaa-1111-2222-3333-444444444444';
+const BLOCK_UUID = 'bbbbbbbb-1111-2222-3333-444444444444';
+const OTHER_UUID = 'cccccccc-1111-2222-3333-444444444444';
+const ROOT_KEY = `entity:${ROOT_UUID}`;
+const SECTION_KEY = `container:${SECTION_UUID}`;
+const BLOCK_KEY = `block:${BLOCK_UUID}`;
+const OTHER_KEY = `block:${OTHER_UUID}`;
+
+test('over a booted index, target() refuses an ancestor key and address() admits the selection and its ancestors only', () => {
+  const block = (uuid, label) => ({
+    kind: 'block',
+    uuid,
+    block_type: 'text',
+    label,
+    block_fields: { field_text_text: label },
+    _element: { presentation: { mode: 'merged', edit_target: 'field_text_text' }, can: OPEN },
+  });
+  store.dispatch(blueprintBooted({
+    entityType: 'node',
+    entityId: '1',
+    uuid: ROOT_UUID,
+    label: 'Page',
+    langcode: 'en',
+    viewMode: 'full',
+    blueprint: {
+      bundle: 'page',
+      fields: {},
+      _element: { can: OPEN },
+      layout: [{
+        kind: 'container',
+        uuid: SECTION_UUID,
+        layout_id: 'layout_onecol',
+        _element: { can: OPEN },
+        children: [{ kind: 'region', region: 'content', children: [block(BLOCK_UUID, 'Text'), block(OTHER_UUID, 'Other')] }],
+      }],
+    },
+  }));
+  Selection.clear();
+  Selection.select(BLOCK_KEY);
+  assert.equal(Selection.getSelected(), BLOCK_KEY);
+  // The done-when: the facade's target() refuses an ancestor key, the
+  // very shape the old one-target spine admitted for a rule on an ancestor.
+  assert.throws(() => Selection.target(SECTION_KEY, '> pb-text'), /not the selected element/);
+  assert.throws(() => Selection.target(ROOT_KEY, 'li'), /not the selected element/);
+  assert.equal(Selection.getTarget(), null);
+  // The address takes the ancestry check: the section and the root are
+  // ancestors of the block in the projection index, a sibling is not.
+  Selection.target(BLOCK_KEY, '.s-abc');
+  Selection.address(SECTION_KEY, 'li');
+  assert.deepEqual(Selection.getAddress(), { key: SECTION_KEY, selector: 'li' });
+  assert.deepEqual(Selection.getTarget(), { key: BLOCK_KEY, selector: '.s-abc' }, 'the rows stay the subject\'s');
+  Selection.address(ROOT_KEY, '> pb-text');
+  assert.deepEqual(Selection.getAddress(), { key: ROOT_KEY, selector: '> pb-text' });
+  assert.throws(() => Selection.address(OTHER_KEY, 'li'), /neither the selected element/);
+  assert.deepEqual(Selection.getAddress(), { key: ROOT_KEY, selector: '> pb-text' }, 'a refused write leaves the standing address');
+  Selection.address(BLOCK_KEY, 'li');
+  assert.deepEqual(Selection.getAddress(), { key: BLOCK_KEY, selector: 'li' });
+  // One subscription delivers the address beside the facet.
+  const calls = record(Selection.onTargetChange, () => Selection.address(SECTION_KEY, 'li'));
+  assert.deepEqual(calls, [{
+    current: { selected: BLOCK_KEY, target: { key: BLOCK_KEY, selector: '.s-abc' }, address: { key: SECTION_KEY, selector: 'li' } },
+    previous: { selected: BLOCK_KEY, target: { key: BLOCK_KEY, selector: '.s-abc' }, address: { key: BLOCK_KEY, selector: 'li' } },
+  }]);
+  Selection.clear();
+  assert.equal(Selection.getAddress(), null);
 });

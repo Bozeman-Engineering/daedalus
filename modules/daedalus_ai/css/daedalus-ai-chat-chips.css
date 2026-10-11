@@ -1,16 +1,14 @@
 /**
  * @file
- * Chat chips — the AI chat's rendering of the selection set.
+ * Chat chips: the AI chat's rendering of the selection set.
+ *
+ * The chips are a READER of the one selection spine, so they spell
+ * "selected" in the chrome's selection token like every other reader
+ * (the canvas frame, the indicator's chips, the page tree's rows, the
+ * inspector's subject pill). The site's highlight color is the attention
+ * token (the mutation pulse, the generating shimmer) and never says
+ * "selected", here or anywhere.
  */
-
-/* Header color override while a selection rides the chat context. */
-.daedalus-ai-has-context .ai-deepchat--header,
-.daedalus-ai-has-context .ai-deepchat--header:hover,
-.daedalus-ai-has-context .ai-deepchat--header.active {
-  transition: background-color 0.3s ease;
-  border-color: var(--daedalus-ui-highlight-color);
-  background: var(--daedalus-ui-highlight-color);
-}
 
 /* Chip panel between header and chat area. */
 .daedalus-ai-context-panel {
@@ -44,11 +42,11 @@
   }
 }
 
-/* Individual chip: the kit's tinted meta chip wearing the highlight hue.
-   The asymmetric padding is the numbered badge's geometry — the 22px
-   circle sits nearly flush in the pill's left end cap. */
+/* Individual chip: the kit's tinted meta chip wearing the selection
+   color. The asymmetric padding is the numbered badge's geometry: the
+   22px circle sits nearly flush in the pill's left end cap. */
 .daedalus-ui-chip.daedalus-ai-context-item {
-  --daedalus-ui-chip-color: var(--daedalus-ui-highlight-color);
+  --daedalus-ui-chip-color: var(--daedalus-selection);
 
   padding: 4px 12px 4px 4px;
 }
@@ -61,9 +59,9 @@
   justify-content: center;
   width: 22px;
   height: 22px;
-  color: #fff;
+  color: var(--daedalus-selection-text);
   border-radius: 50%;
-  background: var(--daedalus-ui-highlight-color);
+  background: var(--daedalus-selection);
   font-size: var(--daedalus-font-size-small);
   font-weight: 700;
 }
@@ -76,13 +74,13 @@
   text-overflow: ellipsis;
 }
 
-/* X dismiss button — dismissing a chip deselects its element. Rides the
+/* X dismiss button: dismissing a chip deselects its element. Rides the
    kit icon-button (hover wash and focus ring included); the round 14px
-   geometry and highlight-tinted resting color are the chip's own. */
+   geometry and selection-tinted resting color are the chip's own. */
 .daedalus-ui-icon-button.daedalus-ai-context-remove {
   flex: none;
   padding: 0;
-  color: color-mix(in sRGB, var(--daedalus-ui-highlight-color) 70%, transparent);
+  color: color-mix(in sRGB, var(--daedalus-selection) 70%, transparent);
   border-radius: 50%;
   font-size: var(--daedalus-icon-size-small);
   line-height: 1;

@@ -10,6 +10,7 @@ use Drupal\Core\Field\FieldDefinitionInterface;
 use Drupal\Core\Field\FieldItemListInterface;
 use Drupal\Core\Session\AccountInterface;
 use Drupal\Core\Session\AccountProxyInterface;
+use Drupal\daedalus_blueprint\Host\HostInterface;
 
 /**
  * Centralized access checks for blueprint operations.
@@ -65,6 +66,27 @@ class BlueprintAccessChecker {
   public function entityAccess(EntityInterface $entity, string $operation, ?AccountInterface $account = NULL): bool {
     $account ??= $this->currentUser;
     return $entity->access($operation, $account, TRUE)->isAllowed();
+  }
+
+  /**
+   * Checks a host's access for an operation: the host entity's own.
+   *
+   * The one root-level check of the spine: a content host answers with
+   * its entity's access, a display host with the display's (update on a
+   * display is administering the bundle's display).
+   *
+   * @param \Drupal\daedalus_blueprint\Host\HostInterface $host
+   *   The host to check.
+   * @param string $operation
+   *   The operation: 'view', 'create', 'update', or 'delete'.
+   * @param \Drupal\Core\Session\AccountInterface|null $account
+   *   The account to check, or NULL for the current user.
+   *
+   * @return bool
+   *   TRUE if the operation is allowed.
+   */
+  public function hostAccess(HostInterface $host, string $operation, ?AccountInterface $account = NULL): bool {
+    return $this->entityAccess($host->entity(), $operation, $account);
   }
 
   /**

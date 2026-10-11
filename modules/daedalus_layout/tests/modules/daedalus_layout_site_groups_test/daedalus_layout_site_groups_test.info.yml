@@ -1,0 +1,7 @@
+name: 'Daedalus Layout Site Groups Test'
+type: module
+description: 'Declares the site group vocabulary in the site declaration for kernel tests.'
+package: Testing
+core_version_requirement: ^11
+dependencies:
+  - daedalus:daedalus_layout

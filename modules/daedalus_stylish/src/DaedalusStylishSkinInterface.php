@@ -16,11 +16,18 @@ use Drupal\user\EntityOwnerInterface;
  * A skin: a site's look as daedalus_stylish data.
  *
  * The site-scope host of the styling tiers that have no per-element home:
- * design token VALUES (the tokens field) and SITE ELEMENT DEFAULTS (the
- * defaults field — live per-scope styles like "sections constrain to
- * 80rem", overridden by any per-entity map by cascade). Token NAMES and
- * values are data here; the scales they validate against are code — the
- * site declaration's token_scales section (StyleGuide::getTokenScales()).
+ * design TOKENS (per name a record of value, description and offered)
+ * and SITE ELEMENT DEFAULTS (live per-scope styles like "sections
+ * constrain to 80rem", overridden by any per-entity map by cascade). Each
+ * tier is two layers: the PACKAGE layer a module ships (tokens, defaults:
+ * sync's fields, the shipper's read, the source hash's payload) and the
+ * SITE layer over it (site_tokens, site_defaults: what the site added or
+ * changed, by name), merged per token fact and per default property into
+ * the skin as worn (tokens(), defaults()), the read of every consumer
+ * but the disk lane. A skin with no provider is the site's own: one
+ * layer, the package one, edited directly. Token NAMES and values are
+ * data here; the scales they validate against are code — the site
+ * declaration's token_scales section (StyleGuide::getTokenScales()).
  * Defaults are data too; the scopes they validate against are the style
  * guide's (plus the closed base:{tag} bare-markup family,
  * StyleGuide::BASE_TAGS).
@@ -50,27 +57,74 @@ interface DaedalusStylishSkinInterface extends ShippedSourceInterface, ContentEn
   public function getMachineName(): string;
 
   /**
-   * Returns the skin's token values.
+   * Returns the package layer's token records: what the skin ships.
+   *
+   * The disk lane's field, the payload the source hash covers, and the
+   * one layer of a skin the site made itself. Every other reader wants
+   * tokens(), the skin as worn.
    *
    * @return array
-   *   {scale: {name: value}} — scale keys from the site's declared token
-   *   scales, token names minted by this skin, each value either a string
-   *   (unconditional) or a condition-keyed map whose 'default' entry
-   *   always applies (width conditions compile as @container,
-   *   scheme/motion as @media). Empty array when the skin mints no tokens.
+   *   {scale: {name: {value, description, offered}}} — scale keys from
+   *   the site's declared token scales, token names minted by this skin,
+   *   each a record (SkinTokensItem::RECORD_KEYS) whose value is either a
+   *   string (unconditional) or a condition-keyed map whose 'default'
+   *   entry always applies (width conditions compile as @container,
+   *   scheme/motion as @media). SkinTokensItem::values() projects the
+   *   values alone. Empty array when the layer mints no tokens.
    */
-  public function getTokens(): array;
+  public function packageTokens(): array;
 
   /**
-   * Sets the skin's token values.
+   * Sets the package layer's tokens.
    *
    * @param array $tokens
-   *   Scale-keyed token values; see getTokens().
+   *   Scale-keyed token records; see packageTokens(). A bare value in
+   *   place of a record is shorthand for {value} and is canonicalized on
+   *   the way in (SkinTokensItem::canonicalizeTokens()).
    */
-  public function setTokens(array $tokens): static;
+  public function setPackageTokens(array $tokens): static;
 
   /**
-   * Returns the skin's site element defaults.
+   * Returns the site layer's tokens: what the site added or changed.
+   *
+   * @return array
+   *   {scale: {name: partial record}} — per token the facts the site
+   *   states (any of SkinTokensItem::RECORD_KEYS); a fact absent here
+   *   shows through from the package layer, a name absent from the
+   *   package is site-minted and states its value. Empty array when the
+   *   site changed nothing.
+   */
+  public function siteTokens(): array;
+
+  /**
+   * Sets the site layer's tokens.
+   *
+   * @param array $tokens
+   *   Scale-keyed partial records; see siteTokens(). A bare value in
+   *   place of a record is shorthand for {value}
+   *   (SkinSiteTokensItem::canonicalizeSiteTokens()).
+   */
+  public function setSiteTokens(array $tokens): static;
+
+  /**
+   * Returns the skin's tokens as worn: the site layer over the package's.
+   *
+   * The read of every consumer but the disk lane (delivery, the roster,
+   * validation's minted universe, the client payload). Records merge per
+   * key, so a site fact replaces the package's and the rest show through;
+   * see SkinTokensItem::mergeLayers() for the rule and the order.
+   *
+   * @return array
+   *   Full records in the packageTokens() shape.
+   */
+  public function tokens(): array;
+
+  /**
+   * Returns the package layer's site element defaults: what the skin ships.
+   *
+   * The disk lane's field, the payload the source hash covers, and the
+   * one layer of a skin the site made itself. Every other reader wants
+   * defaults(), the skin as worn.
    *
    * @return array
    *   {scope: {relative key: entry}} — scope keys from the defaults scope
@@ -79,18 +133,48 @@ interface DaedalusStylishSkinInterface extends ShippedSourceInterface, ContentEn
    *   scope's element) or '::.class-name' (a declared part), each entry a
    *   condition-keyed property map. LIVE semantics: these restyle existing
    *   placements through the compiled skin stylesheet, and any per-entity
-   *   style map value beats them by cascade. Empty array when the skin
+   *   style map value beats them by cascade. Empty array when the layer
    *   carries no defaults.
    */
-  public function getDefaults(): array;
+  public function packageDefaults(): array;
 
   /**
-   * Sets the skin's site element defaults.
+   * Sets the package layer's site element defaults.
    *
    * @param array $defaults
-   *   Scope-keyed element-relative styles; see getDefaults().
+   *   Scope-keyed element-relative styles; see packageDefaults().
    */
-  public function setDefaults(array $defaults): static;
+  public function setPackageDefaults(array $defaults): static;
+
+  /**
+   * Returns the site layer's defaults: what the site added or changed.
+   *
+   * @return array
+   *   The packageDefaults() grammar, holding only the properties the site
+   *   set; a property absent here shows through from the package layer.
+   */
+  public function siteDefaults(): array;
+
+  /**
+   * Sets the site layer's defaults.
+   *
+   * @param array $defaults
+   *   Scope-keyed element-relative styles; see siteDefaults().
+   */
+  public function setSiteDefaults(array $defaults): static;
+
+  /**
+   * Returns the skin's defaults as worn: the site layer over the package's.
+   *
+   * The read of every consumer but the disk lane (delivery, the style
+   * stack, the client payload). A site property replaces the package's
+   * at its scope, key and condition and everything else shows through;
+   * see SkinDefaultsItem::mergeLayers() for the rule and the order.
+   *
+   * @return array
+   *   The packageDefaults() shape.
+   */
+  public function defaults(): array;
 
   /**
    * Returns the module that ships this skin, or NULL.

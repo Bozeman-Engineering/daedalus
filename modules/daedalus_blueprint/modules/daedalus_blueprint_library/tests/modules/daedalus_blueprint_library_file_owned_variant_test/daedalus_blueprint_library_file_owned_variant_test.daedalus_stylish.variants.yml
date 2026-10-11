@@ -1,0 +1,12 @@
+# The cross-site package shape: daedalus_blueprint_library_test ships the
+# 'hero' FILE blueprint, and this variant ships owned by it. File blueprints
+# have no entity, so sync resolves the owner through blueprint discovery and
+# stores it in the blueprint_file machine-name lane.
+hero_look:
+  label: 'Hero look'
+  scope: 'kind:container'
+  blueprint: 'hero'
+  styles:
+    '':
+      default:
+        background-color: 'aliceblue'

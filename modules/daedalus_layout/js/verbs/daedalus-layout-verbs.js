@@ -15,7 +15,8 @@
  * the DaedalusUiQueue seam, so load order doesn't matter.
  */
 
-import { registerStencilVerbs } from './stencil.js';
+import { registerBlueprintVerbs } from './blueprint.js';
+import { isSlotSection, registerSlotVerbs } from './slot.js';
 
 const registerVerbs = (app) => {
   // Facades are read at run time, not registration time: a verb only runs
@@ -30,13 +31,27 @@ const registerVerbs = (app) => {
     const { Blueprint } = Drupal.Daedalus;
     const context = Blueprint.rootContext();
     if (!context) {
-      return;
+      return Promise.resolve(false);
     }
-    Blueprint.mutate({ ...context, operations, optimistic, select }).catch(
-      (error) => {
+    return Blueprint.mutate({ ...context, operations, optimistic, select })
+      .then(() => true)
+      .catch((error) => {
         Blueprint.reportFailure(error, key);
-      },
-    );
+        return false;
+      });
+  };
+
+  /**
+   * Whether a key's element sits outside the main entity: inside the site
+   * frame around the route (a page's fill in a frame slot), which the
+   * mutation response does not re-render. A structure op on such an
+   * element reloads the page on success, so the frame shows the result
+   * (the slot's default after a release) instead of the optimistic hide.
+   */
+  const outsideMainEntity = (key) => {
+    const element = Drupal.Daedalus.Selection.getElement(key);
+    const main = document.querySelector('[data-main-entity]');
+    return !!element && (!main || !main.contains(element));
   };
 
   /**
@@ -118,6 +133,9 @@ const registerVerbs = (app) => {
     // deep-clones a section's whole subtree with fresh identity; the
     // clone lands right after the original.
     kinds: ['block', 'container'],
+    // A clone is an arrangement of the element (the server asks insert of
+    // its parent as well; one declared capability per verb).
+    capability: 'arrange',
     hotkeys: 'mod+d',
     weight: 10,
     // One of the selection chip's own face buttons (daedalus_ui
@@ -167,6 +185,7 @@ const registerVerbs = (app) => {
     label: Drupal.t('Configure'),
     icon: icons.gear,
     kinds: ['block', 'container'],
+    capability: 'configure',
     weight: 20,
     run: (key) => {
       const { Selection, ModeManager, ModePluginBase } = Drupal.Daedalus;
@@ -189,8 +208,15 @@ const registerVerbs = (app) => {
   app.verbs.register({
     id: 'daedalus_layout.trash',
     label: Drupal.t('Remove'),
+    // Removing a slot section RELEASES the slot: the document around the
+    // page shows the slot's default again. One op (remove_element); the
+    // word is the gesture's where the selection is a slot section
+    // (js/verbs/slot.js).
+    menuLabel: (key) =>
+      isSlotSection(key) ? Drupal.t('Release slot') : Drupal.t('Remove'),
     icon: icons.trash,
     kinds: ['block', 'container'],
+    capability: 'arrange',
     // Both delete keys: a Mac keyboard's main delete reports Backspace.
     hotkeys: ['delete', 'backspace'],
     weight: 30,
@@ -203,11 +229,16 @@ const registerVerbs = (app) => {
     multi: true,
     run: (key) => {
       // No confirm: the change stages in tempstore, discard restores it.
+      const outside = outsideMainEntity(key);
       mutate(
         [{ op: 'remove_element', element: uuidOf(key) }],
         optimisticRemove(key),
         key,
-      );
+      ).then((done) => {
+        if (done && outside) {
+          window.location.reload();
+        }
+      });
     },
     runMany: (keys) => {
       mutate(
@@ -218,9 +249,14 @@ const registerVerbs = (app) => {
     },
   });
 
-  // Save as stencil… / Update stencil 'X' (js/verbs/stencil.js): the
-  // save-as-stencil gesture and its provenance-driven update twin.
-  registerStencilVerbs(app);
+  // Save as blueprint… / Update blueprint 'X' / Open blueprint
+  // (js/verbs/blueprint.js): the capture gesture, its provenance-driven
+  // update twin, and the door to the blueprint's own canvas.
+  registerBlueprintVerbs(app);
+
+  // Detach into this slot (the portal chip's claim of a slot door's
+  // default) and the Release word (js/verbs/slot.js).
+  registerSlotVerbs(app);
 };
 
 window.DaedalusUiQueue = window.DaedalusUiQueue || [];

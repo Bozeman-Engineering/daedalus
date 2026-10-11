@@ -14,8 +14,8 @@ use Drupal\daedalus_blueprint\Dialect\DialectSchemaProjector;
  *
  * The roster and its schema fragment are core's (daedalus_blueprint renders
  * `materials` from the providers' records); what stays daedalus_stylish's is the
- * governance posture of ITS mint lanes (swatches and animations, one
- * setting). When the site closed AI minting (daedalus_stylish.settings ai_minting),
+ * governance posture of ITS mint lanes (tokens, swatches and animations,
+ * one setting). When the site closed AI minting (daedalus_stylish.settings ai_minting),
  * the fragment's guidance says so, so the brief's MINT line and the
  * schema never invite a save_material the provider would refuse: an
  * honest advertisement beats discovery by refusal.
@@ -41,7 +41,7 @@ final class MaterialsGateHooks {
     }
     $context['cache_tags'][] = 'config:daedalus_stylish.settings';
     if ($this->configFactory->get('daedalus_stylish.settings')->get('ai_minting') === FALSE) {
-      $schema[DialectSchemaProjector::MATERIALS]['guidance'] .= ' AI minting is DISABLED on this site (daedalus_stylish.settings ai_minting): never save_material a swatch or an animation (nor create a daedalus_swatch or daedalus_animation entity); offer the published values and animations or a literal value instead.';
+      $schema[DialectSchemaProjector::MATERIALS]['guidance'] .= ' AI minting is DISABLED on this site (daedalus_stylish.settings ai_minting): never save_material a token, a swatch, an animation or a font (nor create a daedalus_swatch, daedalus_animation or daedalus_font entity); offer the published values, animations and fonts or a literal value instead.';
     }
   }
 

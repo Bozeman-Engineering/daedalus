@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Drupal\daedalus_blueprint_markup_test;
 
-use Drupal\Core\Entity\FieldableEntityInterface;
+use Drupal\daedalus_blueprint\Host\HostInterface;
 use Drupal\Core\State\StateInterface;
 use Drupal\daedalus_blueprint\Markup\MarkupProjectorInterface;
 
@@ -31,14 +31,14 @@ final class StateMarkupProjector implements MarkupProjectorInterface {
   /**
    * {@inheritdoc}
    */
-  public function projectEntity(FieldableEntityInterface $entity, ?string $langcode = NULL): ?string {
+  public function projectHost(HostInterface $host, ?string $langcode = NULL): ?string {
     return $this->state->get(self::PROJECTION_KEY);
   }
 
   /**
    * {@inheritdoc}
    */
-  public function projectElement(FieldableEntityInterface $entity, string $uuid, ?string $langcode = NULL): ?string {
+  public function projectElement(HostInterface $host, string $uuid, ?string $langcode = NULL): ?string {
     return $this->state->get(self::PROJECTION_KEY);
   }
 

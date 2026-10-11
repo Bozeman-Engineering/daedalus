@@ -11,14 +11,33 @@ services:
 
   Drupal\daedalus_blueprint_api\Render\TargetKeyMapper: '@daedalus_blueprint_api.target_key_mapper'
 
+  # The canvas-builder socket: "this host's canvas as a render array" for
+  # the mutation re-render and the AJAX way into Edit Mode. The spine owns
+  # the seam; the editing UI plugs its builder in via the
+  # daedalus_blueprint_api.canvas_builder tag (see CanvasBuilderInterface).
+  # The entity view is the built-in builder, lowest priority.
+  daedalus_blueprint_api.canvas_builder:
+    class: Drupal\daedalus_blueprint_api\Render\CanvasBuilder
+    tags:
+      - { name: service_collector, tag: daedalus_blueprint_api.canvas_builder, call: addBuilder }
+  Drupal\daedalus_blueprint_api\Render\CanvasBuilderInterface: '@daedalus_blueprint_api.canvas_builder'
+
+  daedalus_blueprint_api.canvas_builder.entity_view:
+    class: Drupal\daedalus_blueprint_api\Render\EntityViewCanvasBuilder
+    arguments:
+      - '@entity_type.manager'
+    tags:
+      - { name: daedalus_blueprint_api.canvas_builder, priority: -100 }
+
   daedalus_blueprint_api.subtree_renderer:
     class: Drupal\daedalus_blueprint_api\Render\SubtreeRenderer
     arguments:
-      - '@entity_type.manager'
+      - '@daedalus_blueprint_api.canvas_builder'
       - '@renderer'
       - '@daedalus_blueprint_api.target_key_mapper'
       - '@ajax_response.attachments_processor'
       - '@request_stack'
+      - '@daedalus_blueprint.host_resolver'
 
   Drupal\daedalus_blueprint_api\Render\SubtreeRenderer: '@daedalus_blueprint_api.subtree_renderer'
 

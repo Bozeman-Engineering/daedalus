@@ -9,6 +9,7 @@ use Drupal\Component\Serialization\Json;
 use Drupal\Core\Controller\ControllerBase;
 use Drupal\Core\Entity\EntityInterface;
 use Drupal\daedalus_blueprint\EntityStorageHandler;
+use Drupal\daedalus_blueprint\Host\HostResolver;
 use Drupal\daedalus_blueprint_ai\Event\AiToolActionEvent;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\EventDispatcher\EventDispatcherInterface;
@@ -39,6 +40,7 @@ class SimulateChatTurn extends ControllerBase {
   public function __construct(
     protected EventDispatcherInterface $eventDispatcher,
     protected EntityStorageHandler $entityStorageHandler,
+    protected HostResolver $hostResolver,
     protected DeepChatResponseListener $responseListener,
   ) {}
 
@@ -49,6 +51,7 @@ class SimulateChatTurn extends ControllerBase {
     return new static(
       $container->get('event_dispatcher'),
       $container->get('daedalus_blueprint.storage_handler'),
+      $container->get('daedalus_blueprint.host_resolver'),
       $container->get('daedalus_ai.deepchat_response_listener'),
     );
   }
@@ -71,15 +74,16 @@ class SimulateChatTurn extends ControllerBase {
     $body = Json::decode($request->getContent()) ?? [];
     $targets = is_array($body['targets'] ?? NULL) ? $body['targets'] : [];
 
-    // A persisted tool hands the event its working copy; load the same
-    // tempstore-aware copy the storage handler would have persisted.
-    $working = $this->entityStorageHandler->load($entity->getEntityTypeId(), $entity->id()) ?? $entity;
+    // A persisted tool hands the event its working copy's host; load the
+    // same tempstore-aware host the storage handler would have persisted.
+    $working = $this->entityStorageHandler->load($entity->getEntityTypeId(), $entity->id())
+      ?? $this->hostResolver->fromEntity($entity);
 
     $this->eventDispatcher->dispatch(new AiToolActionEvent(
       'entity_persisted',
       'daedalus_ai_test:simulated_tool',
       [
-        'entity' => $working,
+        'host' => $working,
         'is_new' => FALSE,
         'targets' => $targets,
       ],

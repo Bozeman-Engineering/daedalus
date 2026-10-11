@@ -13,7 +13,7 @@ use Drupal\Tests\daedalus\Kernel\NestedStorageKernelTestBase;
  *
  * Change_section_layout is retired: a section is born with its real layout
  * and keeps it for life. The explicit "layout" (+ "layout_settings") on
- * add_section is the birth-layout door — the stencil expansion and any
+ * add_section is the birth-layout door — the blueprint expansion and any
  * named-slot layout use it — so these tests cover the happy paths that
  * need daedalus_layout section UUIDs: root placement, nesting, deep nesting, the
  * batch wire grammar, and pinned layout settings.
@@ -37,6 +37,9 @@ class AddSectionExplicitLayoutTest extends NestedStorageKernelTestBase {
   protected function setUp(): void {
     parent::setUp();
     $this->operations = $this->container->get('daedalus_blueprint.operations');
+    // The batch door judges update access on the entity_test host before
+    // the op runs (a direct addSection() call passes no door).
+    $this->setUpCurrentUser([], ['configure any layout', 'administer entity_test content']);
   }
 
   /**
@@ -48,7 +51,7 @@ class AddSectionExplicitLayoutTest extends NestedStorageKernelTestBase {
 
     $section_uuid = $this->uuid->generate();
     $result = $this->operations->addSection(
-      $entity,
+      $this->host($entity),
       ['anchor' => $anchor_uuid, 'placement' => 'after'],
       $section_uuid,
       'layout_twocol_section',
@@ -77,7 +80,7 @@ class AddSectionExplicitLayoutTest extends NestedStorageKernelTestBase {
 
     $section_uuid = $this->uuid->generate();
     $result = $this->operations->addSection(
-      $entity,
+      $this->host($entity),
       ['anchor' => $anchor_uuid, 'placement' => 'inside'],
       $section_uuid,
       'layout_twocol_section',
@@ -107,7 +110,7 @@ class AddSectionExplicitLayoutTest extends NestedStorageKernelTestBase {
 
     $section_uuid = $this->uuid->generate();
     $result = $this->operations->addSection(
-      $entity,
+      $this->host($entity),
       ['anchor' => $deep_uuid, 'placement' => 'inside'],
       $section_uuid,
       'layout_twocol_section',
@@ -129,7 +132,7 @@ class AddSectionExplicitLayoutTest extends NestedStorageKernelTestBase {
 
     $section_uuid = $this->uuid->generate();
     $child_uuid = $this->uuid->generate();
-    $result = $this->operations->batchOperations($entity, [
+    $result = $this->operations->batchOperations($this->host($entity), [
       [
         'op' => 'add_section',
         'uuid' => $section_uuid,
@@ -163,7 +166,7 @@ class AddSectionExplicitLayoutTest extends NestedStorageKernelTestBase {
     $entity = $this->createTestEntity([$this->createSection('layout_onecol', [], $anchor_uuid)]);
 
     $result = $this->operations->addSection(
-      $entity,
+      $this->host($entity),
       ['anchor' => $anchor_uuid, 'placement' => 'after'],
       NULL,
       'layout_bogus',

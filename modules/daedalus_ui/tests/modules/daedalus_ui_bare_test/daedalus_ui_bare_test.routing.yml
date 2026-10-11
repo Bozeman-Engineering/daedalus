@@ -1,0 +1,15 @@
+# A node's view on a bare route: the third chromeless kind (see
+# Chromeless), with no title so the document carries no heading. The
+# only consumer of the option in daedalus_ui's own tier, since the peek
+# door that declares it lives in daedalus_blueprint_api.
+daedalus_ui_bare_test.node:
+  path: '/daedalus-ui-bare-test/{node}'
+  defaults:
+    _controller: '\Drupal\daedalus_ui_bare_test\Controller\BareNode::view'
+  options:
+    _daedalus_ui.bare: true
+    parameters:
+      node:
+        type: entity:node
+  requirements:
+    _entity_access: 'node.view'

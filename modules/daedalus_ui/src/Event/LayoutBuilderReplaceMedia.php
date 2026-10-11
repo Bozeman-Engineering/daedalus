@@ -10,10 +10,12 @@ use Drupal\Component\EventDispatcher\Event;
 /**
  * Layout Builder replace media.
  *
- * A user has dragged a Media Type compatible file from their browser to a
- * dropzone on an existing Media Block on the page. The subscriber (the Layout
- * Builder integration) commits the replacement as an op on the blueprint
- * spine and answers the mutation-response payload.
+ * A user has dragged a Media Type compatible file from their browser onto a
+ * media reference rendered on the page: a placed block's field (the block
+ * context rides the request query as blockUuid) or the host's own field.
+ * The subscriber (the Layout Builder integration) commits the replacement
+ * as one update_element op on the blueprint spine, on the entity whose
+ * field it is, and answers the mutation-response payload.
  */
 class LayoutBuilderReplaceMedia extends Event {
 

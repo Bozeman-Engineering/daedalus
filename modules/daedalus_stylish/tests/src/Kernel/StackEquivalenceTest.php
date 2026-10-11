@@ -19,6 +19,7 @@ use Drupal\Tests\daedalus\Traits\NodeSuitesTrait;
 use Drupal\Tests\user\Traits\UserCreationTrait;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
+use Drupal\Tests\daedalus_stylish\Traits\HostTrait;
 
 /**
  * Locks the PHP and JS style stacks together (round-trip equivalence).
@@ -74,6 +75,7 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 #[RunTestsInSeparateProcesses]
 class StackEquivalenceTest extends KernelTestBase {
 
+  use HostTrait;
   use DesignSystemActivationTrait;
   use NodeSuitesTrait;
   use UserCreationTrait;
@@ -168,8 +170,15 @@ class StackEquivalenceTest extends KernelTestBase {
     // daedalus_stylish provider reads all four storages on every build.
     $this->installEntitySchema('daedalus_swatch');
     $this->installEntitySchema('daedalus_animation');
+    $this->installEntitySchema('daedalus_font');
     $this->installEntitySchema('daedalus_skin');
-    $this->installSchema('daedalus_stylish', ['daedalus_variant_usage', 'daedalus_swatch_usage', 'daedalus_animation_usage']);
+    $this->installSchema('daedalus_stylish', [
+      'daedalus_variant_usage',
+      'daedalus_swatch_usage',
+      'daedalus_animation_usage',
+      'daedalus_token_usage',
+      'daedalus_font_usage',
+    ]);
     $this->installConfig(['daedalus_stylish']);
     $this->installSchema('layout_builder', ['inline_block_usage']);
     $this->setUpCurrentUser([], [], TRUE);
@@ -269,7 +278,7 @@ class StackEquivalenceTest extends KernelTestBase {
     // does, one the link part renders as), the kind blocks beneath both
     // refinements, and the refinement blocks themselves, part included.
     $skin = DaedalusStylishSkin::create(['label' => 'Aurora', 'machine_name' => 'aurora', 'status' => TRUE]);
-    $skin->setDefaults([
+    $skin->setPackageDefaults([
       'base:h2' => ['' => ['default' => ['font-size' => '2rem']]],
       'kind:block' => ['' => ['default' => ['padding' => '0.75rem'], 'narrow' => ['padding' => '0.25rem']]],
       'block_type:testimonial' => [
@@ -401,7 +410,7 @@ class StackEquivalenceTest extends KernelTestBase {
     // The annotated lean tree, exactly as the explain tool and the client
     // mirror carry it.
     $backend = $this->container->get('daedalus_blueprint.backend_resolver')->resolve('entity_test');
-    $tree = $this->container->get('daedalus_ui.element_annotator')->annotate($backend->serialize($entity), $entity, 'full')['_tree'];
+    $tree = $this->container->get('daedalus_ui.element_annotator')->annotate($backend->serialize($entity), $this->host($entity), 'full')['layout'];
     $this->assertSame([self::OUTER], array_column($tree, 'uuid'));
     $this->assertSame([self::SECTION, self::AFTER_SECTION, self::AFTER_P], array_column($tree[0]['children'], 'uuid'));
     $block_markup = $tree[0]['children'][0]['children'][0]['children'][0]['_element']['markup'];
@@ -457,7 +466,7 @@ class StackEquivalenceTest extends KernelTestBase {
       $stack_service = $this->container->get('daedalus_stylish.style_stack');
       $answers = [];
       foreach ($cases as $key) {
-        $stack = $stack_service->stack($stored, $key, ['entity' => $entity], NULL, $tree);
+        $stack = $stack_service->stack($stored, $key, ['host' => $this->host($entity)], NULL, $tree);
         $lines = [];
         foreach (self::CONDITIONS as $condition) {
           $lines[$condition] = $stack_service->linesAt($stack, $condition);

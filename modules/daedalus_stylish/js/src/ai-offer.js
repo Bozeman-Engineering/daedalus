@@ -22,18 +22,29 @@ import { h } from 'preact';
  *   Called with the next boolean.
  * @param {string} [props.className]
  *   The surface's own placement class beside the shared one.
+ * @param {?string} [props.label]
+ *   The control's text when the flag means more than the AI (a token's
+ *   `offered` is also whether the basic rows list it); the AI wording by
+ *   default.
+ * @param {?string} [props.title]
+ *   The control's tooltip, beside the label for the same reason.
  */
 export const AiOfferToggle = ({
   offered,
   disabled = false,
   onChange,
   className = '',
+  label = null,
+  title = null,
 }) => (
   <label
     className={`daedalus-stylish-ai-offer${className ? ` ${className}` : ''}`}
-    title={Drupal.t(
-      'Off, the AI is not told about this material: it leaves the brief and the schema but still applies on the page.',
-    )}
+    title={
+      title ??
+      Drupal.t(
+        'Off, the AI is not told about this material: it leaves the brief and the schema but still applies on the page.',
+      )
+    }
   >
     <input
       type="checkbox"
@@ -41,7 +52,7 @@ export const AiOfferToggle = ({
       disabled={disabled}
       onChange={(event) => onChange(event.target.checked)}
     />
-    {Drupal.t('Offer to the AI')}
+    {label ?? Drupal.t('Offer to the AI')}
   </label>
 );
 

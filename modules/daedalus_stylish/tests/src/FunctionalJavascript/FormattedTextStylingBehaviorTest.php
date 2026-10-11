@@ -52,6 +52,15 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  *   while the panel's subject chip targets it, so canvas and tree agree on
  *   a selection universe that only exists because instance rows render
  *   in basic.
+ * - Canvas seat to outline reveal (seam: the selection spine's target to
+ *   the Outline's selection rule to the part row's scroll): with the
+ *   tree collapsed all, a modifier click on a paragraph of the already
+ *   selected block moves only the TARGET, and the outline opens the
+ *   block's closed default down to the seated paragraph's row, which
+ *   renders active and inside the panel's scrollport. The reveal and
+ *   the row id it reveals are node-pinned (collapse.test.mjs); only a
+ *   browser proves the store's target reaches the effect and the row it
+ *   mounts scrolls into view.
  * - List-item row styling in basic (seam: the universal-minting model
  *   through the same four layers): every declared tag mints at any
  *   depth, so a list ITEM is a carrier with its own basic-tree row, the
@@ -70,10 +79,12 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  * - Breadcrumb depth over the markup tier (seam: selection spine to the
  *   two-tier selection index to the indicator): the deep-selected nested
  *   item's breadcrumb trails part to part through its markup parents up
- *   to the owning block (… › Formatted text › Bulleted list › List item ›
- *   Bulleted list › List item). Ancestry is node-pinned over a fake
- *   index; only a browser sees the spine, the index built from the live
- *   annotation, and the indicator agree.
+ *   to the owning block (… › Formatted text › Bulleted list › the outer
+ *   item's text › Bulleted list › Eta nested item: a carrier's crumb is
+ *   its text, the row grammar's name, and a list wrapper reads as its
+ *   word). Ancestry is node-pinned over a fake index; only a browser
+ *   sees the spine, the index built from the live annotation, and the
+ *   indicator agree.
  * - Keyboard climb over the markup tier (seam: hotkey dispatcher to
  *   traversal over the index's markup tier to the spine to the
  *   inspector): ArrowLeft from the nested item commits its list as the
@@ -87,6 +98,27 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  *   The node suites prove the switcher's shapes over a fixture; only a
  *   browser proves the annotation the inspector hands the matcher carries
  *   the instances rows the fold reads.
+ * - Subject and address (seam: chip menu to spine address to basic rows
+ *   to the op): picking "Every paragraph in Section" seats the spine's
+ *   WRITE ADDRESS alone (the selection and the minted paragraph's SUBJECT
+ *   facet stay), the chip lights at container::p, the paragraph's
+ *   curated controls stay the rows, a typed Size lands ONE update_style
+ *   at the section's rule key, the canvas delivers it to the neighbour
+ *   block's paragraph while block A's keep the nearer tier's size, and
+ *   the own entry drops the address alone. The node suites pin the
+ *   slice, the chip model and the rebased control models; only a
+ *   browser proves the pick reaches the spine and the op lands where
+ *   the chip says.
+ * - An own-key address in code mode (seam: chip pick to spine address to
+ *   the code view's lit mark and its draft, live): with code mode open,
+ *   picking "Every paragraph here" lights the `p` PART row of block A
+ *   alone (a part header, the facet row dark, no second header for the
+ *   key anywhere: an own-key address places no virtual rule row); on
+ *   block C's list item, picking the mintable "Every list item here"
+ *   drafts the `li` island with the cursor, the ancestor seat's parity,
+ *   the map untouched. The model pins the placement rule; only a
+ *   browser proves the pick reaches the view's one lit rule and the
+ *   draft takes focus.
  *
  * The fixture is DaedalusFixtureTrait (the daedalus recipe's site as
  * daedalus_editor) as the recipe ships it: the olivero design system
@@ -149,6 +181,10 @@ class FormattedTextStylingBehaviorTest extends WebDriverTestBase {
    * - Deep-select: a modifier click on the sibling paragraph in the
    *   canvas commits its part facet; the sibling's tree row highlights
    *   and the panel's subject chip retargets, in basic mode.
+   * - Seat reveal: collapse all folds block A over its carriers; a
+   *   modifier click on the target paragraph (block A still selected)
+   *   opens the block down to that paragraph's row, active and inside
+   *   the panel's scrollport, with the sibling's row rendered inactive.
    * - List rows: block C stages a bulleted list with a nested list;
    *   universal minting stamps the wrappers and every item. A real
    *   click on one item's row selects it and a Center pick commits
@@ -158,8 +194,10 @@ class FormattedTextStylingBehaviorTest extends WebDriverTestBase {
    *   basic tree; a modifier click on it in the canvas highlights that
    *   row and retargets the subject chip (flat ownership at depth, live).
    * - Breadcrumb depth: with the nested item selected, the selection
-   *   indicator's breadcrumb ends "Formatted text › Bulleted list › List
-   *   item › Bulleted list › List item" (markup parents, then the owner).
+   *   indicator's breadcrumb ends "Formatted text › Bulleted list › Zeta
+   *   outer itemEta nested itemTheta nested item › Bulleted list › Eta
+   *   nested item" (markup parents by their names, the outer item's name
+   *   its whole text, then the owner).
    * - Keyboard climb: ArrowLeft commits the nested list as the part
    *   facet; the inspector chip names its minted identity and the
    *   breadcrumb ends at "Bulleted list".
@@ -167,6 +205,17 @@ class FormattedTextStylingBehaviorTest extends WebDriverTestBase {
    *   the spine; the subject chip's "Style this at" menu lists "Every
    *   paragraph here" before "Every paragraph in Section" and no
    *   entry containing `.s-`.
+   * - Subject and address: a real pick of "Every paragraph in Section"
+   *   seats the write address (the facet and selection unchanged, the
+   *   chip lit, the paragraph's controls still mounted); a typed Size
+   *   commits ONE update_style at the section's `p` rule, block B's
+   *   paragraph computes it and block A's keep the lead size; the own
+   *   entry drops the address alone.
+   * - Own-key address in code mode: the mode flips to Code; "Every
+   *   paragraph here" lights block A's `p` part row alone (one header
+   *   for the key, the facet row dark); block C's list item targeted
+   *   through the spine, "Every list item here" drafts the `li` island
+   *   with the cursor and writes nothing.
    */
   public function testFormattedTextStylingScenario(): void {
     $this->loginAsEditor();
@@ -334,12 +383,41 @@ class FormattedTextStylingBehaviorTest extends WebDriverTestBase {
     );
 
     // The row finder: instance rows are located by their content excerpt
-    // (the sublabel), because that is the identity a user reads.
+    // (the row's name), because that is the identity a user reads. Rich
+    // text starts collapsed (a text block over its carriers, a list over
+    // its items), so the polls that wait for a carrier's row press expand
+    // all (the page elements root row's control over the tree's one
+    // outline) on the way, the keyboard-free twin of a user opening the
+    // tree; the posture is keyed by row id and stands for the scenario.
     $session->executeScript(<<<'JS'
       window.__ft = {
         partRow(needle) {
           return Array.from(document.querySelectorAll('.daedalus-ui-tree__row--part'))
-            .find((row) => (row.querySelector('.daedalus-ui-tree__sublabel')?.textContent ?? '').includes(needle)) ?? null;
+            .find((row) => (row.querySelector('.daedalus-ui-outline__name')?.textContent ?? '').includes(needle)) ?? null;
+        },
+        expandAll() {
+          document.querySelector('.daedalus-ui-tree__tools .daedalus-ui-expand-all')?.click();
+        },
+        collapseAll() {
+          document.querySelector('.daedalus-ui-tree__tools .daedalus-ui-collapse-all')?.click();
+        },
+        // Whether a row sits wholly inside its scrollport, read the way the
+        // reveal rule (daedalus_ui scroll-reveal.js) reads it: the nearest
+        // vertically scrolling ancestor's padding box, else the viewport.
+        inScrollport(row) {
+          const scrolling = new Set(['auto', 'scroll', 'overlay']);
+          let scroller = null;
+          for (let node = row.parentElement; node && node !== document.documentElement && node !== document.body; node = node.parentElement) {
+            if (scrolling.has(getComputedStyle(node).overflowY) && node.scrollHeight > node.clientHeight) {
+              scroller = node;
+              break;
+            }
+          }
+          const port = scroller
+            ? (() => { const rect = scroller.getBoundingClientRect(); const top = rect.top + scroller.clientTop; return { top, bottom: top + scroller.clientHeight }; })()
+            : { top: 0, bottom: document.documentElement.clientHeight };
+          const rect = row.getBoundingClientRect();
+          return rect.top >= port.top && rect.bottom <= port.bottom;
         },
       };
       JS);
@@ -348,7 +426,7 @@ class FormattedTextStylingBehaviorTest extends WebDriverTestBase {
     // The target paragraph's row exists in the BASIC tree (instance rows
     // are content, not markup, so no Show-all-markup toggle is touched).
     $this->assertJsCondition(
-      "!!window.__ft.partRow('Alpha paragraph target')",
+      "(() => { window.__ft.expandAll(); return !!window.__ft.partRow('Alpha paragraph target'); })()",
       20000,
       'The target paragraph renders an instance row in the basic tree.',
     );
@@ -385,8 +463,9 @@ class FormattedTextStylingBehaviorTest extends WebDriverTestBase {
     );
 
     // The map read every commit below asserts against: the root entity's
-    // blueprint mirror, the same authority the canvas re-renders from.
-    $map = "(Drupal.Daedalus.Blueprint.getBlueprint()?.fields?.daedalus_stylish_styles ?? {})";
+    // blueprint mirror, the same authority the canvas re-renders from (the
+    // flat index derived from the tree's node styles, see styleMapJs()).
+    $map = $this->styleMapJs();
     // The compound part key is owner + '::' + part selector.
     $target_key = json_encode($block_a_key . '::' . $target_part);
 
@@ -520,6 +599,50 @@ class FormattedTextStylingBehaviorTest extends WebDriverTestBase {
       'The panel subject line retargeted to the deep-selected paragraph: canvas, tree, and panel agree in basic.',
     );
 
+    // ----- Canvas seat to outline reveal. -----
+    // Seam: the selection spine's target to the Outline's one selection
+    // rule to the part row's scroll. Formatted text defaults to closed,
+    // and the rule read on the selected KEY alone opened the path to the
+    // block and stopped at its fold, so a seated paragraph stayed hidden
+    // (and, with the block already selected, the path did not even
+    // change). The rule now reveals the seated part's row (tree-outline.js
+    // revealId) and the row scrolls itself into the panel's scrollport.
+    // The reveal pure function is node-pinned; only a browser proves the
+    // store's target reaches the effect and the mounted row reveals.
+    // Collapse all first (the root row's control): block A folds over its
+    // carriers and the target paragraph's row is gone from the tree.
+    $session->executeScript('window.__ft.collapseAll();');
+    $this->assertJsCondition(
+      "!window.__ft.partRow('Alpha paragraph target')",
+      20000,
+      'Collapse all folded block A over its carriers: the target paragraph has no rendered row.',
+    );
+    // A modifier click on the TARGET paragraph while block A is already
+    // the selection and its sibling the target: only the target moves,
+    // which is exactly the gesture whose path did not change before.
+    $session->executeScript(
+      "document.querySelector(\"$canvas_a p.$target_class\").dispatchEvent("
+      . "new MouseEvent('click', { bubbles: true, cancelable: true, metaKey: true }));"
+    );
+    $this->assertJsCondition(
+      "(() => { const row = window.__ft.partRow('Alpha paragraph target');"
+      . " return !!row && row.classList.contains('daedalus-ui-tree__row--part-active'); })()",
+      20000,
+      'Canvas seat to outline reveal: the seat opened the collapsed block down to the seated paragraph, whose row rendered active.',
+    );
+    $this->assertJsCondition(
+      "(() => { const row = window.__ft.partRow('Alpha paragraph target');"
+      . ' return !!row && window.__ft.inScrollport(row); })()',
+      20000,
+      'Canvas seat to outline reveal: the revealed row sits inside the panel\'s scrollport (the row scrolled itself into view by the reveal rule).',
+    );
+    $this->assertJsCondition(
+      "(() => { const row = window.__ft.partRow('Beta paragraph sibling');"
+      . " return !!row && !row.classList.contains('daedalus-ui-tree__row--part-active'); })()",
+      20000,
+      'Canvas seat to outline reveal: the sibling row, under the same opened block, is rendered and no longer active (one target on the spine).',
+    );
+
     // ----- List-item row styling in basic. -----
     // Block C: a bulleted list carrying a nested list. Universal minting
     // stamps every declared tag at any depth, so the wrapper, each item,
@@ -591,17 +714,17 @@ class FormattedTextStylingBehaviorTest extends WebDriverTestBase {
     $this->assertNotNull($nested_class, 'The nested list item minted an identity at stage time (minting at depth).');
     $this->assertNotSame($item_class, $item_sibling_class, 'The two list items minted distinct identities.');
 
-    // An EXACT-text row finder beside the includes() one: a list
-    // wrapper's excerpt contains every item's text (its textContent),
-    // so only exact sublabel equality addresses one item's row.
+    // An EXACT-text row finder beside the includes() one: a list item's
+    // name is its text and so is its paragraph's, so only exact name
+    // equality in document order addresses the item's own row.
     $session->executeScript(<<<'JS'
       window.__ft.exactRow = (text) => Array.from(document.querySelectorAll('.daedalus-ui-tree__row--part'))
-        .find((row) => (row.querySelector('.daedalus-ui-tree__sublabel')?.textContent ?? '').trim() === text) ?? null;
+        .find((row) => (row.querySelector('.daedalus-ui-outline__name')?.textContent ?? '').trim() === text) ?? null;
       JS);
 
     // The item's row exists in the BASIC tree; a real click selects it.
     $this->assertJsCondition(
-      "!!window.__ft.exactRow('Delta list item target')",
+      "(() => { window.__ft.expandAll(); return !!window.__ft.exactRow('Delta list item target'); })()",
       20000,
       'The target list item renders an instance row in the basic tree.',
     );
@@ -656,7 +779,7 @@ class FormattedTextStylingBehaviorTest extends WebDriverTestBase {
     // highlights while the subject chip retargets, which only works when
     // rows at depth carry the owning model key (flat ownership).
     $this->assertJsCondition(
-      "!!window.__ft.exactRow('Eta nested item')",
+      "(() => { window.__ft.expandAll(); return !!window.__ft.exactRow('Eta nested item'); })()",
       20000,
       'The nested list item renders an instance row at depth in the basic tree.',
     );
@@ -682,12 +805,23 @@ class FormattedTextStylingBehaviorTest extends WebDriverTestBase {
     // built from the live annotation), so the deep-selected nested item
     // trails part to part through its markup parents up to the owning
     // block. The spine, the merged index, and the indicator agree only
-    // in a browser; the crumb text is read from the rendered nav.
+    // in a browser; the crumb text is read from the rendered nav. A
+    // carrier's crumb is its NAME under the outline row grammar (its
+    // text excerpt, the annotator's whitespace-normalized textContent,
+    // so the outer item's name runs on into its nested items' text); a
+    // list wrapper reads as its vocabulary word, since its text is only
+    // its items'.
+    $outer_item_name = 'Zeta outer itemEta nested itemTheta nested item';
     $crumbs = "Array.from(document.querySelectorAll('.daedalus-ui-breadcrumb .daedalus-ui-breadcrumb__crumb'), (crumb) => crumb.textContent.trim()).join(' › ')";
     $this->assertJsCondition(
-      "$crumbs.endsWith(" . json_encode(' › Formatted text › Bulleted list › List item › Bulleted list › List item') . ')',
+      "$crumbs.endsWith(" . json_encode(' › Eta nested item') . ')',
       20000,
-      'The breadcrumb trails the nested item through its markup parents to the owning Formatted text block.',
+      'The breadcrumb ends on the nested item\'s own name.',
+    );
+    $this->assertStringEndsWith(
+      " › Formatted text › Bulleted list › $outer_item_name › Bulleted list › Eta nested item",
+      (string) $session->evaluateScript($crumbs),
+      'The breadcrumb trails the nested item through its markup parents (each by its row name) to the owning Formatted text block.',
     );
 
     // ----- Keyboard climb over the markup tier. -----
@@ -708,7 +842,7 @@ class FormattedTextStylingBehaviorTest extends WebDriverTestBase {
       'ArrowLeft climbed from the nested item to its list: the inspector chip stands at the nested list part.',
     );
     $this->assertJsCondition(
-      "$crumbs.endsWith(" . json_encode(' › Formatted text › Bulleted list › List item › Bulleted list') . ')',
+      "$crumbs.endsWith(" . json_encode(" › Formatted text › Bulleted list › $outer_item_name › Bulleted list") . ')',
       20000,
       'The breadcrumb followed the climb: the trail now ends at the nested list.',
     );
@@ -765,6 +899,267 @@ class FormattedTextStylingBehaviorTest extends WebDriverTestBase {
       [],
       array_values(array_filter($menu_labels, static fn (string $label) => str_contains($label, '.s-'))),
       'Annotation instances to matcher facts to switcher: no entry names the identity class (a minted element\'s class of things is its tag; the chains end in `p`, never in `.s-*`).',
+    );
+
+    // ----- A minted paragraph styled at the section's rule. -----
+    // Seam: chip menu to spine address to basic rows to the op, live.
+    // The spine carries two facts: the SUBJECT facet (the minted
+    // paragraph, whose rows the panel reads) and the WRITE ADDRESS (the
+    // section's `p` rule, where a write lands). A real pick of "Every
+    // paragraph in Section" seats the address alone: the selection and
+    // the facet stay, the chip lights at the rule, the curated instance
+    // controls stay mounted (nothing derives the subject from the rule,
+    // so the minted element keeps its own rows), and a typed Size
+    // settles as ONE update_style at the SECTION's rule key, which the
+    // canvas delivers to the neighbouring block's paragraph while block
+    // A's paragraphs keep the nearer block tier's lead size (the
+    // document-order cascade's proximity, a browser fact). The node
+    // suites pin the slice, the chip model and the rebased control
+    // models; only a browser proves the pick reaches the spine, the
+    // panel reads both facts and the op lands where the chip says.
+    $section_key = "container:$section_uuid";
+    $section_rule_key = "$section_key::p";
+    $size_input = "#daedalus_stylish_inspector .daedalus-stylish-inspector__widget--typography input[aria-label='Size']";
+    $session->executeScript(
+      "Array.from(document.querySelectorAll('.daedalus-ui-menu .daedalus-ui-menu__item'))"
+      . ".find((item) => item.querySelector('.daedalus-ui-menu__label')?.textContent.trim() === 'Every paragraph in Section').click();"
+    );
+    $this->assertJsCondition(
+      "(() => { const chip = document.querySelector('$address_chip'); const size = document.querySelector(\"$size_input\"); const alignment = document.querySelector('$alignment');"
+      . ' if (!chip || !size || !alignment) { return false; }'
+      . ' const target = Drupal.Daedalus.Selection.getTarget(); const address = Drupal.Daedalus.Selection.getAddress();'
+      . ' return chip.dataset.daedalusStylishAddress === ' . json_encode($section_rule_key)
+      . " && chip.querySelector('.daedalus-stylish-inspector__address-label')?.textContent.trim() === 'Every paragraph in Section'"
+      . " && chip.classList.contains('daedalus-stylish-chip--lit') && !document.querySelector('.daedalus-ui-menu')"
+      . ' && Drupal.Daedalus.Selection.getSelected() === ' . json_encode($block_a_key)
+      . ' && target?.key === ' . json_encode($block_a_key) . ' && target?.selector === ' . json_encode($target_part)
+      . ' && address?.key === ' . json_encode($section_key) . " && address?.selector === 'p'"
+      . ' && !size.disabled; })()',
+      20000,
+      'Subject and address: the pick seated the section\'s `p` rule as the WRITE ADDRESS (the chip lit at container::p, "Every paragraph in Section") while the selection stayed on block A and the SUBJECT facet stayed the minted paragraph, whose curated controls (Size live, Text alignment mounted) are still the rows: no inverse of the rule replaced the element.',
+    );
+    $this->assertJsCondition(
+      "getComputedStyle(document.querySelector(\"$canvas_b p.$control_class\")).fontSize !== '30px'",
+      20000,
+      'Subject and address: block B\'s paragraph does not compute 30px before the write, so the write below is observable.',
+    );
+    $this->recordOps();
+    $this->typeIntoPanel($size_input, '30px');
+    $this->blurPanel($size_input);
+    $this->assertJsCondition(
+      $map . '[' . json_encode($section_rule_key) . "]?.default?.['font-size'] === '30px'"
+      . ' && ' . $map . '[' . $target_key . "]?.default?.['font-size'] === undefined",
+      20000,
+      'Subject and address: the typed Size committed font-size: 30px at container::p, the write address, and nothing on the minted paragraph\'s own key.',
+    );
+    $this->assertOneOp(
+      $section_rule_key,
+      ['font-size' => '30px'],
+      'Subject and address: the settle was ONE update_style op on the address key carrying font-size alone: the basic widget wrote at the rebased candidate of the paragraph\'s own control model.',
+    );
+    $this->assertJsCondition(
+      "getComputedStyle(document.querySelector(\"$canvas_b p.$control_class\")).fontSize === '30px'"
+      . " && getComputedStyle(document.querySelector(\"$canvas_a p.$target_class\")).fontSize === $lead_size"
+      . " && getComputedStyle(document.querySelector(\"$canvas_a p.$sibling_class\")).fontSize === $lead_size",
+      20000,
+      'Subject and address: the section\'s rule delivers 30px to block B\'s paragraph without reload, while block A\'s paragraphs keep the lead size: the nearer block tier beats the section rule by scope proximity, exactly the reach the chip named.',
+    );
+    // The own entry: picking the first item ("This paragraph") drops the
+    // address alone (address(null)); the facet stands, the chip returns
+    // to the paragraph's own key, unlit.
+    $this->clickPanel($address_chip);
+    $this->assertJsCondition(
+      "(() => { const items = Array.from(document.querySelectorAll('.daedalus-ui-menu .daedalus-ui-menu__item'));"
+      . " return items.length > 0 && items.find((item) => item.querySelector('.daedalus-ui-menu__label')?.textContent.trim() === 'Every paragraph in Section')?.getAttribute('aria-checked') === 'true'; })()",
+      20000,
+      'Subject and address: the reopened menu checks "Every paragraph in Section", the address standing.',
+    );
+    $session->executeScript("document.querySelectorAll('.daedalus-ui-menu .daedalus-ui-menu__item')[0].click();");
+    $this->assertJsCondition(
+      "(() => { const chip = document.querySelector('$address_chip'); if (!chip) { return false; }"
+      . ' const target = Drupal.Daedalus.Selection.getTarget();'
+      . ' return chip.dataset.daedalusStylishAddress === ' . json_encode("$block_a_key::$target_part")
+      . " && !chip.classList.contains('daedalus-stylish-chip--lit') && !document.querySelector('.daedalus-ui-menu')"
+      . ' && Drupal.Daedalus.Selection.getAddress() === null'
+      . ' && target?.key === ' . json_encode($block_a_key) . ' && target?.selector === ' . json_encode($target_part) . '; })()',
+      20000,
+      'Subject and address: the own entry dropped the address (address(null)) and nothing else: the chip is back on the paragraph\'s own key, unlit, and the paragraph is still the subject facet.',
+    );
+
+    // ----- An own-key address in code mode: one lit rule, one draft. -----
+    // Seam: chip pick to spine address to the code view's roster and
+    // its lit mark, live. The code view (one ElementIslands body for
+    // the selection, fed by the leader source) rows the element's own
+    // tag tier `{block A}::p` as a PART row already, and the chip's
+    // "Every paragraph here" is an address on the selection's own key
+    // naming that row. The model pins that an own-key address reaches
+    // no stack and places no rule row (element-model.test.mjs); only a
+    // browser proves the pick reaches the view's one lit rule: the `p`
+    // part header lights (a part header, never a rule header), the
+    // facet's own header goes dark, no second header for the key prints
+    // anywhere, and the chip reads the address. Then the placement
+    // rule's own-key half on a MINTABLE address: block C's list item
+    // targeted, "Every list item here" (`{block C}::li`, held by no
+    // entry) seats the address and the view drafts its island WITH the
+    // cursor, the ancestor seat's parity, the map untouched until a
+    // write. Headers are read by the data attributes the page tree's
+    // hot painter addresses (owner key and selector), the one spelling
+    // a part header and a rule header share.
+    $session->executeScript(<<<'JS'
+      window.__ft.codeHeaders = (owner, part) => Array.from(document.querySelectorAll('.daedalus-stylish-page-tree .daedalus-stylish-islands__part'))
+        .filter((header) => header.dataset.daedalusStylishPartOwner === owner && header.dataset.daedalusStylishPart === part);
+      window.__ft.lit = (header) => !!header
+        && header.classList.contains('daedalus-stylish-islands__part--active')
+        && header.querySelector('.daedalus-stylish-islands__part-select')?.getAttribute('aria-pressed') === 'true';
+      window.__ft.litHeaders = () => document.querySelectorAll('.daedalus-stylish-page-tree .daedalus-stylish-islands__part--active').length;
+      JS);
+    $block_a_json = json_encode($block_a_key);
+    $target_part_json = json_encode($target_part);
+    $this->clickPanel('.daedalus-stylish-inspector__ui-mode-button--code');
+    $this->assertJsCondition(
+      "(() => { const facet = window.__ft.codeHeaders($block_a_json, $target_part_json); const tier = window.__ft.codeHeaders($block_a_json, 'p');"
+      . ' return facet.length === 1 && window.__ft.lit(facet[0]) && tier.length === 1 && !window.__ft.lit(tier[0])'
+      . ' && window.__ft.litHeaders() === 1 && Drupal.Daedalus.Selection.getAddress() === null; })()',
+      20000,
+      'Own-key address in code mode: code mode mounted block A\'s islands with the minted paragraph\'s facet row lit and the `p` tier row dark (one header each), no address standing.',
+    );
+    $this->clickPanel($address_chip);
+    $this->assertJsCondition(
+      "!!document.querySelector('.daedalus-ui-menu') && document.querySelector('.daedalus-ui-menu .daedalus-ui-menu__header')?.textContent.trim() === 'Style this at'",
+      20000,
+      'Own-key address in code mode: the chip opened the "Style this at" menu in code mode.',
+    );
+    $session->executeScript(
+      "Array.from(document.querySelectorAll('.daedalus-ui-menu .daedalus-ui-menu__item'))"
+      . ".find((item) => item.querySelector('.daedalus-ui-menu__label')?.textContent.trim() === 'Every paragraph here').click();"
+    );
+    $this->assertJsCondition(
+      "(() => { const chip = document.querySelector('$address_chip'); const address = Drupal.Daedalus.Selection.getAddress(); const target = Drupal.Daedalus.Selection.getTarget();"
+      . " const facet = window.__ft.codeHeaders($block_a_json, $target_part_json); const tier = window.__ft.codeHeaders($block_a_json, 'p');"
+      . ' return !!chip && chip.dataset.daedalusStylishAddress === ' . json_encode("$block_a_key::p") . " && !document.querySelector('.daedalus-ui-menu')"
+      . " && address?.key === $block_a_json && address?.selector === 'p'"
+      . " && target?.key === $block_a_json && target?.selector === $target_part_json"
+      . " && tier.length === 1 && window.__ft.lit(tier[0]) && !tier[0].classList.contains('daedalus-stylish-islands__part--rule')"
+      . ' && facet.length === 1 && !window.__ft.lit(facet[0]) && window.__ft.litHeaders() === 1'
+      . ' && ' . $map . '[' . json_encode("$block_a_key::p") . "]?.default?.['font-size'] === 'var(--text-lead)'; })()",
+      20000,
+      'Own-key address in code mode: "Every paragraph here" seated {block A}::p as the write address (the chip reads it, the facet stays the minted paragraph) and the code view lit the `p` PART row alone: a part header, not a rule header, the facet row dark, exactly one header for the key on the page (no virtual rule row under the facet), the tier entry untouched.',
+    );
+
+    // The mintable own-key address: block C's list item target has no
+    // `li` tier yet. The pick drafts the `li` island with the cursor.
+    $block_c_json = json_encode($block_c_key);
+    $item_part_json = json_encode(".$item_class");
+    $session->executeScript("Drupal.Daedalus.Selection.select('$block_c_key'); Drupal.Daedalus.Selection.target('$block_c_key', '.$item_class');");
+    $this->assertJsCondition(
+      "(() => { const chip = document.querySelector('$address_chip'); const item = window.__ft.codeHeaders($block_c_json, $item_part_json);"
+      . ' return !!chip && chip.dataset.daedalusStylishAddress === ' . json_encode("$block_c_key::.$item_class") . " && chip.tagName === 'BUTTON'"
+      . ' && Drupal.Daedalus.Selection.getAddress() === null && item.length === 1 && window.__ft.lit(item[0])'
+      . " && window.__ft.codeHeaders($block_c_json, 'li').length === 0"
+      . ' && ' . $map . '[' . json_encode("$block_c_key::li") . '] === undefined; })()',
+      20000,
+      'Mintable own-key address in code mode: block C\'s list item is the facet (its part row lit, the chip at its key as a menu button), no `li` row prints and the map holds no `li` tier.',
+    );
+    $this->clickPanel($address_chip);
+    $this->assertJsCondition(
+      "(() => { const items = Array.from(document.querySelectorAll('.daedalus-ui-menu .daedalus-ui-menu__item'));"
+      . " return items.length > 0 && !!items.find((item) => item.querySelector('.daedalus-ui-menu__label')?.textContent.trim() === 'Every list item here'); })()",
+      20000,
+      'Mintable own-key address in code mode: the chip\'s menu offers "Every list item here" (the item\'s own tag tier, mintable: the open reference declares the tag).',
+    );
+    $session->executeScript(
+      "Array.from(document.querySelectorAll('.daedalus-ui-menu .daedalus-ui-menu__item'))"
+      . ".find((item) => item.querySelector('.daedalus-ui-menu__label')?.textContent.trim() === 'Every list item here').click();"
+    );
+    $this->assertJsCondition(
+      "(() => { const chip = document.querySelector('$address_chip'); const address = Drupal.Daedalus.Selection.getAddress(); const target = Drupal.Daedalus.Selection.getTarget();"
+      . " const tier = window.__ft.codeHeaders($block_c_json, 'li'); const item = window.__ft.codeHeaders($block_c_json, $item_part_json);"
+      . ' if (!chip || tier.length !== 1 || item.length !== 1) { return false; }'
+      . " const body = tier[0].nextElementSibling; const editor = body?.querySelector('.cm-editor');"
+      . ' return chip.dataset.daedalusStylishAddress === ' . json_encode("$block_c_key::li") . " && !document.querySelector('.daedalus-ui-menu')"
+      . " && address?.key === $block_c_json && address?.selector === 'li'"
+      . " && target?.key === $block_c_json && target?.selector === $item_part_json"
+      . " && window.__ft.lit(tier[0]) && !tier[0].classList.contains('daedalus-stylish-islands__part--rule') && !window.__ft.lit(item[0]) && window.__ft.litHeaders() === 1"
+      . " && body?.classList.contains('daedalus-stylish-islands__part-body') && !!editor && editor.contains(document.activeElement)"
+      . " && document.querySelectorAll('.daedalus-stylish-page-tree .cm-editor').length === 1"
+      . ' && ' . $map . '[' . json_encode("$block_c_key::li") . '] === undefined; })()',
+      20000,
+      'Mintable own-key address in code mode: "Every list item here" seated {block C}::li as the write address (the chip reads it, the facet stays the item) and the view drafted the `li` PART row with the cursor: its header lit, its body holding the one live editor with focus, the item row dark, and the map still without the `li` tier (a draft is view state until a write).',
+    );
+  }
+
+  /**
+   * The op log wrapper around Drupal.Daedalus.Blueprint.mutate.
+   */
+  private const OP_LOG = 'Drupal.Daedalus.Blueprint.__daedalusStylishOpLog';
+
+  /**
+   * Starts (or restarts) the op log for the "in one op" claims.
+   *
+   * The leader source dispatches every op through
+   * Drupal.Daedalus.Blueprint.mutate, looked up at call time, so a
+   * wrapper installed on the page records each dispatch's operations
+   * without touching the source. Installed once per page load, cleared
+   * on every call (BasicStylingBehaviorTest's recorder).
+   */
+  private function recordOps(): void {
+    $this->getSession()->executeScript(<<<JS
+      (() => {
+        const Blueprint = Drupal.Daedalus.Blueprint;
+        if (!Blueprint.__daedalusStylishOpLog) {
+          const mutate = Blueprint.mutate;
+          Blueprint.__daedalusStylishOpLog = [];
+          Blueprint.mutate = (context) => {
+            Blueprint.__daedalusStylishOpLog.push((context.operations ?? []).map((operation) => JSON.parse(JSON.stringify(operation))));
+            return mutate.call(Blueprint, context);
+          };
+        }
+        Blueprint.__daedalusStylishOpLog.length = 0;
+      })();
+      JS);
+  }
+
+  /**
+   * Asserts the op log holds exactly one update_style op on the key.
+   *
+   * One dispatch of one op, carrying exactly the given properties.
+   */
+  private function assertOneOp(string $key, array $properties, string $message): void {
+    $this->assertJsCondition(
+      '(() => { const log = ' . self::OP_LOG . ';'
+      . ' if (log.length !== 1 || log[0].length !== 1) { return false; }'
+      . ' const [operation] = log[0];'
+      . ' const sorted = (map) => JSON.stringify(Object.keys(map).sort().map((name) => [name, map[name]]));'
+      . " return operation.op === 'update_style' && operation.key === " . json_encode($key)
+      . ' && sorted(operation.properties ?? {}) === sorted(' . json_encode($properties) . '); })()',
+      20000,
+      $message,
+    );
+  }
+
+  /**
+   * Types into a panel input through the native value setter plus input.
+   *
+   * Preact's controlled inputs read the event; the prototype setter keeps
+   * the framework's value tracker honest (BasicStylingBehaviorTest's).
+   */
+  private function typeIntoPanel(string $selector, string $text): void {
+    $this->getSession()->executeScript(
+      '(() => {'
+      . ' const input = document.querySelector(' . json_encode($selector) . ');'
+      . " const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;"
+      . ' setter.call(input, ' . json_encode($text) . ');'
+      . " input.dispatchEvent(new Event('input', { bubbles: true }));"
+      . ' })();'
+    );
+  }
+
+  /**
+   * Settles a panel input (blur), in its own tick per typeIntoPanel.
+   */
+  private function blurPanel(string $selector): void {
+    $this->getSession()->executeScript(
+      'document.querySelector(' . json_encode($selector) . ").dispatchEvent(new FocusEvent('blur'));"
     );
   }
 

@@ -229,7 +229,7 @@ const Background = ({
           );
     onPickMedia({
       property: 'background-image',
-      label: Drupal.t('Styled @control', { '@control': model.label }),
+      label: Drupal.t('Styled !control', { '!control': model.label }),
       companions: {
         ...mediaPickReplacements(values, siblings),
         ...mediaCompanions(guide, declaration, delivered, model.condition),

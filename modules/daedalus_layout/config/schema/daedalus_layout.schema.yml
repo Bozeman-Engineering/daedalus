@@ -1,11 +1,3 @@
-daedalus_layout.settings:
-  type: config_object
-  label: 'Daedalus Layout settings'
-  mapping:
-    contextual_links:
-      type: boolean
-      label: 'Show Block Contextual links'
-
 # The nested-section container component. The `section` key embeds exactly
 # ONE section; core's layout_builder.section named type resolves its dynamic
 # references at arbitrary depth, so nesting recurses through this same type.
@@ -17,10 +9,17 @@ block.settings.daedalus_layout_section:
       type: layout_builder.section
       label: 'Embedded container'
 
-# The block type's icon, in the icon value grammar (`media:<uuid>` or a
-# root-relative path) resolved by daedalus_blueprint's IconResolver. A property
-# of the block TYPE: every page-builder surface that represents the type
-# (the Add panel's promoted items today) reads it from here.
+# The block type's face in the Add panel, a property of the block TYPE that
+# every page-builder surface representing the type reads from here: its
+# icon, in the icon value grammar (`media:<uuid>` or a root-relative path)
+# resolved by daedalus_blueprint's IconResolver; whether it is a favorite
+# (the site's default, listed under Favorites for everyone; each editor
+# keeps their own marks over it); and the groups it is filed under (ids
+# from the site's group vocabulary, DialectCatalog::groups(); filters
+# only). Each key's absence is the one spelling of its default: no icon,
+# not a favorite, no group. Edited in the block type form's "In the Add
+# panel" group (BlockContentTypeFormAlter), as a blueprint's are in its
+# details dialog.
 block_content.type.*.third_party.daedalus_layout:
   type: mapping
   label: 'Daedalus Layout block type settings'
@@ -28,6 +27,46 @@ block_content.type.*.third_party.daedalus_layout:
     icon:
       type: string
       label: 'Block icon'
+    favorite:
+      type: boolean
+      label: 'Favorite: listed under Favorites in the Add panel for everyone'
+    groups:
+      type: sequence
+      label: 'Groups: the site group ids the block type is filed under'
+      sequence:
+        type: string
+        label: 'Group id'
+
+# A page bundle's settings, in the bundle form's Page builder section
+# (daedalus_ui's BundleEditFormAlter; the "When a page is created" group).
+# Core resolves a third-party section through one explicit
+# `{prefix}.*.third_party.daedalus_layout` name per bundle config type and
+# never through a shared wildcard, so the type is named below for core's
+# page-capable content entity types, as daedalus_ui names its own; a
+# contrib bundle type adds the one line for its prefix.
+# BundleEditFormAlter::hasSettingsSchema($type, 'daedalus_layout') is the
+# probe. A block type carries the icon mapping above instead: its section
+# has no creation group.
+daedalus_layout.bundle.options:
+  type: mapping
+  label: 'Daedalus Layout bundle options'
+  mapping:
+    offer_starts:
+      type: boolean
+      label: 'Offer starting designs: the chooser in front of the add form'
+
+node.type.*.third_party.daedalus_layout:
+  type: daedalus_layout.bundle.options
+  label: 'Daedalus Layout bundle options'
+media.type.*.third_party.daedalus_layout:
+  type: daedalus_layout.bundle.options
+  label: 'Daedalus Layout bundle options'
+taxonomy.vocabulary.*.third_party.daedalus_layout:
+  type: daedalus_layout.bundle.options
+  label: 'Daedalus Layout bundle options'
+comment.type.*.third_party.daedalus_layout:
+  type: daedalus_layout.bundle.options
+  label: 'Daedalus Layout bundle options'
 
 layout_builder.section.third_party.daedalus_layout:
   type: mapping
@@ -42,19 +81,6 @@ core.entity_view_display.*.*.*.third_party.daedalus_layout:
   sequence:
     type: daedalus_layout.[%key]
 
-daedalus_layout.preserved_fields:
-  type: sequence
-  label: 'Preserved fields'
-  sequence:
-    type: string
-    label: 'Field name'
-
 daedalus_layout.default_section:
   type: ignore
   label: 'Per-view-mode Daedalus Layout settings'
-
-daedalus_layout.promoted_blocks:
-  type: sequence
-  label: 'Per-view-mode Daedalus Layout promoted blocks'
-  sequence:
-    type: string

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Drupal\Tests\daedalus_blueprint_api\Unit\Render;
 
 use Drupal\Core\Entity\FieldableEntityInterface;
+use Drupal\daedalus_blueprint\Host\HostInterface;
 use Drupal\daedalus_blueprint\ElementContext;
 use Drupal\daedalus_blueprint\ElementLocator;
 use Drupal\daedalus_blueprint\LayoutBuilder\DaedalusLayoutAdapter;
@@ -30,11 +31,18 @@ class TargetKeyMapperTest extends UnitTestCase {
   protected const SECTION_UUID = 'dddddddd-1111-2222-3333-444444444444';
 
   /**
-   * The root entity.
+   * The root entity: the host's fields entity.
    *
    * @var \Drupal\Core\Entity\FieldableEntityInterface&\PHPUnit\Framework\MockObject\MockObject
    */
   protected FieldableEntityInterface $rootEntity;
+
+  /**
+   * The host over the root entity.
+   *
+   * @var \Drupal\daedalus_blueprint\Host\HostInterface&\PHPUnit\Framework\MockObject\MockObject
+   */
+  protected HostInterface $host;
 
   /**
    * {@inheritdoc}
@@ -43,6 +51,9 @@ class TargetKeyMapperTest extends UnitTestCase {
     parent::setUp();
     $this->rootEntity = $this->createMock(FieldableEntityInterface::class);
     $this->rootEntity->method('uuid')->willReturn(self::ROOT_UUID);
+    $this->host = $this->createMock(HostInterface::class);
+    $this->host->method('uuid')->willReturn(self::ROOT_UUID);
+    $this->host->method('fields')->willReturn($this->rootEntity);
   }
 
   /**
@@ -59,7 +70,7 @@ class TargetKeyMapperTest extends UnitTestCase {
   protected function buildMapper(array $contexts = [], ?string $section_uuid = NULL): TargetKeyMapper {
     $locator = $this->createMock(ElementLocator::class);
     $locator->method('locate')->willReturnCallback(
-      fn(FieldableEntityInterface $entity, string $uuid) => $contexts[$uuid] ?? NULL,
+      fn(HostInterface $host, string $uuid) => $contexts[$uuid] ?? NULL,
     );
     $adapter = $this->createMock(DaedalusLayoutAdapter::class);
     $adapter->method('getSectionUuid')->willReturn($section_uuid);
@@ -70,7 +81,7 @@ class TargetKeyMapperTest extends UnitTestCase {
    * A field change on the root entity maps to its field key.
    */
   public function testRootFieldMapsToFieldKey(): void {
-    $keys = $this->buildMapper()->map($this->rootEntity, [
+    $keys = $this->buildMapper()->map($this->host, [
       ['uuid' => self::ROOT_UUID, 'field_name' => 'field_subtitle'],
     ]);
     $this->assertSame([SelectableKey::field(self::ROOT_UUID, 'field_subtitle')], $keys);
@@ -80,7 +91,7 @@ class TargetKeyMapperTest extends UnitTestCase {
    * A sentinel on the root entity falls back to the entity key.
    */
   public function testRootSentinelFallsBackToEntityKey(): void {
-    $keys = $this->buildMapper()->map($this->rootEntity, [
+    $keys = $this->buildMapper()->map($this->host, [
       ['uuid' => self::ROOT_UUID, 'field_name' => TargetType::RESTRUCTURED],
     ]);
     $this->assertSame([SelectableKey::entity(self::ROOT_UUID)], $keys);
@@ -95,7 +106,7 @@ class TargetKeyMapperTest extends UnitTestCase {
    * applies.
    */
   public function testStringTargetPassesThroughVerbatim(): void {
-    $keys = $this->buildMapper()->map($this->rootEntity, [
+    $keys = $this->buildMapper()->map($this->host, [
       'container:' . self::SECTION_UUID,
       ['uuid' => self::ROOT_UUID, 'field_name' => 'field_subtitle'],
       'container:' . self::SECTION_UUID,
@@ -110,7 +121,7 @@ class TargetKeyMapperTest extends UnitTestCase {
    * An unlocatable UUID (e.g. a removed component) falls back.
    */
   public function testUnlocatableUuidFallsBackToEntityKey(): void {
-    $keys = $this->buildMapper()->map($this->rootEntity, [
+    $keys = $this->buildMapper()->map($this->host, [
       ['uuid' => self::COMPONENT_UUID, 'field_name' => TargetType::REMOVED],
     ]);
     $this->assertSame([SelectableKey::entity(self::ROOT_UUID)], $keys);
@@ -123,7 +134,7 @@ class TargetKeyMapperTest extends UnitTestCase {
     $mapper = $this->buildMapper([
       self::COMPONENT_UUID => $this->lbElementContext(),
     ]);
-    $keys = $mapper->map($this->rootEntity, [
+    $keys = $mapper->map($this->host, [
       ['uuid' => self::COMPONENT_UUID, 'field_name' => 'field_body'],
     ]);
     $this->assertSame([SelectableKey::blockField(self::COMPONENT_UUID, 'field_body')], $keys);
@@ -140,7 +151,7 @@ class TargetKeyMapperTest extends UnitTestCase {
     $mapper = $this->buildMapper([
       self::COMPONENT_UUID => $this->lbElementContext(),
     ]);
-    $keys = $mapper->map($this->rootEntity, [
+    $keys = $mapper->map($this->host, [
       ['uuid' => self::COMPONENT_UUID, 'field_name' => 'field_body'],
       ['uuid' => self::COMPONENT_UUID, 'field_name' => TargetType::PRESENCE],
     ]);
@@ -154,7 +165,7 @@ class TargetKeyMapperTest extends UnitTestCase {
    * A root field that appeared or disappeared re-renders the whole entity.
    */
   public function testRootPresenceFallsBackToEntityKey(): void {
-    $keys = $this->buildMapper()->map($this->rootEntity, [
+    $keys = $this->buildMapper()->map($this->host, [
       ['uuid' => self::ROOT_UUID, 'field_name' => 'field_subtitle'],
       ['uuid' => self::ROOT_UUID, 'field_name' => TargetType::PRESENCE],
     ]);
@@ -172,7 +183,7 @@ class TargetKeyMapperTest extends UnitTestCase {
       [self::COMPONENT_UUID => $this->lbElementContext()],
       self::SECTION_UUID,
     );
-    $keys = $mapper->map($this->rootEntity, [
+    $keys = $mapper->map($this->host, [
       ['uuid' => self::COMPONENT_UUID, 'field_name' => TargetType::ADDED],
     ]);
     $this->assertSame([SelectableKey::container(self::SECTION_UUID)], $keys);
@@ -185,7 +196,7 @@ class TargetKeyMapperTest extends UnitTestCase {
     $mapper = $this->buildMapper([
       self::COMPONENT_UUID => $this->lbElementContext(),
     ]);
-    $keys = $mapper->map($this->rootEntity, [
+    $keys = $mapper->map($this->host, [
       ['uuid' => self::COMPONENT_UUID, 'field_name' => TargetType::ADDED],
     ]);
     $this->assertSame([SelectableKey::entity(self::ROOT_UUID)], $keys);
@@ -198,7 +209,7 @@ class TargetKeyMapperTest extends UnitTestCase {
     $mapper = $this->buildMapper([
       self::PARAGRAPH_UUID => $this->paragraphContext($this->rootEntity),
     ]);
-    $keys = $mapper->map($this->rootEntity, [
+    $keys = $mapper->map($this->host, [
       ['uuid' => self::PARAGRAPH_UUID, 'field_name' => 'field_text'],
     ]);
     $this->assertSame([SelectableKey::field(self::PARAGRAPH_UUID, 'field_text')], $keys);
@@ -211,7 +222,7 @@ class TargetKeyMapperTest extends UnitTestCase {
     $mapper = $this->buildMapper([
       self::PARAGRAPH_UUID => $this->paragraphContext($this->rootEntity),
     ]);
-    $keys = $mapper->map($this->rootEntity, [
+    $keys = $mapper->map($this->host, [
       ['uuid' => self::PARAGRAPH_UUID, 'field_name' => TargetType::ADDED],
     ]);
     $this->assertSame([SelectableKey::field(self::ROOT_UUID, 'field_paragraphs')], $keys);
@@ -226,7 +237,7 @@ class TargetKeyMapperTest extends UnitTestCase {
     $mapper = $this->buildMapper([
       self::PARAGRAPH_UUID => $this->paragraphContext($nested_host),
     ]);
-    $keys = $mapper->map($this->rootEntity, [
+    $keys = $mapper->map($this->host, [
       ['uuid' => self::PARAGRAPH_UUID, 'field_name' => TargetType::ADDED],
     ]);
     $this->assertSame([SelectableKey::entity(self::ROOT_UUID)], $keys);
@@ -240,11 +251,13 @@ class TargetKeyMapperTest extends UnitTestCase {
       self::SECTION_UUID => new ElementContext(
         type: ElementContext::TYPE_SECTION,
         target: new Section('layout_onecol'),
+        host: $this->host,
+
         parentEntity: $this->rootEntity,
-        path: 'layout_builder__layout.0',
+        path: 'layout.0',
       ),
     ]);
-    $keys = $mapper->map($this->rootEntity, [
+    $keys = $mapper->map($this->host, [
       ['uuid' => self::SECTION_UUID, 'field_name' => TargetType::RESTRUCTURED],
     ]);
     $this->assertSame([SelectableKey::container(self::SECTION_UUID)], $keys);
@@ -262,11 +275,13 @@ class TargetKeyMapperTest extends UnitTestCase {
       self::SECTION_UUID => new ElementContext(
         type: ElementContext::TYPE_SECTION,
         target: new Section('layout_twocol_section'),
+        host: $this->host,
+
         parentEntity: $this->rootEntity,
-        path: 'layout_builder__layout.0',
+        path: 'layout.0',
       ),
     ]);
-    $keys = $mapper->map($this->rootEntity, [
+    $keys = $mapper->map($this->host, [
       ['uuid' => self::SECTION_UUID, 'field_name' => 'layout_settings'],
       ['uuid' => self::SECTION_UUID, 'field_name' => 'label'],
     ]);
@@ -277,7 +292,7 @@ class TargetKeyMapperTest extends UnitTestCase {
    * Duplicate keys collapse: many targets can share one subtree.
    */
   public function testKeysAreDeduplicated(): void {
-    $keys = $this->buildMapper()->map($this->rootEntity, [
+    $keys = $this->buildMapper()->map($this->host, [
       ['uuid' => self::ROOT_UUID, 'field_name' => 'field_subtitle'],
       ['uuid' => self::ROOT_UUID, 'field_name' => 'field_subtitle'],
       ['uuid' => self::ROOT_UUID, 'field_name' => TargetType::RESTRUCTURED],
@@ -296,8 +311,10 @@ class TargetKeyMapperTest extends UnitTestCase {
     return new ElementContext(
       type: ElementContext::TYPE_LB_COMPONENT,
       target: new SectionComponent(self::COMPONENT_UUID, 'content', ['id' => 'system_powered_by_block']),
+      host: $this->host,
+
       parentEntity: $this->rootEntity,
-      path: 'layout_builder__layout.0',
+      path: 'layout.0',
       section: new Section('layout_onecol'),
       sectionIndex: 0,
     );
@@ -315,6 +332,7 @@ class TargetKeyMapperTest extends UnitTestCase {
     return new ElementContext(
       type: ElementContext::TYPE_PARAGRAPH,
       target: $paragraph,
+      host: $this->host,
       parentEntity: $parent,
       path: 'field_paragraphs.0',
       fieldName: 'field_paragraphs',

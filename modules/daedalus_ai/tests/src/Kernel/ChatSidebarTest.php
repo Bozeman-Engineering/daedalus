@@ -36,6 +36,11 @@ use Symfony\Component\HttpFoundation\Session\Storage\MockArraySessionStorage;
  *   the client never simulates), and pass the current route as context so
  *   the AI knows the page. The panel is #cache max-age 0 (per-session token +
  *   history), and only history newer than one day is replayed into the widget.
+ *   The body's chat-turn contract (chat_processor_plugin and
+ *   plugin_configuration, drupal/ai 1.5's shape) is asserted against the LIVE
+ *   chat processor manager and plugin, never against a shape this test
+ *   spells itself: a Kernel assertion in daedalus's own words is how the 1.5
+ *   contract move stayed invisible while the suites were green.
  *
  * The runner is MOCKED: getMessageHistory() reads session-scoped tempstore
  * keyed by an internal thread id, so seeding it for real would couple this test
@@ -221,8 +226,30 @@ class ChatSidebarTest extends KernelTestBase {
     // drupal_commands/blueprint_responses injections all ride the JSON body).
     $this->assertArrayNotHasKey('stream', $connect, 'deep-chat neither streams nor simulates streaming; replies render whole.');
     $this->assertFalse($connect['additionalBodyProps']['stream'], 'The server-side transport stays JSON; SSE is never requested.');
-    $this->assertSame('chatbot', $connect['additionalBodyProps']['assistant_id']);
     $this->assertSame('/node/5', $connect['additionalBodyProps']['contexts']['current_route'], 'The current route is passed as AI context.');
+
+    // The chat-turn request contract, locked against ai_chatbot rather than
+    // against daedalus's own words: DeepChatApi::api() refuses any body
+    // whose chat_processor_plugin the processor manager has no definition
+    // for, and hands plugin_configuration to that plugin's createInstance().
+    // So the body names a processor the LIVE manager knows and configures it
+    // with exactly the keys the live plugin declares as its defaults; the
+    // next contract move in ai (a renamed processor, a new or dropped
+    // configuration key) fails here, not on the installed site.
+    $body = $connect['additionalBodyProps'];
+    $processor_manager = $this->container->get('plugin.manager.ai.chat_processor');
+    $this->assertTrue($processor_manager->hasDefinition($body['chat_processor_plugin']), 'The body names a chat processor ai_chatbot can instantiate.');
+    $processor = $processor_manager->createInstance($body['chat_processor_plugin']);
+    $this->assertSame(array_keys($processor->defaultConfiguration()), array_keys($body['plugin_configuration']), 'plugin_configuration carries exactly the processor\'s own configuration keys.');
+    $this->assertSame('chatbot', $body['plugin_configuration']['assistant_id'], 'The configured assistant rides inside the processor configuration.');
+    $this->assertFalse($body['plugin_configuration']['stream_output'], 'The processor never streams its output.');
+    $this->assertTrue($body['plugin_configuration']['verbose_mode']);
+    $this->assertFalse($body['plugin_configuration']['show_structured_results']);
+    // The pre-1.5 top-level keys are gone: the controller reads none of
+    // them, and a surviving one is a second spelling of the contract.
+    foreach (['assistant_id', 'structured_results', 'show_copy_icon', 'verbose_mode'] as $legacy_key) {
+      $this->assertArrayNotHasKey($legacy_key, $body, "No pre-1.5 top-level '$legacy_key' survives in the body.");
+    }
 
     // drupalSettings the client bootstraps deep-chat from.
     $settings = $build['#attached']['drupalSettings']['ai_deepchat'];
@@ -231,11 +258,11 @@ class ChatSidebarTest extends KernelTestBase {
     $this->assertTrue($settings['session_exists'], 'A started session is reported to the client.');
 
     // Attachments: the widget's attach button and drop zone take the lane's
-    // accepted formats (the textual kinds alone here, with no media type
+    // accepted formats (the textual and font kinds here, with no media type
     // installed) and the client reads the same formats and the lane's size
     // ceiling from drupalSettings for its pre-upload refusal.
     $attributes = $build['chat']['deep_chat']['#attributes'];
-    $expected_formats = implode(',', array_map(static fn (string $extension): string => ".$extension", FileLane::TEXTUAL_EXTENSIONS));
+    $expected_formats = implode(',', array_map(static fn (string $extension): string => ".$extension", [...FileLane::TEXTUAL_EXTENSIONS, ...FileLane::FONT_EXTENSIONS]));
     $mixed_files = Json::decode($attributes['mixedfiles']);
     $this->assertSame($expected_formats, $mixed_files['files']['acceptedFormats'], 'The attach button accepts exactly what the lane accepts.');
     $this->assertSame('inside-left', $mixed_files['button']['position']);

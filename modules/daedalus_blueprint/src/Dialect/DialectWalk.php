@@ -4,11 +4,13 @@ declare(strict_types=1);
 
 namespace Drupal\daedalus_blueprint\Dialect;
 
+use Drupal\daedalus_blueprint\LayoutBuilder\FieldBlock;
 use Drupal\daedalus_blueprint\Materials\Address;
 use Drupal\daedalus_blueprint\Materials\MaterialRecord;
 use Drupal\daedalus_blueprint\Materials\MaterialsRoster;
 use Drupal\daedalus_blueprint\Materials\ValueKind;
 use Drupal\daedalus_blueprint\Materials\ValueReference;
+use Drupal\daedalus_blueprint\Plugin\Block\LinkedBlueprintBlock;
 
 /**
  * One walk of a raw parse tree into lean nodes and structural errors.
@@ -16,7 +18,7 @@ use Drupal\daedalus_blueprint\Materials\ValueReference;
  * Stateful per parse (collected ids, errors); created by DialectParser for
  * each document or fragment. The walk enforces the structural grammar and
  * builds nodes; the CSS surface is DialectCssParser's. Every material a
- * document names (a class, an axis attribute value, a stencil name)
+ * document names (a class, an axis attribute value, a blueprint name)
  * resolves through the catalog's value grammar, so an unpublished
  * spelling is refused here with the roster's did-you-mean, never deep in
  * the translated batch. Variant axes are attributes on every tag (the
@@ -29,12 +31,12 @@ final class DialectWalk {
   /**
    * The attributes every placeable element takes (globalAttr()).
    *
-   * Id is identity, class and style are wear and look, stencil is
-   * placement provenance (the stencil the element was placed from, an
-   * identity fact the print carries and the write keeps). <pb-stencil>
+   * Id is identity, class and style are wear and look, blueprint is
+   * placement provenance (the blueprint the element was placed from, an
+   * identity fact the print carries and the write keeps). <pb-blueprint>
    * takes id and name only: a reference is not a placement.
    */
-  public const GLOBAL_ATTRS = ['id', 'class', 'style', 'stencil'];
+  public const GLOBAL_ATTRS = ['id', 'class', 'style', 'blueprint'];
 
   /**
    * The container's own attribute: its name, the section's label.
@@ -44,10 +46,40 @@ final class DialectWalk {
    * (layout_settings.label, the same slot update_element {label} takes).
    * Container-only: a block's name is derived from its content and is
    * not renamable, so <pb-text name="..."> is ILLEGAL_ATTR. On
-   * <pb-stencil> the same spelling names the stencil to place, a
-   * different attribute (stencilReference()).
+   * <pb-blueprint> the same spelling names the blueprint to place, a
+   * different attribute (blueprintReference()).
    */
   public const NAME_ATTR = 'name';
+
+  /**
+   * The slot section's tag: a top-level container filling a slot.
+   *
+   * <pb-slot name="hero"> is the container form of a section tagged with
+   * the slot id it fills (the serializer's `slot` key on a top-level
+   * container); name is the slot id there, a birth fact the op door
+   * judges, never the section's label. Top level only: a slot section is
+   * one of the document's own root containers.
+   */
+  public const SLOT_TAG = 'pb-slot';
+
+  /**
+   * The linked placement's tag.
+   *
+   * <pb-linked blueprint="header"/> is a blueprint shown by reference (the
+   * lean tree's {kind: linked, blueprint}): one block node whose content is
+   * the blueprint's own document, rendered live where the node sits.
+   */
+  public const LINKED_TAG = 'pb-linked';
+
+  /**
+   * The linked placement's one attribute of its own: the blueprint it shows.
+   */
+  public const LINKED_ATTR = 'blueprint';
+
+  /**
+   * The container tags: the plain container and the slot section.
+   */
+  public const CONTAINER_TAGS = ['pb-container', self::SLOT_TAG];
 
   /**
    * The structural errors found while walking.
@@ -105,11 +137,21 @@ final class DialectWalk {
     if ($tag === 'pb-container') {
       return $this->container($el, $depth);
     }
+    if ($tag === self::SLOT_TAG) {
+      if ($depth > 0) {
+        $this->errors[] = new DialectError('ILLEGAL_CONTAINMENT', sprintf('<%s> belongs at the top level of the document: a slot section fills a slot of the document around this one and never nests', self::SLOT_TAG), $el->line, [], 'Write <pb-container> for a nested grouping; <pb-slot name="..."> is one of the page\'s own top-level containers.');
+        return NULL;
+      }
+      return $this->container($el, $depth, TRUE);
+    }
     if ($tag === 'pb-block') {
       return $this->pluginOrGenericBlock($el, $depth);
     }
-    if ($tag === 'pb-stencil') {
-      return $this->stencilReference($el, $depth);
+    if ($tag === 'pb-blueprint') {
+      return $this->blueprintReference($el, $depth);
+    }
+    if ($tag === self::LINKED_TAG) {
+      return $this->linkedPlacement($el, $depth);
     }
     if ($tag === 'pb-field') {
       $this->errors[] = new DialectError('ILLEGAL_CONTAINMENT', '<pb-field> is legal only inside <pb-block type=...> or a structured field context', $el->line);
@@ -120,17 +162,27 @@ final class DialectWalk {
       $tags = array_map([DialectCatalog::class, 'tagForBlockType'], array_keys($this->catalog->blockTypes()));
       $this->errors[] = new DialectError('UNKNOWN_TAG', sprintf('<%s> is not in the catalog', $tag), $el->line, [
         'tag' => $tag,
-        'elements' => array_merge(['pb-container'], $tags, ['pb-block', 'pb-stencil']),
-      ], sprintf('Elements: <pb-container>, %s, <pb-block>, <pb-stencil>.', implode(', ', array_map(static fn (string $t): string => '<' . $t . '>', $tags))));
+        'elements' => array_merge(['pb-container', self::SLOT_TAG], $tags, [
+          'pb-block',
+          'pb-blueprint',
+          self::LINKED_TAG,
+        ]),
+      ], sprintf('Elements: <pb-container>, <%s>, %s, <pb-block>, <pb-blueprint>, <%s>.', self::SLOT_TAG, implode(', ', array_map(static fn (string $t): string => '<' . $t . '>', $tags)), self::LINKED_TAG));
       return NULL;
     }
     return $this->declaredBlock($el, $block_type, $depth);
   }
 
   /**
-   * Builds a container node.
+   * Builds a container node: <pb-container>, or the slot form <pb-slot>.
+   *
+   * Both forms take the same attributes; name is the section's label on
+   * <pb-container> and the slot id on <pb-slot> (required there, landed
+   * on the node's `slot` key; a slot section's label has no spelling,
+   * the slot being the word it is called by).
    */
-  private function container(RawElement $el, int $depth): array {
+  private function container(RawElement $el, int $depth, bool $slot = FALSE): array {
+    $tag = $slot ? self::SLOT_TAG : 'pb-container';
     $node = ['kind' => 'container', 'layout_id' => $this->catalog->containerLayoutId()];
     $worn = [];
     $axis_values = [];
@@ -149,8 +201,16 @@ final class DialectWalk {
         continue;
       }
       if ($name === self::NAME_ATTR) {
+        if ($slot) {
+          // The slot id, judged by the op door (shape and uniqueness);
+          // the parse carries it as the serializer's key.
+          if ($value !== '') {
+            $node['slot'] = $value;
+          }
+          continue;
+        }
         // The node carries the name under the serializer's key, so a
-        // parsed tree, a stored tree (a stencil's element) and the print
+        // parsed tree, a stored tree (a blueprint's element) and the print
         // share one shape; an empty name is no name, as the section's
         // label slot holds none.
         if ($value !== '') {
@@ -162,14 +222,17 @@ final class DialectWalk {
         $this->axisAttr($el, $name, $value, $axes[$name], $depth, $axis_values);
         continue;
       }
-      $this->errors[] = self::illegalAttr($name, 'pb-container', $legal, $el->line);
+      $this->errors[] = self::illegalAttr($name, $tag, $legal, $el->line);
+    }
+    if ($slot && !isset($node['slot'])) {
+      $this->errors[] = new DialectError('ILLEGAL_ATTR', sprintf('<%s> needs name="..." (the id of the slot it fills)', self::SLOT_TAG), $el->line, ['attribute' => self::NAME_ATTR, 'legal' => $legal], 'A slot section names the slot the document around this one placed: <pb-slot name="hero">.');
     }
 
     $children = [];
     foreach ($el->children as $child) {
       if (!$child instanceof RawElement) {
         if (trim($child['#text']) !== '') {
-          $this->errors[] = new DialectError('STRAY_TEXT', sprintf('bare text "%s" inside <pb-container>: wrap copy in <pb-text> or <pb-formatted-text>', DialectParser::excerpt($child['#text'])), $child['#line']);
+          $this->errors[] = new DialectError('STRAY_TEXT', sprintf('bare text "%s" inside <%s>: wrap copy in <pb-text> or <pb-formatted-text>', DialectParser::excerpt($child['#text']), $tag), $child['#line']);
         }
         continue;
       }
@@ -286,7 +349,13 @@ final class DialectWalk {
   }
 
   /**
-   * Builds a plugin-block or undeclared-type (generic form) block node.
+   * Builds a field, plugin-block or undeclared-type (generic form) block node.
+   *
+   * <pb-block field="name"/> is one of the page's fields (the node spells
+   * the field; the page the fragment lands on supplies the field block),
+   * <pb-block plugin="id"/> an existing plugin block, <pb-block type="x">
+   * an undeclared block type with <pb-field> children; exactly one of the
+   * three names the element.
    */
   private function pluginOrGenericBlock(RawElement $el, int $depth): array {
     $node = ['kind' => 'block'];
@@ -295,12 +364,15 @@ final class DialectWalk {
     $default = [];
     $plugin = NULL;
     $type = NULL;
+    $field = NULL;
     // The class roster and the axes depend on what the block is, and class
-    // or an axis may precede plugin/type in source order, so the identity
-    // attributes are read ahead of the walk.
-    $axes = $this->catalog->axesFor(FALSE, $el->attr('type'), $el->attr('plugin'));
-    $roster = $this->catalog->classRosterFor(FALSE, $el->attr('type'), $el->attr('plugin'));
-    $legal = [...self::GLOBAL_ATTRS, 'plugin', 'type', ...array_keys($axes)];
+    // or an axis may precede plugin/type/field in source order, so the
+    // identity attributes are read ahead of the walk. A field block wears
+    // under the field_block base plugin (NodeTreeBuilder::pluginBase).
+    $base_plugin = $el->attr('field') !== NULL ? FieldBlock::PLUGIN : $el->attr('plugin');
+    $axes = $this->catalog->axesFor(FALSE, $el->attr('type'), $base_plugin);
+    $roster = $this->catalog->classRosterFor(FALSE, $el->attr('type'), $base_plugin);
+    $legal = [...self::GLOBAL_ATTRS, 'field', 'plugin', 'type', ...array_keys($axes)];
     $cascade = $this->earlyClosedAttr($el, $legal);
 
     foreach ($el->attributes as $name => $value) {
@@ -319,14 +391,28 @@ final class DialectWalk {
         $type = $value;
         continue;
       }
+      if ($name === 'field') {
+        $field = $value;
+        continue;
+      }
       if (isset($axes[$name])) {
         $this->axisAttr($el, $name, $value, $axes[$name], $depth, $axis_values);
         continue;
       }
       $this->errors[] = self::illegalAttr($name, 'pb-block', $legal, $el->line);
     }
-    if ($plugin === NULL && $type === NULL) {
-      $this->errors[] = new DialectError('ILLEGAL_ATTR', '<pb-block> needs plugin="..." (plugin block) or type="..." (undeclared block type)', $el->line);
+    $named = array_keys(array_filter(['field' => $field, 'plugin' => $plugin, 'type' => $type], static fn (?string $value): bool => $value !== NULL));
+    if ($named === []) {
+      $this->errors[] = new DialectError('ILLEGAL_ATTR', '<pb-block> needs field="..." (one of the page\'s fields), plugin="..." (plugin block) or type="..." (undeclared block type)', $el->line);
+    }
+    elseif (count($named) > 1) {
+      $this->errors[] = new DialectError('ILLEGAL_ATTR', sprintf('<pb-block> takes one of field, plugin or type, not %s', implode(' and ', $named)), $el->line, ['attributes' => $named], 'field="name" renders one of the page\'s fields, plugin="id" an existing plugin block, type="x" an undeclared block type.');
+    }
+    elseif ($field === '') {
+      $this->errors[] = new DialectError('ILLEGAL_ATTR', '<pb-block field="..."> names one of the page\'s fields', $el->line, [], 'Set field to a field machine name the page has (read_schema lists them under available_fields).');
+    }
+    elseif ($plugin !== NULL && FieldBlock::isFieldBlock($plugin)) {
+      $this->errors[] = new DialectError('ILLEGAL_ATTR', sprintf('a field block is placed by field, never by its plugin id "%s"', $plugin), $el->line, ['field' => FieldBlock::fieldOf($plugin)], sprintf('Write <pb-block field="%s"/>: the page the fragment lands on supplies its own field block.', FieldBlock::fieldOf($plugin) ?? 'name'));
     }
 
     $fields = [];
@@ -349,7 +435,10 @@ final class DialectWalk {
       $fields[$field_name] = $child->text();
     }
 
-    if ($plugin !== NULL) {
+    if ($field !== NULL) {
+      $node['field'] = $field;
+    }
+    elseif ($plugin !== NULL) {
       $node['plugin_id'] = $plugin;
     }
     else {
@@ -407,19 +496,92 @@ final class DialectWalk {
   }
 
   /**
-   * Builds a stencil reference node.
+   * Builds a linked placement node: a blueprint shown by reference.
    *
-   * The name resolves through the stencil slot: a placement names a
-   * published stencil or is refused here, with the roster's candidates,
-   * instead of failing as STENCIL_NOT_FOUND deep in the translated batch.
-   * A page band (a stencil whose root wears a root-only variant, the
+   * The blueprint="" attribute names a published BLOCK blueprint saved on
+   * this site as an entity: the name resolves through the blueprint slot (UNKNOWN_BLUEPRINT
+   * with the roster's candidates otherwise), a shipped file is refused
+   * (BLUEPRINT_NOT_LINKABLE: a file has no live document to show) and a
+   * page blueprint is refused (BLUEPRINT_WRONG_SCOPE: a whole page is a
+   * new page's start). The element is a block: it takes id, class, style
+   * and the block kind's axes, no children (its content is the
+   * blueprint's document, edited on the blueprint), and sits inside a
+   * container like any block. Whether the blueprint fits the page is the
+   * op door's judgement at placement (BLUEPRINT_DOES_NOT_FIT).
+   */
+  private function linkedPlacement(RawElement $el, int $depth): array {
+    $node = ['kind' => LinkedBlueprintBlock::KIND];
+    $worn = [];
+    $axis_values = [];
+    $default = [];
+    $named = FALSE;
+    $axes = $this->catalog->axesFor(FALSE, NULL, LinkedBlueprintBlock::PLUGIN_ID);
+    $roster = $this->catalog->classRosterFor(FALSE, NULL, LinkedBlueprintBlock::PLUGIN_ID);
+    $legal = ['id', 'class', 'style', self::LINKED_ATTR, ...array_keys($axes)];
+    $cascade = $this->earlyClosedAttr($el, $legal);
+    foreach ($el->attributes as $name => $value) {
+      if ($this->cascadeGuard($el, (string) $name, $cascade)) {
+        continue;
+      }
+      $value = $value === NULL ? '' : (string) $value;
+      if ($name === self::LINKED_ATTR) {
+        $named = TRUE;
+        $reference = $this->catalog->resolve($value, MaterialRecord::SLOT_BLUEPRINT);
+        if ($reference->kind !== ValueKind::Blueprint) {
+          $blueprints = $this->catalog->roster()->blueprints();
+          $this->errors[] = DialectCssParser::unknownReference('UNKNOWN_BLUEPRINT', sprintf('"%s" is not a published blueprint', $value), $reference, MaterialRecord::SLOT_BLUEPRINT, $this->catalog, $blueprints === [] ? 'No blueprint is published on this site: build the elements directly, or save some as a blueprint first.' : sprintf('Published blueprints: %s.', MaterialsRoster::describe(array_values($blueprints))), $el->line, ['available' => array_keys($blueprints)]);
+          continue;
+        }
+        $record = $reference->record;
+        if ($record->blueprintScope === MaterialRecord::SCOPE_PAGE) {
+          $this->errors[] = new DialectError('BLUEPRINT_WRONG_SCOPE', sprintf('"%s" is a page blueprint: a whole page, never a placement into one', $reference->id), $el->line, ['blueprint' => $reference->id], 'A page blueprint starts a new page (page_create\'s start); link a block blueprint here.');
+          continue;
+        }
+        if ($record->entityId === NULL) {
+          $this->errors[] = new DialectError('BLUEPRINT_NOT_LINKABLE', sprintf('"%s" is a shipped blueprint file: it has no live document to show by reference', $reference->id), $el->line, ['blueprint' => $reference->id], sprintf('Place a copy instead (<pb-blueprint name="%s" />), or link a blueprint saved on this site.', $reference->id));
+          continue;
+        }
+        $node[LinkedBlueprintBlock::BLUEPRINT_KEY] = $reference->id;
+        continue;
+      }
+      if ($this->globalAttr($el, $name, $value, $node, $default, $worn, $roster)) {
+        continue;
+      }
+      if (isset($axes[$name])) {
+        $this->axisAttr($el, $name, $value, $axes[$name], $depth, $axis_values);
+        continue;
+      }
+      $this->errors[] = self::illegalAttr($name, self::LINKED_TAG, $legal, $el->line);
+    }
+    if (!$named) {
+      $this->errors[] = new DialectError('ILLEGAL_ATTR', sprintf('<%s> needs blueprint="..."', self::LINKED_TAG), $el->line, [], sprintf('Name a published blueprint saved on this site: <%s blueprint="blueprint_id" />.', self::LINKED_TAG));
+    }
+    foreach ($el->children as $child) {
+      if ($child instanceof RawElement) {
+        $this->errors[] = new DialectError('ILLEGAL_CONTAINMENT', sprintf('<%s> takes no children; <%s> found. Its content is the blueprint\'s own document, edited on the blueprint', self::LINKED_TAG, $child->tag), $child->line);
+      }
+      elseif (trim($child['#text']) !== '') {
+        $this->errors[] = new DialectError('STRAY_TEXT', sprintf('bare text "%s" in <%s>: a linked placement holds no content of its own', DialectParser::excerpt($child['#text']), self::LINKED_TAG), $child['#line']);
+      }
+    }
+    $this->attachStyles($node, self::references($axes, $axis_values, $worn), $default);
+    return $node;
+  }
+
+  /**
+   * Builds a blueprint reference node.
+   *
+   * The name resolves through the blueprint slot: a placement names a
+   * published blueprint or is refused here, with the roster's candidates,
+   * instead of failing as BLUEPRINT_NOT_FOUND deep in the translated batch.
+   * A page band (a blueprint whose root wears a root-only variant, the
    * roster's one predicate) is refused below the top level in
    * AXIS_NOT_TOP_LEVEL's words, naming the wearing, instead of failing
    * as VARIANT_ROOT_ONLY on the root's own apply_variant deep in the
    * expansion.
    */
-  private function stencilReference(RawElement $el, int $depth): array {
-    $node = ['kind' => 'stencil'];
+  private function blueprintReference(RawElement $el, int $depth): array {
+    $node = ['kind' => 'blueprint'];
     $worn = [];
     $default = [];
     $named = FALSE;
@@ -431,19 +593,21 @@ final class DialectWalk {
       $value = $value === NULL ? '' : (string) $value;
       if ($name === 'name') {
         $named = TRUE;
-        $reference = $this->catalog->resolve($value, MaterialRecord::SLOT_STENCIL);
-        if ($reference->kind !== ValueKind::Stencil) {
-          $stencils = $this->catalog->roster()->stencils();
-          $this->errors[] = DialectCssParser::unknownReference('UNKNOWN_STENCIL', sprintf('"%s" is not a published stencil', $value), $reference, MaterialRecord::SLOT_STENCIL, $this->catalog, $stencils === [] ? 'No stencil is published on this site: build the elements directly, or save some as a stencil first.' : sprintf('Published stencils: %s.', MaterialsRoster::describe(array_values($stencils))), $el->line, ['available' => array_keys($stencils)]);
+        $reference = $this->catalog->resolve($value, MaterialRecord::SLOT_BLUEPRINT);
+        if ($reference->kind !== ValueKind::Blueprint) {
+          $blueprints = $this->catalog->roster()->blueprints();
+          $this->errors[] = DialectCssParser::unknownReference('UNKNOWN_BLUEPRINT', sprintf('"%s" is not a published blueprint', $value), $reference, MaterialRecord::SLOT_BLUEPRINT, $this->catalog, $blueprints === [] ? 'No blueprint is published on this site: build the elements directly, or save some as a blueprint first.' : sprintf('Published blueprints: %s.', MaterialsRoster::describe(array_values($blueprints))), $el->line, ['available' => array_keys($blueprints)]);
           continue;
         }
         $roster = $this->catalog->roster();
-        if ($depth > 0 && !$roster->applicable($reference->record, Address::kind($reference->record->rootKind === MaterialRecord::ROOT_BLOCK ? Address::KIND_BLOCK : Address::KIND_CONTAINER), top_level: FALSE)) {
+        // A placement is always a container (a blueprint's roots are
+        // containers), so the depth verdict is the container kind's.
+        if ($depth > 0 && !$roster->applicable($reference->record, Address::kind(Address::KIND_CONTAINER), top_level: FALSE)) {
           $wears = $roster->rootOnlyWears($reference->record);
           $wearing = reset($wears);
           $described = MaterialsRoster::describe([$wearing], FALSE);
-          $this->errors[] = new DialectError('STENCIL_NOT_TOP_LEVEL', sprintf('"%s" is a page band (its root wears %s): it applies to top-level containers only, never nested inside another container', $reference->id, $described), $el->line, [
-            'stencil' => $reference->id,
+          $this->errors[] = new DialectError('BLUEPRINT_NOT_TOP_LEVEL', sprintf('"%s" is a page band (its root wears %s): it applies to top-level containers only, never nested inside another container', $reference->id, $described), $el->line, [
+            'blueprint' => $reference->id,
             'variant' => $wearing->id,
             'axis' => $wearing->group,
           ], 'Place it at the top level of the document, outside every container.');
@@ -455,10 +619,10 @@ final class DialectWalk {
       if ($this->globalAttr($el, $name, $value, $node, $default, $worn, [])) {
         continue;
       }
-      $this->errors[] = self::illegalAttr($name, 'pb-stencil', ['id', 'name'], $el->line);
+      $this->errors[] = self::illegalAttr($name, 'pb-blueprint', ['id', 'name'], $el->line);
     }
     if (!$named) {
-      $this->errors[] = new DialectError('ILLEGAL_ATTR', '<pb-stencil> needs name="..."', $el->line, [], 'Name a published stencil: <pb-stencil name="stencil_id" />.');
+      $this->errors[] = new DialectError('ILLEGAL_ATTR', '<pb-blueprint> needs name="..."', $el->line, [], 'Name a published blueprint: <pb-blueprint name="blueprint_id" />.');
     }
     $this->attachStyles($node, [], $default);
     return $node;
@@ -572,7 +736,7 @@ final class DialectWalk {
   }
 
   /**
-   * Handles the global attributes: id, class, style, stencil, data-*, residue.
+   * Handles the global attributes: id, class, style, blueprint, data-*, residue.
    *
    * @param \Drupal\daedalus_blueprint\Dialect\RawElement $el
    *   The raw element.
@@ -613,10 +777,10 @@ final class DialectWalk {
         $this->errors[] = new DialectError('DUPLICATE_ID', sprintf('duplicate id "%s"', $value), $el->line);
         return TRUE;
       }
-      $is_container = $el->tag === 'pb-container';
+      $is_container = in_array($el->tag, self::CONTAINER_TAGS, TRUE);
       $this->ids[$value] = [
         'container' => $is_container,
-        'block_type' => $is_container ? NULL : DialectCatalog::blockTypeForTag($el->tag),
+        'block_type' => $is_container || $el->tag === self::LINKED_TAG ? NULL : DialectCatalog::blockTypeForTag($el->tag),
       ];
       $node[DialectParser::isUuid($value) ? 'uuid' : 'id'] = $value;
       return TRUE;
@@ -637,7 +801,7 @@ final class DialectWalk {
       $default = $this->css->parseDeclarations($value, $el->line, $context, $this->errors);
       return TRUE;
     }
-    if ($name === 'stencil' && $el->tag !== 'pb-stencil') {
+    if ($name === 'blueprint' && $el->tag !== 'pb-blueprint' && $el->tag !== self::LINKED_TAG) {
       $this->provenance($el, $value, $node);
       return TRUE;
     }
@@ -645,41 +809,40 @@ final class DialectWalk {
   }
 
   /**
-   * Reads stencil="id": the placement provenance the print carried.
+   * Reads blueprint="id": the placement provenance the print carried.
    *
    * An identity fact, never a request to re-instantiate: the element's
-   * authored children ARE its content, and the stamp says which stencil
+   * authored children ARE its content, and the stamp says which blueprint
    * placed it (so the update gesture and the owned-variant wear rule can
-   * target it after a rewrite). Refused when no published stencil spells
-   * the name (UNKNOWN_STENCIL, the roster's did-you-mean) or when the
-   * stencil places the other kind of element (STENCIL_MISMATCH: a
-   * section-rooted stencil claimed on a block, or a block-rooted one on
-   * <pb-container>). A fresh copy is <pb-stencil name="id" />.
+   * target it after a rewrite). Refused when no published blueprint spells
+   * the name (UNKNOWN_BLUEPRINT, the roster's did-you-mean) or when the
+   * blueprint places the other kind of element (BLUEPRINT_MISMATCH: a
+   * section-rooted blueprint claimed on a block, or a block-rooted one on
+   * <pb-container>). A fresh copy is <pb-blueprint name="id" />.
    */
   private function provenance(RawElement $el, string $value, array &$node): void {
-    $reference = $this->catalog->resolve($value, MaterialRecord::SLOT_STENCIL);
-    if ($reference->kind !== ValueKind::Stencil) {
-      $stencils = $this->catalog->roster()->stencils();
-      $this->errors[] = DialectCssParser::unknownReference('UNKNOWN_STENCIL', sprintf('stencil="%s" on <%s> names no published stencil', $value, $el->tag), $reference, MaterialRecord::SLOT_STENCIL, $this->catalog, $stencils === [] ? 'No stencil is published on this site; an element placed from none carries no stencil attribute.' : sprintf('stencil="" is placement provenance (the stencil an element was placed from). Published stencils: %s.', MaterialsRoster::describe(array_values($stencils))), $el->line, [
-        'attribute' => 'stencil',
-        'available' => array_keys($stencils),
+    $reference = $this->catalog->resolve($value, MaterialRecord::SLOT_BLUEPRINT);
+    if ($reference->kind !== ValueKind::Blueprint) {
+      $blueprints = $this->catalog->roster()->blueprints();
+      $this->errors[] = DialectCssParser::unknownReference('UNKNOWN_BLUEPRINT', sprintf('blueprint="%s" on <%s> names no published blueprint', $value, $el->tag), $reference, MaterialRecord::SLOT_BLUEPRINT, $this->catalog, $blueprints === [] ? 'No blueprint is published on this site; an element placed from none carries no blueprint attribute.' : sprintf('blueprint="" is placement provenance (the blueprint an element was placed from). Published blueprints: %s.', MaterialsRoster::describe(array_values($blueprints))), $el->line, [
+        'attribute' => 'blueprint',
+        'available' => array_keys($blueprints),
       ]);
       return;
     }
-    $is_container = $el->tag === 'pb-container';
-    $root_kind = $reference->record->rootKind;
-    $expected = $is_container ? MaterialRecord::ROOT_SECTION : MaterialRecord::ROOT_BLOCK;
-    if ($root_kind !== $expected) {
+    // A placement is a container (a blueprint's roots are always
+    // containers), so a stamp on a block names nothing a blueprint placed.
+    if (!in_array($el->tag, self::CONTAINER_TAGS, TRUE)) {
       $this->errors[] = new DialectError(
-        'STENCIL_MISMATCH',
-        sprintf('stencil="%s" on <%s>: that stencil places a %s, not a %s', $reference->id, $el->tag, $root_kind === MaterialRecord::ROOT_SECTION ? 'container' : 'block', $is_container ? 'container' : 'block'),
+        'BLUEPRINT_MISMATCH',
+        sprintf('blueprint="%s" on <%s>: a blueprint places a container, never a block', $reference->id, $el->tag),
         $el->line,
-        ['attribute' => 'stencil', 'stencil' => $reference->id, 'root_kind' => $root_kind, 'element' => $el->tag],
-        sprintf('stencil="" is placement provenance and stays on the element the stencil placed; to place a fresh copy write <pb-stencil name="%s" />.', $reference->id),
+        ['attribute' => 'blueprint', 'blueprint' => $reference->id, 'element' => $el->tag],
+        sprintf('blueprint="" is placement provenance and stays on the container the blueprint placed; to place a fresh copy write <pb-blueprint name="%s" />.', $reference->id),
       );
       return;
     }
-    $node['stencil'] = $reference->id;
+    $node['blueprint'] = $reference->id;
   }
 
   /**

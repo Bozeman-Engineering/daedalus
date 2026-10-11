@@ -10,6 +10,7 @@ use Drupal\daedalus_blueprint\Dialect\DialectCatalog;
 use Drupal\daedalus_blueprint\Dialect\DialectCssParser;
 use Drupal\daedalus_blueprint\Dialect\DialectParser;
 use Drupal\daedalus_blueprint\Dialect\DialectPrinter;
+use Drupal\daedalus_blueprint\Dialect\DialectPrintNoteKind;
 use Drupal\daedalus_blueprint\Dialect\Event\DialectCatalogBuildEvent;
 use Drupal\daedalus_blueprint\Dialect\DomOperationHandler;
 use Drupal\daedalus_blueprint\Materials\Address;
@@ -90,7 +91,7 @@ HTML;
    * Mirrors a live site's schema: the text block's field_text_tag allows
    * h1..h6 (a text block may be the page's one h1), so this roster matches
    * what DialectCatalogBuilder emits from the site's real values. The
-   * materials (tokens, a swatch, the axis and style variants, a stencil)
+   * materials (tokens, a swatch, the axis and style variants, a blueprint)
    * ride a hand-built roster (materials()), the same shape the providers
    * serve live.
    */
@@ -202,11 +203,11 @@ HTML;
    * base:h2 treatment no roster places: the spine judges its scope); the
    * 0.6 block axes (tone on the text block type, emphasis on the block
    * kind: attributes on the block's own tag, every block form for the
-   * kind's); two stencils, one rooted on a container (hero) and one on a
-   * block (pull_quote), so the provenance grammar has both root kinds to
-   * check against, plus a page band (full_bleed, its root wearing the
-   * root-only container_full) so the walk's placement refusal has a band
-   * to refuse.
+   * kind's); two block-scope blueprints (hero and pull_quote: a placement is
+   * always a container, so the provenance grammar has two names to stamp
+   * and refuses either on a block), plus a page band (full_bleed, its root
+   * wearing the root-only container_full) so the walk's placement refusal
+   * has a band to refuse.
    */
   protected static function materials(): MaterialsRoster {
     $records = [];
@@ -239,13 +240,13 @@ HTML;
       $records[] = new MaterialRecord(kind: MaterialKind::Variant, id: "text_$tone", label: ucfirst($tone), description: "Set the text $tone.", group: 'tone', spellings: [MaterialRecord::attrSlot('block_type:text', 'tone') => $tone], scope: Address::fromString('block_type:text'));
     }
     $records[] = new MaterialRecord(kind: MaterialKind::Variant, id: 'block_emphatic', label: 'Emphatic', group: 'emphasis', spellings: [MaterialRecord::attrSlot('kind:block', 'emphasis') => 'emphatic'], scope: Address::fromString('kind:block'));
-    $records[] = new MaterialRecord(kind: MaterialKind::Stencil, id: 'hero', label: 'Hero', description: 'A single-column hero band.', spellings: [MaterialRecord::SLOT_STENCIL => 'hero'], rootKind: MaterialRecord::ROOT_SECTION, origin: MaterialRecord::ORIGIN_SHIPPED, updatable: FALSE);
-    $records[] = new MaterialRecord(kind: MaterialKind::Stencil, id: 'pull_quote', label: 'Pull quote', description: 'One quoted line, set large.', spellings: [MaterialRecord::SLOT_STENCIL => 'pull_quote'], rootKind: MaterialRecord::ROOT_BLOCK);
-    $records[] = new MaterialRecord(kind: MaterialKind::Stencil, id: 'full_bleed', label: 'Full bleed', description: 'An edge-to-edge band.', spellings: [
-      MaterialRecord::SLOT_STENCIL => 'full_bleed',
+    $records[] = new MaterialRecord(kind: MaterialKind::Blueprint, id: 'hero', label: 'Hero', description: 'A single-column hero band.', spellings: [MaterialRecord::SLOT_BLUEPRINT => 'hero'], blueprintScope: MaterialRecord::SCOPE_BLOCK, origin: MaterialRecord::ORIGIN_SHIPPED, updatable: FALSE);
+    $records[] = new MaterialRecord(kind: MaterialKind::Blueprint, id: 'pull_quote', label: 'Pull quote', description: 'One quoted line, set large.', spellings: [MaterialRecord::SLOT_BLUEPRINT => 'pull_quote'], blueprintScope: MaterialRecord::SCOPE_BLOCK);
+    $records[] = new MaterialRecord(kind: MaterialKind::Blueprint, id: 'full_bleed', label: 'Full bleed', description: 'An edge-to-edge band.', spellings: [
+      MaterialRecord::SLOT_BLUEPRINT => 'full_bleed',
     ], applies: [
       MaterialRecord::APPLIES_WEARS => ['band', 'container_full'],
-    ], rootKind: MaterialRecord::ROOT_SECTION);
+    ], blueprintScope: MaterialRecord::SCOPE_BLOCK);
     return new MaterialsRoster($records, new CacheableMetadata());
   }
 
@@ -266,7 +267,7 @@ HTML;
   #band { padding-block: var(--space-16); }
 </style>
 HTML,
-      'a band stencil at the document\'s top level' => '<pb-stencil name="full_bleed" />',
+      'a band blueprint at the document\'s top level' => '<pb-blueprint name="full_bleed" />',
       'published @media wrappers are legal (dark, reduced-motion)' => <<<HTML
 <pb-container id="band" width="site">
   <pb-text id="t" tag="h2">Hello &amp; welcome & more</pb-text>
@@ -315,9 +316,11 @@ HTML,
   <pb-text id="t" tag="h2" style="border: 1px solid var(--swatch-lime_green)">Hi</pb-text>
 </pb-container>
 HTML,
-      'placement provenance rides the root as stencil="" (a container and a block)' => <<<HTML
-<pb-container id="band" stencil="hero" width="site">
-  <pb-text id="q" stencil="pull_quote" tag="p">Said well.</pb-text>
+      'placement provenance rides the root as blueprint="" (a top-level and a nested container)' => <<<HTML
+<pb-container id="band" blueprint="hero" width="site">
+  <pb-container id="q" blueprint="pull_quote">
+    <pb-text id="t" tag="p">Said well.</pb-text>
+  </pb-container>
 </pb-container>
 HTML,
       '0.6: block axes are attributes on the block\'s tag (a type axis, the block kind\'s axis on every block form)' => <<<HTML
@@ -405,7 +408,8 @@ HTML,
   protected static function acceptFragments(): array {
     return [
       'a plugin block with no fields' => '<pb-block plugin="system_branding_block"/>',
-      'a stencil reference' => '<pb-stencil name="hero"/>',
+      'a field block naming the page\'s field' => '<pb-block field="body"/>',
+      'a blueprint reference' => '<pb-blueprint name="hero"/>',
       'generic form for an undeclared block type' => '<pb-block type="quote"><pb-field name="field_quote_text">Said well.</pb-field></pb-block>',
     ];
   }
@@ -547,21 +551,21 @@ HTML,
         '<pb-container id="c" style="background: var(--swatch-limegreen)"></pb-container>',
         'UNKNOWN_TOKEN',
       ],
-      'materials: a stencil name nothing publishes' => [
-        '<pb-container id="c"><pb-stencil name="hero-band" /></pb-container>',
-        'UNKNOWN_STENCIL',
+      'materials: a blueprint name nothing publishes' => [
+        '<pb-container id="c"><pb-blueprint name="hero-band" /></pb-container>',
+        'UNKNOWN_BLUEPRINT',
       ],
-      'provenance naming no published stencil' => [
-        '<pb-container id="c" stencil="hero-band"></pb-container>',
-        'UNKNOWN_STENCIL',
+      'provenance naming no published blueprint' => [
+        '<pb-container id="c" blueprint="hero-band"></pb-container>',
+        'UNKNOWN_BLUEPRINT',
       ],
-      'a container-rooted stencil claimed on a block' => [
-        '<pb-container id="c"><pb-text id="t" stencil="hero">Hi</pb-text></pb-container>',
-        'STENCIL_MISMATCH',
+      'a blueprint claimed on an inline block' => [
+        '<pb-container id="c"><pb-text id="t" blueprint="hero">Hi</pb-text></pb-container>',
+        'BLUEPRINT_MISMATCH',
       ],
-      'a block-rooted stencil claimed on a container' => [
-        '<pb-container id="c" stencil="pull_quote"></pb-container>',
-        'STENCIL_MISMATCH',
+      'a blueprint claimed on a plugin block' => [
+        '<pb-container id="c"><pb-block id="b" plugin="system_branding_block" blueprint="pull_quote" /></pb-container>',
+        'BLUEPRINT_MISMATCH',
       ],
       'clamp() is an unsupported value' => [
         "<pb-container id=\"c\"><pb-text id=\"t\" tag=\"h2\">Big</pb-text></pb-container>\n<style>#t { font-size: clamp(2.25rem, 5vw, 3.75rem); }</style>",
@@ -606,9 +610,9 @@ HTML,
         '<pb-container id="c"><pb-container id="inner" width="full"></pb-container></pb-container>',
         'AXIS_NOT_TOP_LEVEL',
       ],
-      'a band stencil inside a container' => [
-        '<pb-container id="c"><pb-stencil name="full_bleed" /></pb-container>',
-        'STENCIL_NOT_TOP_LEVEL',
+      'a band blueprint inside a container' => [
+        '<pb-container id="c"><pb-blueprint name="full_bleed" /></pb-container>',
+        'BLUEPRINT_NOT_TOP_LEVEL',
       ],
       'duplicate id' => [
         '<pb-container id="c"><pb-text id="x">A</pb-text><pb-text id="x">B</pb-text></pb-container>',
@@ -664,6 +668,18 @@ HTML,
         '<pb-text id="t">Hi</pb-text><style>#t { color: red; }</style>',
         'STYLE_IN_FRAGMENT',
       ],
+      'a block naming a field and a plugin at once' => [
+        '<pb-block field="body" plugin="system_branding_block"/>',
+        'ILLEGAL_ATTR',
+      ],
+      'a field block spelled by its per-bundle plugin id' => [
+        '<pb-block plugin="field_block:node:page:body"/>',
+        'ILLEGAL_ATTR',
+      ],
+      'a field attribute naming nothing' => [
+        '<pb-block field=""/>',
+        'ILLEGAL_ATTR',
+      ],
       '<pb-file> inside an op payload (the file op is the batch\'s declaration)' => [
         '<pb-file name="logo.svg" type="image/svg+xml"><svg xmlns="http://www.w3.org/2000/svg"/></pb-file><pb-image file="logo.svg" alt="x" />',
         'FILE_IN_FRAGMENT',
@@ -673,8 +689,8 @@ HTML,
         'ILLEGAL_CONTAINMENT|SUGAR_TAG',
       ],
       'unprefixed tag in an op payload' => ['<text id="t">Hi</text>', 'UNPREFIXED_TAG'],
-      'provenance on a stencil reference (a reference is not a placement)' => [
-        '<pb-stencil name="hero" stencil="hero" />',
+      'provenance on a blueprint reference (a reference is not a placement)' => [
+        '<pb-blueprint name="hero" blueprint="hero" />',
         'ILLEGAL_ATTR',
       ],
     ];
@@ -696,13 +712,13 @@ HTML,
         $failures[] = sprintf('ACCEPT %s was rejected: %s', $name, implode('; ', array_map('strval', $result->errors)));
         continue;
       }
-      $canonical = $this->printer->print($result->tree, $this->catalog);
+      $canonical = $this->printer->print($result->tree, $this->catalog)->text;
       $reparse = $this->parser->parseDocument($canonical, $this->catalog);
       if (!$reparse->isValid()) {
         $failures[] = sprintf('ROUNDTRIP %s: canonical print did not reparse: %s', $name, implode('; ', array_map('strval', $reparse->errors)));
         continue;
       }
-      if ($this->printer->print($reparse->tree, $this->catalog) !== $canonical) {
+      if ($this->printer->print($reparse->tree, $this->catalog)->text !== $canonical) {
         $failures[] = sprintf('ROUNDTRIP %s: print(parse(y)) !== y for the canonical print', $name);
       }
     }
@@ -712,13 +728,13 @@ HTML,
         $failures[] = sprintf('ACCEPT fragment %s was rejected: %s', $name, implode('; ', array_map('strval', $result->errors)));
         continue;
       }
-      $canonical = $this->printer->printFragment($result->tree, $this->catalog);
+      $canonical = $this->printer->printFragment($result->tree, $this->catalog)->text;
       $reparse = $this->parser->parseFragment($canonical, $this->catalog);
       if (!$reparse->isValid()) {
         $failures[] = sprintf('ROUNDTRIP fragment %s: canonical print did not reparse: %s', $name, implode('; ', array_map('strval', $reparse->errors)));
         continue;
       }
-      if ($this->printer->printFragment($reparse->tree, $this->catalog) !== $canonical) {
+      if ($this->printer->printFragment($reparse->tree, $this->catalog)->text !== $canonical) {
         $failures[] = sprintf('ROUNDTRIP fragment %s: print(parse(y)) !== y', $name);
       }
     }
@@ -771,7 +787,7 @@ HTML,
     ], $result->files);
     $this->assertCount(1, $result->tree, 'The declaration is not an element.');
     $this->assertSame('container', $result->tree[0]['kind']);
-    $this->assertStringNotContainsString('pb-file', $this->printer->print($result->tree, $this->catalog));
+    $this->assertStringNotContainsString('pb-file', $this->printer->print($result->tree, $this->catalog)->text);
 
     $fragment = $this->parser->parseFragment('<pb-file name="logo.svg" type="image/svg+xml"><svg/></pb-file>', $this->catalog);
     $this->assertFalse($fragment->isValid());
@@ -788,7 +804,7 @@ HTML,
   }
 
   /**
-   * A band stencil is refused below the top level, its wearing named.
+   * A band blueprint is refused below the top level, its wearing named.
    *
    * The roster's one predicate (MaterialsRoster::applicable()) decides:
    * full_bleed's root wears container_full, root-only, so the reference
@@ -797,21 +813,21 @@ HTML,
    * VARIANT_ROOT_ONLY carries), while hero, wearing nothing root-only,
    * places nested and the band places at the top level.
    */
-  public function testBandStencilRefusedBelowTopLevel(): void {
-    $result = $this->parser->parseFragment('<pb-container id="c"><pb-stencil name="full_bleed" /></pb-container>', $this->catalog);
+  public function testBandBlueprintRefusedBelowTopLevel(): void {
+    $result = $this->parser->parseFragment('<pb-container id="c"><pb-blueprint name="full_bleed" /></pb-container>', $this->catalog);
     $this->assertCount(1, $result->errors);
     $error = $result->errors[0];
-    $this->assertSame('STENCIL_NOT_TOP_LEVEL', $error->code);
+    $this->assertSame('BLUEPRINT_NOT_TOP_LEVEL', $error->code);
     $this->assertSame('"full_bleed" is a page band (its root wears container_full "Full" (width="full")): it applies to top-level containers only, never nested inside another container', $error->message);
-    $this->assertSame(['stencil' => 'full_bleed', 'variant' => 'container_full', 'axis' => 'width'], $error->context);
+    $this->assertSame(['blueprint' => 'full_bleed', 'variant' => 'container_full', 'axis' => 'width'], $error->context);
     $this->assertSame('Place it at the top level of the document, outside every container.', $error->hint);
 
-    $this->assertSame([], $this->parser->parseFragment('<pb-container id="c"><pb-stencil name="hero" /></pb-container>', $this->catalog)->errors);
+    $this->assertSame([], $this->parser->parseFragment('<pb-container id="c"><pb-blueprint name="hero" /></pb-container>', $this->catalog)->errors);
     // A fragment lands nested unless the op says top level (the rule a
     // width= container already follows), so the band is refused by
     // default and accepted where the payload lands at the top level.
-    $this->assertSame(['STENCIL_NOT_TOP_LEVEL'], array_map(static fn ($e) => $e->code, $this->parser->parseFragment('<pb-stencil name="full_bleed" />', $this->catalog)->errors));
-    $this->assertSame([], $this->parser->parseFragment('<pb-stencil name="full_bleed" />', $this->catalog, top_level: TRUE)->errors);
+    $this->assertSame(['BLUEPRINT_NOT_TOP_LEVEL'], array_map(static fn ($e) => $e->code, $this->parser->parseFragment('<pb-blueprint name="full_bleed" />', $this->catalog)->errors));
+    $this->assertSame([], $this->parser->parseFragment('<pb-blueprint name="full_bleed" />', $this->catalog, top_level: TRUE)->errors);
   }
 
   /**
@@ -886,12 +902,12 @@ HTML,
 
 HTML;
 
-    $print = $this->printer->print($tree, $this->catalog);
+    $print = $this->printer->print($tree, $this->catalog)->text;
     $this->assertSame($expected, $print);
 
     $reparse = $this->parser->parseDocument($print, $this->catalog);
     $this->assertSame([], array_map('strval', $reparse->errors));
-    $this->assertSame($print, $this->printer->print($reparse->tree, $this->catalog), 'print(parse(x)) == x');
+    $this->assertSame($print, $this->printer->print($reparse->tree, $this->catalog)->text, 'print(parse(x)) == x');
 
     // The parsed tree carries the same styles and the same authored field
     // values; the residue (info, stubs, label) is gone by design.
@@ -916,7 +932,7 @@ HTML;
    * re-distributes, so a child's fragment has no spelling of its own and
    * the print shows only the parent's class. A loud exception on a
    * distributed fragment would fail every page_create that places a
-   * stencil carrying a composition variant (a theme's card stencil is the
+   * blueprint carrying a composition variant (a theme's card blueprint is the
    * live shape).
    */
   public function testDistributedFragmentsPrintNothing(): void {
@@ -960,7 +976,7 @@ HTML;
 
 HTML;
 
-    $print = $this->printer->print($tree, $this->catalog);
+    $print = $this->printer->print($tree, $this->catalog)->text;
     $this->assertSame($expected, $print);
 
     // The print reparses to the parent's wear (the gesture that
@@ -1031,7 +1047,7 @@ HTML;
 
 HTML;
 
-    $print = $this->printer->print($tree, $this->catalog);
+    $print = $this->printer->print($tree, $this->catalog)->text;
     $this->assertSame($expected, $print);
 
     // The print reparses to the parent's wear (the gesture that
@@ -1093,7 +1109,7 @@ HTML;
       ],
     ];
 
-    $print = $this->printer->print($tree, $this->catalog);
+    $print = $this->printer->print($tree, $this->catalog)->text;
     foreach ($links as $stored => $authorable) {
       $this->assertStringContainsString(sprintf(' url="%s"', $authorable), $print);
       $this->assertStringNotContainsString($stored === $authorable ? 'never-printed' : $stored, $print);
@@ -1105,7 +1121,317 @@ HTML;
       static fn (array $node): string => $node['block_fields']['field_text_url'],
       $reparse->tree[0]['children'],
     ), 'The reparse carries the authorable strings the write grammar accepts.');
-    $this->assertSame($print, $this->printer->print($reparse->tree, $this->catalog), 'print(parse(x)) == x');
+    $this->assertSame($print, $this->printer->print($reparse->tree, $this->catalog)->text, 'print(parse(x)) == x');
+  }
+
+  /**
+   * A section on a non-container layout prints its regions as facts.
+   *
+   * The print is total over the document: a section whose layout is not
+   * the container prints data-layout and, with more than one region,
+   * data-regions, its regions transparent (every child prints at the
+   * depth a container's child would, naming its region in data-region,
+   * regions in the layout's order, an empty region printing nothing). A
+   * single-region layout prints data-layout alone. The result notes the
+   * section once, and the annotations are refused written back.
+   */
+  public function testRegionSectionsPrintLayoutFacts(): void {
+    $text = static fn (string $uuid, string $body): array => [
+      'kind' => 'block',
+      'uuid' => $uuid,
+      'block_type' => 'text',
+      'block_fields' => ['field_text_tag' => 'h2', 'field_text_text' => $body],
+    ];
+    $tree = [
+      [
+        'kind' => 'container',
+        'uuid' => 'aaaaaaaa-0000-4000-8000-000000000001',
+        'layout_id' => 'layout_threecol_section',
+        'children' => [
+          [
+            'kind' => 'region',
+            'region' => 'first',
+            'children' => [
+              $text('bbbbbbbb-0000-4000-8000-000000000002', 'Left'),
+              [
+                'kind' => 'container',
+                'uuid' => 'cccccccc-0000-4000-8000-000000000003',
+                'layout_id' => 'daedalus_stylish_container',
+                'children' => [$text('dddddddd-0000-4000-8000-000000000004', 'Nested')],
+              ],
+            ],
+          ],
+          ['kind' => 'region', 'region' => 'second', 'children' => [['kind' => 'blueprint', 'name' => 'hero']]],
+          ['kind' => 'region', 'region' => 'third', 'children' => []],
+        ],
+      ],
+    ];
+    $expected = <<<HTML
+<pb-container id="aaaaaaaa-0000-4000-8000-000000000001" data-layout="layout_threecol_section" data-regions="first second third">
+  <pb-text id="bbbbbbbb-0000-4000-8000-000000000002" data-region="first" tag="h2">Left</pb-text>
+  <pb-container id="cccccccc-0000-4000-8000-000000000003" data-region="first">
+    <pb-text id="dddddddd-0000-4000-8000-000000000004" tag="h2">Nested</pb-text>
+  </pb-container>
+  <pb-blueprint data-region="second" name="hero" />
+</pb-container>
+
+HTML;
+    $print = $this->printer->print($tree, $this->catalog);
+    $this->assertSame($expected, $print->text);
+    $this->assertFalse($print->isAuthored());
+    $this->assertCount(1, $print->notes);
+    $this->assertSame(DialectPrintNoteKind::Layout, $print->notes[0]->kind);
+    $this->assertSame('aaaaaaaa-0000-4000-8000-000000000001', $print->notes[0]->elementId);
+    $this->assertSame('#aaaaaaaa-0000-4000-8000-000000000001 is a section on the "layout_threecol_section" layout (regions first, second, third), which the page language does not spell', $print->notes[0]->detail);
+    $this->assertReadOnlyWrittenBack($print->text);
+
+    // A single-region layout (core's layout_onecol seed): the layout
+    // prints, no region does, and the one note says so.
+    $single = [
+      [
+        'kind' => 'container',
+        'uuid' => 'aaaaaaaa-0000-4000-8000-000000000001',
+        'layout_id' => 'layout_onecol',
+        'children' => [
+          [
+            'kind' => 'region',
+            'region' => 'content',
+            'children' => [$text('bbbbbbbb-0000-4000-8000-000000000002', 'Only')],
+          ],
+        ],
+      ],
+    ];
+    $print = $this->printer->print($single, $this->catalog);
+    $this->assertSame("<pb-container id=\"aaaaaaaa-0000-4000-8000-000000000001\" data-layout=\"layout_onecol\">\n  <pb-text id=\"bbbbbbbb-0000-4000-8000-000000000002\" tag=\"h2\">Only</pb-text>\n</pb-container>\n", $print->text);
+    $this->assertSame(['#aaaaaaaa-0000-4000-8000-000000000001 is a section on the "layout_onecol" layout, which the page language does not spell'], array_map(static fn ($note) => $note->detail, $print->notes));
+    $this->assertReadOnlyWrittenBack($print->text);
+
+    // A container-layout section prints no layout fact and no note.
+    $this->assertTrue($this->printer->print([$tree[0]['children'][0]['children'][1]], $this->catalog)->isAuthored());
+  }
+
+  /**
+   * A field the grammar cannot spell is named in data-unprinted, not lost.
+   *
+   * Three grains, one register: a structured value under a scalar
+   * attribute contract, a field with no contract at all on a declared
+   * block, and a structured value on an undeclared block's generic form.
+   * The element prints with the rest of its fields; the field names ride
+   * data-unprinted (catalog order, then the block's own); one note per
+   * field names the element and the reason; the annotation is refused
+   * written back.
+   */
+  public function testUnprintedFieldsAreNamedNotPrinted(): void {
+    $tree = [
+      [
+        'kind' => 'container',
+        'uuid' => 'c0d89921-04a5-48d1-8720-d7508da565f6',
+        'layout_id' => 'daedalus_stylish_container',
+        'children' => [
+          [
+            'kind' => 'block',
+            'uuid' => '66f39f31-8735-431e-9848-0db7e34e81ff',
+            'block_type' => 'text',
+            'block_fields' => [
+              'info' => 'Title',
+              'field_text_tag' => ['value' => 'h2', 'weight' => 0],
+              'field_text_text' => 'Welcome!',
+              'field_extra' => 'kept by set, lost by replace',
+              'field_stub' => ['_form_only' => TRUE],
+            ],
+          ],
+          [
+            'kind' => 'block',
+            'uuid' => 'e12f04b1-289f-4a33-a7f9-d506411a67f7',
+            'block_type' => 'card',
+            'block_fields' => [
+              'field_card_title' => 'Plans',
+              'field_card_items' => [['value' => 'a'], ['value' => 'b']],
+            ],
+          ],
+        ],
+      ],
+    ];
+    $expected = <<<HTML
+<pb-container id="c0d89921-04a5-48d1-8720-d7508da565f6">
+  <pb-text id="66f39f31-8735-431e-9848-0db7e34e81ff" data-unprinted="field_text_tag field_extra">Welcome!</pb-text>
+  <pb-block id="e12f04b1-289f-4a33-a7f9-d506411a67f7" data-unprinted="field_card_items" type="card">
+    <pb-field name="field_card_title">Plans</pb-field>
+  </pb-block>
+</pb-container>
+
+HTML;
+    $print = $this->printer->print($tree, $this->catalog);
+    $this->assertSame($expected, $print->text);
+    $title = '66f39f31-8735-431e-9848-0db7e34e81ff';
+    $card = 'e12f04b1-289f-4a33-a7f9-d506411a67f7';
+    $this->assertSame([
+      [
+        DialectPrintNoteKind::UnprintedField,
+        $title,
+        "#$title holds field field_text_tag as a structured value, which the tag attribute does not spell",
+      ],
+      [
+        DialectPrintNoteKind::UnprintedField,
+        $title,
+        "#$title holds field field_extra, which has no attribute or body contract in the catalog",
+      ],
+      [
+        DialectPrintNoteKind::UnprintedField,
+        $card,
+        "#$card holds field field_card_items as a structured value, which the generic <pb-field> form does not spell",
+      ],
+    ], $this->noteTuples($print->notes));
+    $this->assertReadOnlyWrittenBack($print->text);
+  }
+
+  /**
+   * A link with a title or options prints its bare uri, marked partial.
+   *
+   * The uri is the one spelling the url attribute has, so it prints (the
+   * read teaches the write) and the attribute's name rides data-partial:
+   * a set on it replaces the whole link. A link with no uri at all is an
+   * unprinted field. Both annotations are refused written back.
+   */
+  public function testPartialLinkPrintsBareUri(): void {
+    $tree = [
+      [
+        'kind' => 'container',
+        'uuid' => 'c0d89921-04a5-48d1-8720-d7508da565f6',
+        'layout_id' => 'daedalus_stylish_container',
+        'children' => [
+          [
+            'kind' => 'block',
+            'uuid' => '66f39f31-8735-431e-9848-0db7e34e81ff',
+            'block_type' => 'text',
+            'block_fields' => [
+              'field_text_text' => 'About',
+              'field_text_url' => [
+                'uri' => 'internal:/about',
+                'title' => 'About us',
+                'options' => ['attributes' => ['target' => '_blank']],
+                '_displayable' => 'ignored',
+              ],
+            ],
+          ],
+          [
+            'kind' => 'block',
+            'uuid' => 'e12f04b1-289f-4a33-a7f9-d506411a67f7',
+            'block_type' => 'text',
+            'block_fields' => [
+              'field_text_text' => 'Nowhere',
+              'field_text_url' => ['title' => 'A title with no uri'],
+            ],
+          ],
+        ],
+      ],
+    ];
+    $expected = <<<HTML
+<pb-container id="c0d89921-04a5-48d1-8720-d7508da565f6">
+  <pb-text id="66f39f31-8735-431e-9848-0db7e34e81ff" data-partial="url" url="/about">About</pb-text>
+  <pb-text id="e12f04b1-289f-4a33-a7f9-d506411a67f7" data-unprinted="field_text_url">Nowhere</pb-text>
+</pb-container>
+
+HTML;
+    $print = $this->printer->print($tree, $this->catalog);
+    $this->assertSame($expected, $print->text);
+    $about = '66f39f31-8735-431e-9848-0db7e34e81ff';
+    $nowhere = 'e12f04b1-289f-4a33-a7f9-d506411a67f7';
+    $this->assertSame([
+      [
+        DialectPrintNoteKind::PartialField,
+        $about,
+        "#$about prints url as the bare uri; the stored link also carries title, options, which the page language does not spell",
+      ],
+      [
+        DialectPrintNoteKind::UnprintedField,
+        $nowhere,
+        "#$nowhere holds field field_text_url as a link with no uri (title), which the url attribute does not spell",
+      ],
+    ], $this->noteTuples($print->notes));
+    $this->assertReadOnlyWrittenBack($print->text);
+  }
+
+  /**
+   * A fragment over a tree carrying rules prints without them and says so.
+   *
+   * A fragment has no <style> block, so the conditions and parts its
+   * elements carry are left out and the result carries one note for the
+   * fragment (no element). A definition tree without ids has nothing a
+   * rule could address, so its gap is the element's own note instead;
+   * either way the print is not wholly authored.
+   */
+  public function testFragmentWithRulesPrintsWithoutThem(): void {
+    $container = static fn (array $block): array => [
+      [
+        'kind' => 'container',
+        'layout_id' => 'daedalus_stylish_container',
+        'children' => [$block],
+      ],
+    ];
+    $styled = [
+      'kind' => 'block',
+      'uuid' => '66f39f31-8735-431e-9848-0db7e34e81ff',
+      'block_type' => 'text',
+      'block_fields' => ['field_text_text' => 'Hi'],
+      'styles' => ['' => ['default' => ['color' => 'red'], 'hover' => ['color' => 'blue']]],
+    ];
+    $print = $this->printer->printFragment($container($styled), $this->catalog);
+    $this->assertSame("<pb-container>\n  <pb-text id=\"66f39f31-8735-431e-9848-0db7e34e81ff\" style=\"color: red\">Hi</pb-text>\n</pb-container>\n", $print->text);
+    $this->assertFalse($print->isAuthored());
+    $this->assertSame([
+      [
+        DialectPrintNoteKind::UnprintedStyle,
+        NULL,
+        'the fragment leaves out the conditions and parts its elements carry; a fragment spells only style="", conditions and parts ride the style op',
+      ],
+    ], $this->noteTuples($print->notes));
+
+    unset($styled['uuid']);
+    $print = $this->printer->printFragment($container($styled), $this->catalog);
+    $this->assertSame("<pb-container>\n  <pb-text style=\"color: red\">Hi</pb-text>\n</pb-container>\n", $print->text);
+    $this->assertSame([
+      [
+        DialectPrintNoteKind::UnprintedStyle,
+        NULL,
+        '<pb-text> carries conditions or parts, which have no print on an element without an id',
+      ],
+    ], $this->noteTuples($print->notes));
+
+    // Only style="" on an id-less element: a wholly authored fragment.
+    $styled['styles'] = ['' => ['default' => ['color' => 'red']]];
+    $this->assertTrue($this->printer->printFragment($container($styled), $this->catalog)->isAuthored());
+  }
+
+  /**
+   * A print's notes as [kind, element id, detail] tuples, for assertions.
+   *
+   * @param \Drupal\daedalus_blueprint\Dialect\DialectPrintNote[] $notes
+   *   The notes.
+   *
+   * @return array
+   *   One tuple per note, in order.
+   */
+  protected function noteTuples(array $notes): array {
+    return array_map(static fn ($note) => [$note->kind, $note->elementId, $note->detail], $notes);
+  }
+
+  /**
+   * Asserts a print's read-only annotations are refused written back.
+   *
+   * The data-* register is the parser's existing READONLY_ATTR rule: a
+   * document carrying one is refused with that code (other errors may
+   * ride along; the annotation alone closes the write).
+   */
+  protected function assertReadOnlyWrittenBack(string $print): void {
+    $result = $this->parser->parseDocument($print, $this->catalog);
+    $codes = array_unique(array_map(static fn ($e) => $e->code, $result->errors));
+    $this->assertContains('READONLY_ATTR', $codes, implode(', ', $codes));
+    // With the annotations stripped the document is the authored grammar
+    // again: what the model may write back is exactly the rest.
+    $stripped = preg_replace('/ data-[a-z]+="[^"]*"/', '', $print);
+    $result = $this->parser->parseDocument($stripped, $this->catalog);
+    $this->assertSame([], array_map('strval', $result->errors));
   }
 
   /**
@@ -1158,7 +1484,7 @@ HTML;
         [
           'op' => 'replace',
           'id' => 'hero',
-          'html' => '<pb-container id="hero2"><pb-stencil name="hero"/></pb-container>',
+          'html' => '<pb-container id="hero2"><pb-blueprint name="hero"/></pb-container>',
         ],
         [
           'op' => 'move',
@@ -1207,12 +1533,12 @@ HTML;
       'v0.3: the material gestures ride page_edit with aliases' => [
         [
           'op' => 'save_material',
-          'kind' => 'stencil',
+          'kind' => 'blueprint',
           'element' => 'hero',
           'label' => 'Hero',
           'description' => 'The hero band',
         ],
-        ['op' => 'update_material', 'kind' => 'stencil', 'id' => 'hero', 'element' => 'hero'],
+        ['op' => 'update_material', 'kind' => 'blueprint', 'id' => 'hero', 'element' => 'hero'],
         ['op' => 'remove_material', 'kind' => 'swatch', 'id' => 'lime_green'],
       ],
     ];
@@ -1403,12 +1729,12 @@ HTML;
 </style>
 
 HTML;
-    $print = $this->printer->print($tree, $this->catalog);
+    $print = $this->printer->print($tree, $this->catalog)->text;
     $this->assertSame($expected, $print);
 
     $reparse = $this->parser->parseDocument($print, $this->catalog);
     $this->assertSame([], array_map('strval', $reparse->errors));
-    $this->assertSame($print, $this->printer->print($reparse->tree, $this->catalog), 'print(parse(x)) == x');
+    $this->assertSame($print, $this->printer->print($reparse->tree, $this->catalog)->text, 'print(parse(x)) == x');
     $this->assertSame("url('media:$uuid')", $reparse->tree[0]['styles']['']['hover']['background-image'], 'The parse stores the canonical single-quoted token.');
   }
 
@@ -1866,7 +2192,7 @@ HTML;
     $this->assertSame(['content' => '""'], $styles['::&::after']['default']);
     $this->assertSame(['content' => '""', 'background-color' => 'var(--color-accent)'], $styles['::&::before']['hover']);
     $this->assertSame(['content' => 'none'], $styles['::> pb-text::after']['first-child']);
-    $print = $this->printer->print($result->tree, $this->catalog);
+    $print = $this->printer->print($result->tree, $this->catalog)->text;
     $this->assertStringContainsString('#band > pb-text:has(a):hover { color: red; }', $print);
     $this->assertStringContainsString('#band > *:not(pb-image):not(:last-child) { margin-bottom: 0; }', $print);
     $this->assertStringContainsString('#band > pb-text:not(:has(a)) { color: blue; }', $print);
@@ -1927,7 +2253,7 @@ HTML;
 </style>
 
 HTML;
-    $print = $this->printer->print($tree, $this->catalog);
+    $print = $this->printer->print($tree, $this->catalog)->text;
     $this->assertSame($expected, $print);
 
     $reparse = $this->parser->parseDocument($print, $this->catalog);
@@ -1937,7 +2263,7 @@ HTML;
     $this->assertSame(['color' => 'red'], $styles['::> pb-text']['default']);
     $this->assertSame(['color' => 'blue'], $styles['::> pb-text']['hover']);
     $this->assertSame([['variant' => 'lead', 'fragment' => '']], $styles['::h2']['variants']);
-    $this->assertSame($print, $this->printer->print($reparse->tree, $this->catalog), 'print(parse(x)) == x');
+    $this->assertSame($print, $this->printer->print($reparse->tree, $this->catalog)->text, 'print(parse(x)) == x');
 
     $codes = function (string $css): array {
       $document = "<pb-container id=\"band\"><pb-text id=\"t\" tag=\"p\">Hi</pb-text></pb-container>\n<style>$css</style>";
@@ -2038,8 +2364,8 @@ CSS, 1, $known, $errors);
    * roster's ranked candidates, and the hint is the roster's one
    * did-you-mean. Kind-aware: the swatch typo is corrected toward the
    * swatch (the pre-roster parser offered skin tokens only), a class typo
-   * toward the style variants, an axis value toward that axis, a stencil
-   * name toward the stencils.
+   * toward the style variants, an axis value toward that axis, a blueprint
+   * name toward the blueprints.
    */
   public function testMaterialMissesAreStructuredAndKindAware(): void {
     $result = $this->parser->parseDocument('<pb-container id="c" style="background: var(--swatch-limegreen)"></pb-container>', $this->catalog);
@@ -2065,10 +2391,10 @@ CSS, 1, $known, $errors);
     $this->assertSame(['full', 'site', '2xl', 'xl', 'lg', 'md', 'sm'], $result->errors[0]->context['allowed']);
     $this->assertSame('container_full', $result->errors[0]->context['candidates'][0]['id']);
 
-    $result = $this->parser->parseFragment('<pb-stencil name="hero-band" />', $this->catalog);
-    $this->assertSame(['UNKNOWN_STENCIL'], array_map(static fn ($e) => $e->code, $result->errors));
+    $result = $this->parser->parseFragment('<pb-blueprint name="hero-band" />', $this->catalog);
+    $this->assertSame(['UNKNOWN_BLUEPRINT'], array_map(static fn ($e) => $e->code, $result->errors));
     $this->assertSame(['hero', 'pull_quote', 'full_bleed'], $result->errors[0]->context['available']);
-    $this->assertSame('Did you mean this stencil: hero "Hero" (<pb-stencil name="hero">): A single-column hero band.?', $result->errors[0]->hint);
+    $this->assertSame('Did you mean this blueprint: hero "Hero" (<pb-blueprint name="hero">): A single-column hero band.?', $result->errors[0]->hint);
 
     // A miss with nothing close falls back to the roster teaching.
     $result = $this->parser->parseDocument('<pb-container id="c" style="color: var(--zzz)"></pb-container>', $this->catalog);
@@ -2230,15 +2556,15 @@ HTML;
   /**
    * Placement provenance prints on the root and parses as identity.
    *
-   * The serializer surfaces the stamp instantiate_stencil wrote as the
-   * node's read-only `stencil` key; the print carries it as stencil="id"
+   * The serializer surfaces the stamp place_blueprint wrote as the
+   * node's read-only `blueprint` key; the print carries it as blueprint="id"
    * right after the identity (containers and blocks alike, any block
    * form) so the model sees what a band IS, and the parse takes it back
    * as an identity fact on the node (the expansion stamps the root create
    * op with it, never re-instantiates). A stamp naming no rostered
-   * stencil is residue: it never prints, and written by hand it is
-   * refused with the roster's stencils; a stamp on the wrong kind of
-   * element is refused as a mismatch naming both kinds.
+   * blueprint is residue: it never prints, and written by hand it is
+   * refused with the roster's blueprints; a stamp on a block is refused as a
+   * mismatch (a blueprint places a container, never a block).
    */
   public function testProvenancePrintsAndParsesAsIdentity(): void {
     $tree = [
@@ -2246,34 +2572,46 @@ HTML;
         'kind' => 'container',
         'layout_id' => 'daedalus_stylish_container',
         'uuid' => 'c0d89921-04a5-48d1-8720-d7508da565f6',
-        'stencil' => 'hero',
+        'blueprint' => 'hero',
         'children' => [
           [
-            'kind' => 'block',
-            'uuid' => '66f39f31-8735-431e-9848-0db7e34e81ff',
-            'block_type' => 'text',
-            'stencil' => 'pull_quote',
-            'block_fields' => ['field_text_tag' => 'p', 'field_text_text' => 'Said well.'],
-            'styles' => ['' => ['variants' => [['variant' => 'button', 'fragment' => '']]]],
+            'kind' => 'container',
+            'layout_id' => 'daedalus_stylish_container',
+            'uuid' => 'd4e5f6a7-3c4d-4e5f-8a9b-2c3d4e5f6a7b',
+            'blueprint' => 'pull_quote',
+            'children' => [
+              [
+                'kind' => 'block',
+                'uuid' => '66f39f31-8735-431e-9848-0db7e34e81ff',
+                'block_type' => 'text',
+                'block_fields' => ['field_text_tag' => 'p', 'field_text_text' => 'Said well.'],
+                'styles' => ['' => ['variants' => [['variant' => 'button', 'fragment' => '']]]],
+              ],
+            ],
           ],
           [
             'kind' => 'block',
             'uuid' => 'e12f04b1-289f-4a33-a7f9-d506411a67f7',
             'block_type' => 'quote',
-            'stencil' => 'pull_quote',
             'block_fields' => ['field_quote_text' => 'Generic form.'],
           ],
           [
             'kind' => 'block',
             'uuid' => 'a7c1d6e2-1b2c-4d3e-8f90-0a1b2c3d4e5f',
             'plugin_id' => 'system_branding_block',
-            'stencil' => 'pull_quote',
+          ],
+          [
+            'kind' => 'block',
+            'uuid' => 'b8d2e7f3-2c3d-4e5f-9a01-1b2c3d4e5f60',
+            'field' => 'body',
+            'label' => 'Body',
+            'configuration' => ['formatter' => ['type' => 'text_default', 'label' => 'hidden']],
           ],
           [
             'kind' => 'block',
             'uuid' => 'f0e1d2c3-b4a5-4968-8776-655443322110',
             'block_type' => 'text',
-            'stencil' => 'retired',
+            'blueprint' => 'retired',
             'block_fields' => ['field_text_text' => 'Dead stamp.'],
           ],
         ],
@@ -2281,54 +2619,62 @@ HTML;
       ],
     ];
 
+    // A field block prints the field it names, never a per-bundle plugin
+    // id; its formatter configuration has no dialect spelling and does not
+    // print (the parse of the print carries the field alone).
     $expected = <<<HTML
-<pb-container id="c0d89921-04a5-48d1-8720-d7508da565f6" stencil="hero" width="site">
-  <pb-text id="66f39f31-8735-431e-9848-0db7e34e81ff" stencil="pull_quote" class="button" tag="p">Said well.</pb-text>
-  <pb-block id="e12f04b1-289f-4a33-a7f9-d506411a67f7" stencil="pull_quote" type="quote">
+<pb-container id="c0d89921-04a5-48d1-8720-d7508da565f6" blueprint="hero" width="site">
+  <pb-container id="d4e5f6a7-3c4d-4e5f-8a9b-2c3d4e5f6a7b" blueprint="pull_quote">
+    <pb-text id="66f39f31-8735-431e-9848-0db7e34e81ff" class="button" tag="p">Said well.</pb-text>
+  </pb-container>
+  <pb-block id="e12f04b1-289f-4a33-a7f9-d506411a67f7" type="quote">
     <pb-field name="field_quote_text">Generic form.</pb-field>
   </pb-block>
-  <pb-block id="a7c1d6e2-1b2c-4d3e-8f90-0a1b2c3d4e5f" stencil="pull_quote" plugin="system_branding_block" />
+  <pb-block id="a7c1d6e2-1b2c-4d3e-8f90-0a1b2c3d4e5f" plugin="system_branding_block" />
+  <pb-block id="b8d2e7f3-2c3d-4e5f-9a01-1b2c3d4e5f60" field="body" />
   <pb-text id="f0e1d2c3-b4a5-4968-8776-655443322110">Dead stamp.</pb-text>
 </pb-container>
 
 HTML;
-    $print = $this->printer->print($tree, $this->catalog);
+    $print = $this->printer->print($tree, $this->catalog)->text;
     $this->assertSame($expected, $print);
 
     $reparse = $this->parser->parseDocument($print, $this->catalog);
     $this->assertSame([], array_map('strval', $reparse->errors));
-    $this->assertSame($print, $this->printer->print($reparse->tree, $this->catalog), 'print(parse(x)) == x');
+    $this->assertSame($print, $this->printer->print($reparse->tree, $this->catalog)->text, 'print(parse(x)) == x');
     $container = $reparse->tree[0];
-    $this->assertSame('hero', $container['stencil']);
-    $this->assertSame(['pull_quote', 'pull_quote', 'pull_quote'], array_map(static fn (array $node): ?string => $node['stencil'] ?? NULL, array_slice($container['children'], 0, 3)));
-    $this->assertArrayNotHasKey('stencil', $container['children'][3], 'A dead stamp never printed, so the reparse carries none.');
-    $this->assertSame([['variant' => 'button', 'fragment' => '']], $container['children'][0]['styles']['']['variants'], 'Provenance sits beside wear, not instead of it.');
+    $this->assertSame('hero', $container['blueprint']);
+    $this->assertSame('pull_quote', $container['children'][0]['blueprint'], 'A nested placement carries its own stamp.');
+    $this->assertSame([NULL, NULL, NULL, NULL], array_map(static fn (array $node): ?string => $node['blueprint'] ?? NULL, array_slice($container['children'], 1)), 'Blocks carry no stamp: a blueprint places a container.');
+    $this->assertArrayNotHasKey('blueprint', $container['children'][4], 'A dead stamp never printed, so the reparse carries none.');
+    $this->assertSame([['variant' => 'button', 'fragment' => '']], $container['children'][0]['children'][0]['styles']['']['variants'], 'Provenance on the placement sits beside the wear of what it holds.');
 
     // The rejects are structured like every material miss.
-    $result = $this->parser->parseDocument('<pb-container id="c" stencil="hero-band"></pb-container>', $this->catalog);
-    $this->assertSame(['UNKNOWN_STENCIL'], array_map(static fn ($e) => $e->code, $result->errors));
-    $this->assertSame('stencil', $result->errors[0]->context['attribute']);
+    $result = $this->parser->parseDocument('<pb-container id="c" blueprint="hero-band"></pb-container>', $this->catalog);
+    $this->assertSame(['UNKNOWN_BLUEPRINT'], array_map(static fn ($e) => $e->code, $result->errors));
+    $this->assertSame('blueprint', $result->errors[0]->context['attribute']);
     $this->assertSame(['hero', 'pull_quote', 'full_bleed'], $result->errors[0]->context['available']);
     $this->assertSame('hero', $result->errors[0]->context['candidates'][0]['id']);
-    $this->assertStringStartsWith('Did you mean this stencil: hero "Hero"', $result->errors[0]->hint, 'A near miss corrects toward the stencil, like every material miss.');
-    $result = $this->parser->parseDocument('<pb-container id="c" stencil="zzz"></pb-container>', $this->catalog);
+    $this->assertStringStartsWith('Did you mean this blueprint: hero "Hero"', $result->errors[0]->hint, 'A near miss corrects toward the blueprint, like every material miss.');
+    $result = $this->parser->parseDocument('<pb-container id="c" blueprint="zzz"></pb-container>', $this->catalog);
     $this->assertSame([], $result->errors[0]->context['candidates']);
-    $this->assertStringContainsString('placement provenance', $result->errors[0]->hint, 'Nothing close: the hint teaches what the attribute is and lists the stencils.');
+    $this->assertStringContainsString('placement provenance', $result->errors[0]->hint, 'Nothing close: the hint teaches what the attribute is and lists the blueprints.');
     $this->assertStringContainsString('pull_quote "Pull quote"', $result->errors[0]->hint);
 
-    $result = $this->parser->parseDocument('<pb-container id="c"><pb-text id="t" stencil="hero">Hi</pb-text></pb-container>', $this->catalog);
-    $this->assertSame(['STENCIL_MISMATCH'], array_map(static fn ($e) => $e->code, $result->errors));
-    $this->assertSame(['attribute' => 'stencil', 'stencil' => 'hero', 'root_kind' => 'section', 'element' => 'pb-text'], $result->errors[0]->context);
-    $this->assertSame('stencil="hero" on <pb-text>: that stencil places a container, not a block', $result->errors[0]->message);
-    $this->assertStringContainsString('<pb-stencil name="hero" />', $result->errors[0]->hint);
+    $result = $this->parser->parseDocument('<pb-container id="c"><pb-text id="t" blueprint="hero">Hi</pb-text></pb-container>', $this->catalog);
+    $this->assertSame(['BLUEPRINT_MISMATCH'], array_map(static fn ($e) => $e->code, $result->errors));
+    $this->assertSame(['attribute' => 'blueprint', 'blueprint' => 'hero', 'element' => 'pb-text'], $result->errors[0]->context);
+    $this->assertSame('blueprint="hero" on <pb-text>: a blueprint places a container, never a block', $result->errors[0]->message);
+    $this->assertStringContainsString('<pb-blueprint name="hero" />', $result->errors[0]->hint);
     $this->assertSame(1, $result->errors[0]->line);
 
     // The fragment door speaks the same grammar, and the reference element
     // refuses the attribute with its own legal list.
-    $result = $this->parser->parseFragment('<pb-text id="q" stencil="pull_quote">Said well.</pb-text>', $this->catalog);
-    $this->assertTrue($result->isValid());
-    $this->assertSame('pull_quote', $result->tree[0]['stencil']);
-    $result = $this->parser->parseFragment('<pb-stencil name="hero" stencil="hero" />', $this->catalog);
+    $result = $this->parser->parseFragment('<pb-container id="q" blueprint="pull_quote"><pb-text id="t">Said well.</pb-text></pb-container>', $this->catalog);
+    $this->assertTrue($result->isValid(), implode(' | ', array_map('strval', $result->errors)));
+    $this->assertSame('pull_quote', $result->tree[0]['blueprint']);
+    $this->assertSame(['BLUEPRINT_MISMATCH'], array_map(static fn ($e) => $e->code, $this->parser->parseFragment('<pb-text id="q" blueprint="pull_quote">Said well.</pb-text>', $this->catalog)->errors), 'The fragment door refuses a stamp on a block too.');
+    $result = $this->parser->parseFragment('<pb-blueprint name="hero" blueprint="hero" />', $this->catalog);
     $this->assertSame(['ILLEGAL_ATTR'], array_map(static fn ($e) => $e->code, $result->errors));
     $this->assertSame(['id', 'name'], $result->errors[0]->context['legal']);
   }
@@ -2339,7 +2685,7 @@ HTML;
    * The element-naming spine's one renamable word reaches the AI door: a
    * section carrying a label prints name="..." after its provenance and
    * before its axes, the parser lands it back on the node's label key
-   * (the serializer's, so a stored stencil tree and a parsed tree share
+   * (the serializer's, so a stored blueprint tree and a parsed tree share
    * one shape) and the round trip is byte-stable, escaping included. The
    * attribute is the container's alone: a block's name is derived from
    * its content, so name on a block tag is ILLEGAL_ATTR with the block's
@@ -2352,7 +2698,7 @@ HTML;
         'layout_id' => 'daedalus_stylish_container',
         'uuid' => 'c0d89921-04a5-48d1-8720-d7508da565f6',
         'label' => 'Welcome & "hello"',
-        'stencil' => 'hero',
+        'blueprint' => 'hero',
         'children' => [
           [
             'kind' => 'container',
@@ -2379,7 +2725,7 @@ HTML;
       ],
     ];
     $expected = <<<HTML
-<pb-container id="c0d89921-04a5-48d1-8720-d7508da565f6" stencil="hero" name="Welcome &amp; &quot;hello&quot;" width="lg">
+<pb-container id="c0d89921-04a5-48d1-8720-d7508da565f6" blueprint="hero" name="Welcome &amp; &quot;hello&quot;" width="lg">
   <pb-container id="d1e2f3a4-b5c6-4d7e-8f90-a1b2c3d4e5f6" name="Pricing">
   </pb-container>
   <pb-container id="e2f3a4b5-c6d7-4e8f-9a01-b2c3d4e5f6a7">
@@ -2388,12 +2734,12 @@ HTML;
 </pb-container>
 
 HTML;
-    $print = $this->printer->print($tree, $this->catalog);
+    $print = $this->printer->print($tree, $this->catalog)->text;
     $this->assertSame($expected, $print);
 
     $reparse = $this->parser->parseDocument($print, $this->catalog);
     $this->assertSame([], array_map('strval', $reparse->errors));
-    $this->assertSame($print, $this->printer->print($reparse->tree, $this->catalog), 'print(parse(x)) == x');
+    $this->assertSame($print, $this->printer->print($reparse->tree, $this->catalog)->text, 'print(parse(x)) == x');
     $container = $reparse->tree[0];
     $this->assertSame('Welcome & "hello"', $container['label'], 'The name lands on the serializer\'s label key, unescaped.');
     $this->assertSame('Pricing', $container['children'][0]['label'], 'Nested containers name the same way.');
@@ -2418,19 +2764,19 @@ HTML;
     $this->assertSame('name is not an attribute of <pb-block>', $result->errors[0]->message);
     $result = $this->parser->parseDocument('<pb-container id="c" title="Hero"></pb-container>', $this->catalog);
     $this->assertSame(['ILLEGAL_ATTR'], array_map(static fn ($e) => $e->code, $result->errors));
-    $this->assertSame(['class', 'id', 'layout', 'name', 'stencil', 'style', 'width'], $result->errors[0]->context['legal']);
+    $this->assertSame(['blueprint', 'class', 'id', 'layout', 'name', 'style', 'width'], $result->errors[0]->context['legal']);
   }
 
   /**
    * The catalog records the dialect version (a public contract).
    *
-   * Durable artifacts never freeze dialect text (stencils store the lean
+   * Durable artifacts never freeze dialect text (blueprints store the lean
    * node tree), so the catalog is the one surface naming the grammar's
    * version; this pins that the contract exists and tracks the spec.
    */
   public function testCatalogRecordsDialectVersion(): void {
     $this->assertSame(DialectCatalog::DIALECT_VERSION, $this->catalog->version());
-    $this->assertSame('0.6', $this->catalog->version(), 'The recorded version tracks the spec on disk (dialect-spec.md v0.6: placement provenance as stencil="" on the root, and variant axes as attributes on every element\'s tag, the block forms included).');
+    $this->assertSame('0.8', $this->catalog->version(), 'The recorded version tracks the grammar (0.6: placement provenance as blueprint="" on the root, and variant axes as attributes on every element\'s tag, the block forms included; 0.7: the slot section <pb-slot name="id">, a top-level container filling a slot of the document around it; 0.8: the linked placement <pb-linked blueprint="id"/>, a blueprint shown by reference as one block).');
   }
 
   /**
@@ -2494,14 +2840,14 @@ HTML;
 </pb-container>
 
 HTML;
-    $print = $this->printer->print($tree, $this->catalog);
+    $print = $this->printer->print($tree, $this->catalog)->text;
     $this->assertSame($expected, $print);
 
     // The reparse carries the same references in the same order (axes in
     // the element's axis order, then class wear), byte-stable.
     $reparse = $this->parser->parseDocument($print, $this->catalog);
     $this->assertSame([], array_map('strval', $reparse->errors));
-    $this->assertSame($print, $this->printer->print($reparse->tree, $this->catalog), 'print(parse(x)) == x');
+    $this->assertSame($print, $this->printer->print($reparse->tree, $this->catalog)->text, 'print(parse(x)) == x');
     $children = $reparse->tree[0]['children'];
     $this->assertSame([
       ['variant' => 'block_emphatic', 'fragment' => ''],
@@ -2532,13 +2878,13 @@ HTML;
     $this->assertSame([
       'alt',
       'aspect-ratio',
+      'blueprint',
       'class',
       'emphasis',
       'file',
       'generate',
       'id',
       'media',
-      'stencil',
       'style',
       'url',
     ], $result->errors[0]->context['legal']);
@@ -2682,6 +3028,60 @@ HTML;
     }
     catch (\InvalidArgumentException) {
       $this->addToAssertionCount(1);
+    }
+  }
+
+  /**
+   * The site's group vocabulary contributed on the event rides the catalog.
+   *
+   * The groups are declared in a family the spine cannot read, so the
+   * layer that parses it adds them on the build event, validated, and
+   * the built catalog answers them in declaration order (the offered
+   * view too); a second contribution of an id keeps the first. The
+   * reserved bucket for the things in no group (DialectCatalog::UNGROUPED)
+   * is never a declared id, and a malformed group is refused loudly.
+   */
+  public function testGroupsRideTheCatalog(): void {
+    $event = new DialectCatalogBuildEvent([], 'daedalus_stylish_container');
+    $event->addGroups([
+      'heroes' => ['label' => ' Heroes ', 'description' => 'Full-width openers. '],
+      'bands' => ['label' => 'Bands'],
+    ]);
+    $event->addGroups(['heroes' => ['label' => 'Second heroes'], 'cards' => ['label' => 'Cards', 'description' => NULL]]);
+    $expected = [
+      'heroes' => ['label' => 'Heroes', 'description' => 'Full-width openers.'],
+      'bands' => ['label' => 'Bands', 'description' => ''],
+      'cards' => ['label' => 'Cards', 'description' => ''],
+    ];
+    $this->assertSame($expected, $event->getGroups());
+
+    $catalog = new DialectCatalog(
+      containerLayoutId: 'daedalus_stylish_container',
+      axes: $event->getAxes(),
+      blockTypes: static::catalog()->blockTypes(),
+      conditions: [],
+      roster: static::materials(),
+      groups: $event->getGroups(),
+    );
+    $this->assertSame($expected, $catalog->groups(), 'The built catalog answers the contributed groups in declaration order.');
+    $this->assertSame($expected, $catalog->offered()->groups(), 'The offered view carries them through.');
+    $this->assertSame([], $this->catalog->groups(), 'A catalog with no contribution answers none.');
+
+    foreach ([
+      [DialectCatalog::UNGROUPED => ['label' => 'No group']],
+      ['Heroes' => ['label' => 'Heroes']],
+      ['heroes' => ['label' => '']],
+      ['heroes' => ['label' => 7]],
+      ['heroes' => 'Heroes'],
+      ['heroes' => ['label' => 'Heroes', 'description' => 7]],
+    ] as $groups) {
+      try {
+        (new DialectCatalogBuildEvent([], ''))->addGroups($groups);
+        $this->fail(sprintf('Groups %s were accepted.', json_encode($groups)));
+      }
+      catch (\InvalidArgumentException) {
+        $this->addToAssertionCount(1);
+      }
     }
   }
 

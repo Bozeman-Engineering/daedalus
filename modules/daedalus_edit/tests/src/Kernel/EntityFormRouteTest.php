@@ -21,9 +21,11 @@ use Symfony\Component\HttpFoundation\Request;
  * spine: leaves without a declared form endpoint ride it, and the panel's
  * dumb door (icon, boot restore) fetches the top-level form through it. Its
  * contract has two halves this test pins through the real HTTP kernel:
- * - Access: the route is gated on the 'access inline editing' permission and
- *   nothing else — the inline editing surface's one permission, the same
- *   gate the tempstore save/delete routes carry.
+ * - Access: the route is gated on the 'access inline editing' permission (the
+ *   inline editing surface's one permission) AND the entity's own update
+ *   access: the form is a widget host over the entity's staged values, so
+ *   fetching it is an update-shaped read, and the surface permission alone
+ *   must not open another user's entity.
  * - The tempstore-entity form build: the controller builds the entity's
  *   DEFAULT form around the TEMPSTORE version of the entity (stage, don't
  *   save: an open form must show the staged values, not the saved ones),
@@ -125,9 +127,19 @@ class EntityFormRouteTest extends KernelTestBase {
     $staged->setTitle('Staged title');
     $this->container->get('daedalus_tempstore.entity_tempstore_repository')->set($staged);
 
+    // The surface permission alone is not enough: the entity's update access
+    // gates the form too.
     user_role_grant_permissions(RoleInterface::ANONYMOUS_ID, ['access inline editing']);
     $response = $http_kernel->handle($this->entityFormRequest());
-    $this->assertSame(200, $response->getStatusCode(), 'The permission opens the route.');
+    $this->assertSame(403, $response->getStatusCode(), 'The entity-form route denies a user who may not update the entity.');
+
+    // Node update access needs 'access content' beside the edit permission.
+    // The access handler memoizes per entity and operation within the kernel,
+    // so the denial above is reset before the grant is read.
+    user_role_grant_permissions(RoleInterface::ANONYMOUS_ID, ['access content', 'edit any page content']);
+    $this->container->get('entity_type.manager')->getAccessControlHandler('node')->resetCache();
+    $response = $http_kernel->handle($this->entityFormRequest());
+    $this->assertSame(200, $response->getStatusCode(), 'The permission plus update access on the entity opens the route.');
 
     // The ajaxReturnForm answer is the panel's open contract: ONE append of
     // the wrapped form into the EntityFormSidebar plugin's form-cache

@@ -7,6 +7,7 @@ dependencies:
   - daedalus:daedalus
   - drupal:field
   - drupal:user
+  - drupal:file
   - daedalus:daedalus_blueprint
   - daedalus:daedalus_ui
   - daedalus:daedalus_blueprint_api

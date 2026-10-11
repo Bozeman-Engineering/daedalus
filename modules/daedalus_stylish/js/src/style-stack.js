@@ -112,6 +112,7 @@ import {
   ancestorLayerId,
   ancestorWearLayerId,
   declaredLayerId,
+  skinDocumentScope,
   skinLayerId,
   variantLayerId,
 } from './code/layers.js';
@@ -182,8 +183,11 @@ export const conditionValues = (entry) => {
 
 /**
  * A tier layer (declared or skin) for one declaring block.
+ *
+ * `editable` marks the skin layer the open skin session edits (the
+ * document layer: its styles are the staged document at this slot).
  */
-const tierLayer = (tier, scope, styles) => ({
+const tierLayer = (tier, scope, styles, editable = false) => ({
   id: tier === TIER_SKIN ? skinLayerId(scope) : declaredLayerId(scope),
   tier,
   scope,
@@ -195,7 +199,7 @@ const tierLayer = (tier, scope, styles) => ({
   description: null,
   axis: null,
   resolved: true,
-  editable: false,
+  editable,
   carrier: null,
   styles,
 });
@@ -304,7 +308,8 @@ const ruleCarriers = (map, rootKey, relative, variants) => {
  * on whichever carrier wears it (the root, or a rule the key reads
  * through: the rule itself at '' when the session anchors at a rule)
  * carries the staged document and is the editable layer instead of the
- * own one.
+ * own one; `yielded` says the editable mark already went elsewhere (a
+ * write address's ancestor layer, a skin session's floor layer).
  */
 const mapLayers = ({
   guide,
@@ -316,7 +321,7 @@ const mapLayers = ({
   blockTypes,
   sectionLayouts,
   session,
-  addressed = false,
+  yielded = false,
 }) => {
   const layers = [];
   let sessionApplied = false;
@@ -364,7 +369,7 @@ const mapLayers = ({
     description: null,
     axis: null,
     resolved: true,
-    editable: !sessionApplied && !addressed,
+    editable: !sessionApplied && !yielded,
     carrier: null,
     styles: conditionValues(map?.[rootKey + relative]),
   });
@@ -827,6 +832,57 @@ export const offerTag = (tree, key) => {
 };
 
 /**
+ * The floor's element-scope addresses at a captured root scope: the
+ * family kind's block beneath the refinement's, the rank order delivery
+ * prints both tiers in.
+ */
+const floorScopes = (scope) =>
+  [familyKindOf(scope), scope].filter((candidate) => candidate !== null);
+
+/**
+ * The scopes a key's stack reads skin blocks for: the subject's
+ * base:{tag} scope (when the tree knows the tag; the stack carries its
+ * layer once the skin delivers a block there, or a session edits one),
+ * then the family kind's and the refinement's, in the floor's order.
+ *
+ * The wearing read for a skin document (surface-state.js wearsDocument,
+ * the Inspector's honest projection of an open skin session): the
+ * skin's document at a scope is worn by every element whose stack
+ * carries that scope, so a session on `base:h2` survives a move to
+ * another h2 and exits on a move to a paragraph, exactly as a variant
+ * session follows its wearers. Derived from the same inputs buildStack
+ * keys its floor on, so the two never disagree about which skin layers
+ * a key reads.
+ *
+ * @param {object} args
+ * @param {string} args.key
+ *   The read subject's key (an element, a part facet, a rule).
+ * @param {object} [args.blockTypes]
+ * @param {object} [args.sectionLayouts]
+ * @param {?Array} [args.tree]
+ *   The blueprint's lean node tree, for the subject's tag.
+ *
+ * @return {string[]}
+ */
+export const skinScopesAt = ({
+  key,
+  blockTypes = {},
+  sectionLayouts = {},
+  tree = null,
+}) => {
+  const pos = key.indexOf('::');
+  const rootKey = pos === -1 ? key : key.slice(0, pos);
+  const relative = key.slice(rootKey.length);
+  const scope = captureScope(rootKey, blockTypes, sectionLayouts);
+  if (scope === null) {
+    return [];
+  }
+  const matcher = Array.isArray(tree) ? createMatcher(tree) : null;
+  const tag = matcher === null ? null : subjectTagOf(matcher, rootKey, relative);
+  return [...(tag === null ? [] : [`base:${tag}`]), ...floorScopes(scope)];
+};
+
+/**
  * Builds the layer stack a style-map key wears, bottom to top.
  *
  * @param {object} args
@@ -856,17 +912,21 @@ export const offerTag = (tree, key) => {
  *   only (the tree scopes' sparse rows, the roster's occupancy read).
  * @param {?Array} [args.tree]
  *   The blueprint's lean node tree (source.getTree(): the delivered
- *   `_tree`), when the caller holds it: keys the ancestor tier and the
+ *   `layout`), when the caller holds it: keys the ancestor tier and the
  *   skin's base:{tag} layer (the read subject's tag, subjectTag), both
  *   with the floor. Null leaves both out.
  * @param {?{reference: string, pending: ?object}} [args.session]
- *   An open variant-editing session: the edited reference and the
- *   pending update session (pending.js) whose staged lines overlay the
- *   document. The reference's layer on this key's carrier (its root, or
- *   a rule wearing at it, the rule itself when the key IS the anchoring
- *   rule) then carries the staged document and is the editable layer;
- *   null when no session is open or no carrier of this key wears the
- *   reference.
+ *   An open editing session: the edited document's reference and the
+ *   pending session (pending.js) whose staged lines overlay the
+ *   document. A variant reference's layer on this key's carrier (its
+ *   root, or a rule wearing at it, the rule itself when the key IS the
+ *   anchoring rule) then carries the staged document and is the editable
+ *   layer; a skin document's reference (code/layers.js skinDocument)
+ *   makes that scope's skin layer the editable one, carrying the staged
+ *   document at this key's slot (the root position for a base:{tag}
+ *   scope, the relative key for an element scope), when the floor
+ *   carries the scope; null when no session is open or this key wears
+ *   neither.
  * @param {?{key: string, selector: string}} [args.editable]
  *   The write address: an ancestor rule whose layer is the editable one
  *   instead of the element's own (marked when it delivers, inserted
@@ -919,7 +979,29 @@ export const buildStack = ({
     : {};
 
   const layers = [];
-  const pushTier = (tier, tierScope, entry) => {
+  // The skin session's document scope, when one is open: that scope's
+  // skin layer is the editable one, carrying the staged document at
+  // this key's slot (present even while the document is empty at the
+  // slot, as a worn reference's layer is, so the rows keep an editable
+  // layer to write into), and the own layer yields the mark.
+  const skinScope = skinDocumentScope(session?.reference ?? null);
+  let skinApplied = false;
+  const pushTier = (tier, tierScope, entry, slot = relative) => {
+    if (tier === TIER_SKIN && tierScope === skinScope) {
+      layers.push(
+        tierLayer(
+          tier,
+          tierScope,
+          conditionValues(
+            documentSlotEntry(skinDefaults?.[tierScope] ?? {}, slot, session.pending ?? null)
+              .entry,
+          ),
+          true,
+        ),
+      );
+      skinApplied = true;
+      return;
+    }
     const styles = conditionValues(entry);
     if (Object.keys(styles).length) {
       layers.push(tierLayer(tier, tierScope, styles));
@@ -928,16 +1010,14 @@ export const buildStack = ({
   if (floor && scope !== null) {
     // The floor's block addresses: the family kind's block beneath the
     // refinement's, the rank order delivery prints both tiers in.
-    const scopes = [familyKindOf(scope), scope].filter(
-      (candidate) => candidate !== null,
-    );
+    const scopes = floorScopes(scope);
     scopes.forEach((tierScope) => {
       pushTier(TIER_DECLARED, tierScope, declaredDefaults[tierScope]?.[relative]);
     });
     if (tag !== null && skinDefaults !== null) {
       // A base block styles the subject element itself, whatever key
       // names it, so it reads at the root position.
-      pushTier(TIER_SKIN, `base:${tag}`, skinDefaults[`base:${tag}`]?.['']);
+      pushTier(TIER_SKIN, `base:${tag}`, skinDefaults[`base:${tag}`]?.[''], '');
     }
     scopes.forEach((tierScope) => {
       pushTier(TIER_SKIN, tierScope, skinDefaults?.[tierScope]?.[relative]);
@@ -983,7 +1063,7 @@ export const buildStack = ({
       blockTypes,
       sectionLayouts,
       session,
-      addressed: address !== null,
+      yielded: address !== null || skinApplied,
     }),
   );
 

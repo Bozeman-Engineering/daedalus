@@ -93,6 +93,14 @@ services:
       - '@plugin.manager.modes'
       - '@logger.channel.daedalus_ui'
 
+  # The editable UI as the canvas of a host with no entity view (a Layout
+  # Builder display's template), plugged into daedalus_blueprint_api's
+  # canvas-builder socket for the mutation re-render and LoadEditablePage.
+  daedalus_ui.canvas_builder:
+    class: Drupal\daedalus_ui\Render\EditableUiCanvasBuilder
+    tags:
+      - { name: daedalus_blueprint_api.canvas_builder }
+
   daedalus_ui.event_subscriber.selectable_field_delivery:
     class: Drupal\daedalus_ui\EventSubscriber\SelectableFieldDelivery
 
@@ -129,13 +137,19 @@ services:
   daedalus_ui.event_subscriber.initial_mode:
     class: Drupal\daedalus_ui\EventSubscriber\InitialMode
 
-  # Renders pop-out routes (the _daedalus_ui.popout option) without
-  # block chrome.
+  # Selects the display variant of pop-out routes (the _daedalus_ui.popout
+  # option: the pop-out document variant) and of bare routes (the
+  # _daedalus_ui.bare option: core's simple_page), both without block
+  # chrome (see Chromeless).
   daedalus_ui.event_subscriber.popout_page_variant:
     class: Drupal\daedalus_ui\EventSubscriber\PopoutPageVariant
 
+  # The bundle form's Page builder section. Another module's bundle setting
+  # enters a group of it through ensureGroup(); the alias is for their
+  # autowired constructors.
   daedalus_ui.form_alter.bundle_edit:
     class: Drupal\daedalus_ui\Form\BundleEditFormAlter
+  Drupal\daedalus_ui\Form\BundleEditFormAlter: '@daedalus_ui.form_alter.bundle_edit'
 
   # The site-builder tier of the field presentation decision, in the shared
   # "Page builder" field-config section that other page-builder modules
@@ -188,7 +202,19 @@ services:
       - { name: service_collector, tag: daedalus_ui.existence_feeder, call: addFeeder }
   Drupal\daedalus_ui\ElementModel\ElementModel: '@daedalus_ui.element_model'
 
-  # The existence inference daedalus_ui owns: an inline block's
+  # The element icon providers: `_element.icon`, the third minted word
+  # beside type and name. daedalus_ui answers its own kinds from its own
+  # glyphs (assets/outline); a container and an inline block are
+  # daedalus_layout's concepts, so the annotator asks the tagged providers
+  # for those, in priority order, first non-null answer wins.
+  daedalus_ui.element_icon_provider:
+    class: Drupal\daedalus_ui\ElementModel\ElementIconProviders
+    tags:
+      - { name: service_collector, tag: daedalus_ui.element_icon_provider, call: addProvider }
+  Drupal\daedalus_ui\ElementModel\ElementIconProviderInterface: '@daedalus_ui.element_icon_provider'
+
+  # The existence inference daedalus_ui owns: a field with no view display
+  # options renders through no display, and an inline block's
   # display-hidden fields never render, so nothing answers to their keys.
   daedalus_ui.element_model.display_hidden_fields:
     class: Drupal\daedalus_ui\ElementModel\DisplayHiddenFields

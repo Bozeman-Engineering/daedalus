@@ -76,7 +76,14 @@ class AnimationUsageTest extends KernelTestBase {
     $this->installEntitySchema('daedalus_skin');
     $this->installEntitySchema('daedalus_swatch');
     $this->installEntitySchema('daedalus_animation');
-    $this->installSchema('daedalus_stylish', ['daedalus_variant_usage', 'daedalus_swatch_usage', 'daedalus_animation_usage']);
+    $this->installEntitySchema('daedalus_font');
+    $this->installSchema('daedalus_stylish', [
+      'daedalus_variant_usage',
+      'daedalus_swatch_usage',
+      'daedalus_animation_usage',
+      'daedalus_token_usage',
+      'daedalus_font_usage',
+    ]);
     $this->installConfig(['daedalus_stylish']);
     $this->setUpCurrentUser();
     $this->container->get('daedalus_stylish.field_manager')->enable('entity_test', 'entity_test');
@@ -125,7 +132,7 @@ class AnimationUsageTest extends KernelTestBase {
    */
   protected function createSkin(string $machine_name, array $tokens, array $defaults = []): DaedalusStylishSkinInterface {
     $skin = DaedalusStylishSkin::create(['label' => $machine_name, 'machine_name' => $machine_name]);
-    $skin->setTokens($tokens)->setDefaults($defaults);
+    $skin->setPackageTokens($tokens)->setPackageDefaults($defaults);
     $skin->save();
     return $skin;
   }
@@ -380,7 +387,7 @@ class AnimationUsageTest extends KernelTestBase {
     $this->assertSame(['' => ['hover' => ['animation-name' => 'none']]], $variant_storage->load($variant->id())->getStyles());
     $skin_storage = $this->container->get('entity_type.manager')->getStorage('daedalus_skin');
     $skin_storage->resetCache([$skin->id()]);
-    $this->assertSame(['kind:container' => ['' => ['default' => ['animation' => 'none 1s, motion-rise 2s']]]], $skin_storage->load($skin->id())->getDefaults());
+    $this->assertSame(['kind:container' => ['' => ['default' => ['animation' => 'none 1s, motion-rise 2s']]]], $skin_storage->load($skin->id())->packageDefaults());
     $this->assertNull(DaedalusStylishAnimation::load($fade->id()));
     $this->assertSame(3, $context['results']['rewritten']);
     $this->assertSame('Fade in', $context['results']['deleted']);

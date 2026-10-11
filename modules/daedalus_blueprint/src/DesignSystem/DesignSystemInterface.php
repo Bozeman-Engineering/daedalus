@@ -11,7 +11,7 @@ use Drupal\Core\Config\Entity\ConfigEntityInterface;
  *
  * The site holds several; ONE is active (daedalus_blueprint.settings
  * active_design_system, read through ActiveDesignSystem). Members (skins,
- * variants, swatches, animations, stencils, skills) reference it by id
+ * variants, swatches, animations, blueprints, skills) reference it by id
  * or carry none and are global; the roster partitions on it.
  */
 interface DesignSystemInterface extends ConfigEntityInterface {
@@ -71,7 +71,7 @@ interface DesignSystemInterface extends ConfigEntityInterface {
    * The skin that carries this system's vocabulary, or NULL.
    *
    * The machine name of the skin the site activates with the system; a
-   * system without one (stencils and doctrine only) has NULL.
+   * system without one (blueprints and doctrine only) has NULL.
    */
   public function getDefaultSkin(): ?string;
 

@@ -11,7 +11,7 @@
  *     align: 'end',                    // 'start' (default) or 'end'
  *     header: Drupal.t('Show'),
  *     items: [
- *       { label, icon, checked, hint, run },
+ *       { label, icon, checked, hint, run, preview },
  *       { separator: true },
  *       { label, danger: true, confirm: Drupal.t('Confirm delete?'), run },
  *     ],
@@ -46,6 +46,13 @@
  *   takes it at document capture).
  * - Rows: the header caption, the check gutter, icons, labels, hints,
  *   separators, and the armed label swap of the two-step confirm.
+ * - Hover ownership: the list is a selection hover-scope owner
+ *   (`data-selection-hover-scope`, the attribute the page-elements tree
+ *   and code mode's page view carry). An item's preview drives the
+ *   spine's hover-selector facet, and the canvas resolver
+ *   (edit_mode/selection/selector-events.js) steps aside inside an owner
+ *   instead of clearing that facet on every pointer move over the list,
+ *   which it would otherwise do before the first frame painted.
  *
  * Like every surface rider this is an unbundled module script, so a
  * separate window (daedalus_stylish's satellite) gets its own copy by declaring
@@ -225,6 +232,7 @@ const buildItem = (item, index, gutter) => {
 const mount = (menu) => {
   const list = build('div', 'daedalus-ui-menu');
   list.setAttribute('role', 'menu');
+  list.setAttribute('data-selection-hover-scope', '');
   list.setAttribute('aria-label', menu.header ?? Drupal.t('Menu'));
   list.addEventListener('keydown', onKeyDown);
   list.addEventListener('contextmenu', (event) => {

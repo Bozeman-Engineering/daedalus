@@ -17,13 +17,16 @@
  * Drupal, window, and the rAF pair before requiring it, and drive frames
  * through a manual scheduler.
  *
- * The last case crosses to the drag controller (drag-controller.js, the
- * drop pipeline every placement gesture shares) for the one seam the
+ * The last cases cross to the drag controller (drag-controller.js, the
+ * drop pipeline every placement gesture shares) for the seams the
  * pointer primitive's frames never see: which drop door releases keyboard
- * focus. The controller imports the app store (webpack-style
- * extensionless imports; document, drupalSettings and BroadcastChannel
- * globals), so that case registers an extension-adding resolve hook and
- * stubs the globals before dynamically importing it.
+ * focus, and the capability gate (arrange of a moved element at
+ * dragstart, insert of a target's container at every drop) the
+ * controller asks for every source and target. The controller imports
+ * the app store (webpack-style extensionless imports; document,
+ * drupalSettings and BroadcastChannel globals), so those cases register
+ * an extension-adding resolve hook and stub the globals before
+ * dynamically importing it.
  *
  * Run with `node --test tests/js/*.test.mjs` from the module root.
  */
@@ -374,5 +377,125 @@ test('a pointer drop releases chrome focus; the keyboard door, the canvas and an
     globalThis.drupalSettings = saved.drupalSettings;
     globalThis.BroadcastChannel = saved.BroadcastChannel;
     Drupal.Daedalus.Blueprint = saved.Blueprint;
+  }
+});
+
+test('the drag gate: a moved element is asked arrange at dragstart, a target\'s container insert at every drop', async () => {
+  const saved = {
+    document: globalThis.document,
+    drupalSettings: globalThis.drupalSettings,
+    BroadcastChannel: globalThis.BroadcastChannel,
+  };
+  globalThis.document = {
+    addEventListener() {},
+    removeEventListener() {},
+    querySelector: () => null,
+    querySelectorAll: () => [],
+    getElementById: () => null,
+    documentElement: { addEventListener() {}, getAttribute: () => null },
+    body: {},
+    activeElement: null,
+  };
+  globalThis.drupalSettings = { daedalusUi: {} };
+  globalThis.BroadcastChannel = class {
+    postMessage() {}
+    close() {}
+  };
+  Drupal.t = (string) => string;
+  Drupal.behaviors = {};
+  try {
+    const controller = await import('../../js/edit_mode/drag/drag-controller.js');
+    const { default: store } = await import('../../js/edit_mode/store/store.js');
+    const { blueprintBooted } = await import('../../js/edit_mode/store/slices/blueprint-slice.js');
+    controller.registerDragSource('move_block', { operations: () => [] });
+
+    // A mirror whose verdicts differ per element: a frozen section (a
+    // template's, on a plain host) and the page's own section.
+    const ROOT = '99999999-1111-2222-3333-444444444444';
+    const FROZEN = 'aaaaaaaa-1111-2222-3333-444444444444';
+    const OWN = 'bbbbbbbb-1111-2222-3333-444444444444';
+    const FROZEN_BLOCK = 'cccccccc-1111-2222-3333-444444444444';
+    const OWN_BLOCK = 'dddddddd-1111-2222-3333-444444444444';
+    const refused = { content: false, configure: false, style: false, arrange: false, insert: false };
+    const open = { content: true, configure: true, style: true, arrange: true, insert: true };
+    const named = (name) => ({ name, type: name });
+    const blockNode = (uuid, can) => ({
+      kind: 'block', uuid, block_type: 'text', label: 'Text', block_fields: {}, _element: { ...named('Text'), can },
+    });
+    // The index composes the lean `layout` (compose.js), as delivered.
+    const treeSection = (uuid, block, can) => ({
+      kind: 'container',
+      uuid,
+      layout_id: 'layout_onecol',
+      _element: { ...named('Section'), can },
+      children: [{ kind: 'region', region: 'content', children: [blockNode(block, can)] }],
+    });
+    store.dispatch(blueprintBooted({
+      entityType: 'node',
+      entityId: '1',
+      uuid: ROOT,
+      label: 'Page',
+      langcode: 'en',
+      viewMode: 'full',
+      verdict: { can: { ...open, insert: false }, refused: [] },
+      blueprint: {
+        bundle: 'page',
+        fields: {},
+        _element: { ...named('Page'), can: { ...open, insert: false } },
+        layout: [treeSection(FROZEN, FROZEN_BLOCK, refused), treeSection(OWN, OWN_BLOCK, open)],
+      },
+    }));
+
+    // The source gate: a tree row (or the canvas delegate) naming the
+    // element it moves as data.key. A refused element never starts a
+    // drag: the native dragstart is cancelled and the layer stays idle.
+    const row = { setAttribute() {} };
+    const dragstart = () => {
+      const event = { stopPropagation() {}, prevented: 0, dataTransfer: { setData() {} }, preventDefault() { this.prevented += 1; } };
+      row.ondragstart(event);
+      return event;
+    };
+    controller.makeDraggable(row, 'move_block', () => ({ uuid: FROZEN_BLOCK, key: `block:${FROZEN_BLOCK}` }));
+    let event = dragstart();
+    assert.equal(event.prevented, 1, 'a refused element\'s drag is cancelled at dragstart');
+    assert.equal(store.getState().drag.active, false, 'the layer never armed');
+    controller.makeDraggable(row, 'move_block', () => ({ uuid: OWN_BLOCK, key: `block:${OWN_BLOCK}` }));
+    event = dragstart();
+    assert.equal(event.prevented, 0);
+    assert.equal(store.getState().drag.active, true, 'the page\'s own element drags');
+    row.ondragend({ stopPropagation() {} });
+    assert.equal(store.getState().drag.active, false);
+    // A source placing something new names no key and is judged at the
+    // destination alone.
+    controller.makeDraggable(row, 'move_block', () => ({}));
+    assert.equal(dragstart().prevented, 0);
+    row.ondragend({ stopPropagation() {} });
+
+    // The target gate: insert of the container a location inserts into,
+    // for the pointer's resolved gap and the keyboard lift's enumerated
+    // ones alike (both filter through dropAllowed).
+    const gap = (anchor, placement) => ({ kind: 'gap', location: { anchor, placement } });
+    assert.equal(controller.dropAllowed(gap(FROZEN, 'inside')), false, 'inside a frozen section');
+    assert.equal(controller.dropAllowed(gap(FROZEN_BLOCK, 'after')), false, 'beside a block of a frozen section');
+    assert.equal(controller.dropAllowed(gap(OWN, 'inside')), true, 'inside the page\'s own section');
+    assert.equal(controller.dropAllowed(gap(OWN_BLOCK, 'before')), true, 'beside a block of the page\'s own section');
+    assert.equal(controller.dropAllowed(gap(ROOT, 'inside')), false, 'the root flow, refused insert (a plain host)');
+    assert.equal(controller.dropAllowed(gap('unknown', 'inside')), false, 'a container the projection cannot name');
+    assert.equal(controller.dropAllowed(null), false);
+
+    // The pointer door: a resolved gap the gate refuses is no target, so
+    // the drop handler commits nothing.
+    assert.equal(controller.beginExternalDrag('move_block', {}), true);
+    controller.setCurrentDrop(gap(FROZEN, 'inside'));
+    // setCurrentDrop is the keyboard face and trusts its caller (the lift
+    // filtered its gaps); the pointer face runs the gate in updateDrop,
+    // reached through the document's dragover, whose stub above records
+    // no listeners. The gate itself is what both doors share.
+    controller.endExternalDrag();
+    assert.equal(store.getState().drag.active, false);
+  } finally {
+    globalThis.document = saved.document;
+    globalThis.drupalSettings = saved.drupalSettings;
+    globalThis.BroadcastChannel = saved.BroadcastChannel;
   }
 });

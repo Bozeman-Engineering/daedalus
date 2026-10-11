@@ -6,9 +6,10 @@ namespace Drupal\Tests\daedalus_blueprint_api\Unit\Render;
 
 use Drupal\Core\Ajax\AjaxResponse;
 use Drupal\Core\Ajax\SettingsCommand;
-use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\Render\AttachmentsResponseProcessorInterface;
 use Drupal\Core\Render\RendererInterface;
+use Drupal\daedalus_blueprint\Host\HostResolver;
+use Drupal\daedalus_blueprint_api\Render\CanvasBuilderInterface;
 use Drupal\daedalus_blueprint_api\Render\SubtreeRenderer;
 use Drupal\daedalus_blueprint_api\Render\TargetKeyMapper;
 use Drupal\Tests\UnitTestCase;
@@ -48,11 +49,12 @@ class SubtreeRendererAssetGuardTest extends UnitTestCase {
    */
   protected function buildRenderer(RequestStack $request_stack, AttachmentsResponseProcessorInterface $processor): SubtreeRenderer {
     return new SubtreeRenderer(
-      $this->createMock(EntityTypeManagerInterface::class),
+      $this->createMock(CanvasBuilderInterface::class),
       $this->createMock(RendererInterface::class),
       $this->createMock(TargetKeyMapper::class),
       $processor,
       $request_stack,
+      $this->createMock(HostResolver::class),
     );
   }
 

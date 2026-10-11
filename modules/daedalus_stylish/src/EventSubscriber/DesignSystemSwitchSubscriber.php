@@ -50,11 +50,13 @@ use Symfony\Component\EventDispatcher\EventSubscriberInterface;
  *   a fresh site whole. A pointer naming a system whose config has not
  *   landed syncs nothing (there is no law to sync under until it lands).
  * - Both systems' ids ride the response's materials delta: every token id
- *   each system's default skin carries and every member record each
- *   system has (MaterialsRosterBuilder::members(), the unpartitioned
- *   read). The delta resolves each id against the fresh roster, so the
- *   old system's ids resolve to removes and the new system's to upserts;
- *   a default skin that does not exist yet contributes no token ids.
+ *   the skin each system wears carries (SkinManager::loadSkinFor(): the
+ *   site's choice for the system, else its default skin) and every
+ *   member record each system has (MaterialsRosterBuilder::members(),
+ *   the unpartitioned read). The delta resolves each id against the
+ *   fresh roster, so the old system's ids resolve to removes and the new
+ *   system's to upserts; a worn skin that does not exist yet contributes
+ *   no token ids.
  * - The defaults, variants and swatches files recompile: each prints the
  *   roster's (partitioned) set, so all three change on a switch (the
  *   defaults file twice over: its declared tier follows the guide reset
@@ -124,12 +126,9 @@ final class DesignSystemSwitchSubscriber implements EventSubscriberInterface {
    * Records a system's token and member ids on the request's change set.
    */
   protected function touchSystem(string $id): void {
-    $system = $this->loadSystem($id);
-    if ($system !== NULL && $system->getDefaultSkin() !== NULL) {
-      $skin = $this->skinManager->loadByMachineName($system->getDefaultSkin());
-      if ($skin !== NULL) {
-        $this->materialsChangeSet->touch(MaterialKind::Token, ...$this->materialsProvider->tokenIds($skin));
-      }
+    $skin = $this->skinManager->loadSkinFor($id);
+    if ($skin !== NULL) {
+      $this->materialsChangeSet->touch(MaterialKind::Token, ...$this->materialsProvider->tokenIds($skin));
     }
     foreach ($this->materialsRosterBuilder->members($id) as $record) {
       $this->materialsChangeSet->touch($record->kind, $record->id);

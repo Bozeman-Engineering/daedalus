@@ -14,7 +14,7 @@ namespace Drupal\daedalus_blueprint\Materials;
  *   "color/accent", "container_full", "hero"); a media reference's uuid;
  *   a generation request's prompt; for Unknown the reference as the
  *   writer named it (the custom property "--swatch-limegreen", the class
- *   token, the attribute value, the stencil name), so a corrective can
+ *   token, the attribute value, the blueprint name), so a corrective can
  *   search for what was meant; NULL for a literal, which is only its
  *   spelling.
  * - spelling: the reference as it is written in its slot, canonical

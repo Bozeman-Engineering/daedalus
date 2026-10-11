@@ -11,6 +11,7 @@ use Drupal\daedalus_stylish\DaedalusStylishFieldManager;
 use Drupal\Tests\user\Traits\UserCreationTrait;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
+use Drupal\Tests\daedalus_stylish\Traits\HostTrait;
 
 /**
  * Locks the layout widget's batch contract (mode + share).
@@ -43,6 +44,7 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 #[RunTestsInSeparateProcesses]
 class LayoutWidgetBatchTest extends KernelTestBase {
 
+  use HostTrait;
   use UserCreationTrait;
 
   /**
@@ -93,6 +95,7 @@ class LayoutWidgetBatchTest extends KernelTestBase {
     // daedalus_stylish provider reads all four storages on every build.
     $this->installEntitySchema('daedalus_swatch');
     $this->installEntitySchema('daedalus_animation');
+    $this->installEntitySchema('daedalus_font');
     $this->installEntitySchema('daedalus_skin');
     $this->installConfig(['daedalus_stylish']);
     $this->installSchema('layout_builder', ['inline_block_usage']);
@@ -100,7 +103,7 @@ class LayoutWidgetBatchTest extends KernelTestBase {
     // variant included, and the entrance family whose motion-* references
     // a variant save mirrors into the animation usage table); the importer
     // switches to an administrative account, so give the switcher one.
-    $this->installSchema('daedalus_stylish', ['daedalus_animation_usage']);
+    $this->installSchema('daedalus_stylish', ['daedalus_animation_usage', 'daedalus_token_usage', 'daedalus_font_usage']);
     $this->setUpCurrentUser([], [], TRUE);
     \Drupal::service('module_installer')->install(['daedalus_stylish_layouts']);
     $this->container->get('daedalus_stylish.field_manager')->enable('entity_test', 'entity_test');
@@ -119,7 +122,7 @@ class LayoutWidgetBatchTest extends KernelTestBase {
    * Runs a batch of operations, asserting success.
    */
   protected function batch(EntityTest $entity, array $operations): void {
-    $result = $this->operations->batchOperations($entity, $operations);
+    $result = $this->operations->batchOperations($this->host($entity), $operations);
     $this->assertTrue($result->isSuccess(), print_r($result->toArray()['errors'] ?? [], TRUE));
   }
 
@@ -376,7 +379,7 @@ class LayoutWidgetBatchTest extends KernelTestBase {
 
     // Removing a variant the entry does not wear fails loudly (the band
     // is born wearing container_site and row; container_sm it is not).
-    $result = $this->operations->batchOperations($entity, [
+    $result = $this->operations->batchOperations($this->host($entity), [
       ['op' => 'remove_variant', 'key' => $key, 'variant' => 'container_sm'],
     ]);
     $this->assertFalse($result->isSuccess());
@@ -384,7 +387,7 @@ class LayoutWidgetBatchTest extends KernelTestBase {
     $this->assertSame('STYLE_VARIANT_NOT_REFERENCED', $errors[0]['code'] ?? NULL, print_r($errors, TRUE));
 
     // A missing variant parameter is structural.
-    $result = $this->operations->batchOperations($entity, [
+    $result = $this->operations->batchOperations($this->host($entity), [
       ['op' => 'remove_variant', 'key' => $key],
     ]);
     $this->assertFalse($result->isSuccess());

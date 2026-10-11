@@ -9,6 +9,8 @@ use Drupal\Component\Datetime\TimeInterface;
 use Drupal\Core\Batch\BatchBuilder;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\Entity\FieldableEntityInterface;
+use Drupal\daedalus_blueprint\Host\HostInterface;
+use Drupal\daedalus_blueprint\Host\HostResolver;
 use Drupal\Core\Session\AccountProxyInterface;
 use Drupal\Core\StringTranslation\StringTranslationTrait;
 use Drupal\daedalus_blueprint\DesignSystem\ActiveDesignSystem;
@@ -53,16 +55,16 @@ class VariantManager {
   use StringTranslationTrait;
 
   /**
-   * The stencil discovery service, when daedalus_blueprint_stencil exists.
+   * The blueprint discovery service, when daedalus_blueprint_library exists.
    *
    * Deliberately untyped (its interface lives in an optional module): the
-   * resolver for the stencil_file ownership lane: a file-shipped stencil
+   * resolver for the blueprint_file ownership lane: a file-shipped blueprint
    * has no entity to reference, so its owned variants store its machine
    * name and orphanhood is "discovery no longer serves the id".
    *
    * @var object|null
    */
-  protected ?object $stencilDiscovery;
+  protected ?object $blueprintDiscovery;
 
   public function __construct(
     protected StyleMapValidator $validator,
@@ -73,10 +75,11 @@ class VariantManager {
     protected VariantImporter $importer,
     protected ActiveDesignSystem $activeDesignSystem,
     protected DistroLock $distroLock,
+    protected HostResolver $hostResolver,
     protected ?EntityTempstoreRepository $tempstore = NULL,
-    ?object $stencilDiscovery = NULL,
+    ?object $blueprintDiscovery = NULL,
   ) {
-    $this->stencilDiscovery = $stencilDiscovery;
+    $this->blueprintDiscovery = $blueprintDiscovery;
   }
 
   /**
@@ -95,12 +98,12 @@ class VariantManager {
    *   'defaults_changed', or NULL when the variant has no
    *   living disk source (site-created, or its provider stopped shipping
    *   it), in which case no revert is ever offered. OWNED variants (the
-   *   `stencil` reference and `stencil_file` machine-name fields
-   *   daedalus_blueprint_stencil provides — read here as data, never a
-   *   dependency) additionally carry `stencil` (the owning stencil's
+   *   `blueprint` reference and `blueprint_file` machine-name fields
+   *   daedalus_blueprint_library provides — read here as data, never a
+   *   dependency) additionally carry `blueprint` (the owning blueprint's
    *   machine name, matching the placement provenance stamps the client
-   *   filters offering on) and `stencil_orphaned` (TRUE when the owner is
-   *   gone, the content stencil deleted or the file stencil no longer
+   *   filters offering on) and `blueprint_orphaned` (TRUE when the owner is
+   *   gone, the content blueprint deleted or the file blueprint no longer
    *   discovered: offered nowhere, existing wearers keep rendering).
    *   Unowned variants carry neither key.
    */
@@ -115,19 +118,19 @@ class VariantManager {
       'provider' => $variant->getProvider(),
       'shipped_state' => $this->shippedState($variant),
     ];
-    if ($variant->hasField('stencil') && !$variant->get('stencil')->isEmpty()) {
-      $owner = $variant->get('stencil')->entity;
-      $payload['stencil'] = $owner !== NULL ? (string) $owner->get('machine_name')->value : NULL;
-      $payload['stencil_orphaned'] = $owner === NULL;
+    if ($variant->hasField('blueprint') && !$variant->get('blueprint')->isEmpty()) {
+      $owner = $variant->get('blueprint')->entity;
+      $payload['blueprint'] = $owner !== NULL ? (string) $owner->get('machine_name')->value : NULL;
+      $payload['blueprint_orphaned'] = $owner === NULL;
     }
-    elseif ($variant->hasField('stencil_file') && ($file_owner = (string) ($variant->get('stencil_file')->value ?? '')) !== '') {
-      // The FILE lane: a module-shipped stencil owns by machine name. Alive
+    elseif ($variant->hasField('blueprint_file') && ($file_owner = (string) ($variant->get('blueprint_file')->value ?? '')) !== '') {
+      // The FILE lane: a module-shipped blueprint owns by machine name. Alive
       // means discovery still serves the id; mirroring the reference lane,
       // an orphaned owner reads as NULL (the annotation says "owned but the
       // owner is gone", never a name the site cannot resolve).
-      $alive = is_array($this->stencilDiscovery?->getStencil($file_owner));
-      $payload['stencil'] = $alive ? $file_owner : NULL;
-      $payload['stencil_orphaned'] = !$alive;
+      $alive = is_array($this->blueprintDiscovery?->getBlueprint($file_owner));
+      $payload['blueprint'] = $alive ? $file_owner : NULL;
+      $payload['blueprint_orphaned'] = !$alive;
     }
     return $payload;
   }
@@ -213,18 +216,18 @@ class VariantManager {
    *   saved from an element, and its sub-element rules travel inside it).
    * @param array $styles
    *   Element-relative styles: '' => root entry, '::.class' => sub entries.
-   * @param \Drupal\Core\Entity\FieldableEntityInterface|null $entity
-   *   The host entity, for per-block-type scope capture and validation.
+   * @param \Drupal\daedalus_blueprint\Host\HostInterface|null $host
+   *   The host, for per-block-type scope capture and validation.
    * @param string|null $axis
    *   The variant axis picked at save, validated against the captured
    *   scope's vocabulary. NULL lands on the built-in "style" axis.
-   * @param string|null $stencil
-   *   The source element's stencil provenance (the placed root's stamp),
-   *   when the client has one: a variant minted on a stencil's placement
-   *   defaults to that stencil's ownership. Resolution is content-stencil
-   *   by machine name through the field daedalus_blueprint_stencil provides;
+   * @param string|null $blueprint
+   *   The source element's blueprint provenance (the placed root's stamp),
+   *   when the client has one: a variant minted on a blueprint's placement
+   *   defaults to that blueprint's ownership. Resolution is content-blueprint
+   *   by machine name through the field daedalus_blueprint_library provides;
    *   dead or file-shipped provenance degrades to unowned, mirroring the
-   *   client's updatable-stencil posture (never an error).
+   *   client's updatable-blueprint posture (never an error).
    * @param string $origin
    *   Who minted it, MaterialRecord::ORIGIN_USER or ORIGIN_AI: the lane's
    *   stamp, carried on the roster record for the life of the site.
@@ -247,13 +250,13 @@ class VariantManager {
    *
    * @throws \Drupal\daedalus_stylish\Exception\VariantValidationException
    */
-  public function saveAsVariant(string $label, string $key, array $styles, ?FieldableEntityInterface $entity = NULL, ?string $axis = NULL, ?string $stencil = NULL, string $origin = MaterialRecord::ORIGIN_USER, string $description = '', int $weight = 0, bool $global = FALSE, bool $offered = TRUE): DaedalusStylishVariantInterface {
+  public function saveAsVariant(string $label, string $key, array $styles, ?HostInterface $host = NULL, ?string $axis = NULL, ?string $blueprint = NULL, string $origin = MaterialRecord::ORIGIN_USER, string $description = '', int $weight = 0, bool $global = FALSE, bool $offered = TRUE): DaedalusStylishVariantInterface {
     if (trim($label) === '') {
       throw new VariantValidationException([
         new BlueprintError('label', 'MISSING_PARAMETER', 'A variant needs a label.', [], 'Name the variant the way editors should find it in the library.'),
       ]);
     }
-    $context = $entity !== NULL ? ['entity' => $entity] : [];
+    $context = $host !== NULL ? ['host' => $host] : [];
     $scope = (string) $this->sourceScope($key, $context);
     $this->validateAxis($axis, $scope);
     $normalized = $this->normalizeStyles($styles);
@@ -276,14 +279,14 @@ class VariantManager {
     $variant = $this->entityTypeManager->getStorage('daedalus_variant')->create($values);
     assert($variant instanceof DaedalusStylishVariantInterface);
     $variant->setStyles($normalized);
-    if ($stencil !== NULL && $stencil !== '' && $variant->hasField('stencil')) {
-      $ids = $this->entityTypeManager->getStorage('stencil')->getQuery()
+    if ($blueprint !== NULL && $blueprint !== '' && $variant->hasField('blueprint')) {
+      $ids = $this->entityTypeManager->getStorage('blueprint')->getQuery()
         ->accessCheck(FALSE)
-        ->condition('machine_name', $stencil)
+        ->condition('machine_name', $blueprint)
         ->range(0, 1)
         ->execute();
       if ($ids !== []) {
-        $variant->set('stencil', reset($ids));
+        $variant->set('blueprint', reset($ids));
       }
     }
     $variant->save();
@@ -325,9 +328,9 @@ class VariantManager {
    *
    * @throws \Drupal\daedalus_stylish\Exception\VariantValidationException
    */
-  public function push(DaedalusStylishVariantInterface $variant, string $key, array $styles, ?FieldableEntityInterface $entity = NULL): int {
+  public function push(DaedalusStylishVariantInterface $variant, string $key, array $styles, ?HostInterface $host = NULL): int {
     $this->checkShippedLock($variant);
-    $context = $entity !== NULL ? ['entity' => $entity] : [];
+    $context = $host !== NULL ? ['host' => $host] : [];
     if ($key !== '') {
       $this->sourceScope($key, $context);
       if (!$this->validator->scopeMatches($variant->getScope(), $key, $context)) {
@@ -425,8 +428,8 @@ class VariantManager {
    * The lock is the distro lock (DistroLock): it holds on a consuming site
    * and lifts on a development site whose settings.php names the package
    * author (`$settings['daedalus_blueprint_developer'] = TRUE`), where the
-   * site is the authoring canvas and `drush daedalus_stylish:ship` carries the
-   * variant back to disk.
+   * site is the authoring canvas and `drush daedalus-blueprint:design-system:ship`
+   * carries the variant back to disk.
    *
    * @throws \Drupal\daedalus_stylish\Exception\VariantValidationException
    */
@@ -448,7 +451,7 @@ class VariantManager {
    * original is locked. The styles are stored content that already passed
    * the scope-only seam when the source was saved, so they copy without
    * re-validation, exactly like a revision revert: a fork must preserve
-   * the look verbatim even where the guide has drifted since. Stencil
+   * the look verbatim even where the guide has drifted since. Blueprint
    * ownership deliberately does not travel: the copy is the user's own,
    * offered wherever its scope matches.
    *
@@ -698,16 +701,16 @@ class VariantManager {
   }
 
   /**
-   * Resolves the host entity a gesture names, preferring its staged copy.
+   * Resolves the host a gesture names, preferring its staged copy.
    *
    * The styles being saved were read from the STAGED map (the tempstore
    * session the editor is looking at), so block-bundle resolution should see
-   * the staged layout too — a just-placed block exists only there. Without
+   * the staged layout too: a just-placed block exists only there. Without
    * daedalus_tempstore (or with nothing staged) the saved entity serves, and an
    * unresolvable block degrades to the universal block scope exactly as
    * validation does.
    */
-  public function resolveEntity(?string $entity_type, ?string $id): ?FieldableEntityInterface {
+  public function resolveHost(?string $entity_type, ?string $id): ?HostInterface {
     if ($entity_type === NULL || $id === NULL || !$this->entityTypeManager->hasDefinition($entity_type)) {
       return NULL;
     }
@@ -721,7 +724,7 @@ class VariantManager {
       return NULL;
     }
     $staged = $this->tempstore?->get($entity);
-    return $staged instanceof FieldableEntityInterface ? $staged : $entity;
+    return $this->hostResolver->fromEntity($staged instanceof FieldableEntityInterface ? $staged : $entity);
   }
 
   /**

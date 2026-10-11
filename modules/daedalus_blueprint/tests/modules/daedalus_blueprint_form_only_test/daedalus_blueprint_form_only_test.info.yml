@@ -1,0 +1,7 @@
+name: Daedalus Blueprint Form-Only Field Test
+type: module
+description: Registers a field handler that serializes nothing, for value-block refusal tests.
+package: Testing
+core_version_requirement: ^11
+dependencies:
+  - daedalus:daedalus_blueprint

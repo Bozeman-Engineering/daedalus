@@ -64,11 +64,14 @@ class TempstoreSaveTest extends FormCommitTestBase {
     // aliases, and it validates the alias's source through the
     // access-checked path validator (viewing the node needs `access
     // content`); the published flag is editable only by a node
-    // administrator (the spine checks field edit access on every write).
+    // administrator (the spine checks field edit access on every write);
+    // and the op door judges update access on the host before any field
+    // (`administer nodes` is not node edit access).
     $this->setUpCurrentUser([], [
       'access inline editing',
       'use daedalus ui edit mode',
       'access content',
+      'edit any plain content',
       'create url aliases',
       'administer nodes',
     ]);
@@ -99,6 +102,9 @@ class TempstoreSaveTest extends FormCommitTestBase {
     ]);
     $this->submitAndAnswer($form_object, $form_state, $this->formRequest($node, '/daedalus-edit/entity-form/node/' . $node->id()));
     $this->assertFalse($form_state->hasAnyErrors(), 'The path widget accepted the alias. ' . print_r(array_map('strval', $form_state->getErrors()), TRUE));
+    $outcome = $form_state->getTemporaryValue(FormCommit::OUTCOME);
+    $this->assertInstanceOf(FormCommitOutcome::class, $outcome);
+    $this->assertTrue($outcome->result->isSuccess(), print_r($outcome->result->toArray(), TRUE));
     $this->assertSame('/new-alias', $this->working($node)->get('path')->alias, 'The working copy holds the new alias.');
     $this->assertSame('/old-alias', $this->aliasOf($source), 'Staging never saves: the alias row is unchanged.');
 
@@ -128,13 +134,13 @@ class TempstoreSaveTest extends FormCommitTestBase {
     $this->assertTrue($tempstore->has($node), 'Both commits live in one stage.');
 
     // Save through the controller, with the request the top bar sends: the
-    // entities on the route and the edited page as the destination.
-    $request = Request::create('/daedalus-edit/tempstore/save/node.' . $node->id(), 'GET', ['destination' => $source]);
-    $request->attributes->set('entities', 'node.' . $node->id());
+    // one host on the route ({entity_type}/{entity}) and the edited page as
+    // the destination.
+    $request = Request::create('/daedalus-edit/tempstore/save/node/' . $node->id(), 'GET', ['destination' => $source]);
     $request_stack = $this->container->get('request_stack');
     $request_stack->push($request);
     try {
-      $response = Tempstore::create($this->container)->save($request);
+      $response = Tempstore::create($this->container)->save($request, 'node', $node);
     }
     finally {
       $request_stack->pop();
@@ -160,7 +166,7 @@ class TempstoreSaveTest extends FormCommitTestBase {
     $this->assertCount(1, $cookies);
     $this->assertSame('navigationMode', $cookies[0]->getName());
     $this->assertSame('none', $cookies[0]->getValue());
-    $this->assertSame('/new-alias', $cookies[0]->getPath());
+    $this->assertSame('/new-alias', $cookies[0]->getPath(), 'The cookie is scoped to the saved host\'s editing path: a node\'s canonical URL under its fresh alias.');
   }
 
   /**

@@ -11,6 +11,7 @@
  */
 import { strict as assert } from 'node:assert';
 import { painterFor, highlightRects } from '../../js/src/canvas-painters.js';
+import { createCanvasSelectorPaint } from '../../js/src/canvas-selector-paint.js';
 import { SIDES } from '../../js/src/widgets/lib/box-model.js';
 
 const tests = [];
@@ -202,6 +203,139 @@ test('highlightRects paints border bands between the border box and the padding 
     highlightRects(['border-top-width', 'border-top-style', 'border-top-color'], context({ box: rect(0, 0, 100, 100), computed })),
     [{ kind: 'border', ...rect(0, 0, 100, 5) }],
   );
+});
+
+// --- the selector paint (canvas-selector-paint.js) --------------------------
+
+/**
+ * A document double: <style> tags land in `head`, and `remove` lifts
+ * them back out, so the slots' tags can be read by their data attribute.
+ */
+const fakeDocument = () => {
+  const head = [];
+  const document = {
+    head: { appendChild: (tag) => head.push(tag) },
+    createElement: () => {
+      const tag = {
+        attributes: {},
+        textContent: '',
+        setAttribute: (name, value) => { tag.attributes[name] = value; },
+        remove: () => { head.splice(head.indexOf(tag), 1); },
+      };
+      return tag;
+    },
+  };
+  const slots = () => Object.fromEntries(head.map((tag) => [tag.attributes['data-daedalus-stylish-selector-paint'], tag.textContent]));
+  return { document, slots };
+};
+
+/**
+ * A spine double: the three facts and the two subscriptions the paint
+ * reads, with `fire` helpers; `selectorFor` prints the pair and the
+ * treatment's first word so each slot's tag names what it paints.
+ */
+const fakeApp = () => {
+  const app = {
+    target: null,
+    address: null,
+    hoverListeners: [],
+    targetListeners: [],
+    Selection: {
+      getTarget: () => app.target,
+      getAddress: () => app.address,
+    },
+    onHoverSelectorChange: (callback) => app.hoverListeners.push(callback),
+    onTargetChange: (callback) => app.targetListeners.push(callback),
+    fireTargetChange: (selected, target, address) => {
+      app.target = target;
+      app.address = address;
+      app.targetListeners.forEach((callback) => callback({ selected, target, address }));
+    },
+    fireHover: (hovered) => app.hoverListeners.forEach((callback) => callback(hovered)),
+  };
+  return app;
+};
+const behavior = {
+  selectorFor: (key, selector, treatment) =>
+    selector === 'unprintable' ? null : `${key}::${selector} ${treatment.split(' ')[2]}`,
+};
+
+test('the selector paint renders the subject facet dashed and the write address dotted, together, each slot emptying with its fact', () => {
+  const { document, slots } = fakeDocument();
+  const held = globalThis.document;
+  globalThis.document = document;
+  try {
+    const app = fakeApp();
+    createCanvasSelectorPaint({ app, behavior });
+    const BLOCK = 'block:a';
+    const SECTION = 'container:w';
+    // A minted list item selected under "every list item in Welcome":
+    // the item's own box dashed INSIDE the rule's dotted reach, both at
+    // once (two facts, two slots).
+    app.fireTargetChange(BLOCK, { key: BLOCK, selector: '.s-abc' }, { key: SECTION, selector: 'li' });
+    assert.deepEqual(slots(), {
+      selected: `${BLOCK}::.s-abc dashed`,
+      write: `${SECTION}::li dotted`,
+    });
+    // Dropping the address (the chip's own entry) empties the dotted
+    // slot alone; the facet keeps its dashed box.
+    app.fireTargetChange(BLOCK, { key: BLOCK, selector: '.s-abc' }, null);
+    assert.deepEqual(slots(), { selected: `${BLOCK}::.s-abc dashed` });
+    // An address on the bare element (no facet) paints dotted alone.
+    app.fireTargetChange(BLOCK, null, { key: SECTION, selector: '> *' });
+    assert.deepEqual(slots(), { write: `${SECTION}::> * dotted` });
+    // An address on the selected key itself (an instance part's own tag
+    // tier) is a dotted box like any other.
+    app.fireTargetChange(BLOCK, { key: BLOCK, selector: '.s-abc' }, { key: BLOCK, selector: 'li' });
+    assert.deepEqual(slots(), {
+      selected: `${BLOCK}::.s-abc dashed`,
+      write: `${BLOCK}::li dotted`,
+    });
+    // A selection move clears both (the spine fires with neither).
+    app.fireTargetChange(SECTION, null, null);
+    assert.deepEqual(slots(), {});
+    // A pair the behavior cannot print paints nothing and throws nothing.
+    app.fireTargetChange(BLOCK, { key: BLOCK, selector: 'unprintable' }, null);
+    assert.deepEqual(slots(), {});
+  } finally {
+    globalThis.document = held;
+  }
+});
+
+test('the hover box yields to the facet AND to the address on the same pair, and returns when the pair moves', () => {
+  const { document, slots } = fakeDocument();
+  const held = globalThis.document;
+  globalThis.document = document;
+  try {
+    const app = fakeApp();
+    createCanvasSelectorPaint({ app, behavior });
+    const BLOCK = 'block:a';
+    const SECTION = 'container:w';
+    app.fireHover({ key: SECTION, selector: 'li' });
+    assert.deepEqual(slots(), { hover: `${SECTION}::li dashed` });
+    // The hovered pair becomes the address: the dotted box stands, the
+    // muted hover box goes.
+    app.fireTargetChange(BLOCK, { key: BLOCK, selector: '.s-abc' }, { key: SECTION, selector: 'li' });
+    assert.deepEqual(slots(), {
+      selected: `${BLOCK}::.s-abc dashed`,
+      write: `${SECTION}::li dotted`,
+    });
+    // Hovering the facet's own pair paints no extra box either.
+    app.fireHover({ key: BLOCK, selector: '.s-abc' });
+    assert.equal(slots().hover, undefined);
+    // A hover elsewhere paints beside both.
+    app.fireHover({ key: SECTION, selector: '> *' });
+    assert.equal(slots().hover, `${SECTION}::> * dashed`);
+    // The address drops while the hover stands on its old pair: the
+    // hover box returns.
+    app.fireHover({ key: SECTION, selector: 'li' });
+    app.fireTargetChange(BLOCK, { key: BLOCK, selector: '.s-abc' }, null);
+    assert.equal(slots().hover, `${SECTION}::li dashed`);
+    app.fireHover(null);
+    assert.equal(slots().hover, undefined);
+  } finally {
+    globalThis.document = held;
+  }
 });
 
 // --- runner ---------------------------------------------------------------

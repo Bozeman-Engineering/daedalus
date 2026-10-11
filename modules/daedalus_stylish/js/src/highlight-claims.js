@@ -85,17 +85,18 @@ const registries = new WeakMap();
 
 /**
  * The claim stack for a state source (leader or satellite), created on
- * first use. Any move of the styling address wipes the claims: a
- * selection move AND a target move under the same selection (the
- * switcher or "Edit at" seating an ancestor rule, the target moves
- * without the selection), both heard on the source's one target-aware
- * subscription (onTargetChange fires for either, the selection facade's
- * rule). Why: every claim is keyed at a write address (a row's
- * `model.keys[property]`, the ring's family write key), so a claim a
- * focused row holds is a claim at the OLD address once the target
- * moves; the source clears its highlight state on the same move
- * (transient edit chrome never outlives its address), and a surviving
- * claim would let a later release resurrect the stale address's spec.
+ * first use. Any move of the styling facts wipes the claims: a
+ * selection move, a subject facet move under the same selection (a part
+ * row, a code-mode row header) AND a write address move under the same
+ * subject (the switcher or "Edit at" seating a rule), all heard on the
+ * source's one target-aware subscription (onTargetChange fires for any
+ * of the three, the selection facade's rule). Why: every claim is keyed
+ * at a write key (a row's `model.keys[property]`, the ring's family
+ * write key), so a claim a focused row holds is a claim at the OLD key
+ * once a fact moves; the source clears its highlight state on the same
+ * move (transient edit chrome never outlives its address), and a
+ * surviving claim would let a later release resurrect the stale key's
+ * spec.
  *
  * @param {object} source
  *   A state source exposing setCanvasHighlight and onTargetChange.

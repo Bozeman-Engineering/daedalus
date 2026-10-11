@@ -280,6 +280,8 @@ test('CHROME_SELECTOR names the known in-canvas chrome', () => {
   assert.ok(CHROME_SELECTOR.includes('[data-contextual-id]'));
   assert.ok(CHROME_SELECTOR.includes('.daedalus-edit-validation-message'));
   assert.ok(CHROME_SELECTOR.includes('.daedalus-ui-drop-placeholder'));
+  assert.ok(CHROME_SELECTOR.includes('.layout-builder-block__content-preview-placeholder-label'));
+  assert.ok(CHROME_SELECTOR.includes('.daedalus-ui-block-stand-in'));
 });
 
 test('NON_BOX_SELECTOR names the box-less tags', () => {

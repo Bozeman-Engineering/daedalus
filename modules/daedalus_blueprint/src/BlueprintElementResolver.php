@@ -5,16 +5,19 @@ declare(strict_types=1);
 namespace Drupal\daedalus_blueprint;
 
 use Drupal\Core\Entity\FieldableEntityInterface;
+use Drupal\daedalus_blueprint\Host\HostInterface;
 use Drupal\daedalus_blueprint\Access\BlueprintAccessChecker;
 use Drupal\daedalus_blueprint\FieldHandler\FieldHandlerManager;
-use Drupal\daedalus_blueprint\LayoutBuilder\LayoutSerializer;
 use Drupal\daedalus_blueprint\LayoutBuilder\DaedalusLayoutAdapter;
 
 /**
  * Resolves any addressable page element with full context.
  *
  * Unified resolution pipeline: locate → identify type → serialize data →
- * enrich with guidance/defaults → return ResolvedElement.
+ * enrich with guidance/defaults → return ResolvedElement. A layout
+ * element's data is its lean node as the element read answers it
+ * (BlueprintSerializerInterface::serializeElement()); a region's data is
+ * the region node of its container.
  */
 class BlueprintElementResolver implements BlueprintElementResolverInterface {
 
@@ -36,8 +39,6 @@ class BlueprintElementResolver implements BlueprintElementResolverInterface {
    *   The blueprint serializer.
    * @param \Drupal\daedalus_blueprint\LayoutBuilder\DaedalusLayoutAdapter $daedalusLayoutAdapter
    *   The daedalus_layout adapter.
-   * @param \Drupal\daedalus_blueprint\LayoutBuilder\LayoutSerializer $layoutSerializer
-   *   The layout serializer.
    * @param \Drupal\daedalus_blueprint\Access\BlueprintAccessChecker $accessChecker
    *   The access checker, used to gate field values the user cannot view.
    */
@@ -47,7 +48,6 @@ class BlueprintElementResolver implements BlueprintElementResolverInterface {
     protected FieldHandlerManager $fieldHandlerManager,
     protected BlueprintSerializerInterface $serializer,
     protected DaedalusLayoutAdapter $daedalusLayoutAdapter,
-    protected LayoutSerializer $layoutSerializer,
     protected BlueprintAccessChecker $accessChecker,
   ) {}
 
@@ -55,44 +55,44 @@ class BlueprintElementResolver implements BlueprintElementResolverInterface {
    * {@inheritdoc}
    */
   public function resolve(
-    FieldableEntityInterface $entity,
+    HostInterface $host,
     string $identifier,
     ?string $parentUuid = NULL,
   ): ?ResolvedElement {
     if (preg_match(self::UUID_PATTERN, $identifier)) {
-      return $this->resolveByUuid($entity, $identifier);
+      return $this->resolveByUuid($host, $identifier);
     }
 
-    return $this->resolveByName($entity, $identifier, $parentUuid);
+    return $this->resolveByName($host, $identifier, $parentUuid);
   }
 
   /**
    * Resolves a UUID-based element (block, paragraph, or section).
    *
-   * @param \Drupal\Core\Entity\FieldableEntityInterface $entity
-   *   The root entity.
+   * @param \Drupal\daedalus_blueprint\Host\HostInterface $host
+   *   The host.
    * @param string $uuid
    *   The UUID to resolve.
    *
    * @return \Drupal\daedalus_blueprint\ResolvedElement|null
    *   The resolved element, or NULL if not found.
    */
-  protected function resolveByUuid(FieldableEntityInterface $entity, string $uuid): ?ResolvedElement {
-    $context = $this->elementLocator->locate($entity, $uuid);
+  protected function resolveByUuid(HostInterface $host, string $uuid): ?ResolvedElement {
+    $context = $this->elementLocator->locate($host, $uuid);
     if ($context === NULL) {
       return NULL;
     }
 
     if ($context->isSection()) {
-      return $this->buildSectionElement($entity, $context);
+      return $this->buildSectionElement($host, $context);
     }
 
     if ($context->isLbComponent()) {
-      return $this->buildBlockElement($entity, $context);
+      return $this->buildBlockElement($host, $context);
     }
 
     if ($context->isParagraph()) {
-      return $this->buildParagraphElement($entity, $context);
+      return $this->buildParagraphElement($host, $context);
     }
 
     return NULL;
@@ -101,8 +101,8 @@ class BlueprintElementResolver implements BlueprintElementResolverInterface {
   /**
    * Resolves a name-based element (field or region).
    *
-   * @param \Drupal\Core\Entity\FieldableEntityInterface $entity
-   *   The root entity.
+   * @param \Drupal\daedalus_blueprint\Host\HostInterface $host
+   *   The host.
    * @param string $name
    *   The field name or region name.
    * @param string|null $parentUuid
@@ -112,19 +112,20 @@ class BlueprintElementResolver implements BlueprintElementResolverInterface {
    * @return \Drupal\daedalus_blueprint\ResolvedElement|null
    *   The resolved element, or NULL if not found.
    */
-  protected function resolveByName(FieldableEntityInterface $entity, string $name, ?string $parentUuid): ?ResolvedElement {
+  protected function resolveByName(HostInterface $host, string $name, ?string $parentUuid): ?ResolvedElement {
     if ($parentUuid !== NULL) {
-      return $this->resolveNamedOnParent($entity, $name, $parentUuid);
+      return $this->resolveNamedOnParent($host, $name, $parentUuid);
     }
 
-    return $this->resolveFieldOnEntity($entity, $name, $entity);
+    $fields = $host->fields();
+    return $fields === NULL ? NULL : $this->resolveFieldOnEntity($host, $name, $fields);
   }
 
   /**
    * Resolves a named element on a parent (field on block, or region).
    *
-   * @param \Drupal\Core\Entity\FieldableEntityInterface $entity
-   *   The root entity.
+   * @param \Drupal\daedalus_blueprint\Host\HostInterface $host
+   *   The host.
    * @param string $name
    *   The field name or region name.
    * @param string $parentUuid
@@ -133,28 +134,28 @@ class BlueprintElementResolver implements BlueprintElementResolverInterface {
    * @return \Drupal\daedalus_blueprint\ResolvedElement|null
    *   The resolved element, or NULL if not found.
    */
-  protected function resolveNamedOnParent(FieldableEntityInterface $entity, string $name, string $parentUuid): ?ResolvedElement {
-    $parentContext = $this->elementLocator->locate($entity, $parentUuid);
+  protected function resolveNamedOnParent(HostInterface $host, string $name, string $parentUuid): ?ResolvedElement {
+    $parentContext = $this->elementLocator->locate($host, $parentUuid);
     if ($parentContext === NULL) {
       return NULL;
     }
 
     // Region on a section.
     if ($parentContext->isSection()) {
-      return $this->buildRegionElement($entity, $name, $parentContext);
+      return $this->buildRegionElement($host, $name, $parentContext);
     }
 
     // Field on an inline block.
     if ($parentContext->isLbComponent()) {
       $blockContent = $this->daedalusLayoutAdapter->extractBlockContent($parentContext->target);
       if ($blockContent instanceof FieldableEntityInterface) {
-        return $this->resolveFieldOnEntity($entity, $name, $blockContent, $parentContext);
+        return $this->resolveFieldOnEntity($host, $name, $blockContent, $parentContext);
       }
     }
 
     // Field on a paragraph.
     if ($parentContext->isParagraph() && $parentContext->target instanceof FieldableEntityInterface) {
-      return $this->resolveFieldOnEntity($entity, $name, $parentContext->target, $parentContext);
+      return $this->resolveFieldOnEntity($host, $name, $parentContext->target, $parentContext);
     }
 
     return NULL;
@@ -163,8 +164,8 @@ class BlueprintElementResolver implements BlueprintElementResolverInterface {
   /**
    * Resolves a field on an entity.
    *
-   * @param \Drupal\Core\Entity\FieldableEntityInterface $rootEntity
-   *   The root entity (for context resolution).
+   * @param \Drupal\daedalus_blueprint\Host\HostInterface $host
+   *   The host (for context resolution).
    * @param string $fieldName
    *   The field name.
    * @param \Drupal\Core\Entity\FieldableEntityInterface $fieldEntity
@@ -177,7 +178,7 @@ class BlueprintElementResolver implements BlueprintElementResolverInterface {
    *   The resolved element, or NULL if the field doesn't exist.
    */
   protected function resolveFieldOnEntity(
-    FieldableEntityInterface $rootEntity,
+    HostInterface $host,
     string $fieldName,
     FieldableEntityInterface $fieldEntity,
     ?ElementContext $parentContext = NULL,
@@ -200,8 +201,8 @@ class BlueprintElementResolver implements BlueprintElementResolverInterface {
     // Merge guidance: YAML field_type override wins over handler guidance.
     $handlerGuidance = $info['guidance'] ?? NULL;
     $yamlGuidance = $this->contextResolver->getFieldTypeGuidance(
-      $rootEntity->getEntityTypeId(),
-      $rootEntity->bundle(),
+      $host->entityTypeId(),
+      $host->bundle(),
       $definition->getType(),
     );
     $guidance = $yamlGuidance ?? $handlerGuidance;
@@ -219,8 +220,8 @@ class BlueprintElementResolver implements BlueprintElementResolverInterface {
       elementType: 'field',
       typeId: $definition->getType(),
       label: (string) $info['label'],
-      entityType: $rootEntity->getEntityTypeId(),
-      entityId: $rootEntity->id(),
+      entityType: $host->entityTypeId(),
+      entityId: $host->id(),
       fieldName: $fieldName,
       parentUuid: $parentUuid,
       parentLabel: $parentLabel,
@@ -236,15 +237,15 @@ class BlueprintElementResolver implements BlueprintElementResolverInterface {
    * Handles any SectionComponent: inline blocks, custom block plugins,
    * views blocks, menu blocks, etc.
    *
-   * @param \Drupal\Core\Entity\FieldableEntityInterface $entity
-   *   The root entity.
+   * @param \Drupal\daedalus_blueprint\Host\HostInterface $host
+   *   The host.
    * @param \Drupal\daedalus_blueprint\ElementContext $context
    *   The component context.
    *
    * @return \Drupal\daedalus_blueprint\ResolvedElement
    *   The resolved element.
    */
-  protected function buildBlockElement(FieldableEntityInterface $entity, ElementContext $context): ResolvedElement {
+  protected function buildBlockElement(HostInterface $host, ElementContext $context): ResolvedElement {
     $component = $context->target;
     $uuid = $component->getUuid();
     $config = $component->get('configuration');
@@ -254,15 +255,15 @@ class BlueprintElementResolver implements BlueprintElementResolverInterface {
     $typeId = $blockType ?? $pluginId;
     $label = $config['label'] ?? $typeId;
 
-    $data = $this->serializer->serializeElement($entity, $uuid);
+    $data = $this->serializer->serializeElement($host, $uuid);
 
     // Only inline blocks have block_type context YAML.
     $guidance = NULL;
     $defaults = NULL;
     if ($blockType !== NULL) {
       $blockTypeContext = $this->contextResolver->getBlockTypeContext(
-        $entity->getEntityTypeId(),
-        $entity->bundle(),
+        $host->entityTypeId(),
+        $host->bundle(),
         $blockType,
       );
       $guidance = $blockTypeContext['guidance'] ?? NULL;
@@ -272,7 +273,7 @@ class BlueprintElementResolver implements BlueprintElementResolverInterface {
     $parentUuid = NULL;
     $parentLabel = NULL;
     $parentTypeId = NULL;
-    if ($context->parentEntity !== $entity) {
+    if ($context->parentEntity !== NULL && $context->parentEntity !== $host->fields()) {
       $parentUuid = $context->parentEntity->uuid();
       $parentLabel = $context->parentEntity->label();
       $parentTypeId = $context->parentEntity->bundle();
@@ -282,8 +283,8 @@ class BlueprintElementResolver implements BlueprintElementResolverInterface {
       elementType: 'block',
       typeId: $typeId,
       label: $label,
-      entityType: $entity->getEntityTypeId(),
-      entityId: $entity->id(),
+      entityType: $host->entityTypeId(),
+      entityId: $host->id(),
       uuid: $uuid,
       parentUuid: $parentUuid,
       parentLabel: $parentLabel,
@@ -297,30 +298,30 @@ class BlueprintElementResolver implements BlueprintElementResolverInterface {
   /**
    * Builds a ResolvedElement for a paragraph.
    *
-   * @param \Drupal\Core\Entity\FieldableEntityInterface $entity
-   *   The root entity.
+   * @param \Drupal\daedalus_blueprint\Host\HostInterface $host
+   *   The host.
    * @param \Drupal\daedalus_blueprint\ElementContext $context
    *   The component context.
    *
    * @return \Drupal\daedalus_blueprint\ResolvedElement
    *   The resolved element.
    */
-  protected function buildParagraphElement(FieldableEntityInterface $entity, ElementContext $context): ResolvedElement {
+  protected function buildParagraphElement(HostInterface $host, ElementContext $context): ResolvedElement {
     $paragraph = $context->target;
     $uuid = $paragraph->uuid();
 
-    $data = $this->serializer->serializeElement($entity, $uuid);
+    $data = $this->serializer->serializeElement($host, $uuid);
 
     return new ResolvedElement(
       elementType: 'paragraph',
       typeId: $paragraph->bundle(),
       label: $paragraph->label() ?: $paragraph->bundle(),
-      entityType: $entity->getEntityTypeId(),
-      entityId: $entity->id(),
+      entityType: $host->entityTypeId(),
+      entityId: $host->id(),
       uuid: $uuid,
-      parentUuid: $context->parentEntity->uuid(),
-      parentLabel: $context->parentEntity->label(),
-      parentTypeId: $context->parentEntity->bundle(),
+      parentUuid: $context->parentEntity?->uuid(),
+      parentLabel: $context->parentEntity?->label(),
+      parentTypeId: $context->parentEntity?->bundle(),
       data: $data,
     );
   }
@@ -328,27 +329,27 @@ class BlueprintElementResolver implements BlueprintElementResolverInterface {
   /**
    * Builds a ResolvedElement for a Layout Builder section.
    *
-   * @param \Drupal\Core\Entity\FieldableEntityInterface $entity
-   *   The root entity.
+   * @param \Drupal\daedalus_blueprint\Host\HostInterface $host
+   *   The host.
    * @param \Drupal\daedalus_blueprint\ElementContext $context
    *   The section context.
    *
    * @return \Drupal\daedalus_blueprint\ResolvedElement
    *   The resolved element.
    */
-  protected function buildSectionElement(FieldableEntityInterface $entity, ElementContext $context): ResolvedElement {
+  protected function buildSectionElement(HostInterface $host, ElementContext $context): ResolvedElement {
     /** @var \Drupal\layout_builder\Section $section */
     $section = $context->target;
     $layoutId = $section->getLayoutId();
     $uuid = $this->daedalusLayoutAdapter->getSectionUuid($section);
 
     $layoutContext = $this->contextResolver->getLayoutContext(
-      $entity->getEntityTypeId(),
-      $entity->bundle(),
+      $host->entityTypeId(),
+      $host->bundle(),
       $layoutId,
     );
 
-    $data = $this->layoutSerializer->serializeSection($section, [], summarize_blocks: TRUE);
+    $data = $uuid === NULL ? NULL : $this->serializer->serializeElement($host, $uuid);
 
     // The user-facing name lives in layout_settings.label (uniform at every
     // depth); the layout id is the type. Nested and top-level sections
@@ -359,8 +360,8 @@ class BlueprintElementResolver implements BlueprintElementResolverInterface {
       elementType: 'section',
       typeId: $layoutId,
       label: is_string($label) && $label !== '' ? $label : $layoutId,
-      entityType: $entity->getEntityTypeId(),
-      entityId: $entity->id(),
+      entityType: $host->entityTypeId(),
+      entityId: $host->id(),
       uuid: $uuid,
       guidance: $layoutContext['guidance'] ?? NULL,
       defaults: $layoutContext['defaults'] ?? NULL,
@@ -371,8 +372,12 @@ class BlueprintElementResolver implements BlueprintElementResolverInterface {
   /**
    * Builds a ResolvedElement for a region within a section.
    *
-   * @param \Drupal\Core\Entity\FieldableEntityInterface $entity
-   *   The root entity.
+   * The region's data is its region node as the container's element read
+   * carries it ({kind: 'region', region, children}); a container layout
+   * has no region nodes, so no region of it resolves.
+   *
+   * @param \Drupal\daedalus_blueprint\Host\HostInterface $host
+   *   The host.
    * @param string $regionName
    *   The region name.
    * @param \Drupal\daedalus_blueprint\ElementContext $sectionContext
@@ -381,51 +386,35 @@ class BlueprintElementResolver implements BlueprintElementResolverInterface {
    * @return \Drupal\daedalus_blueprint\ResolvedElement|null
    *   The resolved element, or NULL if the region doesn't exist.
    */
-  protected function buildRegionElement(FieldableEntityInterface $entity, string $regionName, ElementContext $sectionContext): ?ResolvedElement {
+  protected function buildRegionElement(HostInterface $host, string $regionName, ElementContext $sectionContext): ?ResolvedElement {
     /** @var \Drupal\layout_builder\Section $section */
     $section = $sectionContext->target;
     $layoutId = $section->getLayoutId();
-    $regionNames = $section->getLayout()->getPluginDefinition()->getRegionNames();
+    $sectionUuid = $this->daedalusLayoutAdapter->getSectionUuid($section);
+    $container = $sectionUuid === NULL ? NULL : $this->serializer->serializeElement($host, $sectionUuid);
 
-    if (!in_array($regionName, $regionNames, TRUE)) {
+    $region = NULL;
+    foreach ($container['children'] ?? [] as $child) {
+      if (is_array($child) && ($child['kind'] ?? NULL) === 'region' && ($child['region'] ?? NULL) === $regionName) {
+        $region = $child;
+        break;
+      }
+    }
+    if ($region === NULL) {
       return NULL;
     }
-
-    $elements = [];
-    foreach ($section->getComponentsByRegion($regionName) as $component) {
-      // A nested section presents as a section, never as a block.
-      $embedded = $this->daedalusLayoutAdapter->embeddedSection($component);
-      if ($embedded !== NULL) {
-        $embeddedLabel = $embedded->getLayoutSettings()['label'] ?? '';
-        $elements[] = [
-          'uuid' => $component->getUuid(),
-          'layout_id' => $embedded->getLayoutId(),
-          'label' => is_string($embeddedLabel) && $embeddedLabel !== '' ? $embeddedLabel : $embedded->getLayoutId(),
-        ];
-        continue;
-      }
-      $blockType = $this->daedalusLayoutAdapter->getInlineBlockType($component);
-      $config = $component->get('configuration');
-      $elements[] = [
-        'uuid' => $component->getUuid(),
-        'block_type' => $blockType,
-        'label' => $config['label'] ?? $blockType,
-      ];
-    }
-
-    $sectionUuid = $this->daedalusLayoutAdapter->getSectionUuid($section);
 
     return new ResolvedElement(
       elementType: 'region',
       typeId: $layoutId,
       label: $regionName,
-      entityType: $entity->getEntityTypeId(),
-      entityId: $entity->id(),
+      entityType: $host->entityTypeId(),
+      entityId: $host->id(),
       regionName: $regionName,
       parentUuid: $sectionUuid,
       parentLabel: $layoutId,
       parentTypeId: $layoutId,
-      data: ['elements' => $elements],
+      data: $region,
     );
   }
 

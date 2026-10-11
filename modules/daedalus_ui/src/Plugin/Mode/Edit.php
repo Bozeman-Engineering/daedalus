@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Drupal\daedalus_ui\Plugin\Mode;
 
-use Drupal\Core\Entity\EntityInterface;
 use Drupal\Core\Render\Element;
 use Drupal\Core\Url;
 use Drupal\daedalus_ui\EditSessionScope;
@@ -42,11 +41,6 @@ final class Edit extends ModePluginBase {
 
   use StringTranslationTrait;
   use ButtonBuilderTrait;
-
-  /**
-   * The entity being edited.
-   */
-  public EntityInterface $entity;
 
   public function __construct(
     ContainerInterface $container,
@@ -87,8 +81,8 @@ final class Edit extends ModePluginBase {
    * {@inheritdoc}
    */
   public function applies(): bool {
-    $entity = $this->ui->deriveEntityFromRoute();
-    $event = $this->eventDispatcher->dispatch(new ShouldNotEditModeEvent($entity), ShouldNotEditModeEvent::class);
+    $host = $this->ui->deriveHostFromRoute();
+    $event = $this->eventDispatcher->dispatch(new ShouldNotEditModeEvent($host), ShouldNotEditModeEvent::class);
     return !$event->shouldNotEdit();
   }
 
@@ -133,12 +127,22 @@ final class Edit extends ModePluginBase {
    *   The page_top render array, the attachment target.
    */
   protected function attachInitialMode(array &$page_top): void {
-    $entity = $this->ui->deriveEntityFromRoute();
-    $bundle_entity_type = $entity?->getEntityType()->getBundleEntityType();
+    $host = $this->ui->deriveHostFromRoute();
+    if ($host === NULL) {
+      return;
+    }
+    // The bundle is the DOCUMENT's kind (a template host's target bundle,
+    // a content host's own), read through the host's display; a host with
+    // no display (the site frame) has no bundle to carry the setting.
+    $display = $host->display();
+    if ($display === NULL) {
+      return;
+    }
+    $bundle_entity_type = $this->entityTypeManager->getDefinition($display->getTargetEntityTypeId())->getBundleEntityType();
     if (!$bundle_entity_type) {
       return;
     }
-    $bundle = $this->entityTypeManager->getStorage($bundle_entity_type)->load($entity->bundle());
+    $bundle = $this->entityTypeManager->getStorage($bundle_entity_type)->load($display->getTargetBundle());
     $initial_mode = $bundle->getThirdPartySetting('daedalus_ui', 'initial_mode', 'none');
     if ($initial_mode !== 'none') {
       $page_top['#attached']['drupalSettings']['daedalusUi']['initialMode'] = $initial_mode;
@@ -173,12 +177,19 @@ final class Edit extends ModePluginBase {
         'daedalus_ui',
         'refresh'
       ),
-      'save' => $this->buildTopBarButton(
+      // Save is a split control: the button commits as it always has, and
+      // the caret beside it opens the document menu, the top bar's face of
+      // the verb registry (the root's verbs flagged `document`, see
+      // tool_manager/top-bar.js). The bar names no gesture of its own:
+      // whole-page gestures register as root verbs and show up here.
+      'save' => $this->buildSplitButton(
         'daedalus-ui-save',
         $this->t('Save'),
         $this->t('Commit the tempstore changes'),
         'daedalus_ui',
-        'save'
+        'save',
+        'daedalus-ui-save-menu',
+        $this->t('More save actions'),
       ),
       'discard-changes' => $this->buildTopBarButton(
         'daedalus-ui-discard-changes',
@@ -194,7 +205,7 @@ final class Edit extends ModePluginBase {
     // + workspace) every wire of this session pairs on (the materials
     // relay, the preview ping, the stylish pop-out leader, the pop-out
     // keyboard relay) and every pop-out opener forwards as ?scope. It needs
-    // a main entity; without one there is no session to pair with, and no
+    // a route host; without one there is no session to pair with, and no
     // canvas to pose: the canvas state vector spine (width / scheme /
     // motion) rides the same gate. Headless: the posing UI is the
     // daedalus_stylish inspector's chip row, driving the CanvasVector
@@ -204,8 +215,8 @@ final class Edit extends ModePluginBase {
     // chip row's width menu (the edited page's path is appended by the
     // opener at click time: the same page can be reached at several URLs;
     // the click knows the real one).
-    $entity = $this->ui->deriveEntityFromRoute();
-    $scope = $entity !== NULL ? $this->editSessionScope->derive($entity) : NULL;
+    $host = $this->ui->deriveHostFromRoute();
+    $scope = $host !== NULL ? $this->editSessionScope->derive($host->entity()) : NULL;
     if ($scope !== NULL) {
       $page_top['#attached']['library'][] = 'daedalus_ui/canvas_vector';
       $page_top['#attached']['drupalSettings']['daedalusUi']['editSession'] = [

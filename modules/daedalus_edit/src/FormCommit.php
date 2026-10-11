@@ -7,7 +7,7 @@ namespace Drupal\daedalus_edit;
 use Drupal\Component\Serialization\Json;
 use Drupal\Core\Ajax\AjaxResponse;
 use Drupal\Core\Ajax\ReplaceCommand;
-use Drupal\Core\Entity\FieldableEntityInterface;
+use Drupal\daedalus_blueprint\Host\HostInterface;
 use Drupal\Core\Field\FieldItemListInterface;
 use Drupal\Core\Form\FormStateInterface;
 use Drupal\daedalus_blueprint\BlueprintOperationsInterface;
@@ -87,8 +87,8 @@ final class FormCommit {
   /**
    * Commits properties of one subject through the spine and stages them.
    *
-   * @param \Drupal\Core\Entity\FieldableEntityInterface $root
-   *   The subject's root entity (the page); only its type and id are used,
+   * @param \Drupal\daedalus_blueprint\Host\HostInterface $root
+   *   The subject's root host (the page); only its type and id are used,
    *   the batch runs on the storage handler's working copy.
    * @param string $element_uuid
    *   The spine element the properties belong to: the root's own uuid for
@@ -113,10 +113,10 @@ final class FormCommit {
    * @return \Drupal\daedalus_edit\FormCommitOutcome
    *   The outcome, persisted on success.
    */
-  public function commit(FieldableEntityInterface $root, string $element_uuid, array $properties, ?string $langcode, string|\Stringable $label, bool $changed = TRUE): FormCommitOutcome {
+  public function commit(HostInterface $root, string $element_uuid, array $properties, ?string $langcode, string|\Stringable $label, bool $changed = TRUE): FormCommitOutcome {
     $working = $this->stagedRoot($root);
     if ($working === NULL) {
-      throw new \RuntimeException(sprintf('Daedalus Edit: no working copy for %s:%s to commit to.', $root->getEntityTypeId(), $root->id()));
+      throw new \RuntimeException(sprintf('Daedalus Edit: no working copy for %s:%s to commit to.', $root->entityTypeId(), $root->id()));
     }
 
     $result = $this->operations->batchOperations($working, [
@@ -134,7 +134,7 @@ final class FormCommit {
       // result supplies the targets that drive undo's re-render subtree.
       $this->historyRecorder->annotate((string) $label, $result->getTargets());
       $persisted = $this->storageHandler->persist(
-        $result->getEntity(),
+        $result->getHost(),
         element_uuids: $result->getElementUuids(),
       );
     }
@@ -143,20 +143,20 @@ final class FormCommit {
   }
 
   /**
-   * The root's working copy: the staged entity a commit runs on.
+   * The root's working copy: the staged host a commit runs on.
    *
    * The form builds on its own copy of the entity (a clone); the working
    * copy is what the spine mutates and what a submit's value is compared
    * against to tell a change from a widget round that changed nothing.
    *
-   * @param \Drupal\Core\Entity\FieldableEntityInterface $root
-   *   The subject's root entity; only its type and id are used.
+   * @param \Drupal\daedalus_blueprint\Host\HostInterface $root
+   *   The subject's root host; only its type and id are used.
    *
-   * @return \Drupal\Core\Entity\FieldableEntityInterface|null
-   *   The working copy, or NULL when the root cannot be loaded.
+   * @return \Drupal\daedalus_blueprint\Host\HostInterface|null
+   *   The working copy's host, or NULL when the root cannot be loaded.
    */
-  public function stagedRoot(FieldableEntityInterface $root): ?FieldableEntityInterface {
-    return $this->storageHandler->load($root->getEntityTypeId(), $root->id());
+  public function stagedRoot(HostInterface $root): ?HostInterface {
+    return $this->storageHandler->load($root->entityTypeId(), $root->id());
   }
 
   /**
@@ -242,7 +242,8 @@ final class FormCommit {
       $extra['history'] = $this->historyManager->metadata($outcome->root);
     }
 
-    $json = $this->responseBuilder->build($request, $outcome->root, $outcome->result, $outcome->langcode, $extra, $view_mode);
+    // The form edits the canvas root's page, so the root is the canvas.
+    $json = $this->responseBuilder->build($request, $outcome->root->entity(), $outcome->result, $outcome->langcode, $extra, $view_mode, $outcome->root);
     $payload = Json::decode($json->getContent());
 
     $response = new AjaxResponse();

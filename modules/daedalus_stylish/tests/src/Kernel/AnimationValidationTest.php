@@ -82,12 +82,19 @@ class AnimationValidationTest extends KernelTestBase {
     $this->installEntitySchema('daedalus_swatch');
     $this->installEntitySchema('daedalus_variant');
     $this->installEntitySchema('daedalus_animation');
+    $this->installEntitySchema('daedalus_font');
     $this->installConfig(['daedalus_stylish']);
     // Activating a design system syncs every enabled module's shipped
     // definitions (ShippedSync::onDesignSystemActivated()): the importers
     // mirror motion-* and --swatch-* references into the usage tables and
     // switch to an administrative account, so the fixture carries both.
-    $this->installSchema('daedalus_stylish', ['daedalus_variant_usage', 'daedalus_swatch_usage', 'daedalus_animation_usage']);
+    $this->installSchema('daedalus_stylish', [
+      'daedalus_variant_usage',
+      'daedalus_swatch_usage',
+      'daedalus_animation_usage',
+      'daedalus_token_usage',
+      'daedalus_font_usage',
+    ]);
     $this->setUpCurrentUser([], [], TRUE);
     $this->container->get('state')->set('daedalus_stylish_control_test.site', [
       'token_scales' => [
@@ -109,7 +116,7 @@ class AnimationValidationTest extends KernelTestBase {
     $animation->setSteps(['from' => ['opacity' => '0'], 'to' => ['opacity' => '1']]);
     $animation->save();
     $skin = DaedalusStylishSkin::create(['label' => 'Aurora']);
-    $skin->setTokens(['color' => ['accent' => '#1a1a2e']])->save();
+    $skin->setPackageTokens(['color' => ['accent' => '#1a1a2e']])->save();
     $this->activateSkin($skin);
     $swatch = DaedalusStylishSwatch::create(['label' => 'Lime green', 'kind' => 'color']);
     $swatch->setSwatchValue('#4dff8c');

@@ -22,7 +22,7 @@ use Drupal\daedalus_blueprint\Materials\VocabularyRosterInterface;
  * attributes and bodies, which condition names map to which CSS wrappers,
  * which parts and tags a relative selector's compounds may land on under
  * each owner, which instance namespaces are declared, and the site's
- * MATERIALS roster (tokens, swatches, variants, stencils, animations). The
+ * MATERIALS roster (tokens, swatches, variants, blueprints, animations). The
  * printer and
  * parser are grammar; this is the site's vocabulary, and it is passed in
  * rather than read from config here so the spine stays styling-agnostic
@@ -111,7 +111,7 @@ use Drupal\daedalus_blueprint\Materials\VocabularyRosterInterface;
  * - $roster: the materials roster (MaterialsRosterBuilder::build() on a
  *   live site; a hand-built MaterialsRoster in tests). NULL is the empty
  *   roster: no material spells anywhere, so every var(), class, axis
- *   value and stencil name is refused.
+ *   value and blueprint name is refused.
  * - $birthDefaults: placement scope print ("layout:daedalus_stylish_container",
  *   "block_type:text") => [axis attribute => variant id], the variants
  *   the styling layer stamps on an op-created placement of that scope
@@ -121,6 +121,15 @@ use Drupal\daedalus_blueprint\Materials\VocabularyRosterInterface;
  * - $dressedTags: the base tags the active skin's defaults dress, in the
  *   skin's order (dressedTags()): the data behind "pick the tag, the
  *   skin sizes it".
+ * - $groups: the site's group vocabulary, group id => ['label' => ...,
+ *   'description' => ...] in declaration order (groups()): the filter
+ *   categories blueprints and block types are filed under on the surfaces
+ *   that offer them (the Add panel, the page chooser, the model's index),
+ *   a filter and nothing else. Declared in a family the spine cannot read
+ *   (daedalus_ui's `PROVIDER.page_builder*.yml`, under `site.groups`)
+ *   and contributed on the build event by the layer that parses it
+ *   (daedalus_layout's SiteGroups); UNGROUPED is the reserved bucket for
+ *   the things in no group and is never a declared id.
  */
 final class DialectCatalog {
 
@@ -128,14 +137,17 @@ final class DialectCatalog {
    * The dialect grammar version the catalog records.
    *
    * The model-facing serialization is versioned HERE, on the catalog:
-   * durable artifacts never store dialect text (stencils store the lean
+   * durable artifacts never store dialect text (blueprints store the lean
    * node tree, prompts regenerate from live config), so only this one
    * contract surface names the grammar's version. Tracks the dialect
    * spec; bump it when tags, attributes, value grammar, or the op
-   * envelope change meaning. 0.6: placement provenance (stencil="") and
-   * variant axes as attributes on every element's tag.
+   * envelope change meaning. 0.6: placement provenance (blueprint="") and
+   * variant axes as attributes on every element's tag. 0.7: the slot
+   * section (<pb-slot name="id">, a top-level container filling a slot of
+   * the document around it). 0.8: the linked placement (<pb-linked
+   * blueprint="id"/>, a blueprint shown by reference as one block).
    */
-  public const DIALECT_VERSION = '0.6';
+  public const DIALECT_VERSION = '0.8';
 
   /**
    * The attrs key a `set` op patches an element's body under.
@@ -150,12 +162,25 @@ final class DialectCatalog {
   /**
    * Attribute names no variant axis may take on any tag.
    *
-   * The global attributes (identity, wear, look, provenance), the two
-   * generic-form identity attributes (plugin, type), the stencil
+   * The global attributes (identity, wear, look, provenance),    * generic-form identity attributes (plugin, type), the blueprint
    * reference's name, and the set op's body slot; data-* is reserved as a
    * prefix (print-only annotations).
    */
-  public const RESERVED_ATTRS = ['id', 'class', 'style', 'stencil', 'plugin', 'type', 'name', self::BODY_ATTR];
+  public const RESERVED_ATTRS = ['id', 'class', 'style', 'blueprint', 'plugin', 'type', 'name', self::BODY_ATTR];
+
+  /**
+   * The reserved group bucket: the blueprints and block types in no group.
+   *
+   * The surfaces that file by group (the model's index, the Add panel)
+   * print it beside the declared groups; a declaration that names it as
+   * a group id is refused, by the contributor and by the build event.
+   */
+  public const UNGROUPED = 'ungrouped';
+
+  /**
+   * The shape of a group id: a machine name (a blueprint's `groups` spelling).
+   */
+  public const GROUP_ID_PATTERN = '/^[a-z0-9_]+$/';
 
   /**
    * Normalized wrapper prelude => condition name.
@@ -228,6 +253,7 @@ final class DialectCatalog {
     private readonly array $dressedTags = [],
     private readonly ?string $skin = NULL,
     private readonly array $facts = [],
+    private readonly array $groups = [],
   ) {
     foreach ($stylable as $kind => $vocabulary) {
       if (!$vocabulary instanceof VocabularyRosterInterface) {
@@ -268,9 +294,9 @@ final class DialectCatalog {
       $scope = (string) $record->scope;
       foreach ($record->spellings as $slot => $spelling) {
         if ($slot === MaterialRecord::SLOT_CLASS) {
-          // A stencil's owned look is wearable only inside that stencil's
-          // placements, so it is the stencil's to teach (the schema and
-          // the brief list it under the stencil), never the element's.
+          // A blueprint's owned look is wearable only inside that blueprint's
+          // placements, so it is the blueprint's to teach (the schema and
+          // the brief list it under the blueprint), never the element's.
           if ($record->ownedBy === NULL) {
             $this->classByScope[$scope][$spelling] = $record->id;
           }
@@ -358,7 +384,7 @@ final class DialectCatalog {
    * This catalog over the roster's offered view (MaterialsRoster::offered()).
    *
    * The AI is taught from here: every view a teaching surface reads (the
-   * axis values, the class rosters, the stencils, the named values) then
+   * axis values, the class rosters, the blueprints, the named values) then
    * answers for the materials their authors share with the AI, while the
    * catalog itself, built over the full roster, stays what the parser and
    * the validators judge against. The same declarations (axes, block
@@ -383,6 +409,7 @@ final class DialectCatalog {
         dressedTags: $this->dressedTags,
         skin: $this->skin,
         facts: $this->facts,
+        groups: $this->groups,
       );
     }
     return $this->offered;
@@ -530,6 +557,24 @@ final class DialectCatalog {
   }
 
   /**
+   * The site's group vocabulary, in declaration order.
+   *
+   * The filter categories blueprints and block types are filed under on
+   * the surfaces that offer them, contributed on the build event by the
+   * layer that parses the declaration (DialectCatalogBuildEvent::addGroups()).
+   * A surface ignores an id a thing carries that is not here (a shipped
+   * blueprint from a package whose groups this site lacks); UNGROUPED is
+   * the bucket for the things in no group and never a key of this map.
+   *
+   * @return array<string, array{label: string, description: string}>
+   *   Group id => its label and description ('' when none); [] when no
+   *   layer contributed any.
+   */
+  public function groups(): array {
+    return $this->groups;
+  }
+
+  /**
    * The [axis attr, attr value] a variant prints as, or NULL when none.
    */
   public function axisForVariant(string $variant): ?array {
@@ -578,8 +623,8 @@ final class DialectCatalog {
    *
    * The style-axis variants whose scope PLACES them on the element
    * (scopesFor(): the kind, then the container layout, the block type or
-   * the base plugin id), minus the looks a stencil owns (those belong to
-   * the stencil's placements and list under the stencil). A class outside
+   * the base plugin id), minus the looks a blueprint owns (those belong to
+   * the blueprint's placements and list under the blueprint). A class outside
    * the roster still resolves (styleVariants(), the spine judging scope);
    * the roster is what the element's teaching line and correctives name.
    *

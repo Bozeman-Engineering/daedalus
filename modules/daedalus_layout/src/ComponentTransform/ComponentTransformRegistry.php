@@ -7,7 +7,9 @@ use Drupal\layout_builder\Section;
 use Drupal\layout_builder\SectionComponent;
 use Drupal\layout_builder\SectionListInterface;
 use Drupal\Core\Entity\ContentEntityInterface;
+use Drupal\daedalus_blueprint\Host\HostResolver;
 use Drupal\daedalus_layout\Plugin\Block\SectionBlock;
+use Drupal\layout_builder\Entity\LayoutEntityDisplayInterface;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 
 /**
@@ -20,8 +22,10 @@ use Symfony\Component\DependencyInjection\ContainerInterface;
  *   shape, returning the section to keep (core sections cannot change
  *   layout id in place); the registry writes replacements back into the
  *   holding list or embedded container configuration.
- * - Host transforms (tag daedalus_layout.host_transform) run once per content host
- *   after its section walk, for host-level state (e.g. style maps).
+ * - Host transforms (tag daedalus_layout.host_transform) run once per host (a
+ *   content entity revision or translation, a Layout Builder enabled
+ *   display) after its section walk, for host-level state (e.g. style
+ *   maps), addressed through the host object the resolver answers.
  *
  * Tagged services are collected by DaedalusLayoutServiceProvider in tag priority
  * order (higher first) and injected here as service IDs. Transforms are
@@ -42,12 +46,16 @@ class ComponentTransformRegistry {
    *   Section transform service IDs in priority order.
    * @param string[] $hostTransformIds
    *   Host transform service IDs in priority order.
+   * @param \Drupal\daedalus_blueprint\Host\HostResolver|null $hostResolver
+   *   The host resolver, which answers the host object the host transforms
+   *   receive for a walked store.
    */
   public function __construct(
     protected ContainerInterface $container,
     protected array $transformIds = [],
     protected array $sectionTransformIds = [],
     protected array $hostTransformIds = [],
+    protected ?HostResolver $hostResolver = NULL,
   ) {}
 
   /**
@@ -250,6 +258,48 @@ class ComponentTransformRegistry {
         $changed = $this->transformSectionList($field, $translation) || $changed;
       }
     }
+    return $this->transformHost($host) || $changed;
+  }
+
+  /**
+   * Applies every transform to a Layout Builder enabled display's template.
+   *
+   * The display is both the section list its components are walked in
+   * (the live Section objects held in its third-party settings) and the
+   * store the host transforms receive, as the display host.
+   *
+   * @param \Drupal\layout_builder\Entity\LayoutEntityDisplayInterface $display
+   *   The display.
+   *
+   * @return bool
+   *   TRUE if anything was rewritten, so the display is dirty.
+   */
+  public function transformDisplay(LayoutEntityDisplayInterface $display): bool {
+    $changed = $this->transformSectionList($display, $display);
+    return $this->transformHost($display) || $changed;
+  }
+
+  /**
+   * Runs the host transforms over a walked store's host.
+   *
+   * @param \Drupal\Core\Entity\EntityInterface $entity
+   *   The store: a content entity revision or translation, or a display.
+   *
+   * @return bool
+   *   TRUE if a host transform changed the host.
+   */
+  protected function transformHost(EntityInterface $entity): bool {
+    if ($this->hostTransformIds === [] || $this->hostResolver === NULL || !$this->hostResolver->hosts($entity)) {
+      return FALSE;
+    }
+    $host = $this->hostResolver->fromEntity($entity);
+    // The spine rewrites what is STORED, and the presave safety net runs
+    // it on the entity being saved: a content host seeds an empty override
+    // from its template on the first read of either document door, so a
+    // sweep reading a never-edited page's style map would seed it here and
+    // the save in progress would persist a document nobody authored.
+    $host->declineSeed();
+    $changed = FALSE;
     foreach ($this->hostTransformIds as $transform_id) {
       /** @var \Drupal\daedalus_layout\ComponentTransform\HostTransformInterface $transform */
       $transform = $this->container->get($transform_id);

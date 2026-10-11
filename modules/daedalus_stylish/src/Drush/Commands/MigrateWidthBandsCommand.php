@@ -17,8 +17,8 @@ use Symfony\Component\DependencyInjection\Attribute\Autowire;
  *
  * The same sequence the width_bands_000N post_update hooks run, for
  * development environments and re-imported data sets: walk every host
- * style map through the transform spine, then fold variant entities, skin
- * tokens and defaults, and stored stencils. Every notable rewrite prints;
+ * style map through the transform spine, then fold variant entities and
+ * skin tokens and defaults. Every notable rewrite prints;
  * the post_update path logs the same lines to the daedalus_stylish channel instead.
  */
 #[AsCommand(
@@ -60,11 +60,6 @@ final class MigrateWidthBandsCommand extends Command {
 
     $output->writeln('Folding wide conditions on skins (tokens and defaults)...');
     foreach ($this->migration->migrateSkins() as $line) {
-      $output->writeln('  ' . $line);
-    }
-
-    $output->writeln('Folding wide conditions on stored stencils...');
-    foreach ($this->migration->migrateStencils() as $line) {
       $output->writeln('  ' . $line);
     }
 

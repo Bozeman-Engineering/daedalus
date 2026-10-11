@@ -23,6 +23,7 @@ import {
   valuesEqual,
   wearing,
 } from './value-space.js';
+import { tagWord } from './style-guide.js';
 
 /**
  * @file
@@ -38,7 +39,7 @@ import {
  * still the variant's).
  *
  * The defaults tier has two suppliers and one hue: the active skin's
- * defaults (data, the skin form is their doorway) over the declaration's
+ * defaults (data, the skin session is their doorway) over the declaration's
  * own defaults (code: a block type, block plugin, or layout shipping the
  * box facts its markup needs; one inert doorway). Both render lit in
  * the skin hue (the display rule: the shown value is the winner's); the
@@ -127,22 +128,49 @@ export const declarationLabel = (scope) => {
   const id = scope.slice(pos + 1);
   switch (scope.slice(0, pos)) {
     case 'kind':
-      return Drupal.t('@id kind', { '@id': id });
+      return Drupal.t('!id kind', { '!id': id });
     case 'block_type':
-      return Drupal.t('@id block type', { '@id': id });
+      return Drupal.t('!id block type', { '!id': id });
     case 'block_plugin':
-      return Drupal.t('@id block plugin', { '@id': id });
+      return Drupal.t('!id block plugin', { '!id': id });
     case 'layout':
-      return Drupal.t('@id layout', { '@id': id });
+      return Drupal.t('!id layout', { '!id': id });
     default:
       return null;
   }
 };
 
+/**
+ * A skin document's scope in words: the base tag's word for a base:{tag}
+ * scope (style-guide.js tagWord: the guide's tagLabels, "Heading 2"),
+ * else the declaring scope in words (declarationLabel, "text block
+ * type"), the scope itself when neither parses.
+ *
+ * The one name the skin session speaks for its document: the doorway's
+ * hint, the session header's label, the push bar's name and the leave
+ * prompt read here, so the document never has two names on one panel.
+ *
+ * @param {?string} scope
+ *   The declaring scope ("base:h2", "block_type:text").
+ * @param {?object} [guide]
+ *   The style guide payload, for the tag words.
+ *
+ * @return {string}
+ */
+export const skinScopeLabel = (scope, guide = null) => {
+  if (typeof scope !== 'string') {
+    return '';
+  }
+  if (scope.startsWith('base:')) {
+    return tagWord(guide, scope.slice('base:'.length));
+  }
+  return declarationLabel(scope) ?? scope;
+};
+
 const driveDoorway = (condition, conditions) => ({
   id: 'drive',
-  label: Drupal.t('Go to @condition', {
-    '@condition': conditionText(condition, conditions),
+  label: Drupal.t('Go to !condition', {
+    '!condition': conditionText(condition, conditions),
   }),
   hint: Drupal.t('drives the canvas'),
   condition,
@@ -155,9 +183,9 @@ const driveDoorway = (condition, conditions) => ({
 // root); null leaves the host's wear key as the anchor.
 const documentDoorway = (reference, label, condition, conditions, anchor = null) => ({
   id: 'document',
-  label: Drupal.t('Edit @label at @condition…', {
-    '@label': label,
-    '@condition': conditionText(condition, conditions),
+  label: Drupal.t('Edit !label at !condition…', {
+    '!label': label,
+    '!condition': conditionText(condition, conditions),
   }),
   hint: Drupal.t('opens the variant'),
   reference,
@@ -165,28 +193,42 @@ const documentDoorway = (reference, label, condition, conditions, anchor = null)
   anchor,
 });
 
-const skinDoorway = (url) =>
-  url
-    ? [
-        {
-          id: 'skin',
-          label: Drupal.t('Edit skin…'),
-          hint: Drupal.t('opens the skin form'),
-          url,
-        },
-      ]
-    : [];
+// The skin doorway: open the editing session on the active skin's
+// document at the delivering scope (code/layers.js skinDocument: the
+// scope's skin layer id is the document's reference; use-row-menu.js
+// hands it to the one openDocument the variant doorway takes), driving
+// the canvas to the delivering condition first, as the variant doorway
+// does. The scope is the layer's (a base:{tag} block, the family kind's,
+// the refinement's), so a value the kind block supplies edits the kind
+// block, never the refinement over it.
+const skinDoorway = (scope, condition, conditions, guide) => [
+  {
+    id: 'skin',
+    label: Drupal.t('Edit skin…'),
+    hint: Drupal.t("opens the skin's !scope default", {
+      '!scope': skinScopeLabel(scope, guide),
+    }),
+    scope,
+    condition,
+  },
+];
 
-// The declared tier's one doorway is inert: a declaration is code beside
-// its templates, nothing on the site edits it. It exists so the menu
-// still opens on a declared value (the menu primitive refuses an empty
-// list) and says why there is nothing to do.
-const declaredDoorway = () => ({
+// The declared tier's doorway: a declaration is code beside its
+// templates and nothing on the site edits it, so the doorway SHOWS it,
+// the Materials place's Law tab at the declaring scope with the
+// property's rows revealed (law.js, law-model.js). It rides the one
+// openDocument road the skin doorway rides, as a law document reference
+// (code/layers.js lawDocument: the declared layer id with the property
+// as its fragment; use-row-menu.js dispatches it, the Inspector's
+// openDocument routes it to the tab before any session logic).
+const declaredDoorway = (scope, property, declaration) => ({
   id: 'declared',
-  label: Drupal.t('Declared in code'),
-  hint: Drupal.t('edited beside the templates'),
-  disabled: true,
-  reason: Drupal.t('A declaration ships with its module; the site has no form for it.'),
+  label: Drupal.t('See the declaration…'),
+  hint: Drupal.t('opens the Law tab at the !declaration declaration', {
+    '!declaration': declaration,
+  }),
+  scope,
+  property,
 });
 
 /**
@@ -200,9 +242,10 @@ export const ancestorName = (layer) =>
   layer?.owner ?? Drupal.t('the parent element');
 
 // The ancestor's doorway: edit AT a rule (the owner key with the
-// selector), by making it the panel's styling target (write-address.js)
-// while the selection stays put: the rows keep reading this element and
-// their writes land on that rule. For a rule's own value the rule is
+// selector), by making it the panel's write address (the spine's
+// `address`, write-address.js) while the selection and the subject stay
+// put: the rows keep reading this element and their writes land on that
+// rule. For a rule's own value the rule is
 // the layer's position; for a value a rule's worn variant delivers it
 // is the CARRIER, the rule that wears the variant (where the wear bar
 // shows it), never the position the value lands at. The subject
@@ -210,13 +253,20 @@ export const ancestorName = (layer) =>
 // words, already built through Drupal.t (the switcher's address label,
 // or the owner with its selector), so it rides an unescaped
 // placeholder: the menu renders labels as text, and `@` would show a
-// `>` as its entity or double-escape an owner's name.
+// `>` as its entity or double-escape an owner's name. `preview` is the
+// pair the canvas paints while the entry is the menu's active item
+// (rowMenu hands it to onPreview): the rule's reach, seen before the
+// pick, the same preview the address chip's entries give.
 const ancestorDoorway = (rule, label) => ({
   id: 'ancestor',
   label: Drupal.t('Edit at !rule', { '!rule': label }),
   hint: Drupal.t('writes land on that rule; the selection stays'),
   key: rule.key,
   selector: rule.selector,
+  preview:
+    typeof rule.key === 'string' && typeof rule.selector === 'string'
+      ? { key: rule.key, selector: rule.selector }
+      : null,
 });
 
 // An own ancestor layer's doorway: the rule at the layer's position.
@@ -224,8 +274,8 @@ const ownRuleDoorway = (layer) => {
   const rule = ancestorRule(layer?.id ?? '') ?? { key: null, selector: null };
   return ancestorDoorway(
     rule,
-    Drupal.t('@owner (!selector)', {
-      '@owner': ancestorName(layer),
+    Drupal.t('!owner (!selector)', {
+      '!owner': ancestorName(layer),
       '!selector': rule.selector ?? '',
     }),
   );
@@ -235,13 +285,13 @@ const ownRuleDoorway = (layer) => {
 // sits ABOVE the address's editable layer (style-stack.js: the rule's
 // ancestor layer takes the editable mark while the selection stays), so
 // a value the element itself styles wins over anything the rule says,
-// and the way to edit it is to drop the target (re-select the element:
-// any selection write clears the target). `key` is the stack's own key,
-// the selected element.
+// and the way to edit it is to drop the address (address(null): the
+// subject stays, writes land at its own key again). `key` is the
+// stack's own key, the selected element.
 const elementDoorway = (key) => ({
   id: 'element',
   label: Drupal.t('Edit on the element'),
-  hint: Drupal.t('drops the target; writes land on the element'),
+  hint: Drupal.t('drops the address; writes land on the element'),
   key,
 });
 
@@ -250,7 +300,7 @@ const elementDoorway = (key) => ({
  * value's doorway story (the "not here" sentence, the family row's
  * split), in the words the delivering sentences use for the same
  * layer: a variant's label, a worn ancestor's variant, an own ancestor
- * rule as "@owner (!selector)", "the active skin", "the @declaration
+ * rule as "!owner (!selector)", "the active skin", "the !declaration
  * declaration", "this element".
  *
  * @param {object} layer
@@ -265,15 +315,15 @@ export const supplierName = (layer) => {
     case TIER_ANCESTOR:
       return ancestorVariant(layer.id) !== null
         ? (layer.label ?? ancestorVariant(layer.id))
-        : Drupal.t('@owner (!selector)', {
-            '@owner': ancestorName(layer),
+        : Drupal.t('!owner (!selector)', {
+            '!owner': ancestorName(layer),
             '!selector': ancestorRule(layer.id)?.selector ?? '',
           });
     case TIER_SKIN:
       return Drupal.t('the active skin');
     case TIER_DECLARED:
-      return Drupal.t('the @declaration declaration', {
-        '@declaration': declarationLabel(layer.scope ?? null) ?? Drupal.t('element'),
+      return Drupal.t('the !declaration declaration', {
+        '!declaration': declarationLabel(layer.scope ?? null) ?? Drupal.t('element'),
       });
     default:
       return Drupal.t('this element');
@@ -303,13 +353,13 @@ export const supplierName = (layer) => {
  * the posed compound; `delivers` whether a winner exists. The sentences
  * follow the same two facts:
  * - set here: the editable layer delivers at the pose with nothing
- *   beneath ("!value set here at @condition", "!value set here" at
+ *   beneath ("!value set here at !condition", "!value set here" at
  *   Base).
  * - inherited: another layer's or another condition's value shows:
  *   the editable layer's own block from another condition (the drive
  *   doorway), a worn variant beneath (open the variant there, drive when
  *   the condition differs), an ancestor's rule (the doorway selects the
- *   rule), the active skin's block (the skin form), a
+ *   rule), the active skin's block (the skin session), a
  *   declaration's block (the inert doorway), or a layer ABOVE the
  *   editable one: in a session the wearer's own entry or a higher
  *   reference, with the winner doorway to where that value lives; under
@@ -323,8 +373,8 @@ export const supplierName = (layer) => {
  *   winner doorway (a session) or the element doorway (a write address
  *   the element's own value beats).
  * - not here: nothing delivers at the pose but a layer authors the
- *   property at other conditions ("Set by @label at @condition, not
- *   here"; "Set at @condition, not here" for the editable layer's own).
+ *   property at other conditions ("Set by !label at !condition, not
+ *   here"; "Set at !condition, not here" for the editable layer's own).
  * - not set: no layer authors the property anywhere ("Not set").
  *
  * @param {{winner: ?object, beneath: Array<object>, own: ?object}} read
@@ -347,8 +397,6 @@ export const supplierName = (layer) => {
  *   component uuid → bundle, for the same words.
  * @param {object} [input.sectionLayouts]
  *   section uuid → layout id, for the same words.
- * @param {?string} [input.skinEditUrl]
- *   guide.skinEditUrl: the active skin's edit form, null when none.
  * @param {Function} [input.faceOf]
  *   value → its display face (the field's own ref→display read at the
  *   pose); the sentences and the roster speak faces, never var()
@@ -387,7 +435,6 @@ export const originOf = (
     guide = null,
     blockTypes = {},
     sectionLayouts = {},
-    skinEditUrl = null,
     faceOf = (value) => value,
     staged = false,
   },
@@ -395,9 +442,10 @@ export const originOf = (
   const editable = editableLayer(stack);
   const editableId = layerAt(stack, editable)?.id ?? ELEMENT_LAYER;
   // What made the layer editable: a session (the document layer, a
-  // reference's) or a write address (an ancestor rule's layer); the
-  // element's own layer otherwise.
-  const session = layerAt(stack, editable)?.tier === TIER_VARIANT;
+  // variant reference's or the skin's at a scope) or a write address (an
+  // ancestor rule's layer); the element's own layer otherwise.
+  const editableTier = layerAt(stack, editable)?.tier ?? null;
+  const session = editableTier === TIER_VARIANT || editableTier === TIER_SKIN;
   const { winner, beneath, own } = read;
   const alsoAt = propertyValues(deliveredEntry(stack), property, conditions)
     .filter((entry) => entry.condition !== winner?.condition)
@@ -411,11 +459,11 @@ export const originOf = (
   const declarationOf = (entry) =>
     declarationLabel(layerAt(stack, entry.layer)?.scope ?? null) ??
     Drupal.t('element');
-  // A sentence's "at @condition" tail: the delivering condition when it
+  // A sentence's "at !condition" tail: the delivering condition when it
   // differs from the pose, nothing when it is the pose.
   const at = (entry) =>
     entry.condition !== pose
-      ? { '@condition': conditionText(entry.condition, conditions) }
+      ? { '!condition': conditionText(entry.condition, conditions) }
       : null;
   // The identity axis of a layer (a read entry or a stack layer: both
   // carry id, tier and variant). The mark reads as a variant for an own
@@ -441,9 +489,9 @@ export const originOf = (
     hued(
       entry,
       pose !== 'default'
-        ? Drupal.t('!value set here at @condition', {
+        ? Drupal.t('!value set here at !condition', {
             '!value': faceOf(entry.value),
-            '@condition': conditionText(pose, conditions),
+            '!condition': conditionText(pose, conditions),
           })
         : Drupal.t('!value set here', { '!value': faceOf(entry.value) }),
       [],
@@ -460,14 +508,14 @@ export const originOf = (
       );
       if (named.length) {
         const args = {
-          '@condition': named
+          '!condition': named
             .map((condition) => conditionText(condition, conditions))
             .join(', '),
         };
         const sentence =
           index === editable
-            ? Drupal.t('Set at @condition, not here', args)
-            : Drupal.t('Set by !label at @condition, not here', {
+            ? Drupal.t('Set at !condition, not here', args)
+            : Drupal.t('Set by !label at !condition, not here', {
                 ...args,
                 '!label': supplierName(layer),
               });
@@ -535,7 +583,7 @@ export const originOf = (
     // higher reference beats it: the winner doorway navigates to where
     // that value is edited (the sheet's). Under a write address the
     // rule's ancestor layer is editable and the element's own block sits
-    // above it: the element doorway drops the target, since the element
+    // above it: the element doorway drops the address, since the element
     // is where that value is edited. Any other layer above an address's
     // (a nearer ancestor's rule, a variant the element wears) reads
     // through the tier switch below like every other delivering layer.
@@ -550,7 +598,7 @@ export const originOf = (
       }
       const tail = at(winner);
       const sentence = tail
-        ? Drupal.t('!value from this element at @condition', {
+        ? Drupal.t('!value from this element at !condition', {
             '!value': value,
             ...tail,
           })
@@ -565,7 +613,7 @@ export const originOf = (
       const doorway = {
         id: 'winner',
         label: label
-          ? Drupal.t('Edit @label…', { '@label': label })
+          ? Drupal.t('Edit !label…', { '!label': label })
           : Drupal.t('Go to element'),
         hint: label
           ? Drupal.t('opens the variant')
@@ -574,21 +622,21 @@ export const originOf = (
       };
       if (own || staged) {
         const sentence = label
-          ? Drupal.t('Overridden by @label on this page', { '@label': label })
+          ? Drupal.t('Overridden by !label on this page', { '!label': label })
           : Drupal.t('Overridden by this element on this page');
         return hued(winner, sentence, [doorway]);
       }
       const tail = at(winner);
       const sentence = label
         ? tail
-          ? Drupal.t('!value from @label at @condition', {
+          ? Drupal.t('!value from !label at !condition', {
               '!value': value,
-              '@label': label,
+              '!label': label,
               ...tail,
             })
-          : Drupal.t('!value from @label', { '!value': value, '@label': label })
+          : Drupal.t('!value from !label', { '!value': value, '!label': label })
         : tail
-          ? Drupal.t('!value from this element at @condition', {
+          ? Drupal.t('!value from this element at !condition', {
               '!value': value,
               ...tail,
             })
@@ -602,12 +650,12 @@ export const originOf = (
         case TIER_VARIANT: {
           const label = labelOf(winner);
           const sentence = tail
-            ? Drupal.t('!value from @label at @condition', {
+            ? Drupal.t('!value from !label at !condition', {
                 '!value': value,
-                '@label': label,
+                '!label': label,
                 ...tail,
               })
-            : Drupal.t('!value from @label', { '!value': value, '@label': label });
+            : Drupal.t('!value from !label', { '!value': value, '!label': label });
           return hued(winner, sentence, [
             documentDoorway(winner.variant, label, winner.condition, conditions),
             ...(tail ? [driveDoorway(winner.condition, conditions)] : []),
@@ -619,28 +667,28 @@ export const originOf = (
             // A variant the rule wears delivers: named as the variant,
             // at the rule in the switcher's words, or worn by the owner
             // at its root.
-            const args = { '!value': value, '@label': worn.label };
+            const args = { '!value': value, '!label': worn.label };
             const sentence =
               worn.rule !== null
                 ? tail
-                  ? Drupal.t('!value from @label at @rule, set at @condition', {
+                  ? Drupal.t('!value from !label at !rule, set at !condition', {
                       ...args,
-                      '@rule': worn.words,
+                      '!rule': worn.words,
                       ...tail,
                     })
-                  : Drupal.t('!value from @label at @rule', {
+                  : Drupal.t('!value from !label at !rule', {
                       ...args,
-                      '@rule': worn.words,
+                      '!rule': worn.words,
                     })
                 : tail
-                  ? Drupal.t('!value from @label worn by @owner, set at @condition', {
+                  ? Drupal.t('!value from !label worn by !owner, set at !condition', {
                       ...args,
-                      '@owner': worn.owner,
+                      '!owner': worn.owner,
                       ...tail,
                     })
-                  : Drupal.t('!value from @label worn by @owner', {
+                  : Drupal.t('!value from !label worn by !owner', {
                       ...args,
-                      '@owner': worn.owner,
+                      '!owner': worn.owner,
                     });
             return hued(
               winner,
@@ -659,15 +707,15 @@ export const originOf = (
           // `>` as its entity.
           const args = {
             '!value': value,
-            '@owner': ancestorName(layer),
+            '!owner': ancestorName(layer),
             '!selector': rule.selector,
           };
           const sentence = tail
             ? Drupal.t(
-                '!value inherited from @owner (!selector) at @condition',
+                '!value inherited from !owner (!selector) at !condition',
                 { ...args, ...tail },
               )
-            : Drupal.t('!value inherited from @owner (!selector)', args);
+            : Drupal.t('!value inherited from !owner (!selector)', args);
           return hued(winner, sentence, [
             ownRuleDoorway(layer),
             ...(tail ? [driveDoorway(winner.condition, conditions)] : []),
@@ -675,32 +723,47 @@ export const originOf = (
         }
         case TIER_SKIN: {
           const sentence = tail
-            ? Drupal.t('!value from the active skin at @condition', {
+            ? Drupal.t('!value from the active skin at !condition', {
                 '!value': value,
                 ...tail,
               })
             : Drupal.t('!value from the active skin', { '!value': value });
-          return hued(winner, sentence, skinDoorway(skinEditUrl));
+          return hued(
+            winner,
+            sentence,
+            skinDoorway(
+              layerAt(stack, winner.layer)?.scope ?? null,
+              winner.condition,
+              conditions,
+              guide,
+            ),
+          );
         }
         case TIER_DECLARED: {
           const declaration = declarationOf(winner);
           const sentence = tail
-            ? Drupal.t('!value from the @declaration declaration at @condition', {
+            ? Drupal.t('!value from the !declaration declaration at !condition', {
                 '!value': value,
-                '@declaration': declaration,
+                '!declaration': declaration,
                 ...tail,
               })
-            : Drupal.t('!value from the @declaration declaration', {
+            : Drupal.t('!value from the !declaration declaration', {
                 '!value': value,
-                '@declaration': declaration,
+                '!declaration': declaration,
               });
-          return hued(winner, sentence, [declaredDoorway()]);
+          return hued(winner, sentence, [
+            declaredDoorway(
+              layerAt(stack, winner.layer)?.scope ?? null,
+              property,
+              declaration,
+            ),
+          ]);
         }
         default: {
           // An element-tier layer beneath the editable one (no layer
           // editable at all): the element's value, named as such.
           const sentence = tail
-            ? Drupal.t('!value from this element at @condition', {
+            ? Drupal.t('!value from this element at !condition', {
                 '!value': value,
                 ...tail,
               })
@@ -715,9 +778,9 @@ export const originOf = (
     }
     // The editable layer delivers.
     if (winner.condition !== pose) {
-      const sentence = Drupal.t('!value from @condition', {
+      const sentence = Drupal.t('!value from !condition', {
         '!value': value,
-        '@condition': conditionText(winner.condition, conditions),
+        '!condition': conditionText(winner.condition, conditions),
       });
       return hued(winner, sentence, [
         driveDoorway(winner.condition, conditions),
@@ -732,17 +795,17 @@ export const originOf = (
     switch (beaten.tier) {
       case TIER_VARIANT: {
         const label = labelOf(beaten);
-        const sentence = Drupal.t("Your !value overrides @label's !beneath", {
+        const sentence = Drupal.t("Your !value overrides !label's !beneath", {
           '!value': value,
-          '@label': label,
+          '!label': label,
           '!beneath': beneathValue,
         });
         return hued(winner, sentence, [
           {
             id: 'unset',
             label: Drupal.t('Unset'),
-            hint: Drupal.t("@label's !beneath returns", {
-              '@label': label,
+            hint: Drupal.t("!label's !beneath returns", {
+              '!label': label,
               '!beneath': beneathValue,
             }),
           },
@@ -754,35 +817,35 @@ export const originOf = (
         if (worn !== null) {
           const args = {
             '!value': value,
-            '@label': worn.label,
+            '!label': worn.label,
             '!beneath': beneathValue,
           };
           const sentence =
             worn.rule !== null
               ? tail
                 ? Drupal.t(
-                    "Your !value overrides @label's !beneath at @rule, set at @condition",
-                    { ...args, '@rule': worn.words, ...tail },
+                    "Your !value overrides !label's !beneath at !rule, set at !condition",
+                    { ...args, '!rule': worn.words, ...tail },
                   )
-                : Drupal.t("Your !value overrides @label's !beneath at @rule", {
+                : Drupal.t("Your !value overrides !label's !beneath at !rule", {
                     ...args,
-                    '@rule': worn.words,
+                    '!rule': worn.words,
                   })
               : tail
                 ? Drupal.t(
-                    "Your !value overrides @label's !beneath worn by @owner, set at @condition",
-                    { ...args, '@owner': worn.owner, ...tail },
+                    "Your !value overrides !label's !beneath worn by !owner, set at !condition",
+                    { ...args, '!owner': worn.owner, ...tail },
                   )
-                : Drupal.t("Your !value overrides @label's !beneath worn by @owner", {
+                : Drupal.t("Your !value overrides !label's !beneath worn by !owner", {
                     ...args,
-                    '@owner': worn.owner,
+                    '!owner': worn.owner,
                   });
           return hued(winner, sentence, [
             {
               id: 'unset',
               label: Drupal.t('Unset'),
-              hint: Drupal.t("@label's !beneath returns", {
-                '@label': worn.label,
+              hint: Drupal.t("!label's !beneath returns", {
+                '!label': worn.label,
                 '!beneath': beneathValue,
               }),
             },
@@ -793,22 +856,22 @@ export const originOf = (
         const rule = ancestorRule(beaten.id) ?? { selector: '' };
         const args = {
           '!value': value,
-          '@owner': ancestorName(layer),
+          '!owner': ancestorName(layer),
           '!selector': rule.selector,
           '!beneath': beneathValue,
         };
         const sentence = tail
           ? Drupal.t(
-              "Your !value overrides @owner's !beneath (!selector) at @condition",
+              "Your !value overrides !owner's !beneath (!selector) at !condition",
               { ...args, ...tail },
             )
-          : Drupal.t("Your !value overrides @owner's !beneath (!selector)", args);
+          : Drupal.t("Your !value overrides !owner's !beneath (!selector)", args);
         return hued(winner, sentence, [
           {
             id: 'unset',
             label: Drupal.t('Unset'),
-            hint: Drupal.t("@owner's !beneath returns", {
-              '@owner': ancestorName(layer),
+            hint: Drupal.t("!owner's !beneath returns", {
+              '!owner': ancestorName(layer),
               '!beneath': beneathValue,
             }),
           },
@@ -818,7 +881,7 @@ export const originOf = (
       case TIER_SKIN: {
         const sentence = tail
           ? Drupal.t(
-              "Your !value overrides the active skin's !skin at @condition",
+              "Your !value overrides the active skin's !skin at !condition",
               { '!value': value, '!skin': beneathValue, ...tail },
             )
           : Drupal.t("Your !value overrides the active skin's !skin", {
@@ -831,26 +894,31 @@ export const originOf = (
             label: Drupal.t('Unset'),
             hint: Drupal.t("the skin's !skin returns", { '!skin': beneathValue }),
           },
-          ...skinDoorway(skinEditUrl),
+          ...skinDoorway(
+            layerAt(stack, beaten.layer)?.scope ?? null,
+            beaten.condition,
+            conditions,
+            guide,
+          ),
         ]);
       }
       case TIER_DECLARED: {
         const declaration = declarationOf(beaten);
         const sentence = tail
           ? Drupal.t(
-              "Your !value overrides the @declaration declaration's !declared at @condition",
+              "Your !value overrides the !declaration declaration's !declared at !condition",
               {
                 '!value': value,
-                '@declaration': declaration,
+                '!declaration': declaration,
                 '!declared': beneathValue,
                 ...tail,
               },
             )
           : Drupal.t(
-              "Your !value overrides the @declaration declaration's !declared",
+              "Your !value overrides the !declaration declaration's !declared",
               {
                 '!value': value,
-                '@declaration': declaration,
+                '!declaration': declaration,
                 '!declared': beneathValue,
               },
             );
@@ -858,8 +926,8 @@ export const originOf = (
           {
             id: 'unset',
             label: Drupal.t('Unset'),
-            hint: Drupal.t("the @declaration declaration's !declared returns", {
-              '@declaration': declaration,
+            hint: Drupal.t("the !declaration declaration's !declared returns", {
+              '!declaration': declaration,
               '!declared': beneathValue,
             }),
           },
@@ -906,13 +974,13 @@ export const originOf = (
  * The family row's sentence (the padding row's mark title and menu
  * header) over box-model.js sidesOrigin's facts, in the property rows'
  * vocabulary: one group reads as any row would ("!value set here at
- * @condition", "!value from @condition", "!value from !label at
- * @condition"; the value is the field's uniform face, or the sentence
+ * !condition", "!value from !condition", "!value from !label at
+ * !condition"; the value is the field's uniform face, or the sentence
  * opens on the story when the sides differ), a split names each group's
  * sides and story and points at the diagram ("Top, bottom set here at
  * Hover; left, right from Base. Open the diagram for each side"), no set
- * side reads "Set at @condition, not here" / "Set by !label at
- * @condition, not here" for the topmost author, or "Not set".
+ * side reads "Set at !condition, not here" / "Set by !label at
+ * !condition, not here" for the topmost author, or "Not set".
  *
  * @param {object} origin
  *   sidesOrigin()'s facts.
@@ -927,24 +995,24 @@ export const originOf = (
  * @return {string}
  */
 export const sidesSentence = (origin, { pose, conditions = {}, value = null }) => {
-  const posed = { '@condition': conditionText(pose, conditions) };
+  const posed = { '!condition': conditionText(pose, conditions) };
   // One group's story, lowercase: it follows a value or a side list.
   const story = (group) => {
     const tail =
       group.condition !== pose
-        ? { '@condition': conditionText(group.condition, conditions) }
+        ? { '!condition': conditionText(group.condition, conditions) }
         : null;
     if (group.state === 'authored') {
       if (group.atPose) {
         return pose !== 'default'
-          ? Drupal.t('set here at @condition', posed)
+          ? Drupal.t('set here at !condition', posed)
           : Drupal.t('set here');
       }
-      return Drupal.t('from @condition', tail);
+      return Drupal.t('from !condition', tail);
     }
     const label = { '!label': supplierName(group.supplier) };
     return tail
-      ? Drupal.t('from !label at @condition', { ...label, ...tail })
+      ? Drupal.t('from !label at !condition', { ...label, ...tail })
       : Drupal.t('from !label', label);
   };
   const capitalize = (text) => text.charAt(0).toUpperCase() + text.slice(1);
@@ -953,13 +1021,13 @@ export const sidesSentence = (origin, { pose, conditions = {}, value = null }) =
       return Drupal.t('Not set');
     }
     const named = {
-      '@condition': origin.named
+      '!condition': origin.named
         .map((condition) => conditionText(condition, conditions))
         .join(', '),
     };
     return origin.supplier.tier === ELEMENT_LAYER
-      ? Drupal.t('Set at @condition, not here', named)
-      : Drupal.t('Set by !label at @condition, not here', {
+      ? Drupal.t('Set at !condition, not here', named)
+      : Drupal.t('Set by !label at !condition, not here', {
           ...named,
           '!label': supplierName(origin.supplier),
         });
@@ -1106,7 +1174,7 @@ export const tokenItems = (
 
 /**
  * The row's right-click menu: the origin's doorways, the "Also set at"
- * group (with "Also set on @candidate" beside it when the address rule
+ * group (with "Also set on !candidate" beside it when the address rule
  * found a second authored value on another of the binding's boxes: an
  * inert line, since the way to that box is advanced mode), then the
  * token items, separated.
@@ -1122,6 +1190,10 @@ export const tokenItems = (
  *   padding row) and the tokens are the whole menu.
  * @param {Function} [input.onDoorway]
  *   (doorway) — the row dispatches by doorway.id.
+ * @param {Function} [input.onPreview]
+ *   (pair, active) — a doorway carrying a `preview` pair (the ancestor
+ *   doorway's rule) is the menu's active item (true) or stopped being
+ *   it (false); the row paints the pair's reach on the canvas.
  * @param {Function} [input.onCondition]
  *   (condition) — drive the canvas to an "Also set at" entry.
  *
@@ -1135,6 +1207,7 @@ export const rowMenu = ({
   tokens = [],
   face = '',
   onDoorway = null,
+  onPreview = null,
   onCondition = null,
 }) => {
   const groups = [];
@@ -1151,6 +1224,9 @@ export const rowMenu = ({
           label: doorway.label,
           hint: doorway.hint,
           checked: null,
+          ...(doorway.preview
+            ? { preview: (active) => onPreview?.(doorway.preview, active) }
+            : {}),
           run: () => onDoorway?.(doorway),
         },
   );
@@ -1167,8 +1243,8 @@ export const rowMenu = ({
             label: entry.label,
             hint: entry.value,
             checked: null,
-            title: Drupal.t('Drive the canvas to @condition', {
-              '@condition': entry.label,
+            title: Drupal.t('Drive the canvas to !condition', {
+              '!condition': entry.label,
             }),
             run: () => onCondition?.(entry.condition),
           })),
@@ -1177,15 +1253,15 @@ export const rowMenu = ({
     ...(alsoOn
       ? [
           {
-            label: Drupal.t('Also set on @candidate', {
-              '@candidate': alsoOn.label,
+            label: Drupal.t('Also set on !candidate', {
+              '!candidate': alsoOn.label,
             }),
             hint: alsoOn.value,
             checked: null,
             disabled: true,
             reason: Drupal.t(
-              'The @candidate is styled in Advanced or code mode.',
-              { '@candidate': alsoOn.label },
+              'The !candidate is styled in Advanced or code mode.',
+              { '!candidate': alsoOn.label },
             ),
           },
         ]

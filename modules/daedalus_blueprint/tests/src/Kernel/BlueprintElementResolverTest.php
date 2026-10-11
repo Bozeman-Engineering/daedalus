@@ -136,7 +136,7 @@ class BlueprintElementResolverTest extends BlueprintKernelTestBase {
     // (1) Resolve by a real field name on the root entity. The name-vs-UUID
     // dispatch must take the field branch, return a 'field' element with the
     // field type, label, and the serialized value.
-    $fieldElement = $this->resolver->resolve($entity, 'field_subtitle');
+    $fieldElement = $this->resolver->resolve($this->host($entity), 'field_subtitle');
     $this->assertInstanceOf(ResolvedElement::class, $fieldElement);
     $this->assertSame('field', $fieldElement->elementType);
     $this->assertSame('string', $fieldElement->typeId);
@@ -146,13 +146,13 @@ class BlueprintElementResolverTest extends BlueprintKernelTestBase {
 
     // (2) A field name that does not exist resolves to NULL, so the tool can
     // report "no such element" rather than fabricate one.
-    $this->assertNull($this->resolver->resolve($entity, 'field_nope'));
+    $this->assertNull($this->resolver->resolve($this->host($entity), 'field_nope'));
 
     // (3) Resolve by the component UUID. The UUID pattern routes to
     // resolveByUuid -> buildBlockElement, returning a 'block' element with the
     // inline block type, its admin label, and the serialized component data
     // (proving it threads through serializeElement).
-    $blockElement = $this->resolver->resolve($entity, $component_uuid);
+    $blockElement = $this->resolver->resolve($this->host($entity), $component_uuid);
     $this->assertInstanceOf(ResolvedElement::class, $blockElement);
     $this->assertSame('block', $blockElement->elementType);
     $this->assertSame('text_section', $blockElement->typeId);
@@ -166,7 +166,7 @@ class BlueprintElementResolverTest extends BlueprintKernelTestBase {
     // returns a 'section' element keyed by the layout id, and carries the
     // layout guidance from the fixture's scoped context YAML, proving the
     // YAML-over-handler/derived guidance merge reaches the resolved element.
-    $sectionElement = $this->resolver->resolve($entity, $section_uuid);
+    $sectionElement = $this->resolver->resolve($this->host($entity), $section_uuid);
     $this->assertInstanceOf(ResolvedElement::class, $sectionElement);
     $this->assertSame('section', $sectionElement->elementType);
     $this->assertSame('layout_onecol', $sectionElement->typeId);
@@ -176,20 +176,26 @@ class BlueprintElementResolverTest extends BlueprintKernelTestBase {
       $sectionElement->guidance,
     );
 
+    // The section's data is its container node as the element read
+    // answers it: its region node holding the block node.
+    $this->assertSame('container', $sectionElement->data['kind']);
+    $this->assertSame($component_uuid, $sectionElement->data['children'][0]['children'][0]['uuid']);
+
     // (5) Resolve a region by name with the section UUID as parent. This goes
     // through resolveByName -> resolveNamedOnParent -> buildRegionElement and
-    // lists the region's elements. An unknown region on the same section
-    // returns NULL.
-    $regionElement = $this->resolver->resolve($entity, 'content', $section_uuid);
+    // answers the container's region node. An unknown region on the same
+    // section returns NULL.
+    $regionElement = $this->resolver->resolve($this->host($entity), 'content', $section_uuid);
     $this->assertInstanceOf(ResolvedElement::class, $regionElement);
     $this->assertSame('region', $regionElement->elementType);
     $this->assertSame('content', $regionElement->regionName);
     $this->assertSame($section_uuid, $regionElement->parentUuid);
     $this->assertIsArray($regionElement->data);
-    $elementUuids = array_column($regionElement->data['elements'], 'uuid');
-    $this->assertContains($component_uuid, $elementUuids);
+    $this->assertSame('region', $regionElement->data['kind']);
+    $this->assertSame('content', $regionElement->data['region']);
+    $this->assertContains($component_uuid, array_column($regionElement->data['children'], 'uuid'));
 
-    $this->assertNull($this->resolver->resolve($entity, 'no_such_region', $section_uuid));
+    $this->assertNull($this->resolver->resolve($this->host($entity), 'no_such_region', $section_uuid));
   }
 
   /**
@@ -221,7 +227,7 @@ class BlueprintElementResolverTest extends BlueprintKernelTestBase {
       'field_description' => ['value' => 'Some text', 'format' => 'plain_text'],
     ]);
 
-    $element = $resolver->resolve($entity, 'field_description');
+    $element = $resolver->resolve($this->host($entity), 'field_description');
     $this->assertInstanceOf(ResolvedElement::class, $element);
     $this->assertSame('text_long', $element->typeId);
     $this->assertSame('OVERRIDE: write a single short paragraph.', $element->guidance);
@@ -256,7 +262,7 @@ class BlueprintElementResolverTest extends BlueprintKernelTestBase {
     ]);
     $entity = $this->entityTypeManager->getStorage('entity_test')->load($entity->id());
 
-    $element = $resolver->resolve($entity, $child->uuid());
+    $element = $resolver->resolve($this->host($entity), $child->uuid());
     $this->assertInstanceOf(ResolvedElement::class, $element);
     $this->assertSame('paragraph', $element->elementType);
     $this->assertSame('entity_test_rev', $element->typeId);

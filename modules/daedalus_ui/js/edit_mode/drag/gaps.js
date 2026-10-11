@@ -25,25 +25,24 @@
  * consecutive deltas), so horizontal flows get a vertical caret without
  * per-layout configuration.
  *
- * The page-elements tree is a second drop surface: its rows carry the same
- * selectable keys as canvas elements (data-tree-key), so a row resolves to
- * a location read straight off the tree structure with no gap geometry —
- * the precision path for exactly the nesting depths where canvas geometry
- * is hardest. One keyless row joins them: the markup view's shell row
- * whose part claims the root's sections (daedalus_layout's layout root, stamped
- * data-tree-owner and data-tree-claims by the tree). The section rows are
- * its rows, so it is the root flow's drop surface, resolving exactly as
- * the root row does: one inside target on the root entity. The claim
- * decides, never the row's label or selector.
+ * The page-elements tree is a second drop surface, resolved in
+ * tree-gaps.js: its drop unit is the gap LINE between two visible rows,
+ * the depth at a line that can mean several drops chosen by the cursor's
+ * x, so no gap geometry is read from the panel at all. resolveDropTarget
+ * dispatches a cursor over a tree row (a keyed row, a region row, or a
+ * shell row claiming slots) there. Tree targets carry none of the canvas
+ * gap's rect inputs, so liveCaret answers null for them and their panel
+ * face is drawn from the location alone (treeCaretForLocation), the same
+ * face every canvas drop also gets.
  */
 
-import { elementForKey } from '../selection/resolver';
 import {
   projectionIndex,
   projectionRoot,
 } from '../components/page-elements/projection-index';
 import { markupForKey, containerEmpty } from '../blueprint/markup-index';
 import { warnMissingEntityUi } from '../utilities/warn';
+import { resolveRowTarget } from './tree-gaps';
 
 /**
  * Parses a selectable key into segments, or null.
@@ -62,13 +61,35 @@ const isPlacement = (element) => {
 };
 
 /**
+ * The nearest container at or above an element that is the page's own, or
+ * null at the root flow.
+ *
+ * The main entity is the canvas's edge. The page renders INSIDE foreign
+ * documents' containers that wear selectable keys like its own: the site
+ * frame's section around the route's output (and its main slot door), a
+ * template's sections around a locked page. A container above the main
+ * entity is that outer document's flow, never the flow a page section
+ * sits in, so every container walk stops at the main entity: a container
+ * found above it answers null, the root flow, exactly as if the frame were
+ * not there. (A pointer outside the main entity never reaches these
+ * resolvers: resolveDropTarget answers null for it.)
+ */
+const containerAt = (element) => {
+  const container =
+    element?.closest('[data-selectable^="container:"]') ?? null;
+  return container && container.closest('[data-main-entity]')
+    ? container
+    : null;
+};
+
+/**
  * The nearest container ancestor of an element, or null at the root flow.
  *
  * Containers all the way down: a nested container is an ordinary child of
  * its parent container, which owns the nested flow.
  */
 const enclosingContainer = (element) =>
-  element?.parentElement?.closest('[data-selectable^="container:"]') ?? null;
+  containerAt(element?.parentElement ?? null);
 
 /**
  * The items of one flow, in document order: a container's direct children
@@ -119,6 +140,48 @@ const dropSurface = (container) => {
 const flowIsEmpty = (container, items) =>
   items.length === 0 ||
   (containerEmpty(container.getAttribute('data-selectable')) ?? false);
+
+/**
+ * The attribute a slot block's root wears on the editing canvas (stamped
+ * by daedalus_ui's LayoutBuilderBlockAttributes with the slot id): the
+ * door a document rendered inside the template fills.
+ */
+export const SLOT_DOOR_ATTRIBUTE = 'data-daedalus-slot';
+
+/**
+ * The nearest slot door around an element whose slot is EMPTY, or null.
+ *
+ * An empty door (no filling container rendered inside it, so the slot's
+ * stand-in or its default shows) is one 'inside' target on the door's
+ * own block key, the same grammar an empty container speaks: the server
+ * lands the placement in the page's slot section, minted for it. A
+ * filled door holds the page's slot section, a container like any other,
+ * whose own flow the container rules below address; the door itself is
+ * then no target. Whether the door MAY be dropped into is the drag
+ * controller's question (insert of the block key, through the one
+ * client gate: the spine stamps insert on a door exactly when this
+ * document may fill it).
+ */
+const emptySlotDoor = (element) => {
+  const door = element.closest(`[${SLOT_DOOR_ATTRIBUTE}]`);
+  // The page's own doors only: the site frame's main slot door wraps the
+  // whole page from outside the main entity and is never a target here (a
+  // blank page is the root flow's one inside target, below).
+  if (!door || !isPlacement(door) || !door.closest('[data-main-entity]')) {
+    return null;
+  }
+  return door.querySelector('[data-selectable^="container:"]') ? null : door;
+};
+
+/**
+ * The inside target of an empty slot door.
+ */
+const slotDoorTarget = (door) => ({
+  location: { anchor: segments(door)[1], placement: 'inside' },
+  container: door,
+  empty: true,
+  insert: { parent: door, before: null },
+});
 
 /**
  * The positional unit of a flow item: the item plus any pure wrapper
@@ -294,7 +357,7 @@ const describeFlowGap = (anchorItem, placement) => ({
  * batch). Container flows hold anything; every other gap passes through
  * untouched.
  */
-const legalize = (target, targets) =>
+export const legalize = (target, targets) =>
   targets === 'block' && target.rootFlow
     ? { ...target, newSection: true }
     : target;
@@ -325,9 +388,9 @@ const legalize = (target, targets) =>
 const resolveEdgeZoneTarget = (element, main, x, y) => {
   const chain = [];
   for (
-    let section = element.closest('[data-selectable^="container:"]');
+    let section = containerAt(element);
     section;
-    section = section.parentElement?.closest('[data-selectable^="container:"]')
+    section = enclosingContainer(section)
   ) {
     chain.unshift(section);
   }
@@ -396,7 +459,7 @@ export const liveCaret = (drop) => {
  * The selectable key of the root entity, the page under edit, or null
  * before the canvas mounts.
  */
-const rootEntityKey = () =>
+export const rootEntityKey = () =>
   document
     .querySelector('[data-main-entity]')
     ?.getAttribute('data-selectable') ?? null;
@@ -425,8 +488,9 @@ export const treeRowKeyCandidates = (location) => {
   }
   const { anchor, placement } = location;
   return placement === 'inside'
-    ? // Inside a container, or the root entity.
-      [`container:${anchor}`, `entity:${anchor}`]
+    ? // Inside a container, the root entity, or a slot door (a block whose
+      // interior is the page's slot section).
+      [`container:${anchor}`, `entity:${anchor}`, `block:${anchor}`]
     : [`block:${anchor}`, `container:${anchor}`];
 };
 
@@ -480,8 +544,9 @@ export const isRootFlowLocation = (location) => {
  * for before/after, the container's row for inside. Null when the panel
  * (or the row — folded ancestors don't render) is not in the DOM.
  *
- * The inverse of resolveTreeTarget's row → location mapping, and the seam
- * that lets every drop location render a panel face: the location is the
+ * The inverse of the tree resolver's row → location mapping (tree-gaps.js),
+ * and the seam that lets every drop location render a panel face: the
+ * location is the
  * one carrier, the row is derived. The root inside location has two faces
  * in the markup view: the shell row claiming the root's sections holds
  * the section rows, so when it is rendered the caret sits under it (the
@@ -513,11 +578,47 @@ export const treeRowForLocation = (location) => {
 };
 
 /**
+ * A page-elements row's content edge in viewport coordinates: where its
+ * indent ends. The panel grammar pads the row itself one
+ * --daedalus-outline-step per level (panel-controls.css), so the edge is
+ * the row's left plus its computed padding. ONE reading for the tree
+ * resolver's depth pick (tree-gaps.js pickByX) and the panel caret's line
+ * start below, so the line the caret draws starts exactly where the x
+ * pick reads that depth.
+ *
+ * @param {Element} row
+ *   A tree row (the treeitem).
+ *
+ * @return {number}
+ */
+export const treeRowContentEdge = (row) =>
+  row.getBoundingClientRect().left +
+  parseFloat(getComputedStyle(row).paddingLeft);
+
+/**
+ * One outline step in pixels, read off a row: --daedalus-outline-step
+ * (variables.css) is declared in rem, so a rem value scales by the root
+ * font size; a px override passes through.
+ */
+const outlineStepPx = (row) => {
+  const value = getComputedStyle(row)
+    .getPropertyValue('--daedalus-outline-step')
+    .trim();
+  const number = parseFloat(value);
+  return value.endsWith('rem')
+    ? number * parseFloat(getComputedStyle(document.documentElement).fontSize)
+    : number;
+};
+
+/**
  * The caret line rect for a location's panel face, or null (no row, or
  * the panel is hidden). Before/after bracket the row's SUBTREE (the li
  * wraps the children), because the drop lands outside the whole element,
- * not between it and its own children; inside indents one tree level
- * under the container's row.
+ * not between it and its own children; inside sits under the container's
+ * row. The line starts at the anchor row's content edge, one outline step
+ * deeper for inside (the indent the appended child's own row would have),
+ * so the line's indent says which depth the drop lands at: the depth the
+ * tree resolver picked by x, or the depth a canvas gap's location means.
  *
  * @return {?{left, top, width, height, orientation}}
  */
@@ -526,23 +627,18 @@ export const treeCaretForLocation = (location) => {
   if (!resolved || !resolved.row.offsetParent) {
     return null;
   }
-  const rowRect = resolved.row.getBoundingClientRect();
-  if (resolved.placement === 'inside') {
-    return {
-      left: rowRect.left + 14,
-      top: rowRect.bottom,
-      width: Math.max(rowRect.width - 14, 0),
-      height: 0,
-      orientation: 'vertical',
-    };
-  }
-  const itemRect = (
-    resolved.row.closest('.daedalus-ui-tree__item') ?? resolved.row
-  ).getBoundingClientRect();
+  const { row, placement } = resolved;
+  const rowRect = row.getBoundingClientRect();
+  const left =
+    treeRowContentEdge(row) + (placement === 'inside' ? outlineStepPx(row) : 0);
+  const itemRect =
+    placement === 'inside'
+      ? rowRect
+      : (row.closest('.daedalus-ui-tree__item') ?? row).getBoundingClientRect();
   return {
-    left: rowRect.left,
-    top: resolved.placement === 'before' ? itemRect.top : itemRect.bottom,
-    width: rowRect.width,
+    left,
+    top: placement === 'before' ? itemRect.top : itemRect.bottom,
+    width: Math.max(rowRect.right - left, 0),
     height: 0,
     orientation: 'vertical',
   };
@@ -563,29 +659,36 @@ export const treeCaretForLocation = (location) => {
  *   Null when nothing under the cursor accepts the drag, otherwise:
  *   - kind: 'gap' — the drag layer's target-kind discriminant (element
  *     targets, kind 'element', resolve in element-targets.js).
- *   - location: {anchor, placement} — the server grammar.
+ *   - location: {anchor, placement} — the server grammar (a tree target
+ *     over a region row adds the region).
  *   - newSection: true when a block drop must be wrapped in a new section
  *     (the location then addresses the SECTION to create; the block goes
  *     inside it).
- *   - container: Element — highlighted while this target is active.
+ *   - container: Element — highlighted while this target is active (the
+ *     canvas container, or the panel row of the container inserted into).
  *   - empty: true when the target is an empty container (render the
  *     centered drop affordance instead of a caret line).
+ *   - gapId: stable identity for hysteresis.
+ *   Canvas targets also carry:
  *   - insert: {parent, before} — where a placeholder element belongs.
  *   - items / index / orientation: the gap's inputs, for liveCaret().
- *   - gapId: stable identity for hysteresis.
+ *   Tree targets (tree-gaps.js) carry canvasElement instead, the anchor's
+ *   canvas element for the move sources' descendant guard: no insertion
+ *   point and no geometric line.
  */
 export const resolveDropTarget = (target, x, y, targets) => {
   const element = target instanceof Element ? target : null;
   if (!element) {
     return null;
   }
-  const treeRow = element.closest('[data-tree-key], [data-tree-claims]');
+  // A page-elements row: a keyed row, a region row (data-tree-region with
+  // its owner) or a shell row claiming slots (data-tree-claims with its
+  // owner). The tree resolver decides which of them are drop surfaces.
+  const treeRow = element.closest(
+    '[data-tree-key], [data-tree-region], [data-tree-claims]',
+  );
   if (treeRow) {
-    const rowTarget = resolveTreeTarget(treeRow, y, targets);
-    if (rowTarget) {
-      rowTarget.kind = 'gap';
-    }
-    return rowTarget;
+    return resolveRowTarget(treeRow, x, y, targets);
   }
   if (element.closest('#daedalus-root')) {
     return null;
@@ -618,7 +721,13 @@ const resolveCanvasTarget = (element, main, x, y, targets) => {
   if (edgeTarget) {
     return legalize(edgeTarget, targets);
   }
-  const container = element.closest('[data-selectable^="container:"]');
+  // An empty slot door (a slot block nothing fills yet): one 'inside'
+  // target on the door, before the container around it claims the pixel.
+  const door = emptySlotDoor(element);
+  if (door) {
+    return slotDoorTarget(door);
+  }
+  const container = containerAt(element);
   if (container) {
     const items = flowItems(container);
     if (flowIsEmpty(container, items)) {
@@ -755,8 +864,20 @@ export const enumerateGapTargets = (targets) => {
     gapsFor(flowContainer(rootItems), rootItems, true);
   }
 
+  // Every empty slot door is one 'inside' gap on the door (the page's
+  // slot section is minted for it server-side), walked like an empty
+  // container.
+  Array.from(main.querySelectorAll(`[${SLOT_DOOR_ATTRIBUTE}]`))
+    .filter((door) => visible(door) && emptySlotDoor(door) === door)
+    .forEach((door) => {
+      results.push(withGapId(slotDoorTarget(door)));
+    });
+
   // One mixed flow per container; an empty container is one 'inside' gap
-  // ({anchor: container, inside}, the AI's grammar).
+  // ({anchor: container, inside}, the AI's grammar). Whether a gap MAY be
+  // dropped into is not decided here: the drag controller asks insert of
+  // every target's container (dropAllowed), for the pointer and the
+  // keyboard lift alike.
   Array.from(main.querySelectorAll('[data-selectable^="container:"]'))
     .filter(visible)
     .forEach((container) => {
@@ -790,136 +911,4 @@ export const enumerateGapTargets = (targets) => {
     .map((target) => ({ target, point: point(target) }))
     .sort((a, b) => a.point.top - b.point.top || a.point.left - b.point.left)
     .map(({ target }) => target);
-};
-
-/**
- * Tree-row resolution: the location reads off the tree structure.
- *
- * Rows carry uniform zones, IDENTICAL for both drag kinds (the grammar is
- * kind-blind, so the surface is too):
- * - Container rows split three ways: top band = before, middle = inside,
- *   bottom band = after — the standard tree-DnD pattern.
- * - Block-placement rows split at the midpoint into before/after.
- * - The root entity row is one 'inside' zone (append a page row).
- * - The shell row claiming the root's sections (data-tree-claims carries
- *   `section`, data-tree-owner the root key) is the root row's twin: one
- *   'inside' zone on the root entity, no sibling bands (the row is no
- *   item of any flow). Only its claim and its owner decide; a shell
- *   claiming other kinds, or one owned by another element, is no target.
- * Kind shows only through legalize()'s root-flow rule: the root row, its
- * sections shell and a root-level container's sibling bands address
- * root-flow gaps, where a block drop wraps in a new section (rootFlow
- * rides the target exactly as on the canvas).
- *
- * Tree drops materialize no placeholder (insert names no parent): the
- * canvas gap is not derivable from a row, and the committing caret on the
- * row is the drop feedback until the response's swap lands. canvasElement
- * carries the anchor's canvas element so source filters that reason about
- * page containment (the move's descendant guard) work from this surface
- * too — and tells the sibling bands whether the row's parent flow is the
- * root flow.
- */
-const resolveTreeTarget = (row, y, targets) => {
-  const claims = row.getAttribute('data-tree-claims');
-  if (claims !== null) {
-    return resolveClaimsRowTarget(row, claims.split(' '), targets);
-  }
-  const key = row.getAttribute('data-tree-key');
-  const parts = key.split(':');
-  // A block PLACEMENT row (block:{uuid}), not an inline-block field row.
-  const placementRow = parts[0] === 'block' && parts.length === 2;
-  const canvasElement = elementForKey(key);
-
-  // The drop lands INSIDE this row's element: the row renders the
-  // whole-container affordance.
-  const insideTarget = (location) => ({
-    location,
-    container: row,
-    empty: true,
-    insert: { parent: null, before: null },
-    canvasElement,
-    gapId: `tree|${key}|inside`,
-  });
-
-  // The drop lands NEXT TO this row's element: the caret line hugs the
-  // row's matching edge (the row is the gap's single item, so liveCaret
-  // re-derives the line from it). The gap lives in the row element's
-  // parent flow; when that is the root flow, rootFlow rides along for
-  // legalize().
-  const siblingTarget = (anchor, placement) => {
-    const target = {
-      location: { anchor, placement },
-      container: row,
-      empty: false,
-      insert: { parent: null, before: null },
-      items: [row],
-      index: placement === 'before' ? 0 : 1,
-      orientation: 'vertical',
-      canvasElement,
-      gapId: `tree|${key}|${placement}`,
-    };
-    if (canvasElement && !enclosingContainer(canvasElement)) {
-      target.rootFlow = true;
-    }
-    return legalize(target, targets);
-  };
-
-  const isRootRow = key === rootEntityKey();
-  if (isRootRow) {
-    // Appends to the root flow; a block drop wraps in a new section there.
-    return legalize(
-      {
-        ...insideTarget({ anchor: parts[1], placement: 'inside' }),
-        rootFlow: true,
-      },
-      targets,
-    );
-  }
-  if (parts[0] === 'container') {
-    const rect = row.getBoundingClientRect();
-    // The band caps at a third of short rows so the inside zone survives.
-    const band = Math.min(8, rect.height / 3);
-    if (y < rect.top + band) {
-      return siblingTarget(parts[1], 'before');
-    }
-    if (y > rect.bottom - band) {
-      return siblingTarget(parts[1], 'after');
-    }
-    return insideTarget({ anchor: parts[1], placement: 'inside' });
-  }
-  if (placementRow) {
-    const rect = row.getBoundingClientRect();
-    return siblingTarget(
-      parts[1],
-      y < rect.top + rect.height / 2 ? 'before' : 'after',
-    );
-  }
-  return null;
-};
-
-/**
- * A claiming shell row's target: the row that claims the root entity's
- * sections resolves as the root row does (one inside target on the root,
- * rootFlow for legalize()), under its own gapId so hysteresis tells the
- * two rows apart. Every other claiming row (fields, regions, a value; or
- * a sections claim owned by an element other than the root) is no drop
- * surface.
- */
-const resolveClaimsRowTarget = (row, claims, targets) => {
-  const owner = row.getAttribute('data-tree-owner');
-  if (!claims.includes('section') || !owner || owner !== rootEntityKey()) {
-    return null;
-  }
-  return legalize(
-    {
-      location: { anchor: owner.split(':')[1], placement: 'inside' },
-      container: row,
-      empty: true,
-      insert: { parent: null, before: null },
-      canvasElement: elementForKey(owner),
-      gapId: `tree|${owner}|sections|inside`,
-      rootFlow: true,
-    },
-    targets,
-  );
 };

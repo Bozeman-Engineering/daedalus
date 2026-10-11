@@ -7,38 +7,46 @@ namespace Drupal\Tests\daedalus_stylish\Kernel;
 use Drupal\Component\Serialization\Yaml;
 use Drupal\Core\Test\TestDatabase;
 use Drupal\KernelTests\KernelTestBase;
-use Drupal\daedalus_stylish\Drush\Commands\ShipCommand;
+use Drupal\daedalus_stylish\AnimationShipper;
+use Drupal\daedalus_stylish\Entity\DaedalusStylishAnimation;
 use Drupal\daedalus_stylish\Entity\DaedalusStylishSkin;
+use Drupal\daedalus_stylish\Entity\DaedalusStylishSwatch;
 use Drupal\daedalus_stylish\Entity\DaedalusStylishVariant;
+use Drupal\daedalus_blueprint\DesignSystem\ShipReport;
+use Drupal\daedalus_blueprint\Entity\DesignSystem;
 use Drupal\daedalus_stylish\Ship;
 use Drupal\daedalus_stylish\ShippedDefinitionsImporter;
 use Drupal\daedalus_stylish\ShippedDefinitionsShipper;
 use Drupal\daedalus_stylish\ShippedSync;
+use Drupal\daedalus_stylish\FontShipper;
 use Drupal\daedalus_stylish\SkinShipper;
+use Drupal\daedalus_stylish\SwatchShipper;
+use Drupal\daedalus_stylish\DaedalusStylishAnimationInterface;
 use Drupal\daedalus_stylish\DaedalusStylishSkinInterface;
+use Drupal\daedalus_stylish\DaedalusStylishSwatchInterface;
 use Drupal\daedalus_stylish\DaedalusStylishVariantInterface;
 use Drupal\daedalus_stylish\VariantShipper;
 use Drupal\Tests\user\Traits\UserCreationTrait;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
-use Symfony\Component\Console\Command\Command;
-use Symfony\Component\Console\Tester\CommandTester;
 
 /**
- * Tests the ship orchestrator and the daedalus_stylish:ship command.
+ * Tests the ship orchestrator: the materials lane of a package ship.
  *
- * Ship runs the kind shippers (skins, variants) over one module: with no
+ * Ship runs the kind shippers (fonts, animations, swatches, skins,
+ * variants) over one module: with no
  * names every per-id file is rebuilt whole from the current entities (keys
  * the shipper does not emit carried, entries whose entity is gone dropped,
  * the hand-authored single file read and never written); with names the
  * named site materials are adopted into the module, a new name landing in
- * MODULE.daedalus_stylish.<kind>.NAME.yml. The command prints the report in the sync
- * command's grammar, failures last and non-zero, and a dry run prints the
- * identical lines with nothing written. The target module is created under
- * the test's own site directory (sites/simpletest/ID, a root extension
- * discovery scans), never a real module directory, and removed on
- * teardown; see VariantShipperTest for the two conditions that make
- * discovery see it.
+ * MODULE.daedalus_stylish.<kind>.NAME.yml. As a package shipper it does
+ * both at once for a design system: the rebuild plus the adoption of
+ * every member nothing ships yet. The command that prints the report
+ * is daedalus_blueprint's design-system ship (DesignSystemShipTest). The
+ * target module is created under the test's own site directory
+ * (sites/simpletest/ID, a root extension discovery scans), never a real
+ * module directory, and removed on teardown; see VariantShipperTest for
+ * the two conditions that make discovery see it.
  */
 #[Group('daedalus_stylish')]
 #[RunTestsInSeparateProcesses]
@@ -130,7 +138,14 @@ class DaedalusStylishShipTest extends KernelTestBase {
     $this->installEntitySchema('daedalus_variant');
     $this->installEntitySchema('daedalus_swatch');
     $this->installEntitySchema('daedalus_animation');
-    $this->installSchema('daedalus_stylish', ['daedalus_variant_usage', 'daedalus_swatch_usage', 'daedalus_animation_usage']);
+    $this->installEntitySchema('daedalus_font');
+    $this->installSchema('daedalus_stylish', [
+      'daedalus_variant_usage',
+      'daedalus_swatch_usage',
+      'daedalus_animation_usage',
+      'daedalus_token_usage',
+      'daedalus_font_usage',
+    ]);
     $this->installConfig(['daedalus_stylish']);
     // The vocabulary a definition syncing back through an importer
     // validates against: token scales for the skin tokens tier, base: for
@@ -233,6 +248,61 @@ class DaedalusStylishShipTest extends KernelTestBase {
   }
 
   /**
+   * Loads a swatch by machine name, bypassing access.
+   */
+  protected function loadSwatch(string $machine_name): ?DaedalusStylishSwatchInterface {
+    $storage = \Drupal::entityTypeManager()->getStorage('daedalus_swatch');
+    $storage->resetCache();
+    $swatches = $storage->loadByProperties(['machine_name' => $machine_name]);
+    $swatch = reset($swatches) ?: NULL;
+    assert($swatch === NULL || $swatch instanceof DaedalusStylishSwatchInterface);
+    return $swatch;
+  }
+
+  /**
+   * Loads an animation by machine name, bypassing access.
+   */
+  protected function loadAnimation(string $machine_name): ?DaedalusStylishAnimationInterface {
+    $storage = \Drupal::entityTypeManager()->getStorage('daedalus_animation');
+    $storage->resetCache();
+    $animations = $storage->loadByProperties(['machine_name' => $machine_name]);
+    $animation = reset($animations) ?: NULL;
+    assert($animation === NULL || $animation instanceof DaedalusStylishAnimationInterface);
+    return $animation;
+  }
+
+  /**
+   * Saves a site-created color swatch.
+   */
+  protected function createSwatch(string $machine_name, string $value = '#0000ff'): DaedalusStylishSwatchInterface {
+    $swatch = DaedalusStylishSwatch::create([
+      'label' => ucfirst(str_replace('_', ' ', $machine_name)),
+      'machine_name' => $machine_name,
+      'kind' => 'color',
+    ]);
+    assert($swatch instanceof DaedalusStylishSwatchInterface);
+    $swatch->setSwatchValue($value);
+    $swatch->save();
+    return $swatch;
+  }
+
+  /**
+   * Saves a site-created animation.
+   *
+   * Named site_* because daedalus_stylish itself ships fade_in and rise.
+   */
+  protected function createAnimation(string $machine_name): DaedalusStylishAnimationInterface {
+    $animation = DaedalusStylishAnimation::create([
+      'label' => ucfirst(str_replace('_', ' ', $machine_name)),
+      'machine_name' => $machine_name,
+    ]);
+    assert($animation instanceof DaedalusStylishAnimationInterface);
+    $animation->setSteps(['0%' => ['opacity' => '0'], '100%' => ['opacity' => '1']]);
+    $animation->save();
+    return $animation;
+  }
+
+  /**
    * Saves a site-created skin.
    */
   protected function createSkin(string $machine_name): DaedalusStylishSkinInterface {
@@ -241,8 +311,8 @@ class DaedalusStylishShipTest extends KernelTestBase {
       'machine_name' => $machine_name,
     ]);
     assert($skin instanceof DaedalusStylishSkinInterface);
-    $skin->setTokens(self::DUSK_TOKENS);
-    $skin->setDefaults(self::DUSK_DEFAULTS);
+    $skin->setPackageTokens(self::DUSK_TOKENS);
+    $skin->setPackageDefaults(self::DUSK_DEFAULTS);
     $skin->save();
     return $skin;
   }
@@ -291,28 +361,14 @@ class DaedalusStylishShipTest extends KernelTestBase {
   }
 
   /**
-   * A fresh tester over the command, built from the current container.
-   */
-  protected function tester(): CommandTester {
-    return new CommandTester(ShipCommand::create($this->container));
-  }
-
-  /**
-   * The command's display as trimmed lines.
-   *
-   * @return string[]
-   *   The lines.
-   */
-  protected function lines(CommandTester $tester): array {
-    return array_values(array_filter(array_map('trim', explode("\n", $tester->getDisplay())), static fn (string $line): bool => $line !== ''));
-  }
-
-  /**
-   * The shippers are keyed by kind in the sync's order: skins, variants.
+   * The shippers are keyed by kind in the sync's order (ShippedSync::ORDER).
    */
   public function testShippersKeyedByKind(): void {
     $shippers = $this->ship()->shippers();
-    $this->assertSame(['skin', 'variant'], array_keys($shippers));
+    $this->assertSame(['font', 'animation', 'swatch', 'skin', 'variant'], array_keys($shippers));
+    $this->assertInstanceOf(FontShipper::class, $shippers['font']);
+    $this->assertInstanceOf(AnimationShipper::class, $shippers['animation']);
+    $this->assertInstanceOf(SwatchShipper::class, $shippers['swatch']);
     $this->assertInstanceOf(SkinShipper::class, $shippers['skin']);
     $this->assertInstanceOf(VariantShipper::class, $shippers['variant']);
   }
@@ -335,7 +391,7 @@ class DaedalusStylishShipTest extends KernelTestBase {
     $this->editVariant('card_left');
     $edited_defaults = ['base:h2' => ['' => ['default' => ['font-size' => '4rem']]]];
     $skin = $this->loadSkin('dusk');
-    $skin->setDefaults($edited_defaults);
+    $skin->setPackageDefaults($edited_defaults);
     $skin->save();
     $this->assertTrue($this->loadSkin('dusk')->isModified());
 
@@ -387,7 +443,7 @@ class DaedalusStylishShipTest extends KernelTestBase {
   /**
    * Keys the shipper does not emit are carried from the existing entry.
    *
-   * The variants file's `stencil:` key belongs to the stencil shipper;
+   * The variants file's `blueprint:` key belongs to the blueprint shipper;
    * daedalus_stylish never learns what it means, so a rebuild keeps it where its
    * owner put it, and an entry whose only difference is a carried key
    * reads UNCHANGED.
@@ -400,7 +456,7 @@ class DaedalusStylishShipTest extends KernelTestBase {
     $owned = [
       'label' => $entries['card_left']['label'],
       'scope' => $entries['card_left']['scope'],
-      'stencil' => 'card',
+      'blueprint' => 'card',
       'design_system' => NULL,
       'styles' => self::CARD_STYLES,
     ];
@@ -475,7 +531,7 @@ class DaedalusStylishShipTest extends KernelTestBase {
     $report = $this->ship()->ship(self::TARGET);
     $this->assertSame([
       'variant' => [
-        'hand_section' => Ship::MODIFIED,
+        'hand_section' => ShipReport::MODIFIED,
         'hand_aside' => ShippedDefinitionsShipper::UNCHANGED,
         'card_left' => ShippedDefinitionsShipper::UNCHANGED,
       ],
@@ -502,37 +558,58 @@ class DaedalusStylishShipTest extends KernelTestBase {
    * reads UNCHANGED; a name already in one of the module's per-id files
    * rebuilds that file (never a second one); a name another module ships,
    * or that no entity carries, is refused with the shipper's own error
-   * while the other kind still ships.
+   * while the other kind still ships. Every kind rides the one road: a
+   * swatch and an animation adopt beside the skin and the variant, in the
+   * sync's kind order.
    */
   public function testNamedAdoption(): void {
     $this->createVariant('card_blue');
     $this->createSkin('dusk');
+    $this->createSwatch('brand_blue');
+    $this->createAnimation('site_fade');
+    $names = ['variant' => ['card_blue'], 'skin' => ['dusk'], 'swatch' => ['brand_blue'], 'animation' => ['site_fade']];
 
-    $planned = $this->ship()->plan(self::TARGET, ['variant' => ['card_blue'], 'skin' => ['dusk']]);
+    $planned = $this->ship()->plan(self::TARGET, $names);
     $this->assertSame([
+      'animation' => ['site_fade' => ShippedDefinitionsShipper::CREATED],
+      'swatch' => ['brand_blue' => ShippedDefinitionsShipper::CREATED],
       'skin' => ['dusk' => ShippedDefinitionsShipper::CREATED],
       'variant' => ['card_blue' => ShippedDefinitionsShipper::CREATED],
     ], $planned->outcomes());
     $this->assertFileDoesNotExist($this->file('daedalus_stylish.variants.card_blue.yml'));
     $this->assertFileDoesNotExist($this->file('daedalus_stylish.skins.dusk.yml'));
+    $this->assertFileDoesNotExist($this->file('daedalus_stylish.swatches.brand_blue.yml'));
+    $this->assertFileDoesNotExist($this->file('daedalus_stylish.animations.site_fade.yml'));
     $this->assertNull($this->loadVariant('card_blue')->getProvider());
 
-    $report = $this->ship()->ship(self::TARGET, ['variant' => ['card_blue'], 'skin' => ['dusk']]);
+    $report = $this->ship()->ship(self::TARGET, $names);
     $this->assertSame($planned->outcomes(), $report->outcomes());
     $this->assertSame(['card_blue'], array_keys($this->entries('daedalus_stylish.variants.card_blue.yml')));
     $this->assertSame(['dusk'], array_keys($this->entries('daedalus_stylish.skins.dusk.yml')));
+    $this->assertSame(['brand_blue'], array_keys($this->entries('daedalus_stylish.swatches.brand_blue.yml')));
+    $this->assertSame('#0000ff', $this->entries('daedalus_stylish.swatches.brand_blue.yml')['brand_blue']['value']);
+    $this->assertSame(['site_fade'], array_keys($this->entries('daedalus_stylish.animations.site_fade.yml')));
     $this->assertSame(self::TARGET, $this->loadVariant('card_blue')->getProvider());
     $this->assertSame(self::TARGET, $this->loadSkin('dusk')->getProvider());
+    $this->assertSame(self::TARGET, $this->loadSwatch('brand_blue')->getProvider());
+    $this->assertSame(self::TARGET, $this->loadAnimation('site_fade')->getProvider());
     $this->assertTrue($this->loadVariant('card_blue')->isPublished());
     $sync = $this->sync()->sync([self::TARGET]);
     $this->assertSame([self::TARGET => ['dusk' => ShippedDefinitionsImporter::UNCHANGED]], $sync->report('skin')->outcomes());
     $this->assertSame([self::TARGET => ['card_blue' => ShippedDefinitionsImporter::UNCHANGED]], $sync->report('variant')->outcomes());
+    $this->assertSame([self::TARGET => ['brand_blue' => ShippedDefinitionsImporter::UNCHANGED]], $sync->report('swatch')->outcomes());
+    $this->assertSame([self::TARGET => ['site_fade' => ShippedDefinitionsImporter::UNCHANGED]], $sync->report('animation')->outcomes());
 
     // A name already this module's rebuilds the file that holds it.
     $this->editVariant('card_blue');
     $this->assertSame(['variant' => ['card_blue' => ShippedDefinitionsShipper::UPDATED]], $this->ship()->ship(self::TARGET, ['variant' => ['card_blue']])->outcomes());
     $this->assertSame(self::EDITED_STYLES, $this->entries('daedalus_stylish.variants.card_blue.yml')['card_blue']['styles']);
-    $this->assertSame(['daedalus_stylish.skins.dusk.yml', 'daedalus_stylish.variants.card_blue.yml'], array_map(static fn (string $path): string => substr(basename($path), strlen(self::TARGET) + 1), glob($this->targetPath . '/*.daedalus_stylish.*.yml')));
+    $this->assertSame([
+      'daedalus_stylish.animations.site_fade.yml',
+      'daedalus_stylish.skins.dusk.yml',
+      'daedalus_stylish.swatches.brand_blue.yml',
+      'daedalus_stylish.variants.card_blue.yml',
+    ], array_map(static fn (string $path): string => substr(basename($path), strlen(self::TARGET) + 1), glob($this->targetPath . '/*.daedalus_stylish.*.yml')));
 
     // A name shipped by another module, or carried by no entity, refuses
     // its own file; the other names still ship, whatever their kind.
@@ -566,80 +643,101 @@ class DaedalusStylishShipTest extends KernelTestBase {
   }
 
   /**
-   * The command prints one line per entry in the sync command's grammar.
+   * The package lane: the module rebuilt AND the system's unshipped members adopted.
    *
-   * Outcomes in kind order (skins, then variants), a hand-authored entry
-   * told to be edited by hand, failures last with their path, code,
-   * message and hint, and a non-zero exit when anything was refused. A
-   * dry run prints the identical lines and writes nothing; a module with
-   * nothing to ship is told which files a rebuild reads and which options
-   * adopt; a module that is not enabled fails with the reason.
+   * The package ship over a design system is the module-wide rebuild (a
+   * site edit of a shipped variant reaches disk, the hand-authored file
+   * is read and reported) plus the adoption of every member of the
+   * system that has no provider, each kind in its own per-id file, in
+   * the sync's kind order; a member of another system, a global
+   * material, and a member another module ships stay where they are.
+   * The plan is the dry run; the second ship of a converged module reads
+   * unchanged throughout, and a sync right after reads the whole package
+   * UNCHANGED.
    */
-  public function testCommand(): void {
+  public function testPackageShip(): void {
+    DesignSystem::create(['id' => 'dusk_system', 'label' => 'Dusk', 'package' => self::TARGET])->save();
+    DesignSystem::create(['id' => 'other_system', 'label' => 'Other'])->save();
+    $system = DesignSystem::load('dusk_system');
     file_put_contents($this->file('daedalus_stylish.variants.yml'), Yaml::encode([
       'hand_section' => ['label' => 'Hand section', 'scope' => 'kind:container', 'styles' => self::CARD_STYLES],
     ]));
-    $authored = file_get_contents($this->file('daedalus_stylish.variants.yml'));
+    // The target packages the system now, so its files land only under
+    // that system's activation (a package waits for its system).
+    \Drupal::service('daedalus_blueprint.active_design_system')->activate('dusk_system');
     $this->sync()->sync([self::TARGET]);
     $this->createVariant('card_left');
-    $this->createVariant('card_right', ['' => ['default' => ['padding' => '1rem']]]);
-    $this->shipVariants('card', ['card_left', 'card_right']);
-    $dusk = $this->createSkin('dusk');
-    $this->skinShipper()->ship(self::TARGET, 'dusk', ['dusk' => $this->skinShipper()->definition($dusk)]);
+    $this->shipVariants('card', ['card_left']);
     $this->editVariant('card_left');
     $this->editVariant('hand_section');
-    $this->loadVariant('card_right')->delete();
-    $card = file_get_contents($this->file('daedalus_stylish.variants.card.yml'));
+
+    // The members: one per kind, unshipped; the skin unpublished (a ship
+    // publishes what it adopts). Beside them a global variant, a member
+    // of the other system, and a member another module ships.
+    $card_blue = $this->createVariant('card_blue');
+    $card_blue->setDesignSystem('dusk_system')->save();
+    $dusk = $this->createSkin('dusk');
+    $dusk->setDesignSystem('dusk_system')->setUnpublished()->save();
+    $brand_blue = $this->createSwatch('brand_blue');
+    $brand_blue->setDesignSystem('dusk_system')->save();
+    $site_fade = $this->createAnimation('site_fade');
+    $site_fade->setDesignSystem('dusk_system')->save();
+    $this->createVariant('free_look');
+    $other = $this->createVariant('other_look');
+    $other->setDesignSystem('other_system')->save();
+    \Drupal::service('module_installer')->install(['daedalus_stylish_skins_test']);
+    $aurora = $this->loadSkin('aurora');
+    $aurora->setDesignSystem('dusk_system')->save();
+    $this->assertSame('daedalus_stylish_skins_test', $this->loadSkin('aurora')->getProvider());
 
     $expected = [
-      self::TARGET . ': skin dusk unchanged',
-      self::TARGET . ': variant hand_section modified; edit by hand in ' . self::TARGET . '.daedalus_stylish.variants.yml',
-      self::TARGET . ': variant card_left updated',
-      self::TARGET . ': variant card_right dropped',
-    ];
-
-    // The dry run: the identical lines, nothing written, nothing adopted.
-    $tester = $this->tester();
-    $this->assertSame(Command::SUCCESS, $tester->execute(['module' => self::TARGET, '--dry-run' => TRUE]));
-    $this->assertSame($expected, $this->lines($tester));
-    $this->assertSame($card, file_get_contents($this->file('daedalus_stylish.variants.card.yml')));
-    $this->assertTrue($this->loadVariant('card_left')->isModified());
-
-    $this->assertSame(Command::SUCCESS, $tester->execute(['module' => self::TARGET]));
-    $this->assertSame($expected, $this->lines($tester));
-    $this->assertSame(['card_left'], array_keys($this->entries('daedalus_stylish.variants.card.yml')));
-    $this->assertSame(self::EDITED_STYLES, $this->entries('daedalus_stylish.variants.card.yml')['card_left']['styles']);
-    $this->assertFalse($this->loadVariant('card_left')->isModified());
-    $this->assertSame($authored, file_get_contents($this->file('daedalus_stylish.variants.yml')));
-
-    // Named adoption, repeatable per kind; a refusal prints last and fails
-    // the run while the other names ship.
-    $this->createVariant('card_blue');
-    $this->createSkin('dawn');
-    $this->assertSame(Command::FAILURE, $tester->execute([
-      'module' => self::TARGET,
-      '--variant' => ['card_blue', 'ghost'],
-      '--skin' => ['dawn'],
-    ]));
-    $this->assertSame([
-      self::TARGET . ': skin dawn created',
-      self::TARGET . ': variant card_blue created',
-      self::TARGET . ': variant ghost failed',
-      'ghost [SHIPPED_VARIANT_ABSENT]: No variant named "ghost" exists on this site, so there is nothing to ship.',
-      'Hint: Shipping takes an existing variant to disk and adopts it in place; to bring a definition onto the site, put it in the file and sync.',
-    ], $this->lines($tester));
-    $this->assertFileExists($this->file('daedalus_stylish.variants.card_blue.yml'));
-    $this->assertFileExists($this->file('daedalus_stylish.skins.dawn.yml'));
-    $this->assertSame(self::TARGET, $this->loadSkin('dawn')->getProvider());
-
-    // The sync right after reads the whole package UNCHANGED.
-    $sync = $this->sync()->sync([self::TARGET]);
-    $this->assertSame([
-      self::TARGET => [
-        'dawn' => ShippedDefinitionsImporter::UNCHANGED,
-        'dusk' => ShippedDefinitionsImporter::UNCHANGED,
+      'skin' => ['dusk' => ShippedDefinitionsShipper::CREATED],
+      'animation' => ['site_fade' => ShippedDefinitionsShipper::CREATED],
+      'swatch' => ['brand_blue' => ShippedDefinitionsShipper::CREATED],
+      'variant' => [
+        'hand_section' => ShipReport::MODIFIED,
+        'card_left' => ShippedDefinitionsShipper::UPDATED,
+        'card_blue' => ShippedDefinitionsShipper::CREATED,
       ],
-    ], $sync->report('skin')->outcomes());
+    ];
+    $planned = new ShipReport(self::TARGET);
+    $this->ship()->planPackage($system, self::TARGET, $planned);
+    $this->assertEquals($expected, $planned->outcomes());
+    $this->assertFalse($planned->hasFailures());
+    $this->assertFileDoesNotExist($this->file('daedalus_stylish.skins.dusk.yml'));
+    $this->assertTrue($this->loadVariant('card_left')->isModified());
+    $this->assertNull($this->loadVariant('card_blue')->getProvider());
+
+    $report = new ShipReport(self::TARGET);
+    $this->ship()->shipPackage($system, self::TARGET, $report);
+    $this->assertEquals($expected, $report->outcomes());
+    $this->assertSame(self::EDITED_STYLES, $this->entries('daedalus_stylish.variants.card.yml')['card_left']['styles']);
+    $this->assertSame([
+      'daedalus_stylish.animations.site_fade.yml',
+      'daedalus_stylish.skins.dusk.yml',
+      'daedalus_stylish.swatches.brand_blue.yml',
+      'daedalus_stylish.variants.card.yml',
+      'daedalus_stylish.variants.card_blue.yml',
+      'daedalus_stylish.variants.yml',
+    ], array_map(static fn (string $path): string => substr(basename($path), strlen(self::TARGET) + 1), glob($this->targetPath . '/*.daedalus_stylish.*.yml')));
+    $this->assertSame('dusk_system', $this->entries('daedalus_stylish.skins.dusk.yml')['dusk']['design_system']);
+    $adopted = [
+      'card_blue' => 'loadVariant',
+      'dusk' => 'loadSkin',
+      'brand_blue' => 'loadSwatch',
+      'site_fade' => 'loadAnimation',
+    ];
+    foreach ($adopted as $name => $load) {
+      $this->assertSame(self::TARGET, $this->$load($name)->getProvider(), "$name is adopted.");
+      $this->assertTrue($this->$load($name)->isPublished(), "$name is published.");
+    }
+    $this->assertNull($this->loadVariant('free_look')->getProvider(), 'A global material is not the system\'s.');
+    $this->assertNull($this->loadVariant('other_look')->getProvider(), 'Another system\'s member stays.');
+    $this->assertSame('daedalus_stylish_skins_test', $this->loadSkin('aurora')->getProvider(), 'A member another module ships stays its shipper\'s.');
+    $this->assertTrue($this->loadVariant('hand_section')->isModified());
+
+    $sync = $this->sync()->sync([self::TARGET]);
+    $this->assertSame([self::TARGET => ['dusk' => ShippedDefinitionsImporter::UNCHANGED]], $sync->report('skin')->outcomes());
     $this->assertSame([
       self::TARGET => [
         'hand_section' => ShippedDefinitionsImporter::UNCHANGED,
@@ -648,12 +746,18 @@ class DaedalusStylishShipTest extends KernelTestBase {
       ],
     ], $sync->report('variant')->outcomes());
 
-    // A module with no per-id file and no name is told what a rebuild
-    // reads and what adopts; one that is not enabled fails with the reason.
-    $this->assertSame(Command::SUCCESS, $tester->execute(['module' => 'system']));
-    $this->assertSame('system ships no per-id daedalus_stylish file (no system.daedalus_stylish.skins.*.yml or system.daedalus_stylish.variants.*.yml); name a site material to adopt with --skin NAME or --variant NAME.', trim($tester->getDisplay()));
-    $this->assertSame(Command::FAILURE, $tester->execute(['module' => 'daedalus_stylish_nowhere']));
-    $this->assertSame('The "daedalus_stylish_nowhere" module is not enabled, so there is no directory to ship into.', trim($tester->getDisplay()));
+    $again = new ShipReport(self::TARGET);
+    $this->ship()->shipPackage($system, self::TARGET, $again);
+    $this->assertEquals([
+      'skin' => ['dusk' => ShippedDefinitionsShipper::UNCHANGED],
+      'animation' => ['site_fade' => ShippedDefinitionsShipper::UNCHANGED],
+      'swatch' => ['brand_blue' => ShippedDefinitionsShipper::UNCHANGED],
+      'variant' => [
+        'hand_section' => ShipReport::MODIFIED,
+        'card_left' => ShippedDefinitionsShipper::UNCHANGED,
+        'card_blue' => ShippedDefinitionsShipper::UNCHANGED,
+      ],
+    ], $again->outcomes());
   }
 
 }

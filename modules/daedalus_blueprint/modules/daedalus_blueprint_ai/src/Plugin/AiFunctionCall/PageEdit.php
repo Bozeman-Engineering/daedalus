@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Drupal\daedalus_blueprint_ai\Plugin\AiFunctionCall;
 
-use Drupal\Core\Entity\FieldableEntityInterface;
 use Drupal\Core\Plugin\Context\ContextDefinition;
 use Drupal\Core\StringTranslation\TranslatableMarkup;
 use Drupal\ai\Attribute\FunctionCall;
@@ -84,15 +83,15 @@ class PageEdit extends PageToolBase {
     }
 
     $entity_type = $this->getContextValue('entity_type');
-    if (!$this->requireWorkspaceFor($entity_type)) {
+    if (!$this->requireDocumentHostType($entity_type)) {
       return;
     }
-    $backend = $this->getBackend($entity_type);
-    if ($backend === NULL) {
-      return;
-    }
-    $entity = $this->loadAnyEntity($entity_type, $this->getContextValue('entity_id'), 'update');
-    if (!$entity) {
+    // The host door: a page (a content host, its staged copy) or a template
+    // (a display host, config). Both take the same batch; whether the site
+    // asks a workspace of the host is the op door's own verdict
+    // (WORKSPACE_REQUIRED from the capability gate).
+    $host = $this->loadHost($entity_type, $this->getContextValue('entity_id'), 'update');
+    if ($host === NULL) {
       return;
     }
 
@@ -103,7 +102,7 @@ class PageEdit extends PageToolBase {
       $ops = [$ops];
     }
     // The page language's op set: the DOM vocabulary plus the gestures the
-    // registered handlers declare as page ops (capturing a stencil). One
+    // registered handlers declare as page ops (capturing a blueprint). One
     // source (the registry) for this gate and the cached catalog.
     $page_ops = $this->operationHandlerRegistry->getPageLanguageOperations();
     foreach (is_array($ops) ? $ops : [] as $i => $op) {
@@ -120,8 +119,13 @@ class PageEdit extends PageToolBase {
     }
 
     $save = $this->getContextValue('save');
+    // The try covers the batch and the persist: a failure before the write
+    // lands is this tool's Error. The echo follows outside it, so a write
+    // that landed is never answered as an error (an Error: invites the
+    // model to retry a write that is already on the page); the print is
+    // total over data, and an unknown failure in it fails as an exception.
     try {
-      $result = $backend->batchOperations($entity, $ops, $this->dialectOptions());
+      $result = $this->blueprintOperations->batchOperations($host, $ops, $this->dialectOptions());
       // The batch is this tool's parse: fragments and CSS parse inside the
       // spine ops, so the result is the parse verdict on the input.
       $this->recordParseVerdict($this->resultVerdict($result));
@@ -129,22 +133,28 @@ class PageEdit extends PageToolBase {
         $this->output = $this->formatResult($result);
         return;
       }
-      if (!$this->persistViaBackend($backend, $result, force_save: (bool) $save)) {
+      if (!$this->persistEntity($result, force_save: (bool) $save)) {
         return;
-      }
-
-      $result_array = $result->toArray();
-      $result_array['persisted'] = $save ? 'database' : 'tempstore';
-      $this->output = $this->formatArray($result_array);
-      // The echo is the page language itself: the updated page print (with
-      // data-alias names), so the model verifies in the grammar it writes.
-      $updated = $result->getEntity();
-      if ($updated instanceof FieldableEntityInterface) {
-        $this->output .= "\n\nUpdated page:\n" . $this->printPage($updated);
       }
     }
     catch (\Exception $e) {
       $this->output = 'Error: ' . $e->getMessage();
+      return;
+    }
+
+    $result_array = $result->toArray();
+    $result_array['persisted'] = $save ? 'database' : 'tempstore';
+    $this->output = $this->formatArray($result_array);
+    // The echo is the page language itself: the updated page print (with
+    // data-alias names, its reading notes heading it when the page holds
+    // anything the language cannot spell), so the model verifies in the
+    // grammar it writes. A batch that wrote the page's own fields (a set
+    // on root) changes nothing in the document, so the fields head the
+    // echo as they head a read.
+    $host = $result->getHost();
+    if ($host !== NULL) {
+      $fields = $this->wroteOwnFields($result, $host) ? $this->fieldsBlock($host) : NULL;
+      $this->output .= "\n\nUpdated page:\n" . ($fields ?? '') . $this->hostPrinter->print($host, $this->conversationContext->get())->forReader();
     }
   }
 

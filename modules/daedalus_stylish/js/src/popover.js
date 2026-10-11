@@ -111,7 +111,12 @@ export const usePopover = () => {
 };
 
 /**
- * Renders its children into the surface root as a second preact root.
+ * Renders its children into `root` as a second preact root: the popover
+ * surface here, and the inspector's pinned head slot
+ * (daedalus-stylish-inspector__head) for the mode views' head rows
+ * (page-view.js's showing row, inspector.js Sections' head), which
+ * live in the views that own their state and render through this into
+ * the pinned box above the body.
  *
  * Not preact/compat's createPortal: importing compat installs its
  * React-parity option hooks for the WHOLE bundle (onBlur becomes
@@ -121,9 +126,12 @@ export const usePopover = () => {
  * nested render runs inside this component's own render (the shape
  * compat's Portal takes), so the content re-renders whenever its
  * consumer does and unmounts with it. The inspector passes no context
- * down, so the second root loses nothing.
+ * down, so the second root loses nothing. One root may pass between
+ * consumers (a mode switch swaps the head's filler): preact unmounts
+ * the leaving subtree, and so runs this cleanup, before it diffs the
+ * arriving one, so the newcomer's render into the root lands last.
  */
-function Portal({ root, children }) {
+export function Portal({ root, children }) {
   const rendered = useRef(null);
   if (rendered.current !== null && rendered.current !== root) {
     // The surface was replaced under this consumer (a re-open): the old

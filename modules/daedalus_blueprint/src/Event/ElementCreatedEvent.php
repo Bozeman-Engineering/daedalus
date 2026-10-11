@@ -5,13 +5,14 @@ declare(strict_types=1);
 namespace Drupal\daedalus_blueprint\Event;
 
 use Drupal\Core\Entity\FieldableEntityInterface;
+use Drupal\daedalus_blueprint\Host\HostInterface;
 use Drupal\layout_builder\SectionComponent;
 
 /**
  * Fired when an add operation creates a Layout Builder component.
  *
  * Dispatched for every successful add_element of a Layout Builder block,
- * inline or plugin, whatever the door (palette, AI, programmatic, a stencil
+ * inline or plugin, whatever the door (palette, AI, programmatic, a blueprint
  * expansion). Whether the block arrived dressed (its styles come with it)
  * is the batch's posture, read through dressed(); the `populate: 'sample'`
  * option means only that unprovided fields were sample-filled and says
@@ -33,8 +34,8 @@ class ElementCreatedEvent extends LifecycleEventBase {
   /**
    * Constructs a ElementCreatedEvent.
    *
-   * @param \Drupal\Core\Entity\FieldableEntityInterface $entity
-   *   The root entity the component is being added to.
+   * @param \Drupal\daedalus_blueprint\Host\HostInterface $host
+   *   The host the component is being added to.
    * @param \Drupal\layout_builder\SectionComponent $component
    *   The created component, not yet inserted into its section.
    * @param \Drupal\Core\Entity\FieldableEntityInterface|null $blockContent
@@ -47,12 +48,12 @@ class ElementCreatedEvent extends LifecycleEventBase {
    *   see LifecycleEventBase::dressed().
    */
   public function __construct(
-    FieldableEntityInterface $entity,
+    HostInterface $host,
     protected SectionComponent $component,
     protected ?FieldableEntityInterface $blockContent = NULL,
     bool $dressed = FALSE,
   ) {
-    parent::__construct($entity, $dressed);
+    parent::__construct($host, $dressed);
   }
 
   /**

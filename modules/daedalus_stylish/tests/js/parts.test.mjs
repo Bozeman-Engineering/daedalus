@@ -14,6 +14,7 @@ const UUID_A = 'aaaaaaaa-1111-2222-3333-444444444444';
 const UUID_B = 'bbbbbbbb-1111-2222-3333-444444444444';
 const UUID_C = 'cccccccc-1111-2222-3333-444444444444';
 const UUID_P = 'dddddddd-1111-2222-3333-444444444444';
+const UUID_F = 'ffffffff-1111-2222-3333-444444444444';
 
 const guide = {
   kinds: {
@@ -162,22 +163,29 @@ test('declared plugin blocks join their blockPlugins declaration', () => {
 });
 
 test('componentBlockTypes maps plugin placements to plugin:{base id}', () => {
+  // A field node names the page's field, never a per-bundle plugin id;
+  // its base plugin is field_block, read off the node without a bundle.
   const blueprint = {
-    layout_builder__layout: [{
+    layout: [{
+      kind: 'container',
       uuid: UUID_B,
       layout_id: 'layout_onecol',
-      regions: {
-        content: [
-          { uuid: UUID_A, block_type: 'testimonial' },
-          { uuid: UUID_P, plugin_id: 'system_menu_block:main' },
-          { uuid: UUID_C },
+      children: [{
+        kind: 'region',
+        region: 'content',
+        children: [
+          { kind: 'block', uuid: UUID_A, block_type: 'testimonial' },
+          { kind: 'block', uuid: UUID_P, plugin_id: 'system_menu_block:main' },
+          { kind: 'block', uuid: UUID_F, field: 'body' },
+          { kind: 'block', uuid: UUID_C },
         ],
-      },
+      }],
     }],
   };
   assert.deepEqual(componentBlockTypes(blueprint), {
     [UUID_A]: 'testimonial',
     [UUID_P]: 'plugin:system_menu_block',
+    [UUID_F]: 'plugin:field_block',
     [UUID_C]: null,
   });
 });

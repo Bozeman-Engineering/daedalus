@@ -65,9 +65,10 @@ const library = [
 
 const layout = [
   {
+    kind: 'container',
     uuid: SEC,
-    layout_id: 'layout_onecol',
-    children: [{ uuid: TXT, block_type: 'text' }],
+    layout_id: 'daedalus_stylish_container',
+    children: [{ kind: 'block', uuid: TXT, block_type: 'text' }],
   },
 ];
 
@@ -271,6 +272,10 @@ test('a document line a higher layer beats names its winner', () => {
   assert.equal(documentLineWinner(winners, 'loud', 'gap'), null);
   // A property nothing else defines is the sheet's to win.
   assert.equal(documentLineWinner(winners, 'cta', 'color'), null);
+  // A skin document is beaten by every map layer defining the property
+  // (its own layer is the floor's), and wins what nothing else defines.
+  assert.deepEqual(documentLineWinner(winners, 'skin:kind:container', 'padding'), { layer: ELEMENT_LAYER, variant: null });
+  assert.equal(documentLineWinner(winners, 'skin:kind:container', 'color'), null);
 });
 
 // --- updateFromElementLines: the pre-staged diff ---------------------------

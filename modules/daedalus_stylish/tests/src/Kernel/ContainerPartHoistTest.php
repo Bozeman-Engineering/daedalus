@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Drupal\Tests\daedalus_stylish\Kernel;
 
-use Drupal\daedalus_blueprint_stencil\Entity\Stencil;
 use Drupal\entity_test\Entity\EntityTest;
 use Drupal\layout_builder\Plugin\SectionStorage\OverridesSectionStorage;
 use Drupal\daedalus_layout\NestedSectionStorageInterface;
@@ -24,8 +23,8 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  * children entries) re-key onto the root everywhere they live: host style
  * maps (the ContainerPartHoistSweep, riding daedalus_layout's transform spine
  * after the row sweep), daedalus_variant styles across revisions
- * (composition slot paths included), daedalus_skin defaults, stored
- * stencils, and stale tempstore sessions converging at load time.
+ * (composition slot paths included), daedalus_skin defaults, and stale
+ * tempstore sessions converging at load time.
  *
  * @group daedalus_stylish
  */
@@ -39,12 +38,9 @@ class ContainerPartHoistTest extends NestedStorageKernelTestBase {
   protected static $modules = [
     'daedalus_stylish',
     'daedalus_stylish_layouts',
-    // The stencil entity's icon field references media, so installing the
-    // stencil schema needs the media entity type (and its field types).
     'file',
     'image',
     'media',
-    'daedalus_blueprint_stencil',
   ];
 
   /**
@@ -58,7 +54,7 @@ class ContainerPartHoistTest extends NestedStorageKernelTestBase {
     // every build, and every compile and validation builds it.
     $this->installEntitySchema('daedalus_swatch');
     $this->installEntitySchema('daedalus_animation');
-    $this->installEntitySchema('stencil');
+    $this->installEntitySchema('daedalus_font');
     $this->installSchema('daedalus_stylish', ['daedalus_variant_usage']);
     $this->installConfig(['daedalus_stylish']);
     $this->container->get('daedalus_stylish.field_manager')->enable('entity_test', 'entity_test');
@@ -206,7 +202,7 @@ class ContainerPartHoistTest extends NestedStorageKernelTestBase {
    */
   public function testSkinHoist(): void {
     $skin = DaedalusStylishSkin::create(['label' => 'Aurora', 'machine_name' => 'aurora', 'status' => TRUE]);
-    $skin->setDefaults([
+    $skin->setPackageDefaults([
       'kind:container' => [
         '' => ['default' => ['background-color' => 'white']],
         ContainerMigration::CONTAINER_PART => ['default' => ['max-width' => '80rem']],
@@ -221,7 +217,7 @@ class ContainerPartHoistTest extends NestedStorageKernelTestBase {
       'defaults' => ['kind:container' => [ContainerMigration::CONTAINER_PART => ['default' => ['max-width' => '90rem']]]],
     ];
     $shipped = DaedalusStylishSkin::create(['label' => 'Shipped', 'machine_name' => 'shipped_skin', 'status' => TRUE]);
-    $shipped->setDefaults($shipped_data['defaults']);
+    $shipped->setPackageDefaults($shipped_data['defaults']);
     $shipped->setShippedSource('daedalus_stylish_test', $shipped_data);
     $shipped->save();
 
@@ -230,7 +226,7 @@ class ContainerPartHoistTest extends NestedStorageKernelTestBase {
     $storage = $this->entityTypeManager->getStorage('daedalus_skin');
     $storage->resetCache();
 
-    $defaults = $storage->loadUnchanged($skin->id())->getDefaults();
+    $defaults = $storage->loadUnchanged($skin->id())->packageDefaults();
     $this->assertSame([
       'kind:container' => [
         '' => ['default' => ['background-color' => 'white', 'max-width' => '80rem']],
@@ -240,58 +236,10 @@ class ContainerPartHoistTest extends NestedStorageKernelTestBase {
     ], $defaults);
 
     $shipped = $storage->loadUnchanged($shipped->id());
-    $this->assertSame($shipped_data['defaults'], $shipped->getDefaults(), 'A shipped unmodified skin is left to the sync lane.');
+    $this->assertSame($shipped_data['defaults'], $shipped->packageDefaults(), 'A shipped unmodified skin is left to the sync lane.');
     $this->assertFalse($shipped->isModified());
   }
 
-  /**
-   * Stored stencils hoist at every node depth, idempotently.
-   */
-  public function testStencilHoist(): void {
-    $stencil = Stencil::create([
-      'label' => 'Legacy band',
-      'machine_name' => 'legacy_band',
-      'description' => 'Captured before the one-box container.',
-      'status' => TRUE,
-    ]);
-    $stencil->setElement([
-      'layout_id' => 'daedalus_stylish_container',
-      'label' => 'Band',
-      'styles' => [
-        '' => ['variants' => ['container_lg']],
-        ContainerMigration::CONTAINER_PART => ['default' => ['padding-top' => '4rem']],
-        ContainerMigration::CONTAINER_PART . '::>' => ['default' => ['min-width' => '0']],
-      ],
-      'regions' => [
-        'content' => [
-          [
-            'layout_id' => 'daedalus_stylish_container',
-            'styles' => [ContainerMigration::CONTAINER_PART => ['default' => ['gap' => '2rem']]],
-          ],
-          ['block_type' => 'text'],
-        ],
-      ],
-    ]);
-    $stencil->save();
-
-    $hoist = $this->container->get('daedalus_stylish_layouts.container_part_hoist');
-    $lines = $hoist->hoistStencils();
-    $this->assertNotEmpty($lines);
-    $storage = $this->entityTypeManager->getStorage('stencil');
-    $storage->resetCache();
-    $element = $storage->loadUnchanged($stencil->id())->getElement();
-
-    $this->assertSame([
-      '' => ['variants' => ['container_lg'], 'default' => ['padding-top' => '4rem']],
-      '::> *' => ['default' => ['min-width' => '0']],
-    ], $element['styles']);
-    $this->assertSame(['' => ['default' => ['gap' => '2rem']]], $element['regions']['content'][0]['styles']);
-
-    // Idempotence: a second pass leaves the stencil untouched.
-    $hoist->hoistStencils();
-    $storage->resetCache();
-    $this->assertSame($element, $storage->loadUnchanged($stencil->id())->getElement());
-  }
 
   /**
    * A stale tempstore session's part keys converge at LOAD time.

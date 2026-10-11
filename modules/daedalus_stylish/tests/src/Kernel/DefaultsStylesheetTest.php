@@ -16,6 +16,7 @@ use Drupal\daedalus_blueprint\Materials\Address;
 use Drupal\daedalus_stylish\CssPrinter;
 use Drupal\daedalus_stylish\AnimationStylesheet;
 use Drupal\daedalus_stylish\DefaultsStylesheet;
+use Drupal\daedalus_stylish\FontStylesheet;
 use Drupal\daedalus_stylish\SwatchStylesheet;
 use Drupal\daedalus_stylish\Entity\DaedalusStylishSkin;
 use Drupal\daedalus_ui\Chromeless;
@@ -105,9 +106,16 @@ class DefaultsStylesheetTest extends KernelTestBase {
     $this->installEntitySchema('daedalus_variant');
     $this->installEntitySchema('daedalus_swatch');
     $this->installEntitySchema('daedalus_animation');
+    $this->installEntitySchema('daedalus_font');
     // Skins are a swatch-usage source: publish resyncs their rows; the
     // module install hook's shipped sync reads every usage table.
-    $this->installSchema('daedalus_stylish', ['daedalus_variant_usage', 'daedalus_swatch_usage', 'daedalus_animation_usage']);
+    $this->installSchema('daedalus_stylish', [
+      'daedalus_variant_usage',
+      'daedalus_swatch_usage',
+      'daedalus_animation_usage',
+      'daedalus_token_usage',
+      'daedalus_font_usage',
+    ]);
     $this->installConfig(['daedalus_stylish']);
     // Activating a design system syncs every enabled module's shipped
     // definitions (ShippedSync::onDesignSystemActivated()): the importers
@@ -133,7 +141,7 @@ class DefaultsStylesheetTest extends KernelTestBase {
       'machine_name' => $machine_name,
       'status' => $published,
     ]);
-    $skin->setTokens($tokens)->save();
+    $skin->setPackageTokens($tokens)->save();
     return $skin;
   }
 
@@ -241,7 +249,7 @@ class DefaultsStylesheetTest extends KernelTestBase {
     $this->assertStringContainsString(CssPrinter::PAGE_CONTAINER_RULE, $css);
 
     // A token edit recompiles to a NEW filename and cleans up the old file.
-    $skin->setTokens(['space' => ['4' => '2rem']]);
+    $skin->setPackageTokens(['space' => ['4' => '2rem']]);
     $skin->save();
     $new_uri = $this->stylesheetUri();
     $this->assertNotSame($uri, $new_uri);
@@ -261,6 +269,38 @@ class DefaultsStylesheetTest extends KernelTestBase {
     $skin->save();
     $this->assertNull($this->stylesheetUri());
     $this->assertFileDoesNotExist($new_uri);
+  }
+
+  /**
+   * A skin choice recompiles the file to the chosen member skin.
+   *
+   * The choice is a daedalus_stylish.settings save, so the recompile is
+   * DefaultsSettingsSubscriber's (no direct compile call anywhere), and
+   * the read falls back to the default_skin the moment the system may
+   * no longer wear the choice (here: the chosen skin unpublished, whose
+   * save recompiles through the skin change hook).
+   */
+  public function testChoiceRecompiles(): void {
+    $this->activateSkin('aurora');
+    $skin = DaedalusStylishSkin::create(['label' => 'aurora', 'machine_name' => 'aurora', 'design_system' => 'aurora']);
+    $skin->setPackageTokens(['space' => ['4' => '1rem']])->save();
+    $dusk = DaedalusStylishSkin::create(['label' => 'dusk', 'machine_name' => 'dusk', 'design_system' => 'aurora']);
+    $dusk->setPackageTokens(['space' => ['4' => '2rem']])->save();
+    $uri = $this->stylesheetUri();
+    $this->assertIsString($uri);
+    $this->assertStringContainsString('--space-4: 1rem;', file_get_contents($uri));
+
+    $this->container->get('daedalus_stylish.skin_manager')->choose('dusk');
+    $chosen_uri = $this->stylesheetUri();
+    $this->assertIsString($chosen_uri);
+    $this->assertNotSame($uri, $chosen_uri);
+    $this->assertFileDoesNotExist($uri);
+    $this->assertStringContainsString('--space-4: 2rem;', file_get_contents($chosen_uri));
+
+    $dusk->setUnpublished()->save();
+    $fallback_uri = $this->stylesheetUri();
+    $this->assertIsString($fallback_uri);
+    $this->assertStringContainsString('--space-4: 1rem;', file_get_contents($fallback_uri));
   }
 
   /**
@@ -366,7 +406,7 @@ class DefaultsStylesheetTest extends KernelTestBase {
   public function testDeclaredTierPrintsBeneathSkin(): void {
     $this->enableFixture();
     $skin = $this->createSkin('aurora', ['space' => ['4' => '1rem']]);
-    $skin->setDefaults([
+    $skin->setPackageDefaults([
       'block_type:image' => ['' => ['default' => ['display' => 'inline-block']]],
       'kind:block' => ['' => ['default' => ['padding' => '1rem']]],
     ])->save();
@@ -531,7 +571,7 @@ class DefaultsStylesheetTest extends KernelTestBase {
    */
   public function testScopedDefaultsCoTargetBaseDefaultsDoNot(): void {
     $skin = $this->createSkin('site_skin', ['space' => ['4' => '1rem']]);
-    $skin->setDefaults([
+    $skin->setPackageDefaults([
       'base:a' => ['' => ['default' => ['color' => '#111111']]],
       'kind:block' => ['' => ['default' => ['color' => '#222222', 'padding' => '1rem']]],
       'block_type:text' => ['' => ['default' => ['color' => '#333333']]],
@@ -676,7 +716,7 @@ class DefaultsStylesheetTest extends KernelTestBase {
     // Stage a token edit: the shared public file keeps the live CSS.
     $this->switchToWorkspace('stage');
     $staged = $this->entityTypeManager->getStorage('daedalus_skin')->load($skin->id());
-    $staged->setTokens(['space' => ['4' => '9rem']]);
+    $staged->setPackageTokens(['space' => ['4' => '9rem']]);
     $staged->save();
     $this->assertSame($live_uri, $this->stylesheetUri());
     $this->assertStringContainsString('--space-4: 1rem;', file_get_contents($live_uri));
@@ -721,18 +761,24 @@ class DefaultsStylesheetTest extends KernelTestBase {
    * (_daedalus_stylish_skinless_document()).
    */
   public function testAdminThemeReachGate(): void {
-    $libraries = ['daedalus_stylish/defaults', 'daedalus_stylish/swatches', 'daedalus_stylish/animations'];
+    $libraries = [
+      'daedalus_stylish/defaults',
+      'daedalus_stylish/swatches',
+      'daedalus_stylish/animations',
+      'daedalus_stylish/fonts',
+    ];
     $tags = [
       DefaultsStylesheet::CACHE_TAG,
       'config:daedalus_stylish.settings',
       SwatchStylesheet::CACHE_TAG,
       AnimationStylesheet::CACHE_TAG,
+      FontStylesheet::CACHE_TAG,
     ];
 
     // No admin theme configured: the site chose one look everywhere, so
-    // nothing gates: scope element stamped, the three libraries attached
-    // with their recompile tags (the swatch and animations files ride the
-    // same seam and the same gate).
+    // nothing gates: scope element stamped, the four libraries attached
+    // with their recompile tags (the swatch, animations and fonts files
+    // ride the same seam and the same gate).
     $this->assertStringContainsString(DefaultsStylesheet::SCOPE_CLASS, $this->wrap());
     $attachments = $this->pageAttachments();
     $this->assertSame($libraries, $attachments['#attached']['library']);

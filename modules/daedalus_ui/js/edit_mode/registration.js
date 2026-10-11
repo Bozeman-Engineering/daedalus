@@ -36,6 +36,8 @@ import {
   getPartBehavior,
   registerShowMenuItem,
 } from './components/page-elements/view-registry';
+import { registerRowFacts } from './components/page-elements/row-facts-registry';
+import { registerPortalAction } from './components/portal/portal-actions';
 import {
   projectionIndex,
   projectionRoot,
@@ -72,6 +74,16 @@ const buildApp = () => ({
   verbs: {
     register: (verb) => Drupal.Daedalus.Verbs.register(verb),
   },
+  portal: {
+    // A doorway on what a join shows, offered by the portal chip and the
+    // tree's shown-document row alike (see components/portal/
+    // portal-actions.js for the contract): {id, label, icon?,
+    // applies(showing), run(showing, uuid)}. For a gesture that is this
+    // PAGE's, made on the shown document, where no verb reaches
+    // (daedalus_layout's claim of a slot door's default); returns
+    // unregister.
+    registerAction: registerPortalAction,
+  },
   editSession: {
     registerEngine: (engine) =>
       Drupal.Daedalus.EditSession.registerEngine(engine),
@@ -107,6 +119,15 @@ const buildApp = () => ({
     // time rather than at registration, since the behavior's own
     // registration is another queue callback that may run later.
     partBehavior: getPartBehavior,
+    // A row-facts provider (see row-facts-registry.js for the contract):
+    // {id, facts(address), doorways(address), subscribe?}. What another
+    // module TELLS about rows the tree already lists, drawn in the row's
+    // facts zone (a dot per variant an element wears, daedalus_stylish)
+    // and led in the row menu ahead of the verbs ("Edit {variant}"). On
+    // while registered, no toggle; a fact never adds a row and never
+    // touches reach, which is why this is not a view. Re-registering an
+    // id replaces the provider in place; returns unregister.
+    registerRowFacts,
     // A Show-menu item (see view-registry.js for the contract): {id,
     // label, icon?, checked, run}, rendered in the Page elements panel's
     // Show kebab after the view toggles, behind a separator. For a
@@ -132,7 +153,7 @@ const buildApp = () => ({
     setRowMarks: (keys) => store.dispatch(setMarkedKeys(keys ?? [])),
     // THE projection index, read-only (see projection-index.js): address →
     // {label, kind, bundle, parent, rowParent, children, rows, tier,
-    // owner?, tag?} over BOTH tiers, element keys and `key::selector` part
+    // can, owner?, tag?} over BOTH tiers, element keys and `key::selector` part
     // addresses. The same map labelForKey, typeForKey, traversal, the
     // breadcrumb and drag read, memoized on the mirror reference (rebuilt
     // only when a mutation response replaces the blueprint), so a module
@@ -210,6 +231,12 @@ const buildApp = () => ({
     // lands in the root flow, a page band's position.
     isRootFlowLocation: (location) =>
       Drupal.Daedalus.Drag.isRootFlowLocation(location),
+    // The controller's drop gate (drag-controller.js dropAllowed): insert
+    // of the container a gap target inserts into, through the one client
+    // gate. A placement door of a source's own (the Add panel's
+    // click-to-place) asks it before the spec's acceptsTarget, exactly as
+    // the pointer and the keyboard lift do for every resolved gap.
+    dropAllowed: (target) => Drupal.Daedalus.Drag.dropAllowed(target),
   },
 
   // Curated events. The store itself is app-private: subscribing to state
@@ -217,9 +244,13 @@ const buildApp = () => ({
   // free to change without breaking contrib.
   onSelectionChange: (callback) =>
     Drupal.Daedalus.Selection.onChange(callback),
-  // The target-aware counterpart: fires when the selection OR its styling
-  // target changes, so styling surfaces track the address without widening
-  // onSelectionChange (which stays key-only for element-scoped consumers).
+  // The styling-aware counterpart: the ONE subscription that fires when
+  // the selection, its subject facet (Selection.getTarget(), keyed by the
+  // selected element) OR its write address (Selection.getAddress(), the
+  // selection or an ancestor) changes, delivering ({selected, target,
+  // address}, previous), so styling surfaces track all three without
+  // widening onSelectionChange (which stays key-only for element-scoped
+  // consumers). There is no separate address event on purpose.
   onTargetChange: (callback) =>
     Drupal.Daedalus.Selection.onTargetChange(callback),
   onHoverChange: (callback) =>

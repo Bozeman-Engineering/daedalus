@@ -1,0 +1,8 @@
+name: 'Daedalus UI Stand-in Test'
+type: module
+description: 'Two blocks that build nothing, one of them forbidden to everyone, for the block stand-in kernel pin.'
+package: Testing
+core_version_requirement: ^11
+hidden: true
+dependencies:
+  - daedalus:daedalus_ui

@@ -1,6 +1,6 @@
 name: Daedalus Blueprint API Render Test
 type: module
-description: Observes the mutation-render flag from inside an entity render.
+description: Observes the mutation-render flag from inside an entity render and ships a block whose build throws an Error.
 package: Testing
 core_version_requirement: ^11
 hidden: true

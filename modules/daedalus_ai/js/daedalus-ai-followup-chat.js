@@ -11,7 +11,8 @@
  *   1. Find the active deepchat element.
  *   2. Add a synthetic AI bubble ("Painting your images…") and disable
  *      submit — same processing UX as a normal user-initiated chat turn.
- *   3. Direct-POST to deepchat URL with the LLM-facing message text. Loop
+ *   3. Direct-POST to connect.url a body derived from the element's connect
+ *      object (buildRequestBody) with the LLM-facing message text. Loop
  *      while should_continue (mirrors getAllMessages in deepchat-init.js).
  *
  * The page refresh needs no leg of its own: every response is fed through
@@ -101,13 +102,15 @@
      *   The user text for this turn.
      */
     loop(deepchatElement, payload, messageIndex, userText) {
-      const requestBody = {
-        thread_id: drupalSettings.ai_deepchat.thread_id,
-        assistant_id: drupalSettings.ai_deepchat.assistant_id,
-        show_copy_icon: drupalSettings.ai_deepchat.show_copy_icon,
-        structured_results: drupalSettings.ai_deepchat.structured_results,
-        messages: [{ role: 'user', text: userText }],
-      };
+      // The thread id is the live one ai_chatbot publishes on
+      // drupalSettings.ai_deepchat (ChatSidebar renders it there and
+      // deepchat-init.js rotates it on a history clear), the same read
+      // ai_chatbot's own continuation call makes.
+      const requestBody = this.buildRequestBody(
+        deepchatElement.connect,
+        drupalSettings.ai_deepchat.thread_id,
+        userText,
+      );
 
       fetch(deepchatElement.connect.url, {
         method: 'POST',
@@ -161,6 +164,35 @@
           );
           this.complete(deepchatElement, payload);
         });
+    },
+
+    /**
+     * Builds one chat-turn request body from the element's connect object.
+     *
+     * connect.additionalBodyProps is ai_chatbot's chat-turn request contract
+     * as ChatSidebar::build() spells it (drupal/ai 1.5: chat_processor_plugin,
+     * plugin_configuration, stream, contexts), the same object deep-chat
+     * sends a typed turn from and ai_chatbot's reset and continuation calls
+     * read. Spreading it keeps the follow-up on that one spine: nothing of
+     * the shape is spelled a second time here, so a contract move lands in
+     * the sidebar once and this lane follows.
+     *
+     * @param {object} connect
+     *   The <deep-chat> element's connect object.
+     * @param {string} threadId
+     *   The thread the turn belongs to.
+     * @param {string} text
+     *   The user text for the turn ('dummy_loading' on a continuation).
+     *
+     * @return {object}
+     *   The JSON body to POST to connect.url.
+     */
+    buildRequestBody(connect, threadId, text) {
+      return {
+        ...connect.additionalBodyProps,
+        thread_id: threadId,
+        messages: [{ role: 'user', text }],
+      };
     },
 
     /**

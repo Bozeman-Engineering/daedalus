@@ -1,3 +1,0 @@
-save stencils:
-  title: 'Save stencils'
-  description: 'Save composed elements as reusable stencils, push updates into existing content stencils, and manage them in the admin listing. Built-in stencils (shipped as files by modules) stay read-only regardless.'

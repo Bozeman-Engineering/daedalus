@@ -46,7 +46,7 @@ export const useMintRow = ({ space, face, canMint, source, onSettle }) => {
     saveMaterial(
       source,
       { kind: 'swatch', label: name, group: 'color', value: face.spelling },
-      Drupal.t('Added the swatch @label', { '@label': name }),
+      Drupal.t('Added the swatch !label', { '!label': name }),
     )
       .then((minted) => {
         // The op queue landed the minted record on the store; its style

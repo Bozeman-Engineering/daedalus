@@ -13,9 +13,9 @@ import { componentForUuid } from './component-for-uuid';
  * the tree), while a rendered leaf carrying one of these keys is rendered
  * evidence that the field is on the page. The editing gate
  * (selection/resolver.js keyForEditableItem) consults this so a field the
- * tree folds (a non-preserved root field on a Layout Builder display, a
- * display-hidden block field) still edits in place wherever a theme, a
- * field block or a display actually rendered it.
+ * tree folds (a root field on a Layout Builder display that a theme prints
+ * anyway, a display-hidden block field) still edits in place wherever a
+ * theme, a field block or a display actually rendered it.
  *
  * Pure over the mirror: no DOM, no store.
  *

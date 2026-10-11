@@ -36,7 +36,7 @@ export const PanelClose = () => {
       type="button"
       className="daedalus-ui-panel__close daedalus-ui-icon-button daedalus-ui-icon-button--muted"
       data-sidebar-close=""
-      aria-label={Drupal.t('Close @panel', { '@panel': Drupal.t('Styles') })}
+      aria-label={Drupal.t('Close !panel', { '!panel': Drupal.t('Styles') })}
       data-daedalus-ui-tooltip={Drupal.t('Close')}
       ref={ref}
     >

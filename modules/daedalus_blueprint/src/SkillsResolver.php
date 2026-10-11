@@ -129,7 +129,7 @@ class SkillsResolver implements SkillsResolverInterface {
    *   config by an installed module (a pending system's members resolve;
    *   only an id nothing lands and nothing ships refuses): a developer
    *   error in the shipping module, caught at discovery (the first cache
-   *   rebuild) like a malformed stencil file, never as a skill that
+   *   rebuild) like a malformed blueprint file, never as a skill that
    *   quietly went global.
    */
   protected function membership(string $module, string $skill_id, string $file, array $data): ?string {

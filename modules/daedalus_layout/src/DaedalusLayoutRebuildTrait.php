@@ -46,6 +46,9 @@ trait DaedalusLayoutRebuildTrait {
     $layout = [
       '#type' => 'layout_builder_plus',
       '#section_storage' => $section_storage,
+      // The replacement is the layout root alone: the page's canvas root
+      // (the main-entity wrapper around it) stays where it is.
+      '#canvas_root' => FALSE,
     ];
     $response->addCommand(new ReplaceCommand('#layout-builder', $layout));
 

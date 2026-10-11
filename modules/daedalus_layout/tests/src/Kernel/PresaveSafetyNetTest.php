@@ -19,7 +19,7 @@ use Drupal\Tests\daedalus\Kernel\NestedStorageKernelTestBase;
  *
  * The batched walkers migrate persisted stores, but an editing session
  * staged in tempstore before the update ran writes its stale layout back
- * through a normal entity save. The net (daedalus_layout_entity_presave() ->
+ * through a normal entity save. The net (EntityPresave::entityPresave() ->
  * PresaveSafetyNet) must converge those layouts at save time, before
  * layout_builder's inline block machinery persists any block_serialized
  * replacement, and must leave syncing saves alone.

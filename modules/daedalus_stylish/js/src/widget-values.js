@@ -44,6 +44,7 @@ import {
   swatchOptions,
   tokenOptions,
 } from './materials.js';
+import { scaleRow } from './style-guide.js';
 
 /**
  * Normalizes a committed value for stop matching.
@@ -468,15 +469,17 @@ const dedupe = (stops) => {
  *   faces from the same stop shape and the name carries what the paint
  *   cannot) and lit by the reference spelling ONLY (a literal equal to a
  *   token's current resolution is a different statement: it will not
- *   track a skin swap, so it stays custom). An ordered `stops:` list beside it curates
- *   WHICH minted tokens the row offers, in list order (offer-shaping,
- *   not legality: validation keeps accepting the whole scale; entries
- *   compare as string forms, so numeric YAML names work). Names the
- *   roster does not carry drop client-side (token names are SKIN DATA
- *   and may drift under guide code; the payload build logs the drift),
- *   the whole scale stands in when none survive, and a scale minting
- *   nothing yields the honest empty row. Any `allowed:` literals
- *   beside the scale append after the tokens (the server's
+ *   track a skin swap, so it stays custom). WHICH of the minted tokens
+ *   the row offers is scaleRow (style-guide.js, the roster's
+ *   scaleStops() twin): the element's curated `stops:` in list order
+ *   where its declaration lists them (names the roster does not carry
+ *   drop; the scale's offered tokens stand in when none survive), else
+ *   the scale's tokens the skin marks `offered`, in stored order; on a
+ *   curated row the site-minted tokens follow while offered on open and
+ *   guarded systems and are withheld on strict. Offer-shaping, not
+ *   legality: validation keeps accepting the whole scale, and a scale
+ *   minting nothing yields the honest empty row. Any `allowed:`
+ *   literals beside the scale append after the tokens (the server's
  *   allowed-beside-scale rule).
  * - A bare `allowed:` list IS the row, in list order, the guide's EXACT
  *   spellings as canonical writes (allowed checks are verbatim on both
@@ -519,14 +522,11 @@ export const stopsFor = (guide, materials, constraints, fallback) => {
   let stops;
   if (typeof scale === 'string') {
     const declaration = guide?.tokenScales?.[scale];
-    const minted = scaleTokens(guide, materials, scale);
-    const names = Array.isArray(constraints?.stops)
-      ? constraints.stops.map((name) => String(name))
-      : [];
-    const curated = names
-      .map((name) => minted.find((token) => token.name === name))
-      .filter((token) => token !== undefined);
-    const tokens = curated.length ? curated : minted;
+    const tokens = scaleRow(
+      guide,
+      scaleTokens(guide, materials, scale),
+      constraints,
+    );
     const numeric =
       declaration?.shape === 'dimension' || declaration?.shape === 'number';
     stops = [

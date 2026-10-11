@@ -72,7 +72,14 @@ class AnimationManagerTest extends KernelTestBase {
     $this->installEntitySchema('daedalus_variant');
     $this->installEntitySchema('daedalus_skin');
     $this->installEntitySchema('daedalus_animation');
-    $this->installSchema('daedalus_stylish', ['daedalus_variant_usage', 'daedalus_swatch_usage', 'daedalus_animation_usage']);
+    $this->installEntitySchema('daedalus_font');
+    $this->installSchema('daedalus_stylish', [
+      'daedalus_variant_usage',
+      'daedalus_swatch_usage',
+      'daedalus_animation_usage',
+      'daedalus_token_usage',
+      'daedalus_font_usage',
+    ]);
     $this->installConfig(['daedalus_stylish']);
     $this->container->get('daedalus_stylish.field_manager')->enable('entity_test', 'entity_test');
     // The importer (the shipped-lock tests) switches to an administrative
@@ -285,7 +292,7 @@ class AnimationManagerTest extends KernelTestBase {
     $variant->setStyles(['' => ['default' => ['animation-name' => 'motion-fade_in']]]);
     $variant->save();
     $skin = DaedalusStylishSkin::create(['label' => 'Site skin', 'machine_name' => 'site_skin']);
-    $skin->setDefaults(['kind:block' => ['' => ['default' => ['animation-name' => 'motion-fade_in, spin']]]]);
+    $skin->setPackageDefaults(['kind:block' => ['' => ['default' => ['animation-name' => 'motion-fade_in, spin']]]]);
     $skin->save();
 
     // The gesture stages the Batch API job (one rewrite per wearing source
@@ -322,7 +329,7 @@ class AnimationManagerTest extends KernelTestBase {
     $this->assertSame(['' => ['default' => ['animation-name' => 'none']]], $variant_storage->load($variant->id())->getStyles());
     $skin_storage = $this->container->get('entity_type.manager')->getStorage('daedalus_skin');
     $skin_storage->resetCache([$skin->id()]);
-    $this->assertSame(['kind:block' => ['' => ['default' => ['animation-name' => 'none, spin']]]], $skin_storage->load($skin->id())->getDefaults());
+    $this->assertSame(['kind:block' => ['' => ['default' => ['animation-name' => 'none, spin']]]], $skin_storage->load($skin->id())->packageDefaults());
     $this->assertNull($this->manager()->loadAnimation('fade_in'));
     $this->assertSame(3, $context['results']['rewritten']);
     $this->assertSame('Fade in', $context['results']['deleted']);

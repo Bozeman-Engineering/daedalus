@@ -18,27 +18,6 @@ daedalus_ui.load_editable_page:
   requirements:
     _permission: 'use daedalus ui edit mode'
 
-daedalus_ui.mode.enable:
-  path: '/daedalus-ui/mode/enable/{plugin_id}/{entity_type_id}/{entity_bundle_id}'
-  defaults:
-    _controller: '\Drupal\daedalus_ui\Controller\ModeController::enable'
-  requirements:
-    _permission: 'configure daedalus ui modes'
-
-daedalus_ui.mode.disable:
-  path: '/daedalus-ui/mode/disable/{plugin_id}/{entity_type_id}/{entity_bundle_id}'
-  defaults:
-    _controller: '\Drupal\daedalus_ui\Controller\ModeController::disable'
-  requirements:
-    _permission: 'configure daedalus ui modes'
-
-daedalus_ui.mode.configure:
-  path: '/daedalus-ui/mode/configure/{plugin_id}/{entity_type_id}/{entity_bundle_id}'
-  defaults:
-    _form: '\Drupal\daedalus_ui\Form\ModeConfigureForm'
-  requirements:
-    _permission: 'configure daedalus ui modes'
-
 daedalus_ui.settings.save_user_hotkey:
   path: '/daedalus-ui/save-user-hotkey/{binding_id}/{hotkey}'
   defaults:
@@ -110,22 +89,3 @@ daedalus_ui.responsive_preview:
     _permission: 'use daedalus ui edit mode'
   options:
     _daedalus_ui.popout: true
-
-# The standalone editing surface for a block_content entity whose display is
-# managed by Layout Builder (e.g. a footer placed in a theme region). The
-# canvas is the entity view itself, the same shape as node editing: param
-# conversion applies (tempstore hydration, so staging and preview work),
-# access gates on the content entity, and mutation-response markup matches
-# the page shape. The bare-label title is the inline label editing target.
-daedalus_ui.block_content.edit:
-  path: '/block-content/{block_content}/{view_mode}'
-  defaults:
-    _controller: '\Drupal\daedalus_ui\Controller\BlockContentEdit::render'
-    _title_callback: '\Drupal\daedalus_ui\Controller\BlockContentEdit::title'
-    view_mode: 'full'
-  requirements:
-    _entity_access: block_content.update
-  options:
-    parameters:
-      block_content:
-        type: entity:block_content

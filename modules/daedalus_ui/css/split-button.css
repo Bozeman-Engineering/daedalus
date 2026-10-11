@@ -1,7 +1,10 @@
+/* The top bar's split control (ButtonBuilderTrait::buildSplitButton()): a
+   main button and a menu caret reading as one pill. The caret opens the
+   shared menu primitive (daedalus_ui/menu), so the control carries no
+   dropdown of its own; a caret with nothing to list renders hidden. */
 :is(#extra-specificity-hack, [data-drupal-admin-styles]),
 html {
   .daedalus-ui-split-button {
-    position: relative;
     display: flex;
     align-items: stretch;
   }
@@ -11,46 +14,25 @@ html {
     border-radius: var(--daedalus-border-radius) 0 0 var(--daedalus-border-radius);
   }
 
+  /* A real <button>: core's toolbar-button vocabulary styles it, the
+     control's own rules only shape the seam with the main half. */
   .daedalus-ui-split-button__caret {
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 0 4px;
+    padding-inline: 2px;
     cursor: pointer;
-    border-left: 1px solid rgb(255, 255, 255, 0.2);
+    border: 0;
+    border-left: 1px solid var(--daedalus-lines);
     border-radius: 0 var(--daedalus-border-radius) var(--daedalus-border-radius) 0;
   }
 
-  .daedalus-ui-split-button__caret:hover {
-    background-color: rgb(255, 255, 255, 0.1);
+  .daedalus-ui-split-button__caret[hidden] {
+    display: none;
   }
 
-  .daedalus-ui-split-button__chevron {
-    font-size: var(--daedalus-icon-size);
-    line-height: 1;
-  }
-
-  .daedalus-ui-split-button__dropdown {
-    position: absolute;
-    z-index: 1262;
-    top: 100%;
-    right: 0;
-    visibility: hidden;
-    transition:
-      opacity 0.3s ease,
-      transform 0.3s ease,
-      visibility 0.3s ease;
-    transform: translateY(-10px);
-    opacity: 0;
-    border: 1px solid var(--daedalus-lines);
+  /* With the caret hidden the main half is the whole pill again. */
+  .daedalus-ui-split-button:has(.daedalus-ui-split-button__caret[hidden]) .daedalus-ui-split-button__main {
     border-radius: var(--daedalus-border-radius);
-    background: var(--daedalus-background);
-    box-shadow: 0 4px 12px rgb(0, 0, 0, 0.15);
-  }
-
-  .daedalus-ui-split-button__dropdown--open {
-    visibility: visible;
-    transform: translateY(0);
-    opacity: 1;
   }
 }

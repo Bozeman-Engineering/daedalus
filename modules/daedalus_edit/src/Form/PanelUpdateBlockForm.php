@@ -6,6 +6,7 @@ use Drupal\Core\Entity\Entity\EntityFormDisplay;
 use Drupal\Core\Render\Element;
 use Drupal\Core\Form\SubformState;
 use Drupal\daedalus_blueprint\ExtractedValue;
+use Drupal\daedalus_blueprint\Host\HostResolver;
 use Drupal\daedalus_edit\DaedalusEditFormTrait;
 use Drupal\daedalus_edit\EditIdentity;
 use Drupal\daedalus_edit\FormCommit;
@@ -43,6 +44,11 @@ class PanelUpdateBlockForm extends UpdateBlockForm implements EntityFormInterfac
   use DaedalusEditFormTrait;
 
   /**
+   * The host resolver: the panel form's root is its storage's host.
+   */
+  protected HostResolver $hostResolver;
+
+  /**
    * The placement settings the panel form offers beside the block's fields.
    */
   protected const PANEL_SETTINGS = [
@@ -64,6 +70,7 @@ class PanelUpdateBlockForm extends UpdateBlockForm implements EntityFormInterfac
     $instance->dispatcher = $container->get('event_dispatcher');
     $instance->requestStack = $container->get('request_stack');
     $instance->formCommit = $container->get('daedalus_edit.form_commit');
+    $instance->hostResolver = $container->get('daedalus_blueprint.host_resolver');
     return $instance;
   }
 
@@ -172,7 +179,10 @@ class PanelUpdateBlockForm extends UpdateBlockForm implements EntityFormInterfac
    *   The block field name, or 'label' for the placement label.
    */
   protected function commitProperty(array $form, FormStateInterface $form_state, string $property): void {
-    $root = $this->getMainEntity($form, $form_state);
+    $root = $this->hostResolver->fromSectionStorage($this->sectionStorage);
+    if ($root === NULL) {
+      throw new \LogicException('Daedalus Edit: the panel block form submitted off a hosted layout.');
+    }
 
     if ($property === 'label') {
       $value = (string) $form_state->getValue(['settings', 'label']);
@@ -200,7 +210,7 @@ class PanelUpdateBlockForm extends UpdateBlockForm implements EntityFormInterfac
       $root,
       $this->uuid,
       [$property => $value],
-      $root->language()->getId(),
+      $root->entity()->language()->getId(),
       $label,
       $changed,
     );
@@ -231,11 +241,7 @@ class PanelUpdateBlockForm extends UpdateBlockForm implements EntityFormInterfac
    * {@inheritdoc}
    */
   public function getMainEntity(array &$form, FormStateInterface $form_state): EntityInterface {
-    $storage = $this->sectionStorage;
-    if ($storage instanceof NestedSectionStorageInterface) {
-      return $storage->getRootStorage()->getContextValue('entity');
-    }
-    return $storage->getContextValue('entity');
+    return $this->hostResolver->fromSectionStorage($this->sectionStorage)->entity();
   }
 
   /**

@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Drupal\daedalus_blueprint\Materials;
 
-use Drupal\Core\Entity\FieldableEntityInterface;
+use Drupal\daedalus_blueprint\Host\HostInterface;
 use Drupal\daedalus_blueprint\NodeTree\NodeTreeBuilder;
 
 /**
@@ -13,9 +13,9 @@ use Drupal\daedalus_blueprint\NodeTree\NodeTreeBuilder;
  * The one read behind every "what is this element using" surface (the
  * ACTIVE SELECTION block, read-back tools): the element's style stack
  * names the variants it wears and how each wearing arrived, its lean node
- * carries the placement's stencil stamp, and the roster knows their labels
+ * carries the placement's blueprint stamp, and the roster knows their labels
  * and spellings, so a consumer gets records and renders them however its
- * surface speaks (MaterialsRoster::describe()). Reads the entity it is
+ * surface speaks (MaterialsRoster::describe()). Reads the host it is
  * handed: callers decide whether that is the saved or the staged copy.
  */
 class ElementMaterials {
@@ -64,8 +64,8 @@ class ElementMaterials {
    * tell the AI the element wears what its section wears, and an
    * apply or detach at this key could never act on it.
    *
-   * @param \Drupal\Core\Entity\FieldableEntityInterface $entity
-   *   The host entity whose style map answers for the element.
+   * @param \Drupal\daedalus_blueprint\Host\HostInterface $host
+   *   The host whose style map answers for the element.
    * @param string $key
    *   The address's selectable key (a style-map key: an element, a part
    *   or a rule).
@@ -73,11 +73,11 @@ class ElementMaterials {
    * @return \Drupal\daedalus_blueprint\Materials\Wearing[]
    *   The wearings, bottom to top of the stack.
    */
-  public function worn(FieldableEntityInterface $entity, string $key): array {
+  public function worn(HostInterface $host, string $key): array {
     if ($this->styleStack === NULL) {
       return [];
     }
-    $map = $this->treeBuilder->styleMap($entity);
+    $map = $this->treeBuilder->styleMap($host);
     // References live on the root entry and on its rules' entries, so a
     // root the map carries nothing under wears nothing. The map's keys
     // are style-map keys by construction (the validator gates every
@@ -99,7 +99,7 @@ class ElementMaterials {
     }
     $roster = $this->rosterBuilder->build();
     $worn = [];
-    foreach ($this->styleStack->stack($map, $key, ['entity' => $entity])['layers'] as $layer) {
+    foreach ($this->styleStack->stack($map, $key, ['host' => $host])['layers'] as $layer) {
       // The variant tier (StyleStack::TIER_VARIANT, spelled here because
       // the stack's module is optional): what this key's own carriers
       // wear.
@@ -115,35 +115,35 @@ class ElementMaterials {
   }
 
   /**
-   * The stencil an element was placed from, or NULL.
+   * The blueprint an element was placed from, or NULL.
    *
-   * Reads the lean node's `stencil` key (the serializer's read-only surface
+   * Reads the lean node's `blueprint` key (the serializer's read-only surface
    * of the instantiate stamp on a section's third-party settings or a
    * component's additional data) and resolves it against the roster. Only a
    * bare element key (`container:{uuid}` / `block:{uuid}`) names a
    * placement; a field or part key is not one. A stamp the roster no longer
-   * serves (a deleted or unpublished stencil) is residue, exactly as the
+   * serves (a deleted or unpublished blueprint) is residue, exactly as the
    * printer treats it: never named.
    *
-   * @param \Drupal\Core\Entity\FieldableEntityInterface $entity
-   *   The host entity whose layout carries the element.
+   * @param \Drupal\daedalus_blueprint\Host\HostInterface $host
+   *   The host whose document carries the element.
    * @param string $key
    *   The element's selectable key.
    *
    * @return \Drupal\daedalus_blueprint\Materials\MaterialRecord|null
-   *   The stencil record, or NULL when the element is not a placement or
-   *   its stencil is gone.
+   *   The blueprint record, or NULL when the element is not a placement or
+   *   its blueprint is gone.
    */
-  public function placedFrom(FieldableEntityInterface $entity, string $key): ?MaterialRecord {
+  public function placedFrom(HostInterface $host, string $key): ?MaterialRecord {
     if (!preg_match('/^(?:container|block):([^:]+)$/', $key, $match)) {
       return NULL;
     }
-    $node = $this->findNode($this->treeBuilder->build($entity), $match[1]);
-    $stencil = $node['stencil'] ?? NULL;
-    if (!is_string($stencil) || $stencil === '') {
+    $node = $this->findNode($this->treeBuilder->build($host), $match[1]);
+    $blueprint = $node['blueprint'] ?? NULL;
+    if (!is_string($blueprint) || $blueprint === '') {
       return NULL;
     }
-    return $this->rosterBuilder->build()->get(MaterialKind::Stencil, $stencil);
+    return $this->rosterBuilder->build()->get(MaterialKind::Blueprint, $blueprint);
   }
 
   /**
@@ -156,11 +156,11 @@ class ElementMaterials {
    * style entry (a swatch captured from what it wears, a variant saved
    * from its look).
    */
-  public function keyFor(FieldableEntityInterface $entity, string $uuid): ?string {
-    if ($entity->uuid() === $uuid) {
+  public function keyFor(HostInterface $host, string $uuid): ?string {
+    if ($host->uuid() === $uuid) {
       return 'entity:' . $uuid;
     }
-    $node = $this->findNode($this->treeBuilder->build($entity), $uuid);
+    $node = $this->findNode($this->treeBuilder->build($host), $uuid);
     return match ($node['kind'] ?? NULL) {
       'container' => 'container:' . $uuid,
       'block' => 'block:' . $uuid,

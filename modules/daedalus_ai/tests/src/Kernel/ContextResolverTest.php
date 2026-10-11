@@ -6,13 +6,11 @@ namespace Drupal\Tests\daedalus_ai\Kernel;
 
 use Drupal\daedalus_ai\ElementSelectionResolver;
 use Drupal\daedalus_ai\RouteEntityResolver;
-use Drupal\block_content\Entity\BlockContent;
-use Drupal\block_content\Entity\BlockContentType;
+use Drupal\daedalus_blueprint\Host\HostInterface;
+use Drupal\daedalus_blueprint\LayoutBuilder\DisplayHost;
 use Drupal\daedalus_blueprint\LayoutBuilder\LayoutSerializer;
 use Drupal\daedalus_blueprint\Materials\ElementMaterials;
 use Drupal\daedalus_stylish\Entity\DaedalusStylishVariant;
-use Drupal\field\Entity\FieldConfig;
-use Drupal\field\Entity\FieldStorageConfig;
 use Drupal\KernelTests\KernelTestBase;
 use Drupal\layout_builder\Entity\LayoutBuilderEntityViewDisplay;
 use Drupal\layout_builder\Section;
@@ -45,6 +43,13 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  *   client-supplied identifiers — a key that names anything but the root
  *   entity's own elements resolves to a generic description carrying no
  *   entity metadata at all, and anatomy sub-element keys are rejected.
+ * - The two styling facts ride separately: a `selector` is the SUBJECT
+ *   facet under the element (the rows the user reads) and an `address`
+ *   ({key, selector}) is the WRITE address (a rule on the element or an
+ *   ancestor). The element described is always the selection's own key;
+ *   the address is its own sentence naming the rule, its owner and the
+ *   style-map key; an address outside the grammar, with an owner outside
+ *   the vocabulary, or malformed is dropped.
  * - What an element WEARS rides its style stack: the reference layers of
  *   the root entity's stack for the key (a part key answers with its
  *   root's), each wearing rendered by label with its origin (applied here
@@ -53,15 +58,13 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  *   here; an unrostered reference is not worn, and no value ever prints
  *   (the values are explain_element_styles' answer).
  * - Where a placement was PLACED FROM rides its entry too: the staged
- *   node's stencil stamp resolves to the roster's record by id and label
- *   (so "update the stencil this came from" needs no print read); a stamp
- *   the roster no longer serves is residue and is not named.
+ *   node's blueprint stamp resolves to the roster's record by id and label
+ *   (so "update the blueprint this came from" needs no print read); a
+ *   stamp the roster no longer serves is residue and is not named.
  *
  * RouteEntityResolver:
  * - Delegates to daedalus_ui' derivation spine (deriveEntityFromRoute),
- *   so it resolves any route the page builder considers "about one entity":
- *   canonical entity pages AND the standalone block_content editing surface
- *   (/block-content/{id}), not just entity.*.canonical routes.
+ *   so it resolves any route the page builder considers "about one entity".
  * - Returns NULL for non-entity, external, and invalid paths.
  * - Gates on view access (an unviewable entity resolves to NULL).
  * - Caches per request (a second resolve of the same path returns the cached
@@ -101,10 +104,6 @@ class ContextResolverTest extends KernelTestBase {
     'daedalus_tempstore',
     'file',
     'daedalus_ui',
-    // block_content: the standalone editing surface case the spine resolves
-    // and the canonical regex never could.
-    'block',
-    'block_content',
   ];
 
   /**
@@ -115,7 +114,6 @@ class ContextResolverTest extends KernelTestBase {
 
     $this->installEntitySchema('user');
     $this->installEntitySchema('entity_test');
-    $this->installEntitySchema('block_content');
     // layout_builder's entity-delete hook reads inline block usage.
     $this->installSchema('layout_builder', ['inline_block_usage']);
     $this->installConfig(['filter', 'text']);
@@ -132,7 +130,14 @@ class ContextResolverTest extends KernelTestBase {
    *   A resolver whose every key falls back to key-vocabulary descriptions.
    */
   private function selectionResolver(): ElementSelectionResolver {
-    return new ElementSelectionResolver(NULL);
+    return new ElementSelectionResolver($this->container->get('daedalus_blueprint.host_resolver'), NULL);
+  }
+
+  /**
+   * The host of a root entity, as the route resolver hands it over.
+   */
+  private function hostOf(object $root): HostInterface {
+    return $this->container->get('daedalus_blueprint.host_resolver')->fromEntity($root);
   }
 
   /**
@@ -147,6 +152,7 @@ class ContextResolverTest extends KernelTestBase {
       $this->container->get('daedalus_blueprint.access_checker'),
       $this->container->get('router.no_access_checks'),
       $this->container->get('daedalus_ui.ui'),
+      $this->container->get('daedalus_blueprint.verdict_stamper'),
     );
   }
 
@@ -184,6 +190,28 @@ class ContextResolverTest extends KernelTestBase {
       ['key' => "container:$container_uuid", 'selector' => '>   pb-text', 'number' => 11],
       // A selector outside the grammar is dropped: the owner alone.
       ['key' => "container:$container_uuid", 'selector' => '[href]', 'number' => 12],
+      // The two styling facts: a minted list item (the subject facet on
+      // the block) styled at its container's `li` rule (the write
+      // address). The element stays the block; the address is its own
+      // sentence.
+      [
+        'key' => "block:$block_uuid",
+        'selector' => '.s-abc',
+        'address' => ['key' => "container:$container_uuid", 'selector' => 'li'],
+        'number' => 13,
+      ],
+      // An address on the element itself (its own tag tier) with no facet.
+      ['key' => "block:$block_uuid", 'address' => ['key' => "block:$block_uuid", 'selector' => '  p '], 'number' => 14],
+      // An address outside the grammar, one whose owner is not in the
+      // vocabulary, and one not shaped {key, selector}: each dropped, the
+      // element described alone.
+      [
+        'key' => "block:$block_uuid",
+        'address' => ['key' => "container:$container_uuid", 'selector' => '[href]'],
+        'number' => 15,
+      ],
+      ['key' => "block:$block_uuid", 'address' => ['key' => 'bogus', 'selector' => 'li'], 'number' => 16],
+      ['key' => "block:$block_uuid", 'address' => "container:$container_uuid::li", 'number' => 17],
       // The block placement's displayed label.
       ['key' => "block:$block_uuid:label", 'label' => 'Heading', 'number' => 6],
       // A container (a Layout Builder section, the container-model
@@ -202,23 +230,43 @@ class ContextResolverTest extends KernelTestBase {
       ['key' => 'bogus', 'number' => 7],
     ];
 
-    $resolved = $this->selectionResolver()->resolve($selections, $root);
+    $resolved = $this->selectionResolver()->resolve($selections, $this->hostOf($root));
 
     // The ksort put the kept selections in ascending number order despite the
     // input listing 2 first; the malformed and unknown-prefix entries
     // produced nothing.
-    $this->assertSame([1, 2, 4, 5, 6, 8, 11, 12], array_keys($resolved), 'Results are ksorted by selection number; malformed and retired-prefix keys are dropped.');
+    $this->assertSame([1, 2, 4, 5, 6, 8, 11, 12, 13, 14, 15, 16, 17], array_keys($resolved), 'Results are ksorted by selection number; malformed and retired-prefix keys are dropped.');
 
-    // An address describes its owner and carries the rule as the styling
-    // target, naming the style-map key styling acts at; the two spellings
-    // (a `::` key, a key plus selector) read the same, the selector
-    // canonical; a selector outside the grammar leaves the owner alone.
+    // A subject facet describes its element and carries the rule as the
+    // styling target, naming the style-map key styling acts at when no
+    // address stands; the two spellings (a `::` key, a key plus selector)
+    // read the same, the selector canonical; a selector outside the
+    // grammar leaves the element alone.
     $this->assertStringContainsString('Block (UUID: ' . $block_uuid . ')', $resolved[5]['description']);
     $this->assertSame('the rule ".hero-image" under it (style-map key block:' . $block_uuid . '::.hero-image): styling acts on every element the rule matches, not on this element alone', $resolved[5]['target']);
+    $this->assertArrayNotHasKey('address', $resolved[5], 'A subject alone carries no address.');
     $this->assertStringContainsString('Container (UUID: ' . $container_uuid . ')', $resolved[11]['description']);
     $this->assertSame('the rule "> pb-text" under it (style-map key container:' . $container_uuid . '::> pb-text): styling acts on every element the rule matches, not on this element alone', $resolved[11]['target']);
     $this->assertArrayNotHasKey('target', $resolved[12], 'A selector outside the grammar is dropped.');
     $this->assertArrayNotHasKey('target', $resolved[8], 'A bare key carries no target.');
+
+    // The two facts: the element described is the SELECTION (the block,
+    // never the address's container), the facet is the subject being
+    // read, and the address names the rule, its owner (the ancestor's
+    // kind and label) and the style-map key the write lands at.
+    $this->assertStringContainsString('Block (UUID: ' . $block_uuid . ')', $resolved[13]['description'], 'The element stays the selection under an address.');
+    $this->assertStringNotContainsString('Container', $resolved[13]['description']);
+    $this->assertSame('the rule ".s-abc" under it (style-map key block:' . $block_uuid . '::.s-abc): the elements whose styles the user is reading; styling acts at the address below, not here', $resolved[13]['target']);
+    $this->assertSame('styling acts at the rule "li" on its ancestor Container (UUID: ' . $container_uuid . ') (style-map key container:' . $container_uuid . '::li): every element it matches, this one included', $resolved[13]['address']);
+    // An address on the element's own key: no facet, the owner is "this
+    // element", the selector canonicalized.
+    $this->assertArrayNotHasKey('target', $resolved[14]);
+    $this->assertSame('styling acts at the rule "p" on this element (style-map key block:' . $block_uuid . '::p): every element it matches, this one included', $resolved[14]['address']);
+    // Dropped addresses leave the element described alone.
+    foreach ([15, 16, 17] as $number) {
+      $this->assertArrayNotHasKey('address', $resolved[$number], "Address $number is dropped: outside the grammar, an unknown owner, or malformed.");
+      $this->assertStringContainsString('Block (UUID: ' . $block_uuid . ')', $resolved[$number]['description']);
+    }
 
     // The block falls back to the key-vocabulary description (no
     // element_resolver wired), including the root entity context.
@@ -307,6 +355,7 @@ class ContextResolverTest extends KernelTestBase {
 
     $materials = $this->container->get('daedalus_blueprint.element_materials');
     $resolver = new ElementSelectionResolver(
+      $this->container->get('daedalus_blueprint.host_resolver'),
       NULL,
       $materials,
       $this->container->get('daedalus_blueprint.storage_handler'),
@@ -322,7 +371,7 @@ class ContextResolverTest extends KernelTestBase {
       // root's wearing (ElementMaterials::worn()).
       ['key' => "block:$block_uuid", 'selector' => '.text-block-link', 'number' => 6],
     ];
-    $resolved = $resolver->resolve($selection, $root);
+    $resolved = $resolver->resolve($selection, $this->hostOf($root));
     $this->assertSame('button "Button" (class="button")', $resolved[6]['materials'], 'A target reads the wear at its address.');
     $this->assertSame('the rule ".text-block-link" under it (style-map key block:' . $block_uuid . '::.text-block-link): styling acts on every element the rule matches, not on this element alone', $resolved[6]['target']);
 
@@ -353,7 +402,7 @@ class ContextResolverTest extends KernelTestBase {
     // A stale origin prints by machine name: the fact stays visible; the
     // container's own wearing of the deleted composition is gone with it.
     $card->delete();
-    $resolved = $resolver->resolve($selection, $root);
+    $resolved = $resolver->resolve($selection, $this->hostOf($root));
     $this->assertSame('row "Row" via card_left', $resolved[3]['materials']);
     $this->assertArrayNotHasKey('materials', $resolved[1]);
   }
@@ -396,6 +445,7 @@ class ContextResolverTest extends KernelTestBase {
 
     $materials = $this->container->get('daedalus_blueprint.element_materials');
     $resolver = new ElementSelectionResolver(
+      $this->container->get('daedalus_blueprint.host_resolver'),
       NULL,
       $materials,
       $this->container->get('daedalus_blueprint.storage_handler'),
@@ -403,7 +453,7 @@ class ContextResolverTest extends KernelTestBase {
     $resolved = $resolver->resolve([
       ['key' => "block:$member_uuid", 'number' => 1],
       ['key' => "container:$container_uuid", 'selector' => '> pb-text', 'number' => 2],
-    ], $root);
+    ], $this->hostOf($root));
     $this->assertArrayNotHasKey('materials', $resolved[1], 'A member under a wearing rule wears nothing of its own.');
     $this->assertSame('button "Button" (class="button")', $resolved[2]['materials'], 'The rule, as a target, wears the look.');
 
@@ -460,25 +510,22 @@ class ContextResolverTest extends KernelTestBase {
     $this->installEntitySchema('daedalus_variant');
     $this->installEntitySchema('daedalus_swatch');
     $this->installEntitySchema('daedalus_animation');
+    $this->installEntitySchema('daedalus_font');
     $this->installEntitySchema('daedalus_skin');
     // Saving a styled entity records variant, swatch and animation usage.
     $this->installSchema('daedalus_stylish', [
       'daedalus_variant_usage',
       'daedalus_swatch_usage',
       'daedalus_animation_usage',
+      'daedalus_token_usage',
+      'daedalus_font_usage',
     ]);
     $this->installConfig(['daedalus_stylish']);
-    FieldStorageConfig::create([
-      'field_name' => 'daedalus_stylish_styles',
-      'entity_type' => 'entity_test',
-      'type' => 'daedalus_stylish_style_map',
-    ])->save();
-    FieldConfig::create([
-      'field_name' => 'daedalus_stylish_styles',
-      'entity_type' => 'entity_test',
-      'bundle' => 'entity_test',
-      'label' => 'Styles',
-    ])->save();
+    // The product way: the field manager owns the style map field, and a
+    // Layout Builder display saved on entity_test (a bundle-less type, so
+    // no Edit Mode carrier gates it) after daedalus_stylish is enabled has
+    // already created it; enable() is then a no-op.
+    $this->container->get('daedalus_stylish.field_manager')->enable('entity_test', 'entity_test');
     $this->setUpCurrentUser([], [], TRUE);
   }
 
@@ -486,8 +533,8 @@ class ContextResolverTest extends KernelTestBase {
    * ElementSelectionResolver: placement provenance rides each element's entry.
    *
    * A real layout on the root entity: a section stamped with the test
-   * provider's `hero` stencil (the section's third-party settings, the
-   * section-rooted slot), a block stamped with a stencil the roster no
+   * provider's `hero` blueprint (the section's third-party settings, the
+   * section-rooted slot), a block stamped with a blueprint the roster no
    * longer serves (the component's additional data, the block-rooted slot)
    * and a plain block. daedalus_layout gives the section its selectable uuid.
    */
@@ -506,10 +553,10 @@ class ContextResolverTest extends KernelTestBase {
     $plain_uuid = '44444444-4444-4444-4444-444444444444';
     $section = new Section('layout_onecol', [], [], [
       'daedalus_layout' => ['uuid' => $container_uuid],
-      LayoutSerializer::STENCIL_PROVENANCE_KEY => ['stencil' => 'hero'],
+      LayoutSerializer::BLUEPRINT_PROVENANCE_KEY => ['blueprint' => 'hero'],
     ]);
     $section->appendComponent(new SectionComponent($dead_uuid, 'content', ['id' => 'system_powered_by_block'], [
-      LayoutSerializer::STENCIL_PROVENANCE_KEY => 'gone',
+      LayoutSerializer::BLUEPRINT_PROVENANCE_KEY => 'gone',
     ]));
     $section->appendComponent(new SectionComponent($plain_uuid, 'content', ['id' => 'system_powered_by_block']));
     $root = $this->container->get('entity_type.manager')
@@ -521,6 +568,7 @@ class ContextResolverTest extends KernelTestBase {
     $root->save();
 
     $resolver = new ElementSelectionResolver(
+      $this->container->get('daedalus_blueprint.host_resolver'),
       NULL,
       $this->container->get('daedalus_blueprint.element_materials'),
       $this->container->get('daedalus_blueprint.storage_handler'),
@@ -530,7 +578,7 @@ class ContextResolverTest extends KernelTestBase {
       ['key' => "block:$dead_uuid", 'number' => 2],
       ['key' => "block:$plain_uuid", 'number' => 3],
       ['key' => "field:{$root->uuid()}:name", 'number' => 4],
-    ], $root);
+    ], $this->hostOf($root));
 
     // Identity only: the id the update gesture targets and the label a
     // person says; never the placement spelling (provenance is a fact to
@@ -562,25 +610,13 @@ class ContextResolverTest extends KernelTestBase {
     // A canonical entity path resolves to the entity.
     $resolved = $resolver->resolve($path);
     $this->assertNotNull($resolved);
-    $this->assertSame('entity_test', $resolved->getEntityTypeId());
+    $this->assertSame('entity_test', $resolved->entityTypeId());
     $this->assertSame((string) $entity->id(), (string) $resolved->id());
 
     // Non-entity, external, and garbage paths all resolve to NULL.
     $this->assertNull($resolver->resolve('/user/logout'), 'A non-entity route resolves to NULL.');
     $this->assertNull($resolver->resolve('https://example.com/node/1'), 'An external URL resolves to NULL.');
     $this->assertNull($resolver->resolve('/this/path/does/not/exist'), 'An invalid path resolves to NULL.');
-
-    // The standalone block_content editing surface resolves through the
-    // derivation spine: /block-content/{id} is not an entity.*.canonical
-    // route, yet it is "the page the user is on" when editing e.g. a footer,
-    // so chat must get it as entity context.
-    BlockContentType::create(['id' => 'basic', 'label' => 'Basic'])->save();
-    $block = BlockContent::create(['type' => 'basic', 'info' => 'Footer']);
-    $block->save();
-    $resolved_block = $resolver->resolve('/block-content/' . $block->id());
-    $this->assertNotNull($resolved_block, 'The block_content editing surface resolves to its entity.');
-    $this->assertSame('block_content', $resolved_block->getEntityTypeId());
-    $this->assertSame((string) $block->id(), (string) $resolved_block->id());
 
     // Per-request cache: delete the entity, then resolve the SAME path again on
     // the SAME resolver. The cached instance is returned (consistent result)
@@ -603,6 +639,100 @@ class ContextResolverTest extends KernelTestBase {
       $this->routeResolver()->resolve('/entity_test/' . $entity2->id()),
       'An entity the current user cannot view resolves to NULL.',
     );
+  }
+
+  /**
+   * RouteEntityResolver: a template route resolves its display host.
+   *
+   * Core's manage-display layout route (field_ui builds it) carries a
+   * defaults storage, which the derivation spine answers with the
+   * display's host; the resolver describes it as a template, with the
+   * document's kind beside the host's own identity.
+   */
+  public function testTemplateRouteResolvesItsDisplayHost(): void {
+    $this->enableModules(['field_ui']);
+    $this->setUpCurrentUser([], [], TRUE);
+    LayoutBuilderEntityViewDisplay::create([
+      'targetEntityType' => 'entity_test',
+      'bundle' => 'entity_test',
+      'mode' => 'default',
+      'status' => TRUE,
+    ])->enableLayoutBuilder()->save();
+    $this->container->get('router.builder')->rebuild();
+    $display = LayoutBuilderEntityViewDisplay::load('entity_test.entity_test.default');
+    $path = $this->container->get('daedalus_ui.ui')->getEditingUrl($display)->toString();
+
+    $resolver = $this->routeResolver();
+    $host = $resolver->resolve($path);
+    $this->assertInstanceOf(DisplayHost::class, $host, 'The defaults route resolves to the display host.');
+    $this->assertSame('entity_test.entity_test.default', $host->id());
+
+    $facts = $resolver->describe($host);
+    $this->assertSame('entity_view_display', $facts['entity_type']);
+    $this->assertSame('entity_test.entity_test.default', $facts['entity_id']);
+    $this->assertSame($display->uuid(), $facts['uuid']);
+    $this->assertSame(['entity_type' => 'entity_test', 'bundle' => 'entity_test'], $facts['kind'], 'The kind is what the template renders.');
+    $this->assertSame('the default template for entity_test entity_tests', $facts['template']);
+
+    $entity = $this->container->get('entity_type.manager')->getStorage('entity_test')->create(['name' => 'Page']);
+    $entity->save();
+    $page = $resolver->describe($resolver->resolve('/entity_test/' . $entity->id()));
+    $this->assertNull($page['template'], 'A page is no template.');
+    $this->assertSame(['entity_type' => 'entity_test', 'bundle' => 'entity_test'], $page['kind']);
+
+    // Viewing entities is not administering their display.
+    $this->setUpCurrentUser([], ['view test entity']);
+    $this->assertNull($this->routeResolver()->resolve($path), 'A template the user cannot administer resolves to NULL.');
+  }
+
+
+  /**
+   * RouteEntityResolver: a saved blueprint is described as a blueprint.
+   *
+   * The wording keys on the host class, never on fields(): a blueprint
+   * answers its entity's fields like a page and is still described as the
+   * blueprint it is (scope, label, the subject it is for), with the
+   * document's kind the subject's; a page carries neither the template nor
+   * the blueprint sentence.
+   */
+  public function testBlueprintHostIsDescribedAsABlueprint(): void {
+    $this->enableModules(['options', 'image', 'media', 'daedalus_blueprint_library']);
+    $this->installEntitySchema('file');
+    $this->installSchema('file', ['file_usage']);
+    $this->installEntitySchema('media');
+    $this->installEntitySchema('blueprint');
+    $this->installConfig(['image', 'file', 'media', 'daedalus_blueprint_library']);
+    $this->setUpCurrentUser([], [], TRUE);
+    LayoutBuilderEntityViewDisplay::create([
+      'targetEntityType' => 'entity_test',
+      'bundle' => 'entity_test',
+      'mode' => 'default',
+      'status' => TRUE,
+    ])->enableLayoutBuilder()->setOverridable()->save();
+    $blueprint = $this->container->get('entity_type.manager')->getStorage('blueprint')->create([
+      'type' => 'section',
+      'label' => 'Card',
+      'machine_name' => 'card',
+      'scope' => 'block',
+      'subject_type' => 'entity_test',
+      'subject_bundle' => 'entity_test',
+      'status' => 1,
+    ]);
+    $blueprint->save();
+
+    $facts = $this->routeResolver()->describe($this->hostOf($blueprint));
+    $this->assertSame('blueprint', $facts['entity_type']);
+    $this->assertSame((string) $blueprint->id(), $facts['entity_id']);
+    $this->assertSame($blueprint->uuid(), $facts['uuid']);
+    $this->assertSame(['entity_type' => 'entity_test', 'bundle' => 'entity_test'], $facts['kind'], 'The kind is the subject the blueprint is for.');
+    $this->assertSame('the block blueprint "Card" for entity_test entity_tests', $facts['blueprint']);
+    $this->assertNull($facts['template'], 'A blueprint is no template, whatever its fields() answers.');
+
+    $page = $this->container->get('entity_type.manager')->getStorage('entity_test')->create(['name' => 'Page']);
+    $page->save();
+    $facts = $this->routeResolver()->describe($this->hostOf($page));
+    $this->assertNull($facts['blueprint'], 'A page is no blueprint.');
+    $this->assertNull($facts['template']);
   }
 
 }

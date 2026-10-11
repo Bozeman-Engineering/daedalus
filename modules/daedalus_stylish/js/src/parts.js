@@ -275,8 +275,8 @@ const typeWord = (guide, type) => {
  */
 const article = (noun) =>
   /^[aeiou]/i.test(noun)
-    ? Drupal.t('an @noun', { '@noun': noun })
-    : Drupal.t('a @noun', { '@noun': noun });
+    ? Drupal.t('an !noun', { '!noun': noun })
+    : Drupal.t('a !noun', { '!noun': noun });
 
 /**
  * The block-type declaration a type compound's parts label against, or
@@ -401,17 +401,17 @@ export const selectorWords = (
   const hasPhrase = (lead, thing, negated) => {
     if (lead === NEXT) {
       return negated
-        ? Drupal.t('not right before @thing', { '@thing': thing })
-        : Drupal.t('right before @thing', { '@thing': thing });
+        ? Drupal.t('not right before !thing', { '!thing': thing })
+        : Drupal.t('right before !thing', { '!thing': thing });
     }
     if (lead === SUBSEQUENT) {
       return negated
-        ? Drupal.t('not before @thing', { '@thing': thing })
-        : Drupal.t('before @thing', { '@thing': thing });
+        ? Drupal.t('not before !thing', { '!thing': thing })
+        : Drupal.t('before !thing', { '!thing': thing });
     }
     return negated
-      ? Drupal.t('without @thing', { '@thing': thing })
-      : Drupal.t('containing @thing', { '@thing': thing });
+      ? Drupal.t('without !thing', { '!thing': thing })
+      : Drupal.t('containing !thing', { '!thing': thing });
   };
   // The words of a chain in an owner context; groups() re-enters for a
   // `:has()` argument, so a relation inside a relation reads the same.
@@ -427,8 +427,8 @@ export const selectorWords = (
         words.combinator = previous.combinator;
         words.phrases.push(
           compound.combinator === NEXT
-            ? Drupal.t('right after @thing', { '@thing': nounPhrase(previous) })
-            : Drupal.t('after @thing', { '@thing': nounPhrase(previous) }),
+            ? Drupal.t('right after !thing', { '!thing': nounPhrase(previous) })
+            : Drupal.t('after !thing', { '!thing': nounPhrase(previous) }),
         );
       }
       list.push(words);
@@ -463,8 +463,8 @@ export const selectorWords = (
         if (negated.implied) {
           return negated.phrases.join(' ');
         }
-        return Drupal.t('except @things', {
-          '@things': [`${negated.noun}s`, ...negated.phrases].join(' '),
+        return Drupal.t('except !things', {
+          '!things': [`${negated.noun}s`, ...negated.phrases].join(' '),
         });
       });
     return {

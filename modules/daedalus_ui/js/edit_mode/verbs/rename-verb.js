@@ -16,9 +16,10 @@ import { register } from './verbs';
  */
 
 // Phosphor pencil-simple, matching the other verbs' icon set; currentColor
-// so the menu button's text color drives it. Exported: the portal chip's
-// Edit link (components/portal) wears the same pencil as daedalus_edit's Edit
-// verb, so "edit this" reads the same on both sides of the entity boundary.
+// so the menu button's text color drives it. Exported: the document
+// notice's "Edit the template" link wears the same pencil as daedalus_edit's
+// Edit verb, so "edit this" reads the same on both sides of the host
+// boundary.
 export const pencilIcon =
   '<svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 256 256"><path d="M227.31,73.37,182.63,28.68a16,16,0,0,0-22.63,0L36.69,152A15.86,15.86,0,0,0,32,163.31V208a16,16,0,0,0,16,16H92.69A15.86,15.86,0,0,0,104,219.31L227.31,96a16,16,0,0,0,0-22.63ZM92.69,208H48V163.31l88-88L180.69,120ZM192,108.68,147.31,64l24-24L216,84.68Z"></path></svg>';
 
@@ -31,12 +32,17 @@ export const registerRenameVerb = () => {
     id: 'daedalus_ui.rename',
     label: Drupal.t('Rename'),
     icon: pencilIcon,
-    // Containers at every depth (the container label is their one renamable
-    // property) and the ROOT entity row: the entity's label field presents
-    // AS the root row (the `_element` annotation's derived edit_target), so
-    // renaming the row IS editing the title. Rows for other kinds have
-    // nothing to rename.
-    kinds: ['container', 'entity'],
+    // Containers and blocks at every depth (the configured label is the one
+    // renamable property of each; offered on EVERY block, and where the
+    // label renders as page content the rename changes the page) and the
+    // ROOT entity row: the entity's label field presents AS the root row
+    // (the `_element` annotation's derived edit_target), so renaming the
+    // row IS editing the title. Rows for other kinds have nothing to
+    // rename.
+    kinds: ['container', 'block', 'entity'],
+    // A container's and a block's label is its configuration; the root's
+    // title is its content (the label field the row stands in for).
+    capability: { container: 'configure', block: 'configure', entity: 'content' },
     applies: (key) => {
       if (!key.startsWith('entity:')) {
         return true;

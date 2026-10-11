@@ -44,20 +44,23 @@ export const variantLayerId = (name) => `${TIER_VARIANT}:${name}`;
  * A defaults-floor layer id: the declaration's own defaults at one
  * declaring scope (`declared:kind:block`, `declared:block_type:text`).
  *
- * The floor's layers are display layers, never write targets: none lives
- * in the map (style-stack.js reads them from the guide payload), so no
- * island op ever addresses one; a floor line edits as an own override
- * and vanishes as a no-op. They sit at the bottom of every stack, one
- * layer per declaring scope in delivery rank (the family kind's block
- * beneath the refinement's), so a floor line never wins over a map
- * line: a declared layer loses to every skin layer, a skin layer to every
- * worn variant and to the element's own layer. They print on the
- * SELECTED element's islands only, in every code scope (page-view.js;
- * the tree's other rows print the map alone), in the floor hue, with the
- * lift and, for a skin line, the Edit skin… doorway in the line menu,
- * never Unset (line-menu.js). Canvas coverage has no footprint for them
- * (paintCoverage reads map refs and own styles; the floor's coverage
- * story is still an open design call).
+ * The floor's layers are display layers outside a skin session, never
+ * write targets: none lives in the map (style-stack.js reads them from
+ * the guide payload), so no island op ever addresses one; a floor line
+ * edits as an own override and vanishes as a no-op. They sit at the
+ * bottom of every stack, one layer per declaring scope in delivery rank
+ * (the family kind's block beneath the refinement's), so a floor line
+ * never wins over a map line: a declared layer loses to every skin
+ * layer, a skin layer to every worn variant and to the element's own
+ * layer. They print on the SELECTED element's islands only, in every
+ * code scope (page-view.js; the tree's other rows print the map alone),
+ * in the floor hue, with the lift and, for a skin line, the Edit skin…
+ * doorway in the line menu, never Unset (line-menu.js). A skin layer
+ * becomes the editable layer inside the skin session on its scope (the
+ * doorway's session: style-stack.js overlays the staged document on it,
+ * and Push commits update_default). Canvas coverage has no footprint
+ * for them (paintCoverage reads map refs and own styles; the floor's
+ * coverage story is still an open design call).
  */
 export const declaredLayerId = (scope) => `${TIER_DECLARED}:${scope}`;
 
@@ -67,6 +70,84 @@ export const declaredLayerId = (scope) => `${TIER_DECLARED}:${scope}`;
  * skin's base:{tag} block, present only when the rendered tag is known).
  */
 export const skinLayerId = (scope) => `${TIER_SKIN}:${scope}`;
+
+/**
+ * A skin document's reference: the active skin's defaults at one
+ * declaring scope, as an editing session edits them.
+ *
+ * The session machinery speaks documents by reference (pending.js
+ * sessions, the synced `editing` field, the doorways' openDocument): a
+ * variant's reference is its record id, and the skin's document at a
+ * scope is spelled as that scope's skin LAYER id (`skin:base:h2`,
+ * `skin:block_type:text`, `skin:kind:container`), one string that both
+ * names the document and is the layer the stack overlays it on. No
+ * variant reference carries a colon, so the grammar tells the two apart
+ * (isSkinDocument), and every identity surface (the dot, the rail hue)
+ * reads the document's layer through documentLayerId.
+ */
+export const skinDocument = (scope) => skinLayerId(scope);
+
+/**
+ * Whether a document reference names the skin's document at a scope.
+ */
+export const isSkinDocument = (reference) =>
+  typeof reference === 'string' &&
+  layerTier(reference) === TIER_SKIN &&
+  (layerScope(reference) ?? '') !== '';
+
+/**
+ * The scope a skin document reference names, null for a variant's.
+ */
+export const skinDocumentScope = (reference) =>
+  isSkinDocument(reference) ? layerScope(reference) : null;
+
+/**
+ * A document's layer id: a skin document's own spelling, a variant
+ * reference's variant layer.
+ */
+export const documentLayerId = (reference) =>
+  isSkinDocument(reference) ? reference : variantLayerId(reference);
+
+/**
+ * A law document's reference: the declaration at one declaring scope,
+ * as the Materials place's Law tab shows it, optionally at one property.
+ *
+ * The declared tier's doorway rides the one openDocument road the skin
+ * and variant doorways ride (provenance-model.js declaredDoorway,
+ * use-row-menu.js, the code view's run menu), so its target is spelled
+ * the way theirs are: the declared LAYER id (`declared:block_type:text`,
+ * `declared:kind:container`), with a `#property` fragment naming the
+ * rows the tab reveals (`declared:block_type:text#display`). A law
+ * document is never a session: the Inspector's openDocument routes it
+ * to the tab before any session logic (lawDocumentFocus), so no stack
+ * or session ever sees the fragment. No scope or property carries `#`.
+ */
+export const lawDocument = (scope, property = null) =>
+  `${declaredLayerId(scope)}${property ? `#${property}` : ''}`;
+
+/**
+ * Whether a document reference names the law at a scope.
+ */
+export const isLawDocument = (reference) =>
+  typeof reference === 'string' &&
+  layerTier(reference) === TIER_DECLARED &&
+  (layerScope(reference) ?? '') !== '';
+
+/**
+ * The focus a law document reference names, null for any other document.
+ *
+ * @return {?{scope: string, property: ?string}}
+ */
+export const lawDocumentFocus = (reference) => {
+  if (!isLawDocument(reference)) {
+    return null;
+  }
+  const scope = layerScope(reference);
+  const hash = scope.indexOf('#');
+  return hash === -1
+    ? { scope, property: null }
+    : { scope: scope.slice(0, hash), property: scope.slice(hash + 1) };
+};
 
 /**
  * An ancestor-rule layer id: another element's selector entry reaching
@@ -300,8 +381,10 @@ const entryHasOwnStyles = (entry) =>
  *   the element layer by its id, a variant layer by its reference).
  *
  * @return {Array<{key: string, selector: ?string, layers: string[]}>}
- *   One item per covered style target in map order, with the covering
- *   layer ids in the given layer order. Uncovered targets are absent.
+ *   One item per covered style target in map order (the map's canonical
+ *   order is the document's, styleMapOf: node-less keys first, then the
+ *   nodes in document order), with the covering layer ids in the given
+ *   layer order. Uncovered targets are absent.
  */
 export const paintCoverage = (map, layers) => {
   const list = (Array.isArray(layers) ? layers : []).filter(

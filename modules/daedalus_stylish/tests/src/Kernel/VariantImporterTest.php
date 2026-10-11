@@ -86,6 +86,7 @@ class VariantImporterTest extends KernelTestBase {
     // every build, and every compile and validation builds it.
     $this->installEntitySchema('daedalus_swatch');
     $this->installEntitySchema('daedalus_animation');
+    $this->installEntitySchema('daedalus_font');
     $this->installEntitySchema('daedalus_skin');
     // The daedalus-stylish-install sweep imports daedalus_stylish's own entrance variants,
     // whose motion-* references mirror into the animation usage table.

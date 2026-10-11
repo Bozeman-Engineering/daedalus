@@ -12,6 +12,7 @@ use Drupal\Tests\daedalus\Kernel\NestedStorageKernelTestBase;
 use Drupal\Tests\daedalus\Traits\DesignSystemActivationTrait;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
+use Drupal\Tests\daedalus_stylish\Traits\HostTrait;
 
 /**
  * Tests variant apply/detach over a staged composition (layered entries).
@@ -46,6 +47,7 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 #[RunTestsInSeparateProcesses]
 class VariantApplySubtreeTest extends NestedStorageKernelTestBase {
 
+  use HostTrait;
   use DesignSystemActivationTrait;
 
   /**
@@ -78,7 +80,14 @@ class VariantApplySubtreeTest extends NestedStorageKernelTestBase {
     $this->installEntitySchema('daedalus_skin');
     $this->installEntitySchema('daedalus_swatch');
     $this->installEntitySchema('daedalus_animation');
-    $this->installSchema('daedalus_stylish', ['daedalus_variant_usage', 'daedalus_swatch_usage', 'daedalus_animation_usage']);
+    $this->installEntitySchema('daedalus_font');
+    $this->installSchema('daedalus_stylish', [
+      'daedalus_variant_usage',
+      'daedalus_swatch_usage',
+      'daedalus_animation_usage',
+      'daedalus_token_usage',
+      'daedalus_font_usage',
+    ]);
     $this->installConfig(['daedalus_stylish']);
     // Activating a design system syncs every enabled module's shipped
     // definitions (ShippedSync::onDesignSystemActivated()): the importers
@@ -199,7 +208,7 @@ class VariantApplySubtreeTest extends NestedStorageKernelTestBase {
       'block:{out}' => $styled,
     ]);
 
-    $result = $this->operations->batchOperations($entity, [
+    $result = $this->operations->batchOperations($this->host($entity), [
       ['op' => 'apply_variant', 'key' => "container:{$ids['sec']}", 'variant' => 'white'],
     ]);
     $this->assertTrue($result->isSuccess());
@@ -259,7 +268,7 @@ class VariantApplySubtreeTest extends NestedStorageKernelTestBase {
       'block:{out}' => ['default' => ['margin' => '1px']],
     ]);
 
-    $result = $this->operations->batchOperations($entity, [
+    $result = $this->operations->batchOperations($this->host($entity), [
       ['op' => 'apply_variant', 'key' => "container:{$ids['sec']}", 'variant' => 'hero'],
     ]);
     $this->assertTrue($result->isSuccess());
@@ -319,7 +328,7 @@ class VariantApplySubtreeTest extends NestedStorageKernelTestBase {
       'block:{b1}' => ['default' => ['padding' => '7rem'], 'variants' => [['variant' => 'old_card', 'fragment' => '']]],
     ]);
 
-    $result = $this->operations->batchOperations($entity, [
+    $result = $this->operations->batchOperations($this->host($entity), [
       ['op' => 'apply_variant', 'key' => "container:{$ids['sec']}", 'variant' => 'hero'],
     ]);
     $this->assertTrue($result->isSuccess());
@@ -336,7 +345,7 @@ class VariantApplySubtreeTest extends NestedStorageKernelTestBase {
 
     // Re-apply: the same-variant re-place and the sparing keep the pair
     // stable — no duplicates, no order churn, no group cleanup.
-    $result = $this->operations->batchOperations($entity, [
+    $result = $this->operations->batchOperations($this->host($entity), [
       ['op' => 'apply_variant', 'key' => "container:{$ids['sec']}", 'variant' => 'hero'],
     ]);
     $this->assertTrue($result->isSuccess());
@@ -380,7 +389,7 @@ class VariantApplySubtreeTest extends NestedStorageKernelTestBase {
     $outer->save();
 
     [$entity, $ids] = $this->buildComposition([]);
-    $result = $this->operations->batchOperations($entity, [
+    $result = $this->operations->batchOperations($this->host($entity), [
       ['op' => 'apply_variant', 'key' => "container:{$ids['sec']}", 'variant' => 'outer_comp'],
     ]);
     $this->assertTrue($result->isSuccess());
@@ -483,7 +492,7 @@ class VariantApplySubtreeTest extends NestedStorageKernelTestBase {
     $this->assertArrayHasKey('inner', $withheld);
     $this->assertArrayNotHasKey('outer', $withheld);
     [$entity, $ids] = $this->buildComposition([]);
-    $result = $this->operations->batchOperations($entity, [
+    $result = $this->operations->batchOperations($this->host($entity), [
       ['op' => 'apply_variant', 'key' => "container:{$ids['sec']}", 'variant' => 'outer'],
     ]);
     $this->assertTrue($result->isSuccess(), json_encode($result->toArray()));
@@ -512,7 +521,7 @@ class VariantApplySubtreeTest extends NestedStorageKernelTestBase {
    *   The structural error code the judge's verdict carries there.
    */
   protected function assertRefusedByTheJudge(EntityTest $entity, string $section, string $variant, string $at, string $code): void {
-    $result = $this->operations->batchOperations($entity, [
+    $result = $this->operations->batchOperations($this->host($entity), [
       ['op' => 'apply_variant', 'key' => "container:$section", 'variant' => $variant],
     ]);
     $this->assertFalse($result->isSuccess(), "Expected the \"$variant\" apply to be refused.");
@@ -562,7 +571,7 @@ class VariantApplySubtreeTest extends NestedStorageKernelTestBase {
       'block:{out}' => ['variants' => [self::ref('hero', 'block(basic,2)')]],
     ]);
 
-    $result = $this->operations->batchOperations($entity, [
+    $result = $this->operations->batchOperations($this->host($entity), [
       ['op' => 'apply_variant', 'key' => "container:{$ids['sec']}", 'variant' => 'hero'],
     ]);
     $this->assertTrue($result->isSuccess());
@@ -613,7 +622,7 @@ class VariantApplySubtreeTest extends NestedStorageKernelTestBase {
       'block:{out}' => ['variants' => [self::ref('hero', 'block(basic,9)')]],
     ]);
 
-    $result = $this->operations->batchOperations($entity, [
+    $result = $this->operations->batchOperations($this->host($entity), [
       ['op' => 'apply_variant', 'key' => "container:{$ids['sec']}", 'variant' => 'flat'],
     ]);
     $this->assertTrue($result->isSuccess());
@@ -680,7 +689,7 @@ class VariantApplySubtreeTest extends NestedStorageKernelTestBase {
       'block:{out}' => ['variants' => [self::ref('hero', 'block(basic,9)')]],
     ]);
 
-    $result = $this->operations->batchOperations($entity, [
+    $result = $this->operations->batchOperations($this->host($entity), [
       ['op' => 'detach_variant', 'key' => "container:{$ids['sec']}", 'variant' => 'hero'],
     ]);
     $this->assertTrue($result->isSuccess());
@@ -726,7 +735,7 @@ class VariantApplySubtreeTest extends NestedStorageKernelTestBase {
       'block:{out}' => ['default' => ['padding' => '7rem'], 'variants' => [self::ref('hero', 'block(basic,1)')]],
     ]);
 
-    $result = $this->operations->batchOperations($entity, [
+    $result = $this->operations->batchOperations($this->host($entity), [
       ['op' => 'detach_variant', 'key' => "block:{$ids['out']}", 'variant' => 'hero'],
     ]);
     $this->assertTrue($result->isSuccess());
@@ -772,7 +781,7 @@ class VariantApplySubtreeTest extends NestedStorageKernelTestBase {
     $hero->save();
 
     [$entity, $ids] = $this->buildComposition([]);
-    $result = $this->operations->batchOperations($entity, [
+    $result = $this->operations->batchOperations($this->host($entity), [
       ['op' => 'apply_variant', 'key' => "container:{$ids['sec']}", 'variant' => 'hero'],
     ]);
     $this->assertTrue($result->isSuccess());
@@ -784,7 +793,7 @@ class VariantApplySubtreeTest extends NestedStorageKernelTestBase {
 
     // Detaching the NESTED wearing materializes its values locally; the
     // enclosing fragment reference stays worn.
-    $result = $this->operations->batchOperations($entity, [
+    $result = $this->operations->batchOperations($this->host($entity), [
       ['op' => 'detach_variant', 'key' => "block:{$ids['b2']}", 'variant' => 'card'],
     ]);
     $this->assertTrue($result->isSuccess());
@@ -796,7 +805,7 @@ class VariantApplySubtreeTest extends NestedStorageKernelTestBase {
     // The group detach: each fragment's own VALUES materialize (nothing
     // for the ref-only fragment), the composition's references drop, and
     // the surviving nested wearing keeps delivering, released: no "via".
-    $result = $this->operations->batchOperations($entity, [
+    $result = $this->operations->batchOperations($this->host($entity), [
       ['op' => 'detach_variant', 'key' => "container:{$ids['sec']}", 'variant' => 'hero'],
     ]);
     $this->assertTrue($result->isSuccess());
@@ -873,7 +882,7 @@ class VariantApplySubtreeTest extends NestedStorageKernelTestBase {
       'container:{other_sec}' => ['variants' => [['variant' => 'row', 'fragment' => '']]],
     ]);
 
-    $result = $this->operations->batchOperations($entity, [
+    $result = $this->operations->batchOperations($this->host($entity), [
       ['op' => 'apply_variant', 'key' => "container:{$ids['sec']}", 'variant' => 'card_left'],
     ]);
     $this->assertTrue($result->isSuccess());
@@ -886,7 +895,7 @@ class VariantApplySubtreeTest extends NestedStorageKernelTestBase {
       "container:{$ids['other_sec']}" => ['variants' => [self::ref('row')]],
     ], $this->styleMap($entity));
 
-    $result = $this->operations->batchOperations($entity, [
+    $result = $this->operations->batchOperations($this->host($entity), [
       ['op' => 'apply_variant', 'key' => "container:{$ids['sec']}", 'variant' => 'stacked'],
     ]);
     $this->assertTrue($result->isSuccess());
@@ -910,7 +919,7 @@ class VariantApplySubtreeTest extends NestedStorageKernelTestBase {
     [$entity, $ids] = $this->buildComposition([
       'container:{nsec}' => ['variants' => [['variant' => 'glow', 'fragment' => '']]],
     ]);
-    $result = $this->operations->batchOperations($entity, [
+    $result = $this->operations->batchOperations($this->host($entity), [
       ['op' => 'apply_variant', 'key' => "container:{$ids['sec']}", 'variant' => 'card_left'],
       ['op' => 'remove_variant', 'key' => "container:{$ids['sec']}", 'variant' => 'card_left'],
     ]);
@@ -960,7 +969,7 @@ class VariantApplySubtreeTest extends NestedStorageKernelTestBase {
       // The editor's own wear at depth, on an axis nothing distributes.
       'block:{img}' => ['variants' => [['variant' => 'loud', 'fragment' => '']]],
     ]);
-    $result = $this->operations->batchOperations($entity, [
+    $result = $this->operations->batchOperations($this->host($entity), [
       ['op' => 'apply_variant', 'key' => "container:{$ids['sec']}", 'variant' => 'outer_comp'],
     ]);
     $this->assertTrue($result->isSuccess());
@@ -979,7 +988,7 @@ class VariantApplySubtreeTest extends NestedStorageKernelTestBase {
       ],
     ], $this->styleMap($entity));
 
-    $result = $this->operations->batchOperations($entity, [
+    $result = $this->operations->batchOperations($this->host($entity), [
       ['op' => 'apply_variant', 'key' => "container:{$ids['sec']}", 'variant' => 'plain'],
     ]);
     $this->assertTrue($result->isSuccess());
@@ -1002,7 +1011,7 @@ class VariantApplySubtreeTest extends NestedStorageKernelTestBase {
   public function testDirectApplyOnChildTakesOver(): void {
     $this->createCardScenario();
     [$entity, $ids] = $this->buildComposition([]);
-    $result = $this->operations->batchOperations($entity, [
+    $result = $this->operations->batchOperations($this->host($entity), [
       ['op' => 'apply_variant', 'key' => "container:{$ids['sec']}", 'variant' => 'card_left'],
       ['op' => 'apply_variant', 'key' => "container:{$ids['nsec']}", 'variant' => 'row'],
     ]);
@@ -1012,7 +1021,7 @@ class VariantApplySubtreeTest extends NestedStorageKernelTestBase {
       $this->styleMap($entity)["container:{$ids['nsec']}"],
     );
 
-    $result = $this->operations->batchOperations($entity, [
+    $result = $this->operations->batchOperations($this->host($entity), [
       ['op' => 'apply_variant', 'key' => "container:{$ids['sec']}", 'variant' => 'stacked'],
     ]);
     $this->assertTrue($result->isSuccess());
@@ -1022,7 +1031,7 @@ class VariantApplySubtreeTest extends NestedStorageKernelTestBase {
     ], $this->styleMap($entity));
 
     // Re-apply of the composition re-stamps the wear it nests.
-    $result = $this->operations->batchOperations($entity, [
+    $result = $this->operations->batchOperations($this->host($entity), [
       ['op' => 'apply_variant', 'key' => "container:{$ids['sec']}", 'variant' => 'card_left'],
     ]);
     $this->assertTrue($result->isSuccess());
@@ -1047,7 +1056,7 @@ class VariantApplySubtreeTest extends NestedStorageKernelTestBase {
   public function testDetachReleasesProvenance(): void {
     $this->createCardScenario();
     [$entity, $ids] = $this->buildComposition([]);
-    $result = $this->operations->batchOperations($entity, [
+    $result = $this->operations->batchOperations($this->host($entity), [
       ['op' => 'apply_variant', 'key' => "container:{$ids['sec']}", 'variant' => 'card_left'],
       ['op' => 'detach_variant', 'key' => "container:{$ids['sec']}", 'variant' => 'card_left'],
     ]);
@@ -1061,7 +1070,7 @@ class VariantApplySubtreeTest extends NestedStorageKernelTestBase {
     // Released wears are the elements' own: a composition applied and
     // removed afterwards reaps only what it nested itself (nothing here),
     // and the released wears ride through both gestures untouched.
-    $result = $this->operations->batchOperations($entity, [
+    $result = $this->operations->batchOperations($this->host($entity), [
       ['op' => 'apply_variant', 'key' => "container:{$ids['sec']}", 'variant' => 'stacked'],
     ]);
     $this->assertTrue($result->isSuccess());
@@ -1075,7 +1084,7 @@ class VariantApplySubtreeTest extends NestedStorageKernelTestBase {
         'default' => ['margin' => '1px'],
       ],
     ], $this->styleMap($entity));
-    $result = $this->operations->batchOperations($entity, [
+    $result = $this->operations->batchOperations($this->host($entity), [
       ['op' => 'remove_variant', 'key' => "container:{$ids['sec']}", 'variant' => 'stacked'],
     ]);
     $this->assertTrue($result->isSuccess());
@@ -1083,12 +1092,12 @@ class VariantApplySubtreeTest extends NestedStorageKernelTestBase {
 
     // The site gesture: the same release over the whole map.
     [$entity, $ids] = $this->buildComposition([]);
-    $result = $this->operations->batchOperations($entity, [
+    $result = $this->operations->batchOperations($this->host($entity), [
       ['op' => 'apply_variant', 'key' => "container:{$ids['sec']}", 'variant' => 'card_left'],
     ]);
     $this->assertTrue($result->isSuccess());
     $card_left = $this->container->get('daedalus_stylish.style_map_validator')->loadVariant('card_left');
-    $this->assertTrue($this->container->get('daedalus_stylish.operation_handler')->detachVariantEverywhere($entity, $card_left));
+    $this->assertTrue($this->container->get('daedalus_stylish.operation_handler')->detachVariantEverywhere($this->host($entity), $card_left));
     $this->assertEquals([
       "container:{$ids['sec']}" => ['variants' => [self::ref('half')], 'default' => ['padding' => '2rem']],
       "container:{$ids['nsec']}" => ['variants' => [self::ref('row')], 'default' => ['margin' => '1px']],
@@ -1118,7 +1127,7 @@ class VariantApplySubtreeTest extends NestedStorageKernelTestBase {
       'block:{b1}' => ['variants' => [['variant' => 'card', 'fragment' => '']]],
       'block:{b1}:field_x' => ['variants' => [self::ref('card', 'field(field_x)')]],
     ]);
-    $result = $this->operations->batchOperations($entity, [
+    $result = $this->operations->batchOperations($this->host($entity), [
       ['op' => 'detach_variant', 'key' => "block:{$ids['b1']}", 'variant' => 'card'],
     ]);
     $this->assertTrue($result->isSuccess());
@@ -1139,7 +1148,7 @@ class VariantApplySubtreeTest extends NestedStorageKernelTestBase {
   public function testNestedSectionScopeCapture(): void {
     $validator = $this->container->get('daedalus_stylish.style_map_validator');
     [$entity, $ids] = $this->buildComposition([]);
-    $context = ['entity' => $entity];
+    $context = ['host' => $this->host($entity)];
 
     $this->assertSame('layout:daedalus_stylish_container', (string) $validator->captureScope("container:{$ids['nsec']}", $context));
     // A rule key captures its LANDING: a part is no element scope (its
@@ -1185,7 +1194,7 @@ class VariantApplySubtreeTest extends NestedStorageKernelTestBase {
     [$entity, $ids] = $this->buildComposition([]);
     $rule = "container:{$ids['sec']}::> pb-container";
 
-    $result = $this->operations->batchOperations($entity, [
+    $result = $this->operations->batchOperations($this->host($entity), [
       ['op' => 'apply_variant', 'key' => $rule, 'variant' => 'card'],
     ]);
     $this->assertFalse($result->isSuccess());
@@ -1194,12 +1203,12 @@ class VariantApplySubtreeTest extends NestedStorageKernelTestBase {
     $this->assertSame(['container(1)'], $error->getContext()['slot_paths']);
     $this->assertSame([], $this->styleMap($entity));
 
-    $this->assertTrue($this->operations->batchOperations($entity, [
+    $this->assertTrue($this->operations->batchOperations($this->host($entity), [
       ['op' => 'apply_variant', 'key' => $rule, 'variant' => 'tidy'],
     ])->isSuccess());
     $this->assertSame([$rule => ['variants' => [self::ref('tidy')]]], $this->styleMap($entity));
 
-    $this->assertTrue($this->operations->batchOperations($entity, [
+    $this->assertTrue($this->operations->batchOperations($this->host($entity), [
       ['op' => 'detach_variant', 'key' => $rule, 'variant' => 'tidy'],
     ])->isSuccess());
     $this->assertSame([

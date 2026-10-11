@@ -8,6 +8,7 @@ use Drupal\Core\Config\ConfigFactoryInterface;
 use Drupal\Core\Field\FieldDefinitionInterface;
 use Drupal\Core\Field\FieldItemListInterface;
 use Drupal\daedalus_blueprint\FieldHandler\FieldHandlerResult;
+use Drupal\daedalus_blueprint\Host\HostResolver;
 use Drupal\daedalus_blueprint\Materials\DistroLock;
 use Drupal\daedalus_blueprint\Materials\MaterialsRosterBuilder;
 use Drupal\daedalus_blueprint\Result\BlueprintError;
@@ -51,6 +52,8 @@ class AnimationStepsFieldHandler extends StyleMapFieldHandler {
    *   The materials roster builder.
    * @param \Drupal\daedalus_stylish\Vocabulary\VocabularyRosterBuilder $vocabulary
    *   The vocabulary roster builder.
+   * @param \Drupal\daedalus_blueprint\Host\HostResolver $hostResolver
+   *   The host resolver: the style map field's owner is the map's host.
    * @param \Closure $importer
    *   Service closure resolving the animation importer, the distro lock's
    *   disk read (does the provider ship this entry right now?). Lazy
@@ -71,11 +74,12 @@ class AnimationStepsFieldHandler extends StyleMapFieldHandler {
     StyleValueResolver $valueResolver,
     MaterialsRosterBuilder $rosterBuilder,
     VocabularyRosterBuilder $vocabulary,
+    HostResolver $hostResolver,
     protected \Closure $importer,
     protected ConfigFactoryInterface $configFactory,
     protected DistroLock $distroLock,
   ) {
-    parent::__construct($validator, $styleGuide, $declarations, $conditionTypes, $valueResolver, $rosterBuilder, $vocabulary);
+    parent::__construct($validator, $styleGuide, $declarations, $conditionTypes, $valueResolver, $rosterBuilder, $vocabulary, $hostResolver);
   }
 
   /**

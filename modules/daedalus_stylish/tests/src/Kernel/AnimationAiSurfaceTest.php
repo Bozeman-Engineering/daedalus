@@ -59,6 +59,7 @@ class AnimationAiSurfaceTest extends KernelTestBase {
     parent::setUp();
     $this->installEntitySchema('user');
     $this->installEntitySchema('daedalus_animation');
+    $this->installEntitySchema('daedalus_font');
     // The materials provider reads all four storages on the same alter.
     $this->installEntitySchema('daedalus_swatch');
     $this->installEntitySchema('daedalus_variant');
@@ -76,8 +77,8 @@ class AnimationAiSurfaceTest extends KernelTestBase {
     $schema = [
       'fields' => [
         'name' => ['type' => 'string'],
-        'daedalus_stylish_styles' => ['type' => 'daedalus_stylish_styles', 'style_guide' => ['guidance' => 'x']],
       ],
+      'styles' => ['type' => 'daedalus_stylish_styles', 'style_guide' => ['guidance' => 'x']],
     ];
     $context = ['entity_type' => 'entity_test', 'bundle' => 'entity_test', 'view_mode' => 'full', 'cache_tags' => []];
     $this->container->get('module_handler')->alter('daedalus_blueprint_schema', $schema, $context);
@@ -140,7 +141,7 @@ class AnimationAiSurfaceTest extends KernelTestBase {
 
     // The materials are the schema's own key; the field's style guide is
     // untouched, and non-styling fields are untouched.
-    $this->assertSame(['guidance'], array_keys($schema['fields']['daedalus_stylish_styles']['style_guide']));
+    $this->assertSame(['guidance'], array_keys($schema['styles']['style_guide']));
     $this->assertArrayNotHasKey('style_guide', $schema['fields']['name']);
   }
 

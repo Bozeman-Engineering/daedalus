@@ -23,9 +23,12 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  * install, `drush daedalus_stylish:sync`). Every definition rides the blueprint
  * deserializer through the skin field handlers (the same validation an AI-
  * or UI-authored skin gets), and the importer itself saves, live and
- * published. Sync is "one hash, two comparisons" over the WHOLE shipped
- * payload, the keyed {tokens, defaults} shape, so either tier diverging
- * reads as modified. The active pointer is never touched.
+ * published. Sync writes the PACKAGE layer only and hashes it, the keyed
+ * {tokens, defaults} shape; the site layer is never on the lane, so a new
+ * payload on disk always lands (no KEPT outcome for skins: the distro lock
+ * keeps a consuming site out of the package layer, SkinDistroLockTest) and
+ * the site's layer rides the new revision untouched. The active pointer
+ * is never touched.
  */
 #[Group('daedalus_stylish')]
 #[RunTestsInSeparateProcesses]
@@ -35,17 +38,21 @@ class SkinImporterTest extends KernelTestBase {
   use DesignSystemActivationTrait;
 
   /**
-   * The tokens daedalus_stylish_skins_test ships for aurora.
+   * The tokens daedalus_stylish_skins_test ships for aurora, as stored.
+   *
+   * The file spells bare values and one record (the hero's description):
+   * the disk door canonicalizes, so the entity holds records for all
+   * three and the hash covers exactly these.
    */
   protected const AURORA_TOKENS = [
     'space' => [
-      'gutter' => ['default' => '2rem', 'narrow' => '1rem'],
+      'gutter' => ['value' => ['default' => '2rem', 'narrow' => '1rem'], 'description' => '', 'offered' => TRUE],
     ],
     'color' => [
-      'accent' => ['default' => '#111111', 'dark' => '#eeeeee'],
+      'accent' => ['value' => ['default' => '#111111', 'dark' => '#eeeeee'], 'description' => '', 'offered' => TRUE],
     ],
     'text' => [
-      'hero' => '3rem',
+      'hero' => ['value' => '3rem', 'description' => 'The hero size the h2 default speaks.', 'offered' => TRUE],
     ],
   ];
 
@@ -63,10 +70,10 @@ class SkinImporterTest extends KernelTestBase {
   ];
 
   /**
-   * A stand-in for a previously shipped state of aurora.
+   * A stand-in for a previously shipped state of aurora (as stored).
    */
   protected const OLD_PAYLOAD = [
-    'tokens' => ['space' => ['gutter' => '3rem']],
+    'tokens' => ['space' => ['gutter' => ['value' => '3rem', 'description' => '', 'offered' => TRUE]]],
     'defaults' => [],
   ];
 
@@ -102,12 +109,19 @@ class SkinImporterTest extends KernelTestBase {
     $this->installEntitySchema('daedalus_variant');
     $this->installEntitySchema('daedalus_swatch');
     $this->installEntitySchema('daedalus_animation');
+    $this->installEntitySchema('daedalus_font');
     $this->installConfig(['daedalus_stylish']);
     // Activating a design system syncs every enabled module's shipped
     // definitions (ShippedSync::onDesignSystemActivated()): the importers
     // mirror motion-* and --swatch-* references into the usage tables and
     // switch to an administrative account, so the fixture carries both.
-    $this->installSchema('daedalus_stylish', ['daedalus_variant_usage', 'daedalus_swatch_usage', 'daedalus_animation_usage']);
+    $this->installSchema('daedalus_stylish', [
+      'daedalus_variant_usage',
+      'daedalus_swatch_usage',
+      'daedalus_animation_usage',
+      'daedalus_token_usage',
+      'daedalus_font_usage',
+    ]);
     // The vocabulary the shipped skins validate against: token scales for
     // the tokens tier, the base: section for the defaults tier.
     $this->container->get('state')->set('daedalus_stylish_control_test.site', [
@@ -154,8 +168,8 @@ class SkinImporterTest extends KernelTestBase {
     $aurora = $this->loadSkin('aurora');
     $this->assertInstanceOf(DaedalusStylishSkinInterface::class, $aurora);
     $this->assertSame('Aurora', $aurora->label());
-    $this->assertSame(self::AURORA_TOKENS, $aurora->getTokens());
-    $this->assertSame(self::AURORA_DEFAULTS, $aurora->getDefaults());
+    $this->assertSame(self::AURORA_TOKENS, $aurora->packageTokens());
+    $this->assertSame(self::AURORA_DEFAULTS, $aurora->packageDefaults());
     $this->assertTrue($aurora->isPublished());
     $this->assertTrue($aurora->isShipped());
     $this->assertSame('daedalus_stylish_skins_test', $aurora->getProvider());
@@ -165,8 +179,8 @@ class SkinImporterTest extends KernelTestBase {
     // A tier-less skin imports too: label only, both data tiers empty.
     $bare = $this->loadSkin('bare');
     $this->assertInstanceOf(DaedalusStylishSkinInterface::class, $bare);
-    $this->assertSame([], $bare->getTokens());
-    $this->assertSame([], $bare->getDefaults());
+    $this->assertSame([], $bare->packageTokens());
+    $this->assertSame([], $bare->packageDefaults());
     $this->assertTrue($bare->isPublished());
     $this->assertSame('daedalus_stylish_skins_test', $bare->getProvider());
     $this->assertFalse($bare->isModified());
@@ -198,8 +212,8 @@ class SkinImporterTest extends KernelTestBase {
     // Rewind the skin to a previously shipped state: entity data matches
     // the stored hash (unmodified), but the disk now ships something newer.
     $skin = $this->loadSkin('aurora');
-    $skin->setTokens(self::OLD_PAYLOAD['tokens']);
-    $skin->setDefaults(self::OLD_PAYLOAD['defaults']);
+    $skin->setPackageTokens(self::OLD_PAYLOAD['tokens']);
+    $skin->setPackageDefaults(self::OLD_PAYLOAD['defaults']);
     $skin->setShippedSource('daedalus_stylish_skins_test', self::OLD_PAYLOAD);
     $skin->save();
     $old_revision_id = $skin->getRevisionId();
@@ -208,8 +222,8 @@ class SkinImporterTest extends KernelTestBase {
     $this->assertSame(SkinImporter::UPDATED, $results['daedalus_stylish_skins_test']['aurora']);
 
     $synced = $this->loadSkin('aurora');
-    $this->assertSame(self::AURORA_TOKENS, $synced->getTokens());
-    $this->assertSame(self::AURORA_DEFAULTS, $synced->getDefaults());
+    $this->assertSame(self::AURORA_TOKENS, $synced->packageTokens());
+    $this->assertSame(self::AURORA_DEFAULTS, $synced->packageDefaults());
     $this->assertNotSame($old_revision_id, $synced->getRevisionId());
     $this->assertTrue($synced->isPublished());
     $this->assertFalse($synced->isModified());
@@ -217,32 +231,78 @@ class SkinImporterTest extends KernelTestBase {
   }
 
   /**
-   * A user-modified skin keeps its data AND its stored hash on sync.
+   * New disk defaults land over an edited package layer too: no KEPT.
+   *
+   * Only a development site (the lock lifted) can hold an edited package
+   * layer; there the disk still wins when it moved, the cost of the
+   * layer having one author (ship before pulling). The stored hash is
+   * restamped, so the skin reads unmodified against the new disk.
    */
-  public function testModifiedSkinKeptOnSync(): void {
+  public function testNewDefaultsLandOverAnEditedPackageLayer(): void {
     \Drupal::service('module_installer')->install(['daedalus_stylish_skins_test']);
 
-    // The user edited the skin since the (old) shipped state, and the disk
-    // has ALSO moved on: sync must not clobber the user's data, and must
-    // not touch the stored hash either, so the "defaults changed" signal
-    // stays detectable.
-    $user_tokens = ['space' => ['gutter' => '4rem']];
+    $edited_tokens = ['space' => ['gutter' => ['value' => '4rem', 'description' => '', 'offered' => TRUE]]];
     $skin = $this->loadSkin('aurora');
-    $skin->setTokens($user_tokens);
-    $skin->setDefaults([]);
+    $skin->setPackageTokens($edited_tokens);
+    $skin->setPackageDefaults([]);
     $skin->setShippedSource('daedalus_stylish_skins_test', self::OLD_PAYLOAD);
     $skin->save();
     $revision_id = $skin->getRevisionId();
+    $this->assertTrue($this->loadSkin('aurora')->isModified());
 
     $results = $this->importer()->sync(['daedalus_stylish_skins_test'])->outcomes();
-    $this->assertSame(SkinImporter::KEPT, $results['daedalus_stylish_skins_test']['aurora']);
+    $this->assertSame(SkinImporter::UPDATED, $results['daedalus_stylish_skins_test']['aurora'], 'a new payload on disk lands whatever the package layer held');
+    $this->assertNotContains(SkinImporter::KEPT, $results['daedalus_stylish_skins_test'], 'kept is not an outcome for skins');
 
-    $kept = $this->loadSkin('aurora');
-    $this->assertSame($user_tokens, $kept->getTokens());
-    $this->assertSame($revision_id, $kept->getRevisionId());
-    $this->assertSame(DaedalusStylishSkin::hashData(self::OLD_PAYLOAD), $kept->getSourceHash());
-    $this->assertTrue($kept->isModified());
-    $this->assertTrue($kept->hasNewDefaults(['tokens' => self::AURORA_TOKENS, 'defaults' => self::AURORA_DEFAULTS]));
+    $synced = $this->loadSkin('aurora');
+    $this->assertSame(self::AURORA_TOKENS, $synced->packageTokens());
+    $this->assertSame(self::AURORA_DEFAULTS, $synced->packageDefaults());
+    $this->assertNotSame($revision_id, $synced->getRevisionId());
+    $this->assertSame(DaedalusStylishSkin::hashData([
+      'tokens' => self::AURORA_TOKENS,
+      'defaults' => self::AURORA_DEFAULTS,
+    ]), $synced->getSourceHash());
+    $this->assertFalse($synced->isModified());
+  }
+
+  /**
+   * An UPDATED sync rewrites the package layer under the site layer.
+   *
+   * The site's additions and overrides are not in the shipped payload:
+   * they ride the new revision untouched, and the merge shows the new
+   * package values wherever the site changed nothing.
+   */
+  public function testSyncLeavesTheSiteLayerAlone(): void {
+    \Drupal::service('module_installer')->install(['daedalus_stylish_skins_test']);
+
+    $site_tokens = [
+      'space' => ['gutter' => ['value' => '5rem']],
+      'color' => ['brand' => ['value' => '#ff0000', 'description' => 'Minted on the site.']],
+    ];
+    $site_defaults = ['base:h2' => ['' => ['default' => ['font-weight' => '700']]]];
+    $skin = $this->loadSkin('aurora');
+    $skin->setPackageTokens(self::OLD_PAYLOAD['tokens']);
+    $skin->setPackageDefaults(self::OLD_PAYLOAD['defaults']);
+    $skin->setShippedSource('daedalus_stylish_skins_test', self::OLD_PAYLOAD);
+    $skin->setSiteTokens($site_tokens);
+    $skin->setSiteDefaults($site_defaults);
+    $skin->save();
+    // A site write is never a modification of what the package shipped.
+    $this->assertFalse($this->loadSkin('aurora')->isModified());
+
+    $results = $this->importer()->sync(['daedalus_stylish_skins_test'])->outcomes();
+    $this->assertSame(SkinImporter::UPDATED, $results['daedalus_stylish_skins_test']['aurora']);
+
+    $synced = $this->loadSkin('aurora');
+    $this->assertSame(self::AURORA_TOKENS, $synced->packageTokens());
+    $this->assertSame(self::AURORA_DEFAULTS, $synced->packageDefaults());
+    $this->assertSame($site_tokens, $synced->siteTokens(), 'the site layer rode the new revision untouched');
+    $this->assertSame($site_defaults, $synced->siteDefaults());
+    $merged = $synced->tokens();
+    $this->assertSame('5rem', $merged['space']['gutter']['value'], 'the site override still wins over the new package value');
+    $this->assertSame('The hero size the h2 default speaks.', $merged['text']['hero']['description'], 'a package token the site never touched shows through');
+    $this->assertSame('#ff0000', $merged['color']['brand']['value']);
+    $this->assertSame(['font-size' => 'var(--text-hero)', 'font-weight' => '700'], $synced->defaults()['base:h2']['']['default']);
   }
 
   /**
@@ -255,15 +315,16 @@ class SkinImporterTest extends KernelTestBase {
     // the one hash covers the whole {tokens, defaults} payload.
     $user_defaults = ['base:h2' => ['' => ['default' => ['font-size' => '3rem']]]];
     $skin = $this->loadSkin('aurora');
-    $skin->setDefaults($user_defaults);
+    $skin->setPackageDefaults($user_defaults);
     $skin->save();
     $this->assertTrue($this->loadSkin('aurora')->isModified());
 
-    // Disk unchanged: the user's edit is left alone (modifications
-    // included), never reverted by an idempotent sync.
+    // Disk unchanged: the edit is left alone (an edited package layer is a
+    // development site's, ship-worthy), never reverted by an idempotent
+    // sync.
     $results = $this->importer()->sync(['daedalus_stylish_skins_test'])->outcomes();
     $this->assertSame(SkinImporter::UNCHANGED, $results['daedalus_stylish_skins_test']['aurora']);
-    $this->assertSame($user_defaults, $this->loadSkin('aurora')->getDefaults());
+    $this->assertSame($user_defaults, $this->loadSkin('aurora')->packageDefaults());
   }
 
   /**
@@ -281,7 +342,7 @@ class SkinImporterTest extends KernelTestBase {
 
     $results = $this->importer()->sync(['daedalus_stylish_skins_test'])->outcomes();
     $this->assertSame(SkinImporter::CREATED, $results['daedalus_stylish_skins_test']['aurora']);
-    $this->assertSame(self::AURORA_DEFAULTS, $this->loadSkin('aurora')->getDefaults());
+    $this->assertSame(self::AURORA_DEFAULTS, $this->loadSkin('aurora')->packageDefaults());
   }
 
   /**

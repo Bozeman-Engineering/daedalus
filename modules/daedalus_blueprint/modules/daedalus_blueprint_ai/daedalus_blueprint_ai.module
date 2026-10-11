@@ -79,7 +79,7 @@ function daedalus_blueprint_ai_ai_function_call_info_alter(array &$definitions):
   // the catalog declares a container layout, the page language speaks for
   // every layout-bearing entity and Edit::execute() refuses them, so the
   // operations description composes WITHOUT the layout grammar and the
-  // page-only handler roll-call (DOM, styling, stencil ops), keeping the
+  // page-only handler roll-call (DOM, styling, blueprint ops), keeping the
   // config ops and the root-field update_element.
   if (\Drupal::service('daedalus_blueprint.dialect_catalog_builder')->build()->containerLayoutId() !== '') {
     $operations_context->setDescription(new TranslatableMarkup(

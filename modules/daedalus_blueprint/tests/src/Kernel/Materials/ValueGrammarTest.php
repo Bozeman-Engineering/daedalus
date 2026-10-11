@@ -23,7 +23,7 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  * Pins the resolution contract every former sniff site meets at: a whole
  * style value that is one var() or one media/generate/file url() resolves to
  * its kind, anything else is a literal whose embedded references are
- * listed; class tokens, axis attribute values, stencil names and
+ * listed; class tokens, axis attribute values, blueprint names and
  * animation names resolve through the roster's spelling index or come
  * back Unknown (never
  * literal); spell() is the provider's spelling or a loud refusal; and
@@ -130,12 +130,12 @@ class ValueGrammarTest extends KernelTestBase {
     $this->assertEquals(ValueReference::literal(''), $grammar->resolve('  ', MaterialRecord::SLOT_STYLE, $roster), 'An empty value is the empty literal.');
     $this->assertTrue(ValueKind::Literal->isInline());
     $this->assertFalse(ValueKind::Unknown->isInline());
-    $this->assertSame(MaterialKind::Stencil, ValueKind::Stencil->material());
+    $this->assertSame(MaterialKind::Blueprint, ValueKind::Blueprint->material());
     $this->assertNull(ValueKind::Media->material());
   }
 
   /**
-   * Class, attribute and stencil slots hold references only.
+   * Class, attribute and blueprint slots hold references only.
    */
   public function testResolveReferenceSlots(): void {
     $grammar = $this->grammar();
@@ -143,8 +143,8 @@ class ValueGrammarTest extends KernelTestBase {
 
     $this->assertSame('button', $grammar->resolve('button', MaterialRecord::SLOT_CLASS, $roster)->id);
     $this->assertSame(ValueKind::Variant, $grammar->resolve(' button ', MaterialRecord::SLOT_CLASS, $roster)->kind);
-    $this->assertSame(ValueKind::Unknown, $grammar->resolve('hero', MaterialRecord::SLOT_CLASS, $roster)->kind, 'Slots are separate vocabularies: the stencil "hero" is no class.');
-    $this->assertSame(ValueKind::Stencil, $grammar->resolve('hero', MaterialRecord::SLOT_STENCIL, $roster)->kind);
+    $this->assertSame(ValueKind::Unknown, $grammar->resolve('hero', MaterialRecord::SLOT_CLASS, $roster)->kind, 'Slots are separate vocabularies: the blueprint "hero" is no class.');
+    $this->assertSame(ValueKind::Blueprint, $grammar->resolve('hero', MaterialRecord::SLOT_BLUEPRINT, $roster)->kind);
     $this->assertSame('container_full', $grammar->resolve('full', MaterialRecord::attrSlot('kind:container', 'width'), $roster)->id);
     $this->assertSame('block_full', $grammar->resolve('full', MaterialRecord::attrSlot('kind:block', 'width'), $roster)->id, 'An attribute value resolves in its scope: the same spelling on another scope is that scope\'s variant.');
     $unknown = $grammar->resolve('full', MaterialRecord::attrSlot('kind:container', 'height'), $roster);
@@ -190,7 +190,7 @@ class ValueGrammarTest extends KernelTestBase {
     $this->assertSame([['variant', 'container_full']], $kinds($grammar->references(' full ', MaterialRecord::attrSlot('kind:container', 'width'), $roster)));
     $this->assertSame([['variant', 'block_full']], $kinds($grammar->references(' full ', MaterialRecord::attrSlot('kind:block', 'width'), $roster)));
     $this->assertSame([], $grammar->references('', MaterialRecord::attrSlot('kind:container', 'width'), $roster));
-    $this->assertSame([['stencil', 'hero']], $kinds($grammar->references('hero', MaterialRecord::SLOT_STENCIL, $roster)));
+    $this->assertSame([['blueprint', 'hero']], $kinds($grammar->references('hero', MaterialRecord::SLOT_BLUEPRINT, $roster)));
     $this->assertSame([['animation', 'fade_in']], $kinds($grammar->references(' motion-fade_in ', MaterialRecord::SLOT_ANIMATION, $roster)));
     $this->assertSame([], $grammar->references('motion-fade_in', MaterialRecord::SLOT_STYLE, $roster), 'A bare ident in a style value is a literal, no reference.');
   }
@@ -214,7 +214,7 @@ class ValueGrammarTest extends KernelTestBase {
     $this->assertSame("url('file:hero.svg')", $grammar->canonical('url("file: hero.svg ")', MaterialRecord::SLOT_STYLE, $roster));
     $this->assertSame('var(--nope)', $grammar->canonical('var( --nope )', MaterialRecord::SLOT_STYLE, $roster), 'An unknown reference keeps its spelling; refusing it is the consumer\'s rule.');
     $this->assertSame('button nope', $grammar->canonical('  button   nope ', MaterialRecord::SLOT_CLASS, $roster));
-    $this->assertSame('hero', $grammar->canonical(' hero ', MaterialRecord::SLOT_STENCIL, $roster));
+    $this->assertSame('hero', $grammar->canonical(' hero ', MaterialRecord::SLOT_BLUEPRINT, $roster));
     $this->assertSame('motion-fade_in', $grammar->canonical(' motion-fade_in ', MaterialRecord::SLOT_ANIMATION, $roster));
     $this->assertSame('', $grammar->canonical('', MaterialRecord::SLOT_STYLE, $roster));
   }
@@ -228,7 +228,7 @@ class ValueGrammarTest extends KernelTestBase {
     $this->assertSame('var(--swatch-lime_green)', $grammar->spell($roster->get(MaterialKind::Swatch, 'lime_green'), MaterialRecord::SLOT_STYLE));
     $this->assertSame('full', $grammar->spell($roster->get(MaterialKind::Variant, 'container_full'), MaterialRecord::attrSlot('kind:container', 'width')));
     $this->assertSame('full', $grammar->spell($roster->get(MaterialKind::Variant, 'block_full'), MaterialRecord::attrSlot('kind:block', 'width')));
-    $this->assertSame('hero', $grammar->spell($roster->get(MaterialKind::Stencil, 'hero'), MaterialRecord::SLOT_STENCIL));
+    $this->assertSame('hero', $grammar->spell($roster->get(MaterialKind::Blueprint, 'hero'), MaterialRecord::SLOT_BLUEPRINT));
     $this->assertSame('motion-fade_in', $grammar->spell($roster->get(MaterialKind::Animation, 'fade_in'), MaterialRecord::SLOT_ANIMATION));
     $this->assertSame("url('media:abc')", ValueGrammar::spellMedia(' ABC '));
     $this->assertSame("url('generate:a dog')", ValueGrammar::spellGenerate('  a dog  '));
@@ -319,8 +319,8 @@ class ValueGrammarTest extends KernelTestBase {
         'full',
       ],
       [MaterialRecord::attrSlot('kind:container', 'width'), ''],
-      [MaterialRecord::SLOT_STENCIL, 'hero'], [MaterialRecord::SLOT_STENCIL, 'button'], [
-        MaterialRecord::SLOT_STENCIL,
+      [MaterialRecord::SLOT_BLUEPRINT, 'hero'], [MaterialRecord::SLOT_BLUEPRINT, 'button'], [
+        MaterialRecord::SLOT_BLUEPRINT,
         '',
       ],
       [MaterialRecord::SLOT_ANIMATION, 'motion-fade_in'], [MaterialRecord::SLOT_ANIMATION, ' motion-fade_in '], [
@@ -349,7 +349,7 @@ class ValueGrammarTest extends KernelTestBase {
               'id' => $variant,
               'scope' => $scope,
               'topLevel' => $top_level,
-              'withinStencil' => $within,
+              'withinBlueprint' => $within,
             ];
           }
         }
@@ -360,21 +360,21 @@ class ValueGrammarTest extends KernelTestBase {
       'id' => 'lime_green',
       'scope' => 'block_type:image',
       'topLevel' => FALSE,
-      'withinStencil' => NULL,
+      'withinBlueprint' => NULL,
     ];
     $applicable_cases[] = [
-      'kind' => 'stencil',
+      'kind' => 'blueprint',
       'id' => 'hero',
       'scope' => 'kind:container',
       'topLevel' => FALSE,
-      'withinStencil' => NULL,
+      'withinBlueprint' => NULL,
     ];
     $applicable_cases[] = [
       'kind' => 'animation',
       'id' => 'fade_in',
       'scope' => 'block_type:text',
       'topLevel' => FALSE,
-      'withinStencil' => NULL,
+      'withinBlueprint' => NULL,
     ];
     $pair_cases = array_map(static fn (array $row): array => ['variant' => $row[0], 'element' => $row[1]], array_values(MaterialsRosterTest::scopePairs()));
 
@@ -383,7 +383,7 @@ class ValueGrammarTest extends KernelTestBase {
       'references' => array_map(static fn (array $c): array => array_map(static fn (ValueReference $ref): array => $ref->toArray(), $grammar->references($c['value'], $c['slot'], $roster)), $value_cases),
       'canonical' => array_map(static fn (array $c): string => $grammar->canonical($c['value'], $c['slot'], $roster), $value_cases),
       'spell' => array_map(static fn (array $c): string => $grammar->spell($roster->get(MaterialKind::from($c['kind']), $c['id']), $c['slot']), $spell_cases),
-      'applicable' => array_map(static fn (array $c): bool => $roster->applicable($roster->get(MaterialKind::from($c['kind']), $c['id']), Address::fromString($c['scope']), $c['topLevel'], $c['withinStencil']), $applicable_cases),
+      'applicable' => array_map(static fn (array $c): bool => $roster->applicable($roster->get(MaterialKind::from($c['kind']), $c['id']), Address::fromString($c['scope']), $c['topLevel'], $c['withinBlueprint']), $applicable_cases),
       'scopesPair' => array_map(static fn (array $c): bool => MaterialsRoster::scopesPair($c['variant'], $c['element']), $pair_cases),
     ];
     $input = json_encode([
@@ -407,7 +407,7 @@ class ValueGrammarTest extends KernelTestBase {
     $kinds = array_unique(array_column($php['resolve'], 'kind'));
     sort($kinds);
     $this->assertSame([
-      'animation', 'file', 'generate', 'literal', 'media', 'stencil', 'swatch', 'token', 'unknown', 'variant',
+      'animation', 'blueprint', 'file', 'generate', 'literal', 'media', 'swatch', 'token', 'unknown', 'variant',
     ], $kinds);
     $this->assertContains(TRUE, $php['applicable']);
     $this->assertContains(FALSE, $php['applicable']);

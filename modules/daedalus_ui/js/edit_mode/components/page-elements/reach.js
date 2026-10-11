@@ -21,10 +21,17 @@
  * instance: drawn in every view) or when its view's Show-menu toggle is
  * on (the view slice's `views` map). No second projection and no memo:
  * a lookup in the map every reader already holds, plus one boolean.
+ *
+ * Reach is also gated by the actor: a depicted row whose verdict allows
+ * nothing (selection/capable-model.js selectableIn: a template's
+ * elements on a page that does not own them) is drawn but not reachable,
+ * so the arrows walk past it to its selectable rows exactly as they walk
+ * past an undrawn shell, and the breadcrumb never names it.
  */
 
 import store from '../../store/store';
 import { projectionIndex, selectorAddress } from './projection-index';
+import { selectableIn } from '../../selection/capable-model';
 
 /**
  * Whether rows of a source are currently depicted. Pure: the visibility
@@ -90,12 +97,17 @@ export const depictedRows = (node, visibility) => {
  *   The view visibility map (state.view.views).
  *
  * @return {function(string): boolean}
- *   address → whether the address exists and its row is depicted. With
- *   no index nothing exists, so nothing is reachable.
+ *   address → whether the address exists, its row is depicted and its
+ *   element is selectable. With no index nothing exists, so nothing is
+ *   reachable.
  */
 export const reachOver = (index, visibility) => (address) => {
   const entry = index?.get(address);
-  return entry !== undefined && depicted(entry.source, visibility);
+  return (
+    entry !== undefined &&
+    depicted(entry.source, visibility) &&
+    selectableIn(index, address)
+  );
 };
 
 /**
@@ -106,8 +118,9 @@ export const reachOver = (index, visibility) => (address) => {
  * map the predicate reads is the map the walk reads.
  *
  * @return {function(string): boolean}
- *   address → whether the address exists and its row is depicted. Before
- *   the mirror boots nothing exists, so nothing is reachable.
+ *   address → whether the address exists, its row is depicted and its
+ *   element is selectable. Before the mirror boots nothing exists, so
+ *   nothing is reachable.
  */
 export const reachPredicate = () =>
   reachOver(projectionIndex(), store.getState().view.views);
@@ -191,8 +204,9 @@ export const reachableParent = (index, reach, address) => {
 };
 
 /**
- * Whether one address is reachable now: it exists in the projection index
- * and its row is depicted under the current view visibility.
+ * Whether one address is reachable now: it exists in the projection index,
+ * its row is depicted under the current view visibility and its element
+ * is selectable.
  *
  * @param {string} address
  *   An index address (`key` or `key::selector`, projection-index.js

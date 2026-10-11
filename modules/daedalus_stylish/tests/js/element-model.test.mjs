@@ -8,8 +8,8 @@
  */
 import { strict as assert } from 'node:assert';
 import {
-  ancestorIslands, bracedSelector, conditionRemovalOps, draftRoster, elementIslands,
-  islandConditions, occupiedRoster, ownIslandLines, partRemovalOps, posedRoster,
+  ancestorIslands, bracedSelector, composeUnder, conditionRemovalOps, draftRoster, elementIslands,
+  islandConditions, nestUnder, nestedSpelling, occupiedRoster, ownIslandLines, partRemovalOps, posedRoster,
   restoredLines, ruleIslandLines, selectorGestureOptions, settleOps, shouldRestoreTinted,
 } from '../../js/src/code/element-model.js';
 import { TREE } from './selector-matcher-fixture.mjs';
@@ -269,8 +269,8 @@ const ANCESTOR_MAP = {
   [B_RULE]: { default: { color: 'teal', padding: '1rem' } },
   [T3]: { default: { color: 'purple' } },
 };
-const roster = (map, key, address = null) =>
-  elementIslands(map, key, ANCESTOR_GUIDE, [BAND], null, BLOCK_TYPES, {}, PAGE, address);
+const roster = (map, key, address = null, facet = null) =>
+  elementIslands(map, key, ANCESTOR_GUIDE, [BAND], null, BLOCK_TYPES, {}, PAGE, address, facet);
 const reachingT3 = (map) =>
   stackLines(buildStack({ guide: ANCESTOR_GUIDE, map, key: T3, variants: [BAND], blockTypes: BLOCK_TYPES, tree: PAGE }), 'default');
 
@@ -310,6 +310,66 @@ test('a rule reaching a part rows under the part, never the root', () => {
   assert.deepEqual(
     model.parts.map((part) => [part.selector, part.ancestors.map((entry) => [entry.owner, entry.selector, entry.key, entry.conditions, entry.existing])]),
     [['.text-block-link', [[SEC_E, 'pb-text .text-block-link', rule, ['default', 'hover'], true]]]],
+  );
+  // A write address under the PART facet (the spine's two facts: the
+  // caller says which facet the address stands under, nothing derives
+  // it from the rule) places its mintable rule under the part's row,
+  // never the root's.
+  const seated = roster({ [link]: { default: { color: 'blue' } } }, T8, { key: SEC_E, selector: '> pb-text .text-block-link' }, '.text-block-link');
+  assert.deepEqual(seated.ancestors, []);
+  assert.deepEqual(
+    seated.parts.map((part) => [part.selector, part.ancestors.map((entry) => [entry.selector, entry.existing])]),
+    [['.text-block-link', [['> pb-text .text-block-link', false]]]],
+  );
+  // The same address handed as the root's (no facet) rows under the
+  // root: the facet is the caller's fact, not the matcher's inverse.
+  const atRoot = roster({ [link]: { default: { color: 'blue' } } }, T8, { key: SEC_E, selector: '> pb-text .text-block-link' });
+  assert.deepEqual(atRoot.ancestors.map((entry) => [entry.selector, entry.existing]), [['> pb-text .text-block-link', false]]);
+});
+
+test('an own-key address places no rule row: the part row is the island, under the facet and at the root alike', () => {
+  const link = `${T8}::.text-block-link`;
+  const held = { [link]: { default: { color: 'blue' } } };
+  // The chip's own tag tier for the link part ("Every link here",
+  // `{T8}::a`) the map does not hold yet: no rule row under the facet,
+  // no row anywhere; the view drafts the part row with the cursor.
+  const mintable = roster(held, T8, { key: T8, selector: 'a' }, '.text-block-link');
+  assert.deepEqual(mintable.ancestors, []);
+  assert.deepEqual(
+    mintable.parts.map((part) => [part.selector, part.ancestors]),
+    [['.text-block-link', []]],
+  );
+  // The same address once the map holds it rows ONCE, as the part row
+  // the stack enumerates, never again as a rule row under the facet.
+  const written = roster({ ...held, [`${T8}::a`]: { default: { color: 'red' } } }, T8, { key: T8, selector: 'a' }, '.text-block-link');
+  assert.deepEqual(written.ancestors, []);
+  assert.deepEqual(
+    written.parts.map((part) => [part.selector, part.ancestors]).sort(),
+    [['.text-block-link', []], ['a', []]],
+  );
+  // At the root (no facet, "Every paragraph here" on a text block): the
+  // ancestor rules reaching the root list as before, the own tier not
+  // among them.
+  const atRoot = roster(ANCESTOR_MAP, T3, { key: T3, selector: 'p' });
+  assert.deepEqual(atRoot.ancestors.map((entry) => [entry.owner, entry.selector]), [[SEC_B, '> *'], [SEC_A, '> pb-container > *']]);
+  assert.deepEqual(atRoot.parts, []);
+});
+
+test('an ancestor address under the same facet still places its rule row, existing false while the map lacks it', () => {
+  const link = `${T8}::.text-block-link`;
+  const held = { [link]: { default: { color: 'blue' } } };
+  const seated = roster(held, T8, { key: SEC_E, selector: '> pb-text .text-block-link' }, '.text-block-link');
+  assert.deepEqual(seated.ancestors, []);
+  assert.deepEqual(
+    seated.parts.map((part) => [part.selector, part.ancestors.map((entry) => [entry.owner, entry.selector, entry.key, entry.existing])]),
+    [['.text-block-link', [[SEC_E, '> pb-text .text-block-link', `${SEC_E}::> pb-text .text-block-link`, false]]]],
+  );
+  // Written, the same row reads existing: the placement rule is the
+  // address's owner, not the map's holding.
+  const written = roster({ ...held, [`${SEC_E}::> pb-text .text-block-link`]: { hover: { color: 'red' } } }, T8, { key: SEC_E, selector: '> pb-text .text-block-link' }, '.text-block-link');
+  assert.deepEqual(
+    written.parts.map((part) => [part.selector, part.ancestors.map((entry) => [entry.selector, entry.existing, entry.conditions])]),
+    [['.text-block-link', [['> pb-text .text-block-link', true, ['default', 'hover']]]]],
   );
 });
 
@@ -744,6 +804,130 @@ test('a typed brace mints a generated box: the owner\'s through the anchor, a su
   assert.equal(bracedSelector('& > p', ''), null);
   assert.equal(bracedSelector('> pb-text &::before', ''), null);
   assert.equal(bracedSelector('&::before', ' x'), null);
+});
+
+// --- Composition under a rule island (CSS nesting's relative rule) ----------
+
+test('composeUnder on the owner\'s island leaves the text as typed: no rule, the anchor the owner\'s own box', () => {
+  assert.equal(composeUnder(null, 'p'), 'p');
+  assert.equal(composeUnder('', '> pb-text'), '> pb-text');
+  assert.equal(composeUnder(null, '&::before'), '&::before');
+  assert.equal(composeUnder(null, '  .quote::after '), '.quote::after');
+  // The grammar still judges: the bare anchor and a chain on it refuse.
+  assert.equal(composeUnder(null, '&'), null);
+  assert.equal(composeUnder('', '& > p'), null);
+});
+
+test('composeUnder under a tag rule: `&` is the rule, a bare line is relative to it, the grammar judges the result', () => {
+  assert.equal(composeUnder('p', '&::before'), 'p::before');
+  assert.equal(composeUnder('p', '&::after'), 'p::after');
+  assert.equal(composeUnder('p', '> a'), 'p > a');
+  assert.equal(composeUnder('p', 'a'), 'p a');
+  // A part class composes relative to the rule too, and the grammar
+  // judges the composed text as it judges an authored key: a part is
+  // admitted after the owner or a type, never after a tag.
+  assert.equal(composeUnder('p', '.x'), null);
+  assert.equal(composeUnder('> pb-text', '.x'), '> pb-text .x');
+  assert.equal(composeUnder('p', '& > a'), 'p > a');
+  assert.equal(composeUnder('p', '>a'), 'p > a');
+  assert.equal(composeUnder('p', '  > a '), 'p > a');
+  // `&` alone composes to the rule itself, the row the island already
+  // is: refused, as the owner's island refuses `&`.
+  assert.equal(composeUnder('p', '&'), null);
+  assert.equal(composeUnder('p', ' & '), null);
+  // The grammar's refusals on the composed text: a partial tail, a
+  // dangling combinator, another pseudo, a state.
+  assert.equal(composeUnder('p', '&::'), null);
+  assert.equal(composeUnder('p', '&::bef'), null);
+  assert.equal(composeUnder('p', '>'), null);
+  assert.equal(composeUnder('p', '&::marker'), null);
+  assert.equal(composeUnder('p', '&:hover'), null);
+  // The condition sigil's shape (the anchor glued to a word) never
+  // composes: substituting the rule would spell a tag (`phover`).
+  assert.equal(composeUnder('p', '&hover'), null);
+  assert.equal(composeUnder('p', '&first-child'), null);
+  assert.equal(nestUnder('p', '&hover'), null);
+  assert.equal(nestUnder(null, '&hover'), null);
+});
+
+test('composeUnder under a chain rule continues the chain, and a box rule takes no continuation', () => {
+  assert.equal(composeUnder('> pb-text .link', '&::after'), '> pb-text .link::after');
+  assert.equal(composeUnder('> pb-text .link', '> a'), '> pb-text .link > a');
+  assert.equal(composeUnder('> pb-text', '&::before'), '> pb-text::before');
+  assert.equal(composeUnder('> pb-text', '.link'), '> pb-text .link');
+  assert.equal(composeUnder('> pb-text:has(a)', '&::before'), '> pb-text:has(a)::before');
+  // A rule that is itself a box (`p::before`) is a terminal: a box on a
+  // box and a descendant of a box are outside the grammar.
+  assert.equal(composeUnder('p::before', '&::after'), null);
+  assert.equal(composeUnder('p::before', '> a'), null);
+  assert.equal(composeUnder('p::before', '.x'), null);
+});
+
+test('nestUnder is the raw substitution the completion feeds: a partial line composes without judgement', () => {
+  assert.equal(nestUnder('p', '&::'), 'p::');
+  assert.equal(nestUnder('p', '&::bef'), 'p::bef');
+  assert.equal(nestUnder('p', '> '), 'p > ');
+  assert.equal(nestUnder('p', '> pb-'), 'p > pb-');
+  assert.equal(nestUnder('p', '.'), 'p .');
+  assert.equal(nestUnder('> pb-text', 'a'), '> pb-text a');
+  assert.equal(nestUnder(null, '&::'), '&::');
+  assert.equal(nestUnder('', '> pb-'), '> pb-');
+  assert.equal(nestUnder('p', 42), null);
+});
+
+test('the completion fed the nested line offers the rule\'s position: its boxes behind `&::`, its children behind `>`', () => {
+  // The owner's `p` island on section A: `&::` is the paragraph's boxes,
+  // minting the composed selectors.
+  const boxes = gesture(nestUnder('p', '&::'));
+  assert.deepEqual(boxes.options, [
+    { selector: 'p::before', kind: 'pseudo', name: 'before', label: null },
+    { selector: 'p::after', kind: 'pseudo', name: 'after', label: null },
+  ]);
+  // `>` inside the `> pb-container` island is the nested section's
+  // children, the same set the owner's chain `> pb-container >` reads.
+  assert.deepEqual(
+    selectorsOf(gesture(nestUnder('> pb-container', '> '))),
+    selectorsOf(gesture('> pb-container > ')),
+  );
+  // A bare word inside a tag island is a descendant of the tag's
+  // matches: nothing under section A's paragraphs, so no offer.
+  assert.deepEqual(gesture(nestUnder('p', 'a')), { options: [], create: null });
+  // A box island takes no continuation: the nested line is outside the
+  // grammar.
+  assert.equal(gesture(nestUnder('p::before', '&::')), null);
+  assert.equal(gesture(nestUnder('p::before', '> ')), null);
+});
+
+test('nestedSpelling reads a composed option back in the typed line\'s nesting: anchored lines keep the anchor, bare lines drop the rule', () => {
+  assert.equal(nestedSpelling('p', '&::', 'p::before'), '&::before');
+  assert.equal(nestedSpelling('p', '&::bef', 'p::after'), '&::after');
+  assert.equal(nestedSpelling('p', '& > ', 'p > a'), '& > a');
+  assert.equal(nestedSpelling('p', '> ', 'p > *'), '> *');
+  assert.equal(nestedSpelling('p', '>pb-', 'p > pb-text'), '> pb-text');
+  assert.equal(nestedSpelling('p', '.', 'p .x'), '.x');
+  assert.equal(nestedSpelling('> pb-container', '> ', '> pb-container > pb-text'), '> pb-text');
+  assert.equal(nestedSpelling('> pb-text .link', '&::', '> pb-text .link::after'), '&::after');
+  // On the owner's island the selector is its own spelling.
+  assert.equal(nestedSpelling(null, '&::', '&::before'), '&::before');
+  assert.equal(nestedSpelling('', '> ', '> pb-text'), '> pb-text');
+});
+
+test('a typed brace inside a rule island mints the composed selector', () => {
+  assert.equal(bracedSelector('&::before', '', 'p'), 'p::before');
+  assert.equal(bracedSelector('  &::after ', '', 'p'), 'p::after');
+  assert.equal(bracedSelector('> a', '', 'p'), 'p > a');
+  assert.equal(bracedSelector('.x', '', '> pb-text'), '> pb-text .x');
+  assert.equal(bracedSelector('&::after', '', '> pb-text .link'), '> pb-text .link::after');
+  assert.equal(bracedSelector('&::before', '', '> pb-text'), '> pb-text::before');
+  // The same refusals as the owner's: a partial tail, text after the
+  // cursor, a declaration, a box on a box.
+  assert.equal(bracedSelector('&::', '', 'p'), null);
+  assert.equal(bracedSelector('&::before', ' x', 'p'), null);
+  assert.equal(bracedSelector('color: red', '', 'p'), null);
+  assert.equal(bracedSelector('&::after', '', 'p::before'), null);
+  // No rule: the owner's behaviour, unchanged.
+  assert.equal(bracedSelector('&::before', '', null), '&::before');
+  assert.equal(bracedSelector('&::before', '', ''), '&::before');
 });
 
 test('a block typed or pasted inside an island is a door chunk, never an error: the door materializes or names it', () => {

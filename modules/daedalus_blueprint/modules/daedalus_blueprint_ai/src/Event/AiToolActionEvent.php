@@ -22,8 +22,10 @@ class AiToolActionEvent extends Event {
    * @param string $toolId
    *   The tool plugin ID (e.g. 'daedalus_blueprint:edit').
    * @param array $context
-   *   Arbitrary payload keyed by action type. For 'entity_persisted': entity,
-   *   is_new, targets.
+   *   Arbitrary payload keyed by action type. For 'entity_persisted' from a
+   *   page result: host (the persisted \Drupal\daedalus_blueprint\Host\HostInterface,
+   *   a page's or a template's working copy), is_new, targets; from a
+   *   config result (no host): entity, is_new.
    */
   public function __construct(
     protected readonly string $action,

@@ -31,10 +31,19 @@
 #   minted token or a published swatch. On a guarded site the
 #   constraints stay law but undeclared properties pass with grammar
 #   checks; on an open site everything here only shapes the offer.
-# - stops: curate the OFFER, never legality. A stop row shows the named
-#   tokens in list order; the whole scale still validates. Stop names
-#   are the skin's data: a name the active skin does not mint is dropped
-#   from the row with a logged notice, never a build error.
+# - stops: curate the OFFER, never legality, and only PER ELEMENT (the
+#   block type files beside this one). A stop row shows the named tokens
+#   in list order; the whole scale still validates. Stop names are
+#   contract names (site.token_contract below): a stop outside the
+#   contract is a build error, and whether the worn skin MINTS the
+#   contract is a fact about that skin (SkinConformance), never a build
+#   error. Site-wide offer curation is not guide code: which of a
+#   scale's tokens every uncurated row leads with is each token's
+#   `offered` flag in the skin (the everyday six of the nine space steps
+#   are offered, the gutter and the band tokens are not), so a row bound
+#   to a scale that no element curates offers the skin's offered tokens
+#   in stored order. A `stops` list under constraint_defaults is a build
+#   error.
 # - A node's own constraint block for a property replaces the site
 #   default WHOLE on that node (site blocks merge across layers, node
 #   blocks never key-merge with the site's), so a curated node restates
@@ -118,6 +127,25 @@ site:
       label: Stroke
       shape: dimension
 
+  # The token contract: the names this system promises per scale, which
+  # is what a guide may curate as stops (the build refuses a stop outside
+  # it) and what a skin of the system must mint (SkinConformance judges
+  # one skin; a skin lacking a name is not choosable for the system).
+  # Declared, never derived: the names the package's CSS and the guide
+  # below read are visible to no derivation. Lists replace across
+  # layers, so a package widening a scale restates its whole list. What
+  # is promised here is the everyday ladders the skin marks `offered`
+  # (the type ramp, the tracking trio, the six space steps) plus every
+  # name a per-node stop in the block type files curates; the skin mints
+  # more, and those extras are the skin's own, not promised.
+  token_contract:
+    text: ['display', 'title-1', 'title-2', 'title-3', 'body', 'caption']
+    tracking: ['tight', 'normal', 'wide']
+    space: ['2', '3', '4', '6', '8', '12', '16']
+    color: ['accent', 'accent-contrast', 'text', 'inverse-text', 'surface', 'elevated', 'inverse-bg']
+    radius: ['sm', 'md', 'lg', 'pill']
+    stroke: ['thin']
+
   # The package's DELTAS over the suite's bindings. daedalus_stylish's own site
   # declaration (daedalus_stylish.page_builder.yml site.constraint_defaults)
   # already binds font-family, font-size, font-weight, line-height,
@@ -125,23 +153,18 @@ site:
   # mints, with the zero literal on the dimension blocks, and the family
   # expansion (StyleGuide::expandConstraintFamilies()) carries each
   # shorthand's block to its longhands. A package never restates a block
-  # the suite authors; constraint blocks merge like every map, so a
-  # block carrying only `stops:` lands as the merged block (scale and
-  # allowed literal kept, stops added). What a package DOES author is
-  # what the suite cannot promise for every skin (color, tracking), what
-  # only this package's scales can bind (strokes, shadows, timing), the
-  # margin binding, and the closed lists and ranges a designed site
-  # closes. Every block here is one of those.
+  # the suite authors (the type ramp the font-size row offers top-down,
+  # and the everyday space steps padding and gap lead with, are the
+  # skin's `offered` flags in stored order, not blocks here). What a
+  # package DOES author is what the suite cannot promise for every skin
+  # (color, tracking), what only this package's scales can bind
+  # (strokes, shadows, timing), the margin binding, and the closed lists
+  # and ranges a designed site closes. Every block here is one of those.
   constraint_defaults:
-    # The type ramp is role-named; the stop row offers it top-down so
-    # the row reads as the ladder the skin's defaults walk.
-    font-size:
-      stops: ['display', 'title-1', 'title-2', 'title-3', 'body', 'caption']
     # Tracking is a package binding (not every shipped skin mints it):
     # three generic steps, wide for an eyebrow, tight for a display line.
     letter-spacing:
       scale: tracking
-      stops: ['tight', 'normal', 'wide']
     # Text and border colors are role tokens, never ad hoc, so they bind
     # to the color scale (the suite leaves color to the package: another
     # package keeps it unbound so swatches stay legal there). Backgrounds
@@ -155,14 +178,10 @@ site:
       scale: color
       allowed: ['transparent', 'currentColor']
     # Spacing: the suite binds padding and gap to space with the zero
-    # literal; this package curates the everyday six of the nine minted
-    # steps. The band tokens (band-compact, band, band-spacious) are worn
-    # through the container rhythm axis, never picked by hand, and the
-    # gutter is the page band's inline inset, not a padding step.
-    padding:
-      stops: ['2', '4', '6', '8', '12', '16']
-    gap:
-      stops: ['2', '4', '6', '8', '12', '16']
+    # literal, and the skin marks the everyday six of its nine minted
+    # steps `offered` (the band tokens are worn through the container
+    # rhythm axis, never picked by hand, and the gutter is the page
+    # band's inline inset, not a padding step: all `offered: false`).
     # Margins: the ladder, zero, and auto (centering). The suite leaves
     # margin unbound because auto and negatives are legal there on an
     # open site; a designed site outlaws negative margins by construction
@@ -170,7 +189,6 @@ site:
     margin:
       scale: space
       allowed: ['0', 'auto']
-      stops: ['2', '4', '6', '8', '12', '16']
     # Strokes: hairline / thin / thick, or none. Authored on the
     # shorthand; the expansion reaches the four sides.
     border-width:

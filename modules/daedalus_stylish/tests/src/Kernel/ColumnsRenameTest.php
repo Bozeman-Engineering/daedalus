@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Drupal\Tests\daedalus_stylish\Kernel;
 
-use Drupal\daedalus_blueprint_stencil\Entity\Stencil;
 use Drupal\daedalus_layout\ComponentTransform\HostEntityWalker;
 use Drupal\daedalus_stylish\DaedalusStylishFieldManager;
 use Drupal\daedalus_stylish\DaedalusStylishVariantInterface;
@@ -24,11 +23,10 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  * Tests the one-shot rename of the shipped Columns variant (row → columns).
  *
  * The real post-update runs against the real shipped set (the module
- * installed, so `columns` synced on install) over the three stores a
+ * installed, so `columns` synced on install) over the two stores a
  * machine name lives in: host style maps across revisions (a direct
  * wearing and one a composition stamped "via", both keeping their place
- * and their provenance), stored stencils (the bare-name list, at depth)
- * and variant styles across revisions (a composition nesting the name; a
+ * and their provenance) and variant styles across revisions (a composition nesting the name; a
  * shipped-unmodified one is left to the sync lane). Then the legacy
  * shipped `row` entity retires, `columns` stands shipped and unmodified,
  * the same sync lands the real Row under the freed `row` name, and a
@@ -71,12 +69,9 @@ class ColumnsRenameTest extends KernelTestBase {
     // The unbound site: the shipped Columns gap is a token reference the
     // suite's bindings would refuse on a site that mints nothing.
     'daedalus_stylish_unbound_test',
-    // The stencil entity's icon field references media, so installing the
-    // stencil schema needs the media entity type (and its field types).
     'file',
     'image',
     'media',
-    'daedalus_blueprint_stencil',
   ];
 
   /**
@@ -92,11 +87,19 @@ class ColumnsRenameTest extends KernelTestBase {
     // every build, and every compile and validation builds it.
     $this->installEntitySchema('daedalus_swatch');
     $this->installEntitySchema('daedalus_animation');
+    $this->installEntitySchema('daedalus_font');
     $this->installEntitySchema('daedalus_skin');
-    $this->installEntitySchema('stencil');
     $this->installConfig(['daedalus_stylish']);
     $this->installSchema('layout_builder', ['inline_block_usage']);
-    $this->installSchema('daedalus_stylish', ['daedalus_variant_usage', 'daedalus_animation_usage']);
+    // Every usage table: a shipped variant's save tracks its value references
+    // across all four value tables beside the variant table.
+    $this->installSchema('daedalus_stylish', [
+      'daedalus_variant_usage',
+      'daedalus_swatch_usage',
+      'daedalus_animation_usage',
+      'daedalus_font_usage',
+      'daedalus_token_usage',
+    ]);
     // The importer switches to an administrative account (shipped variants
     // are code, not user input); give the switcher one to find.
     $this->setUpCurrentUser([], [], TRUE);
@@ -195,7 +198,6 @@ class ColumnsRenameTest extends KernelTestBase {
     } while (empty($sandbox['#finished']) || $sandbox['#finished'] < 1);
     $this->container->get('entity_type.manager')->getStorage('entity_test_mulrev')->resetCache();
     $this->container->get('entity_type.manager')->getStorage('daedalus_variant')->resetCache();
-    $this->container->get('entity_type.manager')->getStorage('stencil')->resetCache();
     return $sandbox;
   }
 
@@ -228,32 +230,6 @@ class ColumnsRenameTest extends KernelTestBase {
     $shipped->setStyles($shipped_styles);
     $shipped->setShippedSource('cs_stylish', $shipped_styles);
     $shipped->save();
-
-    // A stored stencil naming it at depth, in the current children grammar.
-    $stencil = Stencil::create([
-      'label' => 'Card',
-      'machine_name' => 'card',
-      'description' => 'A card.',
-      'status' => TRUE,
-    ]);
-    $stencil->setElement([
-      'kind' => 'container',
-      'layout_id' => ContainerMigration::TARGET_LAYOUT,
-      'label' => 'Card',
-      'styles' => ['' => ['variants' => ['card_left']]],
-      'children' => [
-        [
-          'kind' => 'container',
-          'layout_id' => ContainerMigration::TARGET_LAYOUT,
-          'label' => 'Card Wrapper',
-          'styles' => ['' => ['variants' => ['container_full', 'row']]],
-          'children' => [
-            ['kind' => 'block', 'block_type' => 'text', 'block_fields' => ['info' => 'Text']],
-          ],
-        ],
-      ],
-    ]);
-    $stencil->save();
 
     // Host A, two revisions: the band wears the old name directly beside
     // its width, the nested container wears it via the composition.
@@ -313,11 +289,6 @@ class ColumnsRenameTest extends KernelTestBase {
     $this->assertSame([['variant' => 'row', 'fragment' => '']], $kept->getStyles()['container(1)']['variants']);
     $this->assertFalse($kept->isModified(), 'The shipped-unmodified composition was not rewritten in place.');
 
-    // Stored stencils: the bare-name list at depth.
-    $element = $this->container->get('entity_type.manager')->getStorage('stencil')->loadUnchanged($stencil->id())->getElement();
-    $this->assertSame(['card_left'], $element['styles']['']['variants']);
-    $this->assertSame(['container_full', 'columns'], $element['children'][0]['styles']['']['variants']);
-
     // The retire-and-sync: the legacy entity is gone, columns stands
     // shipped and unmodified under its label, and the freed `row` name
     // now carries the real Row (a fresh entity, its styles the Row's).
@@ -346,11 +317,9 @@ class ColumnsRenameTest extends KernelTestBase {
     $before = [
       $this->revisionMap($revision_1),
       $this->revisionMap($revision_2_id),
-      $element,
       $storage->loadRevision($card_revision_2)->getStyles(),
     ];
     $rename = $this->container->get('daedalus_stylish_layouts.variant_rename');
-    $this->assertSame([], $rename->renameInStencils('row', 'columns'));
     // The shipped-unmodified composition is still the sync lane's: the
     // skip line persists until its provider delivers the rename, nothing
     // else is reported.
@@ -364,7 +333,6 @@ class ColumnsRenameTest extends KernelTestBase {
     $this->assertSame($before, [
       $this->revisionMap($revision_1),
       $this->revisionMap($revision_2_id),
-      $this->container->get('entity_type.manager')->getStorage('stencil')->loadUnchanged($stencil->id())->getElement(),
       $storage->loadRevision($card_revision_2)->getStyles(),
     ]);
   }

@@ -23,6 +23,9 @@ import { StyleActions, VariantArea } from './variants.js';
 import { LibraryView } from './library.js';
 import { PaletteView } from './palette.js';
 import { AnimationsView } from './animations.js';
+import { FontsView } from './fonts.js';
+import { LawView } from './law.js';
+import { lawScopeFor } from './law-model.js';
 import { pageWearer } from './library-model.js';
 import { BasicControls } from './basic-controls.js';
 import {
@@ -33,6 +36,7 @@ import {
 } from './layout-section.js';
 import { uiMode as uiModeStore } from './ui-mode.js';
 import { codeScope as codeScopeStore } from './code-scope.js';
+import { mountDoors } from './inspector-doors.js';
 import {
   applicableVariants,
   axisLabel,
@@ -42,16 +46,25 @@ import {
   findVariant,
   locked,
   saveStyles,
-  stencilProvenance,
+  blueprintProvenance,
   subtreeSlotTable,
 } from './variant-scope.js';
-import { ELEMENT_LAYER, layerColor, variantLayerId } from './code/layers.js';
+import {
+  ELEMENT_LAYER,
+  documentLayerId,
+  isSkinDocument,
+  lawDocumentFocus,
+  layerColor,
+  skinDocumentScope,
+  variantLayerId,
+} from './code/layers.js';
 import {
   TIER_VARIANT,
   buildStack,
   deliveredEntry,
   editableLayer,
   offerTag,
+  skinScopesAt,
   stackAt,
 } from './style-stack.js';
 import {
@@ -77,10 +90,12 @@ import {
 } from './session-frame-model.js';
 import { formatSlotKey, rootKindForScope } from './slot-key.js';
 import { createMatcher } from './selector-matcher.js';
+import { Portal } from './popover.js';
 import { vectorCondition, conditionPose } from './editing-at.js';
 import {
   conditionText,
   originOf,
+  skinScopeLabel,
   tokenItems,
 } from './provenance-model.js';
 import { parseAnimationTrigger } from './motion-triggers-model.js';
@@ -91,9 +106,11 @@ import {
   restoreLine,
   saveSession,
   sessionCount,
+  skinSession,
   stageIslandLines,
   stageLine,
   stageValue,
+  stagesLines,
   updateSession,
 } from './pending.js';
 import { PushBar, commitSession } from './push-bar.js';
@@ -125,7 +142,7 @@ import { useConcealed } from './reveal.js';
 import {
   addressKey,
   addressSet,
-  facetOf,
+  isAddress,
   sameAddress,
   withheldAt,
 } from './write-address.js';
@@ -313,7 +330,6 @@ const PropertyWidget = ({
     guide,
     blockTypes: source.getBlockTypes?.() ?? {},
     sectionLayouts: source.getSectionLayouts?.() ?? {},
-    skinEditUrl: guide?.skinEditUrl ?? null,
     faceOf,
     staged: editing || pendingMark !== null,
   });
@@ -782,7 +798,15 @@ const PropertyWidget = ({
  * deletion and a hand-closed one stays closed when a value lands. The
  * collapse-all and expand-all pair at the list head (daedalus_ui's
  * shared control) writes every section's posture at once; it registers
- * no hotkeys. The posture is folded INTO the prop so it mirrors the DOM
+ * no hotkeys. The head itself ("Sections" and the pair) is this
+ * component's but does not scroll with the sections: it renders through
+ * a Portal (popover.js) into `head`, the inspector's pinned head slot at
+ * the end of its `__top` box, the one seat the pair takes in every mode
+ * that folds (code mode's showing row fills the same slot), so a reader
+ * scrolled deep into the sections can still fold them; `head` is null
+ * on the inspector's first render, before its mount effect lifts the
+ * node into state, and the head waits for it. The posture is folded
+ * INTO the prop so it mirrors the DOM
  * at all times. The reset is a KEY, never a function: the parent keys
  * this component on the anchor (the styling target, `key` or
  * `key::part`), so a selection change remounts it with no explicit
@@ -820,6 +844,7 @@ const Sections = ({
   sheet = null,
   pending = null,
   withheld = null,
+  head = null,
   onOpenDocument = null,
   onPreview,
   onRelease,
@@ -898,19 +923,26 @@ const Sections = ({
 
   return (
     <Fragment>
-      {/* The list head: the outline's collapse-all and expand-all pair
-          (daedalus_ui's shared control over this component's posture:
-          each button disabled when its gesture would do nothing; no
-          outline id, so the tooltips carry no key). Only over a rendered
-          section: the empty roster shows its own line below. */}
-      {outline.length > 0 && (
-        <div className="daedalus-stylish-inspector__sections-head">
-          <CollapseControls
-            folds={folds}
-            outline={outline}
-            apply={(next) => setFolds(next)}
-          />
-        </div>
+      {/* The list head: the word "Sections" and the outline's
+          collapse-all and expand-all pair (daedalus_ui's shared control
+          over this component's posture: each button disabled when its
+          gesture would do nothing; no outline id, so the tooltips carry
+          no key), rendered into the inspector's pinned head slot, never
+          into this scrolling body (see the docblock). Only over a
+          rendered section: the empty roster shows its own line below. */}
+      {head && outline.length > 0 && (
+        <Portal root={head}>
+          <div className="daedalus-stylish-inspector__sections-head">
+            <span className="daedalus-stylish-inspector__sections-word">
+              {Drupal.t('Sections')}
+            </span>
+            <CollapseControls
+              folds={folds}
+              outline={outline}
+              apply={(next) => setFolds(next)}
+            />
+          </div>
+        </Portal>
       )}
       {shown.map(({ section, rows }, index) => {
         const node = outline[index];
@@ -1014,8 +1046,8 @@ const Sections = ({
  * input and, on a multi-axis scope, the axis pick (moved here from the
  * retired draft document header): one frame, one cadence, for create
  * and update. `consent` (mintConsent facts, or null) renders as the
- * "Belongs to <stencil>" line: a draft anchored inside a stencil
- * placement is born as that stencil's own switchable look, said out
+ * "Belongs to <blueprint>" line: a draft anchored inside a blueprint
+ * placement is born as that blueprint's own switchable look, said out
  * loud BEFORE commit instead of silently, and Unlink is the opt-out
  * (`linked: false` on the session; one-way, since re-linking is just
  * discarding nothing: the Materials surface's Assign gesture covers
@@ -1038,25 +1070,34 @@ const SessionFrame = ({
 }) => {
   const header = sessionHeader(session, library, guide);
   const creating = header.posture === 'creating';
+  // A skin session's document is the skin's at a scope: no switcher (the
+  // roster is the selection's worn variants), no usage count (the scope
+  // IS the blast radius), the skin hue on the dot.
+  const skin = header.posture === 'skin';
   // The document switcher: the selection's other worn documents, so a
   // designer working two axes hops without exit-and-rejump. Switching
   // resolves the open session through the ordinary prompt first (the
   // displacement queue's business); the retired slim layer-picker rows'
   // duty lives in this one control.
-  const roster = creating ? [] : switcherRoster(entry, library, editing, axes);
+  const roster =
+    creating || skin ? [] : switcherRoster(entry, library, editing, axes);
   const current = roster.find((row) => row.current) ?? null;
   const blast = creating
     ? Drupal.t('Captured from this element · saving wears it here')
-    : usages === null
-      ? Drupal.t('@axis variant · changes affect every use', {
-          '@axis': header.axisLabel,
+    : skin
+      ? Drupal.t('Skin default · restyles every !scope site-wide', {
+          '!scope': header.label,
         })
-      : Drupal.formatPlural(
-          usages,
-          '@axis variant · worn in 1 place site-wide · changes affect every use',
-          '@axis variant · worn in @count places site-wide · changes affect every use',
-          { '@axis': header.axisLabel },
-        );
+      : usages === null
+        ? Drupal.t('!axis variant · changes affect every use', {
+            '!axis': header.axisLabel,
+          })
+        : Drupal.formatPlural(
+            usages,
+            '!axis variant · worn in 1 place site-wide · changes affect every use',
+            '!axis variant · worn in @count places site-wide · changes affect every use',
+            { '!axis': header.axisLabel },
+          );
   return (
     <div className="daedalus-stylish-session">
       <div className="daedalus-stylish-session__header">
@@ -1074,7 +1115,9 @@ const SessionFrame = ({
           <span className="daedalus-stylish-session__posture">
             {creating
               ? Drupal.t('New shared style')
-              : Drupal.t('Editing shared style')}
+              : skin
+                ? Drupal.t('Editing the skin')
+                : Drupal.t('Editing shared style')}
           </span>
           {!creating && (
             <span className="daedalus-stylish-session__document">
@@ -1082,7 +1125,7 @@ const SessionFrame = ({
                 className="daedalus-stylish-session__dot daedalus-ui-dot"
                 style={{
                   background: layerColor(
-                    variantLayerId(editing ?? session.reference),
+                    documentLayerId(editing ?? session.reference),
                   ),
                 }}
               />
@@ -1183,16 +1226,16 @@ const SessionFrame = ({
             <span
               className="daedalus-stylish-session__owner-label"
               title={Drupal.t(
-                "The captured element sits inside this stencil's placement, so the new variant becomes one of its switchable looks, offered on its placements only.",
+                "The captured element sits inside this blueprint's placement, so the new variant becomes one of its switchable looks, offered on its placements only.",
               )}
             >
-              {Drupal.t('Belongs to @stencil', { '@stencil': consent.label })}
+              {Drupal.t('Belongs to !blueprint', { '!blueprint': consent.label })}
             </span>
             <button
               type="button"
               className="daedalus-stylish-session__unlink daedalus-ui-pill-button"
               title={Drupal.t(
-                'Save as a general-purpose variant instead; assign it to a stencil later from Materials.',
+                'Save as a general-purpose variant instead; assign it to a blueprint later from Materials.',
               )}
               onClick={() => onSession({ ...session, linked: false })}
             >
@@ -1286,11 +1329,14 @@ const DraftDocument = ({
   session,
   onSession,
 }) => {
-  const layout = source.getLayout?.() ?? [];
+  // The lean node tree: null before the satellite's first broadcast (no
+  // matcher then), the walks reading it as empty.
+  const nodeTree = source.getTree?.() ?? null;
+  const tree = nodeTree ?? [];
   const capture = saveStyles(
     styleMap ?? {},
     session.anchor,
-    layout,
+    tree,
     library,
     session.axis,
   );
@@ -1298,10 +1344,9 @@ const DraftDocument = ({
   // The capture's slots back to the elements the capture walked
   // (subtreeSlotTable is saveStyles' own walk), so a group's header
   // reads its element's minted type off the tree through the matcher.
-  const nodeTree = source.getTree?.() ?? null;
   const matcher = Array.isArray(nodeTree) ? createMatcher(nodeTree) : null;
   const keyOfSlot = new Map(
-    Object.entries(subtreeSlotTable(session.anchor, layout)).map(
+    Object.entries(subtreeSlotTable(session.anchor, tree)).map(
       ([key, segments]) => [formatSlotKey(segments), key],
     ),
   );
@@ -1319,7 +1364,7 @@ const DraftDocument = ({
   // Part labels resolve through the captured element carrying the row:
   // captureRelativeTable inverted (relative → full map key), the capture
   // walk's own coverage.
-  const table = captureRelativeTable(styleMap ?? {}, session.anchor, layout);
+  const table = captureRelativeTable(styleMap ?? {}, session.anchor, tree);
   const carrierByRelative = new Map(
     [...table].map(([key, relative]) => [relative, key]),
   );
@@ -1394,8 +1439,8 @@ const DraftDocument = ({
                   ),
                 )}
                 <code className="daedalus-stylish-draft__fact">
-                  {Drupal.t('wears @label', {
-                    '@label':
+                  {Drupal.t('wears !label', {
+                    '!label':
                       findVariant(library, ref.variant)?.label ?? ref.variant,
                   })}
                 </code>
@@ -1461,10 +1506,27 @@ const DraftDocument = ({
  *   The swatch gesture gates (drupalSettings.daedalusStylish.swatches):
  *   {canCreate}. Honest chrome for the gradient builder's save-as-swatch
  *   gesture — the mint route enforces.
+ * @param {object} [props.tokens]
+ *   The token gesture gates (drupalSettings.daedalusStylish.tokens):
+ *   {canCreate, canUpdate, canDelete, canDeleteInUse}. Honest chrome for
+ *   the Materials › Palette skin section's mint and cards; the op spine
+ *   and the routes enforce.
  * @param {object} [props.animations]
  *   The animation gesture gates (drupalSettings.daedalusStylish.animations):
  *   {canCreate, canUpdate, canDelete, canDeleteInUse}. Honest chrome for
  *   the Materials › Animations cards; the provider and routes enforce.
+ * @param {object} [props.fonts]
+ *   The font gesture gates (drupalSettings.daedalusStylish.fonts):
+ *   {canCreate, canUpdate, canDelete, canDeleteInUse}. Honest chrome for
+ *   the Materials › Fonts cards and mint card; the provider and routes
+ *   enforce.
+ * @param {object} [props.skin]
+ *   The skin gesture gates (drupalSettings.daedalusStylish.skin):
+ *   {canEditDefaults, canAdminister}. Honest chrome for the skin
+ *   session's pending lane (without the grant the frame mounts
+ *   read-only, as a variant's does without "update variants") and for
+ *   the Materials › Palette skin card's lifecycle gestures (the
+ *   administer grade's alone); the op spine and the routes enforce.
  * @param {?object} [props.previewWindow]
  *   The preview-window opener {url, scope} (the entry point composes it
  *   from daedalusUi.responsivePreview.url and the session identity,
@@ -1475,17 +1537,40 @@ const DraftDocument = ({
  */
 export const Inspector = ({
   source,
-  guide = {},
+  guide: bootGuide = {},
   headerActions = null,
   rail = false,
   variants = {},
   swatches = {},
+  tokens = {},
   animations = {},
+  fonts = {},
+  skin = {},
   previewWindow = null,
 }) => {
+  // The guide payload is the page's boot truth; its one live part is the
+  // active skin's defaults, which a skin session's push rewrites
+  // (leader-source.js refreshDefaults, the satellite off the
+  // broadcast): the source's delivered map overlays the boot payload's
+  // skinDefaults, so every stack below reads the pushed document as the
+  // skin's. Null until a push has landed, when the boot payload stands.
+  const [skinDefaults, setSkinDefaults] = useState(
+    source.getSkinDefaults?.() ?? null,
+  );
+  useEffect(() => {
+    const unsubscribe =
+      source.onSkinDefaultsChange?.(setSkinDefaults) ?? (() => {});
+    setSkinDefaults(source.getSkinDefaults?.() ?? null);
+    return unsubscribe;
+  }, [source]);
+  const guide = useMemo(
+    () =>
+      skinDefaults === null ? bootGuide : { ...bootGuide, skinDefaults },
+    [bootGuide, skinDefaults],
+  );
   const [selected, setSelected] = useState(source.getSelected());
   const [styleMap, setStyleMap] = useState(source.getStyleMap());
-  // The materials roster (tokens, swatches, variants, stencils as the
+  // The materials roster (tokens, swatches, variants, blueprints as the
   // store holds them): read through the source like the style map, and
   // re-read on every store change (a mint, edit or delete in this window,
   // the paired window, or an AI turn), so every stop row, face, completion
@@ -1503,15 +1588,20 @@ export const Inspector = ({
   // delete, here or in the paired window) re-renders every consumer and
   // nothing else re-derives it.
   const library = useMemo(() => materials.ofKind('variant'), [materials]);
-  // The styling target: {key, selector} or null. Spine state read
-  // through the source (the tree's part rows, canvas part clicks and the
-  // code view's selector row headers seat one under the selection; the
-  // address switcher and provenance's "Edit at" seat an ancestor rule
-  // above it; any selection gesture clears it). The panel renders
-  // parent · selector for a target on the selected element itself, and
-  // projects a target on an ancestor into `address` below: where the
-  // rows write while they stay the selected element's.
+  // The two styling facts, spine state read through the source. The
+  // SUBJECT facet `target`: {key, selector} with key always the selected
+  // key, or null for the bare element (the tree's part rows, canvas part
+  // clicks and the code view's selector row headers seat one; any
+  // selection gesture clears it). The WRITE ADDRESS `address`: {key,
+  // selector} with key the selection or an ancestor, or null for the
+  // subject's own key (the address switcher, provenance's "Edit at" and
+  // the code view's rule headers seat one; any selection gesture and any
+  // facet write clears it). The rows are always the subject's; the
+  // address says only where a write lands. Neither is derived from the
+  // other: a minted list item under "every list item in Welcome" keeps
+  // its own rows, which no inverse of the rule could recover.
   const [target, setTarget] = useState(source.getTarget());
+  const [spineAddress, setSpineAddress] = useState(source.getAddress());
   // The canvas state vector and the selection-scoped force state: the two
   // inputs the editing compound derives from (the inspector follows the
   // canvas; it holds no condition of its own). Both are
@@ -1591,6 +1681,23 @@ export const Inspector = ({
   // dismounts in every window.
   const [pending, setPending] = useState(null);
   const [parked, setParked] = useState(false);
+  // The head slot's node (the last pinned line of `__top`, rendered
+  // below): a plain ref, lifted into state by a mount effect so the mode
+  // view that fills it (the code view's showing row, the Sections' head)
+  // re-renders its Portal once the node exists, instead of reading a ref
+  // that was null on the render it was passed down. Never a callback
+  // ref: a state write during commit queues a re-render in a microtask,
+  // and preact's hooks flush a component's still-pending mount effects
+  // before it re-renders, which pulled the source subscriptions below
+  // ahead of daedalus_ui's canvas vector facade (attached by a later
+  // behavior in the same attachBehaviors pass), so the chips never heard
+  // a vector. A mount effect lands after paint, with the other mount
+  // effects, and the write it makes re-renders after they all ran.
+  const headRef = useRef(null);
+  const [head, setHead] = useState(null);
+  useEffect(() => {
+    setHead(headRef.current);
+  }, []);
   // Belt: the parked flag describes a held session; it never outlives
   // one (every discard path resets it, this catches strays).
   useEffect(() => {
@@ -1625,8 +1732,8 @@ export const Inspector = ({
   // Whether a session has anything the leave-prompt must be loud about:
   // staged lines for an update, a named non-empty capture for a save.
   // Anything short of that discards silently — there is no consequence.
-  const committableSession = (session, layout) =>
-    session.kind === 'update'
+  const committableSession = (session, tree) =>
+    stagesLines(session)
       ? sessionCount(session) > 0
       : session.label.trim() !== '' &&
         sessionCount(
@@ -1634,7 +1741,7 @@ export const Inspector = ({
           saveStyles(
             styleMap ?? {},
             session.anchor,
-            layout,
+            tree,
             library,
             session.axis,
           ),
@@ -1646,9 +1753,9 @@ export const Inspector = ({
   // over it resolves the parked work through the prompt too, never a
   // silent clobber behind the chip.
   const queuedSession = useRef(null);
-  const replaceSession = (next, layout) => {
+  const replaceSession = (next, tree) => {
     setParked(false);
-    if (pending && committableSession(pending, layout)) {
+    if (pending && committableSession(pending, tree)) {
       queuedSession.current = next;
     } else {
       setPending(next);
@@ -1663,7 +1770,7 @@ export const Inspector = ({
   const enterSession = (reference, next) => {
     editIntent.current = reference;
     setPlace(shownPlace, reference);
-    replaceSession(next, source.getLayout?.() ?? []);
+    replaceSession(next, source.getTree?.() ?? []);
   };
   // The session's anchor is the wear key (wearKey below): the selected
   // element, or the rule the target names, which the panel must read as
@@ -1671,30 +1778,34 @@ export const Inspector = ({
   // stack with the document as the editable layer, its previews land at
   // the anchor). Seating an anchor makes that so before a session
   // enters: a wearer elsewhere on the page (the library card's Edit
-  // styles) is selected, a rule wearer is seated as the target ON its
-  // root (`select(root)` + `target(root, selector)`, the switcher's
-  // own-entry road), and an ancestor rule reached as an ADDRESS is
-  // re-seated the same way: a session and an address never coexist
-  // (style-stack.js; the address drops on session open), so the rule
-  // becomes the selection's own facet and the panel reads the rule's
-  // own stack, the rule inspected as a rule. The wear key string is the
-  // same before and after, so the session anchors at it unchanged.
+  // styles) is selected, a rule wearer is seated as the SUBJECT facet ON
+  // its root (`select(root)` + `target(root, selector)`: the selection
+  // write and the facet write each drop a standing address), and a rule
+  // reached as a write ADDRESS is re-seated the same way: a session and
+  // an address never coexist (style-stack.js), so the rule becomes the
+  // selection's own facet and the panel reads the rule's own stack, the
+  // rule inspected as a rule. The wear key string is the same before and
+  // after, so the session anchors at it unchanged.
   const seatAnchor = (key) => {
     if (key === wearKey && address === null) {
       return;
     }
     const { key: root, selector } = styleTarget(key);
     if (root !== selected) {
-      source.select?.(root);
+      source.select(root);
     }
     if (selector !== null) {
-      source.target?.(root, selector);
+      source.target(root, selector);
     }
   };
   // The update doorways (wearing-row body, overridden-by badge, the
-  // library card's Edit styles, the header switcher): one openDocument
-  // vocabulary. Entering the edited document's own open session (parked
-  // included) re-enters it instead of minting a fresh one. A doorway may
+  // library card's Edit styles, the header switcher, the rows' and the
+  // code lines' skin doorway): one openDocument vocabulary, a document
+  // being a variant's (its reference) or the skin's at a scope (the
+  // skin document's reference, code/layers.js skinDocument, minting a
+  // skin session). Entering the edited document's own open session
+  // (parked included) re-enters it instead of minting a fresh one. A
+  // doorway may
   // name the condition to open AT (a posed wear surface: the wear bar's
   // sub-line, the layout segment's "stacks at Narrow"): the session has
   // no condition of its own, its rows read and write at the canvas's
@@ -1705,6 +1816,15 @@ export const Inspector = ({
   // card's wearer elsewhere on the page; a provenance row's carrier of
   // a variant an ancestor's rule wears).
   const openDocument = (reference, at = null, anchor = null) => {
+    // A law document (the declared doorway's target, code/layers.js
+    // lawDocument) is never a session: it opens the Law tab at the
+    // declaration and leaves the canvas, the anchor and any open session
+    // untouched.
+    const law = lawDocumentFocus(reference);
+    if (law !== null) {
+      openLaw(law);
+      return;
+    }
     if (at !== null && at !== condition) {
       driveCanvas(at);
     }
@@ -1716,7 +1836,13 @@ export const Inspector = ({
       setPlace(shownPlace, reference);
       return;
     }
-    enterSession(reference, updateSession(reference, wearer));
+    const scope = skinDocumentScope(reference);
+    enterSession(
+      reference,
+      scope === null
+        ? updateSession(reference, wearer)
+        : skinSession(scope, wearer),
+    );
   };
   // The save-as-variant doorway (the header's save icon, all three
   // modes): the creating posture, the same session frame over the
@@ -1739,15 +1865,15 @@ export const Inspector = ({
       setParked(false);
       return;
     }
-    const layout = source.getLayout?.() ?? [];
+    const tree = source.getTree?.() ?? [];
     const vocabulary = axisVocabulary(
       guide,
       selected,
       source.getBlockTypes(),
       source.getSectionLayouts(),
-      layout,
+      tree,
     );
-    replaceSession(saveSession(selected, vocabulary[0] ?? 'style'), layout);
+    replaceSession(saveSession(selected, vocabulary[0] ?? 'style'), tree);
   };
   // Parking (the session header's back arrow) and resuming (the chip):
   // park clears the synced `editing` (the mode dismounts everywhere,
@@ -1778,13 +1904,13 @@ export const Inspector = ({
   // into the document's own open session MERGES (stageLine upserts); any
   // other open session resolves through the leave-prompt first.
   const updateFromElement = (reference) => {
-    const layout = source.getLayout?.() ?? [];
+    const tree = source.getTree?.() ?? [];
     const lines = updateFromElementLines(
       styleMap ?? {},
       wearKey,
       reference,
       library,
-      layout,
+      tree,
     );
     seatAnchor(wearKey);
     const merge = pending !== null && sessionFocuses(pending, reference);
@@ -1809,16 +1935,33 @@ export const Inspector = ({
   // library face); the place itself is the mode row's business.
   const [libraryCard, setLibraryCard] = useState(null);
   // Which catalog section the Materials place shows: 'variants',
-  // 'palette' or 'animations'. The Palette and Animations faces live
-  // WITHIN Materials rather than as further places: the mode row
-  // answers "what am I looking at" with the styling place's modes and the
-  // Materials toggle, and Materials IS the mode-independent
-  // catalog of site-wide reusable styling content — swatches and
-  // animations are the same species as variants at value scope, so they
-  // section the catalog instead of growing the place vocabulary. Panel
-  // state like the open card (each window browses its own catalog), so
-  // satellite parity needs no surface-sync change.
+  // 'palette', 'animations', 'fonts' or 'law'. The Palette, Animations
+  // and Fonts faces live WITHIN Materials rather than as further places:
+  // the mode row answers "what am I looking at" with the styling place's
+  // modes and the Materials toggle, and Materials IS the mode-independent
+  // catalog of site-wide reusable styling content — swatches, animations
+  // and fonts are the same species as variants at value scope, so they
+  // section the catalog instead of growing the place vocabulary. The Law
+  // face is the read-only view of the design system's law (the style
+  // guide, authored in files: law.js over the payload's law projection),
+  // the catalog's last section because the law is site-wide content
+  // too. Panel state like the open card (each window browses its own
+  // catalog), so satellite parity needs no surface-sync change.
   const [catalogSection, setCatalogSection] = useState('variants');
+  // The Law tab's focus: the declaring scope it shows and the property
+  // whose rows it reveals, set by a declared doorway (a law document
+  // through openDocument) or by the tab's own type picker; null follows
+  // the selection to the selected element's type (law-model.js
+  // lawScopeFor). A selection move drops it, so the tab follows again.
+  const [lawFocus, setLawFocus] = useState(null);
+  useEffect(() => {
+    setLawFocus(null);
+  }, [selected]);
+  const openLaw = (focus) => {
+    setLawFocus(focus);
+    setCatalogSection('law');
+    setPlace('materials', editing);
+  };
   // "Variant settings…" (the wearing rows' menu, every mode): flip to
   // the Materials surface with that variant's card open. Cards key by
   // record id, the one reference identity.
@@ -1853,8 +1996,8 @@ export const Inspector = ({
     source.applyVariant(
       wearKey,
       variant.id,
-      Drupal.t('Applied variant @label', {
-        '@label': variant.label ?? variant.id,
+      Drupal.t('Applied variant !label', {
+        '!label': variant.label ?? variant.id,
       }),
     );
   // Outline Variant — ONE toggled gesture in the focus treatment: the
@@ -1890,6 +2033,28 @@ export const Inspector = ({
     source.setCanvasPaint?.(layers.length ? { layers } : null);
   }, [outlined, flash, library]);
   useEffect(() => () => source.setCanvasPaint?.(null), []);
+  // The page elements panel's variant doorways (row-facts.js) lead here:
+  // "Edit {variant}" is openDocument anchored on the row's element, with
+  // no condition, exactly as a wearing row opens it; "Outline everything
+  // wearing it" is the Outline Variant toggle above. Installed through
+  // the doors seam (inspector-doors.js) for this mount's lifetime, in
+  // whichever window this inspector stands; a ref keeps the two
+  // functions current across renders, the wear bar's opener pattern.
+  const panelDoors = useRef(null);
+  panelDoors.current = {
+    openDocument: (reference, anchor) => openDocument(reference, null, anchor),
+    toggleOutline: (reference) => outline.toggle(reference),
+  };
+  useEffect(
+    () =>
+      mountDoors({
+        openDocument: (reference, anchor) =>
+          panelDoors.current.openDocument(reference, anchor),
+        toggleOutline: (reference) =>
+          panelDoors.current.toggleOutline(reference),
+      }),
+    [],
+  );
   // The canvas is part of the mode chrome: session entry auto-enables
   // Outline Variant over the session's document (the blast radius is
   // visible where the user is already looking); exit (park, push,
@@ -1897,23 +2062,26 @@ export const Inspector = ({
   // Identity hue on the canvas, per the settled decision: the outline
   // speaks the variant's own color (outlineGesture unchanged); the mode
   // purple frames the panel only. A draft session outlines nothing (its
-  // document has no wearers until Push mints it), and a mid-session
-  // manual toggle is the user's to keep: this effect moves only on
-  // `editing` edges.
+  // document has no wearers until Push mints it), neither does a skin
+  // session (the outline paints a variant's coverage off the map; a
+  // scope's elements are no map fact), and a mid-session manual toggle
+  // is the user's to keep: this effect moves only on `editing` edges.
   const priorOutlined = useRef(undefined);
+  const outlinedDocument =
+    editing !== null && !isSkinDocument(editing) ? editing : null;
   useEffect(() => {
-    if (editing !== null) {
+    if (outlinedDocument !== null) {
       if (priorOutlined.current === undefined) {
         priorOutlined.current = outlined;
       }
-      setOutlined(editing);
+      setOutlined(outlinedDocument);
       return;
     }
     if (priorOutlined.current !== undefined) {
       setOutlined(priorOutlined.current);
       priorOutlined.current = undefined;
     }
-  }, [editing]);
+  }, [outlinedDocument]);
   // Gesture outcomes (statuses and failures alike) ride source.notify to
   // the edit-mode messenger, the page builder's one notification spine
   // (toast + sidebar history; the satellite broadcasts to the leader).
@@ -1930,7 +2098,10 @@ export const Inspector = ({
     const unsubscribers = [
       source.onSelectionChange((current) => setSelected(current)),
       source.onStyleMapChange((map) => setStyleMap(map)),
-      source.onTargetChange(({ target: next }) => setTarget(next)),
+      source.onTargetChange(({ target: next, address: nextAddress }) => {
+        setTarget(next);
+        setSpineAddress(nextAddress ?? null);
+      }),
       // The vector arrives as a snapshot object; spread it so a re-posed
       // axis always lands as a fresh reference (satellite broadcasts
       // already clone, the leader facade already copies — this is belt).
@@ -1943,6 +2114,7 @@ export const Inspector = ({
     setSelected(source.getSelected());
     setStyleMap(source.getStyleMap());
     setTarget(source.getTarget());
+    setSpineAddress(source.getAddress());
     setVector(source.getCanvasVector?.() ?? null);
     setForceState(source.getForceState?.() ?? null);
     setPlaceValue(
@@ -1971,32 +2143,27 @@ export const Inspector = ({
     [source],
   );
 
-  // The facet below the selection every read here is keyed by: the
-  // target's own selector when it sits on the selected element (a part,
-  // a tag tier, a chain), and for a target on an ancestor the facet the
-  // rule reaches on the element (write-address.js facetOf: `container::a`
-  // keeps the link part's rows, `container::> pb-text` the root's), so
-  // the rows stay the facet's the rule was chosen from. Null for the
-  // root, and for an ancestor rule reaching nothing (dropped below).
+  // The subject facet every read here is keyed by: the spine's target
+  // selector (a part, a tag tier, a chain on the selected element), null
+  // for the root. The spine's one invariant makes the read direct: a
+  // target's key is always the selected key, so the facet is the
+  // target, never a derivation from where a write lands.
   const tree = source.getTree?.() ?? null;
-  const facet = selected ? facetOf({ tree, key: selected, target }) : null;
-  const targetSelector = facet?.selector ?? null;
+  const targetSelector = selected ? (target?.selector ?? null) : null;
   // Everything below the subject line targets the drill: the selector's
   // full style key when one is targeted, the selection itself otherwise.
   const targetKey =
     selected && targetSelector ? `${selected}::${targetSelector}` : selected;
   const parsed = parseKey(targetKey);
-  // The mirror holds the ROOT entity's map — the one this panel reads and
-  // writes. An entity or entity-field key naming a DIFFERENT entity styles
-  // through that entity's own map, which this page's mirror/ops can't
-  // reach: honest not-enabled state instead of a lying empty panel.
-  // (Section, region, and block keys always belong to the root map.)
-  const rootUuid = source.getRootUuid();
-  const foreignEntity =
-    parsed &&
-    (parsed.form === 'entity' || parsed.form === 'field') &&
-    rootUuid &&
-    parsed.uuid !== rootUuid;
+  // Whether the selection may be styled at all: the spine's verdict on
+  // the key (the source's capable(), daedalus_ui's one client gate), the
+  // one answer for a template element on a plain host, a frozen
+  // translation, a role without the style grant, or an element whose
+  // style map this page cannot reach. No write control mounts without it,
+  // in any mode; the document notice in the page elements panel explains
+  // why, so this panel offers no portal of its own.
+  const stylable =
+    Boolean(selected) && Boolean(parsed) && source.capable(selected, 'style');
   // The kind-appropriate discriminator: inline block type for blocks,
   // layout plugin id for sections (bundleForKey()).
   const bundle = bundleForKey(
@@ -2055,7 +2222,7 @@ export const Inspector = ({
     selected,
     source.getBlockTypes(),
     source.getSectionLayouts(),
-    source.getLayout?.() ?? [],
+    source.getTree?.() ?? [],
   );
   // The session frame's posture for this render (session-frame-model.js
   // framePosture): 'editing' mounts the frame over the variant document,
@@ -2064,38 +2231,32 @@ export const Inspector = ({
   // echo is still in flight (nothing mounts anchorless).
   const posture = framePosture(pending, editing, parked);
 
-  // The address set (write-address.js): the selected facet's addresses,
-  // and the one the rows write at this render, `address`: the styling
-  // target when it sits ABOVE the selection (an ancestor rule the set
-  // carries), null when it sits on the element or is absent. The rows
-  // stay the SELECTED element's and read its whole stack; the address
-  // decides which layer is the editable one (stackArgs.editable), where
-  // every styling gesture lands (writeKey: property writes, media picks,
-  // the wear bar, the library card, copy and paste, the Layout rows,
-  // Replay, the row highlights and the forced pose), and which
-  // properties render disabled with the roster's reason (withheld).
-  // The set exists for an element facet (root, part, tag); a chain facet
-  // is a rule of its own with none. The address holds in every mode: in
+  // The address set (write-address.js): the subject facet's addresses,
+  // the chip's menu; and the one the rows write at this render,
+  // `address`: the spine's write address when it names a key other than
+  // the subject's own, null otherwise. The rows stay the SUBJECT's and
+  // read its whole stack; the address decides which layer is the
+  // editable one (stackArgs.editable), where every styling gesture
+  // lands (writeKey: property writes, media picks, the wear bar, the
+  // library card, the Layout rows, Replay, the row highlights and the
+  // forced pose; copy and paste key the subject), and which properties
+  // render disabled with the roster's reason (withheld). The set exists
+  // for an element facet (root, part, tag); a chain facet is a rule of
+  // its own with none. The address holds in every mode: a mode chooses
+  // a projection of the rows, never whether an address may stand. In
   // code mode it is the rule island the selected element's body prints
   // lit (element-view.js, DevTools' rule: the chip and the island
-  // headers are two readouts of one spine target, and a seat from the
-  // chip mounts the rule's island, a mintable one empty). No address
-  // while a variant session is open (its writes go to the document, not
-  // a map key), or in basic mode on a rule facet (the panel is the
-  // rule's, one thing at a time): an ancestor target standing there,
-  // or one the set does not carry (it reaches no facet of the element,
-  // or reaches one it is not an address of), is dropped to the bare
-  // element below, so the panel never writes somewhere the chip does
-  // not say, and opening a session resets the target to the element by
-  // the same rule.
+  // headers are two readouts of one spine fact, and a seat from the chip
+  // mounts the rule's island, a mintable one empty). An address the set
+  // does not carry (the spine admits any ancestor; a programmatic seat
+  // can name one the chip never offered) stands all the same, lit on the
+  // chip with its rows withheld by reach (controls.js, withheldAt): no
+  // surface moves the selection on its own. The one posture without an
+  // address is an open variant session (its writes go to the document,
+  // not a map key); seatAnchor re-seats a rule as the subject before a
+  // session enters, dropping the address with the facet write.
   const own = { key: selected, selector: targetSelector };
-  const above = selected && target && target.key !== selected ? target : null;
-  const addressable =
-    Boolean(selected) &&
-    Boolean(parsed) &&
-    !foreignEntity &&
-    posture !== 'editing' &&
-    !(mode === 'basic' && ruleFacet);
+  const addressable = stylable && posture !== 'editing';
   const addresses = addressable
     ? addressSet({
         guide,
@@ -2111,16 +2272,9 @@ export const Inspector = ({
       })
     : [];
   const address =
-    addressable &&
-    above !== null &&
-    addresses.some((entry) => sameAddress(entry, above))
-      ? above
+    addressable && isAddress(spineAddress) && !sameAddress(spineAddress, own)
+      ? spineAddress
       : null;
-  useEffect(() => {
-    if (above !== null && address === null) {
-      source.select(selected);
-    }
-  }, [above, address]);
   // Where a write lands: the address's map key, else the drill target.
   const writeKey = address ? addressKey(address) : targetKey;
   // The write target split for the canvas chrome (row highlights, the
@@ -2172,13 +2326,15 @@ export const Inspector = ({
     if (!pending || parked || promptBusy.current) {
       return;
     }
-    const layout = source.getLayout?.() ?? [];
+    const nodeTree = source.getTree?.() ?? [];
     const displaced = queuedSession.current !== null;
     let leaving;
-    if (pending.kind === 'update') {
+    if (stagesLines(pending)) {
       const wears =
-        Boolean(wearKey) &&
-        Boolean(wearingOf(styleMap?.[wearKey], pending.reference));
+        pending.kind === 'skin'
+          ? subjectSkinScopes.includes(pending.scope)
+          : Boolean(wearKey) &&
+            Boolean(wearingOf(styleMap?.[wearKey], pending.reference));
       if (!displaced && editIntent.current !== null) {
         if (editing !== editIntent.current) {
           // Our own entry intent is still in flight (the satellite
@@ -2208,7 +2364,7 @@ export const Inspector = ({
         (selected !== pending.anchor &&
           !findNode(
             subtreeNodes(
-              pageNodes(layout, source.getRootUuid()),
+              pageNodes(nodeTree, source.getRootUuid()),
               pending.anchor,
             ),
             selected,
@@ -2221,7 +2377,7 @@ export const Inspector = ({
     const session = pending;
     setPending(null);
     if (
-      session.kind === 'update' &&
+      stagesLines(session) &&
       editing !== null &&
       sessionFocuses(session, editing)
     ) {
@@ -2239,13 +2395,28 @@ export const Inspector = ({
         queuedSession.current = null;
       }
     };
-    if (!committableSession(session, layout)) {
+    if (!committableSession(session, nodeTree)) {
       installQueued();
       return;
     }
     promptBusy.current = true;
     const ask =
-      session.kind === 'update'
+      session.kind === 'skin'
+        ? Drupal.Daedalus.dialog.confirm({
+            title: Drupal.t('Pending skin changes'),
+            message: Drupal.formatPlural(
+              sessionCount(session),
+              'Push 1 pending change to the skin\'s !scope default?',
+              'Push @count pending changes to the skin\'s !scope default?',
+              { '!scope': skinScopeLabel(session.scope, guide) },
+            ),
+            detail: Drupal.t('This restyles every !scope site-wide.', {
+              '!scope': skinScopeLabel(session.scope, guide),
+            }),
+            confirmLabel: Drupal.t('Push'),
+            cancelLabel: Drupal.t('Discard'),
+          })
+        : session.kind === 'update'
         ? // The loud count rides the prompt too: the impact is on screen
           // before the choice, even when the bar has scrolled out of mind.
           fetchUsage(session.reference)
@@ -2258,9 +2429,9 @@ export const Inspector = ({
                 title: Drupal.t('Pending variant changes'),
                 message: Drupal.formatPlural(
                   sessionCount(session),
-                  'Push 1 pending change to "@label"?',
-                  'Push @count pending changes to "@label"?',
-                  { '@label': label },
+                  'Push 1 pending change to "!label"?',
+                  'Push @count pending changes to "!label"?',
+                  { '!label': label },
                 ),
                 detail:
                   usages === null
@@ -2281,8 +2452,8 @@ export const Inspector = ({
             })
         : Drupal.Daedalus.dialog.confirm({
             title: Drupal.t('Unsaved variant'),
-            message: Drupal.t('Save the captured styles as "@label"?', {
-              '@label': session.label.trim(),
+            message: Drupal.t('Save the captured styles as "!label"?', {
+              '!label': session.label.trim(),
             }),
             detail: Drupal.t(
               'Discarding leaves every element exactly as it looks.',
@@ -2330,6 +2501,7 @@ export const Inspector = ({
       {
         entry: styleMap?.[wearKey],
         pending: pending ? sessionCount(pending) : 0,
+        skinScopes: subjectSkinScopes,
       },
     );
     if (moved.editing !== editing) {
@@ -2368,7 +2540,7 @@ export const Inspector = ({
       key: writeKey,
       condition,
       properties: { [property]: value },
-      label: Drupal.t('Styled @property', { '@property': property }),
+      label: Drupal.t('Styled !property', { '!property': property }),
     });
   // The media rows' render inputs, bundled once per render: the uuid → URL
   // table (thumbnails; the leader reads its live object, the satellite its
@@ -2384,7 +2556,7 @@ export const Inspector = ({
       source.pickMedia?.({
         condition,
         property,
-        label: Drupal.t('Styled @property', { '@property': property }),
+        label: Drupal.t('Styled !property', { '!property': property }),
         changes: [
           { key: writeKey, properties: { [property]: MEDIA_PICK_PLACEHOLDER } },
         ],
@@ -2392,18 +2564,18 @@ export const Inspector = ({
   };
 
   // The creating posture's mint-time consent chip: the draft's anchor
-  // sits inside a stencil placement, so the new variant will be born as
-  // that stencil's own switchable look. session-frame-model.js
+  // sits inside a blueprint placement, so the new variant will be born as
+  // that blueprint's own switchable look. session-frame-model.js
   // mintConsent is the ONE read behind the chip and commitSession's
-  // stencil send, so what the chip says is what Save commits; null
+  // blueprint send, so what the chip says is what Save commits; null
   // renders no chip (unlinked, no provenance, or not a draft). The
-  // label resolves through the store's stencil record, the same in both
+  // label resolves through the store's blueprint record, the same in both
   // windows.
   const consent =
     posture === 'creating'
       ? mintConsent(
           pending,
-          stencilProvenance(pending.anchor, source.getLayout?.() ?? []),
+          blueprintProvenance(pending.anchor, source.getTree?.() ?? []),
           materials,
         )
       : null;
@@ -2417,15 +2589,77 @@ export const Inspector = ({
   // flag says it; a shipped variant opens under the developer gate),
   // and without the update grant there is no pending lane to stage
   // into.
+  const editedSkinScope = editing !== null ? skinDocumentScope(editing) : null;
   const editedWearing =
-    selected && Boolean(parsed) && !foreignEntity && editing
+    stylable && editing && editedSkinScope === null
       ? wearingOf(styleMap?.[wearKey], editing)
       : null;
   const editedVariant = editedWearing ? findVariant(library, editing) : null;
-  const documentEditable =
-    editedVariant !== null &&
-    !locked(editedVariant) &&
-    Boolean(variants?.canUpdate);
+  // The skin document's wearing fact: the scopes whose skin block the
+  // read subject's stack carries (style-stack.js skinScopesAt: the
+  // subject's base:{tag} block, the family kind's, the refinement's).
+  // The skin's document at a scope is worn by every element of the
+  // scope, so the session follows the selection from h2 to h2 and exits
+  // on a paragraph, as a variant session follows its wearers. The slot
+  // the rows read and write is the root position for a base block
+  // (it styles the subject element itself) and the drilled relative key
+  // for an element scope.
+  const subjectSkinScopes =
+    stylable
+      ? skinScopesAt({
+          key: targetKey,
+          blockTypes: source.getBlockTypes(),
+          sectionLayouts: source.getSectionLayouts(),
+          tree,
+        })
+      : [];
+  const skinWearing =
+    editedSkinScope !== null && subjectSkinScopes.includes(editedSkinScope)
+      ? {
+          scope: editedSkinScope,
+          slot: editedSkinScope.startsWith('base:')
+            ? ''
+            : targetSelector
+              ? `::${targetSelector}`
+              : '',
+        }
+      : null;
+  // The edited document, whichever kind: its reference, its stored
+  // styles (the diff baseline: a variant's element-relative styles, a
+  // skin scope's defaults as the live guide carries them), the slot the
+  // Sections-level rows read at the drill target (anchored at the
+  // element, a variant's slot is the wearing fragment plus the drilled
+  // part's relative key; anchored at a rule, the fragment alone: the
+  // rule's matches ARE the variant's root, and the rows read the rule's
+  // own stack), and the session mint for a first settle without one.
+  const editedDocument = editedWearing
+    ? {
+        reference: editedWearing.variant,
+        label: editedVariant?.label ?? editedWearing.variant,
+        fragment: editedWearing.fragment,
+        styles: editedVariant?.value ?? {},
+        slot:
+          editedWearing.fragment +
+          (wearKey === selected && targetSelector ? `::${targetSelector}` : ''),
+        rootKind: rootKindForScope(editedVariant?.scope ?? null),
+        mint: () => updateSession(editedWearing.variant, wearKey),
+      }
+    : skinWearing
+      ? {
+          reference: editing,
+          label: skinScopeLabel(skinWearing.scope, guide),
+          fragment: '',
+          styles: guide.skinDefaults?.[skinWearing.scope] ?? {},
+          slot: skinWearing.slot,
+          rootKind: rootKindForScope(skinWearing.scope),
+          mint: () => skinSession(skinWearing.scope, wearKey),
+        }
+      : null;
+  const documentEditable = editedWearing
+    ? editedVariant !== null &&
+      !locked(editedVariant) &&
+      Boolean(variants?.canUpdate)
+    : skinWearing !== null && Boolean(skin?.canEditDefaults);
   // The winner doorway's navigation: the wearer's own layer wins → exit
   // the session onto the styling place, where that value lives (a
   // deliberate exit; the leave-prompt resolves pending work first);
@@ -2450,29 +2684,27 @@ export const Inspector = ({
   const widgetSheet =
     mode !== 'code' &&
     posture === 'editing' &&
-    editedWearing &&
+    editedDocument &&
     documentEditable
       ? {
-          reference: editedWearing.variant,
-          label: editedVariant.label ?? editedWearing.variant,
-          fragment: editedWearing.fragment,
-          styles: editedVariant.value ?? {},
+          reference: editedDocument.reference,
+          label: editedDocument.label,
+          fragment: editedDocument.fragment,
+          styles: editedDocument.styles,
           session:
-            pending?.kind === 'update' &&
-            pending.reference === editedWearing.variant
+            stagesLines(pending) &&
+            pending.reference === editedDocument.reference
               ? pending
               : null,
           stage: (slot, conditionName, property, value) =>
             setPending((previous) => {
               const open =
-                previous?.kind === 'update' &&
-                previous.reference === editedWearing.variant &&
+                stagesLines(previous) &&
+                previous.reference === editedDocument.reference &&
                 previous.anchor === wearKey;
               const next = stageValue(
-                open
-                  ? previous
-                  : updateSession(editedWearing.variant, wearKey),
-                editedVariant.value ?? {},
+                open ? previous : editedDocument.mint(),
+                editedDocument.styles,
                 slot,
                 conditionName,
                 property,
@@ -2496,9 +2728,7 @@ export const Inspector = ({
   // variant's root, and the rows read the rule's own stack.
   const sheetContext = widgetSheet
     ? (() => {
-        const slot =
-          widgetSheet.fragment +
-          (wearKey === selected && targetSelector ? `::${targetSelector}` : '');
+        const { slot } = editedDocument;
         const projection = documentSlotEntry(
           widgetSheet.styles,
           slot,
@@ -2566,7 +2796,7 @@ export const Inspector = ({
             address.key,
             source.getBlockTypes(),
             source.getSectionLayouts(),
-            source.getLayout?.() ?? [],
+            source.getTree?.() ?? [],
           ),
           blockTypes: source.getBlockTypes(),
           sectionLayouts: source.getSectionLayouts(),
@@ -2611,23 +2841,23 @@ export const Inspector = ({
   const codeDocument =
     mode === 'code' &&
     posture === 'editing' &&
-    editedWearing &&
+    editedDocument &&
     documentEditable
       ? {
-          reference: editedWearing.variant,
-          label: editedVariant.label ?? editedWearing.variant,
-          styles: editedVariant.value ?? {},
+          reference: editedDocument.reference,
+          label: editedDocument.label,
+          styles: editedDocument.styles,
           session:
-            pending?.kind === 'update' &&
-            pending.reference === editedWearing.variant
+            stagesLines(pending) &&
+            pending.reference === editedDocument.reference
               ? pending
               : null,
-          rootKind: rootKindForScope(editedVariant.scope ?? null),
+          rootKind: editedDocument.rootKind,
           stage: (relative, conditionName, lines) =>
             setPending((previous) => {
               const open =
-                previous?.kind === 'update' &&
-                previous.reference === editedWearing.variant &&
+                stagesLines(previous) &&
+                previous.reference === editedDocument.reference &&
                 previous.anchor === wearKey;
               // No session and nothing settled: do not mint an empty session
               // (the bar would appear on every blur under a fresh document).
@@ -2635,9 +2865,7 @@ export const Inspector = ({
                 return previous;
               }
               return stageIslandLines(
-                open
-                  ? previous
-                  : updateSession(editedWearing.variant, wearKey),
+                open ? previous : editedDocument.mint(),
                 relative,
                 conditionName,
                 lines,
@@ -2664,18 +2892,24 @@ export const Inspector = ({
     const desired = new Map();
     if (widgetSheet?.session && selected) {
       // The honesty read per staged line: the line's key's stack with
-      // the session overlaid (floorless: the tiers never beat a
-      // document), read at the line's condition; a layer above the
-      // document (the wearer's own entry, a higher reference) means the
-      // canvas would not show the line, so it never previews.
-      const beaten = (targetKey, lineCondition, property) => {
+      // the session overlaid (floorless for a variant document: the
+      // tiers never beat it; with the floor for the skin's, whose
+      // document IS a floor layer), read at the line's condition; a
+      // layer above the document (the wearer's own entry, a higher
+      // reference, for the skin's every map layer) means the canvas
+      // would not show the line, so it never previews.
+      const skinDoc = isSkinDocument(widgetSheet.reference);
+      const beaten = (lineKey, lineCondition, property) => {
         const keyStack = buildStack({
           guide,
           map: styleMap,
-          key: targetKey,
+          key: lineKey,
           variants: library,
           axes,
-          floor: false,
+          blockTypes: source.getBlockTypes(),
+          sectionLayouts: source.getSectionLayouts(),
+          floor: skinDoc,
+          tree: skinDoc ? tree : null,
           session: {
             reference: widgetSheet.reference,
             pending: widgetSheet.session,
@@ -2698,12 +2932,18 @@ export const Inspector = ({
           if (rel !== '' && !rel.startsWith('::')) {
             return;
           }
-          const targetKey = selected + rel;
-          if (beaten(targetKey, lineCondition, property)) {
+          // A base block's document keys the subject element itself
+          // (the drill target, a part's tag included); every other
+          // document keys under the selected root.
+          const lineKey =
+            skinDoc && editedDocument.slot === '' && targetSelector
+              ? targetKey + rel
+              : selected + rel;
+          if (beaten(lineKey, lineCondition, property)) {
             return;
           }
-          desired.set(`${targetKey}|${lineCondition}|${property}`, {
-            key: targetKey,
+          desired.set(`${lineKey}|${lineCondition}|${property}`, {
+            key: lineKey,
             condition: lineCondition,
             property,
             value,
@@ -2738,8 +2978,6 @@ export const Inspector = ({
     [],
   );
 
-  const stylable = Boolean(parsed) && !foreignEntity;
-
   // The library card's "Apply to selection" offer: the wear target's
   // applicable set (the same scope/ownership/tag gates the wear bar's
   // picker speaks, paired at the target's landing, the tag gate keyed
@@ -2753,25 +2991,27 @@ export const Inspector = ({
           wearKey,
           source.getBlockTypes(),
           source.getSectionLayouts(),
-          source.getLayout?.() ?? [],
+          source.getTree?.() ?? [],
           offerTag(tree, wearKey),
         )
       : [];
-  // The target's stencil provenance, for the doorway's honest unfit
-  // titles ("belongs to stencil X" beats a vague scope shrug): the same
+  // The target's blueprint provenance, for the doorway's honest unfit
+  // titles ("belongs to blueprint X" beats a vague scope shrug): the same
   // read the offer filter already made inside applicableVariants.
   const applyProvenance =
     selected && stylable
-      ? stencilProvenance(wearKey, source.getLayout?.() ?? [])
+      ? blueprintProvenance(wearKey, source.getTree?.() ?? [])
       : null;
 
-  // The subject line (subject-line.js): the element word and the address
-  // chip, WHAT is styled and AT which address, the first line of the
+  // The subject line (subject-line.js): the selection pill, "at", the
+  // address chip, WHAT is styled and AT which address, the first line of the
   // panel's sentence, pinned under the title in every mode of the
   // styling place and on the Materials place (the catalog's cards apply
-  // at the target, so the chip says where). The chip's menu is the
-  // address set above with the way back to the bare element when a
-  // facet stands.
+  // at the write key, so the chip says where). The chip's menu is the
+  // address set above (each pick a write address through
+  // source.address), the own entry dropping the address, the way back
+  // to the bare element when a facet stands, and the box doorways (a
+  // facet seat) where the mode styles boxes.
   const subjectLine = selected ? (
     <SubjectLine
       guide={guide}
@@ -2831,7 +3071,7 @@ export const Inspector = ({
   // place to navigate away from, Push/Discard/park are the exits. A parked
   // session leaves the places up and renders the resume chip instead.
   const frameMounted =
-    posture === 'creating' || (posture === 'editing' && Boolean(editedWearing));
+    posture === 'creating' || (posture === 'editing' && editedDocument !== null);
   const draftVocabulary =
     pending?.kind === 'save'
       ? axisVocabulary(
@@ -2839,7 +3079,7 @@ export const Inspector = ({
           pending.anchor,
           source.getBlockTypes(),
           source.getSectionLayouts(),
-          source.getLayout?.() ?? [],
+          source.getTree?.() ?? [],
         )
       : [];
   const parkedChip =
@@ -2851,11 +3091,12 @@ export const Inspector = ({
             ? saveStyles(
                 styleMap ?? {},
                 pending.anchor,
-                source.getLayout?.() ?? [],
+                source.getTree?.() ?? [],
                 library,
                 pending.axis,
               )
             : null,
+          guide,
         )
       : null;
 
@@ -2902,10 +3143,15 @@ export const Inspector = ({
           group (when: the chip row, and the Styled at line beneath it in
           the widget modes) are the element's facts and render in every
           mode; the mode row (HOW: Basic | Advanced | code, Materials)
-          is the editor's control (code mode's scope reads as the
-          showing row inside the body, page-view.js). The box's bottom
-          edge is the fixed/scroll seam: the wear bar and the rows
-          scroll in the body beneath it. */}
+          is the editor's control; and last the head, the listing's
+          own line, a slot the mode view fills through a Portal with
+          the controls that act on what scrolls beneath (code: the
+          showing row, the lens with the collapse pair; advanced: the
+          word "Sections" and the pair; basic: nothing, and the empty
+          slot takes no room). The seam between pinned and scrolling is
+          the head's bottom edge: a reader scrolled deep into the
+          listing still reaches its lens and its pair (Tim, 2026-10-05),
+          while the wear bar and the rows scroll in the body beneath. */}
       <div className="daedalus-stylish-inspector__top">
         {subjectLine}
         {/* The pose group: one chip row, the styling place in every mode,
@@ -3020,6 +3266,14 @@ export const Inspector = ({
           {Drupal.t('Materials')}
         </button>
         </div>
+        {/* The head slot: daedalus_ui's panel slot (empty, it takes no
+            room, panel-controls.css), lent to the mode view as its
+            Portal root; the mount effect above lifts the node into
+            state. */}
+        <div
+          className="daedalus-stylish-inspector__head daedalus-ui-panel__slot"
+          ref={headRef}
+        />
       </div>
       {frameMounted ? (
         /* The editing session: the mode's frame over the places: the
@@ -3051,7 +3305,7 @@ export const Inspector = ({
                 session={pending}
                 onSession={setPending}
               />
-            ) : !editedVariant ? (
+            ) : editedWearing && !editedVariant ? (
               <div className="daedalus-stylish-inspector__empty">
                 {Drupal.t(
                   "This variant is not among the site's materials (deleted or unpublished); there is no document to edit.",
@@ -3059,12 +3313,14 @@ export const Inspector = ({
               </div>
             ) : !documentEditable ? (
               <div className="daedalus-stylish-inspector__empty">
-                {locked(editedVariant)
-                  ? Drupal.t(
-                      '"@label" is built-in and read-only. Copy it as your variant (Variant settings…) to change it.',
-                      { '@label': editedVariant.label },
-                    )
-                  : Drupal.t('You cannot update variants.')}
+                {skinWearing
+                  ? Drupal.t('You cannot edit skin defaults.')
+                  : locked(editedVariant)
+                    ? Drupal.t(
+                        '"!label" is built-in and read-only. Copy it as your variant (Variant settings…) to change it.',
+                        { '!label': editedVariant.label },
+                      )
+                    : Drupal.t('You cannot update variants.')}
               </div>
             ) : mode === 'code' ? (
               <VariantDocumentView
@@ -3097,6 +3353,7 @@ export const Inspector = ({
                   swatches={swatches}
                   sheet={sheetContext}
                   pending={sheetContext.pending}
+                  head={head}
                   onOpenDocument={openDocument}
                   onPreview={handlePreview}
                   onRelease={handleRelease}
@@ -3111,10 +3368,12 @@ export const Inspector = ({
         <Fragment>
           {shownPlace === 'materials' ? (
             /* The Materials place: the catalog, mode-independent, site-wide
-           content, no selection needed. Three sections, one place: the
+           content, no selection needed. Five sections, one place: the
            variant catalog, the Palette (the value catalog: user swatches
-           over the read-only skin half) and the Animations (the motion
-           catalog: named keyframes). */
+           over the skin's tokens), the Animations (the motion catalog:
+           named keyframes), the Fonts (the type catalog: self-hosted
+           families) and the Law (the guide, read-only, following the
+           selection to its type). */
             <div className="daedalus-stylish-inspector__body daedalus-ui-panel__body">
               <div
                 className="daedalus-stylish-inspector__catalog daedalus-ui-segments"
@@ -3125,6 +3384,8 @@ export const Inspector = ({
                   ['variants', Drupal.t('Variants')],
                   ['palette', Drupal.t('Palette')],
                   ['animations', Drupal.t('Animations')],
+                  ['fonts', Drupal.t('Fonts')],
+                  ['law', Drupal.t('Law')],
                 ].map(([section, label]) => (
                   <button
                     key={section}
@@ -3141,7 +3402,9 @@ export const Inspector = ({
                 <PaletteView
                   guide={guide}
                   materials={materials}
-                  config={swatches}
+                  swatches={swatches}
+                  tokens={tokens}
+                  skin={skin}
                   source={source}
                 />
               ) : catalogSection === 'animations' ? (
@@ -3150,6 +3413,24 @@ export const Inspector = ({
                   materials={materials}
                   config={animations}
                   source={source}
+                />
+              ) : catalogSection === 'fonts' ? (
+                <FontsView materials={materials} config={fonts} source={source} />
+              ) : catalogSection === 'law' ? (
+                <LawView
+                  guide={guide}
+                  scope={
+                    lawFocus?.scope ??
+                    lawScopeFor({
+                      key: selected,
+                      blockTypes: source.getBlockTypes(),
+                      sectionLayouts: source.getSectionLayouts(),
+                      law: guide?.law ?? null,
+                    })
+                  }
+                  following={lawFocus === null}
+                  focus={lawFocus}
+                  onScope={(scope) => setLawFocus({ scope, property: null })}
                 />
               ) : (
                 <LibraryView
@@ -3168,6 +3449,14 @@ export const Inspector = ({
                   source={source}
                 />
               )}
+            </div>
+          ) : mode === 'code' && selected && !stylable ? (
+            /* Code mode reads the same gate: an element the actor may not
+               style mounts no stylesheet editor. */
+            <div className="daedalus-stylish-inspector__body daedalus-ui-panel__body">
+              <div className="daedalus-stylish-inspector__empty">
+                {Drupal.t('Styling is not enabled for this element.')}
+              </div>
             </div>
           ) : mode === 'code' ? (
             <div className="daedalus-stylish-inspector__body daedalus-ui-panel__body">
@@ -3195,6 +3484,7 @@ export const Inspector = ({
                 posed={condition}
                 onPose={driveCanvas}
                 onOpenDocument={openDocument}
+                head={head}
               />
             </div>
           ) : selected ? (
@@ -3314,6 +3604,7 @@ export const Inspector = ({
                       withheld={withheld}
                       media={media}
                       swatches={swatches}
+                      head={head}
                       onOpenDocument={openDocument}
                       onPreview={handlePreview}
                       onRelease={handleRelease}

@@ -27,6 +27,30 @@ daedalus_blueprint_api.mutate:
     _entity_access: 'entity.update'
     _csrf_request_header_token: 'TRUE'
 
+# The peek door: a batch applied to the staged working copy in memory and
+# answered as a document holding one element of the result, persisted
+# nowhere (BlueprintApiController::peek). Gated as a mutation is, since
+# the batch is the mutation's own grammar run against the actor's staged
+# copy. The document is a bare site document, daedalus_ui's third
+# chromeless kind (the _daedalus_ui.bare option: no page chrome, core's
+# simple_page variant so none of the theme's regions, the skin kept, no
+# Edit Mode); the option is inert on a site without daedalus_ui, where the
+# document is the theme's plain page around the element.
+daedalus_blueprint_api.peek:
+  path: '/daedalus-blueprint/{entity_type}/{entity}/peek'
+  methods: [POST]
+  defaults:
+    _controller: '\Drupal\daedalus_blueprint_api\Controller\BlueprintApiController::peek'
+  options:
+    no_cache: 'TRUE'
+    _daedalus_ui.bare: true
+    parameters:
+      entity:
+        type: entity:{entity_type}
+  requirements:
+    _entity_access: 'entity.update'
+    _csrf_request_header_token: 'TRUE'
+
 daedalus_blueprint_api.parse_css:
   path: '/daedalus-blueprint/{entity_type}/{entity}/parse-css'
   methods: [POST]

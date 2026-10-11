@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Drupal\daedalus_stylish;
 
-use Drupal\Core\Entity\FieldableEntityInterface;
 use Drupal\Core\Layout\LayoutPluginManagerInterface;
+use Drupal\daedalus_blueprint\Host\HostInterface;
 use Drupal\daedalus_blueprint\LayoutBuilder\ContainerLayout;
 use Drupal\daedalus_blueprint\LayoutBuilder\DaedalusLayoutAdapter;
 use Drupal\layout_builder\Section;
@@ -49,10 +49,10 @@ class SubtreeSlotKeys {
   /**
    * Constructs the resolver; its dependencies are optional for tests only.
    *
-   * The adapter and layout manager ship with daedalus_stylish's hard dependencies
-   * (daedalus_blueprint and layout_builder's layout_discovery); they are optional
-   * only so guide-focused kernel tests can boot without the layout_builder
-   * chain.
+   * The adapter and the layout manager ship with daedalus_stylish's hard
+   * dependencies (daedalus_blueprint and layout_builder's
+   * layout_discovery); they are optional only so guide-focused kernel
+   * tests can boot without the layout_builder chain.
    */
   public function __construct(
     protected ?DaedalusLayoutAdapter $daedalusLayoutAdapter = NULL,
@@ -72,8 +72,8 @@ class SubtreeSlotKeys {
    * block's resolution, exactly like the client fit walk (fields are not
    * in the layout tree).
    *
-   * @param \Drupal\Core\Entity\FieldableEntityInterface $host
-   *   The entity whose staged layout resolves the paths (the map host).
+   * @param \Drupal\daedalus_blueprint\Host\HostInterface $host
+   *   The host whose staged document resolves the paths.
    * @param string $root_key
    *   The element the slot keys are relative to (container:{uuid} or
    *   block:{uuid}; anything else carries no slot space).
@@ -87,7 +87,7 @@ class SubtreeSlotKeys {
    *   carry is omitted — it has no element to bind to, and binds nothing
    *   forever (bind-once).
    */
-  public function resolveSlotKeys(FieldableEntityInterface $host, string $root_key, array $relatives): array {
+  public function resolveSlotKeys(HostInterface $host, string $root_key, array $relatives): array {
     $walk = $relatives === [] ? NULL : $this->walk($host, $root_key);
     if ($walk === NULL) {
       return [];
@@ -134,7 +134,7 @@ class SubtreeSlotKeys {
    *   The element keys, [] when the root carries no slot space or the
    *   layout cannot be resolved.
    */
-  public function subtreeKeys(FieldableEntityInterface $host, string $root_key): array {
+  public function subtreeKeys(HostInterface $host, string $root_key): array {
     $walk = $this->walk($host, $root_key);
     if ($walk === NULL) {
       return [];
@@ -157,7 +157,7 @@ class SubtreeSlotKeys {
    *   Concrete key => slot path; [] when the root carries no slot space or
    *   the layout cannot be resolved.
    */
-  public function slotPaths(FieldableEntityInterface $host, string $root_key): array {
+  public function slotPaths(HostInterface $host, string $root_key): array {
     $walk = $this->walk($host, $root_key);
     if ($walk === NULL) {
       return [];
@@ -182,7 +182,7 @@ class SubtreeSlotKeys {
    *   out-of-layout element degrades to root-and-parts behavior, never an
    *   error.
    */
-  protected function walk(FieldableEntityInterface $host, string $root_key): ?array {
+  protected function walk(HostInterface $host, string $root_key): ?array {
     if ($this->daedalusLayoutAdapter === NULL) {
       return NULL;
     }
@@ -190,7 +190,7 @@ class SubtreeSlotKeys {
       return NULL;
     }
     [, $form, $root_uuid] = $matches;
-    $storage = $this->daedalusLayoutAdapter->getSectionStorage($host);
+    $storage = $host->sectionStorage();
     if ($storage === NULL) {
       return NULL;
     }
@@ -217,8 +217,8 @@ class SubtreeSlotKeys {
   /**
    * Resolves a section by daedalus_layout uuid, root-level or nested, staged.
    */
-  protected function findSection(FieldableEntityInterface $host, string $uuid, object $storage): ?Section {
-    foreach ($storage->getSections() as $section) {
+  protected function findSection(HostInterface $host, string $uuid, object $storage): ?Section {
+    foreach ($this->daedalusLayoutAdapter->rootList($storage)->getSections() as $section) {
       if ($this->daedalusLayoutAdapter->getSectionUuid($section) === $uuid) {
         return $section;
       }

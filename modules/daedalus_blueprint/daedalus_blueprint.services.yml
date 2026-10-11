@@ -14,14 +14,15 @@ services:
   Drupal\daedalus_blueprint\BlueprintSchemaBuilderInterface: '@daedalus_blueprint.schema_builder'
   Drupal\daedalus_blueprint\Validator\SemanticValidator: '@daedalus_blueprint.semantic_validator'
   Drupal\daedalus_blueprint\Access\BlueprintAccessChecker: '@daedalus_blueprint.access_checker'
+  Drupal\daedalus_blueprint\Capability\CapabilityResolver: '@daedalus_blueprint.capability_resolver'
   Drupal\daedalus_blueprint\ManagedKeysRegistry: '@daedalus_blueprint.managed_keys_registry'
   Drupal\daedalus_blueprint\ManagedKeysRegistryInterface: '@daedalus_blueprint.managed_keys_registry'
   Drupal\daedalus_blueprint\LayoutBuilder\LayoutSerializer: '@daedalus_blueprint.layout_serializer'
-  Drupal\daedalus_blueprint\LayoutBuilder\LayoutDeserializer: '@daedalus_blueprint.layout_deserializer'
   Drupal\daedalus_blueprint\LayoutBuilder\PlacementRestrictionsInterface: '@daedalus_blueprint.placement_restrictions'
   Drupal\daedalus_blueprint\LayoutBuilder\PlacementRestrictions: '@daedalus_blueprint.placement_restrictions'
   Drupal\daedalus_blueprint\LayoutBuilder\DaedalusLayoutAdapter: '@daedalus_blueprint.daedalus_layout_adapter'
   Drupal\daedalus_blueprint\LayoutBuilder\OpaqueDataMerger: '@daedalus_blueprint.opaque_data_merger'
+  Drupal\daedalus_blueprint\LayoutBuilder\PluginBlockConfiguration: '@daedalus_blueprint.plugin_block_configuration'
   Drupal\daedalus_blueprint\ElementLocator: '@daedalus_blueprint.element_locator'
   Drupal\daedalus_blueprint\BlueprintSerializerInterface: '@daedalus_blueprint.serializer'
   Drupal\daedalus_blueprint\BlueprintDeserializerInterface: '@daedalus_blueprint.deserializer'
@@ -66,6 +67,7 @@ services:
       - '@daedalus_blueprint.schema_builder'
       - '@daedalus_blueprint.operations'
       - '@daedalus_blueprint.storage_handler'
+      - '@daedalus_blueprint.host_resolver'
     tags:
       - { name: daedalus_blueprint.backend, priority: -10 }
 
@@ -100,6 +102,28 @@ services:
 
   daedalus_blueprint.bundle_list_builder:
     class: Drupal\daedalus_blueprint\BundleListBuilder
+
+  # The one meaning of "page" (an entity whose render is a page document,
+  # its own or its template's): the AI doors and the bundle listing ask it.
+  daedalus_blueprint.page_hosts:
+    class: Drupal\daedalus_blueprint\Host\PageHosts
+  Drupal\daedalus_blueprint\Host\PageHosts: '@daedalus_blueprint.page_hosts'
+
+  # The start: a page's first document has one source, picked once at
+  # creation (the template, a page blueprint, or blank). starts() is the
+  # offer asked for page scope; templateOffered() is whether the bundle's
+  # template holds a document to follow (read off the display's own host,
+  # the seed's input); apply() lands the choice on the unsaved entity
+  # through the whole-document copy, so one save lands both.
+  daedalus_blueprint.page_start:
+    class: Drupal\daedalus_blueprint\Host\PageStart
+    arguments:
+      - '@daedalus_blueprint.materials_roster_builder'
+      - '@daedalus_blueprint.canvas_offer'
+      - '@daedalus_blueprint.blueprint_requirements'
+      - '@daedalus_blueprint.document_instantiator'
+      - '@daedalus_blueprint.host_resolver'
+  Drupal\daedalus_blueprint\Host\PageStart: '@daedalus_blueprint.page_start'
 
   daedalus_blueprint.current_entity_context:
     class: Drupal\daedalus_blueprint\CurrentEntityContext
@@ -142,14 +166,64 @@ services:
 
   daedalus_blueprint.structural_validator:
     class: Drupal\daedalus_blueprint\Validator\StructuralValidator
-    arguments:
-      $layoutPluginManager: '@?plugin.manager.core.layout'
 
   daedalus_blueprint.semantic_validator:
     class: Drupal\daedalus_blueprint\Validator\SemanticValidator
 
   daedalus_blueprint.access_checker:
     class: Drupal\daedalus_blueprint\Access\BlueprintAccessChecker
+
+  # The capability resolver: the one answer to "may this actor do this to
+  # this element on this host". Policies (services tagged
+  # daedalus_blueprint.capability_policy) are intersected, the first
+  # refusal in priority order explaining. The op door asks it before
+  # dispatch; the deserializer asks it at the root.
+  daedalus_blueprint.capability_resolver:
+    class: Drupal\daedalus_blueprint\Capability\CapabilityResolver
+    tags:
+      - { name: service_collector, tag: daedalus_blueprint.capability_policy, call: addPolicy }
+  daedalus_blueprint.capability_policy.host_access:
+    class: Drupal\daedalus_blueprint\Capability\Policy\HostAccessPolicy
+    tags:
+      - { name: daedalus_blueprint.capability_policy, priority: 100 }
+  daedalus_blueprint.capability_policy.workspace:
+    class: Drupal\daedalus_blueprint\Capability\Policy\WorkspacePolicy
+    tags:
+      - { name: daedalus_blueprint.capability_policy, priority: 90 }
+  daedalus_blueprint.capability_policy.ownership:
+    class: Drupal\daedalus_blueprint\Capability\Policy\OwnershipPolicy
+    tags:
+      - { name: daedalus_blueprint.capability_policy, priority: 50 }
+  Drupal\daedalus_blueprint\Capability\Policy\OwnershipPolicy: '@daedalus_blueprint.capability_policy.ownership'
+  daedalus_blueprint.capability_policy.translation:
+    class: Drupal\daedalus_blueprint\Capability\Policy\TranslationPolicy
+    tags:
+      - { name: daedalus_blueprint.capability_policy, priority: 40 }
+  # The role axis: structure follows core's Layout Builder override
+  # permissions, inline block content core's inline block permission, a
+  # template core's `configure any layout`. Style is daedalus_stylish's
+  # policy (its own permissions, registered under the same tag).
+  daedalus_blueprint.capability_policy.role:
+    class: Drupal\daedalus_blueprint\Capability\Policy\RolePolicy
+    arguments:
+      - '@daedalus_blueprint.element_locator'
+      - '@daedalus_blueprint.daedalus_layout_adapter'
+    tags:
+      - { name: daedalus_blueprint.capability_policy, priority: 30 }
+  # The verdict stamp: the same resolver's answers published on every read
+  # (the serializer's full, summary and element reads; a lean tree a
+  # consumer prints for an actor), so a surface reads the consequence and
+  # never interprets the cause.
+  daedalus_blueprint.verdict_stamper:
+    class: Drupal\daedalus_blueprint\Capability\VerdictStamper
+    arguments:
+      - '@daedalus_blueprint.capability_resolver'
+      - '@current_user'
+      - '@daedalus_blueprint.node_tree_builder'
+      - '@daedalus_blueprint.host_resolver'
+      - '@daedalus_blueprint.capability_policy.ownership'
+      - '@daedalus_blueprint.inner_render'
+  Drupal\daedalus_blueprint\Capability\VerdictStamper: '@daedalus_blueprint.verdict_stamper'
 
   daedalus_blueprint.managed_keys_registry:
     class: Drupal\daedalus_blueprint\ManagedKeysRegistry
@@ -159,12 +233,18 @@ services:
   daedalus_blueprint.opaque_data_merger:
     class: Drupal\daedalus_blueprint\LayoutBuilder\OpaqueDataMerger
 
+  # A plugin block's property bag, schema and validation, derived from the
+  # plugin's own config schema (block.settings.{id} through typed config).
+  daedalus_blueprint.plugin_block_configuration:
+    class: Drupal\daedalus_blueprint\LayoutBuilder\PluginBlockConfiguration
+
   daedalus_blueprint.placement_restrictions:
     class: Drupal\daedalus_blueprint\LayoutBuilder\PlacementRestrictions
     arguments:
       - '@plugin.manager.block'
       - '@entity_type.manager'
       - '@context.repository'
+      - '@daedalus_blueprint.slot_roster'
       - '@?plugin.manager.core.layout'
       - '@?plugin.manager.layout_builder.section_storage'
 
@@ -173,9 +253,84 @@ services:
     arguments:
       - '@module_handler'
       - '@entity_type.manager'
+      - '@daedalus_blueprint.inline_block_values'
+      - '@plugin.manager.block'
+      - '@daedalus_blueprint.placement_restrictions'
+
+  # Inline blocks as values: the one owner of the block_values component
+  # shape (a block's fields in the field grammar, references by uuid), the
+  # storage shape of inline blocks on a host whose persistence is
+  # valueBlocks (a display). Spells, refuses, stores and hydrates.
+  daedalus_blueprint.inline_block_values:
+    class: Drupal\daedalus_blueprint\LayoutBuilder\InlineBlockValues
+    arguments:
+      $logger: '@logger.channel.daedalus_blueprint'
+  Drupal\daedalus_blueprint\LayoutBuilder\InlineBlockValues: '@daedalus_blueprint.inline_block_values'
+
+  # The host of a page document (the section tree plus its style map),
+  # resolved at the spine's doors from the entity a public signature takes
+  # or from the section storage core resolved. Every read and write of the
+  # document inside the spine goes through the host; only the content host
+  # names the storage fields.
+  daedalus_blueprint.host_resolver:
+    class: Drupal\daedalus_blueprint\Host\HostResolver
+    arguments:
+      - '@module_handler'
+      - '@plugin.manager.field.field_type'
       - '@?plugin.manager.layout_builder.section_storage'
       - '@?layout_builder.tempstore_repository'
-      - '@daedalus_blueprint.placement_restrictions'
+      - '@?layout_builder.sample_entity_generator'
+      # A content host seeds its first override from its display's template
+      # through the instantiator, which reaches the operations: a closure
+      # breaks the cycle.
+      - !service_closure '@daedalus_blueprint.document_instantiator'
+  Drupal\daedalus_blueprint\Host\HostResolver: '@daedalus_blueprint.host_resolver'
+
+  # The one render primitive of the document stack: an inner host's
+  # sections rendered inside an outer render under the outer's contexts.
+  # The slot block (a template's slot filled by the page's own section),
+  # a linked blueprint placement and the frame's main slot are its
+  # consumers; it also answers which host fills a slot in a render.
+  daedalus_blueprint.inner_render:
+    class: Drupal\daedalus_blueprint\Host\InnerRender
+    arguments:
+      - '@daedalus_blueprint.host_resolver'
+      - '@entity_type.manager'
+      - '@module_handler'
+      - '@plugin.manager.block'
+      - '@theme.manager'
+      - '@daedalus_blueprint.daedalus_layout_adapter'
+      - '@daedalus_blueprint.slot_roster'
+  Drupal\daedalus_blueprint\Host\InnerRender: '@daedalus_blueprint.inner_render'
+  # The slot roster's one reader: every slot id, its label and the tier of
+  # the stack (frame or template) that declares it. The deriver, the offer
+  # and the verdict read the roster here.
+  daedalus_blueprint.slot_roster:
+    class: Drupal\daedalus_blueprint\Slot\SlotRoster
+    arguments:
+      - '@config.factory'
+  Drupal\daedalus_blueprint\Slot\SlotRoster: '@daedalus_blueprint.slot_roster'
+  # The roster's two config-event doors: a roster save rebuilds the slot
+  # block's derivatives, and a config import whose staged roster drops a
+  # placed slot id is refused at import validation.
+  daedalus_blueprint.slot_roster_subscriber:
+    class: Drupal\daedalus_blueprint\Slot\SlotRosterSubscriber
+    arguments:
+      - '@plugin.manager.block'
+      - '@daedalus_blueprint.slot_placements'
+    tags:
+      - { name: event_subscriber }
+  # The judgement behind the slot roster guard: which placed slot ids a
+  # roster would drop, read off the frames and templates of a config
+  # storage (the active one by default). The roster's validation
+  # constraint and the config import door both ask here.
+  daedalus_blueprint.slot_placements:
+    class: Drupal\daedalus_blueprint\Slot\SlotPlacements
+    arguments:
+      - '@config.storage'
+      - '@entity_type.manager'
+      - '@daedalus_blueprint.daedalus_layout_adapter'
+  Drupal\daedalus_blueprint\Slot\SlotPlacements: '@daedalus_blueprint.slot_placements'
 
   # The lean node tree — the spine's canonical page representation: one
   # kind-discriminated tree of containers and blocks with styles on the
@@ -185,6 +340,27 @@ services:
   daedalus_blueprint.node_tree_builder:
     class: Drupal\daedalus_blueprint\NodeTree\NodeTreeBuilder
   Drupal\daedalus_blueprint\NodeTree\NodeTreeBuilder: '@daedalus_blueprint.node_tree_builder'
+
+  # The one machinery that places a whole tree into a host with fresh
+  # identity: a blueprint stamped onto a page, a page-language document or
+  # fragment landing, a page's first override seeded from its display's
+  # template. It expands the lean node tree into the batch operations that
+  # already exist and runs them dressed; uuids are minted through the
+  # caller's strategy and styles re-key onto them by construction.
+  daedalus_blueprint.document_instantiator:
+    class: Drupal\daedalus_blueprint\NodeTree\DocumentInstantiator
+    arguments:
+      - '@uuid'
+      # Service closures because the dependencies are circular by
+      # construction: operations owns the handlers that call back into the
+      # instantiator, and the host resolver hands it to every content host.
+      - !service_closure '@daedalus_blueprint.operations'
+      - !service_closure '@daedalus_blueprint.host_resolver'
+      - '@daedalus_blueprint.node_tree_builder'
+      - '@plugin.manager.block'
+      - '@daedalus_blueprint.daedalus_layout_adapter'
+      - '@?plugin.manager.core.layout'
+  Drupal\daedalus_blueprint\NodeTree\DocumentInstantiator: '@daedalus_blueprint.document_instantiator'
 
   # The model-facing dialect (spec v0.2): the parser reads a document or op
   # fragment back into the lean node tree with structural errors (line
@@ -198,6 +374,22 @@ services:
   daedalus_blueprint.dialect_printer:
     class: Drupal\daedalus_blueprint\Dialect\DialectPrinter
   Drupal\daedalus_blueprint\Dialect\DialectPrinter: '@daedalus_blueprint.dialect_printer'
+
+  # The model's read of a host for a conversation, one composition: the
+  # lean tree stamped for the acting user, printed against the live
+  # catalog with the conversation's aliases. The page tools and the
+  # per-turn print ask it, so every read of a page spells alike.
+  daedalus_blueprint.host_printer:
+    class: Drupal\daedalus_blueprint\Dialect\HostPrinter
+    arguments:
+      - '@daedalus_blueprint.node_tree_builder'
+      - '@daedalus_blueprint.verdict_stamper'
+      - '@daedalus_blueprint.dialect_printer'
+      - '@daedalus_blueprint.dialect_catalog_builder'
+      - '@daedalus_blueprint.dialect_alias_map'
+      - '@daedalus_blueprint.host_resolver'
+      - '@entity_type.manager'
+  Drupal\daedalus_blueprint\Dialect\HostPrinter: '@daedalus_blueprint.host_printer'
 
   # The alias layer over minted identity: author-chosen ids resolved to
   # minted uuids, per entity per conversation, in shared tempstore. Ops
@@ -227,7 +419,7 @@ services:
 
   # The DOM-vocabulary ops (insert/replace/remove/move/set/style): the
   # dialect's write grammar, registered on the op spine and translated into
-  # the batch operations that already exist (the stencil handler's
+  # the batch operations that already exist (the blueprint handler's
   # precedent), so the one validation path judges every write.
   # The catalog generator: derives the site's DialectCatalog from live
   # config (block types + field attribute contracts + the container layout
@@ -256,8 +448,8 @@ services:
   Drupal\daedalus_blueprint\Dialect\DialectSchemaProjector: '@daedalus_blueprint.dialect_schema_projector'
 
   # The materials roster: one typed roster of the site's materials
-  # (tokens, swatches, variants, stencils) collected from tagged
-  # daedalus_blueprint.materials_provider services (daedalus_stylish's and the stencil
+  # (tokens, swatches, variants, blueprints) collected from tagged
+  # daedalus_blueprint.materials_provider services (daedalus_stylish's and the blueprint
   # module's), memoized per request and per workspace. Every model-facing
   # and client-facing material surface projects from it.
   # The design system unit: the one activation every consumer derives
@@ -272,6 +464,28 @@ services:
       - '@entity_type.manager'
       - '@module_handler'
   Drupal\daedalus_blueprint\DesignSystem\ActiveDesignSystem: '@daedalus_blueprint.active_design_system'
+  daedalus_blueprint.design_system_ship:
+    # The package ship: one command ships a design system to its module
+    # (created and installed when absent), the unit as install config
+    # first, then every service tagged daedalus_blueprint.package_shipper
+    # in priority order over the same module and report (the blueprint lane
+    # at 10, so its owned variants land in the blueprints' files before
+    # daedalus_stylish's materials lane at 0 rebuilds the module's files
+    # and adopts the system's unshipped materials).
+    class: Drupal\daedalus_blueprint\DesignSystem\DesignSystemShip
+    arguments:
+      - '@entity_type.manager'
+      - '@module_handler'
+      - '@extension.list.module'
+      - '@module_installer'
+      - '@daedalus_blueprint.active_design_system'
+      # Installing a created module rebuilds the container; the kernel
+      # serves the live one, where the run continues.
+      - '@kernel'
+      - '%app.root%'
+    tags:
+      - { name: service_collector, tag: daedalus_blueprint.package_shipper, call: addShipper }
+  Drupal\daedalus_blueprint\DesignSystem\DesignSystemShip: '@daedalus_blueprint.design_system_ship'
   daedalus_blueprint.active_design_system_subscriber:
     class: Drupal\daedalus_blueprint\DesignSystem\ActiveDesignSystemSubscriber
     arguments:
@@ -299,18 +513,22 @@ services:
   Drupal\daedalus_blueprint\Materials\MaterialsRosterBuilder: '@daedalus_blueprint.materials_roster_builder'
 
   # The roster as the blueprint schema's `materials` fragment (guidance,
-  # tokens, swatches, variants, stencils; full text). Landed on every schema
-  # that references materials by Hook\MaterialsSchemaHooks.
+  # tokens, swatches, variants, the block blueprints the bundle's host is
+  # offered; full text) and a page bundle's `starts` (the page blueprints
+  # it may start as). Landed on every schema that references materials by
+  # Hook\MaterialsSchemaHooks.
   daedalus_blueprint.materials_schema:
     class: Drupal\daedalus_blueprint\Materials\MaterialsSchema
     arguments:
       - '@daedalus_blueprint.materials_roster_builder'
       - '@daedalus_blueprint.dialect_catalog_builder'
       - '@daedalus_blueprint.dialect_printer'
+      # The blueprints group is what the bundle's host offers at block scope.
+      - '@daedalus_blueprint.canvas_offer'
   Drupal\daedalus_blueprint\Materials\MaterialsSchema: '@daedalus_blueprint.materials_schema'
 
   # What one element wears and where it was placed from: its style stack's
-  # reference layers (each wearing with its origin) and its node's stencil
+  # reference layers (each wearing with its origin) and its node's blueprint
   # stamp resolved to roster records (the ACTIVE SELECTION block's read).
   daedalus_blueprint.element_materials:
     class: Drupal\daedalus_blueprint\Materials\ElementMaterials
@@ -349,6 +567,9 @@ services:
     class: Drupal\daedalus_blueprint\Materials\MaterialsChangeSet
     arguments:
       - '@daedalus_blueprint.materials_roster_builder'
+      # A delta resolved for a canvas lists a touched blueprint the canvas
+      # does not offer as a remove.
+      - '@daedalus_blueprint.canvas_offer'
   Drupal\daedalus_blueprint\Materials\MaterialsChangeSet: '@daedalus_blueprint.materials_change_set'
 
   # The page-load half: the whole roster as the JSON string the client
@@ -358,12 +579,44 @@ services:
     class: Drupal\daedalus_blueprint\Materials\MaterialsDelivery
     arguments:
       - '@daedalus_blueprint.materials_roster_builder'
+      # The canvas host's offer: only the blueprints it offers ride the
+      # page-load payload.
+      - '@daedalus_blueprint.canvas_offer'
   Drupal\daedalus_blueprint\Materials\MaterialsDelivery: '@daedalus_blueprint.materials_delivery'
+
+  # Whether a canvas offers a material: a blueprint that is block scope,
+  # has a root and fits the host; every other kind everywhere. The one
+  # judgement both halves of the delivery apply (the payload keeps what
+  # the canvas offers, the delta removes what it does not), and the page
+  # library's for page scope, where a locked bundle's host is offered
+  # only the page blueprints that are fills of the slots its template
+  # places (the resolver names the owner, the adapter reads its slots).
+  daedalus_blueprint.canvas_offer:
+    class: Drupal\daedalus_blueprint\Materials\CanvasOffer
+    arguments:
+      - '@daedalus_blueprint.blueprint_requirements'
+      - '@daedalus_blueprint.host_resolver'
+      - '@daedalus_blueprint.daedalus_layout_adapter'
+  Drupal\daedalus_blueprint\Materials\CanvasOffer: '@daedalus_blueprint.canvas_offer'
+
+  # What a blueprint needs of a host (its subject's fields, the block
+  # types, plugins and layouts its tree names, its allow-list) and whether
+  # a host has it: the one fit judgement the canvas offer reads and
+  # place_blueprint refuses on (BLUEPRINT_DOES_NOT_FIT). Spine machinery:
+  # the library derives a record's requirements through it and never
+  # judges a fit itself.
+  daedalus_blueprint.blueprint_requirements:
+    class: Drupal\daedalus_blueprint\Materials\BlueprintRequirements
+    arguments:
+      - '@plugin.manager.block'
+      - '@entity_type.manager'
+      - '@?plugin.manager.core.layout'
+  Drupal\daedalus_blueprint\Materials\BlueprintRequirements: '@daedalus_blueprint.blueprint_requirements'
 
   # The one icon value seam: resolves the icon value grammar
   # (`media:<uuid>` | root-relative path) to a URL. The grammar and its
-  # contract live on the class; the stencil materials provider resolves
-  # stencil icons through it so the record the client palette paints from
+  # contract live on the class; the blueprint materials provider resolves
+  # blueprint icons through it so the record the client palette paints from
   # carries a URL.
   daedalus_blueprint.icon_resolver:
     class: Drupal\daedalus_blueprint\IconResolver
@@ -384,6 +637,7 @@ services:
       # daedalus_blueprint.operations owns the handler registry that collects
       # this handler.
       - !service_closure '@daedalus_blueprint.operations'
+      - '@daedalus_blueprint.document_instantiator'
     tags:
       - { name: daedalus_blueprint.operation_handler }
       # The seam that saves a batch's declared bytes (the file op, a
@@ -406,11 +660,6 @@ services:
 
   daedalus_blueprint.layout_serializer:
     class: Drupal\daedalus_blueprint\LayoutBuilder\LayoutSerializer
-
-  daedalus_blueprint.layout_deserializer:
-    class: Drupal\daedalus_blueprint\LayoutBuilder\LayoutDeserializer
-    arguments:
-      $layoutPluginManager: '@?plugin.manager.core.layout'
 
   daedalus_blueprint.serializer:
     class: Drupal\daedalus_blueprint\BlueprintSerializer
@@ -463,6 +712,7 @@ services:
       - '@module_handler'
       - '@current_user'
       - '@datetime.time'
+      - '@daedalus_blueprint.host_resolver'
       - '@?daedalus_tempstore.entity_tempstore_repository'
       - '@?daedalus_blueprint.layout_tempstore_helper'
       - '@?workspaces.manager'

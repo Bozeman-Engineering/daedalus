@@ -184,13 +184,13 @@ export const WearBar = ({
   // ancestor rule) rather than an element: the row menu's update
   // gesture names which one's overrides it stages.
   const rule = Boolean(target) && styleTarget(target).selector !== null;
-  const layout = source.getLayout ? source.getLayout() : [];
+  const tree = source.getTree?.() ?? [];
   const vocabulary = axisVocabulary(
     guide,
     target,
     blockTypes,
     sectionLayouts,
-    layout,
+    tree,
   );
   const { rows, stale } = wornRows(entry, library, vocabulary, claimedAxes);
   // The offer: scope-filtered at the target's landing (ownership and tag
@@ -204,11 +204,11 @@ export const WearBar = ({
       target,
       blockTypes,
       sectionLayouts,
-      layout,
+      tree,
       offerTag(source.getTree?.() ?? null, target),
     ),
     target,
-    layout,
+    tree,
   );
 
   const labelOf = (reference) =>
@@ -237,8 +237,8 @@ export const WearBar = ({
         .applyVariant(
           target,
           machineName,
-          Drupal.t('Applied variant @label', {
-            '@label': labelOf(machineName),
+          Drupal.t('Applied variant !label', {
+            '!label': labelOf(machineName),
           }),
         )
         .catch(() => {
@@ -256,7 +256,7 @@ export const WearBar = ({
         .detachVariant(
           target,
           reference,
-          Drupal.t('Detached variant @label', { '@label': labelOf(reference) }),
+          Drupal.t('Detached variant !label', { '!label': labelOf(reference) }),
         )
         .catch(() => {
           // The op queue's source reports the failure.
@@ -275,8 +275,8 @@ export const WearBar = ({
           operations: [
             { op: 'remove_variant', key: target, variant: reference },
           ],
-          label: Drupal.t('Removed variant @label', {
-            '@label': labelOf(reference),
+          label: Drupal.t('Removed variant !label', {
+            '!label': labelOf(reference),
           }),
         })
         .catch(() => {
@@ -293,8 +293,8 @@ export const WearBar = ({
       source
         .commitBatch({
           operations: ops,
-          label: Drupal.t('Reset overrides of @label', {
-            '@label': labelOf(reference),
+          label: Drupal.t('Reset overrides of !label', {
+            '!label': labelOf(reference),
           }),
         })
         .catch(() => {
@@ -404,7 +404,7 @@ export const WearBar = ({
           target,
           reference,
           library,
-          layout,
+          tree,
         ).length > 0,
       canEditFull: Boolean(doorway),
       hasSettings: Boolean(onVariantSettings),
@@ -417,8 +417,8 @@ export const WearBar = ({
   const staleHeader = (reference) => {
     const reason = staleReason(guide, reference);
     return reason.withheld
-      ? Drupal.t('Withheld by the style guide: @refusals', {
-          '@refusals': refusalText(reason.refusals),
+      ? Drupal.t('Withheld by the style guide: !refusals', {
+          '!refusals': refusalText(reason.refusals),
         })
       : null;
   };
@@ -551,7 +551,7 @@ export const WearBar = ({
       fragment: '',
     });
   };
-  // The row's name: its axis, or its owner for a stencil-owned wearing
+  // The row's name: its axis, or its owner for a blueprint-owned wearing
   // (wearRowLabel; the swap trigger's title follows it).
   const rowLabel = (axis, ref) =>
     wearRowLabel(axis, findVariant(library, ref.variant), {
@@ -624,12 +624,12 @@ export const WearBar = ({
                 title={
                   ref.fragment !== ''
                     ? Drupal.t(
-                        'Styled as part of the composition variant "@label". Applying a variant here replaces that on this element only. Right-click for actions.',
-                        { '@label': labelOf(applied) },
+                        'Styled as part of the composition variant "!label". Applying a variant here replaces that on this element only. Right-click for actions.',
+                        { '!label': labelOf(applied) },
                       )
                     : Drupal.t(
-                        'Swap the @axis variant. Right-click for actions.',
-                        { '@axis': rowLabel(axis, ref) },
+                        'Swap the !axis variant. Right-click for actions.',
+                        { '!axis': rowLabel(axis, ref) },
                       )
                 }
                 onClick={(event) => openPicker(event.currentTarget, axis)}
@@ -644,11 +644,11 @@ export const WearBar = ({
               <span
                 className="daedalus-stylish-wear-bar__via"
                 title={Drupal.t(
-                  'Applied by the composition variant "@via": switching or removing that composition removes this wearing too. Apply a variant here yourself to take it over.',
-                  { '@via': origin.label },
+                  'Applied by the composition variant "!via": switching or removing that composition removes this wearing too. Apply a variant here yourself to take it over.',
+                  { '!via': origin.label },
                 )}
               >
-                {Drupal.t('via @via', { '@via': origin.label })}
+                {Drupal.t('via !via', { '!via': origin.label })}
               </span>
             )}
             {overridden && (
@@ -656,17 +656,17 @@ export const WearBar = ({
                 <span
                   className="daedalus-stylish-wear-bar__overridden-text"
                   title={Drupal.t(
-                    'This element\'s own @own hides what "@label" sets for @lost; the variant is still worn, its values do not show through.',
+                    'This element\'s own !own hides what "!label" sets for !lost; the variant is still worn, its values do not show through.',
                     {
-                      '@own': overridden.by.join(', '),
-                      '@label': labelOf(applied),
-                      '@lost': overridden.lost.join(', '),
+                      '!own': overridden.by.join(', '),
+                      '!label': labelOf(applied),
+                      '!lost': overridden.lost.join(', '),
                     },
                   )}
                 >
-                  {Drupal.t('@lost overridden by your @own', {
-                    '@lost': overridden.lost.join(', '),
-                    '@own': overridden.by.join(', '),
+                  {Drupal.t('!lost overridden by your !own', {
+                    '!lost': overridden.lost.join(', '),
+                    '!own': overridden.by.join(', '),
                   })}
                 </span>
                 {!readOnly && (
@@ -718,8 +718,8 @@ export const WearBar = ({
               title={
                 reason.withheld
                   ? Drupal.t(
-                      "This variant is withheld by the style guide: its values fail the site's current enforcement, so it is neither offered nor delivered until they are fixed. @refusals. Right-click for actions.",
-                      { '@refusals': refusalText(reason.refusals) },
+                      "This variant is withheld by the style guide: its values fail the site's current enforcement, so it is neither offered nor delivered until they are fixed. !refusals. Right-click for actions.",
+                      { '!refusals': refusalText(reason.refusals) },
                     )
                   : Drupal.t(
                       "This variant is not among the site's materials (deleted or unpublished). Right-click for actions.",
@@ -737,11 +737,11 @@ export const WearBar = ({
               <span
                 className="daedalus-stylish-wear-bar__via"
                 title={Drupal.t(
-                  'Applied by the composition variant "@via": switching or removing that composition removes this wearing too. Apply a variant here yourself to take it over.',
-                  { '@via': origin.label },
+                  'Applied by the composition variant "!via": switching or removing that composition removes this wearing too. Apply a variant here yourself to take it over.',
+                  { '!via': origin.label },
                 )}
               >
-                {Drupal.t('via @via', { '@via': origin.label })}
+                {Drupal.t('via !via', { '!via': origin.label })}
               </span>
             )}
           </div>

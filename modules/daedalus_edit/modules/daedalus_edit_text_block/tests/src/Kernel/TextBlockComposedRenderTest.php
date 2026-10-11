@@ -207,7 +207,7 @@ class TextBlockComposedRenderTest extends BlueprintKernelTestBase {
       ],
     ]);
 
-    $result = $this->container->get('daedalus_blueprint.operations')->addElement($host, [
+    $result = $this->container->get('daedalus_blueprint.operations')->addElement($this->host($host), [
       'anchor' => '7a3f08ce-2f70-4c98-8f5b-3d1f6a9be0c4',
       'placement' => 'after',
     ], [

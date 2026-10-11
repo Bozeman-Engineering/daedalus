@@ -12,7 +12,16 @@ import { createSatelliteSource } from './sources/satellite-source.js';
  * cannot. While disconnected the last-known state stays visible — a leader
  * refresh resolves itself via the snapshot/hello handshake within a beat.
  */
-const SatelliteHost = ({ source, guide, variants, swatches, animations }) => {
+const SatelliteHost = ({
+  source,
+  guide,
+  variants,
+  swatches,
+  tokens,
+  animations,
+  fonts,
+  skin,
+}) => {
   const [connected, setConnected] = useState(source.isConnected());
 
   // Subscribe, THEN re-read — see the matching comment in inspector.js.
@@ -34,7 +43,10 @@ const SatelliteHost = ({ source, guide, variants, swatches, animations }) => {
         guide={guide}
         variants={variants}
         swatches={swatches}
+        tokens={tokens}
         animations={animations}
+        fonts={fonts}
+        skin={skin}
       />
     </div>
   );
@@ -53,7 +65,10 @@ if (scope && mount) {
       guide={drupalSettings.daedalusStylish?.guide ?? {}}
       variants={drupalSettings.daedalusStylish?.variants ?? {}}
       swatches={drupalSettings.daedalusStylish?.swatches ?? {}}
+      tokens={drupalSettings.daedalusStylish?.tokens ?? {}}
       animations={drupalSettings.daedalusStylish?.animations ?? {}}
+      fonts={drupalSettings.daedalusStylish?.fonts ?? {}}
+      skin={drupalSettings.daedalusStylish?.skin ?? {}}
     />,
     mount,
   );

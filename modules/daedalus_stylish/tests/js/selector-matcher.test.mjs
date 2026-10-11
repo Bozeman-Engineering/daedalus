@@ -31,7 +31,7 @@ import { TREE } from './selector-matcher-fixture.mjs';
 
 const matcher = createMatcher(TREE);
 
-test('the tree facts: key, kind, address, tag, the tags inside, parts, the minted name and type, place', () => {
+test('the tree facts: key, kind, address, tag, the tags inside, parts, the minted name, type and icon, place', () => {
   assert.deepEqual(matcher.facts('block:t3'), {
     key: 'block:t3',
     kind: 'block',
@@ -41,6 +41,7 @@ test('the tree facts: key, kind, address, tag, the tags inside, parts, the minte
     parts: {},
     name: null,
     type: null,
+    icon: null,
     index: 0,
     count: 3,
     childCount: 0,
@@ -55,6 +56,7 @@ test('the tree facts: key, kind, address, tag, the tags inside, parts, the minte
     parts: {},
     name: 'Hero',
     type: 'Section',
+    icon: '/icons/section.svg',
     index: 0,
     count: 4,
     childCount: 5,
@@ -73,6 +75,7 @@ test('the tree facts: key, kind, address, tag, the tags inside, parts, the minte
     parts: { '.text-block-link': 'a', '.text-block-link__icon': 'svg', '.text-block-note': null, '.text-block': 'h6' },
     name: null,
     type: null,
+    icon: null,
     index: 0,
     count: 2,
     childCount: 0,
@@ -93,6 +96,17 @@ test('the tree facts: key, kind, address, tag, the tags inside, parts, the minte
   // inside the block.
   assert.equal(matcher.facts('block:p').address, 'block_plugin:system_menu_block');
   assert.equal(matcher.facts('block:p').tag, null);
+  // A field node names the page's field, never a per-bundle plugin id: its
+  // address is the field_block base plugin, read off the node alone.
+  const fielded = createMatcher([
+    {
+      kind: 'container',
+      uuid: 'sec-f',
+      layout_id: 'daedalus_stylish_container',
+      children: [{ kind: 'block', uuid: 'fb', field: 'body' }],
+    },
+  ]);
+  assert.equal(fielded.facts('block:fb').address, 'block_plugin:field_block');
   assert.deepEqual(matcher.facts('block:t6').tags, ['a', 'p']);
   assert.deepEqual(matcher.facts('block:t6').parts, { '.s-q1': 'p' });
   // A region wrapper is a real sibling level: a block in one is

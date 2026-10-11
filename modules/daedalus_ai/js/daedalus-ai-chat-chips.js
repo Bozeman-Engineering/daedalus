@@ -9,19 +9,23 @@
  * projected from the blueprint mirror. Canvas feedback is the spine's
  * outlines; the old badge/selection-manager UX died with the DaedalusAi tool.
  *
- * The styling TARGET rides the same chip. When the single selection
- * carries a target (Selection.getTarget(): a part, a tag tier, a chain, or
- * an ancestor rule reaching it), its chip reads "Welcome › every link"
- * (the element's label, then the target's words through the same seam the
- * breadcrumb uses) and the request context sends the ADDRESS styling acts
- * at: {key: the target's key, selector, label}, so the AI sees a rule
- * where the user pointed at one. The chip's dismiss stays the element's
- * deselection (the target never outlives the selection).
+ * The two styling FACTS ride the same chip. When the single selection
+ * carries a subject facet (Selection.getTarget(): a part, a tag tier, a
+ * chain ON the selected element) its chip reads "Welcome › every link"
+ * (the element's label, then the facet's words through the same seam the
+ * breadcrumb uses); when it carries a write address
+ * (Selection.getAddress(): a rule on the element or an ancestor that the
+ * write rebases to) the chip adds ", at Welcome › every link" (the
+ * address's owner, then the rule's words). The request context keeps
+ * `key` as the ELEMENT always, `selector` as the facet and `address` as
+ * {key, selector}, so the AI sees what the user is looking at and where
+ * styling acts as two facts, never a rule in the element's place. The
+ * chip's dismiss stays the element's deselection (neither fact outlives
+ * the selection).
  */
 
 (() => {
   const PANEL_CLASS = 'daedalus-ai-context-panel';
-  const HAS_CONTEXT_CLASS = 'daedalus-ai-has-context';
 
   /**
    * The app handed to the registration callback; null until the edit-mode
@@ -30,46 +34,66 @@
   let app = null;
 
   /**
-   * The styling target riding a selected key, or null.
+   * The styling facts riding a selected key: the subject facet and the
+   * write address, each null when none stands.
    *
-   * A target belongs to the ONE selected element (the facade clears it on
-   * every selection write and refuses one under a multi-selection), so
-   * only the selected key's chip can carry it.
+   * Both belong to the ONE selected element (the facade clears them on
+   * every selection write and refuses either under a multi-selection), so
+   * only the selected key's chip can carry them.
    *
    * @param {string} key
    *   A key of the selection set.
    *
-   * @return {?{key: string, selector: string}}
+   * @return {{target: ?{key: string, selector: string}, address: ?{key: string, selector: string}}}
    */
-  const targetOf = (key) =>
-    key === app.Selection.getSelected() ? app.Selection.getTarget() : null;
+  const stylingOf = (key) =>
+    key === app.Selection.getSelected()
+      ? { target: app.Selection.getTarget(), address: app.Selection.getAddress() }
+      : { target: null, address: null };
 
   /**
-   * The chip's words for a key: the element's label, then the target's.
+   * The words for a rule under an owner: the rule's words alone on the
+   * element itself, else the owner's label then the rule's.
+   *
+   * @param {string} key
+   *   The selected element's key.
+   * @param {{key: string, selector: string}} rule
+   *   A facet or an address.
+   *
+   * @return {string}
+   */
+  const ruleWords = (key, rule) => {
+    const words = app.Blueprint.targetLabel(rule.key, rule.selector);
+    return rule.key === key
+      ? words
+      : `${app.Blueprint.labelForKey(rule.key)} › ${words}`;
+  };
+
+  /**
+   * The chip's words for a key: the element's label, then the facet's,
+   * then the address it is styled at.
    *
    * @param {string} key
    *   A key of the selection set.
    * @param {?{key: string, selector: string}} target
-   *   The target riding it, if any.
+   *   The subject facet riding it, if any.
+   * @param {?{key: string, selector: string}} address
+   *   The write address riding it, if any.
    *
    * @return {string}
    */
-  const labelOf = (key, target) => {
+  const labelOf = (key, target, address) => {
     const label = app.Blueprint.labelForKey(key);
-    if (!target) {
-      return label;
-    }
-    const owner =
-      target.key === key ? label : app.Blueprint.labelForKey(target.key);
-    return `${owner} › ${app.Blueprint.targetLabel(target.key, target.selector)}`;
+    const subject = target ? `${label} › ${ruleWords(key, target)}` : label;
+    return address ? `${subject}, at ${ruleWords(key, address)}` : subject;
   };
 
   /**
    * The selection set as the selected_elements request context: spine keys
    * (the same string identity that syncs panel and canvas) plus projected
-   * labels, in set order. A key carrying a styling target sends the
-   * target's address instead (its key, which is the element or an
-   * ancestor of it, and its selector).
+   * labels, in set order. `key` is always the element; a subject facet
+   * rides as `selector` and a write address as `address` ({key, selector},
+   * its key the element or an ancestor of it).
    */
   const selectedElements = () => {
     if (!app) {
@@ -80,14 +104,17 @@
       return null;
     }
     return keys.map((key, index) => {
-      const target = targetOf(key);
+      const { target, address } = stylingOf(key);
       const element = {
-        key: target ? target.key : key,
-        label: labelOf(key, target),
+        key,
+        label: labelOf(key, target, address),
         number: index + 1,
       };
       if (target) {
         element.selector = target.selector;
+      }
+      if (address) {
+        element.address = { key: address.key, selector: address.selector };
       }
       return element;
     });
@@ -95,7 +122,7 @@
 
   /**
    * Renders the chips into the chat container, idempotently — call it on
-   * every set or target change AND every behavior attach (the lazy-built
+   * every set or styling change AND every behavior attach (the lazy-built
    * chat panel can stream in after the app boots).
    */
   const renderChips = () => {
@@ -105,7 +132,6 @@
     }
 
     const keys = app ? app.Selection.getSelectedSet() : [];
-    container.classList.toggle(HAS_CONTEXT_CLASS, keys.length > 0);
 
     let panel = container.querySelector(`.${PANEL_CLASS}`);
     if (keys.length === 0) {
@@ -120,14 +146,18 @@
 
     panel.innerHTML = '';
     keys.forEach((key, index) => {
-      const target = targetOf(key);
-      const label = labelOf(key, target);
+      const { target, address } = stylingOf(key);
+      const label = labelOf(key, target, address);
 
       const chip = document.createElement('div');
       chip.className = 'daedalus-ai-context-item daedalus-ui-chip daedalus-ui-chip--tinted';
       chip.setAttribute('data-selection-key', key);
       if (target) {
         chip.setAttribute('data-target-selector', target.selector);
+      }
+      if (address) {
+        chip.setAttribute('data-address-key', address.key);
+        chip.setAttribute('data-address-selector', address.selector);
       }
 
       const number = document.createElement('span');
@@ -162,8 +192,9 @@
     (registeredApp) => {
       app = registeredApp;
       app.Selection.onSetChange(() => renderChips());
-      // A target move under the same selection re-words the chip; the set
-      // subscription never fires for it (it is key-only by design).
+      // A facet or address move under the same selection re-words the
+      // chip; the set subscription never fires for it (it is key-only by
+      // design), and the one styling subscription carries both facts.
       app.Selection.onTargetChange(() => renderChips());
       renderChips();
     },

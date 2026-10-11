@@ -1,0 +1,186 @@
+services:
+  _defaults:
+    autowire: true
+    autoconfigure: true
+
+  # Both lanes as one roster: module-shipped blueprint files and published
+  # blueprint entities, whose documents are built through their host (the
+  # tree builder over the saved entity) once per rebuild.
+  daedalus_blueprint_library.discovery:
+    class: Drupal\daedalus_blueprint_library\BlueprintDiscovery
+    arguments:
+      $cache: '@cache.default'
+      $hostResolver: '@daedalus_blueprint.host_resolver'
+      # Lazy: the content lane builds trees only at a rebuild, and the tree
+      # builder's chain (layout serializer, field handler manager, the
+      # stylish style map handler, the style map validator, the materials
+      # roster builder, this module's provider) leads back to this
+      # discovery. A plain reference is a circular service reference the
+      # moment a constructor edge (media_library's opener resolver at
+      # daedalus_stylish's install) enters the loop; the Kernel tier never
+      # sees it because it enters through a service collector, which the
+      # container caches before running its calls.
+      $nodeTreeBuilder: !service_closure '@daedalus_blueprint.node_tree_builder'
+
+  Drupal\daedalus_blueprint_library\BlueprintDiscoveryInterface: '@daedalus_blueprint_library.discovery'
+  Drupal\daedalus_blueprint_library\BlueprintDiscovery: '@daedalus_blueprint_library.discovery'
+
+  # The blueprint gestures on the one machinery: a capture reads the source
+  # host's tree and instantiates it into the blueprint's own host, a push
+  # does the same into an emptied document, and the commit goes through the
+  # storage handler like any page's.
+  daedalus_blueprint_library.manager:
+    class: Drupal\daedalus_blueprint_library\BlueprintManager
+    arguments:
+      - '@entity_type.manager'
+      - '@daedalus_blueprint_library.discovery'
+      - '@current_user'
+      - '@datetime.time'
+      # A saved blueprint joins the active design system unless the gesture
+      # opts out; adopted variants take the blueprint's membership.
+      - '@daedalus_blueprint.active_design_system'
+      # The distro lock decides what a file blueprint's read-only refusal
+      # points at: fork (lock holds) or the ship command (developer gate).
+      - '@daedalus_blueprint.distro_lock'
+      - '@daedalus_blueprint.host_resolver'
+      - '@daedalus_blueprint.node_tree_builder'
+      - '@daedalus_blueprint.document_instantiator'
+      - '@daedalus_blueprint.storage_handler'
+      - '@daedalus_blueprint_library.subjects'
+
+  Drupal\daedalus_blueprint_library\BlueprintManager: '@daedalus_blueprint_library.manager'
+
+  # The subject vocabulary: the page-builder bundles a blueprint can be
+  # material for, spelled entity_type:bundle, and the gesture lane's
+  # parsing of a subject and of the bundles allow-list (the details route,
+  # update_material, the add form's select).
+  daedalus_blueprint_library.subjects:
+    class: Drupal\daedalus_blueprint_library\BlueprintSubjects
+    arguments:
+      - '@entity_type.manager'
+      - '@entity_type.bundle.info'
+
+  Drupal\daedalus_blueprint_library\BlueprintSubjects: '@daedalus_blueprint_library.subjects'
+
+  # The ship lane: a saved blueprint to a module as a blueprint file (its
+  # host's built tree and node-less styles in discovery's envelope, the
+  # icon media copied beside it through the icon resolver's media-to-file
+  # step) plus its owned variants (through daedalus_stylish's variant
+  # shipper, optional: daedalus_stylish never learns about blueprints and
+  # this module never requires daedalus_stylish); the content blueprint
+  # graduates (deleted once the file is written).
+  daedalus_blueprint_library.shipper:
+    class: Drupal\daedalus_blueprint_library\BlueprintShipper
+    arguments:
+      - '@daedalus_blueprint.node_tree_builder'
+      - '@daedalus_blueprint.host_resolver'
+      # A shipped tree's reference strip reads the block type's field
+      # definitions (no live block to ask).
+      - '@entity_field.manager'
+      - '@daedalus_blueprint_library.manager'
+      - '@module_handler'
+      - '@extension.list.module'
+      - '@entity_type.manager'
+      - '@daedalus_blueprint.icon_resolver'
+      - '@file_system'
+      - '@?daedalus_stylish.variant_shipper'
+    tags:
+      # The blueprint lane of the package ship (daedalus-blueprint:design-
+      # system:ship): the system's content blueprints graduate into the
+      # module. Ahead of daedalus_stylish's materials lane (priority 0),
+      # so the blueprints' owned variants land in the blueprints' own
+      # variants files, with their owner keys, before that lane reads
+      # the module's files and adopts what is still unshipped.
+      - { name: daedalus_blueprint.package_shipper, priority: 10 }
+
+  Drupal\daedalus_blueprint_library\BlueprintShipper: '@daedalus_blueprint_library.shipper'
+
+  daedalus_blueprint_library.operation_handler:
+    class: Drupal\daedalus_blueprint_library\BlueprintOperationHandler
+    arguments:
+      - '@daedalus_blueprint_library.discovery'
+      # The one placement machinery: the definition's tree expands into the
+      # spine's operations with fresh identity there.
+      - '@daedalus_blueprint.document_instantiator'
+      # The fit judgement: a blueprint this host lacks the material for is
+      # refused BLUEPRINT_DOES_NOT_FIT before anything is placed.
+      - '@daedalus_blueprint.blueprint_requirements'
+      # A detach names the linked node it replaces: located here, its ref
+      # resolved through the page language's alias map when not a uuid.
+      - '@daedalus_blueprint.element_locator'
+      - '@daedalus_blueprint.dialect_alias_map'
+      # A claim (detach_blueprint with `slot`) reads the slot's door above
+      # the host, the default blueprint it shows, through the primitive.
+      - '@daedalus_blueprint.inner_render'
+    tags:
+      - { name: daedalus_blueprint.operation_handler }
+
+  # The blueprint materials provider: discovery's served set as roster
+  # records (the ONE place blueprints are read into the materials spine),
+  # and the blueprint kind of the material gesture family (save_material /
+  # update_material / remove_material dispatch here; the UI verbs submit
+  # the same ops, BlueprintApiController's routes adapt onto the same
+  # methods).
+  daedalus_blueprint_library.materials_provider:
+    class: Drupal\daedalus_blueprint_library\Materials\BlueprintMaterialsProvider
+    arguments:
+      - '@daedalus_blueprint_library.discovery'
+      - '@daedalus_blueprint.icon_resolver'
+      # A closure: the manager's instantiator reaches the operations spine,
+      # whose style handlers read the roster this provider feeds (circular
+      # otherwise).
+      - !service_closure '@daedalus_blueprint_library.manager'
+      - '@current_user'
+      - '@entity_type.manager'
+    tags:
+      - { name: daedalus_blueprint.materials_provider }
+  Drupal\daedalus_blueprint_library\Materials\BlueprintMaterialsProvider: '@daedalus_blueprint_library.materials_provider'
+
+  # The any-type gate: may the actor create, edit or delete blueprints of
+  # SOME type. The route requirement of the listing, the gesture routes
+  # and daedalus_layout's dialogs, and the service daedalus_layout's Add
+  # panel flag and daedalus_stylish's ownership gate read (optionally: both
+  # modules work without this one).
+  daedalus_blueprint_library.type_access:
+    class: Drupal\daedalus_blueprint_library\Access\BlueprintTypeAccess
+    arguments:
+      - '@entity_type.manager'
+    tags:
+      - { name: access_check, applies_to: _blueprint_type_access }
+
+  Drupal\daedalus_blueprint_library\Access\BlueprintTypeAccess: '@daedalus_blueprint_library.type_access'
+
+  # Scope is enforced by a capability policy: a block-scope blueprint holds
+  # one root, so a second top-level insert on its canvas is refused
+  # BLUEPRINT_ONE_ROOT at the op door, as every other refusal is.
+  daedalus_blueprint_library.capability_policy.scope:
+    class: Drupal\daedalus_blueprint_library\Capability\BlueprintScopePolicy
+    tags:
+      - { name: daedalus_blueprint.capability_policy, priority: 60 }
+
+  # daedalus_blueprint_library.variant_ownership_checker (the ownership half
+  # of daedalus_stylish's variant applicability seam) is NOT defined here: its class
+  # cannot load without daedalus_stylish, and container compilation reflects every
+  # yml-registered class even when nothing instantiates it. It registers in
+  # DaedalusBlueprintLibraryServiceProvider, only when daedalus_stylish is installed.
+
+  # One canvas for a blueprint: its canonical route over the blueprint
+  # section storage. Core's overrides storage also builds the type's
+  # /blueprint/{blueprint}/layout page (over its plain overrides storage, a
+  # second tempstore key); this subscriber removes it.
+  daedalus_blueprint_library.route_subscriber:
+    class: Drupal\daedalus_blueprint_library\Routing\BlueprintRouteSubscriber
+    tags:
+      - { name: event_subscriber }
+
+  # A blueprint's canvas is its canonical route, and the route is the
+  # editing surface: the first visit in a session lands in Edit Mode for an
+  # actor who may update the blueprint, through daedalus_ui's one door for
+  # the mode cookie (ModeState::enterModeOnFirstVisit). Inert without
+  # daedalus_ui.
+  daedalus_blueprint_library.canvas_mode:
+    class: Drupal\daedalus_blueprint_library\EventSubscriber\BlueprintCanvasMode
+    arguments:
+      $modeState: '@?daedalus_ui.mode_state'
+    tags:
+      - { name: event_subscriber }

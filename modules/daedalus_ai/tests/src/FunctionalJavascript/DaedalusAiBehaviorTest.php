@@ -121,7 +121,7 @@ class DaedalusAiBehaviorTest extends WebDriverTestBase {
 
     // The mutation-response legs below pin the FIELD-level subtree swap,
     // which needs a block whose field renders its own selectable wrapper.
-    // Every content block the recipe promotes is a collapsed type (its one
+    // Every block type the recipe ships as a favorite is collapsed (its one
     // field folds into the block root, so no field key ever reaches the
     // markup). The uncollapsed fixture is a fabricated 'basic' block type
     // with a body field rendering through the default text chain (the shape
@@ -201,11 +201,14 @@ class DaedalusAiBehaviorTest extends WebDriverTestBase {
    * - chat chips: the chat LIVE-FOLLOWS the ONE selection spine: a
    *   selection renders a chip in the chat panel, and dismissing the chip
    *   deselects the element on the page. No AI-owned selection state exists.
-   *   A styling target on the selection (Selection.target) re-words the
-   *   chip "element › target" through the breadcrumb's label seam and
-   *   marks it data-target-selector; the provider then sends the
-   *   target's address (key and selector), and a bare select restores
-   *   the bare chip and key.
+   *   A styling subject facet on the selection (Selection.target)
+   *   re-words the chip "element › facet" through the breadcrumb's label
+   *   seam and marks it data-target-selector; the provider then sends the
+   *   element's key with the facet as `selector`. A write address on an
+   *   ancestor (Selection.address) adds ", at owner › rule" to the chip,
+   *   marks it data-address-key/-selector, and rides the context as
+   *   `address` {key, selector} with `key` still the element; a bare
+   *   select drops both and restores the bare chip and key.
    * - daedalus_ai context: the selection is exposed through Drupal.Daedalus.AiContext as
    *   a 'selected_elements' provider emitting SPINE KEYS (+ labels projected
    *   from the blueprint mirror), which is what the context manager injects
@@ -399,38 +402,70 @@ class DaedalusAiBehaviorTest extends WebDriverTestBase {
       20000,
     );
 
-    // The chip carries the STYLING TARGET when the selection has one: a
+    // The chip carries the STYLING SUBJECT when the selection has one: a
     // tag tier seated through the facade (the road the styling module's
-    // switcher and Cmd-click take) re-words the chip "element › target"
+    // switcher and Cmd-click take) re-words the chip "element › facet"
     // through the label seam the breadcrumb reads too
     // (Blueprint.targetLabel), marks it data-target-selector, and the
-    // provider sends the target's ADDRESS (its key and selector) so the AI
-    // sees where styling acts, never a bare element. A bare select drops
-    // the target (the facade clears it on every selection write) and
-    // restores the element's chip and the bare key.
+    // provider sends the element's key with the facet as `selector`, so
+    // the AI sees what the user is looking at, never a bare element.
     $chip_selector = '#daedalus_ai .daedalus-ai-context-panel .daedalus-ai-context-item[data-selection-key="' . $key . '"]';
     $session->executeScript("Drupal.Daedalus.Selection.target('$key', 'a');");
     $this->assertJsCondition(
       '(function () { var chip = document.querySelector(' . json_encode($chip_selector) . ');'
       . ' var c = Drupal.Daedalus.AiContext.collect().selected_elements;'
       . " var words = Drupal.Daedalus.Blueprint.labelForKey('$key') + ' › ' + Drupal.Daedalus.Blueprint.targetLabel('$key', 'a');"
-      . " return !!chip && chip.getAttribute('data-target-selector') === 'a'"
+      . " return !!chip && chip.getAttribute('data-target-selector') === 'a' && !chip.hasAttribute('data-address-key')"
       . " && chip.querySelector('.daedalus-ai-context-label').textContent === words"
-      . " && Array.isArray(c) && c.length === 1 && c[0].key === '$key' && c[0].selector === 'a' && c[0].label === words && c[0].number === 1;"
+      . " && Array.isArray(c) && c.length === 1 && c[0].key === '$key' && c[0].selector === 'a' && c[0].address === undefined && c[0].label === words && c[0].number === 1;"
       . '})()',
       20000,
-      'A styling target on the selection re-words its chip "element › target" through the label seam, marks it with the target selector, and the context provider sends the target\'s address.',
+      'A styling subject on the selection re-words its chip "element › facet" through the label seam, marks it with the facet selector, and the context provider sends the element\'s key with the facet.',
     );
+
+    // The chip carries the WRITE ADDRESS beside the subject: the block's
+    // container seated as the address of its `a` rule, the chip menu's
+    // "Every link in Section" pick. The container is read off the canvas
+    // as the block's nearest keyed ancestor (only element-tier keys wear
+    // data-selectable, so that is the projection parent the facade's
+    // ancestry check walks; the index itself is the spine's own, with no
+    // public reader, and a key the check refused would throw here). The
+    // chip keeps the subject's words and adds ", at owner › rule", marks
+    // the address, and the context carries `key` as the ELEMENT still,
+    // the facet as `selector` and the rule as `address` {key, selector}:
+    // two facts, never the rule in the element's place.
+    $container_key = $session->evaluateScript(
+      "document.querySelector('[data-selectable=\"$key\"]').parentElement.closest('[data-selectable]').getAttribute('data-selectable')"
+    );
+    $this->assertStringStartsWith('container:', (string) $container_key, 'The placed block sits directly in a section of the layout.');
+    $session->executeScript("Drupal.Daedalus.Selection.address('$container_key', 'a');");
+    $this->assertJsCondition(
+      '(function () { var chip = document.querySelector(' . json_encode($chip_selector) . ');'
+      . ' var c = Drupal.Daedalus.AiContext.collect().selected_elements;'
+      . " var words = Drupal.Daedalus.Blueprint.labelForKey('$key') + ' › ' + Drupal.Daedalus.Blueprint.targetLabel('$key', 'a')"
+      . " + ', at ' + Drupal.Daedalus.Blueprint.labelForKey('$container_key') + ' › ' + Drupal.Daedalus.Blueprint.targetLabel('$container_key', 'a');"
+      . " return !!chip && chip.getAttribute('data-target-selector') === 'a'"
+      . " && chip.getAttribute('data-address-key') === '$container_key' && chip.getAttribute('data-address-selector') === 'a'"
+      . " && chip.querySelector('.daedalus-ai-context-label').textContent === words"
+      . " && Array.isArray(c) && c.length === 1 && c[0].key === '$key' && c[0].selector === 'a'"
+      . " && c[0].address && c[0].address.key === '$container_key' && c[0].address.selector === 'a' && c[0].label === words && c[0].number === 1;"
+      . '})()',
+      20000,
+      'A write address on an ancestor rides the chip beside the subject (", at owner › rule"), marks it, and the context provider sends the element\'s key with the facet and the address as two facts.',
+    );
+
+    // A bare select drops both facts (the facade clears them on every
+    // selection write) and restores the element's chip and the bare key.
     $session->executeScript("Drupal.Daedalus.Selection.select('$key');");
     $this->assertJsCondition(
       '(function () { var chip = document.querySelector(' . json_encode($chip_selector) . ');'
       . ' var c = Drupal.Daedalus.AiContext.collect().selected_elements;'
-      . " return !!chip && !chip.hasAttribute('data-target-selector')"
+      . " return !!chip && !chip.hasAttribute('data-target-selector') && !chip.hasAttribute('data-address-key') && !chip.hasAttribute('data-address-selector')"
       . " && chip.querySelector('.daedalus-ai-context-label').textContent === Drupal.Daedalus.Blueprint.labelForKey('$key')"
-      . " && Array.isArray(c) && c.length === 1 && c[0].key === '$key' && c[0].selector === undefined;"
+      . " && Array.isArray(c) && c.length === 1 && c[0].key === '$key' && c[0].selector === undefined && c[0].address === undefined;"
       . '})()',
       20000,
-      'Dropping the target restores the bare element chip and the bare key in the context.',
+      'Dropping the subject and address restores the bare element chip and the bare key in the context.',
     );
 
     // ----- KEPT BEHAVIOR 1 (survived the spine refactor): the selection

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Drupal\Tests\daedalus_stylish\Kernel;
 
+use Drupal\Core\Recipe\Recipe;
+use Drupal\Core\Recipe\RecipeRunner;
 use Drupal\KernelTests\KernelTestBase;
 use Drupal\field\Entity\FieldStorageConfig;
 use Drupal\layout_builder\Entity\LayoutBuilderEntityViewDisplay;
@@ -29,13 +31,16 @@ class DaedalusStylishFieldManagerTest extends KernelTestBase {
     'field',
     'text',
     'node',
+    // A type with bundles but no bundle entity type: the Edit Mode
+    // setting has no carrier on it.
+    'entity_test',
     'block',
     'layout_discovery',
     'layout_builder',
     'daedalus_blueprint',
     // daedalus_ui (and its dependency chain) provides the config schema
-    // for the per-bundle Edit Mode status third-party setting the default-on
-    // gate reads.
+    // for the per-bundle `enabled` third-party setting the default-on gate
+    // reads.
     'navigation',
     'twig_events',
     'daedalus_tempstore',
@@ -57,6 +62,7 @@ class DaedalusStylishFieldManagerTest extends KernelTestBase {
     parent::setUp();
     $this->installEntitySchema('user');
     $this->installEntitySchema('node');
+    $this->installEntitySchema('entity_test');
     $this->installSchema('node', ['node_access']);
     $this->installSchema('daedalus_stylish', ['daedalus_variant_usage']);
     $this->installConfig(['field']);
@@ -200,7 +206,7 @@ class DaedalusStylishFieldManagerTest extends KernelTestBase {
       $display->setSyncing(TRUE);
       $display->save();
       $node_type = NodeType::load($bundle);
-      $node_type->setThirdPartySetting('daedalus_ui', 'status', ['edit' => TRUE]);
+      $node_type->setThirdPartySetting('daedalus_ui', 'enabled', TRUE);
       $node_type->setSyncing(TRUE);
       $node_type->save();
     }
@@ -216,15 +222,77 @@ class DaedalusStylishFieldManagerTest extends KernelTestBase {
   }
 
   /**
+   * A type with no bundle entity type has no Edit Mode gate to pass.
+   *
+   * The per-bundle Edit Mode status lives on the bundle config entity
+   * (daedalus_ui), so a bundle-less type (entity_test here, the blueprint
+   * type on a real site) has no carrier for it; ShouldNotEditMode treats
+   * that as no veto, and the field manager must read the same setting the
+   * same way: Edit Mode counts as enabled and Layout Builder alone opens
+   * styling at the display save.
+   */
+  public function testBundleLessTypeCountsAsEditModeEnabled(): void {
+    $this->assertTrue($this->fieldManager->editModeEnabled('entity_test', 'entity_test'));
+    $this->assertFalse($this->fieldManager->isEnabled('entity_test', 'entity_test'));
+
+    LayoutBuilderEntityViewDisplay::create([
+      'targetEntityType' => 'entity_test',
+      'bundle' => 'entity_test',
+      'mode' => 'default',
+      'status' => TRUE,
+    ])->enableLayoutBuilder()->setOverridable()->save();
+    $this->assertTrue($this->fieldManager->isEnabled('entity_test', 'entity_test'));
+    $this->assertArrayHasKey('style entity_test entity_test elements', $this->container->get('user.permissions')->getPermissions());
+
+    // The opt-out is the one memory, as for any bundle.
+    $this->fieldManager->disable('entity_test', 'entity_test');
+    LayoutBuilderEntityViewDisplay::load('entity_test.entity_test.default')->save();
+    $this->assertFalse($this->fieldManager->isEnabled('entity_test', 'entity_test'));
+  }
+
+  /**
+   * An applied recipe sweeps the gate.
+   *
+   * A recipe installs modules and imports config under the syncing flag,
+   * so neither hook_install's sweep nor the gate-carrier hooks fire for
+   * what it lands; the sweep after each applied recipe converges the
+   * bundles whose gate the recipe opened, opt-outs respected.
+   */
+  public function testRecipeAppliedSweepsGate(): void {
+    foreach (['page', 'article'] as $bundle) {
+      $display = LayoutBuilderEntityViewDisplay::create([
+        'targetEntityType' => 'node',
+        'bundle' => $bundle,
+        'mode' => 'default',
+        'status' => TRUE,
+      ])->enableLayoutBuilder()->setOverridable();
+      $display->setSyncing(TRUE);
+      $display->save();
+      $node_type = NodeType::load($bundle);
+      $node_type->setThirdPartySetting('daedalus_ui', 'enabled', TRUE);
+      $node_type->setSyncing(TRUE);
+      $node_type->save();
+    }
+    $this->fieldManager->disable('node', 'article');
+    $this->assertFalse($this->fieldManager->isEnabled('node', 'page'));
+
+    $directory = $this->siteDirectory . '/gate_sweep_recipe';
+    mkdir($directory, 0777, TRUE);
+    file_put_contents($directory . '/recipe.yml', "name: 'Gate sweep'\n");
+    RecipeRunner::processRecipe(Recipe::createFromDirectory($directory));
+
+    $this->assertTrue($this->fieldManager->isEnabled('node', 'page'));
+    $this->assertFalse($this->fieldManager->isEnabled('node', 'article'));
+  }
+
+  /**
    * Config sync never auto-creates the field.
    */
   public function testConfigSyncDoesNotAutoEnable(): void {
     $this->enableLayoutBuilderDisplay('page');
 
     $node_type = NodeType::load('page');
-    $statuses = $node_type->getThirdPartySetting('daedalus_ui', 'status', []);
-    $statuses['edit'] = TRUE;
-    $node_type->setThirdPartySetting('daedalus_ui', 'status', $statuses);
+    $node_type->setThirdPartySetting('daedalus_ui', 'enabled', TRUE);
     $node_type->setSyncing(TRUE);
     $node_type->save();
 
@@ -244,19 +312,34 @@ class DaedalusStylishFieldManagerTest extends KernelTestBase {
   }
 
   /**
-   * Sets daedalus_ui's per-bundle Edit Mode status and saves.
+   * Turns the page builder on or off for a bundle (daedalus_ui `enabled`).
    */
   protected function setEditModeStatus(string $bundle, bool $enabled): void {
     $node_type = NodeType::load($bundle);
-    $statuses = $node_type->getThirdPartySetting('daedalus_ui', 'status', []);
-    if ($enabled) {
-      $statuses['edit'] = TRUE;
-    }
-    else {
-      unset($statuses['edit']);
-    }
-    $node_type->setThirdPartySetting('daedalus_ui', 'status', $statuses);
+    $node_type->setThirdPartySetting('daedalus_ui', 'enabled', $enabled);
     $node_type->save();
+  }
+
+  /**
+   * The count of a bundle's styled entities: what disabling deletes.
+   */
+  public function testCountStyled(): void {
+    $this->fieldManager->enable('node', 'page');
+    foreach (['one', 'two'] as $title) {
+      $node = Node::create(['type' => 'page', 'title' => $title]);
+      $node->get(DaedalusStylishFieldManager::FIELD_NAME)->appendItem()->setStyleMap([
+        'block:d4e5f6' => ['default' => ['padding' => '2rem']],
+      ]);
+      $node->save();
+    }
+    Node::create(['type' => 'page', 'title' => 'unstyled'])->save();
+
+    $this->assertSame(2, $this->fieldManager->countStyled('node', 'page'));
+    // Another bundle's entities are not this bundle's; a bundle with no
+    // field stores nothing.
+    $this->assertSame(0, $this->fieldManager->countStyled('node', 'article'));
+    $this->fieldManager->disable('node', 'page');
+    $this->assertSame(0, $this->fieldManager->countStyled('node', 'page'));
   }
 
   /**

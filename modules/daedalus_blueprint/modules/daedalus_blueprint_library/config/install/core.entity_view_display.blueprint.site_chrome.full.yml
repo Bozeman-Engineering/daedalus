@@ -1,0 +1,21 @@
+langcode: en
+status: true
+dependencies:
+  config:
+    - core.entity_view_mode.blueprint.full
+    - daedalus_blueprint_library.blueprint_type.site_chrome
+    - field.field.blueprint.site_chrome.layout_builder__layout
+  module:
+    - layout_builder
+third_party_settings:
+  layout_builder:
+    enabled: true
+    allow_custom: true
+    sections: {  }
+id: blueprint.site_chrome.full
+targetEntityType: blueprint
+bundle: site_chrome
+mode: full
+content: {  }
+hidden:
+  layout_builder__layout: true

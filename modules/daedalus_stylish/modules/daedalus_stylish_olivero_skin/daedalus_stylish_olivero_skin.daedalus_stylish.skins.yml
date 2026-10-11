@@ -7,6 +7,18 @@
 # `drush daedalus_stylish:sync` to get the changes onto the site. You can have
 # multiple skins, and you can switch between them on the Appearance > skins
 # page.
+#
+# This package ships no guide fragment: the suite's bindings (font-size,
+# padding, gap and the rest to the scales every shipped skin mints) are
+# its law, read under the olivero system's `enforcement: open`, so a
+# typed literal still commits and the bindings only shape the offer.
+# Which tokens the basic rows lead with is a fact about the tokens,
+# spelled here per token as `offered`: the four space steps are the
+# everyday padding and gap stops, and the gutter (the page band's inline
+# inset, not a padding step) is `offered: false`, legal and referenced
+# by the container defaults below but off the rows. A token is stored
+# as a record {value, description, offered}; a bare value here is the
+# record with the defaults (offered: true, no description).
 
 olivero:
   label: 'Olivero'
@@ -61,8 +73,11 @@ olivero:
       lg: '2rem'
       xl: '4rem'
       gutter:
-        default: '2rem'
-        narrow: '1rem'
+        value:
+          default: '2rem'
+          narrow: '1rem'
+        description: 'The page band''s inline inset and the container gap; not a padding step.'
+        offered: false
     radius:
       sm: '0.5rem'
       md: '1rem'

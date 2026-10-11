@@ -19,8 +19,8 @@ use Symfony\Component\DependencyInjection\Attribute\Autowire;
  * The same sequence the relative_selector_000N post_update hooks run, for
  * development environments and re-imported data sets: sync the shipped
  * definitions (their disk sources speak the grammar), walk every host
- * style map through the transform spine, then converge variant entities,
- * skin defaults and stored stencils. Every notable rewrite prints; the
+ * style map through the transform spine, then converge variant entities
+ * and skin defaults. Every notable rewrite prints; the
  * post_update path logs the same lines to the daedalus_stylish channel.
  */
 #[AsCommand(
@@ -73,11 +73,6 @@ final class ConvergeSelectorsCommand extends Command {
 
     $output->writeln('Converging skin defaults...');
     foreach ($this->convergence->convergeSkins() as $line) {
-      $output->writeln('  ' . $line);
-    }
-
-    $output->writeln('Converging stored stencils...');
-    foreach ($this->convergence->convergeStencils() as $line) {
       $output->writeln('  ' . $line);
     }
 

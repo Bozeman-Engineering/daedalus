@@ -6,7 +6,6 @@ dependencies:
     - node.type.page
   module:
     - layout_builder
-    - daedalus_layout
     - user
 third_party_settings:
   layout_builder:
@@ -19,12 +18,6 @@ third_party_settings:
           label: ''
         components: {  }
         third_party_settings: {  }
-  daedalus_layout:
-    promoted_blocks:
-      'inline_block:image': 'inline_block:image'
-      'inline_block:formatted_text': 'inline_block:formatted_text'
-      'inline_block:text': 'inline_block:text'
-      'inline_block:teaser': 'inline_block:teaser'
 id: node.page.default
 targetEntityType: node
 bundle: page

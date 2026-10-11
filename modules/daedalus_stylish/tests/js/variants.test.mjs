@@ -35,13 +35,12 @@ import {
   pushStyles,
   saveStyles,
   shadowClearingOps,
-  stencilProvenance,
+  blueprintProvenance,
   variantFit,
   rankVariants,
 } from '../../js/src/variant-scope.js';
 import { formatSlotKey } from '../../js/src/slot-key.js';
-import { layoutTree } from '../../js/src/style-guide.js';
-import { EMPTY_MATERIALS, roster, stencilRecord, variantRecord } from './materials-fixture.mjs';
+import { EMPTY_MATERIALS, roster, blueprintRecord, variantRecord } from './materials-fixture.mjs';
 
 const UUID_A = 'aaaaaaaa-1111-2222-3333-444444444444';
 const UUID_B = 'bbbbbbbb-1111-2222-3333-444444444444';
@@ -199,60 +198,63 @@ test('applicableVariants gates base:{tag} variants on the rendered tag', () => {
   );
 });
 
-test('stencilProvenance resolves the nearest self-or-ancestor stamp', () => {
+test('blueprintProvenance resolves the nearest self-or-ancestor stamp', () => {
   const layout = [
     {
+      kind: 'container',
       uuid: UUID_A,
       layout_id: 'layout_onecol',
-      stencil: 'cta_card',
+      blueprint: 'cta_card',
       children: [
-        { uuid: UUID_B, block_type: 'testimonial' },
+        { kind: 'block', uuid: UUID_B, block_type: 'testimonial' },
         {
+          kind: 'container',
           uuid: 'cccccccc-1111-2222-3333-444444444444',
           layout_id: 'layout_onecol',
-          stencil: 'inner_band',
-          children: [{ uuid: 'dddddddd-1111-2222-3333-444444444444', block_type: 'basic' }],
+          blueprint: 'inner_band',
+          children: [{ kind: 'block', uuid: 'dddddddd-1111-2222-3333-444444444444', block_type: 'basic' }],
         },
       ],
     },
-    { uuid: 'eeeeeeee-1111-2222-3333-444444444444', layout_id: 'layout_onecol', children: [] },
+    { kind: 'container', uuid: 'eeeeeeee-1111-2222-3333-444444444444', layout_id: 'layout_onecol', children: [] },
   ];
   // The stamped root reads its own stamp; descendants inherit it — a
   // placement is the whole placed subtree.
-  assert.equal(stencilProvenance(`container:${UUID_A}`, layout), 'cta_card');
-  assert.equal(stencilProvenance(`block:${UUID_B}`, layout), 'cta_card');
+  assert.equal(blueprintProvenance(`container:${UUID_A}`, layout), 'cta_card');
+  assert.equal(blueprintProvenance(`block:${UUID_B}`, layout), 'cta_card');
   // Part keys resolve through their root.
-  assert.equal(stencilProvenance(`block:${UUID_B}::.quote`, layout), 'cta_card');
+  assert.equal(blueprintProvenance(`block:${UUID_B}::.quote`, layout), 'cta_card');
   // A nested placement's own stamp shadows its ancestor's.
-  assert.equal(stencilProvenance('container:cccccccc-1111-2222-3333-444444444444', layout), 'inner_band');
-  assert.equal(stencilProvenance('block:dddddddd-1111-2222-3333-444444444444', layout), 'inner_band');
+  assert.equal(blueprintProvenance('container:cccccccc-1111-2222-3333-444444444444', layout), 'inner_band');
+  assert.equal(blueprintProvenance('block:dddddddd-1111-2222-3333-444444444444', layout), 'inner_band');
   // Unstamped, unknown, and treeless selections read as unprovenanced.
-  assert.equal(stencilProvenance('container:eeeeeeee-1111-2222-3333-444444444444', layout), null);
-  assert.equal(stencilProvenance('container:ffffffff-1111-2222-3333-444444444444', layout), null);
-  assert.equal(stencilProvenance(`container:${UUID_A}`, []), null);
-  assert.equal(stencilProvenance('bogus', layout), null);
+  assert.equal(blueprintProvenance('container:eeeeeeee-1111-2222-3333-444444444444', layout), null);
+  assert.equal(blueprintProvenance('container:ffffffff-1111-2222-3333-444444444444', layout), null);
+  assert.equal(blueprintProvenance(`container:${UUID_A}`, []), null);
+  assert.equal(blueprintProvenance('bogus', layout), null);
 });
 
-test('applicableVariants gates stencil-owned variants on provenance', () => {
+test('applicableVariants gates blueprint-owned variants on provenance', () => {
   const layout = [
     {
+      kind: 'container',
       uuid: UUID_A,
       layout_id: 'layout_twocol_section',
-      stencil: 'cta_card',
-      children: [{ uuid: UUID_B, block_type: null }],
+      blueprint: 'cta_card',
+      children: [{ kind: 'region', region: 'first', children: [{ kind: 'block', uuid: UUID_B, plugin_id: 'system_menu_block:main' }] }],
     },
-    { uuid: 'eeeeeeee-1111-2222-3333-444444444444', layout_id: 'layout_onecol', children: [] },
+    { kind: 'container', uuid: 'eeeeeeee-1111-2222-3333-444444444444', layout_id: 'layout_onecol', children: [] },
   ];
   // Ownership is the record's owned_by; an orphan owns by an id the
-  // roster holds no stencil for (the ONE orphan rule, isOrphaned).
+  // roster holds no blueprint for (the ONE orphan rule, isOrphaned).
   const variants = roster(
     variantRecord('free_look', { scope: 'kind:container' }),
     variantRecord('card_look', { scope: 'kind:container', owned_by: 'cta_card' }),
-    variantRecord('other_look', { scope: 'kind:container', owned_by: 'other_stencil' }),
-    variantRecord('orphan_look', { scope: 'kind:container', owned_by: 'deleted_stencil' }),
+    variantRecord('other_look', { scope: 'kind:container', owned_by: 'other_blueprint' }),
+    variantRecord('orphan_look', { scope: 'kind:container', owned_by: 'deleted_blueprint' }),
     variantRecord('block_look', { scope: 'kind:block', owned_by: 'cta_card' }),
-    stencilRecord('cta_card'),
-    stencilRecord('other_stencil'),
+    blueprintRecord('cta_card'),
+    blueprintRecord('other_blueprint'),
   );
   // On the placement: unowned plus the owner's own; other owners and
   // orphans stay out.
@@ -275,27 +277,6 @@ test('applicableVariants gates stencil-owned variants on provenance', () => {
     applicableVariants(variants, `container:${UUID_A}`).map((v) => v.id),
     ['free_look'],
   );
-});
-
-test('layoutTree keeps the stencil provenance stamps', () => {
-  const blueprint = {
-    layout_builder__layout: [
-      {
-        uuid: UUID_A,
-        layout_id: 'layout_onecol',
-        stencil: 'cta_card',
-        children: [
-          { uuid: UUID_B, block_type: 'testimonial', stencil: 'block_stencil' },
-        ],
-      },
-    ],
-  };
-  const tree = layoutTree(blueprint);
-  assert.equal(tree[0].stencil, 'cta_card');
-  assert.equal(tree[0].children[0].stencil, 'block_stencil');
-  // Unstamped nodes carry no stencil key at all.
-  const bare = layoutTree({ layout_builder__layout: [{ uuid: UUID_A, layout_id: 'layout_onecol', children: [] }] });
-  assert.equal('stencil' in bare[0], false);
 });
 
 const KEY = `block:${UUID_A}`;
@@ -375,18 +356,21 @@ const NSEC2 = 'abababab-1111-2222-3333-444444444444';
 const IMG = 'efefefef-1111-2222-3333-444444444444';
 const layout = [
   {
+    kind: 'container',
     uuid: SEC,
     layout_id: 'daedalus_stylish_container',
     children: [
-      { uuid: T1, block_type: 'text' },
-      { uuid: PLUGIN, block_type: null },
-      { uuid: T2, block_type: 'text' },
+      { kind: 'block', uuid: T1, block_type: 'text' },
+      { kind: 'block', uuid: PLUGIN, plugin_id: 'system_menu_block:main' },
+      { kind: 'block', uuid: T2, block_type: 'text' },
       {
+        kind: 'container',
         uuid: NSEC,
         layout_id: 'daedalus_stylish_container',
-        children: [{ uuid: IMG, block_type: 'image' }],
+        children: [{ kind: 'block', uuid: IMG, block_type: 'image' }],
       },
       {
+        kind: 'container',
         uuid: NSEC2,
         layout_id: 'daedalus_stylish_container',
         children: [],
@@ -416,9 +400,15 @@ test('subtreeSlotTable mirrors the apply-time resolution contract', () => {
   // keys translate); other root kinds carry no paths at all.
   assert.deepEqual(subtreeSlotTable(`block:${T2}`, layout), { [`block:${T2}`]: [] });
   assert.deepEqual(subtreeSlotTable(`entity:${SEC}`, layout), {});
-  // A multi-region section carries no slot space: named slots left the
-  // grammar with the region segment.
-  const multi = [{ uuid: SEC, layout_id: 'layout_twocol_section', regions: { first: [{ uuid: T1, block_type: 'text' }] } }];
+  // A multi-region container carries no slot space: its children are
+  // region nodes, named slots that left the grammar with the region
+  // segment.
+  const multi = [{
+    kind: 'container',
+    uuid: SEC,
+    layout_id: 'layout_twocol_section',
+    children: [{ kind: 'region', region: 'first', children: [{ kind: 'block', uuid: T1, block_type: 'text' }] }],
+  }];
   assert.deepEqual(subtreeSlotTable(`container:${SEC}`, multi), {});
 });
 
@@ -966,61 +956,6 @@ test('rankVariants slot units survive part-heavy variants', () => {
   assert.deepEqual([ranked.resolved, ranked.total], [1, 2]);
 });
 
-test('layoutTree pares the blueprint to what the walk needs', () => {
-  const blueprint = {
-    fields: { daedalus_stylish_styles: {} },
-    layout_builder__layout: [
-      {
-        uuid: SEC,
-        layout_id: 'layout_twocol_section',
-        extra: 'noise',
-        _element: { name: 'Section', type: 'Section' },
-        regions: {
-          first: [
-            {
-              uuid: NSEC,
-              layout_id: 'layout_onecol',
-              label: 'Hero band',
-              layout_settings: { label: 'Hero band' },
-              _element: { name: 'Hero band', type: 'Container' },
-              regions: { content: [{ uuid: IMG, block_type: 'image', _element: { name: 'Image', type: 'Image' }, fields: { huge: 'payload' } }] },
-            },
-            { uuid: PLUGIN, _element: { name: 'Main navigation', type: 'Main navigation' } },
-          ],
-        },
-      },
-    ],
-  };
-  const tree = layoutTree(blueprint);
-  // The naming spine's two words ride each pared node (the code view's
-  // row title, read off the broadcast alone in the satellite); the rest
-  // of the annotation stays behind.
-  assert.deepEqual(tree, [
-    {
-      uuid: SEC,
-      layout_id: 'layout_twocol_section',
-      type: 'Section',
-      name: 'Section',
-      regions: {
-        first: [
-          {
-            uuid: NSEC,
-            layout_id: 'layout_onecol',
-            type: 'Container',
-            name: 'Hero band',
-            regions: { content: [{ uuid: IMG, block_type: 'image', type: 'Image', name: 'Image' }] },
-          },
-          { uuid: PLUGIN, block_type: null, type: 'Main navigation', name: 'Main navigation' },
-        ],
-      },
-    },
-  ]);
-  // The pared tree drives the same walk the raw blueprint shape does.
-  const viaTree = subtreeSlotTable(`container:${SEC}`, tree);
-  const viaRaw = subtreeSlotTable(`container:${SEC}`, blueprint.layout_builder__layout);
-  assert.deepEqual(viaTree, viaRaw);
-});
-
 test('isVariantRef recognizes references only', () => {
   assert.equal(isVariantRef({ variants: [{ variant: 'x', fragment: '' }] }), true);
   // Layered entry: references coexist with condition overrides.
@@ -1182,17 +1117,22 @@ test('axisVocabulary drops root-only axes at nested depth', () => {
     [UUID_C]: 'layout_twocol_section',
     [UUID_D]: 'layout_twocol_section',
   };
-  // A pared layoutTree() shape: UUID_C nested in UUID_A, UUID_D in UUID_C.
+  // The lean node tree: UUID_C nested in UUID_A's first region, UUID_D in
+  // UUID_C's.
+  const region = (name, children) => ({ kind: 'region', region: name, children });
   const tree = [{
+    kind: 'container',
     uuid: UUID_A,
     layout_id: 'layout_twocol_section',
-    regions: {
-      first: [{
+    children: [
+      region('first', [{
+        kind: 'container',
         uuid: UUID_C,
         layout_id: 'layout_twocol_section',
-        regions: { first: [{ uuid: UUID_D, layout_id: 'layout_twocol_section', regions: {} }] },
-      }],
-    },
+        children: [region('first', [{ kind: 'container', uuid: UUID_D, layout_id: 'layout_twocol_section', children: [region('first', []), region('second', [])] }]), region('second', [])],
+      }]),
+      region('second', []),
+    ],
   }];
   // Top-level: the full vocabulary, tree present or not.
   assert.deepEqual(axisVocabulary(guide, `container:${UUID_A}`, {}, layouts, tree), ['style', 'proportions', 'width']);

@@ -162,7 +162,7 @@ class SectionTransformSpineTest extends NestedStorageKernelTestBase {
 
     // Idempotence: a second walk changes nothing.
     $registry = $this->container->get('daedalus_layout.component_transform_registry');
-    $this->assertFalse($registry->transformLayoutFields($entity, ['layout_builder__layout']));
+    $this->assertFalse($registry->transformLayoutFields($entity, ['layout']));
   }
 
   /**

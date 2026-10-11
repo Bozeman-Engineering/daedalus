@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Drupal\Tests\daedalus_blueprint_api\Kernel;
 
 use Drupal\Component\Serialization\Json;
+use Drupal\daedalus_blueprint\Materials\CanvasOffer;
 use Drupal\daedalus_blueprint\Materials\MaterialKind;
 use Drupal\daedalus_blueprint\Materials\MaterialsChangeSet;
 use Drupal\daedalus_blueprint\Materials\MaterialsDelivery;
@@ -25,10 +26,13 @@ use Symfony\Component\HttpFoundation\Request;
  * {upsert, remove} delta of the materials the request changed
  * (MaterialsChangeSet, resolved against the fresh roster at response time),
  * and the page-load payload carries the whole roster as {records}
- * (MaterialsDelivery). Pinned here against the hand-built test provider so
+ * (MaterialsDelivery). Both halves are resolved for the canvas the door
+ * names (CanvasOffer; the real offer rules are the library's
+ * BlueprintFitsTest). Pinned here against the hand-built test provider so
  * the contract's shape is locked independently of any real provider's
- * entity hooks (the stencil and daedalus_stylish suites cover those lanes).
+ * entity hooks (the blueprint and daedalus_stylish suites cover those lanes).
  */
+#[CoversClass(CanvasOffer::class)]
 #[CoversClass(MaterialsChangeSet::class)]
 #[CoversClass(MaterialsDelivery::class)]
 #[CoversClass(MutationResponseBuilder::class)]
@@ -67,7 +71,7 @@ class MutationResponseMaterialsTest extends BlueprintKernelTestBase {
     // Touch order within a kind is kept; kind order is the enum's, whatever
     // the touch order.
     $change_set->touch(MaterialKind::Animation, 'fade_in');
-    $change_set->touch(MaterialKind::Stencil, 'hero');
+    $change_set->touch(MaterialKind::Blueprint, 'hero');
     $change_set->touch(MaterialKind::Swatch, 'gone', 'lime_green');
     $change_set->touch(MaterialKind::Token, 'color/accent');
     // Touching twice is one change.
@@ -76,7 +80,7 @@ class MutationResponseMaterialsTest extends BlueprintKernelTestBase {
 
     $delta = $change_set->delta();
     $this->assertSame(
-      [['token', 'color/accent'], ['swatch', 'lime_green'], ['stencil', 'hero'], ['animation', 'fade_in']],
+      [['token', 'color/accent'], ['swatch', 'lime_green'], ['blueprint', 'hero'], ['animation', 'fade_in']],
       array_map(static fn (array $record): array => [$record['kind'], $record['id']], $delta['upsert']),
     );
     $this->assertSame([['kind' => 'swatch', 'id' => 'gone']], $delta['remove']);
@@ -131,7 +135,7 @@ class MutationResponseMaterialsTest extends BlueprintKernelTestBase {
     $request = Request::create('/daedalus-blueprint/entity_test/' . $entity->id(), 'POST');
 
     $change_set->touch(MaterialKind::Swatch, 'lime_green', 'gone');
-    $response = $builder->build($request, $entity, BlueprintResult::success($entity), NULL, [], 'full');
+    $response = $builder->build($request, $entity, BlueprintResult::success($this->host($entity)), NULL, [], 'full');
     $payload = Json::decode($response->getContent());
     $this->assertSame(200, $response->getStatusCode());
     $this->assertSame('lime_green', $payload['materials']['upsert'][0]['id']);
@@ -139,12 +143,12 @@ class MutationResponseMaterialsTest extends BlueprintKernelTestBase {
     $this->assertTrue($change_set->isEmpty());
 
     // Flushed once: the next response of the request carries nothing.
-    $response = $builder->build($request, $entity, BlueprintResult::success($entity), NULL, [], 'full');
+    $response = $builder->build($request, $entity, BlueprintResult::success($this->host($entity)), NULL, [], 'full');
     $this->assertSame(['upsert' => [], 'remove' => []], Json::decode($response->getContent())['materials']);
 
-    // Failures carry it too (the stencil gestures' side-effect semantics: a
+    // Failures carry it too (the blueprint gestures' side-effect semantics: a
     // mint before the failing op stands).
-    $change_set->touch(MaterialKind::Stencil, 'hero');
+    $change_set->touch(MaterialKind::Blueprint, 'hero');
     $failure = BlueprintResult::structuralFailure([new BlueprintError('operations[1]', 'UNKNOWN_REF', 'No such element.')]);
     $response = $builder->build($request, $entity, $failure, NULL, [], 'full');
     $this->assertSame(422, $response->getStatusCode());
@@ -152,7 +156,7 @@ class MutationResponseMaterialsTest extends BlueprintKernelTestBase {
 
     // The out-of-operations error shape keeps the key so the client handles
     // every failure uniformly.
-    $change_set->touch(MaterialKind::Stencil, 'hero');
+    $change_set->touch(MaterialKind::Blueprint, 'hero');
     $error = Json::decode($builder->error('WORKSPACE_REQUIRED', 'Nope.', 409)->getContent());
     $this->assertSame('hero', $error['materials']['upsert'][0]['id']);
 
@@ -168,6 +172,48 @@ class MutationResponseMaterialsTest extends BlueprintKernelTestBase {
     $this->assertTrue($detached['success']);
     $this->assertSame('button', $detached['materials']['upsert'][0]['id']);
     $this->assertSame('{}', Json::encode($detached['markup']));
+    $this->assertTrue($change_set->isEmpty());
+  }
+
+  /**
+   * The builder's three sites resolve the delta for the canvas they are handed.
+   *
+   * The fixture's blueprint carries no tree, so no canvas offers it: with
+   * a canvas a touched 'hero' is a remove at build(), error() and the
+   * materials-only payload alike, without one it is the upsert the
+   * previous test pinned; every other kind rides either way.
+   */
+  public function testPayloadsAreResolvedForTheirCanvas(): void {
+    $builder = $this->container->get('daedalus_blueprint_api.mutation_response_builder');
+    $change_set = $this->container->get('daedalus_blueprint.materials_change_set');
+    $entity = $this->createTestEntity();
+    $host = $this->host($entity);
+    $request = Request::create('/daedalus-blueprint/entity_test/' . $entity->id(), 'POST');
+    $ids = static fn (array $records): array => array_map(
+      static fn (array $record): array => [$record['kind'], $record['id']],
+      $records,
+    );
+
+    $change_set->touch(MaterialKind::Swatch, 'lime_green');
+    $change_set->touch(MaterialKind::Blueprint, 'hero');
+    $this->assertSame([['swatch', 'lime_green'], ['blueprint', 'hero']], $ids($change_set->delta()['upsert']), 'No canvas: unfiltered.');
+    $this->assertSame([], $change_set->delta()['remove']);
+    $delta = $change_set->delta($host);
+    $this->assertSame([['swatch', 'lime_green']], $ids($delta['upsert']));
+    $this->assertSame([['kind' => 'blueprint', 'id' => 'hero']], $delta['remove'], 'The canvas does not offer a rootless blueprint.');
+
+    $payload = Json::decode($builder->build($request, $entity, BlueprintResult::success($host), NULL, [], 'full', $host)->getContent());
+    $this->assertSame([['swatch', 'lime_green']], $ids($payload['materials']['upsert']));
+    $this->assertSame([['kind' => 'blueprint', 'id' => 'hero']], $payload['materials']['remove']);
+    $this->assertTrue($change_set->isEmpty());
+
+    $change_set->touch(MaterialKind::Blueprint, 'hero');
+    $error = Json::decode($builder->error('WORKSPACE_REQUIRED', 'Nope.', 409, canvas: $host)->getContent());
+    $this->assertSame(['upsert' => [], 'remove' => [['kind' => 'blueprint', 'id' => 'hero']]], $error['materials']);
+
+    $change_set->touch(MaterialKind::Blueprint, 'hero');
+    $detached = $builder->materialsPayload($host);
+    $this->assertSame(['upsert' => [], 'remove' => [['kind' => 'blueprint', 'id' => 'hero']]], $detached['materials']);
     $this->assertTrue($change_set->isEmpty());
   }
 

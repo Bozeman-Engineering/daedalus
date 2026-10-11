@@ -304,7 +304,7 @@ export const StrokeRow = ({
   const style = useStyleWell({
     stops: stops.style ?? [],
     state: stroke.parts.style,
-    label: Drupal.t('@label style', { '@label': label }),
+    label: Drupal.t('!label style', { '!label': label }),
     onPick: pickPart('style'),
     disabled,
     disabledTitle,

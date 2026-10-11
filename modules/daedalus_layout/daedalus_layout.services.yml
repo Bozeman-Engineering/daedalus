@@ -3,8 +3,20 @@ services:
     autoconfigure: true
     autowire: true
 
+  logger.channel.daedalus_layout:
+    parent: logger.channel_base
+    arguments: ['daedalus_layout']
+
   daedalus_layout.route_subscriber:
     class: Drupal\daedalus_layout\Routing\LayoutBuilderRouteSubscriber
+
+  # Core's Layout Builder write routes are closed for any storage Daedalus
+  # hosts (the requirement the route subscriber sets); a host-less storage
+  # keeps core's path.
+  daedalus_layout.access_check.hostless_storage:
+    class: Drupal\daedalus_layout\Access\HostlessStorageAccessCheck
+    tags:
+      - { name: access_check, applies_to: _daedalus_layout_hostless_storage }
 
   daedalus_layout.route_enhancer.nested:
     class: Drupal\daedalus_layout\Routing\NestedRouteEnhancer
@@ -33,6 +45,7 @@ services:
       - '@daedalus_tempstore.history_recorder'
       - '@daedalus_tempstore.history_manager'
       - '@daedalus_blueprint.daedalus_layout_adapter'
+      - '@daedalus_blueprint.host_resolver'
 
   daedalus_layout.root_entity_registry:
     class: Drupal\daedalus_layout\RootEntityRegistry
@@ -50,13 +63,45 @@ services:
   daedalus_layout.ui_build:
     class: Drupal\daedalus_layout\EventSubscriber\EditableUiBuilder
 
+  # The site frame as the page: for a theme that has a daedalus_frame, the
+  # frame's page display variant replaces the block module's on every
+  # front-end route (after the block module's subscriber, never on an
+  # admin route), with the route's entity handed over as the variant's
+  # context. A title block placed in the frame is given the route's title
+  # at the component build event, the one seam where the building plugin
+  # instance exists.
+  daedalus_layout.frame_page_variant:
+    class: Drupal\daedalus_layout\EventSubscriber\FramePageVariant
+  daedalus_layout.frame_title:
+    class: Drupal\daedalus_layout\EventSubscriber\FrameTitle
+
+  # The frame canvas (the frame's canonical route, FrameCanvas): the first
+  # visit in a session lands in Edit Mode through daedalus_ui's one door,
+  # and the canvas renders in the frame's own theme.
+  daedalus_layout.frame_canvas_mode:
+    class: Drupal\daedalus_layout\EventSubscriber\FrameCanvasMode
+  daedalus_layout.theme.negotiator.frame_canvas:
+    class: Drupal\daedalus_layout\Theme\FrameCanvasTheme
+    tags:
+      - { name: theme_negotiator, priority: 50 }
+
   # Feeds the element model's existence inference: on a Layout Builder
-  # display, non-preserved root fields never render under their own field
-  # keys (preserved_fields IS the render truth daedalus_layout owns).
-  daedalus_layout.element_model.preserved_fields:
-    class: Drupal\daedalus_layout\ElementModel\PreservedFieldsRootExistence
+  # display, core's buildMultiple() strips every display-configurable root
+  # field once sections exist, so none renders under its own field key at
+  # the root (a field block renders it under the placement instead).
+  daedalus_layout.element_model.layout_builder_root_existence:
+    class: Drupal\daedalus_layout\ElementModel\LayoutBuilderRootExistence
     tags:
       - { name: daedalus_ui.existence_feeder }
+
+  # Mints `_element.icon` for the two kinds that are this module's: a
+  # container wears the Container asset, an inline block its block type's
+  # icon setting through the icon value grammar (the Add panel's two
+  # sources), the default block icon when the type has none.
+  daedalus_layout.element_icon_provider:
+    class: Drupal\daedalus_layout\ElementIconProvider
+    tags:
+      - { name: daedalus_ui.element_icon_provider }
 
   daedalus_layout.blueprint_element_created:
     class: Drupal\daedalus_layout\EventSubscriber\BlueprintElementCreated
@@ -79,8 +124,9 @@ services:
     class: Drupal\daedalus_layout\ComponentTransform\ComponentTransformRegistry
     # Transform service IDs (tags: daedalus_layout.component_transform,
     # daedalus_layout.section_transform, daedalus_layout.host_transform) are collected in
-    # priority order by DaedalusLayoutServiceProvider and injected here.
-    arguments: ['@service_container', [], [], []]
+    # priority order by DaedalusLayoutServiceProvider and injected here, with
+    # the host resolver that answers the host object host transforms receive.
+    arguments: ['@service_container', [], [], [], '@daedalus_blueprint.host_resolver']
   Drupal\daedalus_layout\ComponentTransform\ComponentTransformRegistry: '@daedalus_layout.component_transform_registry'
 
   # Migration spine store walker 1: batched walk of content entity layout
@@ -116,3 +162,45 @@ services:
     class: Drupal\daedalus_layout\ComponentTransform\LayoutBlockToSectionTransform
     tags:
       - { name: daedalus_layout.component_transform }
+
+  # Value blocks on displays: an inline block a display names by revision
+  # id (the shape before the display became a host) becomes a value block
+  # (block_values, the block's fields in the field grammar). Run over every
+  # Layout Builder enabled display by
+  # daedalus_layout_post_update_0006_display_value_blocks() and by the
+  # presave safety net for whatever still carries the old shape.
+  daedalus_layout.value_block_transform:
+    class: Drupal\daedalus_layout\ComponentTransform\ValueBlockTransform
+    arguments:
+      $logger: '@logger.channel.daedalus_layout'
+    tags:
+      - { name: daedalus_layout.component_transform }
+
+  # The bundle form's "Offer starting designs" (the chooser's setting) and
+  # the start chooser on a content entity add form, both reached from
+  # daedalus_layout_form_alter(); the chooser's entity builder resolves
+  # the service by id.
+  daedalus_layout.form_alter.bundle_edit:
+    class: Drupal\daedalus_layout\Form\BundleEditFormAlter
+  daedalus_layout.start_chooser:
+    class: Drupal\daedalus_layout\Form\StartChooser
+
+  # The site's group vocabulary: the site declaration's groups section
+  # (daedalus_ui's reserved `site` lane, foreign to it), parsed and
+  # validated here and contributed to the spine's dialect catalog on its
+  # build event (the catalog is what every surface reads; the spine cannot
+  # read the declaration family). Autowired from the declarations service;
+  # the subscriber tag is autoconfigured.
+  daedalus_layout.site_groups:
+    class: Drupal\daedalus_layout\SiteGroups
+  Drupal\daedalus_layout\SiteGroups: '@daedalus_layout.site_groups'
+
+  # The face: what a canvas can place, as one list. One face per block the
+  # placement restrictions admit on the host (the Container and the block
+  # types as the site's own pieces, every other plugin under core's
+  # category), the site's group vocabulary and the editor's own marks
+  # (`favorites` under daedalus_layout in daedalus_ui's EditorSettings).
+  # Blueprints reach the client through the materials store, not here.
+  daedalus_layout.add_panel_faces:
+    class: Drupal\daedalus_layout\AddPanel\AddPanelFaces
+  Drupal\daedalus_layout\AddPanel\AddPanelFaces: '@daedalus_layout.add_panel_faces'

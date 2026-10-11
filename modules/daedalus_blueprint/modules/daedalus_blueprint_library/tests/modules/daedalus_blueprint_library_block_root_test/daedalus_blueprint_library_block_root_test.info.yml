@@ -1,0 +1,8 @@
+name: Daedalus Blueprint Library Block Root Test
+type: module
+description: 'Ships a blueprint fixture whose layout root is a block node, which the file grammar refuses (roots are always containers).'
+package: Testing
+core_version_requirement: ^10.3 || ^11
+hidden: true
+dependencies:
+  - daedalus:daedalus_blueprint_library

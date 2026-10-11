@@ -9,6 +9,7 @@ use Drupal\Core\Entity\EntityInterface;
 use Drupal\Core\Routing\RedirectDestinationInterface;
 use Drupal\Core\Url;
 use Drupal\daedalus_blueprint\EntityStorageHandler;
+use Drupal\daedalus_ui\DaedalusUi;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\HttpFoundation\Cookie;
 use Symfony\Component\HttpFoundation\RedirectResponse;
@@ -18,15 +19,26 @@ use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 /**
  * The top bar's Save: an adapter over the storage handler's commit door.
  *
- * Staging never saves; this route is the one commit of an edited entity.
- * Each entity the route names is loaded as its working copy (the staged
- * entity while a stage exists, the stored row otherwise) and handed to
- * EntityStorageHandler::commit(), which applies the bundle's revision
+ * Staging never saves; this route is the one commit of an edited host.
+ * The host the route names (a content entity, or a Layout Builder display
+ * whose template is staged) is loaded as its working copy (the staged
+ * copy while a stage exists, the stored row otherwise) and handed to
+ * EntityStorageHandler::commit(), which applies the host's persistence
  * policy, saves the working copy as it is, clears the stage and fires the
  * persisted hook (daedalus_edit's implementer invalidates the render tag).
  * Nothing here judges or copies fields: the spine judged every write on the
  * way in, so what the stage holds is what the database gets, computed and
  * key fields included (the URL alias, the published flag, the owner).
+ *
+ * The redirect and the cookie are two facts, not one. The redirect goes
+ * where the client asked (`destination`): the edited page itself, or the
+ * page a portal's leave came from (Drupal.Daedalus.Portal.leave puts it on
+ * the canvas URL, and the top bar passes it on), so saving a header or a
+ * footer returns the editor to the page they were on. The
+ * `navigationMode=none` cookie that drops Edit Mode is scoped to the SAVED
+ * host's editing path (ModeState: the cookie is scoped to the edited page's
+ * path), never to the destination: the saved entity is what left Edit Mode;
+ * the page the editor returns to keeps whatever mode it was in.
  */
 class Tempstore extends ControllerBase {
 
@@ -35,11 +47,14 @@ class Tempstore extends ControllerBase {
    *
    * @param \Drupal\daedalus_blueprint\EntityStorageHandler $storageHandler
    *   The storage handler: the working copy's loader and its commit door.
+   * @param \Drupal\daedalus_ui\DaedalusUi $daedalusUi
+   *   The editable UI: the one reader of a host's editing path.
    * @param \Drupal\Core\Routing\RedirectDestinationInterface $redirect_destination
    *   The redirect destination.
    */
   public function __construct(
     protected EntityStorageHandler $storageHandler,
+    protected DaedalusUi $daedalusUi,
     RedirectDestinationInterface $redirect_destination,
   ) {
     // ControllerBase declares the property untyped; assign, do not redeclare.
@@ -52,43 +67,43 @@ class Tempstore extends ControllerBase {
   public static function create(ContainerInterface $container) {
     return new static(
       $container->get('daedalus_blueprint.storage_handler'),
+      $container->get('daedalus_ui.ui'),
       $container->get('redirect.destination'),
     );
   }
 
   /**
-   * Commits the route's entities and redirects out of Edit Mode.
+   * Commits the route's host and redirects, the saved host out of Edit Mode.
    *
-   * The route parameter names the entities as `{type}.{id}` pairs joined by
-   * `::`; each is committed through the door, in order.
+   * @param \Symfony\Component\HttpFoundation\Request $request
+   *   The request.
+   * @param string $entity_type
+   *   The host's entity type id.
+   * @param \Drupal\Core\Entity\EntityInterface $entity
+   *   The host entity, upcast by the route for access checking.
    */
-  public function save(Request $request) {
-    $parameter = $request->attributes->get('entities');
-    if (empty($parameter)) {
-      throw new \InvalidArgumentException('No entities to save.');
+  public function save(Request $request, string $entity_type, EntityInterface $entity) {
+    $host = $this->storageHandler->load($entity_type, $entity->id());
+    if ($host === NULL) {
+      throw new NotFoundHttpException(sprintf('No %s %s to save.', $entity_type, $entity->id()));
     }
-    $first_entity = NULL;
-    foreach (explode('::', $parameter) as $pair) {
-      [$entity_type_id, $entity_id] = explode('.', $pair);
-      $entity = $this->storageHandler->load($entity_type_id, $entity_id);
-      if ($entity === NULL) {
-        throw new NotFoundHttpException(sprintf('No %s %s to save.', $entity_type_id, $entity_id));
-      }
-      $this->storageHandler->commit($entity);
-      $first_entity ??= $entity;
-    }
+    $this->storageHandler->commit($host);
+    $saved = $host->entity();
 
     $destination = $this->getRedirectDestination();
-    if ($this->shouldRecomputeDestination($request->query->get('destination'), $first_entity)) {
+    if ($this->shouldRecomputeDestination($request->query->get('destination'), $saved)) {
       // If the page title was changed, the autogenerated URL could be
       // different.
-      $url = $first_entity->toUrl()->toString();
+      $url = $saved->toUrl()->toString();
       $request->query->set('destination', $url);
       $destination->set($url);
     }
-    $destination = $destination->get();
-    $response = new RedirectResponse($destination);
-    $response->headers->setCookie((new Cookie('navigationMode', 'none', 0, $destination, NULL, FALSE, FALSE)));
+    $response = new RedirectResponse($destination->get());
+    // The saved host leaves Edit Mode; the cookie is scoped to ITS editing
+    // path (a node's canonical URL under its fresh alias, a block_content's
+    // standalone canvas), whatever page the redirect lands on.
+    $edited_path = $this->daedalusUi->getEditingUrl($saved)->toString();
+    $response->headers->setCookie((new Cookie('navigationMode', 'none', 0, $edited_path, NULL, FALSE, FALSE)));
     return $response;
   }
 
@@ -101,17 +116,21 @@ class Tempstore extends ControllerBase {
    * other routed destination is honored as provided: for example the
    * standalone block_content editing surface
    * (daedalus_ui.block_content.edit), where the canonical URL would
-   * leave the editing surface.
+   * leave the editing surface, or a template's manage-layout route. A host
+   * with no canonical page (a display) never recomputes.
    *
    * @param string|null $destination
    *   The destination query parameter, if any.
    * @param \Drupal\Core\Entity\EntityInterface $entity
-   *   The first saved entity.
+   *   The saved host entity.
    *
    * @return bool
    *   TRUE when the redirect should go to the entity's canonical URL.
    */
   private function shouldRecomputeDestination(?string $destination, EntityInterface $entity): bool {
+    if (!$entity->hasLinkTemplate('canonical')) {
+      return FALSE;
+    }
     if (empty($destination)) {
       return TRUE;
     }

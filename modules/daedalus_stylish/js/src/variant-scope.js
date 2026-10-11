@@ -18,7 +18,7 @@
  * '::.class-name' for sub-elements), so applied to element key E,
  * relative key K's entry lands at map key E + K. Composition
  * capture (save/push from a section) extends the relative space with
- * slot-key paths: the staged layout tree translates child map entries
+ * slot-key paths: the blueprint's lean node tree translates child map entries
  * (container:{uuid}, block:{uuid}, block:{uuid}:{field}) into
  * type-qualified positional slot keys (see slot-key.js for the grammar).
  */
@@ -26,9 +26,10 @@ import {
   parseKey,
   bundleForKey,
   declarationForKey,
-  isSectionNode,
+  isContainerNode,
+  isFlowNode,
   landingForKey,
-  sectionChildNodes,
+  nodeChildren,
 } from './style-guide.js';
 import { formatSlotKey, fragmentStyles } from './slot-key.js';
 import { INSTANCE_PART } from './parts.js';
@@ -195,7 +196,7 @@ export const entryVariants = (entry) =>
 export const isVariantRef = (entry) => entryRefs(entry).length > 0;
 
 /**
- * Whether a section uuid sits at NESTED depth in the layout tree.
+ * Whether a section uuid sits at NESTED depth in the lean node tree.
  *
  * The client twin of ElementLocator::isNestedSection, with the same
  * degradation posture: an unknown placement (empty tree, uuid not found —
@@ -205,8 +206,8 @@ export const isVariantRef = (entry) => entryRefs(entry).length > 0;
  * offers only (the axis vocabulary's root-only axes): a grant is a
  * function of the declaration alone, so nothing legality-shaped asks here.
  */
-export const isNestedSectionUuid = (layout, uuid) => {
-  const sections = Array.isArray(layout) ? layout : [];
+export const isNestedSectionUuid = (tree, uuid) => {
+  const sections = Array.isArray(tree) ? tree : [];
   if (sections.some((section) => section?.uuid === uuid)) {
     return false;
   }
@@ -239,8 +240,8 @@ export const isNestedSectionUuid = (layout, uuid) => {
  * Depth enters here and only here (the served node is depth-blind: one
  * layout, one node, any placement): axes the roster stamps root-only
  * (`root_only`, the {axis: {depth: root}} qualifier resolved
- * server-side) drop from a section's vocabulary when the layout tree
- * (source.getLayout(); the satellite's arrives by broadcast) positively
+ * server-side) drop from a section's vocabulary when the lean node tree
+ * (source.getTree(); the satellite's arrives by broadcast) positively
  * places the section at NESTED depth, and from every rule's (a rule's
  * matches are never top-level: RootOnlyVariantChecker refuses a
  * root-only variant at any rule). Soft semantics: this gates what is
@@ -257,7 +258,7 @@ export const axisVocabulary = (
   key,
   blockTypes = {},
   sectionLayouts = {},
-  layout = [],
+  tree = [],
 ) => {
   const full = typeof key === 'string' ? parseKey(key) : null;
   const parsed = full ?? parseKey(typeof key === 'string' ? key.split('::')[0] : key);
@@ -284,7 +285,7 @@ export const axisVocabulary = (
   const names = Object.keys(axes);
   if (
     rule ||
-    (parsed.kind === 'container' && isNestedSectionUuid(layout, parsed.uuid))
+    (parsed.kind === 'container' && isNestedSectionUuid(tree, parsed.uuid))
   ) {
     const filtered = names.filter((axis) => axes[axis]?.root_only !== true);
     return filtered.length ? filtered : ['style'];
@@ -538,7 +539,7 @@ const SCOPE_FAMILIES = [
  * match every element: whether an element renders as the tag is a
  * live-DOM fact the declaration-space families cannot express, so the tag
  * gate is soft enforcement at OFFER time (applicableVariants' tag filter)
- * — the stencil-ownership posture: offering filters, worn references
+ * — the blueprint-ownership posture: offering filters, worn references
  * always render and stay detachable.
  */
 export const scopeMatches = (
@@ -582,12 +583,12 @@ export const familyKindOf = (scope) =>
   null;
 
 /**
- * An element's stencil provenance: the nearest self-or-ancestor stamp.
+ * An element's blueprint provenance: the nearest self-or-ancestor stamp.
  *
- * The offering read for stencil-owned variants: instantiate_stencil stamps
- * the source stencil's machine name onto the placed ROOT only, and the
- * serializer surfaces it as the node's read-only `stencil` key (the same
- * stamp daedalus_layout's update-stencil verb reads). A placement is the whole
+ * The offering read for blueprint-owned variants: place_blueprint stamps
+ * the source blueprint's machine name onto the placed ROOT only, and the
+ * serializer surfaces it as the node's read-only `blueprint` key (the same
+ * stamp daedalus_layout's update-blueprint verb reads). A placement is the whole
  * placed subtree, so every element under a stamped root inherits its
  * provenance — the walk carries the nearest ancestor's stamp down, and a
  * nested placement's own stamp shadows its parent's. Degradation mirrors
@@ -596,14 +597,14 @@ export const familyKindOf = (scope) =>
  *
  * @param {string} key
  *   A selectable key (root or '::.class' part form).
- * @param {Array} layout
- *   The staged layout tree (style-guide.js layoutTree(); the satellite's
- *   arrives by broadcast).
+ * @param {Array} tree
+ *   The lean node tree (source.getTree(); the satellite's arrives by
+ *   broadcast).
  *
  * @return {?string}
- *   The stencil machine name, or null.
+ *   The blueprint machine name, or null.
  */
-export const stencilProvenance = (key, layout = []) => {
+export const blueprintProvenance = (key, tree = []) => {
   const parsed = parseKey(typeof key === 'string' ? key.split('::')[0] : key);
   if (!parsed?.uuid) {
     return null;
@@ -612,29 +613,29 @@ export const stencilProvenance = (key, layout = []) => {
   const walk = (nodes, inherited) => {
     for (const node of Array.isArray(nodes) ? nodes : []) {
       const stamp =
-        typeof node?.stencil === 'string' && node.stencil !== ''
-          ? node.stencil
+        typeof node?.blueprint === 'string' && node.blueprint !== ''
+          ? node.blueprint
           : inherited;
       if (node?.uuid === parsed.uuid) {
         found = stamp;
         return true;
       }
-      if (walk(sectionChildNodes(node), stamp)) {
+      if (walk(nodeChildren(node), stamp)) {
         return true;
       }
     }
     return false;
   };
-  walk(layout, null);
+  walk(tree, null);
   return found;
 };
 
 /**
- * Whether a variant's owning stencil is gone: the ONE orphan rule.
+ * Whether a variant's owning blueprint is gone: the ONE orphan rule.
  *
  * A record carries its owner's id (`owned_by`), never an orphan flag: the
- * owner is orphaned exactly when the roster holds no stencil of that id
- * (deleted, or a file stencil discovery no longer serves). An orphaned
+ * owner is orphaned exactly when the roster holds no blueprint of that id
+ * (deleted, or a file blueprint discovery no longer serves). An orphaned
  * variant offers nowhere and its wearers keep rendering.
  *
  * @param {object} materials
@@ -645,7 +646,7 @@ export const stencilProvenance = (key, layout = []) => {
  * @return {boolean}
  */
 export const isOrphaned = (materials, variant) =>
-  variant?.owned_by != null && !materials.has('stencil', variant.owned_by);
+  variant?.owned_by != null && !materials.has('blueprint', variant.owned_by);
 
 /**
  * Whether a variant's ownership lets an element's picker offer it.
@@ -686,11 +687,11 @@ const tagOffers = (variant, tag) =>
  *
  * Three gates: the scope family rule; the tag rule for base:{tag}
  * variants (offered only when the selection's rendered tag — resolved
- * from the live canvas by the caller — matches); and, for stencil-owned
+ * from the live canvas by the caller — matches); and, for blueprint-owned
  * variants, the ownership rule against the element's placement provenance
- * (the layout tree resolves it; without a tree owned variants simply do
+ * (the lean node tree resolves it; without a tree owned variants simply do
  * not offer, the degraded posture that never over-offers). The offer is a
- * roster question (ownership needs the stencils beside the variants), so
+ * roster question (ownership needs the blueprints beside the variants), so
  * the roster is the input, not a variant list.
  *
  * @param {object} materials
@@ -704,10 +705,10 @@ export const applicableVariants = (
   key,
   blockTypes = {},
   sectionLayouts = {},
-  layout = [],
+  tree = [],
   tag = null,
 ) => {
-  const provenance = stencilProvenance(key, layout);
+  const provenance = blueprintProvenance(key, tree);
   return materials
     .ofKind('variant')
     .filter(
@@ -760,36 +761,33 @@ export const elementEntries = (map, key) => {
 export const hasCustomStyles = (map, key) =>
   Object.keys(elementEntries(map, key)).length > 0;
 
-const findSection = (sections, uuid) => {
-  for (const section of Array.isArray(sections) ? sections : []) {
-    if (section?.uuid === uuid) {
-      return section;
+const findSection = (nodes, uuid) => {
+  for (const node of Array.isArray(nodes) ? nodes : []) {
+    if (!isContainerNode(node)) {
+      continue;
     }
-    for (const node of sectionChildNodes(section)) {
-      if (isSectionNode(node)) {
-        const found = findSection([node], uuid);
-        if (found) {
-          return found;
-        }
-      }
+    if (node.uuid === uuid) {
+      return node;
+    }
+    const found = findSection(nodeChildren(node), uuid);
+    if (found) {
+      return found;
     }
   }
   return null;
 };
 
-const findComponent = (sections, uuid) => {
-  for (const section of Array.isArray(sections) ? sections : []) {
-    for (const node of sectionChildNodes(section)) {
-      if (isSectionNode(node)) {
-        const found = findComponent([node], uuid);
-        if (found) {
-          return found;
-        }
-        continue;
+const findComponent = (nodes, uuid) => {
+  for (const node of Array.isArray(nodes) ? nodes : []) {
+    if (isContainerNode(node)) {
+      const found = findComponent(nodeChildren(node), uuid);
+      if (found) {
+        return found;
       }
-      if (node?.uuid === uuid) {
-        return node;
-      }
+      continue;
+    }
+    if (node?.uuid === uuid) {
+      return node;
     }
   }
   return null;
@@ -798,23 +796,24 @@ const findComponent = (sections, uuid) => {
 /**
  * Maps the staged subtree's selectable keys to slot-key segment paths.
  *
- * The translation table behind composition capture: walking the layout
- * tree (the blueprint's layout_builder__layout shape, or the pared
- * layoutTree() projection) from the given root element, every child the
- * slot grammar can address maps to its segments (formatSlotKey() turns
- * them into stored keys). Mirrors the server's apply-time resolution walk
+ * The translation table behind composition capture: walking the lean
+ * node tree (the blueprint's `layout`; the satellite's arrives by
+ * broadcast) from the given root element, every child the slot grammar
+ * can address maps to its segments (formatSlotKey() turns them into
+ * stored keys). Mirrors the server's apply-time resolution walk
  * (SubtreeSlotKeys) exactly:
  *
  * - Only inline blocks (block_type resolved) get block segments, and only
  *   they advance the per-bundle index — a non-inline placement is not
  *   addressable, so it is transparent to the captured keys and the count.
- * - A nested section node gets a container(n) segment (counted
- *   positionally among the flow's section nodes) and recursion opens its
- *   own children under the container's path.
- * - Only CONTAINER sections (a `children` list) carry a slot space: their
- *   children are one ordered flow the positional grammar can address. A
- *   multi-region section's children live in named slots the grammar no
- *   longer speaks, so it contributes no slots of its own (it is still
+ * - A nested container node gets a container(n) segment (counted
+ *   positionally among the flow's container nodes) and recursion opens
+ *   its own children under the container's path.
+ * - Only container FLOWS (isFlowNode: element children directly, no
+ *   region nodes) carry a slot space: their children are one ordered flow
+ *   the positional grammar can address. A multi-region container's
+ *   children live in region nodes, named slots the grammar no longer
+ *   speaks, so it contributes no slots of its own (it is still
  *   addressable AS a child via container(n)).
  * - A block root maps to [] so its block:{uuid}:{field} keys translate to
  *   field(name) paths.
@@ -825,16 +824,16 @@ const findComponent = (sections, uuid) => {
  * @return {object}
  *   Full map base keys → slot segment arrays for the root's subtree.
  */
-export const subtreeSlotTable = (key, layout) => {
+export const subtreeSlotTable = (key, tree) => {
   const table = {};
   const addSection = (section, prefix) => {
-    if (!Array.isArray(section?.children)) {
+    if (!isFlowNode(section)) {
       return;
     }
     const counts = {};
     let containers = 0;
     section.children.forEach((node) => {
-      if (isSectionNode(node)) {
+      if (isContainerNode(node)) {
         containers += 1;
         const containerPath = [
           ...prefix,
@@ -862,12 +861,12 @@ export const subtreeSlotTable = (key, layout) => {
     return table;
   }
   if (parsed.form === 'container') {
-    const section = findSection(layout, parsed.uuid);
+    const section = findSection(tree, parsed.uuid);
     if (section) {
       addSection(section, []);
     }
   } else if (parsed.form === 'block') {
-    if (findComponent(layout, parsed.uuid)) {
+    if (findComponent(tree, parsed.uuid)) {
       // A block root opens at its fields: the [] entry lets
       // block:{uuid}:{field} keys translate to field(name) paths.
       table[key] = [];
@@ -885,10 +884,10 @@ export const subtreeSlotTable = (key, layout) => {
  * child's key and its part keys are that child's one slot). Counting
  * style keys here double-counted parts and condition splits, which is
  * how a fully-fitting variant could badge as partial. A slot RESOLVES
- * when the target's staged layout actually has its element — the root
+ * when the target's staged tree actually has its element — the root
  * ('' always resolves) or a slot present in subtreeSlotTable(). A
  * trailing field(name) segment rides its block's resolution (fields are
- * not in the layout tree; delivery-wise a field slot applies whenever
+ * not in the node tree; delivery-wise a field slot applies whenever
  * its block exists), so 'field(x)' on a plain block root resolves like
  * the root does. Unresolved slots are inert CSS, not breakage — the
  * picker ranks and badges, never hides.
@@ -897,9 +896,9 @@ export const subtreeSlotTable = (key, layout) => {
  *   Resolved and total slot counts (a variant with no styles is a full
  *   fit of zero).
  */
-export const variantFit = (styles, key, layout = []) => {
+export const variantFit = (styles, key, tree = []) => {
   const resolvable = new Set(['']);
-  Object.values(subtreeSlotTable(key, layout)).forEach((segments) => {
+  Object.values(subtreeSlotTable(key, tree)).forEach((segments) => {
     resolvable.add(formatSlotKey(segments));
   });
   const slots = new Set();
@@ -929,9 +928,9 @@ export const variantFit = (styles, key, layout = []) => {
  * @return {Array<{variant: object, resolved: number, total: number}>}
  *   One entry per variant, badge-ready.
  */
-export const rankVariants = (variants, key, layout = []) =>
+export const rankVariants = (variants, key, tree = []) =>
   (Array.isArray(variants) ? variants : [])
-    .map((variant) => ({ variant, ...variantFit(variant?.value, key, layout) }))
+    .map((variant) => ({ variant, ...variantFit(variant?.value, key, tree) }))
     .sort((a, b) => {
       const fullA = a.resolved === a.total ? 1 : 0;
       const fullB = b.resolved === b.total ? 1 : 0;
@@ -973,12 +972,12 @@ export const mergeEntry = (winner, loser) => {
  * minted per content instance, so their styles are instance-bound and
  * never travel in a variant (see captureSources).
  *
- * With no layout tree (an out-of-date satellite, a non-layout host) the
+ * With no node tree (an out-of-date satellite, a non-layout host) the
  * table is empty and this degrades to elementEntries() — today's
  * single-element capture.
  */
-export const captureEntries = (map, key, layout = []) => {
-  const sources = captureSources(map, key, layout);
+export const captureEntries = (map, key, tree = []) => {
+  const sources = captureSources(map, key, tree);
   const entries = {};
   sources.direct.forEach(({ relative, entry }) => {
     entries[relative] = entries[relative]
@@ -1053,7 +1052,7 @@ const travellingRefs = (entry) =>
  *   subtree) before placing deeper fragment references, giving
  *   deterministic outcomes for captured nested compositions.
  */
-export const captureSources = (map, key, layout = []) => {
+export const captureSources = (map, key, tree = []) => {
   const own = [];
   const addOwn = (relative, entry) => {
     if (!isEntryObject(entry) || isInstanceRelative(relative)) {
@@ -1079,7 +1078,7 @@ export const captureSources = (map, key, layout = []) => {
       addOwn(relative, entry);
     }
   });
-  const table = subtreeSlotTable(key, layout);
+  const table = subtreeSlotTable(key, tree);
   const direct = [];
   Object.entries(map ?? {}).forEach(([mapKey, entry]) => {
     if (!isEntryObject(entry)) {
@@ -1169,8 +1168,8 @@ export const captureSources = (map, key, layout = []) => {
  *   The style map (mirror view).
  * @param {string} key
  *   The capture root's selectable key.
- * @param {Array} layout
- *   The staged layout tree (subtreeSlotTable's shape).
+ * @param {Array} tree
+ *   The lean node tree (subtreeSlotTable's input).
  * @param {?Array<object>} variants
  *   The store's variant records.
  * @param {string} axis
@@ -1184,11 +1183,11 @@ export const captureSources = (map, key, layout = []) => {
 export const saveStyles = (
   map,
   key,
-  layout = [],
+  tree = [],
   variants = [],
   axis = 'style',
 ) => {
-  const entries = captureEntries(map, key, layout);
+  const entries = captureEntries(map, key, tree);
   const sameAxisRefs = (baseKey, fragmentOnly) =>
     entryRefs(map?.[baseKey])
       .map((ref) => ({ ref, resolved: findVariant(variants, ref.variant) }))
@@ -1228,9 +1227,9 @@ export const saveStyles = (
   const replaced = rootWorn
     .filter(({ ref }) => ref.fragment === '')
     .map(({ resolved }) => resolved);
-  const table = subtreeSlotTable(key, layout);
+  const table = subtreeSlotTable(key, tree);
   const capturedBases = new Set(
-    captureSources(map, key, layout).direct.map(({ key: mapKey }) => {
+    captureSources(map, key, tree).direct.map(({ key: mapKey }) => {
       const pos = mapKey.indexOf('::');
       return pos === -1 ? mapKey : mapKey.slice(0, pos);
     }),
@@ -1341,7 +1340,7 @@ export const pushStyles = (variant, entry, captured) => {
  * @return {Array<object>}
  *   update_style operations, empty when nothing shadows.
  */
-export const shadowClearingOps = (map, key, layout, variant, variants) => {
+export const shadowClearingOps = (map, key, tree, variant, variants) => {
   const isSame = (reference) => reference === variant?.id;
   const competitorStyles = (mapKey, relative) => {
     const styles = [];
@@ -1370,7 +1369,7 @@ export const shadowClearingOps = (map, key, layout, variant, variants) => {
   };
 
   const ops = [];
-  const { own, direct } = captureSources(map, key, layout);
+  const { own, direct } = captureSources(map, key, tree);
   [...direct, ...own].forEach(({ key: mapKey, relative, entry }) => {
     const covered = variant?.value?.[relative];
     if (!isEntryObject(covered)) {

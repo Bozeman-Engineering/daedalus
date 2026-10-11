@@ -4,7 +4,8 @@ import {
   CLASS_PART,
   parseSelector,
 } from '../../../../daedalus_ui/js/edit_mode/materials/relative-selector.js';
-import { ELEMENT_LAYER, variantLayerId } from './layers.js';
+import { ELEMENT_LAYER, documentLayerId } from './layers.js';
+import { stagesLines } from '../pending.js';
 
 /**
  * The variant-document model (pure; the editing session renders it).
@@ -76,7 +77,7 @@ export const wearingOf = (entry, reference) =>
  * @param {?object} styles
  *   The variant's element-relative styles.
  * @param {?object} session
- *   The open pending session (only update sessions stage).
+ *   The open pending session (update and skin sessions stage).
  * @param {?string} rootKind
  *   The document's root kind, one of slot-key.js ROOT_KINDS, or null
  *   (unresolvable scope: only path-less keys parse).
@@ -96,7 +97,7 @@ export const documentTree = (styles, session = null, rootKind = null) => {
       keys.add(key);
     }
   });
-  (session?.kind === 'update' ? session.lines : []).forEach((line) => {
+  (stagesLines(session) ? session.lines : []).forEach((line) => {
     if (typeof line.relative === 'string') {
       keys.add(line.relative);
     }
@@ -204,7 +205,9 @@ export const documentTree = (styles, session = null, rootKind = null) => {
  *   The document's reference (the variant's record id).
  *
  * @return {Map<string, string[]>}
- *   Fragment → carrier keys (elements and rules), both in map order.
+ *   Fragment → carrier keys (elements and rules), both in map order (the
+ *   map's canonical order is the document's, styleMapOf: node-less keys
+ *   first, then the nodes in document order).
  */
 export const carriedBy = (map, reference) => {
   const carriers = new Map();
@@ -280,7 +283,7 @@ export const documentBaselineLines = (variantStyles, slot, condition) => {
  * @param {Array<object>} baseline
  *   documentBaselineLines()'s result.
  * @param {?object} session
- *   The open pending session (only update sessions overlay).
+ *   The open pending session (update and skin sessions overlay).
  * @param {string} slot
  *   The document key.
  * @param {string} condition
@@ -291,7 +294,7 @@ export const documentBaselineLines = (variantStyles, slot, condition) => {
  */
 export const overlaySessionLines = (baseline, session, slot, condition) => {
   const staged = new Map();
-  (session?.kind === 'update' ? session.lines : [])
+  (stagesLines(session) ? session.lines : [])
     .filter((line) => line.relative === slot && line.condition === condition)
     .forEach((line) => staged.set(line.property, line));
   const lines = [];
@@ -362,7 +365,8 @@ export const wearerWinners = (wearerLines) => {
  * The layer beating a document line on this wearer, if any.
  *
  * Null when the document's own value wins (either half of a composition
- * pair: the winning layer is the document's variant layer), or when
+ * pair: the winning layer is the document's own layer, a variant's or
+ * the skin's at its scope), or when
  * nothing else defines the property; then the document line is what the
  * wearer shows (or will show on Push).
  *
@@ -378,7 +382,7 @@ export const wearerWinners = (wearerLines) => {
  */
 export const documentLineWinner = (winners, reference, property) =>
   winners.has(property) &&
-  winners.get(property).layer !== variantLayerId(reference)
+  winners.get(property).layer !== documentLayerId(reference)
     ? winners.get(property)
     : null;
 
@@ -404,7 +408,7 @@ export const documentLineWinner = (winners, reference, property) =>
  *   The document key (for a wearer-context read: the wearing fragment +
  *   the target's element-relative key).
  * @param {?object} session
- *   The open pending session (only update sessions overlay).
+ *   The open pending session (update and skin sessions overlay).
  *
  * @return {{entry: object, pending: object}}
  *   entry: condition → property → value (the sheet Push produces);
@@ -416,7 +420,7 @@ export const documentSlotEntry = (variantStyles, slot, session) => {
       isEntryObject(variantStyles?.[slot]) ? variantStyles[slot] : {},
     ).filter((name) => name !== 'variants'),
   );
-  const staged = (session?.kind === 'update' ? session.lines : []).filter(
+  const staged = (stagesLines(session) ? session.lines : []).filter(
     (line) => line.relative === slot,
   );
   staged.forEach((line) => conditions.add(line.condition));
@@ -475,8 +479,8 @@ export const documentSlotEntry = (variantStyles, slot, session) => {
  *   The worn reference, verbatim.
  * @param {?Array<object>} variants
  *   The store's variant records.
- * @param {Array} layout
- *   The staged layout tree (subtreeSlotTable's shape).
+ * @param {Array} tree
+ *   The lean node tree (subtreeSlotTable's input).
  *
  * @return {Array<{relative: string, condition: string, property: string,
  *   value: string}>}
@@ -488,7 +492,7 @@ export const updateFromElementLines = (
   key,
   reference,
   variants,
-  layout = [],
+  tree = [],
 ) => {
   const wearing = wearingOf(map?.[key], reference);
   const variant = findVariant(variants, reference);
@@ -517,7 +521,7 @@ export const updateFromElementLines = (
       });
     });
   };
-  const { own, direct } = captureSources(map, key, layout);
+  const { own, direct } = captureSources(map, key, tree);
   own.forEach(({ relative, entry }) => add(wearing.fragment + relative, entry));
   if (wearing.fragment === '') {
     direct.forEach(({ relative, entry }) => add(relative, entry));
@@ -541,15 +545,15 @@ export const updateFromElementLines = (
  *   The style map (mirror view).
  * @param {string} anchor
  *   The save session's capture root.
- * @param {Array} layout
- *   The staged layout tree.
+ * @param {Array} tree
+ *   The lean node tree.
  *
  * @return {Map<string, string>}
  *   Full map key → capture-relative key.
  */
-export const captureRelativeTable = (map, anchor, layout = []) => {
+export const captureRelativeTable = (map, anchor, tree = []) => {
   const table = new Map();
-  const { own, direct } = captureSources(map, anchor, layout);
+  const { own, direct } = captureSources(map, anchor, tree);
   [...own, ...direct].forEach(({ key, relative }) => table.set(key, relative));
   return table;
 };

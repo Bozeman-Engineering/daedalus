@@ -12,7 +12,7 @@ use Drupal\daedalus_blueprint\OperationHandler\OperationHandlerInterface;
  * The page language is the ONE grammar the AI surface speaks for pages:
  * page_edit admits exactly the ops the registered handlers declare here
  * (the DOM vocabulary plus the gestures whose only home is a page, such as
- * capturing a stencil), and the cached catalog teaches the same set. A
+ * capturing a blueprint), and the cached catalog teaches the same set. A
  * handler declaring an op here takes refs the page language spells (a
  * printed uuid or a live data-alias) wherever it names an element, the
  * alias map being the spine's to resolve.

@@ -21,7 +21,10 @@
         if (!editPlugin) {
           return null;
         }
-        return editPlugin.getMainEntityInfo().viewMode;
+        // No main entity wrapper on this page (a route with no canvas):
+        // no view mode to report, as top-bar.js guards the same read.
+        const info = editPlugin.getMainEntityInfo();
+        return info ? info.viewMode : null;
       });
     },
   };

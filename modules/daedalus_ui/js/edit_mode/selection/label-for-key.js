@@ -25,9 +25,10 @@ import { getPartBehavior } from '../components/page-elements/view-registry';
  *
  * Addresses span both tiers: an element key or a `key::selector` address
  * (projection-index.js selectorAddress). A placed part address labels
- * from the index alone (the matched-form label the tree's row shows:
- * Raster, Bulleted list, List item); an address the index does not place
- * (a tag tier, a chain, an ancestor rule) labels its OWNER, the element
+ * from the index alone (the name the tree's row shows: a shell part's
+ * matched-form label such as Raster, a carrier's excerpt, a list's word);
+ * an address the index does not place
+ * (a tag tier, a chain) labels its OWNER, the element
  * the address styles under, never the key's kind. The vocabulary below is
  * the ELEMENT key grammar. What a selector itself is called ("every
  * link") is the styling module's vocabulary: targetLabel asks the part

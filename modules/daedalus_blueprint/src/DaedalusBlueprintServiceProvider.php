@@ -33,6 +33,7 @@ class DaedalusBlueprintServiceProvider extends ServiceProviderBase {
     $container->register('daedalus_blueprint.layout_tempstore_helper', LayoutTempstoreHelper::class)
       ->addArgument(new Reference('layout_builder.tempstore_repository'))
       ->addArgument(new Reference('plugin.manager.layout_builder.section_storage'))
+      ->addArgument(new Reference('daedalus_blueprint.host_resolver'))
       // The storage spine's shared defaults->overrides upgrade helper;
       // resolves to NULL when daedalus_tempstore is not installed.
       ->addArgument(new Reference('daedalus_tempstore.section_storage_helper', ContainerBuilder::IGNORE_ON_INVALID_REFERENCE));

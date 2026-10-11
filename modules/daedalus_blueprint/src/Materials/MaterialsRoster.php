@@ -25,9 +25,9 @@ use Drupal\Core\Cache\CacheableMetadata;
  * validates and applies), and offered() is the AI's roster, the records
  * their authors share with the AI (MaterialRecord::$offered), which the
  * cached brief and the schema project. A band verdict on the offered
- * view still resolves a stencil's wearings against the full roster: a
+ * view still resolves a blueprint's wearings against the full roster: a
  * placement rule is a fact of legality, and opting the worn variant out
- * of the brief must not turn a band into a free-floating stencil.
+ * of the brief must not turn a band into a free-floating blueprint.
  */
 final class MaterialsRoster {
 
@@ -155,13 +155,30 @@ final class MaterialsRoster {
   }
 
   /**
-   * The stencils, keyed by id.
+   * The blueprints, keyed by id, every scope or one.
+   *
+   * Scopes never mix on an offering surface, so a surface that speaks for
+   * one scope asks for it here: the always-on list and the schema's
+   * materials.blueprints are block scope (what places into a page), a
+   * bundle's starts are page scope (what a page starts as); legality (the
+   * parser resolving a placement by name) reads every scope.
+   *
+   * @param string|null $scope
+   *   MaterialRecord::SCOPE_BLOCK or SCOPE_PAGE to keep that scope alone,
+   *   NULL for every blueprint.
    *
    * @return array<string, \Drupal\daedalus_blueprint\Materials\MaterialRecord>
    *   The records.
    */
-  public function stencils(): array {
-    return $this->ofKind(MaterialKind::Stencil);
+  public function blueprints(?string $scope = NULL): array {
+    $blueprints = $this->ofKind(MaterialKind::Blueprint);
+    if ($scope === NULL) {
+      return $blueprints;
+    }
+    if (!in_array($scope, MaterialRecord::SCOPES, TRUE)) {
+      throw new \InvalidArgumentException(sprintf('Unknown blueprint scope "%s" asked of the roster; one of %s.', $scope, implode(', ', MaterialRecord::SCOPES)));
+    }
+    return array_filter($blueprints, static fn (MaterialRecord $record): bool => $record->blueprintScope === $scope);
   }
 
   /**
@@ -172,6 +189,16 @@ final class MaterialsRoster {
    */
   public function animations(): array {
     return $this->ofKind(MaterialKind::Animation);
+  }
+
+  /**
+   * The fonts, keyed by id.
+   *
+   * @return array<string, \Drupal\daedalus_blueprint\Materials\MaterialRecord>
+   *   The records.
+   */
+  public function fonts(): array {
+    return $this->ofKind(MaterialKind::Font);
   }
 
   /**
@@ -200,7 +227,7 @@ final class MaterialsRoster {
    *
    * The index the value grammar resolves through: exact match on the
    * spelling the provider contributed (a `var(--x)` reference, a class
-   * token, an axis attribute value in its scope's slot, a stencil name).
+   * token, an axis attribute value in its scope's slot, a blueprint name).
    */
   public function bySpelling(string $slot, string $spelling): ?MaterialRecord {
     return $this->bySpelling[$slot][$spelling] ?? NULL;
@@ -223,10 +250,10 @@ final class MaterialsRoster {
    * records). Variants gate on three facts: their scope must pair with the
    * element's address (Address::pairsWith(), the family rule), a root-only
    * variant applies at top level only, and an owned variant applies only inside
-   * its owning stencil's placements. A stencil gates on one fact, derived,
+   * its owning blueprint's placements. A blueprint gates on one fact, derived,
    * never authored: it is a page band when any variant its root captured
    * (MaterialRecord::APPLIES_WEARS) resolves to a root-only record in this
-   * roster, and a band places at top level only; every other stencil places
+   * roster, and a band places at top level only; every other blueprint places
    * anywhere the placement grammar allows. Tokens, swatches and animations are
    * values and apply everywhere.
    *
@@ -234,16 +261,16 @@ final class MaterialsRoster {
    *   The material.
    * @param \Drupal\daedalus_blueprint\Materials\Address $element
    *   The element's own address ("block_type:text", "layout:layout_onecol",
-   *   "kind:container"); for a stencil, the address its root lands as.
+   *   "kind:container"); for a blueprint, the address its root lands as.
    * @param bool $top_level
    *   Whether the element sits at top level (a page band) rather than
-   *   nested inside another section; for a stencil, where it would land.
-   * @param string|null $within_stencil
-   *   The id of the stencil whose placement the element sits inside, or
+   *   nested inside another section; for a blueprint, where it would land.
+   * @param string|null $within_blueprint
+   *   The id of the blueprint whose placement the element sits inside, or
    *   NULL outside every placement.
    */
-  public function applicable(MaterialRecord $record, Address $element, bool $top_level = TRUE, ?string $within_stencil = NULL): bool {
-    if ($record->kind === MaterialKind::Stencil) {
+  public function applicable(MaterialRecord $record, Address $element, bool $top_level = TRUE, ?string $within_blueprint = NULL): bool {
+    if ($record->kind === MaterialKind::Blueprint) {
       return $top_level || !$this->isBand($record);
     }
     if ($record->kind !== MaterialKind::Variant) {
@@ -255,14 +282,14 @@ final class MaterialsRoster {
     if ($record->rootOnly() && !$top_level) {
       return FALSE;
     }
-    if ($record->ownedBy !== NULL && $record->ownedBy !== $within_stencil) {
+    if ($record->ownedBy !== NULL && $record->ownedBy !== $within_blueprint) {
       return FALSE;
     }
     return TRUE;
   }
 
   /**
-   * Whether a stencil is a page band: its root wears a root-only variant.
+   * Whether a blueprint is a page band: its root wears a root-only variant.
    *
    * The one derivation behind every "band" word (the predicate above, the
    * schema's placement line, the dialect's refusal, the prompt's roster
@@ -272,24 +299,24 @@ final class MaterialsRoster {
    * design system) has no opinion. On the offered view the wearings
    * resolve against the full roster (the class doc: a band is legality).
    */
-  public function isBand(MaterialRecord $stencil): bool {
-    return $this->rootOnlyWears($stencil) !== [];
+  public function isBand(MaterialRecord $blueprint): bool {
+    return $this->rootOnlyWears($blueprint) !== [];
   }
 
   /**
-   * The root-only variant records a stencil's root wears, keyed by id.
+   * The root-only variant records a blueprint's root wears, keyed by id.
    *
-   * What makes a stencil a band, named: a corrective spells the variant
+   * What makes a blueprint a band, named: a corrective spells the variant
    * and its axis from these. Resolved against the full roster, on every
    * view.
    *
    * @return array<string, \Drupal\daedalus_blueprint\Materials\MaterialRecord>
-   *   The root-only records among the stencil's wearings, in wearing
-   *   order; [] for a stencil that wears none, and for every other kind.
+   *   The root-only records among the blueprint's wearings, in wearing
+   *   order; [] for a blueprint that wears none, and for every other kind.
    */
-  public function rootOnlyWears(MaterialRecord $stencil): array {
+  public function rootOnlyWears(MaterialRecord $blueprint): array {
     $records = [];
-    foreach ($stencil->wears() as $id) {
+    foreach ($blueprint->wears() as $id) {
       $variant = ($this->full ?? $this)->get(MaterialKind::Variant, $id);
       if ($variant !== NULL && $variant->rootOnly()) {
         $records[$id] = $variant;
@@ -340,7 +367,7 @@ final class MaterialsRoster {
    * resolve in a slot is corrected against every material that CAN be
    * written there (tokens and swatches for a var() in a style value,
    * style variants for a class, one axis's variants for its attribute,
-   * stencils for a placement name), whatever their kinds, so a swatch
+   * blueprints for a placement name), whatever their kinds, so a swatch
    * typo never gets a token-only hint.
    *
    * @return \Drupal\daedalus_blueprint\Materials\MaterialRecord[]
@@ -461,7 +488,7 @@ final class MaterialsRoster {
    * The one spelling for every corrective and roster line that names
    * materials the writer could have reached for. The spelling is shown
    * as it is written in its slot (var(--x), class="x", width="x",
-   * <pb-stencil name="x">, animation-name: x); a material with no
+   * <pb-blueprint name="x">, animation-name: x); a material with no
    * spelling shows none.
    *
    * @param \Drupal\daedalus_blueprint\Materials\MaterialRecord[] $records
@@ -493,8 +520,9 @@ final class MaterialsRoster {
     }
     return match ($slot) {
       MaterialRecord::SLOT_CLASS => sprintf('class="%s"', $spelling),
-      MaterialRecord::SLOT_STENCIL => sprintf('<pb-stencil name="%s">', $spelling),
+      MaterialRecord::SLOT_BLUEPRINT => sprintf('<pb-blueprint name="%s">', $spelling),
       MaterialRecord::SLOT_ANIMATION => sprintf('animation-name: %s', $spelling),
+      MaterialRecord::SLOT_FONT => sprintf('font-family: %s', $spelling),
       default => $spelling,
     };
   }

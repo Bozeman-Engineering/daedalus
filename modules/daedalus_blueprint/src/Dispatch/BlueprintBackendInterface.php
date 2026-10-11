@@ -28,6 +28,21 @@ interface BlueprintBackendInterface {
   public function supports(string $entity_type_id): bool;
 
   /**
+   * Determines whether this backend hosts the given entity.
+   *
+   * The entity-level door: what an entity IS decides its backend (a
+   * Layout Builder display is a page document, another config entity is
+   * config), which a type id alone cannot tell.
+   *
+   * @param \Drupal\Core\Entity\EntityInterface $entity
+   *   The entity to check.
+   *
+   * @return bool
+   *   TRUE if this backend can handle the entity.
+   */
+  public function supportsEntity(EntityInterface $entity): bool;
+
+  /**
    * Serializes an entity to a full blueprint array.
    *
    * @param \Drupal\Core\Entity\EntityInterface $entity

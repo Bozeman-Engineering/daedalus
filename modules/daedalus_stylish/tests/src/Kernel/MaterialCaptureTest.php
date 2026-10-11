@@ -26,6 +26,7 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 use Symfony\Component\HttpFoundation\Request;
+use Drupal\Tests\daedalus_stylish\Traits\HostTrait;
 
 /**
  * The swatch, variant and animation gestures, end to end.
@@ -50,6 +51,7 @@ use Symfony\Component\HttpFoundation\Request;
 #[RunTestsInSeparateProcesses]
 class MaterialCaptureTest extends NestedStorageKernelTestBase {
 
+  use HostTrait;
   use DesignSystemActivationTrait;
 
   /**
@@ -73,7 +75,14 @@ class MaterialCaptureTest extends NestedStorageKernelTestBase {
     $this->installEntitySchema('daedalus_skin');
     $this->installEntitySchema('daedalus_swatch');
     $this->installEntitySchema('daedalus_animation');
-    $this->installSchema('daedalus_stylish', ['daedalus_variant_usage', 'daedalus_swatch_usage', 'daedalus_animation_usage']);
+    $this->installEntitySchema('daedalus_font');
+    $this->installSchema('daedalus_stylish', [
+      'daedalus_variant_usage',
+      'daedalus_swatch_usage',
+      'daedalus_animation_usage',
+      'daedalus_token_usage',
+      'daedalus_font_usage',
+    ]);
     $this->installConfig(['daedalus_stylish']);
     // Activating a design system syncs every enabled module's shipped
     // definitions (ShippedSync::onDesignSystemActivated()): the importers
@@ -88,7 +97,7 @@ class MaterialCaptureTest extends NestedStorageKernelTestBase {
    * Runs an op batch through the real batch door.
    */
   protected function batch(EntityTest $entity, array $operations, array $options = []): BlueprintResult {
-    return $this->container->get('daedalus_blueprint.operations')->batchOperations($entity, $operations, $options);
+    return $this->container->get('daedalus_blueprint.operations')->batchOperations($this->host($entity), $operations, $options);
   }
 
   /**

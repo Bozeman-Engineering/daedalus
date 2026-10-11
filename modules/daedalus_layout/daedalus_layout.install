@@ -225,31 +225,3 @@ function _daedalus_layout_clone_block(BlockPluginInterface $block_plugin, array 
   }
   return TRUE;
 }
-
-/**
- * Migrate preserved_fields third-party settings from daedalus_edit_lb to daedalus_layout.
- */
-function daedalus_layout_update_10003() {
-  $config_factory = \Drupal::configFactory();
-  $migrated = 0;
-
-  // Find all entity_view_display config.
-  foreach ($config_factory->listAll('core.entity_view_display.') as $config_name) {
-    $config = $config_factory->getEditable($config_name);
-    $preserved_fields = $config->get('third_party_settings.daedalus_edit_lb.preserved_fields');
-
-    if (!empty($preserved_fields)) {
-      // Move to daedalus_layout namespace.
-      $config->set('third_party_settings.daedalus_layout.preserved_fields', $preserved_fields);
-      $config->clear('third_party_settings.daedalus_edit_lb');
-      $config->save();
-      $migrated++;
-    }
-  }
-
-  if ($migrated > 0) {
-    return t('Migrated preserved_fields settings from daedalus_edit_lb to daedalus_layout in @count entity view display(s).', ['@count' => $migrated]);
-  }
-
-  return t('No preserved_fields settings to migrate.');
-}

@@ -202,7 +202,7 @@ class DialectVocabularySubscriber implements EventSubscriberInterface {
     }
     $event->setSkin((string) $skin->label());
     $tags = [];
-    foreach ($skin->getDefaults() as $scope => $entries) {
+    foreach ($skin->defaults() as $scope => $entries) {
       $address = Address::parse((string) $scope);
       if ($address?->isBase() && is_array($entries) && $entries !== []) {
         $tags[] = $address->id;

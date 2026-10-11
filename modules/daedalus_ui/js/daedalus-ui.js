@@ -9,7 +9,7 @@
    * Records the page's mode.
    *
    * The mode cookie is scoped to the edited page, the same path the server
-   * plants it at (InitialMode::setResponseCookies, BlockContentEdit), so one
+   * plants it at (InitialMode::setResponseCookies, ModeState), so one
    * page's mode never bleeds onto another and a server-planted value is
    * overwritten rather than outranked. Any site-wide value is swept first so
    * it cannot linger under the page's own.

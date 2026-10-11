@@ -61,7 +61,7 @@ const SpacingScale = ({
   const gapSet = normalizeValue(lit.gap) !== null;
   const hasGapRow =
     gapGranted &&
-    !layoutOwnsGap(source?.getLayout?.() ?? [], model.home.key) &&
+    !layoutOwnsGap(source?.getTree?.() ?? [], model.home.key) &&
     (gapSet || gapGate(layout?.self ?? null));
 
   return (

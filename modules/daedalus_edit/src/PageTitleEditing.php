@@ -117,9 +117,10 @@ final class PageTitleEditing implements EventSubscriberInterface {
    *   it out of content into the `label` variable, and node.html.twig
    *   prints label only on non-page views. The theme's page title is the
    *   one render, Layout Builder or not.
-   * - An LB display renders no unpreserved display-configurable root field
-   *   (daedalus_layout's preserved_fields is the render truth, the same one the
-   *   element model's existence feeder consumes).
+   * - A Layout Builder display renders no display-configurable root field
+   *   (core's buildMultiple() strips them once sections exist; the same
+   *   render truth daedalus_layout's root-existence feeder hands the
+   *   element model).
    * Other roots (media's name, for example, IS rendered inside content by
    * its display) stay inert; extend this list as render truths are proven.
    *
@@ -145,8 +146,7 @@ final class PageTitleEditing implements EventSubscriberInterface {
     }
     $display = EntityViewDisplay::collectRenderDisplay($entity, $view_mode);
     if ($display->getThirdPartySetting('layout_builder', 'enabled', FALSE)) {
-      $preserved = $display->getThirdPartySetting('daedalus_layout', 'preserved_fields', []);
-      return in_array($target, $preserved, TRUE) ? NULL : $target;
+      return $target;
     }
     return NULL;
   }
@@ -173,8 +173,10 @@ final class PageTitleEditing implements EventSubscriberInterface {
       return;
     }
     $variables['#cache']['contexts'][] = 'daedalus_ui_mode';
-    $route_entity = $this->daedalusUi->deriveEntityFromRoute();
-    if (!$route_entity instanceof FieldableEntityInterface) {
+    // The route host's own fields entity; a template host has none, so
+    // its page title is never a label leaf.
+    $route_entity = $this->daedalusUi->deriveHostFromRoute()?->fields();
+    if ($route_entity === NULL) {
       return;
     }
     // The page usually renders the tempstore version (staged edits
@@ -294,8 +296,9 @@ final class PageTitleEditing implements EventSubscriberInterface {
     if (!$result->isSuccess() || !$result instanceof BlueprintResult) {
       return;
     }
-    $entity = $result->getEntity();
-    if (!$entity instanceof FieldableEntityInterface) {
+    $host = $result->getHost();
+    $entity = $host?->fields();
+    if ($entity === NULL) {
       return;
     }
     $payload = $event->getPayload();
@@ -310,7 +313,7 @@ final class PageTitleEditing implements EventSubscriberInterface {
       return;
     }
     $label_key = SelectableKey::field($entity->uuid(), $label_field);
-    $keys = $this->targetKeyMapper->map($entity, $result->getTargets());
+    $keys = $this->targetKeyMapper->map($host, $result->getTargets());
     if (!in_array($label_key, $keys, TRUE)) {
       return;
     }

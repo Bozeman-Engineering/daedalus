@@ -61,12 +61,17 @@ html .ui-dialog.ui-widget:not(.ui-dialog-off-canvas) {
   }
 
   /* Form controls wear the chrome field look via core's form-control
-     classes (form-text/form-textarea) — the shared vocabulary real forms
-     already carry; dialogs with inert markup (daedalus_layout's stencil dialogs)
-     opt in by stamping the same classes. Never bare input/textarea:
-     that would catch checkboxes and radios too. */
+     classes (form-text/form-textarea/form-select) — the shared vocabulary
+     real forms already carry; dialogs with inert markup (daedalus_layout's
+     blueprint dialogs) opt in by stamping the same classes. Never bare
+     input/textarea: that would catch checkboxes and radios too. The select
+     is here because the dialog root's color (--daedalus-text) is inherited
+     by a select while the site theme paints .form-select on its own light
+     surface with no color of its own: on the dark scheme that was white on
+     near-white (measured on d-a: rgb(255,255,255) on rgb(246,248,248)). */
   input.form-text,
-  textarea.form-textarea {
+  textarea.form-textarea,
+  select.form-select {
     box-sizing: border-box;
     width: 100%;
     padding: 0.5rem;
@@ -84,7 +89,7 @@ html .ui-dialog.ui-widget:not(.ui-dialog-off-canvas) {
 
   /* The hosted form's layout, by core's form vocabulary (form-item,
      form-actions, description, messages) — real forms carry it natively
-     and inert-markup dialogs (daedalus_layout's stencil dialogs) stamp the same
+     and inert-markup dialogs (daedalus_layout's blueprint dialogs) stamp the same
      classes, so every dialog reads as one surface with no per-dialog
      stylesheet. */
   p {
@@ -129,6 +134,42 @@ html .ui-dialog.ui-widget:not(.ui-dialog-off-canvas) {
   /* The gap carries the spacing; the buttonpane margin below must not. */
   .form-actions button {
     margin: 0;
+  }
+
+  /* The foot of a dialog with NO buttonpane. Core's dialog.ajax.js hoists
+     a form's submit inputs and links into jQuery UI's buttonpane (and
+     stamps .form-actions on the buttonset), but daedalus_layout's
+     blueprint dialogs render plain <button>s, which stay in the content
+     pane, and Drupal's dialog autoResize caps that pane's max-height to
+     the viewport: a dialog taller than the window scrolls its pane and
+     the row rides out under the pane's bottom edge. Measured on d-a in
+     headless Chrome: at 1400x900 nothing is capped and the 1rem pad
+     under the row is 16px; at 1400x600 the save dialog's pane is capped
+     at 455px over 513px of content, the row sits 42px below the pane's
+     edge unscrolled and its pad is back only at scrollTop max. The pad
+     was never missing; the foot was clipped. So, in a dialog whose foot
+     is in the content, the row is pinned to the scrollport's bottom edge
+     with the buttonpane's own idiom (its padding, its line, the chrome
+     background) and carries the pane's 1rem bottom pad itself: a sticky
+     box is held inside its containing block's content box, so the pad
+     cannot stay on the pane (a negative margin on the row was lifted
+     back by exactly that pad, leaving scrolled content showing under the
+     row). The negative inline margins span the pane's side padding so
+     nothing scrolls past beside the row. The buttonpane guard keeps a
+     hoisted core form, whose emptied .form-actions stays in the content,
+     from growing a hollow foot. */
+  &:not(:has(.ui-dialog-buttonpane)) {
+    .ui-dialog-content:has(.form-actions) {
+      padding-bottom: 0;
+    }
+    .form-actions {
+      position: sticky;
+      bottom: 0;
+      margin: 0 -1rem;
+      padding: 0.75rem 1rem 1rem;
+      border-top: 1px solid var(--daedalus-lines);
+      background: var(--daedalus-background);
+    }
   }
 
   .ui-dialog-titlebar {

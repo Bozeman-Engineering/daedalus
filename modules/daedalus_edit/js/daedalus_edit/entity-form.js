@@ -230,6 +230,13 @@ export const fetchMainEntityForm = ({ quiet = false } = {}) => {
       ),
     );
   }
+  // A root whose blueprint carries no `fields` (a template host: the
+  // display's canvas) has no entity form to fetch; the door is inert.
+  if (Drupal.Daedalus.Blueprint?.getBlueprint()?.fields === undefined) {
+    return Promise.reject(
+      new Error('Daedalus Edit: the root has no entity form (a template host).'),
+    );
+  }
   const [entityTypeId, entityId] =
     wrapper.dataset.daedalusUiEntityWrapper.split('::');
   return fetchEntityForm(

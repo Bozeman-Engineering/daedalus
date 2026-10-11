@@ -1,0 +1,10 @@
+# The site frame's door in the administration menu: one child of Appearance
+# per frame (FrameMenuLink derives them), beside Themes, Skins and Design
+# systems, so the frame is reachable from every admin page regardless of
+# what it renders. The route and parameters come from the deriver.
+daedalus_layout.frame:
+  title: 'Site frame'
+  description: 'Edit the header, footer and page chrome of the theme.'
+  parent: system.themes_page
+  weight: 5
+  deriver: Drupal\daedalus_layout\Plugin\Derivative\FrameMenuLink

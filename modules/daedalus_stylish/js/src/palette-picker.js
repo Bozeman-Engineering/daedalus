@@ -33,10 +33,10 @@ import { usePopover } from './popover.js';
  */
 export const stopTitle = (stop) =>
   stop.paintDark != null
-    ? Drupal.t('@label: default @default · dark @dark', {
-        '@label': Drupal.t(stop.label),
-        '@default': stop.paint,
-        '@dark': stop.paintDark,
+    ? Drupal.t('!label: default !default · dark !dark', {
+        '!label': Drupal.t(stop.label),
+        '!default': stop.paint,
+        '!dark': stop.paintDark,
       })
     : Drupal.t(stop.label);
 

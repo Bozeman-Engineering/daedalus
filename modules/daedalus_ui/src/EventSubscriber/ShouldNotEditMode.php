@@ -7,7 +7,9 @@ namespace Drupal\daedalus_ui\EventSubscriber;
 use Drupal\Core\Routing\AdminContext;
 use Drupal\Core\Routing\RouteMatchInterface;
 use Drupal\Core\Session\AccountProxyInterface;
+use Drupal\daedalus_blueprint\Capability\VerdictStamper;
 use Symfony\Component\HttpFoundation\RequestStack;
+use Drupal\daedalus_ui\Chromeless;
 use Drupal\daedalus_ui\Event\ShouldNotEditModeEvent;
 use Drupal\daedalus_ui\ModeState;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
@@ -15,6 +17,14 @@ use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 
 /**
  * Should not edit.
+ *
+ * Whether the actor may act on the host is the capability spine's answer
+ * (daedalus_blueprint's resolver, the same verdicts every read carries):
+ * with no capability on anything, the root and every element of the
+ * document the host renders, Edit Mode does not apply. The host access
+ * policy is what answers it for an actor without update access; a
+ * workspace, a translation or a role refusing everything answers the
+ * same way, with no second access grammar here.
  */
 final class ShouldNotEditMode implements EventSubscriberInterface {
 
@@ -34,6 +44,8 @@ final class ShouldNotEditMode implements EventSubscriberInterface {
     private readonly AccountProxyInterface $currentUser,
     private readonly EntityTypeManagerInterface $entityTypeManager,
     private readonly ModeState $modeState,
+    private readonly VerdictStamper $verdictStamper,
+    private readonly Chromeless $chromeless,
   ) {}
 
   /**
@@ -53,13 +65,28 @@ final class ShouldNotEditMode implements EventSubscriberInterface {
       $event->setShouldNotEdit();
       return;
     }
-    // Edit mode is enabled for this content type.
-    $entity = $event->getEntity();
-    if ($entity) {
-      $bundle_entity_type = $entity->getEntityType()->getBundleEntityType();
+    // A bare site document (Chromeless::BARE_ROUTE_OPTION: one element of
+    // a page rendered alone in the skin, for a frame) is content, never a
+    // canvas: it has a host, since its route names the page it renders
+    // from, and the request may even name the edit mode (the peek door is
+    // posted from the editing page), so the veto is the route's own.
+    if ($this->chromeless->isBare()) {
+      $event->setShouldNotEdit();
+      return;
+    }
+    // The page builder is on for the document's bundle (the bundle config
+    // entity's daedalus_ui `enabled` setting): the host's own bundle for a
+    // content host, the template's target bundle for a display host, both
+    // read through the host's display. A type with no bundle entity type
+    // has no carrier for the setting and no veto here; neither has a host
+    // with no display (the site frame).
+    $host = $event->getHost();
+    $display = $host?->display();
+    if ($display !== NULL) {
+      $bundle_entity_type = $this->entityTypeManager->getDefinition($display->getTargetEntityTypeId())->getBundleEntityType();
       if ($bundle_entity_type) {
-        $bundle = $this->entityTypeManager->getStorage($bundle_entity_type)->load($entity->bundle());
-        if (!$bundle->getThirdPartySetting('daedalus_ui', 'status', [])) {
+        $bundle = $this->entityTypeManager->getStorage($bundle_entity_type)->load($display->getTargetBundle());
+        if (!$bundle->getThirdPartySetting('daedalus_ui', 'enabled', FALSE)) {
           $event->setShouldNotEdit();
           return;
         }
@@ -91,12 +118,14 @@ final class ShouldNotEditMode implements EventSubscriberInterface {
       return;
     }
 
-    // Ensure that the user can edit this node.
-    $entity = $event->getEntity();
-    if (empty($entity)) {
+    // No host, no canvas; and with no capability on anything (the host
+    // access policy's answer for an actor who may not update the host),
+    // no Edit Mode.
+    if ($host === NULL) {
       $event->setShouldNotEdit();
+      return;
     }
-    if ($entity && $entity->access('edit', NULL, TRUE)->isForbidden()) {
+    if (!$this->verdictStamper->allowsAnywhere($host)) {
       $event->setShouldNotEdit();
     }
   }

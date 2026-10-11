@@ -12,6 +12,7 @@ use Drupal\daedalus_stylish\DaedalusStylishFieldManager;
 use Drupal\Tests\user\Traits\UserCreationTrait;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
+use Drupal\Tests\daedalus_stylish\Traits\HostTrait;
 
 /**
  * Tests the depth gate on the apply seam (RootOnlyVariantChecker).
@@ -36,6 +37,7 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 #[RunTestsInSeparateProcesses]
 class RootOnlyVariantCheckerTest extends KernelTestBase {
 
+  use HostTrait;
   use UserCreationTrait;
 
   /**
@@ -86,6 +88,7 @@ class RootOnlyVariantCheckerTest extends KernelTestBase {
     // every build, and the checker reads the roster.
     $this->installEntitySchema('daedalus_swatch');
     $this->installEntitySchema('daedalus_animation');
+    $this->installEntitySchema('daedalus_font');
     $this->installEntitySchema('daedalus_skin');
     $this->installConfig(['daedalus_stylish']);
     $this->installSchema('layout_builder', ['inline_block_usage']);
@@ -94,7 +97,7 @@ class RootOnlyVariantCheckerTest extends KernelTestBase {
     // the importer switches to an administrative account. A host entity
     // saved directly (the whole-map lane below) mirrors its variant
     // references into the variant usage table.
-    $this->installSchema('daedalus_stylish', ['daedalus_variant_usage', 'daedalus_animation_usage']);
+    $this->installSchema('daedalus_stylish', ['daedalus_variant_usage', 'daedalus_animation_usage', 'daedalus_token_usage', 'daedalus_font_usage']);
     $this->setUpCurrentUser([], [], TRUE);
     \Drupal::service('module_installer')->install(['daedalus_stylish_layouts']);
     $this->container->get('daedalus_stylish.field_manager')->enable('entity_test', 'entity_test');
@@ -113,7 +116,7 @@ class RootOnlyVariantCheckerTest extends KernelTestBase {
    * Runs a batch of operations, asserting success.
    */
   protected function batch(EntityTest $entity, array $operations): void {
-    $result = $this->operations->batchOperations($entity, $operations);
+    $result = $this->operations->batchOperations($this->host($entity), $operations);
     $this->assertTrue($result->isSuccess(), print_r($result->toArray()['errors'] ?? [], TRUE));
   }
 
@@ -166,7 +169,7 @@ class RootOnlyVariantCheckerTest extends KernelTestBase {
 
     // A NEW wearing of the root-only width variant on the nested container
     // is refused in AXIS_NOT_TOP_LEVEL's words, and nothing lands.
-    $result = $this->operations->batchOperations($entity, [
+    $result = $this->operations->batchOperations($this->host($entity), [
       ['op' => 'apply_variant', 'key' => $nested_key, 'variant' => 'container_site'],
     ]);
     $this->assertFalse($result->isSuccess());
@@ -178,7 +181,7 @@ class RootOnlyVariantCheckerTest extends KernelTestBase {
     $this->assertArrayNotHasKey($nested_key, $this->styleMap($entity));
 
     // Every root-only record refuses nested, not only the birth default.
-    $result = $this->operations->batchOperations($entity, [
+    $result = $this->operations->batchOperations($this->host($entity), [
       ['op' => 'apply_variant', 'key' => $nested_key, 'variant' => 'container_md'],
     ]);
     $this->assertFalse($result->isSuccess());
@@ -189,7 +192,7 @@ class RootOnlyVariantCheckerTest extends KernelTestBase {
     $this->batch($entity, [
       ['op' => 'add_section', 'uuid' => $deep, 'location' => ['anchor' => $nested, 'placement' => 'inside']],
     ]);
-    $result = $this->operations->batchOperations($entity, [
+    $result = $this->operations->batchOperations($this->host($entity), [
       ['op' => 'apply_variant', 'key' => "container:$deep", 'variant' => 'container_site'],
     ]);
     $this->assertFalse($result->isSuccess());
@@ -236,11 +239,11 @@ class RootOnlyVariantCheckerTest extends KernelTestBase {
     $map[$nested_key] = $nested_entry;
     $entity->set(DaedalusStylishFieldManager::FIELD_NAME, json_encode($map));
     $entity->save();
-    $this->assertSame([], $this->container->get('daedalus_stylish.style_map_validator')->validate($map, ['entity' => $entity]));
+    $this->assertSame([], $this->container->get('daedalus_stylish.style_map_validator')->validate($map, ['host' => $this->host($entity)]));
     $this->assertSame($nested_entry, $this->styleMap($entity)[$nested_key] ?? NULL);
 
     // Removing and detaching stay legal nested; a re-apply is the gate.
-    $result = $this->operations->batchOperations($entity, [
+    $result = $this->operations->batchOperations($this->host($entity), [
       ['op' => 'apply_variant', 'key' => $nested_key, 'variant' => 'container_md'],
     ]);
     $this->assertFalse($result->isSuccess());
@@ -250,11 +253,11 @@ class RootOnlyVariantCheckerTest extends KernelTestBase {
     // Out to the root flow: the container becomes a band, the reference
     // rides along; the redress finds the width axis already worn.
     $locator = $this->container->get('daedalus_blueprint.element_locator');
-    $this->assertTrue($locator->isNestedSection($entity, $nested));
+    $this->assertTrue($locator->isNestedSection($this->host($entity), $nested));
     $this->batch($entity, [
       ['op' => 'move_element', 'element' => $nested, 'location' => ['anchor' => $root, 'placement' => 'after']],
     ]);
-    $this->assertFalse($locator->isNestedSection($entity, $nested));
+    $this->assertFalse($locator->isNestedSection($this->host($entity), $nested));
     $this->assertSame($nested_entry, $this->styleMap($entity)[$nested_key] ?? NULL);
 
     // Back inside another band: root-only wear is a fact of depth, so the
@@ -263,9 +266,9 @@ class RootOnlyVariantCheckerTest extends KernelTestBase {
     $this->batch($entity, [
       ['op' => 'move_element', 'element' => $nested, 'location' => ['anchor' => $root, 'placement' => 'inside']],
     ]);
-    $this->assertTrue($locator->isNestedSection($entity, $nested));
+    $this->assertTrue($locator->isNestedSection($this->host($entity), $nested));
     $this->assertArrayNotHasKey($nested_key, $this->styleMap($entity));
-    $this->assertSame([], $this->container->get('daedalus_stylish.style_map_validator')->validate($this->styleMap($entity), ['entity' => $entity]));
+    $this->assertSame([], $this->container->get('daedalus_stylish.style_map_validator')->validate($this->styleMap($entity), ['host' => $this->host($entity)]));
   }
 
 
@@ -282,7 +285,7 @@ class RootOnlyVariantCheckerTest extends KernelTestBase {
     $rule = "container:$root::> pb-container";
 
     foreach (['container_site', 'container_md'] as $variant) {
-      $result = $this->operations->batchOperations($entity, [
+      $result = $this->operations->batchOperations($this->host($entity), [
         ['op' => 'apply_variant', 'key' => $rule, 'variant' => $variant],
       ]);
       $this->assertFalse($result->isSuccess());

@@ -148,7 +148,7 @@ final class IconResolverTest extends KernelTestBase {
    * The source file comes back as a file, or NULL when the media has none.
    *
    * The media-to-file step on its own, for consumers that need the file
-   * rather than its URL (the stencil ship lane copies it into a module).
+   * rather than its URL (the blueprint ship lane copies it into a module).
    */
   public function testSourceFile(): void {
     $media = $this->createImageMedia();

@@ -3,7 +3,7 @@
  * (rename-commit.js) — the pure decisions the Preact tree row
  * (page-elements-tree.js) renders.
  *
- * Two renamable kinds, ONE op: section rows write their custom label
+ * Three renamable kinds, ONE op: section and block rows write their stored label
  * through `update_element {label}` (empty CLEARS back to the type word
  * the annotator mints for an unrenamed section, "Section" or
  * "Container"), while the root row is the entity's label field
@@ -33,6 +33,19 @@ const sectionNode = (customLabel = '') => ({
   customLabel,
   children: [],
 });
+// A merged text block: its NAME is the annotator's excerpt of its content,
+// its customLabel the stored configuration label (the rename seed), so the
+// two never agree by construction.
+const BLOCK = 'bbbbbbbb-1111-2222-3333-444444444444';
+const blockNode = (customLabel = 'Text') => ({
+  key: `block:${BLOCK}`,
+  kind: 'block',
+  label: 'Welcome to the page',
+  elementType: 'Text',
+  customLabel,
+  presentation: 'merged',
+  children: [],
+});
 
 test('the root row is renamable exactly when the annotation routes an edit target', () => {
   // The gate reads the blueprint ANNOTATION's edit_target, which the tree
@@ -42,11 +55,15 @@ test('the root row is renamable exactly when the annotation routes an edit targe
   assert.equal(rowRenamable(rootNode, true, null), false);
 });
 
-test('container rows are renamable at any depth; other kinds are not', () => {
+test('container and block rows are renamable at any depth; other kinds are not', () => {
   assert.equal(rowRenamable(sectionNode(), false, null), true);
+  assert.equal(rowRenamable(blockNode(), false, null), true);
   // A keyless section (no daedalus_layout uuid) has no identity to commit against.
   assert.equal(rowRenamable({ key: null, kind: 'container', children: [] }, false, null), false);
-  assert.equal(rowRenamable({ key: `block:${SECTION}`, kind: 'block', children: [] }, false, null), false);
+  // An INERT row (an element the actor can do nothing to) takes no
+  // gesture, rename included, whatever its kind.
+  assert.equal(rowRenamable(blockNode(), false, null, true), false);
+  assert.equal(rowRenamable(sectionNode(), false, null, true), false);
   assert.equal(rowRenamable({ key: `field:${ROOT}:title`, kind: 'field', children: [] }, false, null), false);
   // Inline entity rows (paragraphs) share the root's kind but are not the
   // root: no rename yet, even if an edit target leaks in.
@@ -104,5 +121,35 @@ test('an empty section commit clears the custom label; unchanged is a no-op', ()
     op: 'update_element',
     element: SECTION,
     properties: { label: 'Section' },
+  });
+});
+
+test('a block commit writes the configured label through update_element, anchored on the stored label', () => {
+  // The same op as a section's: the component configuration's label
+  // (BlueprintOperations update_element on a block). The anchor is the
+  // STORED label, never the shown name: a merged block names itself by
+  // its content, so typing that excerpt in IS a rename.
+  assert.deepEqual(renameOperation(blockNode('Text'), '  Hero copy  ', {}), {
+    op: 'update_element',
+    element: BLOCK,
+    properties: { label: 'Hero copy' },
+  });
+  assert.deepEqual(renameOperation(blockNode('Text'), 'Welcome to the page', {}), {
+    op: 'update_element',
+    element: BLOCK,
+    properties: { label: 'Welcome to the page' },
+  });
+});
+
+test('an unchanged block commit is a no-op; empty clears the label', () => {
+  assert.equal(renameOperation(blockNode('Text'), 'Text', {}), null);
+  assert.equal(renameOperation(blockNode('Text'), '  Text ', {}), null);
+  assert.equal(renameOperation(blockNode(''), '', {}), null);
+  // Empty clears (the row falls back to the name the annotator mints
+  // without a label), the section precedent.
+  assert.deepEqual(renameOperation(blockNode('Text'), '', {}), {
+    op: 'update_element',
+    element: BLOCK,
+    properties: { label: '' },
   });
 });

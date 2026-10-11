@@ -5,25 +5,33 @@ declare(strict_types=1);
 namespace Drupal\daedalus_stylish;
 
 use Drupal\Core\Extension\ModuleHandlerInterface;
+use Drupal\daedalus_blueprint\DesignSystem\DesignSystemInterface;
+use Drupal\daedalus_blueprint\DesignSystem\PackageShipperInterface;
+use Drupal\daedalus_blueprint\DesignSystem\ShipReport;
 use Drupal\daedalus_stylish\Exception\VariantValidationException;
 
 /**
- * The one ship lane for a module's package: the site OUT to its per-id files.
+ * The materials lane of a package ship: the site OUT to a module's per-id files.
  *
  * ShippedSync brings a module's MODULE.daedalus_stylish.<kind>*.yml INTO the site;
  * this orchestrator runs the kind shippers (ShippedDefinitionsShipper's
- * subclasses, one per kind that has a site-to-disk lane: skins and
- * variants today, swatches and animations when they gain a shipper) over
- * ONE module and answers with a ShipReport. It is the lane the package
- * author uses from a development site: change a shipped material on the
- * site (the distro lock lifted by the daedalus_blueprint developer gate),
- * then ship the module, and disk follows the site.
+ * subclasses, one per kind: fonts, animations, swatches, skins and
+ * variants) over ONE module and answers with a ShipReport. It is the lane
+ * the package author uses from a development site: change a shipped
+ * material on the site (the distro lock lifted by the daedalus_blueprint
+ * developer gate), then ship the design system
+ * (`drush daedalus-blueprint:design-system:ship`), and disk follows the
+ * site. That command runs this lane as a tagged package shipper
+ * (PackageShipperInterface): shipPackage() rebuilds every per-id file of
+ * the module AND adopts every member of the system nothing ships yet
+ * (each kind's unshippedMembers()), so one gesture carries the whole
+ * system; the two module-scoped gestures below are what it composes.
  *
  * With no names, every per-id file of the module is rebuilt whole from
  * the current entities: each entry's definition comes from the entity
  * (the shipper's definition()), keys the shipper does not emit are carried
- * from the existing entry (the variants file's `stencil:` key belongs to
- * whoever owns stencils; this module never learns what it means), and an
+ * from the existing entry (the variants file's `blueprint:` key belongs to
+ * whoever owns blueprints; this module never learns what it means), and an
  * entry whose entity no longer exists is dropped from the file. Entries
  * of the hand-authored single file (MODULE.daedalus_stylish.<kind>.yml) are read,
  * never written: one the site edited is reported MODIFIED so the author
@@ -46,18 +54,19 @@ use Drupal\daedalus_stylish\Exception\VariantValidationException;
  * plan() is the dry run: the same report from the shippers' plans, with
  * no file written and no entity touched.
  */
-final class Ship {
-
-  /**
-   * A hand-authored entry the site edited: reported, never written.
-   */
-  public const MODIFIED = 'modified';
+final class Ship implements PackageShipperInterface {
 
   /**
    * Constructs the orchestrator.
    *
    * @param \Drupal\Core\Extension\ModuleHandlerInterface $moduleHandler
    *   Answers whether the target module is enabled and where it lives.
+   * @param \Drupal\daedalus_stylish\FontShipper $fonts
+   *   The fonts lane's site-to-disk direction (the file and its assets).
+   * @param \Drupal\daedalus_stylish\AnimationShipper $animations
+   *   The animations lane's site-to-disk direction.
+   * @param \Drupal\daedalus_stylish\SwatchShipper $swatches
+   *   The swatches lane's site-to-disk direction.
    * @param \Drupal\daedalus_stylish\SkinShipper $skins
    *   The skins lane's site-to-disk direction.
    * @param \Drupal\daedalus_stylish\VariantShipper $variants
@@ -65,25 +74,50 @@ final class Ship {
    */
   public function __construct(
     protected ModuleHandlerInterface $moduleHandler,
+    protected FontShipper $fonts,
+    protected AnimationShipper $animations,
+    protected SwatchShipper $swatches,
     protected SkinShipper $skins,
     protected VariantShipper $variants,
   ) {}
 
   /**
-   * The shippers keyed by kind, in the sync's order (skins, variants).
+   * The shippers keyed by kind, in the sync's order.
    *
-   * The order is the sync's so a ship report reads like a sync report;
-   * nothing on disk depends on it (each file is one kind).
+   * Fonts, animations, swatches, skins, variants (ShippedSync's order),
+   * so a ship report reads like a sync report; nothing on disk depends
+   * on it (each file is one kind).
    *
    * @return array<string, \Drupal\daedalus_stylish\ShippedDefinitionsShipper>
    *   Keyed by the kind's noun, as the importer's kind() names it.
    */
   public function shippers(): array {
     $shippers = [];
-    foreach ([$this->skins, $this->variants] as $shipper) {
+    foreach ([$this->fonts, $this->animations, $this->swatches, $this->skins, $this->variants] as $shipper) {
       $shippers[$shipper->importer()->kind()] = $shipper;
     }
     return $shippers;
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function packageDependencies(): array {
+    return ['daedalus:daedalus_stylish'];
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function planPackage(DesignSystemInterface $system, string $module, ShipReport $report): void {
+    $this->run($module, $this->members($system), FALSE, TRUE, $report);
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function shipPackage(DesignSystemInterface $system, string $module, ShipReport $report): void {
+    $this->run($module, $this->members($system), TRUE, TRUE, $report);
   }
 
   /**
@@ -121,9 +155,36 @@ final class Ship {
   }
 
   /**
-   * Runs the shippers over the module; see plan() and ship().
+   * The system's members nothing ships yet, keyed by kind: the package's adoption set.
+   *
+   * @return array<string, string[]>
+   *   Machine names keyed by kind, in the shippers' order.
    */
-  protected function run(string $module, array $names, bool $write): ShipReport {
+  protected function members(DesignSystemInterface $system): array {
+    $names = [];
+    foreach ($this->shippers() as $kind => $shipper) {
+      $names[$kind] = $shipper->unshippedMembers($system->id());
+    }
+    return $names;
+  }
+
+  /**
+   * Runs the shippers over the module; see plan(), ship() and shipPackage().
+   *
+   * @param string $module
+   *   The target module.
+   * @param array<string, string[]> $names
+   *   Machine names to adopt, keyed by kind.
+   * @param bool $write
+   *   TRUE ships, FALSE plans.
+   * @param bool|null $rebuild
+   *   Whether every per-id file of the module is rebuilt whole beside the
+   *   adoption; NULL rebuilds exactly when no name is given (the
+   *   module-scoped gestures' rule), the package ship always rebuilds.
+   * @param \Drupal\daedalus_blueprint\DesignSystem\ShipReport|null $report
+   *   The report to record on; NULL for a fresh one.
+   */
+  protected function run(string $module, array $names, bool $write, ?bool $rebuild = NULL, ?ShipReport $report = NULL): ShipReport {
     if (!$this->moduleHandler->moduleExists($module)) {
       throw new \InvalidArgumentException(sprintf('The "%s" module is not enabled, so there is no directory to ship into.', $module));
     }
@@ -132,30 +193,28 @@ final class Ship {
     if (($unknown = array_diff_key($names, $shippers)) !== []) {
       throw new \InvalidArgumentException(sprintf('No shipper for the kind(s) %s; the kinds that ship are %s.', implode(', ', array_keys($unknown)), implode(', ', array_keys($shippers))));
     }
-    $report = new ShipReport($module);
-    $module_wide = $names === [];
+    $report ??= new ShipReport($module);
+    $rebuild ??= $names === [];
     foreach ($shippers as $kind => $shipper) {
       $files = [];
       foreach ($shipper->importer()->perIdFiles($module) as $file_id => $path) {
         $files[$file_id] = $shipper->readFile($path);
       }
-      if ($module_wide) {
+      $targets = [];
+      if ($rebuild) {
         $this->reportHandAuthored($report, $module, $kind, $shipper);
-        $rebuild = array_fill_keys(array_keys($files), []);
+        $targets = array_fill_keys(array_keys($files), []);
       }
-      else {
-        $rebuild = [];
-        foreach (array_unique($names[$kind] ?? []) as $name) {
-          $file_id = $this->fileHolding($files, $name);
-          if ($file_id !== NULL) {
-            $rebuild[$file_id] ??= [];
-          }
-          else {
-            $rebuild[$name][] = $name;
-          }
+      foreach (array_unique($names[$kind] ?? []) as $name) {
+        $file_id = $this->fileHolding($files, $name);
+        if ($file_id !== NULL) {
+          $targets[$file_id] ??= [];
+        }
+        else {
+          $targets[$name][] = $name;
         }
       }
-      foreach ($rebuild as $file_id => $adopt) {
+      foreach ($targets as $file_id => $adopt) {
         $this->shipFile($report, $module, $kind, $shipper, (string) $file_id, $files[$file_id] ?? [], $adopt, $write);
       }
     }
@@ -165,7 +224,7 @@ final class Ship {
   /**
    * Rebuilds one per-id file from its entities and the names it adopts.
    *
-   * @param \Drupal\daedalus_stylish\ShipReport $report
+   * @param \Drupal\daedalus_blueprint\DesignSystem\ShipReport $report
    *   The run's report, every entry of the file recorded on it.
    * @param string $module
    *   The target module.
@@ -185,26 +244,26 @@ final class Ship {
   protected function shipFile(ShipReport $report, string $module, string $kind, ShippedDefinitionsShipper $shipper, string $file_id, array $existing, array $adopt, bool $write): void {
     $file = basename($shipper->filePath($module, $file_id));
     $definitions = [];
-    foreach ($existing as $name => $entry) {
-      $entity = $shipper->load((string) $name);
-      if ($entity === NULL) {
-        // Left out of the rewrite: the plan reports it DROPPED.
-        continue;
-      }
-      $definitions[$name] = $this->carry(is_array($entry) ? $entry : [], $shipper->definitionOf($entity));
-    }
-    foreach ($adopt as $name) {
-      if (array_key_exists($name, $definitions)) {
-        continue;
-      }
-      $entity = $shipper->load($name);
-      if ($entity === NULL) {
-        $report->fail($kind, $name, $shipper->absentException($module, $name)->getErrors());
-        return;
-      }
-      $definitions[$name] = $shipper->definitionOf($entity);
-    }
     try {
+      foreach ($existing as $name => $entry) {
+        $entity = $shipper->load((string) $name);
+        if ($entity === NULL) {
+          // Left out of the rewrite: the plan reports it DROPPED.
+          continue;
+        }
+        $definitions[$name] = $this->carry(is_array($entry) ? $entry : [], $shipper->definitionOf($entity));
+      }
+      foreach ($adopt as $name) {
+        if (array_key_exists($name, $definitions)) {
+          continue;
+        }
+        $entity = $shipper->load($name);
+        if ($entity === NULL) {
+          $report->fail($kind, $name, $shipper->absentException($module, $name)->getErrors());
+          return;
+        }
+        $definitions[$name] = $shipper->definitionOf($entity);
+      }
       $outcomes = $write
         ? $shipper->ship($module, $file_id, $definitions)
         : $shipper->plan($module, $file_id, $definitions);
@@ -216,8 +275,10 @@ final class Ship {
       }
     }
     catch (VariantValidationException $e) {
-      // Meaningful recovery: the file is refused whole and reported; the
-      // module's other files and kinds still ship.
+      // Meaningful recovery: the file is refused whole and reported (a
+      // definition that cannot be built, a font face whose file is gone,
+      // counts the same as one the lane refuses); the module's other
+      // files and kinds still ship.
       $report->fail($kind, $file, $e->getErrors());
       return;
     }
@@ -241,7 +302,7 @@ final class Ship {
       if ($entity === NULL || $entity->getProvider() !== $module) {
         continue;
       }
-      $report->record($kind, (string) $name, $entity->isModified() ? self::MODIFIED : ShippedDefinitionsShipper::UNCHANGED, basename($path));
+      $report->record($kind, (string) $name, $entity->isModified() ? ShipReport::MODIFIED : ShippedDefinitionsShipper::UNCHANGED, basename($path));
     }
   }
 
@@ -266,7 +327,7 @@ final class Ship {
    * Merges a rebuilt definition over the existing entry, carrying its keys.
    *
    * The entity wins every key the shipper emits; keys it does not emit
-   * survive from the entry, in the entry's order (a `stencil:` key stays
+   * survive from the entry, in the entry's order (a `blueprint:` key stays
    * where its owner put it), and keys the entry never had append.
    */
   protected function carry(array $entry, array $definition): array {

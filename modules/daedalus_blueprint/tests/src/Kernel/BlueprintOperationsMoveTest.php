@@ -145,7 +145,7 @@ class BlueprintOperationsMoveTest extends BlueprintKernelTestBase {
    */
   protected function addRootSibling(object $entity): string {
     $section_uuid = (new PhpUuid())->generate();
-    $result = $this->operations->addSection($entity, [
+    $result = $this->operations->addSection($this->host($entity), [
       'anchor' => $this->rootSectionUuid,
       'placement' => 'after',
     ], $section_uuid);
@@ -292,7 +292,7 @@ class BlueprintOperationsMoveTest extends BlueprintKernelTestBase {
   public function testMoveAfterComponent(): void {
     $entity = $this->createLbEntityWithThreeComponents();
 
-    $result = $this->operations->moveElement($entity, self::COMP[1], [
+    $result = $this->operations->moveElement($this->host($entity), self::COMP[1], [
       'anchor' => self::COMP[2],
       'placement' => 'after',
     ]);
@@ -308,7 +308,7 @@ class BlueprintOperationsMoveTest extends BlueprintKernelTestBase {
   public function testMoveBeforeComponent(): void {
     $entity = $this->createLbEntityWithThreeComponents();
 
-    $result = $this->operations->moveElement($entity, self::COMP[3], [
+    $result = $this->operations->moveElement($this->host($entity), self::COMP[3], [
       'anchor' => self::COMP[1],
       'placement' => 'before',
     ]);
@@ -323,7 +323,7 @@ class BlueprintOperationsMoveTest extends BlueprintKernelTestBase {
   public function testMoveAfterLastComponent(): void {
     $entity = $this->createLbEntityWithThreeComponents();
 
-    $result = $this->operations->moveElement($entity, self::COMP[1], [
+    $result = $this->operations->moveElement($this->host($entity), self::COMP[1], [
       'anchor' => self::COMP[3],
       'placement' => 'after',
     ]);
@@ -338,7 +338,7 @@ class BlueprintOperationsMoveTest extends BlueprintKernelTestBase {
   public function testMoveAcrossSections(): void {
     $entity = $this->createLbEntityWithTwoSections();
 
-    $result = $this->operations->moveElement($entity, self::COMP[1], [
+    $result = $this->operations->moveElement($this->host($entity), self::COMP[1], [
       'anchor' => self::COMP[3],
       'placement' => 'after',
     ]);
@@ -358,7 +358,7 @@ class BlueprintOperationsMoveTest extends BlueprintKernelTestBase {
   public function testSameSectionMoveTargets(): void {
     $entity = $this->createLbEntityWithThreeComponents();
 
-    $result = $this->operations->moveElement($entity, self::COMP[1], [
+    $result = $this->operations->moveElement($this->host($entity), self::COMP[1], [
       'anchor' => self::COMP[2],
       'placement' => 'after',
     ]);
@@ -401,7 +401,7 @@ class BlueprintOperationsMoveTest extends BlueprintKernelTestBase {
     ]);
     $entity->save();
 
-    $result = $this->operations->moveElement($entity, self::COMP[1], [
+    $result = $this->operations->moveElement($this->host($entity), self::COMP[1], [
       'anchor' => self::COMP[3],
       'placement' => 'after',
     ]);
@@ -421,7 +421,7 @@ class BlueprintOperationsMoveTest extends BlueprintKernelTestBase {
   public function testMoveMissingAnchor(): void {
     $entity = $this->createLbEntityWithThreeComponents();
 
-    $result = $this->operations->moveElement($entity, self::COMP[1], [
+    $result = $this->operations->moveElement($this->host($entity), self::COMP[1], [
       'placement' => 'after',
     ]);
 
@@ -436,7 +436,7 @@ class BlueprintOperationsMoveTest extends BlueprintKernelTestBase {
   public function testMoveSelfAnchor(): void {
     $entity = $this->createLbEntityWithThreeComponents();
 
-    $result = $this->operations->moveElement($entity, self::COMP[1], [
+    $result = $this->operations->moveElement($this->host($entity), self::COMP[1], [
       'anchor' => self::COMP[1],
       'placement' => 'after',
     ]);
@@ -451,7 +451,7 @@ class BlueprintOperationsMoveTest extends BlueprintKernelTestBase {
   public function testMoveElementNotFound(): void {
     $entity = $this->createLbEntityWithThreeComponents();
 
-    $result = $this->operations->moveElement($entity, 'c68c9561-d36d-b4fc-77ac-50039f354800', [
+    $result = $this->operations->moveElement($this->host($entity), 'c68c9561-d36d-b4fc-77ac-50039f354800', [
       'anchor' => self::COMP[1],
       'placement' => 'after',
     ]);
@@ -466,7 +466,7 @@ class BlueprintOperationsMoveTest extends BlueprintKernelTestBase {
   public function testMoveAnchorNotFound(): void {
     $entity = $this->createLbEntityWithThreeComponents();
 
-    $result = $this->operations->moveElement($entity, self::COMP[1], [
+    $result = $this->operations->moveElement($this->host($entity), self::COMP[1], [
       'anchor' => 'c68c9561-d36d-b4fc-77ac-50039f354800',
       'placement' => 'after',
     ]);
@@ -482,7 +482,7 @@ class BlueprintOperationsMoveTest extends BlueprintKernelTestBase {
   public function testMoveInsideComponentAnchorRejected(): void {
     $entity = $this->createLbEntityWithThreeComponents();
 
-    $result = $this->operations->moveElement($entity, self::COMP[1], [
+    $result = $this->operations->moveElement($this->host($entity), self::COMP[1], [
       'anchor' => self::COMP[2],
       'placement' => 'inside',
     ]);
@@ -500,7 +500,7 @@ class BlueprintOperationsMoveTest extends BlueprintKernelTestBase {
     $paragraph_uuid = $entity->get('field_paragraphs')->get(0)->entity->uuid();
     $anchor_uuid = $entity->get('field_paragraphs')->get(1)->entity->uuid();
 
-    $result = $this->operations->moveElement($entity, $paragraph_uuid, [
+    $result = $this->operations->moveElement($this->host($entity), $paragraph_uuid, [
       'anchor' => $anchor_uuid,
       'placement' => 'after',
     ]);
@@ -527,7 +527,7 @@ class BlueprintOperationsMoveTest extends BlueprintKernelTestBase {
     $paragraph = $this->createRevEntity(['name' => 'Para']);
     $entity->set('field_paragraphs', [['entity' => $paragraph]]);
 
-    $result = $this->operations->moveElement($entity, self::COMP[1], [
+    $result = $this->operations->moveElement($this->host($entity), self::COMP[1], [
       'anchor' => $paragraph->uuid(),
       'placement' => 'after',
     ]);
@@ -548,7 +548,7 @@ class BlueprintOperationsMoveTest extends BlueprintKernelTestBase {
     $sibling_uuid = $this->addRootSibling($entity);
     $this->assertSame([$this->rootSectionUuid, $sibling_uuid], $this->rootSectionUuids($entity));
 
-    $result = $this->operations->moveElement($entity, $this->rootSectionUuid, [
+    $result = $this->operations->moveElement($this->host($entity), $this->rootSectionUuid, [
       'anchor' => $entity->uuid(),
       'placement' => 'inside',
     ]);
@@ -569,7 +569,7 @@ class BlueprintOperationsMoveTest extends BlueprintKernelTestBase {
   public function testMoveNestedSectionToRootInsideUnwrapsAndLandsLast(): void {
     $entity = $this->createDaedalusLayoutEntityWithNestedSection();
 
-    $result = $this->operations->moveElement($entity, $this->nestedSectionUuid, [
+    $result = $this->operations->moveElement($this->host($entity), $this->nestedSectionUuid, [
       'anchor' => $entity->uuid(),
       'placement' => 'inside',
     ]);
@@ -591,7 +591,7 @@ class BlueprintOperationsMoveTest extends BlueprintKernelTestBase {
   public function testMoveBlockToRootInsideRejected(): void {
     $entity = $this->createLbEntityWithThreeComponents();
 
-    $result = $this->operations->moveElement($entity, self::COMP[1], [
+    $result = $this->operations->moveElement($this->host($entity), self::COMP[1], [
       'anchor' => $entity->uuid(),
       'placement' => 'inside',
     ]);
@@ -608,7 +608,7 @@ class BlueprintOperationsMoveTest extends BlueprintKernelTestBase {
   public function testMoveSectionBesideRootRejected(): void {
     $entity = $this->createDaedalusLayoutEntityWithNestedSection();
 
-    $result = $this->operations->moveElement($entity, $this->nestedSectionUuid, [
+    $result = $this->operations->moveElement($this->host($entity), $this->nestedSectionUuid, [
       'anchor' => $entity->uuid(),
       'placement' => 'after',
     ]);
@@ -626,7 +626,7 @@ class BlueprintOperationsMoveTest extends BlueprintKernelTestBase {
   public function testMoveViaBatch(): void {
     $entity = $this->createLbEntityWithThreeComponents();
 
-    $result = $this->operations->batchOperations($entity, [
+    $result = $this->operations->batchOperations($this->host($entity), [
       [
         'op' => 'move_element',
         'element' => self::COMP[3],

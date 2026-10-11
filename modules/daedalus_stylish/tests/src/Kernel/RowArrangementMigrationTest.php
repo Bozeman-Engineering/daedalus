@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Drupal\Tests\daedalus_stylish\Kernel;
 
-use Drupal\daedalus_blueprint_stencil\Entity\Stencil;
 use Drupal\entity_test\Entity\EntityTest;
 use Drupal\layout_builder\Section;
 use Drupal\layout_builder\SectionComponent;
@@ -28,7 +27,7 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  * minmax pattern (and shadowing a worn reference when both exist), track
  * styles outside that pattern staying Custom LOUDLY, the split_* entity
  * delete pass (the migrate_0006 precedent), the proportions axis moving
- * off surviving variants, stored stencil conversion, and idempotence.
+ * off surviving variants, and idempotence.
  *
  * @group daedalus_stylish
  */
@@ -42,12 +41,9 @@ class RowArrangementMigrationTest extends NestedStorageKernelTestBase {
   protected static $modules = [
     'daedalus_stylish',
     'daedalus_stylish_layouts',
-    // The stencil entity's icon field references media, so installing the
-    // stencil schema needs the media entity type (and its field types).
     'file',
     'image',
     'media',
-    'daedalus_blueprint_stencil',
   ];
 
   /**
@@ -75,8 +71,8 @@ class RowArrangementMigrationTest extends NestedStorageKernelTestBase {
     // every build, and every compile and validation builds it.
     $this->installEntitySchema('daedalus_swatch');
     $this->installEntitySchema('daedalus_animation');
+    $this->installEntitySchema('daedalus_font');
     $this->installEntitySchema('daedalus_skin');
-    $this->installEntitySchema('stencil');
     $this->installSchema('daedalus_stylish', ['daedalus_variant_usage']);
     $this->installConfig(['daedalus_stylish']);
     $this->container->get('daedalus_stylish.field_manager')->enable('entity_test', 'entity_test');
@@ -532,49 +528,5 @@ class RowArrangementMigrationTest extends NestedStorageKernelTestBase {
     $this->assertSame('style', $user->getAxis());
   }
 
-  /**
-   * Stored stencils: split names and stepper tracks convert like maps.
-   */
-  public function testStencilArrangement(): void {
-    $stencil = Stencil::create([
-      'label' => 'Legacy columns',
-      'machine_name' => 'legacy_columns',
-      'description' => 'Captured before mode + share.',
-      'status' => TRUE,
-    ]);
-    $stencil->setElement([
-      'layout_id' => 'daedalus_stylish_container',
-      'label' => 'Columns',
-      'styles' => [
-        '' => ['variants' => ['container_lg', 'split_25_50_25'], 'default' => ['background-color' => 'aliceblue']],
-      ],
-      'regions' => [
-        'content' => [
-          ['block_type' => 'text'],
-          ['block_type' => 'text'],
-          ['block_type' => 'text'],
-        ],
-      ],
-    ]);
-    $stencil->save();
-
-    $migration = $this->container->get('daedalus_stylish_layouts.container_migration');
-    $lines = $migration->migrateStencils();
-    $this->assertNotEmpty($lines);
-    $storage = $this->entityTypeManager->getStorage('stencil');
-    $storage->resetCache();
-    $component = $storage->loadUnchanged($stencil->id())->getElement();
-
-    $this->assertSame(['variants' => ['container_lg', 'columns'], 'default' => ['background-color' => 'aliceblue']], $component['styles']['']);
-    $children = $component['regions']['content'];
-    $this->assertArrayNotHasKey('styles', $children[0]);
-    $this->assertSame(['' => ['default' => ['flex-grow' => '2']]], $children[1]['styles']);
-    $this->assertArrayNotHasKey('styles', $children[2]);
-
-    // Idempotence: a second pass leaves the stencil untouched.
-    $migration->migrateStencils();
-    $storage->resetCache();
-    $this->assertSame($component, $storage->loadUnchanged($stencil->id())->getElement());
-  }
 
 }

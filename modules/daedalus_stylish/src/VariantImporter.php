@@ -87,15 +87,15 @@ class VariantImporter extends ShippedDefinitionsImporter {
    * Axis: the variant axis within the scope. Omitted definitions land
    * on the built-in "style" axis (DaedalusStylishVariant::preSave()).
    *
-   * Stencil: the owning stencil's machine name (stencil-owned variants: a
-   * shipped stencil's switchable looks ship beside it and are offered only
-   * on its placements). Requires daedalus_blueprint_stencil (the module
-   * providing the ownership fields) and resolves against the site's whole
-   * stencil vocabulary: content stencils through the entity reference
-   * lane, file-shipped stencils through the machine-name lane (see
-   * syncOwner()). A dangling reference is a loud developer error, never
-   * silently dropped ownership. An absent key on an update leaves stored
-   * ownership alone, exactly like axis.
+   * Blueprint: the owning blueprint's machine name (blueprint-owned
+   * variants: a shipped blueprint's switchable looks ship beside it and
+   * are offered only on its placements). Requires daedalus_blueprint_library
+   * (the module providing the ownership fields) and resolves against the
+   * site's whole blueprint vocabulary: content blueprints through the
+   * entity reference lane, file-shipped blueprints through the
+   * machine-name lane (see syncOwner()). A dangling reference is a loud
+   * developer error, never silently dropped ownership. An absent key on
+   * an update leaves stored ownership alone, exactly like axis.
    *
    * Description: when to reach for this look, the payload the style
    * materials roster serves to the AI (the schema's materials.variants). Syncs
@@ -125,18 +125,27 @@ class VariantImporter extends ShippedDefinitionsImporter {
    * key is the default, not "leave it alone" (see the base class's
    * syncOffered()).
    */
-  protected const OPTIONAL_KEYS = ['axis', 'stencil', 'description', 'weight', 'ai', 'design_system'];
+  protected const OPTIONAL_KEYS = ['axis', self::OWNER_KEY, 'description', 'weight', 'ai', 'design_system'];
 
   /**
-   * The stencil discovery service, when daedalus_blueprint_stencil exists.
+   * The owner key: the owning blueprint's machine name.
+   *
+   * daedalus_blueprint_library's shipper writes it beside the blueprint
+   * file; this module reads it onto the ownership fields that module
+   * provides.
+   */
+  public const OWNER_KEY = 'blueprint';
+
+  /**
+   * The blueprint discovery service, when daedalus_blueprint_library exists.
    *
    * Deliberately untyped (its interface lives in an optional module): the
-   * FILE half of the stencil vocabulary. Content stencils resolve through
-   * entity queries; file-shipped stencils only exist here.
+   * FILE half of the blueprint vocabulary. Content blueprints resolve
+   * through entity queries; file-shipped blueprints only exist here.
    *
    * @var object|null
    */
-  protected ?object $stencilDiscovery;
+  protected ?object $blueprintDiscovery;
 
   public function __construct(
     ModuleHandlerInterface $moduleHandler,
@@ -146,10 +155,10 @@ class VariantImporter extends ShippedDefinitionsImporter {
     TimeInterface $time,
     ActiveDesignSystem $activeDesignSystem,
     ?WorkspaceManagerInterface $workspaceManager = NULL,
-    ?object $stencilDiscovery = NULL,
+    ?object $blueprintDiscovery = NULL,
   ) {
     parent::__construct($moduleHandler, $entityTypeManager, $deserializer, $accountSwitcher, $time, $activeDesignSystem, $workspaceManager);
-    $this->stencilDiscovery = $stencilDiscovery;
+    $this->blueprintDiscovery = $blueprintDiscovery;
   }
 
   /**
@@ -259,7 +268,7 @@ class VariantImporter extends ShippedDefinitionsImporter {
     // Ownership, the description, the weight, and the membership sync
     // independently of the styles outcome: the source hash covers styles
     // only, and all four are part of the variant's shipped face (a
-    // stencil:, description:, weight:, or design_system: key added later
+    // blueprint:, description:, weight:, or design_system: key added later
     // must land even when the styles never changed). The UNCHANGED / KEPT
     // vocabulary keeps describing the STYLES sync.
     if (!$variant->hasNewDefaults($styles)) {
@@ -355,22 +364,23 @@ class VariantImporter extends ShippedDefinitionsImporter {
   }
 
   /**
-   * Syncs a definition's stencil: ownership onto the variant, loudly.
+   * Syncs a definition's blueprint: ownership onto the variant, loudly.
    *
-   * Resolution runs against the site's WHOLE stencil vocabulary, one flat
-   * machine-name space across both sources (StencilDiscovery's rule):
-   * - A CONTENT stencil owns through the `stencil` entity reference field
-   *   daedalus_blueprint_stencil provides on daedalus_variant (referential
-   *   integrity at storage level).
-   * - A FILE-shipped stencil has no entity to reference, so it owns through
-   *   the sibling `stencil_file` machine-name field, resolved against
-   *   stencil discovery. This is what makes a cross-site package (stencil
-   *   file plus owned variants file) work: both ship as code, and the
-   *   variant's owner is the file stencil's id.
+   * Resolution runs against the site's WHOLE blueprint vocabulary, one
+   * flat machine-name space across both sources (BlueprintDiscovery's
+   * rule):
+   * - A CONTENT blueprint owns through the `blueprint` entity reference
+   *   field daedalus_blueprint_library provides on daedalus_variant
+   *   (referential integrity at storage level).
+   * - A FILE-shipped blueprint has no entity to reference, so it owns
+   *   through the sibling `blueprint_file` machine-name field, resolved
+   *   against blueprint discovery. This is what makes a cross-site package
+   *   (blueprint file plus owned variants file) work: both ship as code,
+   *   and the variant's owner is the file blueprint's id.
    * Setting one lane clears the other; both empty means unowned.
    *
    * Both failure modes are developer errors: shipping ownership without the
-   * module that defines it, and naming a stencil the site knows nothing
+   * module that defines it, and naming a blueprint the site knows nothing
    * about in either source. The caller decides when the assignment saves.
    *
    * @return bool
@@ -379,16 +389,16 @@ class VariantImporter extends ShippedDefinitionsImporter {
    * @throws \Drupal\daedalus_stylish\Exception\ShippedVariantException
    */
   protected function syncOwner(string $module, string $name, DaedalusStylishVariantInterface $variant, array $definition): bool {
-    if (!array_key_exists('stencil', $definition)) {
+    if (!array_key_exists(self::OWNER_KEY, $definition)) {
       return FALSE;
     }
-    if (!$variant->hasField('stencil')) {
+    if (!$variant->hasField('blueprint')) {
       throw new ShippedVariantException($module, $name, [
-        new BlueprintError($name, 'SHIPPED_VARIANT_OWNER_UNAVAILABLE', sprintf('The "%s" entry declares a stencil owner, but stencil ownership requires the daedalus_blueprint_stencil module.', $name), [], 'Enable daedalus_blueprint_stencil, or drop the stencil key.'),
+        new BlueprintError($name, 'SHIPPED_VARIANT_OWNER_UNAVAILABLE', sprintf('The "%s" entry declares a blueprint owner, but blueprint ownership requires the daedalus_blueprint_library module.', $name), [], 'Enable daedalus_blueprint_library, or drop the blueprint key.'),
       ]);
     }
-    $owner = $definition['stencil'];
-    $ids = $this->entityTypeManager->getStorage('stencil')->getQuery()
+    $owner = $definition[self::OWNER_KEY];
+    $ids = $this->entityTypeManager->getStorage('blueprint')->getQuery()
       ->accessCheck(FALSE)
       ->condition('machine_name', $owner)
       ->range(0, 1)
@@ -396,17 +406,18 @@ class VariantImporter extends ShippedDefinitionsImporter {
     if ($ids !== []) {
       return $this->setOwnerLanes($variant, (string) reset($ids), NULL);
     }
-    // No content stencil: the FILE lane. Discovery serves published content
-    // stencils too, but those would have matched the query above, so a hit
-    // here is a module-shipped file stencil (guarded anyway: 'module' is
-    // StencilDiscoveryInterface::SOURCE_MODULE, mirrored as a literal
-    // because the interface lives in the optional module).
-    $discovered = $this->stencilDiscovery?->getStencil($owner);
+    // No content blueprint: the FILE lane. Discovery serves published
+    // content blueprints too, but those would have matched the query
+    // above, so a hit here is a module-shipped file blueprint (guarded
+    // anyway: 'module' is BlueprintDiscoveryInterface::SOURCE_MODULE,
+    // mirrored as a literal because the interface lives in the optional
+    // module).
+    $discovered = $this->blueprintDiscovery?->getBlueprint($owner);
     if (is_array($discovered) && ($discovered['source'] ?? NULL) === 'module') {
       return $this->setOwnerLanes($variant, NULL, $owner);
     }
     throw new ShippedVariantException($module, $name, [
-      new BlueprintError($name, 'SHIPPED_VARIANT_OWNER_MISSING', sprintf('The "%s" entry names the stencil "%s", which is neither a content stencil nor a module-shipped file stencil on this site.', $name, $owner), [], 'Owned variants resolve their owner across the whole stencil vocabulary; save (or ship) the stencil first, or drop the stencil key.'),
+      new BlueprintError($name, 'SHIPPED_VARIANT_OWNER_MISSING', sprintf('The "%s" entry names the blueprint "%s", which is neither a content blueprint nor a module-shipped file blueprint on this site.', $name, $owner), [], 'Owned variants resolve their owner across the whole blueprint vocabulary; save (or ship) the blueprint first, or drop the blueprint key.'),
     ]);
   }
 
@@ -460,12 +471,12 @@ class VariantImporter extends ShippedDefinitionsImporter {
    */
   protected function setOwnerLanes(DaedalusStylishVariantInterface $variant, ?string $target_id, ?string $file_id): bool {
     $changed = FALSE;
-    if ((string) ($variant->get('stencil')->target_id ?? '') !== (string) ($target_id ?? '')) {
-      $variant->set('stencil', $target_id);
+    if ((string) ($variant->get('blueprint')->target_id ?? '') !== (string) ($target_id ?? '')) {
+      $variant->set('blueprint', $target_id);
       $changed = TRUE;
     }
-    if ((string) ($variant->get('stencil_file')->value ?? '') !== (string) ($file_id ?? '')) {
-      $variant->set('stencil_file', $file_id);
+    if ((string) ($variant->get('blueprint_file')->value ?? '') !== (string) ($file_id ?? '')) {
+      $variant->set('blueprint_file', $file_id);
       $changed = TRUE;
     }
     return $changed;
@@ -478,7 +489,9 @@ class VariantImporter extends ShippedDefinitionsImporter {
     // shipped_sync: disk is the one author the distro lock protects, so the
     // importer's own writes pass the styles field handler's read-only gate
     // (VariantStylesFieldHandler); every other blueprint write refuses.
-    $result = $this->deserializer->deserialize($blueprint, ['shipped_sync' => TRUE]);
+    // A shipped sync acts for the site (files on disk are the author), so
+    // the capability gate is not asked: the system posture.
+    $result = $this->deserializer->deserialize($blueprint, ['shipped_sync' => TRUE, 'system' => TRUE]);
     if (!$result->isSuccess()) {
       throw new ShippedVariantException($module, $name, $result->getErrors());
     }
@@ -522,9 +535,9 @@ class VariantImporter extends ShippedDefinitionsImporter {
         new BlueprintError($name, 'INVALID_SHIPPED_VARIANT', sprintf('The "%s" entry has the wrong shape.', $name), [], 'axis, when given, is an axis machine name string; omit it for the built-in "style" axis.'),
       ]);
     }
-    if (array_key_exists('stencil', $definition) && (!is_string($definition['stencil']) || trim($definition['stencil']) === '')) {
+    if (array_key_exists(self::OWNER_KEY, $definition) && (!is_string($definition[self::OWNER_KEY]) || trim($definition[self::OWNER_KEY]) === '')) {
       throw new ShippedVariantException($module, $name, [
-        new BlueprintError($name, 'INVALID_SHIPPED_VARIANT', sprintf('The "%s" entry has the wrong shape.', $name), [], 'stencil, when given, is the owning stencil\'s machine name (a content stencil or a module-shipped file stencil); omit it for an unowned variant.'),
+        new BlueprintError($name, 'INVALID_SHIPPED_VARIANT', sprintf('The "%s" entry has the wrong shape.', $name), [], 'blueprint, when given, is the owning blueprint\'s machine name (a content blueprint or a module-shipped file blueprint); omit it for an unowned variant.'),
       ]);
     }
     if (array_key_exists('description', $definition) && (!is_string($definition['description']) || trim($definition['description']) === '')) {

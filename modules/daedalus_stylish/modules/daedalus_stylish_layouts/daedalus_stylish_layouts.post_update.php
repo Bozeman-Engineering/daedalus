@@ -128,19 +128,6 @@ function daedalus_stylish_layouts_post_update_migrate_0004_variants() {
 }
 
 /**
- * Migrates stored stencils to the container grammar.
- *
- * Multi-region daedalus_stylish section nodes become container nodes, region:NAME
- * relative styles move onto the minted child nodes, retired conditions and
- * layout-exact variant names rewrite. File-shipped stencils are module
- * code and are not touched.
- */
-function daedalus_stylish_layouts_post_update_migrate_0005_stencils() {
-  $lines = \Drupal::service('daedalus_stylish_layouts.container_migration')->migrateStencils();
-  return t('Migrated stored stencils to the container grammar (@count report lines logged to the daedalus_stylish_layouts channel).', ['@count' => count($lines)]);
-}
-
-/**
  * Deletes the retired shipped layout-exact variants (onecol_*..fourcol_*).
  *
  * The four multi-region layouts are gone and every reference re-pointed to
@@ -174,19 +161,6 @@ function daedalus_stylish_layouts_post_update_migrate_0007_row_arrangement(&$san
     return t('Converted split_* references and stepper tracks to the row arrangement on host entities (all revisions and translations).');
   }
   return t('Converted @count host revisions in this batch.', ['@count' => $saved]);
-}
-
-/**
- * Converts stored stencils' proportions grammar to mode + share.
- *
- * Container stencil nodes naming split_* variants (or carrying stepper
- * tracks) convert exactly like host style maps: the `row` name plus
- * flex-grow on the child nodes in order. File-shipped stencils are module
- * code and are not touched.
- */
-function daedalus_stylish_layouts_post_update_migrate_0008_row_arrangement_stencils() {
-  $lines = \Drupal::service('daedalus_stylish_layouts.container_migration')->migrateStencils();
-  return t('Converted stored stencils to the row arrangement (@count report lines logged to the daedalus_stylish_layouts channel).', ['@count' => count($lines)]);
 }
 
 /**
@@ -258,8 +232,9 @@ function daedalus_stylish_layouts_post_update_one_box_0001_sync_shipped(): void 
  * `::.daedalus-stylish-layout-container` part entries (and their `::>` children
  * entries) merge onto the container's root key - the one element a
  * container is now. Per-map details are logged to the daedalus_stylish_layouts
- * channel. Entity view displays hold layout structure only, never style
- * data, so there is no display walk.
+ * channel. Entity view displays carried no style map when this update
+ * shipped (a template's map arrived with the display host), so there is no
+ * display walk.
  */
 function daedalus_stylish_layouts_post_update_one_box_0002_hoist_hosts(&$sandbox) {
   if (!\Drupal::hasService('daedalus_layout.host_entity_walker')) {
@@ -297,18 +272,6 @@ function daedalus_stylish_layouts_post_update_one_box_0004_hoist_skins() {
 }
 
 /**
- * Hoists container part styles onto the root key in stored stencils.
- *
- * At every node depth. File-shipped stencils are module code and are not
- * touched; one still carrying the part key fails loudly at instantiate
- * time.
- */
-function daedalus_stylish_layouts_post_update_one_box_0005_hoist_stencils() {
-  $lines = \Drupal::service('daedalus_stylish_layouts.container_part_hoist')->hoistStencils();
-  return t('Hoisted container part styles onto the root key in stored stencils (@count report lines logged to the daedalus_stylish_layouts channel).', ['@count' => count($lines)]);
-}
-
-/**
  * Renames the shipped Columns variant from `row` to `columns`.
  *
  * A variant named `row` that means Columns misleads the AI (apply_variant
@@ -326,7 +289,7 @@ function daedalus_stylish_layouts_post_update_one_box_0005_hoist_stencils() {
  * repointed: host style maps (every revision and translation, through
  * daedalus_layout's host entity walker with a sweep that is deliberately
  * not registered, since a permanent row-to-columns sweep would eat Row
- * wearings), stored stencils and variant styles (composition variants
+ * wearings) and variant styles (composition variants
  * nesting the name; shipped-unmodified ones ride the sync lane).
  */
 function daedalus_stylish_layouts_post_update_rename_row_to_columns(&$sandbox) {
@@ -344,8 +307,7 @@ function daedalus_stylish_layouts_post_update_rename_row_to_columns(&$sandbox) {
     }
   }
   $count = $sandbox['daedalus_stylish_layouts_rename_lines']
-    + count($rename->renameInStencils($from, $to))
     + count($rename->renameInVariants($from, $to));
   $sandbox['#finished'] = 1;
-  return t('Renamed the shipped Columns variant from "@from" to "@to" across host maps, stored stencils and variant styles (the host repoints logged per revision; @count retirement, stencil and variant report lines logged to the daedalus_stylish_layouts channel).', ['@from' => $from, '@to' => $to, '@count' => $count]);
+  return t('Renamed the shipped Columns variant from "@from" to "@to" across host maps and variant styles (the host repoints logged per revision; @count retirement and variant report lines logged to the daedalus_stylish_layouts channel).', ['@from' => $from, '@to' => $to, '@count' => $count]);
 }

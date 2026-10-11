@@ -5,8 +5,10 @@ namespace Drupal\daedalus_layout\Entity;
 use Drupal\Core\Render\Element;
 use Drupal\Core\Cache\CacheableMetadata;
 use Drupal\Core\Plugin\Context\EntityContext;
-use Drupal\Core\Entity\Entity\EntityViewDisplay;
+use Drupal\Core\Entity\EntityInterface;
+use Drupal\Core\Entity\EntityStorageInterface;
 use Drupal\Core\Entity\FieldableEntityInterface;
+use Drupal\layout_builder\Plugin\SectionStorage\OverridesSectionStorage;
 use Drupal\Core\StringTranslation\TranslatableMarkup;
 use Drupal\layout_builder\Section;
 use Drupal\layout_builder\Entity\LayoutBuilderEntityViewDisplay as BaseEntityViewDisplay;
@@ -51,33 +53,54 @@ class LayoutBuilderEntityViewDisplay extends BaseEntityViewDisplay {
    * children (getSectionAttributes() and core's shape are untouched).
    *
    * Only while sections exist: an empty list stays the bare `#cache`-only
-   * array core returns, so Element::isEmpty() in buildMultiple() keeps
-   * rendering the display's fields on a section-less entity, and the
+   * array core returns, so Element::isEmpty() in core's buildMultiple()
+   * keeps rendering the display's fields on a section-less entity, and the
    * declared part is presence-gated exactly as its anatomy says (an entity
    * with no layout has no layout root). The drag placeholder for a new
    * root section lands inside the root beside its siblings (daedalus_ui
    * inserts against a section's own parent) and a blank page's drop lands
    * in the entity root; either way the placement is delivered as a
    * whole-entity re-render, so the root needs no client insertion logic.
+   *
+   * The sections render against the HOST'S SUBJECT (getContextsForEntity()
+   * states it), not against core's choice of the rendered entity: core's
+   * buildSections() hands every section the entity itself as
+   * layout_builder.entity, which is right for a page (its subject is itself)
+   * and wrong for a saved blueprint, whose document is material for hosts of
+   * another kind: with the blueprint as layout_builder.entity the subject's
+   * field blocks are forbidden (FieldBlock::blockAccess asks hasField() on
+   * the blueprint) and a live view shows only the non-field blocks while
+   * the canvas shows them all. So the loop is core's, over our contexts.
+   *
+   * A slot section of the document (a fill of a slot the template or the
+   * site frame around it declares) is left out: its place on the page is
+   * the slot's, where the slot block renders it
+   * (InnerRender::renderedBySlot()).
    */
   protected function buildSections(FieldableEntityInterface $entity) {
-    $build = parent::buildSections($entity);
-    $build['#cache']['contexts'][] = 'user.permissions';
-
     $contexts = $this->getContextsForEntity($entity);
-    $label = new TranslatableMarkup('@entity being viewed', [
-      '@entity' => $entity->getEntityType()->getSingularLabel(),
-    ]);
-    $contexts['layout_builder.entity'] = EntityContext::fromEntity($entity, $label);
 
     $cacheability = new CacheableMetadata();
     $storage = $this->getSectionStorage()->findByContext($contexts, $cacheability);
 
+    $build = [];
     if ($storage) {
+      $host = \Drupal::service('daedalus_blueprint.host_resolver')->fromSectionStorage($storage);
+      /** @var \Drupal\daedalus_blueprint\Host\InnerRender $inner_render */
+      $inner_render = \Drupal::service('daedalus_blueprint.inner_render');
       foreach ($storage->getSections() as $delta => $section) {
+        if ($host !== NULL && $inner_render->renderedBySlot($host, $section)) {
+          continue;
+        }
+        $build[$delta] = $section->toRenderArray($contexts);
         $this->getSectionAttributes($delta, $build[$delta], $storage, $section, $entity);
       }
     }
+    // The render array is built on decisions the section storage plugins
+    // made, so it depends on their accumulated cacheability.
+    $cacheability->applyTo($build);
+    $build['#cache']['contexts'][] = 'user.permissions';
+
     if (Element::children($build) !== []) {
       $build['#type'] = 'container';
       $build['#attributes']['class'][] = self::LAYOUT_ROOT_CLASS;
@@ -93,6 +116,62 @@ class LayoutBuilderEntityViewDisplay extends BaseEntityViewDisplay {
    */
   protected function getSectionStorage() {
     return \Drupal::service('plugin.manager.layout_builder.section_storage');
+  }
+
+  /**
+   * {@inheritdoc}
+   *
+   * The override field follows Layout Builder being enabled on the bundle,
+   * not overrides being allowed. Core adds `layout_builder__layout` when a
+   * display becomes overridable and deletes it when the last overridable
+   * display of the bundle stops being so; a Daedalus page needs the field
+   * on a LOCKED bundle too, because a page rendered inside its template
+   * still owns a document there (its slot sections; the host's
+   * ContentHost::hasDocument() and HostResolver::foreignOwner() are the
+   * two answers). So the field is added whenever the display is enabled,
+   * overridable or not (idempotent: core's addSectionField() creates only
+   * what is missing), and removed only when no display of the bundle is
+   * Layout Builder enabled any more (removeSectionField() below widens
+   * core's criterion the same one step). Core's own add and remove run
+   * first, inside the parent, so a lock (overridable to not) that core
+   * would answer with a delete answers with the field kept.
+   */
+  public function preSave(EntityStorageInterface $storage) {
+    parent::preSave($storage);
+    $entity_type_id = $this->getTargetEntityTypeId();
+    $bundle = $this->getTargetBundle();
+    if ($this->isLayoutBuilderEnabled()) {
+      $this->addSectionField($entity_type_id, $bundle, OverridesSectionStorage::FIELD_NAME);
+    }
+    elseif ($this->getOriginal()?->isLayoutBuilderEnabled() ?? FALSE) {
+      $this->removeSectionField($entity_type_id, $bundle, OverridesSectionStorage::FIELD_NAME);
+    }
+  }
+
+  /**
+   * {@inheritdoc}
+   *
+   * Removes the field only when no display of the bundle is Layout Builder
+   * enabled: core asks whether another display is overridable, which on a
+   * lock answers "none" and would delete the pages' slot sections with the
+   * field. This display's own answer is its unsaved state, so a display
+   * being disabled counts itself out and one being locked counts itself
+   * in.
+   */
+  protected function removeSectionField($entity_type_id, $bundle, $field_name) {
+    if ($this->isLayoutBuilderEnabled()) {
+      return;
+    }
+    $query = $this->entityTypeManager()->getStorage($this->getEntityTypeId())->getQuery()
+      ->accessCheck(FALSE)
+      ->condition('targetEntityType', $entity_type_id)
+      ->condition('bundle', $bundle)
+      ->condition('mode', $this->getMode(), '<>')
+      ->condition('third_party_settings.layout_builder.enabled', TRUE);
+    if ((bool) $query->count()->execute()) {
+      return;
+    }
+    parent::removeSectionField($entity_type_id, $bundle, $field_name);
   }
 
   /**
@@ -190,18 +269,34 @@ class LayoutBuilderEntityViewDisplay extends BaseEntityViewDisplay {
   /**
    * {@inheritdoc}
    *
-   * Adds the stable root-entity context to every Layout Builder render.
-   * For an inline block's content rendering its own Layout Builder display
-   * the root comes from the RootEntityRegistry (recorded when the
-   * inline-block component built in its host render); for a root entity it
-   * is the entity itself. This is what lets a field block mapped to
-   * ROOT_ENTITY_CONTEXT_ID (e.g. a node title block moved into a nested
+   * The contexts a live render's sections render with, the same rule the
+   * edit canvas states (LayoutBuilderPlus::renderContexts()): the host's
+   * subject is layout_builder.entity and the stable root-entity context
+   * (NestedSectionStorageInterface::ROOT_ENTITY_CONTEXT_ID), one context
+   * object for both, over the contexts core resolves the storage with. The
+   * subject is the entity itself for a page and for an inline block's
+   * content, and the sample entity of the subject bundle for a saved
+   * blueprint (HostInterface::subject()); the `entity` context stays the
+   * rendered entity, since it is what findByContext resolves the storage
+   * by. For an inline block's content rendering its own Layout Builder
+   * display the root comes from the RootEntityRegistry instead (recorded
+   * when the inline-block component built in its host render, so it is
+   * already the host's subject), which is what lets a field block mapped
+   * to ROOT_ENTITY_CONTEXT_ID (e.g. a node title block moved into a nested
    * layout) render at any depth.
    */
   protected function getContextsForEntity(FieldableEntityInterface $entity) {
     $contexts = parent::getContextsForEntity($entity);
-    $root = \Drupal::service('daedalus_layout.root_entity_registry')->getRoot($entity) ?? $entity;
-    $contexts[NestedSectionStorageInterface::ROOT_ENTITY_CONTEXT_ID] = EntityContext::fromEntity($root);
+    $subject = \Drupal::service('daedalus_blueprint.host_resolver')->fromEntity($entity)->subject();
+    // A fieldable entity's host is a content host, whose subject is itself
+    // or a sample of its bundle, never absent.
+    assert($subject !== NULL);
+    $subject_context = EntityContext::fromEntity($subject, new TranslatableMarkup('@entity being viewed', [
+      '@entity' => $subject->getEntityType()->getSingularLabel(),
+    ]));
+    $contexts['layout_builder.entity'] = $subject_context;
+    $root = \Drupal::service('daedalus_layout.root_entity_registry')->getRoot($entity);
+    $contexts[NestedSectionStorageInterface::ROOT_ENTITY_CONTEXT_ID] = $root ? EntityContext::fromEntity($root) : $subject_context;
     return $contexts;
   }
 
@@ -236,7 +331,7 @@ class LayoutBuilderEntityViewDisplay extends BaseEntityViewDisplay {
    * @return array
    *   The section build with its data attributes set.
    */
-  public static function getSectionAttributes(int|string $delta, array &$build, $storage = NULL, ?Section $section = NULL, ?FieldableEntityInterface $entity = NULL): array {
+  public static function getSectionAttributes(int|string $delta, array &$build, $storage = NULL, ?Section $section = NULL, ?EntityInterface $entity = NULL): array {
     // Attribute the rendered sections so that the Daedalus Edit JS can make sense
     // of the page.
     $build['#attributes']['data-layout-builder-section-delta'] = $delta;
@@ -287,50 +382,6 @@ class LayoutBuilderEntityViewDisplay extends BaseEntityViewDisplay {
       }
     }
     return $build;
-  }
-
-  /**
-   * Build Multiple.
-   *
-   * Fields configured in the "Daedalus Edit: Preserved Fields" section will not be
-   * removed from the render array, allowing them to be edited inline with
-   * in Edit Mode while Layout Builder manages the rest of the page structure.
-   */
-  public function buildMultiple(array $entities) {
-    $fields_that_should_render = $this->getThirdPartySetting('daedalus_layout', 'preserved_fields', []);
-
-    // Call grandparent to build the initial render array with all fields.
-    $build_list = EntityViewDisplay::buildMultiple($entities);
-
-    // Override parent below.
-    // Layout Builder can not be enabled for the '_custom' view mode that is
-    // used for on-the-fly rendering of fields in isolation from the entity.
-    if ($this->isCustomMode()) {
-      return $build_list;
-    }
-
-    foreach ($entities as $id => $entity) {
-      $build_list[$id]['_layout_builder'] = $this->buildSections($entity);
-
-      // If there are any sections, remove all fields with configurable display
-      // from the existing build EXCEPT those configured to be preserved.
-      // Preserved fields can be edited inline using Daedalus Edit.
-      if (!Element::isEmpty($build_list[$id]['_layout_builder'])) {
-        foreach ($build_list[$id] as $name => $build_part) {
-          $field_definition = $this->getFieldDefinition($name);
-          if (
-            $field_definition &&
-            $field_definition->isDisplayConfigurable($this->displayContext) &&
-            // Omit removal of configured fields.
-            !in_array($name, $fields_that_should_render, TRUE)
-          ) {
-            unset($build_list[$id][$name]);
-          }
-        }
-      }
-    }
-
-    return $build_list;
   }
 
 }

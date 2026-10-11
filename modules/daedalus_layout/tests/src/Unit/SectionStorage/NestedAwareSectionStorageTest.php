@@ -513,7 +513,7 @@ class NestedAwareSectionStorageTest extends UnitTestCase {
   public function testMismatchedContainerUuidFollowsSection(): void {
     // A copy that re-minted only the wrapper: component uuid differs from
     // the embedded section's uuid. The SECTION uuid wins (styles and
-    // stencils key on it) and the component is re-keyed in lockstep.
+    // blueprints key on it) and the component is re-keyed in lockstep.
     $inner = $this->realSection('inner-section', [$this->realBlock('inner-block')]);
     $container = new SectionComponent('drifted-wrapper-uuid', 'content', [
       'id' => SectionBlock::PLUGIN_ID,

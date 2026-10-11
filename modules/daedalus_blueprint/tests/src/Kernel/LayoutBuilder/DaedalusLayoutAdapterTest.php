@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Drupal\Tests\daedalus_blueprint\Kernel\LayoutBuilder;
 
 use Drupal\daedalus_blueprint\ElementContext;
+use Drupal\daedalus_blueprint\Host\HostInterface;
+use Drupal\daedalus_blueprint\Host\HostResolver;
 use Drupal\daedalus_blueprint\LayoutBuilder\DaedalusLayoutAdapter;
 use Drupal\layout_builder\Entity\LayoutBuilderEntityViewDisplay;
 use Drupal\layout_builder\Section;
@@ -18,9 +20,12 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  *
  * The site here has layout_builder but not daedalus_layout, so locateElement() and
  * getBlockContentEntities() both ride the one flat walk of the root
- * sections. The cases pin what that walk promises: positional component
- * indexes per section, plugin blocks counted but never yielded as block
- * content, and one path string for the same component on both reads.
+ * sections of the host's storage. The cases pin what that walk promises:
+ * positional component indexes per section, plugin blocks counted but
+ * never yielded as block content, and one path string for the same
+ * component on both reads. The host's own two section reads (its own
+ * storage's sections, and the sections a reader sees) are pinned here
+ * too, since the adapter's walk stands on them.
  */
 #[CoversClass(DaedalusLayoutAdapter::class)]
 #[Group('daedalus_blueprint')]
@@ -33,6 +38,11 @@ class DaedalusLayoutAdapterTest extends BlueprintKernelTestBase {
   protected DaedalusLayoutAdapter $adapter;
 
   /**
+   * The host resolver.
+   */
+  protected HostResolver $hostResolver;
+
+  /**
    * {@inheritdoc}
    */
   protected function setUp(): void {
@@ -43,6 +53,14 @@ class DaedalusLayoutAdapterTest extends BlueprintKernelTestBase {
     $this->createBlockField('field_body', 'text_long', 'text_section');
 
     $this->adapter = $this->container->get('daedalus_blueprint.daedalus_layout_adapter');
+    $this->hostResolver = $this->container->get('daedalus_blueprint.host_resolver');
+  }
+
+  /**
+   * The host of an entity.
+   */
+  protected function host(object $entity): HostInterface {
+    return $this->hostResolver->fromEntity($entity);
   }
 
   /**
@@ -132,17 +150,26 @@ class DaedalusLayoutAdapterTest extends BlueprintKernelTestBase {
     $this->assertSame('layout_builder_blank', $display->getSections()[0]->getLayoutId());
 
     $entity = $this->createTestEntity();
-    $this->assertSame([], $this->adapter->getDefaultSections($entity), 'A blank-only display default is no default.');
-    $this->assertSame([], $this->adapter->getFieldSections($entity), 'An empty field holds no sections.');
+    $this->assertTrue($this->host($entity)->hasDocument());
+    $this->assertSame([], $this->host($entity)->sections(), 'A blank-only display default is no default.');
+    $this->assertSame([], $this->host($entity)->ownSections(), 'An empty storage holds no sections.');
 
     $entity->set('layout_builder__layout', [new Section('layout_builder_blank')]);
-    $this->assertSame([], $this->adapter->getFieldSections($entity), 'A blank-only field reads as empty.');
+    $this->assertSame([], $this->host($entity)->ownSections(), 'A blank-only storage reads as empty.');
+    $this->assertSame([], $this->host($entity)->sections(), 'A blank-only storage over a blank-only default reads as empty.');
 
     $section = new Section('layout_onecol');
     $entity->set('layout_builder__layout', [$section]);
-    $field = $this->adapter->getFieldSections($entity);
-    $this->assertCount(1, $field);
-    $this->assertSame('layout_onecol', $field[0]->getLayoutId());
+    $own = $this->host($entity)->ownSections();
+    $this->assertCount(1, $own);
+    $this->assertSame('layout_onecol', $own[0]->getLayoutId());
+    $this->assertSame($own, $this->host($entity)->sections(), 'An own section is what a reader sees.');
+
+    // A plain host: no document, only fields.
+    $plain = $this->createRevEntity();
+    $this->assertFalse($this->host($plain)->hasDocument());
+    $this->assertNull($this->host($plain)->sectionStorage());
+    $this->assertSame([], $this->host($plain)->sections());
   }
 
   /**
@@ -151,25 +178,26 @@ class DaedalusLayoutAdapterTest extends BlueprintKernelTestBase {
   public function testLocateElementFlatCountsEveryComponent(): void {
     ['entity' => $entity, 'uuids' => $uuids] = $this->createLayoutEntity();
 
-    $behind_plugin = $this->adapter->locateElement($entity, $uuids[1]);
+    $host = $this->host($entity);
+    $behind_plugin = $this->adapter->locateElement($host, $uuids[1]);
     $this->assertNotNull($behind_plugin);
     $this->assertSame(ElementContext::TYPE_LB_COMPONENT, $behind_plugin->type);
     $this->assertSame($uuids[1], $behind_plugin->target->getUuid());
     $this->assertSame(0, $behind_plugin->sectionIndex);
-    $this->assertSame('layout_builder__layout[0].components[1]', $behind_plugin->path);
+    $this->assertSame('layout[0].components[1]', $behind_plugin->path);
     $this->assertSame('layout_onecol', $behind_plugin->section->getLayoutId());
     $this->assertSame($entity->id(), $behind_plugin->parentEntity->id());
 
-    $second_section = $this->adapter->locateElement($entity, $uuids[3]);
+    $second_section = $this->adapter->locateElement($host, $uuids[3]);
     $this->assertNotNull($second_section);
     $this->assertSame(1, $second_section->sectionIndex);
-    $this->assertSame('layout_builder__layout[1].components[1]', $second_section->path);
+    $this->assertSame('layout[1].components[1]', $second_section->path);
 
-    $plugin_block = $this->adapter->locateElement($entity, $uuids[0]);
+    $plugin_block = $this->adapter->locateElement($host, $uuids[0]);
     $this->assertNotNull($plugin_block);
-    $this->assertSame('layout_builder__layout[0].components[0]', $plugin_block->path);
+    $this->assertSame('layout[0].components[0]', $plugin_block->path);
 
-    $this->assertNull($this->adapter->locateElement($entity, 'no-such-component'));
+    $this->assertNull($this->adapter->locateElement($host, 'no-such-component'));
   }
 
   /**
@@ -178,21 +206,22 @@ class DaedalusLayoutAdapterTest extends BlueprintKernelTestBase {
   public function testBlockContentEntitiesFlatShareTheLocatePath(): void {
     ['entity' => $entity, 'uuids' => $uuids] = $this->createLayoutEntity();
 
+    $host = $this->host($entity);
     $yielded = [];
-    foreach ($this->adapter->getBlockContentEntities($entity) as $info) {
+    foreach ($this->adapter->getBlockContentEntities($host) as $info) {
       $yielded[$info['component_uuid']] = $info;
     }
 
     // The plugin block is walked (it holds index 0) but never yielded.
     $this->assertSame([$uuids[1], $uuids[2], $uuids[3]], array_keys($yielded));
     $this->assertSame([
-      'layout_builder__layout[0].components[1]',
-      'layout_builder__layout[1].components[0]',
-      'layout_builder__layout[1].components[1]',
+      'layout[0].components[1]',
+      'layout[1].components[0]',
+      'layout[1].components[1]',
     ], array_column($yielded, 'path'));
 
     foreach ($yielded as $uuid => $info) {
-      $this->assertSame($this->adapter->locateElement($entity, $uuid)->path, $info['path']);
+      $this->assertSame($this->adapter->locateElement($host, $uuid)->path, $info['path']);
       $this->assertSame('text_section', $info['entity']->bundle());
     }
 

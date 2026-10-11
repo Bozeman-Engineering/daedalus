@@ -3,18 +3,27 @@
 namespace Drupal\daedalus_ui\Event;
 
 use Drupal\Component\EventDispatcher\Event;
-use Drupal\Core\Entity\EntityInterface;
+use Drupal\daedalus_blueprint\Host\HostInterface;
 
 /**
- * Lets subscribers alter the editable UI build of an entity.
+ * Lets subscribers build the editable canvas of a host.
+ *
+ * Dispatched over the render the canvas replaces: the route entity's own
+ * view build on a canonical page (the entity view is the canvas root
+ * there, and the build already wears the main-entity wrapper), or an
+ * empty build for a host with no entity view (a template host on core's
+ * manage-display route, LoadEditablePage and the mutation re-render for
+ * it), where the subscriber's element supplies the root wrapper itself.
+ * daedalus_layout answers with the layout_builder_plus element over the
+ * host's section storage.
  */
 class EditableUiBuilder extends Event {
 
   public function __construct(
-    private $build,
-    readonly mixed $mode,
-    readonly EntityInterface $entity,
-    readonly string $view_mode,
+    private array $build,
+    private readonly string $mode,
+    private readonly HostInterface $host,
+    private readonly string $viewMode,
   ) {
   }
 
@@ -22,43 +31,34 @@ class EditableUiBuilder extends Event {
    * Gets the view mode.
    */
   public function getViewMode(): string {
-    return $this->view_mode;
+    return $this->viewMode;
   }
 
   /**
-   * Gets the entity being built.
-   *
-   * @return \Drupal\Core\Entity\EntityInterface
-   *   The entity.
+   * The host whose canvas is being built.
    */
-  public function getEntity(): EntityInterface {
-    return $this->entity;
+  public function getHost(): HostInterface {
+    return $this->host;
   }
 
   /**
    * Gets the current mode.
    */
-  public function getMode(): mixed {
+  public function getMode(): string {
     return $this->mode;
   }
 
   /**
    * Gets the render array.
-   *
-   * @return mixed
-   *   The render array.
    */
-  public function getBuild() {
+  public function getBuild(): array {
     return $this->build;
   }
 
   /**
    * Replaces the render array.
-   *
-   * @param mixed $build
-   *   The render array.
    */
-  public function setBuild($build): void {
+  public function setBuild(array $build): void {
     $this->build = $build;
   }
 

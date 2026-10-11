@@ -29,7 +29,14 @@ import {
   stackLines,
   unseenOwnLines,
 } from './island.js';
-import { ELEMENT_LAYER, layerColor, variantLayerId } from './layers.js';
+import {
+  ELEMENT_LAYER,
+  documentLayerId,
+  isSkinDocument,
+  lawDocument,
+  layerColor,
+  skinDocument,
+} from './layers.js';
 import { buildStack } from '../style-stack.js';
 import {
   createStitching,
@@ -43,6 +50,8 @@ import {
   conditionRemovalOps,
   draftRoster,
   elementIslands,
+  nestUnder,
+  nestedSpelling,
   occupiedRoster,
   ownIslandLines,
   partRemovalOps,
@@ -81,7 +90,7 @@ import {
   overlaySessionLines,
   wearerWinners,
 } from './variant-document.js';
-import { rowWords } from './page-model.js';
+
 import { useMenu } from '../menu.js';
 import { axisVocabulary, continuedKey, findVariant } from '../variant-scope.js';
 import { styleTarget } from '../widgets/lib/use-highlight.js';
@@ -105,6 +114,7 @@ import {
   TAG,
   TYPE,
   UNIVERSAL,
+  splitKey,
   typeAddress,
 } from '../../../../daedalus_ui/js/edit_mode/materials/relative-selector.js';
 import {
@@ -152,7 +162,11 @@ import {
  * explicit "Create this part" confirm for an undeclared class), and
  * picking an option creates its chrome row + island, exactly as typing
  * `{` after a whole selector does (the brace is swallowed with the
- * selector, bracedSelector); a bare word merges with the property
+ * selector, bracedSelector); inside a rule island the typed line
+ * composes under the island's rule first, by CSS nesting's relative
+ * rule (`&::before {` in the `p` row mints `p::before`, `> a` is
+ * `p > a`; composeUnder), so every island carries the gesture under
+ * its own rule; a bare word merges with the property
  * completions at the same anchor, since `p` is a paragraph rule and the
  * start of `padding` alike; `&`/`@` opens the condition vocabulary and
  * picking one creates its condition row + island. Materialized rows are
@@ -502,12 +516,12 @@ const selectorDetail = (option) => {
       return Drupal.t('Children');
     case TYPE:
       return option.name === TYPE_CONTAINER || option.name === TYPE_BLOCK
-        ? Drupal.t('Every @label here', { '@label': lower(option.label ?? option.name) })
-        : Drupal.t('Every @label block here', {
-            '@label': lower(option.label ?? option.name),
+        ? Drupal.t('Every !label here', { '!label': lower(option.label ?? option.name) })
+        : Drupal.t('Every !label block here', {
+            '!label': lower(option.label ?? option.name),
           });
     case TAG:
-      return Drupal.t('Every @label here', { '@label': lower(option.label ?? option.name) });
+      return Drupal.t('Every !label here', { '!label': lower(option.label ?? option.name) });
     case PSEUDO:
       return boxWord(option.name);
     default:
@@ -532,6 +546,15 @@ const selectorDetail = (option) => {
  * `.`, a `::`), so a chain typed on one line completes compound by
  * compound and a subject continues into its boxes (`> pb-text::`; the
  * owner's own through the anchor, `&::`).
+ *
+ * Inside a rule island (the `p` row, an ancestor's `> pb-text` row) the
+ * line composes under the island's rule by CSS nesting's relative rule
+ * before the offer is read (element-model.js nestUnder: `&` is the
+ * rule, a bare line is relative to it), so the position is the rule's
+ * and the offer is the rule's matches' children, parts and boxes. The
+ * popup spells each option the nested way the user is typing
+ * (nestedSpelling: `&::before`, `> a`) while picking it mints the
+ * composed canonical selector (`p::before`, `p > a`).
  */
 const selectorCompletions = (context, propsRef) => {
   const { materialize } = propsRef.current;
@@ -547,7 +570,11 @@ const selectorCompletions = (context, propsRef) => {
     return null;
   }
   const typed = match[2];
-  const offer = selectorGestureOptions(typed, materialize.selectors.context);
+  const { rule } = materialize.selectors;
+  const offer = selectorGestureOptions(
+    nestUnder(rule, typed),
+    materialize.selectors.context,
+  );
   if (!offer) {
     return null;
   }
@@ -559,14 +586,14 @@ const selectorCompletions = (context, propsRef) => {
   const typeOf = (kind) =>
     kind === UNIVERSAL || kind === PSEUDO ? 'keyword' : kind === TYPE ? 'type' : 'class';
   const completions = offer.options.map((option) => ({
-    label: option.selector,
+    label: nestedSpelling(rule, typed, option.selector),
     type: typeOf(option.kind),
     detail: selectorDetail(option),
     apply: pick(option.selector),
   }));
   if (offer.create) {
     completions.push({
-      label: offer.create,
+      label: nestedSpelling(rule, typed, offer.create),
       type: 'class',
       detail: Drupal.t('Create this part'),
       boost: -1,
@@ -594,13 +621,15 @@ const selectorCompletions = (context, propsRef) => {
  *
  * A condition sigil owns its line: `&` and `@` open the condition
  * vocabulary on any island, the structural facts grouped under Position.
- * On the element's own island the `&` is also the anchor of its
- * generated boxes, so that popup ends with `::before` and `::after`
- * under their own group (the selector gesture's offer for `&`, labelled
- * past the sigil so the filter reads the typed tail); typing the `::`
- * hands the line to the selector gesture. Picking an option REMOVES the
- * typed token and materializes the condition row (or the box row) + island
- * instead of inserting text.
+ * The `&` is also the anchor of the island's generated boxes (the
+ * owner's own on its island, the rule's inside a rule island: `p::before`
+ * in the `p` row), so that popup ends with `::before` and `::after`
+ * under their own group (the selector gesture's offer for the anchor's
+ * `::` tail composed under the island's rule, labelled past the sigil so
+ * the filter reads the typed tail); typing the `::` hands the line to
+ * the selector gesture. Picking an option REMOVES the typed token and
+ * materializes the condition row (or the box row) + island instead of
+ * inserting text.
  */
 const conditionCompletions = (context, propsRef) => {
   const { guide, materialize } = propsRef.current;
@@ -627,10 +656,16 @@ const conditionCompletions = (context, propsRef) => {
   // sits there).
   const position = { name: Drupal.t('Position'), rank: 1 };
   const box = { name: Drupal.t('Generated box'), rank: 2 };
-  const boxes =
-    read.before.trim().startsWith('&') && materialize.selectors
-      ? (selectorGestureOptions('&', materialize.selectors.context)?.options ?? [])
-      : [];
+  // The island's boxes behind the anchor: the anchor's `::` tail
+  // composed under the island's rule (`&::` is the owner's boxes on its
+  // island, `p::` inside the `p` row), each labelled past the sigil
+  // (`::before`) and minting the composed selector.
+  const anchored = read.before.trim().startsWith('&') && materialize.selectors;
+  const rule = anchored ? materialize.selectors.rule : null;
+  const boxes = anchored
+    ? (selectorGestureOptions(nestUnder(rule, '&::'), materialize.selectors.context)
+        ?.options ?? [])
+    : [];
   return {
     // The filter range starts past the sigil so typed text matches
     // condition names.
@@ -647,7 +682,7 @@ const conditionCompletions = (context, propsRef) => {
         },
       })),
       ...boxes.map((option) => ({
-        label: option.selector.slice(1),
+        label: nestedSpelling(rule, '&::', option.selector).slice(1),
         type: 'keyword',
         detail: selectorDetail(option),
         section: box,
@@ -1183,8 +1218,8 @@ const Island = ({
           properties: { [property]: value },
           label:
             value === null
-              ? Drupal.t('Removed @property', { '@property': property })
-              : Drupal.t('Styled @property', { '@property': property }),
+              ? Drupal.t('Removed !property', { '!property': property })
+              : Drupal.t('Styled !property', { '!property': property }),
         })
         .catch(() => {
           if (pending.get(property) === value) {
@@ -1712,8 +1747,8 @@ const Island = ({
         key: mapKey,
         condition,
         properties: { [line.property]: line.value },
-        label: Drupal.t('Moved @property to this element', {
-          '@property': line.property,
+        label: Drupal.t('Moved !property to this element', {
+          '!property': line.property,
         }),
       })
       .catch(() => {
@@ -1729,7 +1764,7 @@ const Island = ({
         key: mapKey,
         condition,
         properties: { [line.property]: null },
-        label: Drupal.t('Removed @property', { '@property': line.property }),
+        label: Drupal.t('Removed !property', { '!property': line.property }),
       })
       .catch(() => {
         // The op failure report lands on the leader page.
@@ -1891,6 +1926,8 @@ const Island = ({
           // without the pick, the brace and the selector swallowed
           // together (bracedSelector decides; a partial selector or a
           // declaration keeps the brace as text for the lint to name).
+          // Inside a rule island the line composes under the island's
+          // rule first (`&::before {` in the `p` row mints `p::before`).
           EditorView.inputHandler.of((view, from, to, inserted) => {
             const selectors = propsRef.current.materialize?.selectors;
             if (inserted !== '{' || !selectors) {
@@ -1900,6 +1937,7 @@ const Island = ({
             const selector = bracedSelector(
               line.text.slice(0, from - line.from),
               line.text.slice(to - line.from),
+              selectors.rule,
             );
             if (selector === null) {
               return false;
@@ -2141,28 +2179,36 @@ const Island = ({
   // The menu's items (the shared menu primitive renders the chrome; the
   // keyboard's route to the same landings is typing, which always lifts).
   // The skin doorway is the row menu's (provenance-model.js skinDoorway):
-  // it opens the active skin's edit form in a new window and exists only
-  // while the guide carries the URL (null drops the item).
+  // it opens the editing session on the skin's document at the line's
+  // scope through the Inspector's openDocument (the skin document's
+  // reference, code/layers.js skinDocument, at this island's condition
+  // when it is not the default), and exists only where a host wires the
+  // doorway (the satellite drops it, as it drops the variant doorway).
   const menuItem = (item, line) => {
     switch (item.type) {
       case 'lift':
         return {
           label: Drupal.t('Move to this element'),
           title: Drupal.t(
-            "Make @property this element's own override — the same landing as typing in this line. The layer beneath keeps its value: a variant stays worn, the skin stays where it is.",
-            { '@property': line.property },
+            "Make !property this element's own override — the same landing as typing in this line. The layer beneath keeps its value: a variant stays worn, the skin stays where it is.",
+            { '!property': line.property },
           ),
           run: () => liftLine(line),
         };
       case 'edit-skin': {
-        const url = propsRef.current.guide?.skinEditUrl ?? null;
-        return url
+        const open = propsRef.current.onOpenDocument;
+        return open
           ? {
               label: Drupal.t('Edit skin…'),
-              title: Drupal.t("Opens the active skin's form."),
-              run: () => {
-                window.open(url, '_blank', 'noopener');
-              },
+              title: Drupal.t(
+                "Edit the active skin's default for every element of this scope, in context of this element. Edits are pending until pushed.",
+              ),
+              run: () =>
+                open(
+                  skinDocument(item.scope),
+                  condition !== 'default' ? condition : null,
+                  null,
+                ),
             }
           : null;
       }
@@ -2190,7 +2236,7 @@ const Island = ({
   // the editing session on the variant's document, at this island's
   // condition when it is not the default, anchored at the carrier a
   // rule-carried or worn ancestor run names); the skin doorway is the
-  // line menu's. A rule has no doorway here: it prints as a rule island
+  // line menu's, at the run's scope. A rule has no doorway here: it prints as a rule island
   // whose header is its seat (line-menu.js runMenuItems).
   const runItem = (item) => {
     switch (item.type) {
@@ -2203,7 +2249,7 @@ const Island = ({
           findVariant(propsRef.current.variants ?? [], item.reference)?.label ??
           item.reference;
         return {
-          label: Drupal.t('Edit @variant', { '@variant': label }),
+          label: Drupal.t('Edit !variant', { '!variant': label }),
           title: Drupal.t(
             "Edit this variant's whole document, in context of this wearer. Edits are pending until pushed.",
           ),
@@ -2217,15 +2263,29 @@ const Island = ({
       }
       case 'edit-skin':
         return menuItem({ type: 'edit-skin' }, null);
-      default:
-        return {
-          label: Drupal.t('Declared in code'),
-          hint: Drupal.t('edited beside the templates'),
-          disabled: true,
-          reason: Drupal.t(
-            'A declaration ships with its module; the site has no form for it.',
-          ),
-        };
+      default: {
+        // The declared run: the declaration is code, so the doorway
+        // shows it in the Law tab at its scope (a law document through
+        // the same openDocument, code/layers.js lawDocument); without a
+        // host wiring the doorway the item stays and says so.
+        const open = propsRef.current.onOpenDocument;
+        return open
+          ? {
+              label: Drupal.t('See the declaration…'),
+              title: Drupal.t(
+                'Show this declaration in the Law tab. A declaration ships with its module; the site has no form for it.',
+              ),
+              run: () => open(lawDocument(item.scope), null, null),
+            }
+          : {
+              label: Drupal.t('Declared in code'),
+              hint: Drupal.t('edited beside the templates'),
+              disabled: true,
+              reason: Drupal.t(
+                'A declaration ships with its module; the site has no form for it.',
+              ),
+            };
+      }
     }
   };
 
@@ -2234,7 +2294,7 @@ const Island = ({
   // identity color, inherited by every line (a staged line overrides it
   // with the focus color in inspector.css).
   const railHue = sheet
-    ? { '--daedalus-stylish-line-hue': layerColor(variantLayerId(sheet.reference)) }
+    ? { '--daedalus-stylish-line-hue': layerColor(documentLayerId(sheet.reference)) }
     : undefined;
 
   return (
@@ -2256,12 +2316,16 @@ const Island = ({
  *
  * The per-element unit of the code view: the page tree mounts one per
  * styled element under its chrome row (the full body for the selection,
- * sparse for the rest). Owns the materialization drafts: rows the
- * selector and `&`/`@` gestures created that hold no committed values
- * yet. Drafts are view state keyed to the element
- * (an element change discards them); once a draft row's first declaration
- * commits, the map-derived roster surfaces the row itself and the draft
- * merges away (draftRoster deduplicates).
+ * sparse for the rest). Owns the materialization drafts: rows that hold
+ * no committed values yet, created by the selector and `&`/`@` typing
+ * gestures (the drafted island takes the cursor) or by a SEAT (the
+ * spine's styling target landing on a part of this element that no
+ * delivered row lists: the island drafts without the cursor, since a
+ * seat is a selection gesture). Drafts are view state keyed to the
+ * element (an element change discards them, which is how a seat-minted
+ * island the editor left empty goes away); once a draft row's first
+ * declaration commits, the map-derived roster surfaces the row itself
+ * and the draft merges away (draftRoster deduplicates).
  *
  * A condition row reads the condition's word as its label and its
  * nested-rule prelude as its code face (`&:hover`, `&:not(:last-child)`,
@@ -2289,9 +2353,13 @@ const Island = ({
  * row disappears on the next roster print).
  *
  * With `sparse` (the tree scopes set it on every UNSELECTED row), the
- * roster prunes to occupied islands (occupiedRoster): no empty
- * placeholder editors on rows the user is not working in; selecting the
- * element brings the full roster back.
+ * roster prunes to occupied islands (occupiedRoster) and the drafts are
+ * none (a sparse row sheds its gesture state, the tree scopes' twin of
+ * the single-element view's key change): no empty placeholder editors
+ * on rows the user is not working in, and no island a typing gesture
+ * or a seat drafted and the editor left empty; selecting the element
+ * brings the full roster back, drafts excluded (they were the
+ * selection's, and the selection left).
  *
  * Each island prints its key's style stack (style-stack.js buildStack,
  * the one model every row and the AI's explain tool read). The defaults
@@ -2328,11 +2396,11 @@ const Island = ({
  * address words the subject line's chip speaks (write-address.js
  * addressLabel), carries the OWNER's key and the rule's selector in the
  * same data attributes, hovers the rule's reach and seats the rule as
- * the target on click; `address` (the inspector's write address, an
- * ancestor rule the address set carries, passed for the selection
- * alone) lights the seated one, and a seated rule the map does not
- * hold yet mounts as an empty island that takes the cursor: the chip
- * and the headers are two readouts of one spine target.
+ * the WRITE ADDRESS on click (the spine's address fact; the selection
+ * and the subject stay); `address` (the spine's write address, passed
+ * for the selection alone) lights the seated one, and a seated rule the
+ * map does not hold yet mounts as an empty island that takes the
+ * cursor: the chip and the headers are two readouts of one spine fact.
  */
 export const ElementIslands = ({
   source,
@@ -2361,7 +2429,6 @@ export const ElementIslands = ({
   const stitching = stitch ?? localStitch.current;
   const blockTypes = source.getBlockTypes();
   const layoutsTable = source.getSectionLayouts();
-  const layoutTree = source.getLayout?.() ?? [];
   const tree = source.getTree?.() ?? null;
   // The matcher over the tree, for the rule headers' owner words; the
   // roster and the stacks build their own reads of the same tree.
@@ -2374,7 +2441,7 @@ export const ElementIslands = ({
     selected,
     blockTypes,
     layoutsTable,
-    layoutTree,
+    tree ?? [],
   );
   const library = variants ?? [];
   const selectedParsed = parseKey(selected);
@@ -2384,22 +2451,38 @@ export const ElementIslands = ({
   const conditionLabel = (name) => guide?.conditions?.[name]?.label ?? name;
 
   // Materialized-but-uncommitted rows, plus which island takes the cursor.
-  // Keyed to the selection so stale drafts never leak across elements.
+  // The SELECTED element's view state: keyed to the element so stale
+  // drafts never leak across elements in the single-element view (its
+  // key changes with the selection), and none on a sparse row (the tree
+  // scopes' rows keep their key across selections, so the selection
+  // leaving is the row going sparse). The state is shed, not merely
+  // hidden, when the row goes sparse: a reselection does not revive an
+  // island the editor left empty, which is how a seat-minted island goes
+  // away when the seat moves on.
   const emptyDrafts = { for: selected, conditions: {}, parts: [], focus: null };
   const [gestureState, setGestureState] = useState(emptyDrafts);
-  const drafts = gestureState.for === selected ? gestureState : emptyDrafts;
+  const drafts =
+    !sparse && gestureState.for === selected ? gestureState : emptyDrafts;
   const withDrafts = (mutate) =>
     setGestureState((previous) =>
       mutate(previous.for === selected ? previous : emptyDrafts),
     );
+  useEffect(() => {
+    if (sparse && gestureState.for === selected) {
+      setGestureState(emptyDrafts);
+    }
+  }, [sparse]);
 
-  const materializeSelector = (selector) =>
+  // `focus` is the typing gestures' default (the drafted island takes the
+  // cursor); a seat passes false, because a selection gesture must not
+  // pull the cursor off the canvas.
+  const materializeSelector = (selector, { focus = true } = {}) =>
     withDrafts((state) => ({
       ...state,
       parts: state.parts.includes(selector)
         ? state.parts
         : [...state.parts, selector],
-      focus: `${selected}::${selector}|default`,
+      focus: focus ? `${selected}::${selector}|default` : state.focus,
     }));
   const materializeCondition = (mapKey, name) =>
     withDrafts((state) => {
@@ -2424,8 +2507,8 @@ export const ElementIslands = ({
     if (ops.length) {
       source.commitBatch({
         operations: ops,
-        label: Drupal.t('Removed @condition styles', {
-          '@condition': conditionLabel(condition),
+        label: Drupal.t('Removed !condition styles', {
+          '!condition': conditionLabel(condition),
         }),
       });
     }
@@ -2445,7 +2528,7 @@ export const ElementIslands = ({
     if (ops.length) {
       source.commitBatch({
         operations: ops,
-        label: Drupal.t('Removed @part styles', { '@part': part.selector }),
+        label: Drupal.t('Removed !part styles', { '!part': part.selector }),
       });
     }
     withDrafts((state) => {
@@ -2468,7 +2551,8 @@ export const ElementIslands = ({
       : Drupal.t('Remove this row and unset its styles.');
 
   // The full body (the selection) lists the ancestor rules reaching each
-  // key and places the write address's rule; a sparse row lists none.
+  // key and places the write address's rule under the subject facet's
+  // row; a sparse row lists none.
   const baseModel = elementIslands(
     styleMap ?? {},
     selected,
@@ -2479,11 +2563,41 @@ export const ElementIslands = ({
     layoutsTable,
     sparse ? null : tree,
     sparse ? null : address,
+    sparse ? null : targetSelector,
   );
   const rosterModel = sparse
     ? occupiedRoster(baseModel, styleMap ?? {}, selected, library, axes)
     : baseModel;
   const storedModel = draftRoster(rosterModel, drafts, selected, guide);
+  // The seat's way in: a styling target on this element (a canvas
+  // Cmd-click, a tree part row, keyboard traversal) that neither the
+  // delivered roster nor the drafts hold drafts its island, without the
+  // cursor (a seat is a selection gesture, not a typing one). The draft
+  // is keyed to the element like every draft, so an island the seat
+  // minted and the editor left empty drops when the selection leaves;
+  // no rule of its own. The write address is a separate fact: an
+  // ANCESTOR's rule mounts as its own island under the facet's row (and
+  // takes the cursor when the map lacks it, rulesFor's wake), and the
+  // facet's own island drafts the same whether or not an address stands
+  // over it. An address on THIS key (the chip's "Every paragraph here",
+  // `{key}::p`) names a part row of the roster, never a rule row: when
+  // the map lacks it the same effect drafts that island WITH the cursor,
+  // the ancestor seat's parity (the seat opens the type-here surface),
+  // so one placement rule covers both addresses.
+  const ownAddressSelector =
+    address !== null && address.key === selected ? address.selector : null;
+  useEffect(() => {
+    const unrowed = (selector) =>
+      selector !== null &&
+      !rosterModel.parts.some((part) => part.selector === selector) &&
+      !drafts.parts.includes(selector);
+    if (unrowed(targetSelector)) {
+      materializeSelector(targetSelector, { focus: false });
+    }
+    if (unrowed(ownAddressSelector)) {
+      materializeSelector(ownAddressSelector, { focus: true });
+    }
+  }, [selected, targetSelector, ownAddressSelector]);
   const model = posedGhost
     ? posedRoster(storedModel, posed, guide)
     : storedModel;
@@ -2495,8 +2609,19 @@ export const ElementIslands = ({
     condition === posed &&
     !storedModel.conditions.includes(condition);
 
-  // Selector materialization is the element's gesture (selector rows
-  // do not nest); condition materialization belongs to every island.
+  // Selector materialization is every island's gesture, each under its
+  // own rule: on the owner's island a typed selector is as typed; inside
+  // a rule island (the `p` row, an ancestor's `> pb-text` row) it
+  // composes under the island's rule by CSS nesting's relative rule
+  // (element-model.js nestUnder / composeUnder: `&::before` in the `p`
+  // row is `p::before`, `> a` is `p > a`), the same substitution the
+  // dialect parser and the paste door make, so the stored key stays
+  // canonical and no `&` ever reaches the grammar from a rule island.
+  // splitKey(mapKey) gives the island's owner and rule: the owner's own
+  // island has none, a part row's owner is the selection, an ancestor
+  // rule island's owner is the ancestor, and the offer reads that
+  // owner's tree facts. Condition materialization belongs to every
+  // island too.
   // The offer is an ELEMENT projection: it reads the blueprint's lean
   // tree through the matcher (the children present, their types and
   // tags), the declared anatomy (the owner's parts, and a type's parts
@@ -2506,11 +2631,37 @@ export const ElementIslands = ({
   // annotation), and the DOM-presence
   // facts for the owner's declared parts (the layout context's
   // self.parts), which describe the CANVAS SELECTION only and so join in
-  // just when this element is it; anywhere else (a styled-but-unselected
-  // page-tree row, the satellite pre-broadcast) the unknown facts
-  // degrade to offering, the gate's rule. The rows already materialized
-  // below (model.parts, off the style map) are the store projection and
-  // ignore presence by construction.
+  // just when the owner is it; anywhere else (a styled-but-unselected
+  // page-tree row, an ancestor's rule island, the satellite
+  // pre-broadcast) the unknown facts degrade to offering, the gate's
+  // rule. The rows already materialized below (model.parts, off the
+  // style map) are the store projection and ignore presence by
+  // construction.
+  // A minted row seats the spine fact it is, every typed row alike (a
+  // tag, a part, a chain or a box, on the owner's island or inside a
+  // rule island): when the island's owner is this element the composed
+  // selector is a FACET of it, seated through source.target (the chip
+  // turns to it, Basic and Advanced read it, the canvas highlights it)
+  // and drafted here with the cursor, the code twin of the chip's "+
+  // Before"; when the owner is an ancestor (a row typed inside the
+  // seated `> pb-text` island) the composed selector is a rule on that
+  // ancestor, an ADDRESS, seated through source.address, and the rule
+  // row the address places takes the cursor itself (rulesFor's wake for
+  // a seated rule the map lacks), so no draft is made for it: a draft
+  // would be a second island for one spine fact. Both seats belong to a
+  // selection, so an unselected row (the page tree's sparse rows) is
+  // selected first, the part header click's rule.
+  const seatMinted = (owner) => (selector) => {
+    if (source.getSelected?.() !== selected) {
+      source.select?.(selected);
+    }
+    if (owner === selected) {
+      source.target?.(selected, selector);
+      materializeSelector(selector);
+      return;
+    }
+    source.address?.(owner, selector);
+  };
   const partsOfType = (type) => {
     const address = typeAddress(type);
     const declaration =
@@ -2525,24 +2676,37 @@ export const ElementIslands = ({
       .filter(([selector]) => PART_SELECTOR.test(selector))
       .map(([selector, part]) => ({ id: selector, label: part?.label ?? selector }));
   };
-  const selectorGestures = {
-    context: {
-      key: selected,
-      tree,
-      parts: partsForKey(guide, selected, blockTypes, layoutsTable),
-      partsFor: partsOfType,
-      presence:
-        selected === source.getSelected?.()
-          ? (source.getLayoutContext?.()?.self?.parts ?? null)
-          : null,
-      closed: propertiesClosed(guide),
-      tags: Object.fromEntries(
-        baseTags(guide?.base).map((tag) => [tag, tagWord(guide, tag)]),
-      ),
-      present: source.getMarkup?.(selected)?.tags ?? null,
-      types: typeLabels(guide),
-    },
-    onMaterialize: materializeSelector,
+  const gestureVocabulary = {
+    tree,
+    partsFor: partsOfType,
+    closed: propertiesClosed(guide),
+    tags: Object.fromEntries(
+      baseTags(guide?.base).map((tag) => [tag, tagWord(guide, tag)]),
+    ),
+    types: typeLabels(guide),
+  };
+  const selectorGesturesFor = (mapKey) => {
+    const split = splitKey(mapKey);
+    if (split === null) {
+      // A key outside the grammar (inert data that still rows) has no
+      // rule to compose under: no gesture on its island.
+      return null;
+    }
+    const { root: owner, selector: rule } = split;
+    return {
+      rule,
+      context: {
+        ...gestureVocabulary,
+        key: owner,
+        parts: partsForKey(guide, owner, blockTypes, layoutsTable),
+        presence:
+          owner === source.getSelected?.()
+            ? (source.getLayoutContext?.()?.self?.parts ?? null)
+            : null,
+        present: source.getMarkup?.(owner)?.tags ?? null,
+      },
+      onMaterialize: seatMinted(owner),
+    };
   };
 
   // The posed tag matches non-default compounds only: the default
@@ -2610,7 +2774,8 @@ export const ElementIslands = ({
   // stack, `project` the Island's line projection, `facts` the fact set
   // the condition rows light against, `declaration` the grant judge for the
   // key's writes, `wake` the condition whose island takes the cursor on
-  // mount beside the drafts' focus.
+  // mount beside the drafts' focus. The key's islands share one selector
+  // gesture under the key's rule (selectorGesturesFor).
   const islandsFor = (
     mapKey,
     conditions,
@@ -2622,8 +2787,9 @@ export const ElementIslands = ({
       wake = null,
       rule = false,
     },
-  ) =>
-    conditions.map((condition) => (
+  ) => {
+    const selectors = selectorGesturesFor(mapKey);
+    return conditions.map((condition) => (
       <Fragment key={`${mapKey}|${condition}`}>
         {condition !== 'default' && (
           <div
@@ -2636,8 +2802,8 @@ export const ElementIslands = ({
               tabIndex={-1}
               className="daedalus-stylish-islands__condition-pose"
               title={Drupal.t(
-                'Pose the canvas at "@condition" to preview these styles',
-                { '@condition': conditionLabel(condition) },
+                'Pose the canvas at "!condition" to preview these styles',
+                { '!condition': conditionLabel(condition) },
               )}
               onClick={() => onPose?.(condition)}
             >
@@ -2689,7 +2855,7 @@ export const ElementIslands = ({
           variants={library}
           axes={axes}
           materialize={{
-            selectors: mapKey === selected ? selectorGestures : null,
+            selectors,
             condition: (name) => materializeCondition(mapKey, name),
           }}
           autoFocus={
@@ -2704,6 +2870,7 @@ export const ElementIslands = ({
         />
       </Fragment>
     ));
+  };
 
   // The rule rows reaching one island key (the roster's `ancestors`,
   // nearest ancestor first): a header on the selection spine like the
@@ -2713,8 +2880,10 @@ export const ElementIslands = ({
   // words are the address's (addressLabel: "All children of Hero"), the
   // same sentence the subject line's chip offers for it. Hover paints
   // the rule's reach through the hoverSelector facet; a click seats the
-  // rule as the styling target (the selection stays put), and the
-  // inspector's write address lights the seated row. A seated rule the
+  // rule as the WRITE ADDRESS (the selection and the subject stay put;
+  // an unselected element is selected first, since an address belongs
+  // to a selection), and the spine's address lights the seated row. A
+  // seated rule the
   // map does not hold yet (`existing` false: the chip's mintable entry)
   // is an empty island that takes the cursor, so the seat is one move
   // from the first declaration; its first settled write mints the entry
@@ -2749,7 +2918,12 @@ export const ElementIslands = ({
               className="daedalus-stylish-islands__part-select"
               title={rule.key}
               aria-pressed={lit}
-              onClick={() => source.target?.(rule.owner, rule.selector)}
+              onClick={() => {
+                if (source.getSelected?.() !== selected) {
+                  source.select?.(selected);
+                }
+                source.address?.(rule.owner, rule.selector);
+              }}
             >
               <span className="daedalus-stylish-islands__part-label">
                 {addressLabel(
@@ -2797,9 +2971,15 @@ export const ElementIslands = ({
       })}
       {model.parts.map((part) => {
         const partStack = stackFor(part.key);
-        // A part facet lights while the target sits on the element; under
-        // an ancestor address the seated rule row inside it is the lit one.
-        const active = address === null && part.selector === targetSelector;
+        // One lit rule: with no address standing the facet's part row is
+        // lit; under an address the row the address names is, which for
+        // an own-key address ("Every paragraph here", `{key}::p`) is this
+        // part row, and for an ancestor's is the seated rule row inside
+        // the facet's body (rulesFor), so the facet row itself goes dark.
+        const active =
+          address === null
+            ? part.selector === targetSelector
+            : address.key === selected && address.selector === part.selector;
         return (
           <Fragment key={part.key}>
             {/* The part header is the part's chrome row on the selection
@@ -2938,9 +3118,14 @@ export const VariantDocumentView = ({
   const map = styleMap ?? {};
   const blockTypes = source.getBlockTypes();
   const layoutsTable = source.getSectionLayouts();
-  const layout = source.getLayout?.() ?? [];
   const tree = documentTree(doc.styles, doc.session, doc.rootKind);
-  const carriers = carriedBy(map, doc.reference);
+  // A skin document's one slot is carried by the anchor alone: the
+  // scope's element the session was entered from (every element of the
+  // scope carries it, and the anchor is the one whose stack the islands
+  // read); a variant's slots are carried by the map's wearers.
+  const carriers = isSkinDocument(doc.reference)
+    ? new Map(anchor ? [['', [anchor]]] : [])
+    : carriedBy(map, doc.reference);
   // The matcher over the blueprint tree, for the slot headers' element
   // words (the same read every host makes: the leader off the mirror,
   // the satellite off the broadcast tree).
@@ -2997,13 +3182,17 @@ export const VariantDocumentView = ({
     const carrier = carrierOf(fragment);
     return carrier === null ? '' : styleTarget(carrier).key;
   };
-  // A slot header's words: the element's minted type word and name (the
-  // tree node's `_element` through the matcher's facts, spelled by the
-  // page tree's rowWords so both documents read one way) when an
-  // element carrier anchors the slot to a live node; else the slot's
-  // own vocabulary, since a variant nobody wears has positions, not
-  // elements (a container slot is nested by construction: no variant
-  // roots at the entity, so its word is "Container").
+  // A slot header's words: the element's minted type word and, after it,
+  // its minted name ONLY when it says more than the type does (the
+  // annotator names an unrenamed element with its type word, so an equal
+  // name is no name: "Section", never "Section Section"), read off the
+  // tree node's `_element` through the matcher's facts when an element
+  // carrier anchors the slot to a live node; else the slot's own
+  // vocabulary, since a variant nobody wears has positions, not elements
+  // (a container slot is nested by construction: no variant roots at the
+  // entity, so its word is "Container"). The document's slot headers are
+  // the one surface still spelling the type word beside the name: the
+  // page outlines say what an element is with its icon.
   const slotWords = (node) => {
     if (node.slot === '') {
       return { word: Drupal.t('Root'), name: null };
@@ -3014,7 +3203,11 @@ export const VariantDocumentView = ({
         ? (nodeMatcher?.facts(carrier) ?? null)
         : null;
     if (facts?.type) {
-      return rowWords(facts);
+      const name = typeof facts.name === 'string' ? facts.name.trim() : '';
+      return {
+        word: facts.type,
+        name: name !== '' && name !== facts.type ? name : null,
+      };
     }
     const word =
       node.kind === 'container'
@@ -3066,8 +3259,8 @@ export const VariantDocumentView = ({
         className="daedalus-ui-chip daedalus-ui-chip--muted daedalus-stylish-document__carried"
         title={
           keys.length
-            ? Drupal.t('Elements on this page carrying this fragment: @keys', {
-                '@keys': keys.join(', '),
+            ? Drupal.t('Elements on this page carrying this fragment: !keys', {
+                '!keys': keys.join(', '),
               })
             : Drupal.t(
                 'Nothing on this page carries this fragment; the variant still delivers it site-wide.',
@@ -3091,7 +3284,7 @@ export const VariantDocumentView = ({
     const anchored = carried !== null;
     const mapKey = anchored ? carried : `~${key}`;
     const axes = anchored
-      ? axisVocabulary(guide, carrier, blockTypes, layoutsTable, layout)
+      ? axisVocabulary(guide, carrier, blockTypes, layoutsTable, nodeTree ?? [])
       : [];
     const declaration = anchored
       ? declarationForKey(
@@ -3122,8 +3315,8 @@ export const VariantDocumentView = ({
               tabIndex={-1}
               className="daedalus-stylish-islands__condition-pose"
               title={Drupal.t(
-                'Pose the canvas at "@condition" to preview these styles',
-                { '@condition': conditionLabel(condition) },
+                'Pose the canvas at "!condition" to preview these styles',
+                { '!condition': conditionLabel(condition) },
               )}
               onClick={() => onPose?.(condition)}
             >

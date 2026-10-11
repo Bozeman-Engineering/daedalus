@@ -6,6 +6,7 @@ namespace Drupal\daedalus_blueprint\Materials;
 
 use Drupal\Component\Serialization\Json;
 use Drupal\Core\Cache\CacheableMetadata;
+use Drupal\daedalus_blueprint\Host\HostInterface;
 
 /**
  * The roster as the client boots it: the page-load half of delivery.
@@ -22,42 +23,74 @@ use Drupal\Core\Cache\CacheableMetadata;
  * - Mid-session: {upsert, remove} on every mutation response and gesture
  *   route (MaterialsChangeSet), applied to the same store.
  *
+ * The payload is FOR a canvas: handed the canvas host, it keeps only what
+ * the canvas offers at block scope (CanvasOffer asked for the Add panel's
+ * scope: a blueprint that is a container placed into a page, has a root
+ * and fits the host; every other kind whole), so the Add panel offers
+ * what can land on this page and nothing that would refuse. The same
+ * judgement filters the mid-session delta (MaterialsChangeSet), so an
+ * upsert never undoes it. Without a host (daedalus_stylish's inspector
+ * pop-out, a window over no canvas, which reads blueprints only to name a
+ * variant's owner) nothing is filtered. The roster the prompt and the
+ * schema read is never this payload: the AI's list is the site's.
+ *
  * The roster's cache metadata rides with the envelope so the render that
- * carries it is invalidated by any material write.
+ * carries it is invalidated by any material write; a filtered payload adds
+ * what the offer depends on.
  */
 final class MaterialsDelivery {
 
   public function __construct(
     private readonly MaterialsRosterBuilder $rosterBuilder,
+    private readonly CanvasOffer $offer,
   ) {}
 
   /**
    * The page-load payload: every record of every kind, in roster order.
    *
+   * @param \Drupal\daedalus_blueprint\Host\HostInterface|null $host
+   *   The canvas host the payload boots, which keeps only the records it
+   *   offers; NULL for a delivery over no canvas, unfiltered.
+   *
    * @return array{records: array[]}
    *   The payload.
    */
-  public function payload(): array {
+  public function payload(?HostInterface $host = NULL): array {
+    $records = $this->rosterBuilder->build()->all();
+    if ($host !== NULL) {
+      $records = array_filter(
+        $records,
+        fn (MaterialRecord $record): bool => $this->offer->offered($record, $host, MaterialRecord::SCOPE_BLOCK),
+      );
+    }
     return [
-      'records' => array_map(
+      'records' => array_values(array_map(
         static fn (MaterialRecord $record): array => $record->toArray(),
-        $this->rosterBuilder->build()->all(),
-      ),
+        $records,
+      )),
     ];
   }
 
   /**
    * The payload as the JSON string drupalSettings carries.
+   *
+   * @param \Drupal\daedalus_blueprint\Host\HostInterface|null $host
+   *   The canvas host, as payload() takes it.
    */
-  public function envelope(): string {
-    return Json::encode($this->payload());
+  public function envelope(?HostInterface $host = NULL): string {
+    return Json::encode($this->payload($host));
   }
 
   /**
    * What the envelope derives from, for the render that attaches it.
+   *
+   * @param \Drupal\daedalus_blueprint\Host\HostInterface|null $host
+   *   The canvas host, as payload() takes it: a filtered envelope also
+   *   depends on what the offer judged.
    */
-  public function cacheMetadata(): CacheableMetadata {
-    return $this->rosterBuilder->build()->getCacheableMetadata();
+  public function cacheMetadata(?HostInterface $host = NULL): CacheableMetadata {
+    $metadata = $this->rosterBuilder->build()->getCacheableMetadata();
+    return $host === NULL ? $metadata : (new CacheableMetadata())->merge($metadata)->merge($this->offer->cacheMetadata());
   }
 
 }

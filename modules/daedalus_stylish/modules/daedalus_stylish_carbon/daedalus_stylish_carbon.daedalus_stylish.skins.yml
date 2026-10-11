@@ -39,7 +39,8 @@
 #
 # Shipping makes the skin AVAILABLE (synced on module install, on every
 # cache rebuild, and by `drush daedalus_stylish:sync daedalus_stylish_carbon`); wearing it
-# is the site's call at /admin/appearance/skins. This fixture is never
+# is a design system's call (a unit's default_skin may name a global skin;
+# the skin card chooses among a system's members). This fixture is never
 # auto-activated.
 carbon:
   label: 'Carbon'

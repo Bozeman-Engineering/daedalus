@@ -62,14 +62,16 @@ import { SUFFIX } from '../../../daedalus_ui/js/edit_mode/materials/relative-sel
 let clipboard = null;
 
 /**
- * The key a styling target names, the address every styling gesture
- * acts at: the selected element's own key when no target is seated,
- * else the target's {key, selector} as a map key (`key::selector`).
+ * The SUBJECT's key, what copy and paste act on: the selected element's
+ * own key when no facet is seated, else the facet's {key, selector} as a
+ * map key (`key::selector`). Copy and paste key the subject, never the
+ * write address: the clipboard carries one element's own document, and
+ * a paste lands it where the rows read.
  *
  * @param {?string} selected
  *   The committed selection's key (source.getSelected()).
  * @param {?{key: string, selector: ?string}} target
- *   The styling target (source.getTarget()), or null for the element.
+ *   The subject facet (source.getTarget()), or null for the element.
  *
  * @return {?string}
  *   The key, or null without a selection.
@@ -289,6 +291,12 @@ export const pasteStyles = (source, guide) => {
   }
   if (clipboard === null) {
     notify('warning', Drupal.t('Nothing to paste: copy styles first.'));
+    return true;
+  }
+  // The one gate: style of the target's element, as every other write
+  // control of the inspector asks before it mounts.
+  if (!source.capable(key, 'style')) {
+    notify('warning', Drupal.t('Nothing pasted: this element cannot be styled here.'));
     return true;
   }
   const plan = pastePlan(clipboard, key, {

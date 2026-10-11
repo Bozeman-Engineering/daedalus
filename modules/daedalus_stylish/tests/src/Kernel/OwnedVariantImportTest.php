@@ -11,14 +11,14 @@ use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 
 /**
- * The disk lane's stencil: key without daedalus_blueprint_stencil is loud.
+ * The disk lane's blueprint: key without daedalus_blueprint_library is loud.
  *
- * Ownership lives in the `stencil` reference field daedalus_blueprint_stencil
+ * Ownership lives in the `blueprint` reference field daedalus_blueprint_library
  * provides on daedalus_variant; a shipped file declaring an owner on a site
  * without that field is a developer error, never silently dropped ownership
- * (the resolving half — content-stencil resolution, orphan posture — is
- * covered where both modules live, in daedalus_blueprint_stencil's
- * StencilOwnedVariantTest).
+ * (the resolving half, content-blueprint resolution and orphan posture, is
+ * covered where both modules live, in daedalus_blueprint_library's
+ * BlueprintOwnedVariantTest).
  */
 #[Group('daedalus_stylish')]
 #[RunTestsInSeparateProcesses]
@@ -59,9 +59,9 @@ class OwnedVariantImportTest extends KernelTestBase {
   }
 
   /**
-   * A stencil: key without the ownership field fails the sync loudly.
+   * A blueprint: key without the ownership field fails the sync loudly.
    */
-  public function testOwnerWithoutStencilModuleIsLoud(): void {
+  public function testOwnerWithoutLibraryModuleIsLoud(): void {
     $importer = \Drupal::service('daedalus_stylish.variant_importer');
     assert($importer instanceof VariantImporter);
     $report = $importer->sync(['daedalus_stylish_owned_variants_test']);

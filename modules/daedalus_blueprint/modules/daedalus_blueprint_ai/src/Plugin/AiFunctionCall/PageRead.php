@@ -4,77 +4,50 @@ declare(strict_types=1);
 
 namespace Drupal\daedalus_blueprint_ai\Plugin\AiFunctionCall;
 
-use Drupal\ai\Service\FunctionCalling\FunctionCallInterface;
 use Drupal\Core\Plugin\Context\ContextDefinition;
 use Drupal\Core\StringTranslation\TranslatableMarkup;
 use Drupal\ai\Attribute\FunctionCall;
-use Drupal\daedalus_blueprint\Materials\MaterialKind;
 use Drupal\daedalus_blueprint_ai\PageToolBase;
-use Drupal\daedalus_blueprint_stencil\StencilDiscoveryInterface;
-use Drupal\daedalus_blueprint_stencil\StencilElementTree;
-use Symfony\Component\DependencyInjection\ContainerInterface;
 
 /**
- * Reads a page, or a stencil's definition, as a dialect document.
+ * Reads a page as a dialect document.
  *
- * Two reads through one print grammar. A page read (entity_type and
- * entity_id) is rarely needed for the CURRENT page (its print rides every
- * turn); it is the read for OTHER pages, or to re-read after out-of-band
- * changes. A stencil read (stencil: an id from the roster) prints the
- * definition's tree as a document without ids: a definition has no
- * identity, so the print is the composition itself, the same fragment
- * the schema's stencil entries carry. Placing (a <pb-stencil> copy as
- * is, or the fragment written with the author's content under
- * stencil="id") needs no read: the schema already shows the fragment.
+ * One read through one print grammar, for every host of a page document:
+ * a page (entity_type and entity_id), a template (entity_view_display and
+ * its display id) and a saved blueprint (blueprint and its id), which is
+ * a page of its own. The read answers the host's own fields (the
+ * serializer's fields map, stubs stripped, printed as fields: between the
+ * host notice and the document) and then the document with its ids; the
+ * CURRENT page needs it for its field values only (its per-turn print is
+ * layout alone), and it is the read for OTHER pages, or to re-read after
+ * out-of-band changes. A blueprint's fields are its face (label,
+ * description, scope, subject) and its document is the composition every
+ * placement lands; placing one needs no read (the schema prints each
+ * blueprint's fragment without ids, and <pb-blueprint name="id"/> copies
+ * it as is).
  */
 #[FunctionCall(
   id: 'daedalus_blueprint:page_read',
   function_name: 'page_read',
   name: 'Page Read',
-  description: 'Reads a page or a stencil as a page-language document. A page (entity_type and entity_id) prints as the "Current page print" tag does; never needed for the current page, use it to read a DIFFERENT page before editing it. A stencil (stencil: an id from the roster) prints its definition without ids, the same fragment the schema shows; read it to learn how a composition is built (an exemplar), never to place it: placing needs no read (<pb-stencil name="id"/> for a copy as is, or the fragment written with your own content and stencil="id" on the root).',
+  description: 'Reads a page as a page-language document: its own fields (fields:, the map page_create takes) then its document as the "Current page print" tag does. The current page needs it for field values only; use it to read a DIFFERENT page before editing it. The same read answers a template (entity_type entity_view_display, entity_id its display id) and a saved blueprint (entity_type blueprint, entity_id from the BLUEPRINTS list or the schema), whose fields are its label, description, scope and subject and whose document is what every placement lands: read it before page_edit on the blueprint itself; placing one needs no read (<pb-blueprint name="id"/> for a copy as is, or the schema\'s fragment written with your own content and blueprint="id" on the root).',
   group: 'information_tools',
   context_definitions: [
     'entity_type' => new ContextDefinition(
       data_type: 'string',
       label: new TranslatableMarkup('Entity Type'),
-      required: FALSE,
-      description: new TranslatableMarkup('The entity type ID (e.g. node) of the page to read. With entity_id; omit both to read a stencil.'),
+      required: TRUE,
+      description: new TranslatableMarkup('The entity type ID (e.g. node) of the page to read; entity_view_display for a template (a bundle\'s default layout); blueprint for a saved blueprint.'),
     ),
     'entity_id' => new ContextDefinition(
       data_type: 'string',
       label: new TranslatableMarkup('Entity ID'),
-      required: FALSE,
-      description: new TranslatableMarkup('The entity ID of the page to read.'),
-    ),
-    'stencil' => new ContextDefinition(
-      data_type: 'string',
-      label: new TranslatableMarkup('Stencil'),
-      required: FALSE,
-      description: new TranslatableMarkup('The id of a stencil to read instead of a page (one of the stencils on the roster).'),
+      required: TRUE,
+      description: new TranslatableMarkup('The entity ID of the page to read; for a template its display id (e.g. node.page.default); for a blueprint its entity_id from the BLUEPRINTS list or the schema.'),
     ),
   ],
 )]
 class PageRead extends PageToolBase {
-
-  /**
-   * Stencil discovery, when the stencil module is installed.
-   *
-   * The definition (the body) lives on the stencil module's discovery; the
-   * roster carries only the record. Without the module no stencil is on
-   * the roster and the stencil read refuses with an empty roster.
-   */
-  protected ?StencilDiscoveryInterface $stencilDiscovery = NULL;
-
-  /**
-   * {@inheritdoc}
-   */
-  public static function create(ContainerInterface $container, array $configuration, $plugin_id, $plugin_definition): FunctionCallInterface|static {
-    $instance = parent::create($container, $configuration, $plugin_id, $plugin_definition);
-    if ($container->has('daedalus_blueprint_stencil.discovery')) {
-      $instance->stencilDiscovery = $container->get('daedalus_blueprint_stencil.discovery');
-    }
-    return $instance;
-  }
 
   /**
    * {@inheritdoc}
@@ -87,73 +60,49 @@ class PageRead extends PageToolBase {
     if (!$this->requireValidParams()) {
       return;
     }
-    $stencil = $this->getContextValue('stencil');
-    if (is_string($stencil) && $stencil !== '') {
-      $this->readStencil($stencil);
-      return;
-    }
     $entity_type = $this->getContextValue('entity_type');
     $entity_id = $this->getContextValue('entity_id');
     if (!is_string($entity_type) || $entity_type === '' || $entity_id === NULL || $entity_id === '') {
-      $this->output = 'Error: page_read reads a page (entity_type and entity_id) or a stencil (stencil: an id from the roster); pass one or the other.';
+      $this->output = 'Error: page_read reads one host of a page document by entity_type and entity_id (a page, a template as entity_view_display, or a saved blueprint as blueprint); pass both.';
       return;
     }
-    if (!$this->requireContentEntityType($entity_type)) {
+    if (!$this->requireDocumentHostType($entity_type)) {
       return;
     }
-    if (!$this->requireWorkspace()) {
+    $host = $this->loadHost($entity_type, $entity_id, 'view');
+    if ($host === NULL) {
       return;
     }
-    $entity = $this->loadEntity($entity_type, $entity_id, 'view');
-    if (!$entity) {
+    // A content host stages in a workspace when the site requires one; a
+    // template is config and never does.
+    if ($host->persistence()->workspaceAware && !$this->requireWorkspace()) {
       return;
     }
     try {
-      $print = $this->printPage($entity);
-      $this->output = trim($print) === '' ? '(the page has no layout content yet)' : $print;
+      // The read is total: whatever the page language cannot spell prints
+      // in the read-only register, and the print's own reading notes head
+      // the document (once) to say what those annotations mean.
+      $print = $this->hostPrinter->print($host, $this->conversationContext->get());
+      $this->output = trim($print->text) === '' ? '(the page has no layout content yet)' : $print->forReader();
+      // The page's own fields ride before the document: short before
+      // long, and in the order page_create takes them, so what is read is
+      // what is written.
+      $fields = $this->fieldsBlock($host);
+      if ($fields !== NULL) {
+        $this->output = $fields . $this->output;
+      }
+      // A page the user cannot fully edit says so first (its layout is the
+      // template's, a frozen translation, a required workspace): the
+      // elements below carry data-can, and this line says where the
+      // gesture belongs.
+      $notice = $this->hostNotice($host);
+      if ($notice !== NULL) {
+        $this->output = $notice . "\n" . $this->output;
+      }
     }
     catch (\Exception $e) {
       $this->output = 'Error: ' . $e->getMessage();
     }
-  }
-
-  /**
-   * Prints a stencil's definition as a document without ids.
-   *
-   * The roster is the model's world (the published set, partitioned by
-   * the active design system), so an id the roster does not carry is
-   * refused with the ids it does, even when discovery knows it.
-   */
-  protected function readStencil(string $id): void {
-    $catalog = $this->catalogBuilder->build();
-    $roster = $catalog->roster();
-    $record = $roster->get(MaterialKind::Stencil, $id);
-    $definition = $record === NULL ? NULL : $this->stencilDiscovery?->getStencil($id);
-    if ($record === NULL || $definition === NULL) {
-      $available = array_keys($roster->stencils());
-      $this->output = sprintf(
-        'Error: "%s" is not an available stencil. %s',
-        $id,
-        $available === [] ? 'This site has no stencils.' : 'Available: ' . implode(', ', $available) . '.',
-      );
-      return;
-    }
-    try {
-      $print = $this->dialectPrinter->print(StencilElementTree::dialectNodes($definition['element']), $catalog);
-    }
-    catch (\Exception $e) {
-      $this->output = 'Error: ' . $e->getMessage();
-      return;
-    }
-    $this->output = sprintf(
-      "Stencil \"%s\" (%s), root %s: the definition below is a template without ids, not a page. Place it as <pb-stencil name=\"%s\"/>, or write this fragment with your own content and stencil=\"%s\" on the root; edit the placement, never this.\n%s",
-      $id,
-      $record->label,
-      (string) $record->rootKind,
-      $id,
-      $id,
-      $print,
-    );
   }
 
 }

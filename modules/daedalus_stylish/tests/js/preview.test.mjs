@@ -17,7 +17,13 @@
  */
 import { strict as assert } from 'node:assert';
 import test from 'node:test';
-import { createPreview } from '../../js/src/preview.js';
+import {
+  TOKEN_SCOPE_CLASS,
+  createMaterialDelivery,
+  createPreview,
+  scopedEntries,
+} from '../../js/src/preview.js';
+import { roster, swatchRecord, tokenRecord } from './materials-fixture.mjs';
 
 const UUID = 'aaaaaaaa-1111-2222-3333-444444444444';
 const KEY = `block:${UUID}`;
@@ -56,10 +62,10 @@ const createRoot = () => {
  * A preview over a mutable base map and a root table (root key -> fake
  * root), recording every resolveRoot call.
  */
-const setup = ({ base = {}, roots, urls = {}, resolveRoot } = {}) => {
-  const state = { base, urls, roots: roots ?? { [KEY]: createRoot() }, lookups: [] };
+const setup = ({ base = {}, roots, urls = {}, resolveRoot, conditions = CONDITIONS } = {}) => {
+  const state = { base, urls, roots: roots ?? { [KEY]: createRoot() }, lookups: [], scope: createRoot() };
   const preview = createPreview({
-    guide: { conditions: CONDITIONS },
+    guide: { conditions },
     getBaseMap: () => state.base,
     getMediaUrls: () => state.urls,
     resolveRoot: resolveRoot === undefined
@@ -68,8 +74,10 @@ const setup = ({ base = {}, roots, urls = {}, resolveRoot } = {}) => {
         return state.roots[key] ?? null;
       }
       : resolveRoot,
+    // The token scope element: one fake, the same for every read.
+    resolveScope: () => state.scope,
   });
-  return { preview, state, root: () => state.roots[KEY] };
+  return { preview, state, root: () => state.roots[KEY], scope: () => state.scope };
 };
 
 test('the first stage of a triple mints a slot: var() in the sheet, the literal inline on the root', () => {
@@ -276,4 +284,205 @@ test('media tokens substitute inline per value from the live table', () => {
   state.urls[MEDIA_UUID.replace('1', '9')] = '/files/other.png';
   preview.stage(KEY, 'default', 'background-image', `url(media:${MEDIA_UUID.replace('1', '9')})`);
   assert.equal(root().props['--daedalus-stylish-live-1'], 'url("/files/other.png")');
+});
+
+// ----- The token scope lane. -----
+
+// The scheme axis the compiled skin file wraps a dark entry under.
+const SCHEME_CONDITIONS = {
+  ...CONDITIONS,
+  narrow: { label: 'Narrow', wrapper: '@container page (max-width: 500px)', axis: 'width' },
+  dark: { label: 'Dark', wrapper: '@media (prefers-color-scheme: dark)', axis: 'scheme' },
+};
+
+test('scopedEntries: a string is its default entry, a map its live entries', () => {
+  assert.deepEqual(scopedEntries('#fff'), { default: '#fff' });
+  assert.deepEqual(scopedEntries(' 1rem '), { default: '1rem' });
+  assert.deepEqual(scopedEntries({ default: '#fff', dark: '#111' }), { default: '#fff', dark: '#111' });
+  // Blank and null entries print nothing, so they stage nothing.
+  assert.deepEqual(scopedEntries({ default: '#fff', dark: '' }), { default: '#fff' });
+  assert.deepEqual(scopedEntries(null), {});
+  assert.deepEqual(scopedEntries(''), {});
+});
+
+test('stageScoped: the shape prints on the token scope element, the literal rides inline there', () => {
+  const { preview, scope, root } = setup();
+  preview.stageScoped('--color-accent', '#1475ad');
+  assert.ok(sheet().includes(`@scope (.${TOKEN_SCOPE_CLASS})`), 'the block opens at the token scope element, as the compiled file prints it');
+  assert.ok(sheet().includes('--color-accent: var(--daedalus-stylish-live-1);'));
+  assert.ok(!sheet().includes('#1475ad'), 'the literal never enters the sheet');
+  assert.deepEqual(scope().props, { '--daedalus-stylish-live-1': '#1475ad' });
+  assert.deepEqual(root().props, {}, 'nothing lands on a style-key root');
+  // A second value is one inline write: the sheet holds still.
+  const before = sheet();
+  preview.stageScoped('--color-accent', '#116392');
+  assert.equal(sheet(), before);
+  assert.deepEqual(scope().props, { '--daedalus-stylish-live-1': '#116392' });
+});
+
+test('stageScoped: every condition of a paired value rides its own slot under its wrapper', () => {
+  const { preview, scope } = setup({ conditions: SCHEME_CONDITIONS });
+  preview.stageScoped('--color-bg', { default: '#ffffff', dark: '#0b0d0f' });
+  assert.ok(sheet().includes('--color-bg: var(--daedalus-stylish-live-1);'));
+  assert.ok(sheet().includes('@media (prefers-color-scheme: dark)'), 'the dark entry keeps its wrapper: the other scheme never wears the wrong value');
+  assert.ok(sheet().includes('--color-bg: var(--daedalus-stylish-live-2);'));
+  assert.deepEqual(scope().props, {
+    '--daedalus-stylish-live-1': '#ffffff',
+    '--daedalus-stylish-live-2': '#0b0d0f',
+  });
+  // Dragging one entry is an inline write on its slot alone.
+  const before = sheet();
+  preview.stageScoped('--color-bg', { default: '#fdfdf6', dark: '#0b0d0f' });
+  assert.equal(sheet(), before);
+  assert.equal(scope().props['--daedalus-stylish-live-1'], '#fdfdf6');
+  // Dropping the dark entry is a membership change: its slot goes, the
+  // default keeps its slot.
+  preview.stageScoped('--color-bg', '#fdfdf6');
+  assert.ok(!sheet().includes('prefers-color-scheme'));
+  assert.ok(sheet().includes('--color-bg: var(--daedalus-stylish-live-1);'));
+  assert.deepEqual(scope().props, { '--daedalus-stylish-live-1': '#fdfdf6' });
+});
+
+test('stageScoped: a container condition brings the page container root along', () => {
+  const { preview } = setup({ conditions: SCHEME_CONDITIONS });
+  // The client's containerRootsCss reads guide.containerRoots; the
+  // setup's guide lacks it, so the rule is withheld here...
+  preview.stageScoped('--space-gutter', { default: '2rem', narrow: '1rem' });
+  assert.ok(sheet().includes('@container page (max-width: 500px)'));
+  assert.ok(!sheet().includes('container-type'));
+  // ...and printed with it (the compiled file's rule, replicated).
+  const withRoots = createPreview({
+    guide: { conditions: SCHEME_CONDITIONS, containerRoots: true },
+    getBaseMap: () => ({}),
+    resolveScope: () => null,
+  });
+  withRoots.stageScoped('--space-gutter', { default: '2rem', narrow: '1rem' });
+  assert.ok(sheet().includes('.dialog-off-canvas-main-canvas {\n  container-type: inline-size;\n}'));
+});
+
+test('releaseScoped drops the slots, the inline properties and the block; a blank value releases too', () => {
+  const { preview, scope } = setup({ conditions: SCHEME_CONDITIONS });
+  preview.stageScoped('--color-bg', { default: '#ffffff', dark: '#0b0d0f' });
+  preview.stageScoped('--color-accent', '#1475ad');
+  preview.releaseScoped('--color-bg');
+  assert.ok(!sheet().includes('--color-bg'));
+  assert.ok(sheet().includes('--color-accent: var(--daedalus-stylish-live-3);'));
+  assert.deepEqual(scope().props, { '--daedalus-stylish-live-3': '#1475ad' });
+  preview.stageScoped('--color-accent', '');
+  assert.equal(sheet(), '', 'nothing staged: the preview empties');
+  assert.deepEqual(scope().props, {});
+  // A release naming nothing staged is a no-op.
+  preview.releaseScoped('--color-accent');
+  assert.equal(sheet(), '');
+});
+
+test('the scope lane and the style-key overlay share one sheet and one slot sequence', () => {
+  const { preview, scope, root } = setup();
+  preview.stage(KEY, 'default', 'font-size', '24px');
+  preview.stageScoped('--swatch-brand_red', '#b91c1c');
+  assert.ok(sheet().includes(`@scope ([data-selectable="${KEY}"])`));
+  assert.ok(sheet().includes(`@scope (.${TOKEN_SCOPE_CLASS})`));
+  assert.deepEqual(root().props, { '--daedalus-stylish-live-1': '24px' });
+  assert.deepEqual(scope().props, { '--daedalus-stylish-live-2': '#b91c1c' });
+  // Releasing the style key keeps the scope block, and vice versa.
+  preview.release(KEY, 'default', { 'font-size': '24px' });
+  assert.ok(!sheet().includes('font-size'));
+  assert.ok(sheet().includes('--swatch-brand_red: var(--daedalus-stylish-live-2);'));
+  preview.releaseScoped('--swatch-brand_red');
+  assert.equal(sheet(), '');
+});
+
+test('baseChanged rewrites the scope slots too', () => {
+  const { preview, scope, state } = setup();
+  preview.stageScoped('--color-accent', '#1475ad');
+  // The token scope element outlives a markup swap; a fresh element
+  // (a full re-render) still gets every slot back.
+  state.scope = createRoot();
+  preview.baseChanged();
+  assert.deepEqual(scope().props, { '--daedalus-stylish-live-1': '#1475ad' });
+});
+
+test('without a token scope element the shape still prints and nothing throws', () => {
+  const bare = createPreview({ guide: { conditions: CONDITIONS }, getBaseMap: () => ({}) });
+  bare.stageScoped('--color-accent', '#1475ad');
+  assert.ok(sheet().includes('--color-accent: var(--daedalus-stylish-live-1);'));
+  bare.releaseScoped('--color-accent');
+  assert.equal(sheet(), '');
+});
+
+// ----- The committed materials' delivery. -----
+
+const BOOT = roster(
+  tokenRecord('color', 'accent', '#1475ad'),
+  tokenRecord('color', 'bg', { default: '#ffffff', dark: '#0b0d0f' }),
+  swatchRecord('brand_red', 'color', '#b91c1c'),
+);
+
+test('delivery stages what differs from boot, releases what returns to it, never touches the unchanged', () => {
+  const { preview, scope } = setup({ conditions: SCHEME_CONDITIONS });
+  const delivery = createMaterialDelivery(preview, BOOT);
+  // The boot roster itself delivers nothing: the compiled files print it.
+  delivery.apply(BOOT);
+  assert.equal(sheet(), '');
+  assert.deepEqual(scope().props, {});
+  // An edit: the changed token alone, condition-honest.
+  delivery.apply(roster(
+    tokenRecord('color', 'accent', '#1475ad'),
+    tokenRecord('color', 'bg', { default: '#fdfdf6', dark: '#0b0d0f' }),
+    swatchRecord('brand_red', 'color', '#b91c1c'),
+  ));
+  assert.ok(sheet().includes('--color-bg: var(--daedalus-stylish-live-1);'));
+  assert.ok(sheet().includes('@media (prefers-color-scheme: dark)'));
+  assert.ok(!sheet().includes('--color-accent'));
+  assert.ok(!sheet().includes('--swatch-brand_red'));
+  assert.deepEqual(scope().props, {
+    '--daedalus-stylish-live-1': '#fdfdf6',
+    '--daedalus-stylish-live-2': '#0b0d0f',
+  });
+  // A revert: back to the boot value, the property releases.
+  delivery.apply(BOOT);
+  assert.equal(sheet(), '');
+  assert.deepEqual(scope().props, {});
+});
+
+test('delivery stages a minted material and releases a deleted one', () => {
+  const { preview, scope } = setup({ conditions: SCHEME_CONDITIONS });
+  const delivery = createMaterialDelivery(preview, BOOT);
+  delivery.apply(roster(
+    tokenRecord('color', 'accent', '#1475ad'),
+    tokenRecord('color', 'bg', { default: '#ffffff', dark: '#0b0d0f' }),
+    tokenRecord('space', 'hero', '3rem'),
+    swatchRecord('brand_red', 'color', '#b91c1c'),
+    swatchRecord('dusk', 'color', '#334455'),
+  ));
+  assert.ok(sheet().includes('--space-hero: var(--daedalus-stylish-live-1);'));
+  assert.ok(sheet().includes('--swatch-dusk: var(--daedalus-stylish-live-2);'));
+  assert.deepEqual(scope().props, {
+    '--daedalus-stylish-live-1': '3rem',
+    '--daedalus-stylish-live-2': '#334455',
+  });
+  // The delete: the rewrite gave every use the literal, the file's stale
+  // property changes nothing, and the lane forgets it.
+  delivery.apply(BOOT);
+  assert.equal(sheet(), '');
+  assert.deepEqual(scope().props, {});
+});
+
+test('delivery.restore re-delivers one record after a draft: the store value, or the file', () => {
+  const { preview, scope } = setup({ conditions: SCHEME_CONDITIONS });
+  const delivery = createMaterialDelivery(preview, BOOT);
+  const accent = tokenRecord('color', 'accent', '#1475ad');
+  // A draft on an unchanged record, then its release: nothing stays.
+  preview.stageScoped('--color-accent', '#ff0000');
+  assert.equal(scope().props['--daedalus-stylish-live-1'], '#ff0000');
+  delivery.restore(accent);
+  assert.equal(sheet(), '');
+  assert.deepEqual(scope().props, {});
+  // A draft over a delivered (edited) record restores the committed value.
+  const edited = tokenRecord('color', 'accent', '#116392');
+  delivery.apply(roster(edited, tokenRecord('color', 'bg', { default: '#ffffff', dark: '#0b0d0f' }), swatchRecord('brand_red', 'color', '#b91c1c')));
+  preview.stageScoped('--color-accent', '#ff0000');
+  delivery.restore(edited);
+  assert.ok(sheet().includes('--color-accent: var(--daedalus-stylish-live-'));
+  assert.deepEqual(Object.values(scope().props), ['#116392']);
 });

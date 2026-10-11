@@ -11,7 +11,7 @@
  * suite glob. Exits non-zero on failure.
  */
 import { strict as assert } from 'node:assert';
-import { conditionText, declarationLabel, originOf, rowMenu, sidesSentence, supplierName, tokenItems } from '../../js/src/provenance-model.js';
+import { conditionText, declarationLabel, originOf, rowMenu, sidesSentence, skinScopeLabel, supplierName, tokenItems } from '../../js/src/provenance-model.js';
 import { ELEMENT_LAYER, SKIN_COLOR, ancestorLayerId, ancestorWearLayerId, declaredLayerId, layerColor, skinLayerId, variantLayerId } from '../../js/src/code/layers.js';
 import { buildStack, stackAt } from '../../js/src/style-stack.js';
 import { valueSpaceFor } from '../../js/src/value-space.js';
@@ -48,7 +48,6 @@ const UUID = 'aaaaaaaa-1111-2222-3333-444444444444';
 const ROOT = `block:${UUID}`;
 const BLOCK_TYPES = { [UUID]: 'text' };
 const AXES = ['style', 'emphasis'];
-const SKIN_URL = '/admin/appearance/skins/1';
 
 // Two worn looks on two axes: Stuff (style, first in delivery) beneath
 // Calm (emphasis, above it).
@@ -285,42 +284,62 @@ test('inherited from a variant at the posed condition itself: no drive doorway, 
   assert.equal(both.layer, variantLayerId('calm'));
 });
 
-test('inherited from the skin: nothing in the map, the skin value shows lit in the skin teal with the skin doorway iff a URL exists', () => {
-  const withUrl = originAt(stackFor({ guide: SKIN }), 'padding-top', 'default', { skinEditUrl: SKIN_URL });
-  assert.equal(withUrl.delivers, true);
-  assert.equal(withUrl.layer, skinLayerId('block_type:text'), 'the delivering scope\'s layer');
-  assert.equal(withUrl.reference, null);
-  assert.equal(withUrl.color, SKIN_COLOR);
-  assert.equal(withUrl.header, '1.125rem from the active skin');
-  assert.deepEqual(withUrl.doorways.map((doorway) => [doorway.id, doorway.url]), [['skin', SKIN_URL]]);
-  const noUrl = originAt(stackFor({ guide: SKIN }), 'padding-top', 'default');
-  assert.deepEqual(noUrl.doorways, []);
+test('inherited from the skin: nothing in the map, the skin value shows lit in the skin teal with the skin doorway to the delivering scope\'s session', () => {
+  const origin = originAt(stackFor({ guide: SKIN }), 'padding-top', 'default');
+  assert.equal(origin.delivers, true);
+  assert.equal(origin.layer, skinLayerId('block_type:text'), 'the delivering scope\'s layer');
+  assert.equal(origin.reference, null);
+  assert.equal(origin.color, SKIN_COLOR);
+  assert.equal(origin.header, '1.125rem from the active skin');
+  // The doorway carries the SCOPE the session opens on (the delivering
+  // layer's, never the refinement over a kind block's value) and the
+  // delivering condition, and names the scope in its hint.
+  assert.deepEqual(
+    origin.doorways.map((doorway) => [doorway.id, doorway.label, doorway.hint, doorway.scope, doorway.condition]),
+    [['skin', 'Edit skin…', "opens the skin's text block type default", 'block_type:text', 'default']],
+  );
+  // A kind block's value opens the kind's document.
+  const kind = { conditions: CONDITIONS, skinDefaults: { 'kind:block': { '': { default: { 'padding-top': '2rem' } } } } };
+  assert.deepEqual(originAt(stackFor({ guide: kind }), 'padding-top', 'default').doorways.map((doorway) => doorway.scope), ['kind:block']);
+});
+
+test('skinScopeLabel: a base tag speaks the guide\'s tag word, an element scope the declaration\'s words, anything else itself', () => {
+  assert.equal(skinScopeLabel('base:h2', { tagLabels: { h2: 'Heading 2' } }), 'Heading 2');
+  assert.equal(skinScopeLabel('base:h2'), 'h2');
+  assert.equal(skinScopeLabel('block_type:text'), 'text block type');
+  assert.equal(skinScopeLabel('kind:container'), 'container kind');
+  assert.equal(skinScopeLabel('bogus'), 'bogus');
+  assert.equal(skinScopeLabel(null), '');
 });
 
 test('inherited from the skin at another condition: posed at Medium the skin\'s Base block delivers and the sentence says where; a subset compound names itself', () => {
-  const origin = originAt(stackFor({ guide: SKIN }), 'padding-top', 'medium', { skinEditUrl: SKIN_URL });
+  const origin = originAt(stackFor({ guide: SKIN }), 'padding-top', 'medium');
   assert.equal(origin.delivers, true);
   assert.equal(origin.color, SKIN_COLOR);
   assert.equal(origin.header, '1.125rem from the active skin at Base');
   assert.ok(origin.title.startsWith(origin.header), "the title opens with the sentence");
-  assert.deepEqual(doorways(origin), ['skin'], 'the doorway is still the skin form, never a drive');
+  assert.deepEqual(doorways(origin), ['skin'], 'the doorway is still the skin session, never a drive');
+  assert.equal(origin.doorways[0].condition, 'default', 'the session opens at the delivering condition, as the variant doorway does');
   const narrow = originAt(stackFor({ guide: SKIN }), 'padding-top', 'narrow+dark');
   assert.equal(narrow.header, '100% from the active skin at Narrow');
 });
 
-test('inherited from the declaration: the declared default shows in the defaults hue, the declaring scope named, one inert doorway', () => {
-  const origin = originAt(stackFor({ guide: DECLARED }), 'display', 'default', { skinEditUrl: SKIN_URL });
+test('inherited from the declaration: the declared default shows in the defaults hue, the declaring scope named, one doorway to the Law tab at the declaration', () => {
+  const origin = originAt(stackFor({ guide: DECLARED }), 'display', 'default');
   assert.equal(origin.delivers, true);
   assert.equal(origin.layer, declaredLayerId('block_type:text'));
   assert.equal(origin.color, SKIN_COLOR, 'the defaults tier\'s one hue');
   assert.equal(origin.header, 'block from the text block type declaration');
   assert.ok(origin.title.startsWith(origin.header), "the title opens with the sentence");
-  // The one doorway is inert, even with a skin edit URL on the page: a
-  // declaration is code, and the skin form does not edit it.
-  assert.deepEqual(origin.doorways.map((d) => [d.id, d.label, d.disabled === true, typeof d.reason]), [['declared', 'Declared in code', true, 'string']]);
+  // The one doorway shows the declaration: a declaration is code, the
+  // skin session does not edit it, and the Law tab opens at the
+  // declaring scope with the property's rows revealed.
+  assert.deepEqual(origin.doorways.map((d) => [d.id, d.label, d.hint, d.disabled === true, d.scope, d.property]), [
+    ['declared', 'See the declaration…', 'opens the Law tab at the text block type declaration', false, 'block_type:text', 'display'],
+  ]);
   const medium = originAt(stackFor({ guide: DECLARED }), 'display', 'medium');
   assert.equal(medium.header, 'block from the text block type declaration at Base');
-  assert.deepEqual(medium.doorways.map((doorway) => [doorway.id, doorway.disabled]), [['declared', true]]);
+  assert.deepEqual(medium.doorways.map((doorway) => [doorway.id, doorway.scope, doorway.property]), [['declared', 'block_type:text', 'display']], 'no drive doorway: the declaration is shown, not posed');
 });
 
 test('inherited from an ancestor rule: lit in the floor hue, the sentence names the section and its rule, one doorway edits at the rule', () => {
@@ -477,7 +496,7 @@ test('overriding an ancestor rule: own at pose beats it, in the element hue, uns
 
 test('the skin\'s value sits over the declaration\'s: both present, the origin is the skin\'s and the declaration is beneath', () => {
   const stack = stackFor({ guide: BOTH });
-  const origin = originAt(stack, 'display', 'default', { skinEditUrl: SKIN_URL });
+  const origin = originAt(stack, 'display', 'default');
   assert.equal(origin.layer, skinLayerId('block_type:text'));
   assert.equal(origin.header, 'inline-block from the active skin');
   assert.deepEqual(doorways(origin), ['skin']);
@@ -503,22 +522,22 @@ test('overriding a variant: own at pose beats the reference, the WINNER\'s ident
 });
 
 test('overriding the skin: own at pose over a skin value wears the element hue; at another condition it says where the beaten value delivers from', () => {
-  const origin = originAt(stackFor({ map: { [ROOT]: { default: { 'padding-top': '1.25rem' } } }, guide: SKIN }), 'padding-top', 'default', { skinEditUrl: SKIN_URL });
+  const origin = originAt(stackFor({ map: { [ROOT]: { default: { 'padding-top': '1.25rem' } } }, guide: SKIN }), 'padding-top', 'default');
   assert.equal(origin.atPose, true);
   assert.equal(origin.layer, ELEMENT_LAYER);
   assert.equal(origin.color, layerColor(ELEMENT_LAYER));
   assert.equal(origin.header, 'Your 1.25rem overrides the active skin\'s 1.125rem');
-  assert.deepEqual(origin.doorways.map((doorway) => [doorway.id, doorway.hint]), [
-    ['unset', 'the skin\'s 1.125rem returns'],
-    ['skin', 'opens the skin form'],
+  assert.deepEqual(origin.doorways.map((doorway) => [doorway.id, doorway.hint, doorway.scope ?? null]), [
+    ['unset', 'the skin\'s 1.125rem returns', null],
+    ['skin', "opens the skin's text block type default", 'block_type:text'],
   ]);
-  const medium = originAt(stackFor({ map: { [ROOT]: { medium: { 'padding-top': '1.25rem' } } }, guide: SKIN }), 'padding-top', 'medium', { skinEditUrl: SKIN_URL });
+  const medium = originAt(stackFor({ map: { [ROOT]: { medium: { 'padding-top': '1.25rem' } } }, guide: SKIN }), 'padding-top', 'medium');
   assert.equal(medium.atPose, true);
   assert.equal(medium.header, 'Your 1.25rem overrides the active skin\'s 1.125rem at Base');
 });
 
 test('overriding the declaration: own at pose over a declared default wears the element hue, unset returns it, no other doorway', () => {
-  const origin = originAt(stackFor({ map: { [ROOT]: { default: { display: 'inline' } } }, guide: DECLARED }), 'display', 'default', { skinEditUrl: SKIN_URL });
+  const origin = originAt(stackFor({ map: { [ROOT]: { default: { display: 'inline' } } }, guide: DECLARED }), 'display', 'default');
   assert.equal(origin.atPose, true);
   assert.equal(origin.layer, ELEMENT_LAYER);
   assert.equal(origin.color, layerColor(ELEMENT_LAYER));
@@ -542,11 +561,11 @@ test('under a write address the element\'s own value sits ABOVE the editable lay
   assert.equal(origin.layer, ELEMENT_LAYER);
   assert.equal(origin.color, layerColor(ELEMENT_LAYER));
   assert.equal(origin.header, '10px from this element');
-  // The doorway carries the selected key: the hook re-selects it on the
-  // source, and any selection write clears the target.
+  // The doorway carries the selected key: the hook drops the write
+  // address on the source (address(null)), the subject staying put.
   assert.deepEqual(
     origin.doorways.map((doorway) => [doorway.id, doorway.label, doorway.hint, doorway.key]),
-    [['element', 'Edit on the element', 'drops the target; writes land on the element', ROOT]],
+    [['element', 'Edit on the element', 'drops the address; writes land on the element', ROOT]],
   );
   // Posed at Medium the element's Base block delivers: the sentence
   // says where, the drive doorway beside; Narrow is "Also set at".
@@ -632,12 +651,32 @@ test('in a session the editable layer is the document: its value from another co
   assert.equal(origin.header, '22px from Base');
   assert.deepEqual(doorways(origin), ['drive']);
   // The document at the pose over the skin beneath it: overriding.
-  const over = originAt(stack, 'padding-top', 'default', { skinEditUrl: SKIN_URL });
+  const over = originAt(stack, 'padding-top', 'default');
   assert.equal(over.atPose, true);
   assert.equal(over.header, 'Your 22px overrides the active skin\'s 1.125rem');
   // The staged document (a pending line) is what the row reads.
   const pending = { reference: 'stuff', pending: { kind: 'update', lines: [{ id: 'p1', relative: '', condition: 'default', property: 'padding-top', value: '30px' }] } };
   assert.equal(originAt(stackFor({ map: worn(['stuff']), guide: SKIN, session: pending }), 'padding-top', 'default').header, 'Your 30px overrides the active skin\'s 1.125rem');
+});
+
+test('in a skin session the scope\'s skin layer is the editable document: its value reads as set here, the wearer\'s own entry above it as overriding with the winner doorway, and the staged document is what the row reads', () => {
+  const skinSession = { reference: skinLayerId('block_type:text'), pending: null };
+  const stack = stackFor({ guide: SKIN, session: skinSession });
+  const origin = originAt(stack, 'padding-top', 'default');
+  assert.equal(origin.layer, skinLayerId('block_type:text'));
+  assert.equal(origin.color, SKIN_COLOR);
+  assert.equal(origin.header, '1.125rem set here', 'the document delivers at the pose with nothing beneath');
+  assert.deepEqual(doorways(origin), []);
+  // The element's own value beats the skin document: overridden, with
+  // the winner doorway to the element (the session's exit), never the
+  // skin doorway into the session already open.
+  const over = originAt(stackFor({ map: { [ROOT]: { default: { 'padding-top': '3rem' } } }, guide: SKIN, session: skinSession }), 'padding-top', 'default');
+  assert.equal(over.layer, ELEMENT_LAYER);
+  assert.equal(over.header, 'Overridden by this element on this page');
+  assert.deepEqual(over.doorways.map((doorway) => [doorway.id, doorway.winner]), [['winner', { variant: null }]]);
+  // A staged line is what the row reads as the document's value.
+  const staged = { reference: skinLayerId('block_type:text'), pending: { kind: 'skin', scope: 'block_type:text', lines: [{ id: 's1', relative: '', condition: 'default', property: 'padding-top', value: '4rem' }] } };
+  assert.equal(originAt(stackFor({ guide: SKIN, session: staged }), 'padding-top', 'default').header, '4rem set here');
 });
 
 // --- originOf: the roster and the faces ------------------------------------
@@ -755,11 +794,16 @@ test('rowMenu: doorways, the Also set at group, then the tokens, separated; the 
   assert.deepEqual(opened, [['doorway', 'document'], ['condition', 'narrow']]);
 });
 
-test('rowMenu: a declared value opens on its sentence with the inert doorway, no run, so a choice row still answers the right-click', () => {
+test('rowMenu: a declared value opens on its sentence with the Law tab doorway, whose run dispatches the scope and the property', () => {
   const origin = originAt(stackFor({ guide: DECLARED }), 'display', 'default');
-  const menu = rowMenu({ origin, tokens: [], face: 'block', onDoorway: () => assert.fail('an inert doorway never dispatches') });
+  const opened = [];
+  const menu = rowMenu({ origin, tokens: [], face: 'block', onDoorway: (doorway) => opened.push([doorway.id, doorway.scope, doorway.property]) });
   assert.equal(menu.header, origin.header);
-  assert.deepEqual(menu.items.map((item) => [item.label, item.disabled, typeof item.reason, 'run' in item]), [['Declared in code', true, 'string', false]]);
+  assert.deepEqual(menu.items.map((item) => [item.label, item.hint, item.disabled, 'run' in item]), [
+    ['See the declaration…', 'opens the Law tab at the text block type declaration', undefined, true],
+  ]);
+  menu.items[0].run();
+  assert.deepEqual(opened, [['declared', 'block_type:text', 'display']]);
 });
 
 test('rowMenu: the origin\'s sentence heads the menu whenever there is an origin, a set-here row included; tokens under no origin wear the "Where should" header; nothing at all is null', () => {

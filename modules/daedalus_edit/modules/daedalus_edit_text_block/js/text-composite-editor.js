@@ -573,6 +573,7 @@
         label: Drupal.t('Tag'),
         icon: CODE_ICON,
         kinds: ['block'],
+        capability: 'content',
         editScoped: true,
         tab: true,
         hotkeys: 'mod+alt+t',

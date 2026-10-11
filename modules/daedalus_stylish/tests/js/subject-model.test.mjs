@@ -1,17 +1,19 @@
 /**
  * Self-asserting tests for the subject line's pure model
  * (js/src/subject-model.js): the element word (the node's minted name,
- * "Element" when the tree has no node) and the address chip (its face, its
- * map key, its lit state and its menu items: the own address first,
- * "This element" as the way back when a facet stands, then the ancestor
- * addresses in the set's order, a mintable one hinted "new rule").
+ * "Element" when the tree has no node), the element icon (the node's
+ * minted glyph, null when the node or the tree has none) and the address
+ * chip (its face, its map key, its lit state and its menu items: the own
+ * address first, "This element" as the way back when a facet stands,
+ * then the ancestor addresses in the set's order, a mintable one hinted
+ * "new rule"; and what each item previews on the canvas while active).
  *
  * Run directly (`node --test tests/js/subject-model.test.mjs`) or via
  * the suite glob. Exits non-zero on failure.
  */
 import { strict as assert } from 'node:assert';
 import { test } from 'node:test';
-import { elementWord, subjectChip } from '../../js/src/subject-model.js';
+import { elementIcon, elementWord, subjectChip } from '../../js/src/subject-model.js';
 import { addressSet } from '../../js/src/write-address.js';
 import { createMatcher } from '../../js/src/selector-matcher.js';
 
@@ -49,14 +51,14 @@ const TREE = [
         uuid: HERO_UUID,
         layout_id: 'daedalus_stylish_container',
         label: 'Welcome',
-        _element: { name: 'Welcome', type: 'Container', markup: { tag: 'section', parts: {} } },
+        _element: { name: 'Welcome', type: 'Container', icon: '/icons/container.svg', markup: { tag: 'section', parts: {} } },
         children: [
           {
             kind: 'block',
             uuid: LINKED_UUID,
             block_type: 'text',
             label: 'Read more',
-            _element: { name: 'Read more', type: 'Text', markup: { tag: 'p', parts: { [LINK]: { tag: 'a' } } } },
+            _element: { name: 'Read more', type: 'Text', icon: '/icons/text.svg', markup: { tag: 'p', parts: { [LINK]: { tag: 'a' } } } },
           },
           {
             kind: 'block',
@@ -153,6 +155,20 @@ test('elementWord: the node\'s minted name, else Element', () => {
   assert.equal(elementWord(null, 'field:aaaaaaaa-0000-4000-8000-00000000000a:body'), 'Element');
   // A key outside the grammar still words itself.
   assert.equal(elementWord(null, 'nonsense'), 'Element');
+});
+
+test('elementIcon: the node\'s minted glyph, else null', () => {
+  assert.equal(elementIcon(MATCHER, LINKED), '/icons/text.svg');
+  assert.equal(elementIcon(MATCHER, HERO), '/icons/container.svg');
+  // A node the annotator minted no glyph for: null, and the pill draws
+  // no icon zone (the page tree's rule for a null icon).
+  assert.equal(elementIcon(MATCHER, HEADING), null);
+  assert.equal(elementIcon(MATCHER, PAGE), null);
+  // A key the tree does not carry, or no tree at all: null, never a
+  // generic glyph (the word has a generic "Element"; the face has none).
+  assert.equal(elementIcon(MATCHER, 'container:99999999-0000-4000-8000-000000000009'), null);
+  assert.equal(elementIcon(null, LINKED), null);
+  assert.equal(elementIcon(null, 'nonsense'), null);
 });
 
 test('a root facet: "This element" faces the own address, unlit, its item checked, the ancestors after it', () => {
@@ -299,11 +315,83 @@ test('a part facet: "This link" faces the own address, "This element" is the way
     label: 'This element',
     checked: false,
     hint: null,
+    seat: 'element',
     address: { key: LINKED, selector: null },
+    preview: null,
   });
   assert.deepEqual(out.items[2].address, { key: PAGE, selector: 'a' });
   assert.equal(out.items[2].hint, null);
   assert.equal(out.items[3].hint, 'new rule');
+});
+
+test('each item says how it seats: the own entry drops the address, the way back selects, a set entry is an address, a doorway is a facet', () => {
+  const out = chip({ key: LINKED, selector: LINK }, set(LINKED, LINK));
+  assert.deepEqual(out.items.map((item) => item.seat), [
+    'own',
+    'element',
+    'address',
+    'address',
+    'address',
+    'address',
+    'address',
+    'box',
+    'box',
+  ]);
+  // An instance part's own tag tier is an address on the SELECTED key:
+  // the spine admits the selection beside its ancestors, and the
+  // component seats it through address(), never target().
+  const markup = { tag: 'p', parts: {}, instances: [{ class: INSTANCE.slice(1), label: 'Body text', children: [] }] };
+  // The set as write-address.js builds it for a minted paragraph (its
+  // own entry, then the element's own tag tier; the fixture's tree
+  // carries no instance facts, so the entries are handed in).
+  const instanceSet = [
+    { key: LINKED, selector: INSTANCE, label: 'This body text', existing: true },
+    { key: LINKED, selector: 'p', label: 'Every paragraph here', existing: false },
+  ];
+  const instance = chip({ key: LINKED, selector: INSTANCE }, instanceSet, null, { markup });
+  const tier = instance.items.find((item) => item.label === 'Every paragraph here');
+  assert.deepEqual(tier, { label: 'Every paragraph here', checked: false, hint: 'new rule', seat: 'address', address: { key: LINKED, selector: 'p' }, preview: { key: LINKED, selector: 'p' } });
+  // Seated there the chip lights at the selected key's tag tier.
+  const lit = chip({ key: LINKED, selector: INSTANCE }, instanceSet, { key: LINKED, selector: 'p' }, { markup });
+  assert.equal(lit.face, 'Every paragraph here');
+  assert.equal(lit.id, `${LINKED}::p`);
+  assert.equal(lit.lit, true);
+  assert.deepEqual(checked(lit.items), ['Every paragraph here']);
+});
+
+test('an address the set does not carry stands: the chip lights at it, it lists checked and hinted, nothing drops it', () => {
+  const own = { key: HEADING, selector: null };
+  const addresses = set(HEADING, null);
+  // A rule on an ancestor the switcher never offered (a programmatic
+  // seat: the spine admits any ancestor): worded as the set would word
+  // it, in its owner.
+  const stranger = chip(own, addresses, { key: PAGE, selector: '> pb-container > pb-text' });
+  assert.equal(stranger.face, 'Containers › Text blocks in Page');
+  assert.equal(stranger.id, `${PAGE}::> pb-container > pb-text`);
+  assert.equal(stranger.lit, true);
+  const item = stranger.items.find((entry) => entry.checked);
+  assert.deepEqual(item, {
+    label: 'Containers › Text blocks in Page',
+    checked: true,
+    hint: 'not an address of this element',
+    seat: 'address',
+    address: { key: PAGE, selector: '> pb-container > pb-text' },
+    preview: { key: PAGE, selector: '> pb-container > pb-text' },
+  });
+  // It lists after the set's entries and before the box doorways; the
+  // own entry is unchecked (the way back to the own key).
+  assert.deepEqual(labels(stranger.items).slice(-3), ['Containers › Text blocks in Page', '+ Before', '+ After']);
+  assert.equal(stranger.items[0].checked, false);
+  // One on the selected key words itself as a facet face (the fixture
+  // titles no `em`, so the tag is its own word).
+  const tier = chip(own, addresses, { key: HEADING, selector: 'em' });
+  assert.equal(tier.face, 'Every em here');
+  assert.equal(tier.lit, true);
+  // An address equal to the own key is no address at all: unlit, the
+  // own entry checked.
+  const same = chip({ key: LINKED, selector: LINK }, set(LINKED, LINK), { key: LINKED, selector: LINK });
+  assert.equal(same.lit, false);
+  assert.deepEqual(checked(same.items), ['This link']);
 });
 
 test('a tag facet faces "Every link here"; seated on an ancestor tag rule the chip lights at that rule', () => {
@@ -327,7 +415,7 @@ test('without an address set the chip still renders: the facet face and the way 
     face: 'This element',
     id: HEADING,
     lit: false,
-    items: [{ label: 'This element', checked: true, hint: null, address: { key: HEADING, selector: null } }],
+    items: [{ label: 'This element', checked: true, hint: null, seat: 'own', address: { key: HEADING, selector: null }, preview: null }],
   });
   // A part with no set: its face, and "This element" as the way back.
   const part = chip({ key: LINKED, selector: LINK }, []);
@@ -367,4 +455,25 @@ test('an instance part words itself from the markup annotation the caller passes
   });
   assert.equal(addresses[0].label, 'This body text');
   assert.equal(chip({ key: LINKED, selector: INSTANCE }, addresses, null, { markup }).face, 'This body text');
+});
+
+test('each item says what it previews while active: its address whenever that names a selector, nothing for the bare element', () => {
+  // A part facet: the own pair previews (the paint yields to the standing
+  // facet), "This element" previews nothing, every rule and box its pair.
+  const part = chip({ key: LINKED, selector: LINK }, set(LINKED, LINK));
+  assert.deepEqual(part.items.map((item) => [item.seat, item.preview]), [
+    ['own', { key: LINKED, selector: LINK }],
+    ['element', null],
+    ...part.items.slice(2).map((item) => [item.seat, { key: item.address.key, selector: item.address.selector }]),
+  ]);
+  assert.ok(part.items.slice(2).every((item) => item.preview.selector !== null));
+  assert.deepEqual(part.items.slice(-2).map((item) => item.preview.selector), [`${LINK}::before`, `${LINK}::after`]);
+  // A root facet: the own entry IS the bare element, so it previews
+  // nothing; the ancestors' rules preview their pairs.
+  const root = chip({ key: HERO, selector: null }, set(HERO, null));
+  assert.equal(root.items[0].seat, 'own');
+  assert.equal(root.items[0].preview, null);
+  assert.deepEqual(root.items[1].preview, root.items[1].address);
+  // A preview is its own object: a consumer may hold it across renders.
+  assert.notEqual(root.items[1].preview, root.items[1].address);
 });

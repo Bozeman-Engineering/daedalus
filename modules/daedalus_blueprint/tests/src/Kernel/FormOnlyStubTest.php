@@ -56,7 +56,7 @@ class FormOnlyStubTest extends BlueprintKernelTestBase {
       // field_count, field_email, etc. stay empty.
     ]);
 
-    $full = $this->serializer->serialize($entity);
+    $full = $this->serializer->serialize($this->host($entity));
     $fields = $full['fields'];
 
     // Populated fields keep their values.
@@ -73,7 +73,7 @@ class FormOnlyStubTest extends BlueprintKernelTestBase {
     );
 
     // Summary transport stays sparse — no stub nodes.
-    $summary = $this->serializer->serializeSummary($entity);
+    $summary = $this->serializer->serializeSummary($this->host($entity));
     $this->assertArrayNotHasKey('field_count', $summary['fields'] ?? []);
   }
 
@@ -90,7 +90,7 @@ class FormOnlyStubTest extends BlueprintKernelTestBase {
     // Read FULL (contains stubs for the empty fields), modify one field,
     // and — the hostile part — replace a POPULATED field's value with a
     // stub, as if a confused client echoed presentation identity back.
-    $blueprint = $this->serializer->serialize($entity);
+    $blueprint = $this->serializer->serialize($this->host($entity));
     $this->assertTrue(FormOnlyStub::isStub($blueprint['fields']['field_email']));
     $blueprint['fields']['field_subtitle'] = 'Changed subtitle';
     $blueprint['fields']['field_count'] = FormOnlyStub::forDefinition(
@@ -142,21 +142,22 @@ class FormOnlyStubTest extends BlueprintKernelTestBase {
 
     // FULL mode: the empty block field carries a stub beside the populated
     // one.
-    $full = $this->serializer->serialize($entity);
-    $component = $full['layout_builder__layout'][0]['regions']['content'][0];
+    $full = $this->serializer->serialize($this->host($entity));
+    $component = $full['layout'][0]['children'][0]['children'][0];
     $this->assertSame('Welcome', $component['block_fields']['field_heading']);
     $this->assertTrue(FormOnlyStub::isStub($component['block_fields']['field_body']));
     $this->assertSame('Body', $component['block_fields']['field_body']['_label']);
     // The block field's stub carries the emptiness flag like a root field's.
     $this->assertTrue($component['block_fields']['field_body'][FormOnlyStub::EMPTY_KEY]);
 
-    // Component mode (AI transport): sparse, no stubs.
-    $component_read = $this->serializer->serializeElement($entity, '19522840-e96e-9546-3ee1-f97220a240ac');
-    $this->assertArrayNotHasKey('field_body', $component_read['block_fields']);
+    // The element read is the same node as the full read's: the stub rides
+    // it too (the AI transport strips stubs itself, FormOnlyStub::strip()).
+    $component_read = $this->serializer->serializeElement($this->host($entity), '19522840-e96e-9546-3ee1-f97220a240ac');
+    $this->assertSame($component, $component_read);
 
     // Summary mode: sparse, no stubs.
-    $summary = $this->serializer->serializeSummary($entity);
-    $summary_component = $summary['layout_builder__layout'][0]['regions']['content'][0];
+    $summary = $this->serializer->serializeSummary($this->host($entity));
+    $summary_component = $summary['layout'][0]['children'][0]['children'][0];
     $this->assertArrayNotHasKey('block_fields', $summary_component);
   }
 
@@ -169,15 +170,23 @@ class FormOnlyStubTest extends BlueprintKernelTestBase {
         'kept' => 'value',
         'stubbed' => [FormOnlyStub::KEY => TRUE, '_label' => 'Stubbed'],
       ],
-      'layout_builder__layout' => [
+      'layout' => [
         [
-          'regions' => [
-            'content' => [
-              [
-                'uuid' => 'a9f7e979-65d6-cf79-9a52-9102a973b8b9',
-                'block_fields' => [
-                  'field_a' => 'text',
-                  'field_b' => [FormOnlyStub::KEY => TRUE, '_label' => 'B'],
+          'kind' => 'container',
+          'layout_id' => 'layout_onecol',
+          'children' => [
+            [
+              'kind' => 'region',
+              'region' => 'content',
+              'children' => [
+                [
+                  'kind' => 'block',
+                  'uuid' => 'a9f7e979-65d6-cf79-9a52-9102a973b8b9',
+                  'block_type' => 'text_section',
+                  'block_fields' => [
+                    'field_a' => 'text',
+                    'field_b' => [FormOnlyStub::KEY => TRUE, '_label' => 'B'],
+                  ],
                 ],
               ],
             ],
@@ -191,7 +200,7 @@ class FormOnlyStubTest extends BlueprintKernelTestBase {
     $this->assertSame(['kept' => 'value'], $stripped['fields']);
     $this->assertSame(
       ['field_a' => 'text'],
-      $stripped['layout_builder__layout'][0]['regions']['content'][0]['block_fields'],
+      $stripped['layout'][0]['children'][0]['children'][0]['block_fields'],
     );
   }
 

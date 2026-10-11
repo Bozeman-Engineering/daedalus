@@ -235,7 +235,7 @@ class FileStyleValueHandlerTest extends DaedalusAiKernelTestBase {
       'property' => 'background-image',
       'path' => "$key.default.background-image",
       'layer' => NULL,
-      'entity' => NULL,
+      'host' => NULL,
       'conversation' => $conversation,
     ];
   }

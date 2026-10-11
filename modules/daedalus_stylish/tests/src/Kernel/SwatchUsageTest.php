@@ -73,7 +73,13 @@ class SwatchUsageTest extends KernelTestBase {
     $this->installEntitySchema('daedalus_skin');
     $this->installEntitySchema('daedalus_swatch');
     $this->installEntitySchema('daedalus_animation');
-    $this->installSchema('daedalus_stylish', ['daedalus_variant_usage', 'daedalus_swatch_usage']);
+    $this->installEntitySchema('daedalus_font');
+    $this->installSchema('daedalus_stylish', [
+      'daedalus_variant_usage',
+      'daedalus_swatch_usage',
+      'daedalus_token_usage',
+      'daedalus_font_usage',
+    ]);
     $this->installConfig(['daedalus_stylish']);
     $this->setUpCurrentUser();
     $this->container->get('daedalus_stylish.field_manager')->enable('entity_test', 'entity_test');
@@ -122,7 +128,7 @@ class SwatchUsageTest extends KernelTestBase {
    */
   protected function createSkin(string $machine_name, array $tokens, array $defaults = []): DaedalusStylishSkinInterface {
     $skin = DaedalusStylishSkin::create(['label' => $machine_name, 'machine_name' => $machine_name]);
-    $skin->setTokens($tokens)->setDefaults($defaults);
+    $skin->setPackageTokens($tokens)->setPackageDefaults($defaults);
     $skin->save();
     return $skin;
   }

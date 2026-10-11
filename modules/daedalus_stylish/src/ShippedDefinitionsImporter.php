@@ -32,15 +32,15 @@ use Drupal\workspaces\WorkspaceManagerInterface;
  * A module's definitions come from two file forms merged: the hand-authored
  * MODULE.{suffix} (e.g. x.daedalus_stylish.variants.yml) plus every per-id file
  * MODULE.{suffix minus .yml}.ID.yml beside it (x.daedalus_stylish.variants.card.yml).
- * The per-id form is the machine-written lane (a stencil shipped with its
+ * The per-id form is the machine-written lane (a blueprint shipped with its
  * variants lands as one such file) so writers never touch the comment-heavy
  * single file; a machine name shipped in two of one module's files is a
  * developer error (FAILED on the sync report under the file's name, an
  * exception for the loud reader). One grammar for every importer: skins,
  * swatches, and animations gain the per-id form by construction.
  *
- * Activation belongs to ShippedSync, which runs the four importers in
- * dependency order (animations, swatches, skins, variants) on every cache
+ * Activation belongs to ShippedSync, which runs the five importers in
+ * dependency order (fonts, animations, swatches, skins, variants) on every cache
  * rebuild (hook_rebuild(), so `drush cr` brings a pulled package live), on
  * module install (hook_modules_installed()), and by hand through
  * `drush daedalus_stylish:sync [MODULE]`. Each importer's sync() stays public
@@ -124,7 +124,7 @@ abstract class ShippedDefinitionsImporter {
   ) {}
 
   /**
-   * The kind's noun: 'variant', 'skin', 'swatch', or 'animation'.
+   * The kind's noun: 'variant', 'skin', 'swatch', 'animation', or 'font'.
    *
    * The word every report, log line, and command line names a definition
    * by (`MODULE: KIND NAME outcome`), and the key ShippedSync files the
@@ -314,7 +314,7 @@ abstract class ShippedDefinitionsImporter {
    * @return bool
    *   Whether the flag changed.
    */
-  protected function syncOffered(DaedalusStylishVariantInterface|DaedalusStylishSwatchInterface|DaedalusStylishAnimationInterface $entity, array $definition): bool {
+  protected function syncOffered(DaedalusStylishVariantInterface|DaedalusStylishSwatchInterface|DaedalusStylishAnimationInterface|DaedalusStylishFontInterface $entity, array $definition): bool {
     $offered = ($definition['ai'] ?? TRUE) !== FALSE;
     if ($entity->isOffered() === $offered) {
       return FALSE;
@@ -422,7 +422,7 @@ abstract class ShippedDefinitionsImporter {
    * Nothing the disk lane can refuse throws out of here; callers read the
    * report, and the sync command, the update hooks and the rebuild log
    * each surface its failures in their own medium. ShippedSync runs the
-   * four kinds in dependency order; call one kind's sync() directly only
+   * five kinds in dependency order; call one kind's sync() directly only
    * when the others cannot matter.
    *
    * @param string[]|null $modules

@@ -1,6 +1,12 @@
 import { h, Fragment } from 'preact';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { IconButton } from './icon-button.js';
+import {
+  clipboardAvailable,
+  clipboardUnavailableText,
+  readClipboardText,
+  writeClipboardText,
+} from './clipboard.js';
 import { fetchUsage, revertVariant } from './variants-api.js';
 import { failureText, gesture } from './gesture-transport.js';
 import { respondedMaterial } from './material-gestures.js';
@@ -65,25 +71,32 @@ const PasteStylesIcon = () => (
  * is the ONE save-as-variant doorway, entering the editing session in
  * its creating posture everywhere.
  *
- * One clipboard, the system's, carrying dialect text. Copy CSS reads the
- * target's own entries printed as flat dialect rules by the server
- * (source.readCss: daedalus_blueprint_api's read route in css mode,
- * `#<uuid>` as the id, the element's words as a comment, its wear as a
- * comment line) into the clipboard through a promise-backed
- * ClipboardItem, so the write stays inside the user's gesture while the
- * print is fetched (Safari accepts a promise for the item's data;
- * Chrome's transient activation covers the fetch). What the AI says,
- * what the designer copies and what they paste are one text. Paste CSS
- * reads the system clipboard (navigator.clipboard.readText, the
- * browser's one-time permission prompt) into the spine's parse door at
- * the write target (paste-door.js: a copied `#id { }` block re-roots
- * onto the element, anything else reads under the target itself) and
- * lands the entries as one additive update_style batch, one history
- * entry: a pasted block sets what it names and unsets nothing (clearing
- * is a row's ×), and travels own styles only (a variant-worn treatment
- * travels by applying the variant). Basic and Advanced have no island to
- * paste into, so the header button is the clipboard's door there; in
- * code mode ⌘V inside an island is the same door.
+ * One clipboard, the system's, carrying dialect text, reached only
+ * through the clipboard door (clipboard.js, the one file that names the
+ * Clipboard API; it never throws, it rejects, so every chain here
+ * settles and `busy` always resets). Copy CSS reads the target's own
+ * entries printed as flat dialect rules by the server (source.readCss:
+ * daedalus_blueprint_api's read route in css mode, `#<uuid>` as the id,
+ * the element's words as a comment, its wear as a comment line) through
+ * writeClipboardText, whose producer runs inside the user's gesture
+ * while the print is fetched. What the AI says, what the designer copies
+ * and what they paste are one text. Paste CSS reads the system clipboard
+ * (readClipboardText, the browser's one-time permission prompt) into the
+ * spine's parse door at the write target (paste-door.js: a copied
+ * `#id { }` block re-roots onto the element, anything else reads under
+ * the target itself) and lands the entries as one additive update_style
+ * batch, one history entry: a pasted block sets what it names and unsets
+ * nothing (clearing is a row's ×), and travels own styles only (a
+ * variant-worn treatment travels by applying the variant). Basic and
+ * Advanced have no island to paste into, so the header button is the
+ * clipboard's door there; in code mode ⌘V inside an island is the same
+ * door.
+ *
+ * A page without the API (plain http: both Clipboard interfaces are
+ * [SecureContext]) renders Copy CSS and Paste CSS disabled wearing the
+ * door's sentence as their tooltip, probed by presence at each render so
+ * a clipboard mounted after load (the FJS seam's stub) is seen on the
+ * next render; Save as variant needs no clipboard and is not withheld.
  *
  * Success feedback rides the gesture's own tooltip ("CSS copied" flashes
  * in place of the label; the eye is already on the button); failures go
@@ -110,9 +123,9 @@ export const StyleActions = ({
   };
   useEffect(() => () => window.clearTimeout(flashTimer.current), []);
 
-  const layout = source.getLayout ? source.getLayout() : [];
+  const tree = source.getTree?.() ?? [];
   const capturable =
-    Object.keys(captureEntries(styleMap, selected, layout)).length > 0;
+    Object.keys(captureEntries(styleMap, selected, tree)).length > 0;
   const canCopy =
     entryRefs(styleMap?.[target]).length > 0 ||
     hasCustomStyles(styleMap, target);
@@ -122,21 +135,12 @@ export const StyleActions = ({
     // messenger, the satellite's settle); only a clipboard refusal after
     // the text arrived is phrased here.
     let printed = false;
-    const text = source.readCss(target).then((css) => {
-      printed = true;
-      return css;
-    });
-    const written =
-      typeof ClipboardItem === 'undefined'
-        ? text.then((css) => navigator.clipboard.writeText(css))
-        : navigator.clipboard.write([
-            new ClipboardItem({
-              'text/plain': text.then(
-                (css) => new Blob([css], { type: 'text/plain' }),
-              ),
-            }),
-          ]);
-    written
+    writeClipboardText(() =>
+      source.readCss(target).then((css) => {
+        printed = true;
+        return css;
+      }),
+    )
       .then(() => flashTooltip('copy', Drupal.t('CSS copied')))
       .catch((error) => {
         if (printed) {
@@ -150,8 +154,9 @@ export const StyleActions = ({
 
   const paste = () => {
     setBusy(true);
-    navigator.clipboard
-      .readText()
+    // The door's read is the chain's first link and never throws, so the
+    // .finally below is reached on every exit and `busy` always resets.
+    readClipboardText()
       .then(
         (text) => {
           if (!text || text.trim() === '') {
@@ -209,6 +214,11 @@ export const StyleActions = ({
       .finally(() => setBusy(false));
   };
 
+  // Probed each render: the FJS seam mounts a stub after load, and the
+  // next render sees it.
+  const clipboard = clipboardAvailable();
+  const withheld = clipboard ? null : clipboardUnavailableText();
+
   return (
     <Fragment>
       {config?.canCreate && capturable && onSaveVariant && (
@@ -223,9 +233,9 @@ export const StyleActions = ({
       {canCopy && (
         <IconButton
           label={Drupal.t('Copy CSS')}
-          tooltip={flash?.key === 'copy' ? flash.text : null}
+          tooltip={flash?.key === 'copy' ? flash.text : withheld}
           show={flash?.key === 'copy'}
-          disabled={busy}
+          disabled={busy || !clipboard}
           onClick={copy}
         >
           <CopyStylesIcon />
@@ -233,9 +243,9 @@ export const StyleActions = ({
       )}
       <IconButton
         label={Drupal.t('Paste CSS')}
-        tooltip={flash?.key === 'paste' ? flash.text : null}
+        tooltip={flash?.key === 'paste' ? flash.text : withheld}
         show={flash?.key === 'paste'}
-        disabled={busy}
+        disabled={busy || !clipboard}
         onClick={paste}
       >
         <PasteStylesIcon />
@@ -257,12 +267,12 @@ export const StyleActions = ({
  */
 const shippedText = (management) => {
   if (management.shipped_state === 'defaults_changed') {
-    return Drupal.t('The @module module ships new defaults for this variant.', {
-      '@module': management.provider,
+    return Drupal.t('The !module module ships new defaults for this variant.', {
+      '!module': management.provider,
     });
   }
-  return Drupal.t('Modified from the defaults shipped by the @module module.', {
-    '@module': management.provider,
+  return Drupal.t('Modified from the defaults shipped by the !module module.', {
+    '!module': management.provider,
   });
 };
 
@@ -286,9 +296,9 @@ export const confirmRevertToDefaults = (variant) =>
   fetchUsage(variant.id).then(async ({ usages, provider }) => {
     const question = Drupal.formatPlural(
       usages,
-      'Revert "@label" to the defaults shipped by the @module module? This updates 1 use across the site.',
-      'Revert "@label" to the defaults shipped by the @module module? This updates @count uses across the site.',
-      { '@label': variant.label, '@module': provider },
+      'Revert "!label" to the defaults shipped by the !module module? This updates 1 use across the site.',
+      'Revert "!label" to the defaults shipped by the !module module? This updates @count uses across the site.',
+      { '!label': variant.label, '!module': provider },
     );
     if (
       !(await Drupal.Daedalus.dialog.confirm({
@@ -354,7 +364,7 @@ const useWornManagement = (worn, enabled, variants) => {
  * `source.applyResponse()`, whose materials delta re-renders every
  * consumer of the store in both windows. The variants arrive as the
  * store's records (`variants`), the roster itself as `materials` (the
- * ownership reads need the stencils beside the variants).
+ * ownership reads need the blueprints beside the variants).
  *
  * The area's pieces:
  * - The WEARING ROWS (wear-bar.js): the worn rows (minus the axes a
@@ -365,7 +375,7 @@ const useWornManagement = (worn, enabled, variants) => {
  *   (the code tree carries no wearing chrome of its own; page-view.js),
  *   so the control surface is one thing wherever it renders.
  * - Ownership and shipped-state notices, one line per worn variant that
- *   carries a story (an orphaned stencil owner, a modified shipped
+ *   carries a story (an orphaned blueprint owner, a modified shipped
  *   variant with its Revert-to-defaults action).
  * - Gesture outcomes ride source.notify to the edit-mode messenger:
  *   the header's StyleActions gestures speak through the same spine, so
@@ -441,8 +451,8 @@ export const VariantArea = ({
           source.applyResponse(result);
           source.notify?.(
             'status',
-            Drupal.t('Reverted "@label" to its built-in defaults.', {
-              '@label':
+            Drupal.t('Reverted "!label" to its built-in defaults.', {
+              '!label':
                 respondedMaterial(result, 'variant', variant.id)?.label ??
                 variant.label,
             }),
@@ -473,8 +483,8 @@ export const VariantArea = ({
             className="daedalus-stylish-inspector__variant-owned daedalus-stylish-inspector__variant-owned--orphaned"
           >
             {Drupal.t(
-              '"@label" belonged to a stencil that no longer exists; it is offered nowhere, but this element keeps its look.',
-              { '@label': variant.label },
+              '"!label" belonged to a blueprint that no longer exists; it is offered nowhere, but this element keeps its look.',
+              { '!label': variant.label },
             )}
           </div>
         );

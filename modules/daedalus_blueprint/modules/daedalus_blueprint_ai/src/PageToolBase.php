@@ -5,15 +5,16 @@ declare(strict_types=1);
 namespace Drupal\daedalus_blueprint_ai;
 
 use Drupal\ai\Service\FunctionCalling\FunctionCallInterface;
-use Drupal\Core\Entity\FieldableEntityInterface;
-use Drupal\daedalus_blueprint\Dialect\DialectAliasMap;
-use Drupal\daedalus_blueprint\Dialect\DialectCatalogBuilder;
-use Drupal\daedalus_blueprint\Dialect\DialectPrinter;
+use Drupal\daedalus_blueprint\Capability\VerdictStamper;
+use Drupal\daedalus_blueprint\Host\HostInterface;
 use Drupal\daedalus_blueprint\Dialect\DomOperationHandler;
-use Drupal\daedalus_blueprint\NodeTree\NodeTreeBuilder;
+use Drupal\daedalus_blueprint\Dialect\HostPrinter;
 use Drupal\daedalus_blueprint\OperationHandler\OperationHandlerRegistry;
 use Drupal\daedalus_blueprint\Result\BlueprintError;
+use Drupal\daedalus_blueprint\Result\BlueprintResult;
 use Drupal\daedalus_blueprint\Result\BlueprintResultInterface;
+use Drupal\daedalus_blueprint\Result\TargetType;
+use Drupal\daedalus_blueprint\Utility\FormOnlyStub;
 use Drupal\daedalus_blueprint_ai\Event\PageToolInputEvent;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 
@@ -26,15 +27,10 @@ use Symfony\Component\DependencyInjection\ContainerInterface;
  * services and threads the per-call contract (the generated catalog as
  * options['dialect_catalog'] and the conversation id, the runner's job
  * id via ConversationContext, as options['conversation']) so aliases
- * persist per entity per conversation and every payload parses against
+ * persist per host per conversation and every payload parses against
  * live vocabulary.
  */
 abstract class PageToolBase extends DaedalusBlueprintToolBase {
-
-  /**
-   * The dialect catalog builder.
-   */
-  protected DialectCatalogBuilder $catalogBuilder;
 
   /**
    * The operation handler registry (the page language's op set).
@@ -42,19 +38,9 @@ abstract class PageToolBase extends DaedalusBlueprintToolBase {
   protected OperationHandlerRegistry $operationHandlerRegistry;
 
   /**
-   * The lean node tree builder.
+   * The model's read of a host: stamp, build, print, aliases, in one.
    */
-  protected NodeTreeBuilder $treeBuilder;
-
-  /**
-   * The dialect printer.
-   */
-  protected DialectPrinter $dialectPrinter;
-
-  /**
-   * The dialect alias map.
-   */
-  protected DialectAliasMap $aliasMap;
+  protected HostPrinter $hostPrinter;
 
   /**
    * The DOM operation handler.
@@ -65,6 +51,11 @@ abstract class PageToolBase extends DaedalusBlueprintToolBase {
    * The conversation context.
    */
   protected ConversationContext $conversationContext;
+
+  /**
+   * The verdict stamp: the host-level refusals a read is headed with.
+   */
+  protected VerdictStamper $verdictStamper;
 
   /**
    * The input event dispatched for the current execution, if any.
@@ -79,13 +70,11 @@ abstract class PageToolBase extends DaedalusBlueprintToolBase {
    */
   public static function create(ContainerInterface $container, array $configuration, $plugin_id, $plugin_definition): FunctionCallInterface|static {
     $instance = parent::create($container, $configuration, $plugin_id, $plugin_definition);
-    $instance->catalogBuilder = $container->get('daedalus_blueprint.dialect_catalog_builder');
     $instance->operationHandlerRegistry = $container->get('daedalus_blueprint.operation_handler_registry');
-    $instance->treeBuilder = $container->get('daedalus_blueprint.node_tree_builder');
-    $instance->dialectPrinter = $container->get('daedalus_blueprint.dialect_printer');
-    $instance->aliasMap = $container->get('daedalus_blueprint.dialect_alias_map');
+    $instance->hostPrinter = $container->get('daedalus_blueprint.host_printer');
     $instance->domOperationHandler = $container->get('daedalus_blueprint.dom_operation_handler');
     $instance->conversationContext = $container->get('daedalus_blueprint_ai.conversation_context');
+    $instance->verdictStamper = $container->get('daedalus_blueprint.verdict_stamper');
     return $instance;
   }
 
@@ -152,14 +141,64 @@ abstract class PageToolBase extends DaedalusBlueprintToolBase {
   }
 
   /**
-   * Prints an entity's current page in the dialect, aliases echoed.
+   * The page's own fields as one block, or NULL when there is nothing to say.
+   *
+   * The serializer's fields map for the host (the map page_create takes),
+   * form-only stubs stripped as every AI transport strips them: the model
+   * never reads a field it cannot write. A template has no fields of its
+   * own (fields() is NULL) and prints none; an entity whose every field is
+   * a stub prints none either.
+   *
+   * @param \Drupal\daedalus_blueprint\Host\HostInterface $host
+   *   The host being read.
+   *
+   * @return string|null
+   *   The block in the tools' array format, newline-terminated, or NULL.
    */
-  protected function printPage(FieldableEntityInterface $entity): string {
-    return $this->dialectPrinter->print(
-      $this->treeBuilder->build($entity),
-      $this->catalogBuilder->build(),
-      $this->aliasMap->printAliases($entity, $this->conversationContext->get()),
-    );
+  protected function fieldsBlock(HostInterface $host): ?string {
+    if ($host->fields() === NULL) {
+      return NULL;
+    }
+    $fields = FormOnlyStub::strip($this->blueprintOperations->getBlueprint($host)['fields'] ?? []);
+    return $fields === [] ? NULL : $this->formatArray(['fields' => $fields]);
+  }
+
+  /**
+   * Whether a batch wrote the page's own fields (a set on root).
+   *
+   * Read off the spine's change targets: a target on the host that names a
+   * real field, the style map aside (every style write names it, and it
+   * is the document's store, not a field of the page).
+   *
+   * @param \Drupal\daedalus_blueprint\Result\BlueprintResult $result
+   *   The batch's successful result.
+   * @param \Drupal\daedalus_blueprint\Host\HostInterface $host
+   *   The host the batch ran on.
+   *
+   * @return bool
+   *   TRUE when at least one of the host's own fields changed.
+   */
+  protected function wroteOwnFields(BlueprintResult $result, HostInterface $host): bool {
+    $style_map = $host->styleMapDefinition()?->getName();
+    foreach ($result->getTargets() as $target) {
+      if (is_array($target) && $target['uuid'] === $host->uuid() && !TargetType::isSentinel($target['field_name']) && $target['field_name'] !== $style_map) {
+        return TRUE;
+      }
+    }
+    return FALSE;
+  }
+
+  /**
+   * The host-level refusals as one line, or NULL when nothing is refused.
+   *
+   * The spine's sentences for the root's verdict (VerdictStamper::explain):
+   * a page whose layout is its template's, a frozen translation, a
+   * required workspace, a missing permission. Heads a read so the model
+   * knows where a gesture belongs before it writes.
+   */
+  protected function hostNotice(HostInterface $host): ?string {
+    $sentences = VerdictStamper::explain($this->verdictStamper->verdicts($host, $host->uuid()));
+    return $sentences === [] ? NULL : implode(' ', $sentences);
   }
 
 }

@@ -1,0 +1,20 @@
+label: Hero
+description: 'Single-column hero banner with a heading.'
+icon: assets/hero.svg
+groups: [heroes, openers]
+favorite: true
+scope: block
+subject: 'entity_test:entity_test'
+layout:
+  -
+    kind: container
+    layout_id: layout_onecol
+    label: Hero
+    children:
+      -
+        kind: region
+        region: content
+        children:
+          -
+            kind: block
+            block_type: text

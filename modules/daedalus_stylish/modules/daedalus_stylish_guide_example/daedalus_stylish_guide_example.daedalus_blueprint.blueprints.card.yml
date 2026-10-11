@@ -1,0 +1,170 @@
+# The "card" blueprint of the Guide Example design system: a composition
+# shipped as a page-language document (daedalus_blueprint_library's
+# per-file lane, MODULE.daedalus_blueprint.blueprints.ID.yml), placed as
+# is from the palette or written with the AI's own content. No
+# design_system key: the module packages guide_example, so the blueprint
+# is a member of it and offered only while the system is active. Block
+# scope, one root container; the subject is the page bundle the material
+# is for (a fork stamps it on the new blueprint). Its blocks are the
+# Daedalus text and image blocks; the file is inert until
+# daedalus_blueprint_library is installed and those bundles exist. The
+# reference fields (media) are omitted on purpose: absent fields
+# sample-populate at placement.
+label: Card
+description: 'A band of three cards: a Tint band at Standard rhythm holding a Columns row, each column a Card with a rounded image, an h3 title, one line of copy and a Link button. Reach for it for a row of features, services or team members; keep one card per column and never a Card in a Card.'
+icon: assets/blueprints/card.svg
+scope: block
+subject: 'node:page'
+layout:
+  -
+    kind: container
+    layout_id: daedalus_stylish_container
+    label: Cards
+    styles:
+      '':
+        variants:
+          - container_site
+          - guide_band_tint
+          - guide_rhythm_standard
+    children:
+      -
+        kind: container
+        layout_id: daedalus_stylish_container
+        label: 'Card row'
+        styles:
+          '':
+            variants:
+              - row
+        children:
+          -
+            kind: container
+            layout_id: daedalus_stylish_container
+            label: Card
+            styles:
+              '':
+                variants:
+                  - guide_card
+            children:
+              -
+                kind: block
+                block_type: image
+                block_fields:
+                  info: Image
+                styles:
+                  '':
+                    variants:
+                      - guide_image_rounded
+              -
+                kind: block
+                block_type: text
+                block_fields:
+                  info: Text
+                  field_text_tag: h3
+                  field_text_text: 'Card title'
+              -
+                kind: block
+                block_type: text
+                block_fields:
+                  info: Text
+                  field_text_text: 'One line that says what this card is about.'
+              -
+                kind: block
+                block_type: text
+                block_fields:
+                  info: Text
+                  field_text_text: 'Read more'
+                  field_text_url:
+                    uri: 'https://example.com'
+                    _displayable: 'https://example.com'
+                styles:
+                  '':
+                    variants:
+                      - guide_button_link
+          -
+            kind: container
+            layout_id: daedalus_stylish_container
+            label: Card
+            styles:
+              '':
+                variants:
+                  - guide_card
+            children:
+              -
+                kind: block
+                block_type: image
+                block_fields:
+                  info: Image
+                styles:
+                  '':
+                    variants:
+                      - guide_image_rounded
+              -
+                kind: block
+                block_type: text
+                block_fields:
+                  info: Text
+                  field_text_tag: h3
+                  field_text_text: 'Card title'
+              -
+                kind: block
+                block_type: text
+                block_fields:
+                  info: Text
+                  field_text_text: 'One line that says what this card is about.'
+              -
+                kind: block
+                block_type: text
+                block_fields:
+                  info: Text
+                  field_text_text: 'Read more'
+                  field_text_url:
+                    uri: 'https://example.com'
+                    _displayable: 'https://example.com'
+                styles:
+                  '':
+                    variants:
+                      - guide_button_link
+          -
+            kind: container
+            layout_id: daedalus_stylish_container
+            label: Card
+            styles:
+              '':
+                variants:
+                  - guide_card
+            children:
+              -
+                kind: block
+                block_type: image
+                block_fields:
+                  info: Image
+                styles:
+                  '':
+                    variants:
+                      - guide_image_rounded
+              -
+                kind: block
+                block_type: text
+                block_fields:
+                  info: Text
+                  field_text_tag: h3
+                  field_text_text: 'Card title'
+              -
+                kind: block
+                block_type: text
+                block_fields:
+                  info: Text
+                  field_text_text: 'One line that says what this card is about.'
+              -
+                kind: block
+                block_type: text
+                block_fields:
+                  info: Text
+                  field_text_text: 'Read more'
+                  field_text_url:
+                    uri: 'https://example.com'
+                    _displayable: 'https://example.com'
+                styles:
+                  '':
+                    variants:
+                      - guide_button_link

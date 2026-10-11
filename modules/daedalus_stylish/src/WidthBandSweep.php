@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Drupal\daedalus_stylish;
 
-use Drupal\Core\Entity\ContentEntityInterface;
+use Drupal\daedalus_blueprint\Host\HostInterface;
 
 /**
  * Sweeps a host's whole style map to the base-at-top width bands.
@@ -28,7 +28,7 @@ class WidthBandSweep extends StyleMapSweepBase {
   /**
    * {@inheritdoc}
    */
-  protected function sweep(array $map, ContentEntityInterface $host, string $context, array &$lines): ?array {
+  protected function sweep(array $map, HostInterface $host, string $context, array &$lines): ?array {
     return $this->migration->migrateStyleMap($map, $context, $lines);
   }
 

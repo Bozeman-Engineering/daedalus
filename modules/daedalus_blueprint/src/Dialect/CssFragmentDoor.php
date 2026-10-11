@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Drupal\daedalus_blueprint\Dialect;
 
-use Drupal\Core\Entity\FieldableEntityInterface;
+use Drupal\daedalus_blueprint\Host\HostInterface;
 use Drupal\daedalus_blueprint\Materials\RelativeSelector;
 use Drupal\daedalus_blueprint\NodeTree\NodeTreeBuilder;
 use Drupal\daedalus_blueprint\Result\BlueprintError;
@@ -62,8 +62,8 @@ final class CssFragmentDoor {
   /**
    * Parses a CSS fragment under a style key into its flat entries.
    *
-   * @param \Drupal\Core\Entity\FieldableEntityInterface $entity
-   *   The entity in the state the client edits (the staged working copy).
+   * @param \Drupal\daedalus_blueprint\Host\HostInterface $host
+   *   The host in the state the client edits (the staged working copy).
    * @param string $key
    *   The style key the text was pasted into: `container:<uuid>` or
    *   `block:<uuid>`, with `::` and a relative selector in its canonical
@@ -79,7 +79,7 @@ final class CssFragmentDoor {
    *   sent text. Under errors the entries are best-effort, as the parser's
    *   are: every rule and declaration that did parse.
    */
-  public function parse(FieldableEntityInterface $entity, string $key, string $css): array {
+  public function parse(HostInterface $host, string $key, string $css): array {
     $split = RelativeSelector::splitKey($key);
     if ($split === NULL || !preg_match(self::ROOT_RE, $split[0], $m) || !DialectParser::isUuid($m['uuid'])) {
       return self::refused(new BlueprintError('key', 'BAD_KEY', sprintf('"%s" is not a style key.', $key), ['key' => $key], 'A style key is container:<uuid> or block:<uuid>, with "::" and a relative selector in its canonical spelling for a rule (container:<uuid>::> pb-text).'));
@@ -87,7 +87,7 @@ final class CssFragmentDoor {
     [, $selector] = $split;
     $uuid = $m['uuid'];
     $catalog = $this->catalogBuilder->build();
-    $known_ids = DialectCssParser::knownIds($this->treeBuilder->build($entity), $catalog);
+    $known_ids = DialectCssParser::knownIds($this->treeBuilder->build($host), $catalog);
     $known = $known_ids[$uuid] ?? NULL;
     if ($known === NULL) {
       return self::refused(new BlueprintError('key', 'ELEMENT_NOT_FOUND', sprintf('No element %s on this page.', $uuid), ['key' => $key], 'Keys name the elements of the page being edited; reload the page and paste again.'));

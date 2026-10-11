@@ -12,7 +12,7 @@ import { pickerGroups, pickerHome, pickerIds } from './variant-picker-model.js';
  * unfiltered) or from a worn row's swap trigger (preset to that row's
  * axis): an autofocused search field over a grouped listbox of the
  * applicable, fit-ranked variants (pickerGroups, the pure half: an
- * owning stencil's curated looks head their axis under the stencil's
+ * owning blueprint's curated looks head their axis under the blueprint's
  * name, the generic offer under the axis's). Type to filter across
  * label, axis label, owner label and description; ArrowUp/Down walk
  * the options across group boundaries (listboxTarget, the palette
@@ -41,7 +41,7 @@ import { pickerGroups, pickerHome, pickerIds } from './variant-picker-model.js';
  * @param {?object} props.guide
  *   The style guide (axis labels).
  * @param {object} props.materials
- *   The materials roster (the owner headings' stencil labels).
+ *   The materials roster (the owner headings' blueprint labels).
  * @param {?string} [props.axis]
  *   The axis to open filtered to (the swap), or null.
  * @param {Function} props.onPick
@@ -138,9 +138,9 @@ export const VariantPicker = ({
   };
 
   const hintText = (hint) =>
-    Drupal.t('fits @resolved of @total slots', {
-      '@resolved': hint.resolved,
-      '@total': hint.total,
+    Drupal.t('fits !resolved of !total slots', {
+      '!resolved': hint.resolved,
+      '!total': hint.total,
     });
 
   return (

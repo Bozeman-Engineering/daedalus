@@ -1,11 +1,71 @@
+# A section's slot: the id of the slot a top-level section fills in the
+# document around it (LayoutSerializer::SLOT_PROVIDER). A template's
+# sections live in config, so the setting needs a schema there.
+layout_builder.section.third_party.daedalus_blueprint:
+  type: mapping
+  mapping:
+    slot:
+      type: string
+      label: 'The id of the slot this section fills'
+
+# A slot block (daedalus_slot:{id}): the derivative is the slot id, the
+# only setting of its own the default blueprint shown when nothing fills
+# the slot. A template carries it as config.
+block.settings.daedalus_slot:*:
+  type: block_settings
+  label: 'Slot block settings'
+  mapping:
+    default_blueprint:
+      type: string
+      label: 'The machine name of the published blueprint shown when nothing fills the slot'
+      nullable: true
+
 daedalus_blueprint.settings:
   type: config_object
   label: 'Daedalus Blueprint settings'
+  # Fully validatable so that core validates the object at a recipe's
+  # config action and a recipe's config install, the recipe's roster
+  # (its daedalus_slots ingredient) being the one real-world writer the
+  # slot constraint below must meet, and so that a roster entry's keys
+  # are required (an entry with no tier is refused). The cost is the
+  # object's shape being law: both keys present and no other, and
+  # `langcode` required (config_object's own rule) since the slot labels
+  # are translatable; the install config ships all three.
+  constraints:
+    FullyValidatable: ~
   mapping:
     active_design_system:
       type: string
       label: 'The active design system'
       nullable: true
+    # The site's slot roster, one namespace per site: a slot block derives
+    # per id (SlotDeriver), the label being the block's and its stand-in's,
+    # and the tier names the one document of the render stack that declares
+    # the slot (SlotRoster): the site frame or a template, never both, so
+    # one page section can never fill two doors. An id a frame or a
+    # template places must stay here: dropped, its placed block is core's
+    # broken block, a door nothing renders into (SlotPlacements is the
+    # judgement).
+    slots:
+      type: sequence
+      label: 'Slots'
+      constraints:
+        DaedalusSlotRosterPlaced: {}
+      sequence:
+        type: mapping
+        label: 'Slot'
+        mapping:
+          label:
+            type: label
+            label: 'Slot label'
+          tier:
+            type: string
+            label: 'The tier of the stack that declares the slot: frame or template'
+            constraints:
+              Choice:
+                choices:
+                  - frame
+                  - template
 
 daedalus_blueprint.design_system.*:
   type: config_entity
@@ -40,3 +100,22 @@ daedalus_blueprint.design_system.*:
           - open
           - guarded
           - strict
+
+# The site frame of a theme: the document rendered around every route of
+# the theme by the Daedalus page display variant. One per theme, keyed by
+# the theme's machine name; it holds the section list and, as third-party
+# settings, its style map (daedalus_stylish declares that schema), and
+# nothing else. Rendered through the `frame` section storage plugin and
+# edited through the frame host (LayoutBuilder\FrameHost).
+daedalus_blueprint.frame.*:
+  type: config_entity
+  label: 'Site frame'
+  mapping:
+    id:
+      type: machine_name
+      label: 'The machine name of the theme the frame is for'
+    sections:
+      type: sequence
+      label: 'Sections'
+      sequence:
+        type: layout_builder.section

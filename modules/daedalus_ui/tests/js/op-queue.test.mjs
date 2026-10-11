@@ -89,7 +89,7 @@ globalThis.Drupal = { t: (string) => string, behaviors: {} };
 
 const record = (fields) => ({
   kind: 'token', id: '', label: '', description: '', value: null, group: null, spellings: {}, scope: null, applies: [],
-  owned_by: null, published: true, weight: 0, icon: null, root_kind: null, origin: 'user', updatable: true, ...fields,
+  owned_by: null, published: true, weight: 0, icon: null, origin: 'user', updatable: true, ...fields,
 });
 const RECORDS = [
   record({ kind: 'token', id: 'color/accent', label: 'accent', value: { default: '#1475ad' }, group: 'color', spellings: { style: 'var(--color-accent)' }, origin: 'shipped' }),
@@ -99,9 +99,31 @@ const RECORDS = [
 const CORAL = record({ kind: 'swatch', id: 'coral', label: 'Coral', value: '#ff7f50', group: 'color', spellings: { style: 'var(--swatch-coral)' } });
 const SCOPE = 'node-uuid:en:live';
 
+/**
+ * The page the suite's selections land on: the store's selection gate
+ * drops a key the projection index does not place or the actor can do
+ * nothing to, so the two keys the tests select (the kept block, the
+ * placed block) are placements of one section, every node open. The
+ * mirror-identity tests stamp a `_probe` key beside the tree and read it
+ * back: which delivered object the store holds, never the tree's shape.
+ */
+const OPEN = { content: true, configure: true, style: true, arrange: true, insert: true };
+const placement = (uuid) => ({ kind: 'block', uuid, block_type: 'text', label: 'Text', block_fields: { field_text_text: uuid }, _element: { can: OPEN } });
+const PAGE = {
+  fields: {},
+  _element: { can: OPEN },
+  layout: [{
+    kind: 'container',
+    uuid: 'section',
+    layout_id: 'layout_onecol',
+    _element: { can: OPEN },
+    children: [{ kind: 'region', region: 'content', children: [placement('kept'), placement('placed')] }],
+  }],
+};
+
 globalThis.drupalSettings = {
   daedalusUi: {
-    blueprint: JSON.stringify({ entityType: 'node', entityId: '1', uuid: 'root-uuid', blueprint: { _tree: { kind: 'root' } } }),
+    blueprint: JSON.stringify({ entityType: 'node', entityId: '1', uuid: 'root-uuid', blueprint: PAGE }),
     materials: JSON.stringify({ records: RECORDS }),
     editSession: { scope: SCOPE },
     responsivePreview: { url: '/preview' },
@@ -137,7 +159,7 @@ test('applyResponse applies materials and history on a page payload', async () =
   await applyResponse({
     success: true,
     entity_uuid: 'root-uuid',
-    blueprint: { _tree: { kind: 'root', mutated: true } },
+    blueprint: { ...PAGE, _probe: { mutated: true } },
     markup: {},
     attachments: [],
     drupal_commands: [],
@@ -146,7 +168,7 @@ test('applyResponse applies materials and history on a page payload', async () =
   });
   assert.deepEqual(swatchIds(), ['coral', 'lime_green']);
   assert.notEqual(store.getState().blueprint.blueprint, mirror);
-  assert.equal(store.getState().blueprint.blueprint._tree.mutated, true);
+  assert.equal(store.getState().blueprint.blueprint._probe.mutated, true);
   assert.equal(history.getState().pointer, 3);
   assert.equal(history.getState().canUndo, true);
   assert.deepEqual(history.getState().entries, [{ seq: 3, label: 'Minted Coral' }]);
@@ -185,7 +207,7 @@ test('a payload for another entity applies its delta without replacing the mirro
   await applyResponse({
     success: true,
     entity_uuid: 'other-uuid',
-    blueprint: { _tree: { kind: 'root', foreign: true } },
+    blueprint: { _probe: { foreign: true } },
     materials: { upsert: [{ ...CORAL, value: '#ff6f40' }], remove: [] },
   });
   assert.equal(store.getState().blueprint.blueprint, mirror);
@@ -211,7 +233,7 @@ test('a delta relayed from another window is applied and not rung back', () => {
 
 test('the facade reads from the store and binds the grammar to its roster', async () => {
   const { Materials } = Drupal.Daedalus;
-  assert.deepEqual(Materials.KINDS, ['token', 'swatch', 'variant', 'stencil', 'animation']);
+  assert.deepEqual(Materials.KINDS, ['token', 'swatch', 'variant', 'blueprint', 'animation', 'font']);
   assert.equal(Materials.isBooted(), true);
   assert.equal(Materials.get('variant', 'button').label, 'Button');
   assert.equal(Materials.has('swatch', 'coral'), false);
@@ -243,14 +265,14 @@ test('the armed edit session hears a response, with its payload, only once it is
   Drupal.ajax = () => ({ success: (commands) => { order.push(`commands:${commands.length}`); } });
   Drupal.Daedalus.EditSession = {
     mutationApplied: (payload) => {
-      order.push(`applied:${store.getState().blueprint.blueprint._tree.stamp}:${payload.targets.length}`);
+      order.push(`applied:${store.getState().blueprint.blueprint._probe.stamp}:${payload.targets.length}`);
     },
   };
   try {
     await applyResponse({
       success: true,
       entity_uuid: 'root-uuid',
-      blueprint: { _tree: { kind: 'root', stamp: 'fresh' } },
+      blueprint: { ...PAGE, _probe: { stamp: 'fresh' } },
       markup: {},
       targets: [{ uuid: 'root-uuid', field_name: 'title' }],
       attachments: [{ command: 'add_css' }],
@@ -278,7 +300,7 @@ test('a job sequences FIFO with ops, and a failed job rolls back what is queued 
   const payloadFor = (stamp) => ({
     success: true,
     entity_uuid: 'root-uuid',
-    blueprint: { _tree: { kind: 'root', stamp } },
+    blueprint: { ...PAGE, _probe: { stamp } },
     markup: {},
     targets: [],
     attachments: [],
@@ -296,7 +318,7 @@ test('a job sequences FIFO with ops, and a failed job rolls back what is queued 
     return { json: async () => payloadFor(stamp) };
   };
   Drupal.Daedalus.EditSession = {
-    mutationApplied: (payload) => { applied.push(payload.blueprint._tree.stamp); },
+    mutationApplied: (payload) => { applied.push(payload.blueprint._probe.stamp); },
   };
   const { enqueueOperations, enqueueJob, isDraining, drained } = await import('../../js/edit_mode/ops/op-queue.js');
   const context = { entityType: 'node', entityId: '1', operations: [], viewMode: 'full' };
@@ -319,7 +341,7 @@ test('a job sequences FIFO with ops, and a failed job rolls back what is queued 
     assert.equal(isDraining(), false);
     assert.deepEqual(order, ['send:op-1', 'job:run', 'send:op-2']);
     assert.deepEqual(applied, ['op-1', 'job', 'op-2']);
-    assert.deepEqual(results.map((payload) => payload.blueprint._tree.stamp), ['op-1', 'job', 'op-2']);
+    assert.deepEqual(results.map((payload) => payload.blueprint._probe.stamp), ['op-1', 'job', 'op-2']);
 
     // A job whose transport refuses (a form's validation errors) rejects
     // with that refusal and rolls back the op queued behind it, newest
@@ -348,7 +370,7 @@ test('the daedalusBlueprintApplyResponse command applies a success and hands eve
   const { initApplyResponseCommand } = await import('../../js/edit_mode/ops/op-queue.js');
   initApplyResponseCommand();
   Drupal.Daedalus.EditSession = {
-    mutationApplied: (payload) => { applied.push(payload.blueprint._tree.stamp); },
+    mutationApplied: (payload) => { applied.push(payload.blueprint._probe.stamp); },
   };
   try {
     const handler = Drupal.AjaxCommands.prototype.daedalusBlueprintApplyResponse;
@@ -356,7 +378,7 @@ test('the daedalusBlueprintApplyResponse command applies a success and hands eve
     const success = {
       success: true,
       entity_uuid: 'root-uuid',
-      blueprint: { _tree: { kind: 'root', stamp: 'carried' } },
+      blueprint: { ...PAGE, _probe: { stamp: 'carried' } },
       markup: {},
       targets: [],
       attachments: [],
@@ -366,7 +388,7 @@ test('the daedalusBlueprintApplyResponse command applies a success and hands eve
     await handler(carrier, { command: 'daedalusBlueprintApplyResponse', payload: success });
     assert.equal(carrier.daedalusBlueprintPayload, success);
     assert.deepEqual(applied, ['carried']);
-    assert.equal(store.getState().blueprint.blueprint._tree.stamp, 'carried');
+    assert.equal(store.getState().blueprint.blueprint._probe.stamp, 'carried');
 
     // A failed payload is handed over untouched and applies nothing.
     const failure = { success: false, errors: [{ message: 'nope' }] };
@@ -374,56 +396,59 @@ test('the daedalusBlueprintApplyResponse command applies a success and hands eve
     await handler(other, { command: 'daedalusBlueprintApplyResponse', payload: failure });
     assert.equal(other.daedalusBlueprintPayload, failure);
     assert.deepEqual(applied, ['carried']);
-    assert.equal(store.getState().blueprint.blueprint._tree.stamp, 'carried');
+    assert.equal(store.getState().blueprint.blueprint._probe.stamp, 'carried');
   } finally {
     delete Drupal.Daedalus.EditSession;
   }
 });
 
-test('a markup swap revalidates the styling target: a target whose key has no element clears, the selection stays', async () => {
-  const { setTarget } = await import('../../js/edit_mode/store/slices/selection-slice.js');
+test('a markup swap revalidates the write address: an address whose key has no element clears, the selection and its facet stay', async () => {
+  const { setTarget, setAddress } = await import('../../js/edit_mode/store/slices/selection-slice.js');
   const Selection = Drupal.Daedalus.Selection;
-  // Only the selected element exists on the (stub) page: the target's
-  // ancestor rule names a container the swap has removed.
-  const elements = { 'block:kept': { tagName: 'DIV' } };
+  // The selected element and one ancestor exist on the (stub) page; the
+  // address's rule names a container the swap has removed.
+  const elements = { 'block:kept': { tagName: 'DIV' }, 'container:kept': { tagName: 'DIV' } };
   const querySelector = document.querySelector;
   document.querySelector = (selector) => {
     const match = /^\[data-selectable="(.+)"\]$/.exec(selector);
     return match ? (elements[match[1]] ?? null) : null;
   };
+  const swap = () => applyResponse({
+    success: true,
+    entity_uuid: 'root-uuid',
+    blueprint: PAGE,
+    markup: {},
+    targets: [],
+    attachments: [],
+    drupal_commands: [],
+    materials: { upsert: [], remove: [] },
+  });
   try {
     Selection.clear();
     Selection.select('block:kept');
     // Seated through the slice: the facade's ancestry check has no
     // projection index to consult in this suite.
-    store.dispatch(setTarget({ key: 'container:gone', selector: '> pb-text' }));
-    assert.deepEqual(Selection.getTarget(), { key: 'container:gone', selector: '> pb-text' });
-    await applyResponse({
-      success: true,
-      entity_uuid: 'root-uuid',
-      blueprint: { _tree: { kind: 'root' } },
-      markup: {},
-      targets: [],
-      attachments: [],
-      drupal_commands: [],
-      materials: { upsert: [], remove: [] },
-    });
+    store.dispatch(setTarget({ key: 'block:kept', selector: '.s-abc' }));
+    store.dispatch(setAddress({ key: 'container:gone', selector: '> pb-text' }));
+    assert.deepEqual(Selection.getAddress(), { key: 'container:gone', selector: '> pb-text' });
+    await swap();
     assert.equal(Selection.getSelected(), 'block:kept');
+    assert.deepEqual(Selection.getTarget(), { key: 'block:kept', selector: '.s-abc' }, 'the facet rides the kept element');
+    assert.equal(Selection.getAddress(), null, 'the vanished rule clears');
+    // An address on an ancestor that survives the swap survives with it,
+    // as does a facet on the kept element.
+    store.dispatch(setAddress({ key: 'container:kept', selector: 'li' }));
+    await swap();
+    assert.equal(Selection.getSelected(), 'block:kept');
+    assert.deepEqual(Selection.getTarget(), { key: 'block:kept', selector: '.s-abc' });
+    assert.deepEqual(Selection.getAddress(), { key: 'container:kept', selector: 'li' });
+    // A facet whose selector the grammar no longer reads clears, and the
+    // address goes with it (dropping the facet drops the address).
+    store.dispatch(setTarget({ key: 'block:kept', selector: 'div > .loose' }));
+    store.dispatch(setAddress({ key: 'container:kept', selector: 'li' }));
+    await swap();
     assert.equal(Selection.getTarget(), null);
-    // A target on an element that survives the swap survives with it.
-    store.dispatch(setTarget({ key: 'block:kept', selector: '.icon' }));
-    await applyResponse({
-      success: true,
-      entity_uuid: 'root-uuid',
-      blueprint: { _tree: { kind: 'root' } },
-      markup: {},
-      targets: [],
-      attachments: [],
-      drupal_commands: [],
-      materials: { upsert: [], remove: [] },
-    });
-    assert.equal(Selection.getSelected(), 'block:kept');
-    assert.deepEqual(Selection.getTarget(), { key: 'block:kept', selector: '.icon' });
+    assert.equal(Selection.getAddress(), null);
   } finally {
     document.querySelector = querySelector;
     Selection.clear();
@@ -447,7 +472,7 @@ test("a request's select lands the selection and opens no editor", async () => {
       json: async () => ({
         success: true,
         entity_uuid: 'root-uuid',
-        blueprint: { _tree: { kind: 'root' } },
+        blueprint: PAGE,
         markup: {},
         targets: [],
         attachments: [],

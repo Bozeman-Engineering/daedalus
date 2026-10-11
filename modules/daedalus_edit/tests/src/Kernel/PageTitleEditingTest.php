@@ -36,8 +36,8 @@ use Symfony\Component\Routing\Route;
  * and markup replacement ambiguous). The rule answers from proven render
  * truths only:
  * a node's non-configurable title (template_preprocess_node pulls it out of
- * page content) and Layout Builder's unpreserved root fields; everything
- * else stays inert. The same rule gates every delivery half, attribution
+ * page content) and a Layout Builder display's root fields (core strips
+ * every display-configurable one); everything else stays inert. The same rule gates every delivery half, attribution
  * (preprocessPageTitle), the replacement render (titleRender) and the
  * mutation-response subscriber (onMutationResponse) that puts that render
  * on the op spine's contract under the label's key, so they agree by
@@ -56,8 +56,7 @@ class PageTitleEditingTest extends KernelTestBase {
    * The daedalus_ui hard dependencies (daedalus_blueprint +
    * daedalus_blueprint_api) are invisible to kernel environments and must be
    * listed explicitly or the container fails to compile. daedalus_layout registers
-   * the preserved-fields existence feeder and owns the preserved_fields
-   * third-party setting the LB branch reads.
+   * the Layout Builder root-existence feeder the LB branch agrees with.
    */
   protected static $modules = [
     'system',
@@ -135,18 +134,10 @@ class PageTitleEditingTest extends KernelTestBase {
     // title is the label's one render, plain display or not.
     $this->assertSame('title', $this->pageTitleEditing->outsideLabelField($this->node));
 
-    // The same holds on a Layout Builder display with the title unpreserved
-    // (the site shape that motivated the rule)...
+    // The same holds on a Layout Builder display (the site shape that
+    // motivated the rule).
     $display = $this->display();
     $display->enableLayoutBuilder()->save();
-    $this->assertSame('title', $this->pageTitleEditing->outsideLabelField($this->node));
-
-    // ...and even preserved: preservation keeps the FIELD in the render
-    // array, but node preprocess still pulls it out of page content; the
-    // node rule outranks the LB branch (which speaks for configurable
-    // labels on non-node roots).
-    $display = $this->display();
-    $display->setThirdPartySetting('daedalus_layout', 'preserved_fields', ['title'])->save();
     $this->assertSame('title', $this->pageTitleEditing->outsideLabelField($this->node));
 
     // A root without an edit target has nothing for the page title to
@@ -185,7 +176,7 @@ class PageTitleEditingTest extends KernelTestBase {
     $this->node->save();
     $this->node->setTitle('Renamed page');
     $label_key = SelectableKey::field($this->node->uuid(), 'title');
-    $result = BlueprintResult::success($this->node)
+    $result = BlueprintResult::success($this->container->get('daedalus_blueprint.host_resolver')->fromEntity($this->node))
       ->withTargets([['uuid' => $this->node->uuid(), 'field_name' => 'title']]);
 
     $request = $this->mutationRequest($this->node);
@@ -197,7 +188,7 @@ class PageTitleEditingTest extends KernelTestBase {
     }
     finally {
       $request_stack->pop();
-      $this->container->get('daedalus_ui.ui')->clearDerivedEntity();
+      $this->container->get('daedalus_ui.ui')->clearDerivedHost();
     }
     $payload = Json::decode($response->getContent());
 
@@ -301,7 +292,7 @@ class PageTitleEditingTest extends KernelTestBase {
    */
   protected function dispatch(array $targets, array $markup, bool $success = TRUE, bool $edit_mode = TRUE): array {
     $result = $success
-      ? BlueprintResult::success($this->node)->withTargets($targets)
+      ? BlueprintResult::success($this->container->get('daedalus_blueprint.host_resolver')->fromEntity($this->node))->withTargets($targets)
       : BlueprintResult::semanticFailure([new BlueprintError('operations[0]', 'CONSTRAINT_VIOLATION', 'Rejected.')]);
     $request = $this->mutationRequest($this->node, $edit_mode);
     $event = new BlueprintMutationResponseEvent($request, $this->node, $result, [
@@ -317,7 +308,7 @@ class PageTitleEditingTest extends KernelTestBase {
     }
     finally {
       $request_stack->pop();
-      $this->container->get('daedalus_ui.ui')->clearDerivedEntity();
+      $this->container->get('daedalus_ui.ui')->clearDerivedHost();
     }
     return $event->getPayload();
   }

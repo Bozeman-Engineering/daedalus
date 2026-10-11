@@ -6,12 +6,14 @@
  * The state machine is deliberately pure (no DOM, no Drupal globals), so
  * these tests cover the whole shared contract directly: the item grammar
  * ({label, icon?, disabled?+reason?, title?, hint?, checked?, danger?,
- * confirm?, run} and {separator}), open/replace/close and onClose
+ * confirm?, run, preview?} and {separator}), open/replace/close and onClose
  * exactly-once, the two placements (pointer coordinates or an anchor)
  * with the anchor's explicit `align` intent and an optional header,
  * wrapping keyboard navigation with disabled items focusable and
  * separators stepped over, the in-menu two-step confirm (arm,
- * disarm-by-rearming-elsewhere, run). Where a placement lands is the
+ * disarm-by-rearming-elsewhere, run), and the preview lifecycle (the
+ * active item, pointer or keyboard, is told it is active and told when
+ * it stops being so, close before run). Where a placement lands is the
  * floating surface's math (tests/js/placement.test.mjs); the plain-DOM
  * host (js/menu/menu.js) renders this machine as the surface's content,
  * and focus and the surface's dismissal are DOM concerns covered by the
@@ -95,6 +97,7 @@ test('normalization fills the full grammar with defaults', () => {
     confirm: false,
     confirmLabel: null,
     run: getState().items[0].run,
+    preview: null,
   });
   assert.equal(getState().activeIndex, 0);
   assert.equal(getState().armedIndex, null);
@@ -268,4 +271,69 @@ test('subscribers hear opens, navigation, and closes', () => {
   unsubscribe();
   open({ x: 0, y: 0, items: [item()] });
   assert.equal(notified, 3, 'unsubscribed listeners stay silent');
+});
+
+// The preview lifecycle: `preview(active)` follows the active item.
+test('the first item previews on open, and a keyboard move or a pointer enter hands the preview over, off before on', () => {
+  const heard = [];
+  open({ x: 0, y: 0, items: [
+    item({ label: 'A', preview: (active) => heard.push(`A:${active}`) }),
+    item({ label: 'B', preview: (active) => heard.push(`B:${active}`) }),
+    item({ label: 'C' }),
+  ] });
+  assert.deepEqual(heard, ['A:true'], 'focus starts on the first item, so it previews');
+  moveActive(1);
+  assert.deepEqual(heard, ['A:true', 'A:false', 'B:true']);
+  setActive(1);
+  assert.deepEqual(heard, ['A:true', 'A:false', 'B:true'], 'the same item again is not a change');
+  setActive(2);
+  assert.deepEqual(heard, ['A:true', 'A:false', 'B:true', 'B:false'], 'an item with no preview is active silently');
+  moveActiveToFirst();
+  assert.deepEqual(heard, ['A:true', 'A:false', 'B:true', 'B:false', 'A:true']);
+});
+
+test('close ends the preview before onClose, and a pick reads preview(false) then run()', () => {
+  const order = [];
+  open({
+    x: 0,
+    y: 0,
+    items: [
+      item({ label: 'A', preview: (active) => order.push(`A:${active}`), run: () => order.push('A:run') }),
+      item({ label: 'B', preview: (active) => order.push(`B:${active}`), run: () => order.push('B:run') }),
+    ],
+    onClose: () => order.push('closed'),
+  });
+  // A synthetic click on B (no pointer enter first) moves the preview
+  // there, then the menu closes, then B runs.
+  assert.equal(activate(1), 'run');
+  assert.deepEqual(order, ['A:true', 'A:false', 'B:true', 'B:false', 'closed', 'B:run']);
+  order.length = 0;
+  open({ x: 0, y: 0, items: [item({ label: 'A', preview: (active) => order.push(`A:${active}`) })], onClose: () => order.push('closed') });
+  close();
+  close();
+  assert.deepEqual(order, ['A:true', 'A:false', 'closed'], 'an outside dismissal ends the preview once');
+});
+
+test('arming a confirm item moves the preview to it and keeps it (the menu stays open)', () => {
+  const order = [];
+  open({ x: 0, y: 0, items: [
+    item({ label: 'A', preview: (active) => order.push(`A:${active}`) }),
+    item({ label: 'B', confirm: true, preview: (active) => order.push(`B:${active}`), run: () => order.push('B:run') }),
+  ] });
+  assert.equal(activate(1), 'armed');
+  assert.deepEqual(order, ['A:true', 'A:false', 'B:true']);
+  assert.equal(activate(1), 'run');
+  assert.deepEqual(order, ['A:true', 'A:false', 'B:true', 'B:false', 'B:run']);
+});
+
+test('a separator never previews and a non-function preview is dropped', () => {
+  const order = [];
+  open({ x: 0, y: 0, items: [
+    item({ label: 'A', preview: 'not a function' }),
+    { separator: true },
+    item({ label: 'B', preview: (active) => order.push(`B:${active}`) }),
+  ] });
+  assert.equal(getState().items[0].preview, null);
+  moveActive(1);
+  assert.deepEqual(order, ['B:true']);
 });

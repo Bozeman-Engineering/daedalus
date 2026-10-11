@@ -1,0 +1,16 @@
+label: 'Colliding Call to Action'
+description: 'Ships the same blueprint ID as daedalus_blueprint_library_test.'
+scope: block
+subject: 'entity_test:entity_test'
+layout:
+  -
+    kind: container
+    layout_id: layout_onecol
+    children:
+      -
+        kind: region
+        region: content
+        children:
+          -
+            kind: block
+            block_type: text

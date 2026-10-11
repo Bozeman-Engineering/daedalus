@@ -28,13 +28,14 @@
  * 'instance'`, which reach (reach.js) depicts in every view, while shell
  * rows carry this view's id and ride its Show-menu toggle: the tree's
  * DEFAULT model projection appends instance rows too (withInstanceRows
- * below), minus the tag chips, which are developer vocabulary and stay
+ * below), minus the tag facts, which are developer vocabulary and stay
  * this view's own, and its draw filter keeps them because of the source
  * they wear, not because this file appended them.
  */
 // cspell:ignore Hieah
 
 import { compose } from './compose.js';
+import { tagGlyph } from './row-glyphs.js';
 
 /**
  * The provider's Show-menu toggle id (the view slice's `views` key).
@@ -42,16 +43,19 @@ import { compose } from './compose.js';
 export const MARKUP_VIEW_ID = 'markup';
 
 /**
- * An instance row (an annotation-derived {selector, label, tag?, sublabel?,
- * children} from the instances source) as a seam pseudo row, owned by the
- * model key whose annotation carries it. Its `source` is 'instance', the
- * origin reach.js reads: content is depicted in every view, so the row
- * is reachable whatever the Show menu says. The annotation already
- * resolved the carrier's tag server-side, so its chip rides the row as-is
- * — but only while `chips` is on: the tag chip is markup vocabulary, worn
- * in this view alongside the shell rows' chips and nowhere else.
+ * An instance row (an annotation-derived {selector, label, elementType?,
+ * icon?, tag?, children} from the instances source) as a seam pseudo row,
+ * owned by the model key whose annotation carries it. Its `source` is
+ * 'instance', the origin reach.js reads: content is depicted in every
+ * view, so the row is reachable whatever the Show menu says. Its words
+ * ride as the source minted them (instance-rows.js: the excerpt as the
+ * name, the vocabulary word as `elementType`, the carrier's glyph as
+ * `icon`). The annotation already resolved the carrier's tag server-side,
+ * so its tag fact rides the row as-is — but only while `tags` is on: the
+ * tag is markup vocabulary, worn in this view alongside the shell rows'
+ * tags and nowhere else.
  */
-const toInstanceRow = (row, ownerKey, chips = true) => {
+const toInstanceRow = (row, ownerKey, tags = true) => {
   const pseudoRow = {
     pseudo: true,
     id: row.selector,
@@ -59,14 +63,17 @@ const toInstanceRow = (row, ownerKey, chips = true) => {
     label: row.label,
     source: 'instance',
     children: row.children.map((child) =>
-      toInstanceRow(child, ownerKey, chips),
+      toInstanceRow(child, ownerKey, tags),
     ),
   };
-  if (chips && row.tag) {
-    pseudoRow.tag = row.tag;
+  if (row.elementType) {
+    pseudoRow.elementType = row.elementType;
   }
-  if (row.sublabel) {
-    pseudoRow.sublabel = row.sublabel;
+  if (row.icon) {
+    pseudoRow.icon = row.icon;
+  }
+  if (tags && row.tag) {
+    pseudoRow.tag = row.tag;
   }
   return pseudoRow;
 };
@@ -83,8 +90,8 @@ const toInstanceRow = (row, ownerKey, chips = true) => {
  * canvas (Cmd+click resolving a part) highlights its row in either
  * projection; the spine's styling target matches the row identically in
  * both, and the draw filter keeps the row in both because of that source.
- * Only the chips differ: here the rows are chip-less, because the tag
- * chip belongs to the markup view's developer vocabulary (shell rows,
+ * Only the tag facts differ: here the rows are tag-less, because the tag
+ * belongs to the markup view's developer vocabulary (shell rows,
  * resolved tags), which stays behind its Show-menu toggle.
  *
  * Display-only, like every view: existence (the projection index)
@@ -117,21 +124,20 @@ export const withInstanceRows = (node, instances) => {
  * Adapts a composed tree (compose.js) to the tree view seam's vocabulary.
  *
  * Model rows pass through — they already wear the projection's shape (key,
- * kind, label, presentation, editTarget…). A field row's markup identity
- * (`markupClass` — the .field--name-X wrapper that IS the selectable
- * element) surfaces as the seam's `sublabel` so the row reads "Hieah ·
- * field--name-field-hieah"; absorbed rows already PRESENT as the class
- * (compose swapped their label), so no sublabel — it would repeat the
- * label. Shell rows become pseudo rows: id is the class selector (the
- * behavior's drill target and hover subject), parentKey the owning model
- * key compose stamped (at any depth), and `claims` (the slot kinds the
- * part claims) rides along when compose stamped it, so the tree can mark
- * the shell that claims the root's sections as the root flow's drop
- * surface. A shell row's `source` is this view's id (MARKUP_VIEW_ID),
- * the origin the projection index records and reach.js reads: a shell
- * EXISTS in the index whatever the Show menu says, and is REACHABLE
- * (pointer, keyboard, breadcrumb) only while the Markup view is on.
- * Value rows become keyless model rows
+ * kind, label, elementType, icon, presentation, editTarget…); a field
+ * row's markup identity (`markupClass`, the .field--name-X wrapper that IS
+ * the selectable element) stays compose's own fact, read where an
+ * absorbed row presents AS the class. Shell rows become pseudo rows: id
+ * is the class selector (the behavior's drill target and hover subject),
+ * parentKey the owning model key compose stamped (at any depth), `icon`
+ * the glyph of the tag the shell rendered as (row-glyphs.js), and
+ * `claims` (the slot kinds the part claims) rides along when compose
+ * stamped it, so the tree can mark the shell that claims the root's
+ * sections as the root flow's drop surface. A shell row's `source` is
+ * this view's id (MARKUP_VIEW_ID), the origin the projection index
+ * records and reach.js reads: a shell EXISTS in the index whatever the
+ * Show menu says, and is REACHABLE (pointer, keyboard, breadcrumb) only
+ * while the Markup view is on. Value rows become keyless model rows
  * — display-only, the same unselectable rendering a uuid-less section row
  * gets, distinctly styled via kind 'value'.
  *
@@ -143,15 +149,15 @@ export const withInstanceRows = (node, instances) => {
  * field row for a core-rendered field, mirroring where the innermost
  * selectable element lands in the DOM.
  *
- * Tag chips ride the seam as `tag`, the element tag a row rendered as
- * (rendered by the tree as a dim monospace `<img>` / `<a>` / `<div>`
- * chip). Model rows wear the RESOLVED tag from the markup annotation
- * (tags.root), only when the model speaks: no chip is honest for a key
- * the annotation never covered (plugin blocks, fields). Shell rows
- * resolve first (tags.part, the same owner/selector pair the placement
- * gate asks with) and degrade to the declaration's authored tag
+ * Tag facts ride the seam as `tag`, the element tag a row rendered as
+ * (drawn by the tree in the row's facts zone as a dim monospace `img` /
+ * `a` / `div`). Model rows wear the RESOLVED tag from the markup
+ * annotation (tags.root), only when the model speaks: no tag is honest
+ * for a key the annotation never covered (plugin blocks, fields). Shell
+ * rows resolve first (tags.part, the same owner/selector pair the
+ * placement gate asks with) and degrade to the declaration's authored tag
  * (compose's `declaredTag`, the anatomy payload): the sketch keeps its
- * chips when the model does not speak, never wears a wrong one when it
+ * tags when the model does not speak, never wears a wrong one when it
  * does. `declaredTag` itself is composed vocabulary and never leaks.
  *
  * A shell row's LABEL resolves the same way: the matched-form label from
@@ -159,7 +165,7 @@ export const withInstanceRows = (node, instances) => {
  * name, 'Raster' for the image part's img form) when the model speaks,
  * the composed label (the declared part-level label, or the dotless
  * selector) otherwise. A multi-form part composes no declaredTag, because
- * only the annotation knows which form matched, so its chip exists
+ * only the annotation knows which form matched, so its tag exists
  * exactly when the model speaks.
  *
  * @param {object} node
@@ -190,6 +196,7 @@ export const toViewTree = (node, instances = null, tags = null) => {
     };
     const tag =
       tags?.part?.(node.parentKey, node.selector) ?? node.declaredTag ?? null;
+    pseudoRow.icon = tagGlyph(tag);
     if (tag) {
       pseudoRow.tag = tag;
     }
@@ -207,10 +214,13 @@ export const toViewTree = (node, instances = null, tags = null) => {
       children: [],
     };
   }
-  const { type, ...row } = node;
-  if (node.markupClass && !node.absorbed) {
-    row.sublabel = node.markupClass;
+  if (node.type === 'shown') {
+    // The shown-document row (shown-rows.js) is already in the seam's
+    // shape: only the composed vocabulary's `type` leaves.
+    const { type, ...shown } = node;
+    return shown;
   }
+  const { type, ...row } = node;
   const tag = node.key ? (tags?.root?.(node.key) ?? null) : null;
   if (tag) {
     row.tag = tag;
@@ -251,7 +261,7 @@ export const toViewTree = (node, instances = null, tags = null) => {
  *   flip the answer with the mutation response that re-delivers the
  *   mirror, which re-renders the tree; no subscribe seam is needed), and
  *   `rootTag`/`partTag`/`partLabel` (markup-index.js) feed toViewTree's
- *   tag chips and shell labels, the resolved tag a row rendered as and
+ *   tag facts and shell labels, the resolved tag a row rendered as and
  *   the matched-form label a multi-form part resolved under, riding the
  *   same annotation and the same liveness. Null (node tests) composes
  *   declared anatomy only: placement-blind, declared tags and labels
