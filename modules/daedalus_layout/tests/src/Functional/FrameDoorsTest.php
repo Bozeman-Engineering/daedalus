@@ -66,9 +66,12 @@ class FrameDoorsTest extends BrowserTestBase {
   private const UNFRAMED = 'claro';
 
   /**
-   * The canvas URL every door must carry: the frame's canonical link.
+   * The canvas href every door must carry: the frame's canonical link.
+   *
+   * Read from the entity after it saves, so the href carries the base path
+   * the site is served under (drupal.org's runner serves it under /web/).
    */
-  private const CANVAS = '/site-frame/' . self::FRAMED;
+  private string $canvas;
 
   /**
    * The block layout warning, as stark renders a status_messages element.
@@ -105,7 +108,9 @@ class FrameDoorsTest extends BrowserTestBase {
   protected function setUp(): void {
     parent::setUp();
     $this->container->get('theme_installer')->install([self::UNFRAMED]);
-    Frame::create(['id' => self::FRAMED])->save();
+    $frame = Frame::create(['id' => self::FRAMED]);
+    $frame->save();
+    $this->canvas = $frame->toUrl()->toString();
   }
 
   /**
@@ -121,21 +126,21 @@ class FrameDoorsTest extends BrowserTestBase {
     // theme's), and no site frame link on any other row.
     $this->drupalGet('admin/appearance');
     $assert->statusCodeEquals(200);
-    $assert->elementsCount('css', '.theme-selector.theme-default a[href="' . self::CANVAS . '"]', 1);
-    $assert->elementTextEquals('css', '.theme-selector.theme-default a[href="' . self::CANVAS . '"]', 'Site frame');
-    $assert->elementAttributeContains('css', '.theme-selector.theme-default a[href="' . self::CANVAS . '"]', 'title', 'Edit the site frame of Stark');
+    $assert->elementsCount('css', '.theme-selector.theme-default a[href="' . $this->canvas . '"]', 1);
+    $assert->elementTextEquals('css', '.theme-selector.theme-default a[href="' . $this->canvas . '"]', 'Site frame');
+    $assert->elementAttributeContains('css', '.theme-selector.theme-default a[href="' . $this->canvas . '"]', 'title', 'Edit the site frame of Stark');
     $assert->elementNotExists('css', '.theme-selector:not(.theme-default) a[href^="/site-frame/"]');
 
     // The Appearance menu, as the Navigation toolbar renders it on every
     // admin page: one child titled after the theme.
-    $assert->elementsCount('css', '.toolbar-menu__item--level-1 a[href="' . self::CANVAS . '"]', 1);
-    $assert->elementTextEquals('css', '.toolbar-menu__item--level-1 a[href="' . self::CANVAS . '"]', 'Site frame: Stark');
+    $assert->elementsCount('css', '.toolbar-menu__item--level-1 a[href="' . $this->canvas . '"]', 1);
+    $assert->elementTextEquals('css', '.toolbar-menu__item--level-1 a[href="' . $this->canvas . '"]', 'Site frame: Stark');
 
     // The theme settings form of the framed theme: the item with the link.
     $this->drupalGet('admin/appearance/settings/' . self::FRAMED);
     $assert->statusCodeEquals(200);
-    $assert->elementsCount('css', '#system-theme-settings a[href="' . self::CANVAS . '"]', 1);
-    $assert->elementTextEquals('css', '#system-theme-settings a[href="' . self::CANVAS . '"]', 'Edit the site frame');
+    $assert->elementsCount('css', '#system-theme-settings a[href="' . $this->canvas . '"]', 1);
+    $assert->elementTextEquals('css', '#system-theme-settings a[href="' . $this->canvas . '"]', 'Edit the site frame');
     $assert->elementTextContains('css', '#system-theme-settings', 'The header, footer and page chrome of Stark are edited in its site frame');
 
     // The theme settings form of the unframed theme: nothing.
@@ -150,8 +155,8 @@ class FrameDoorsTest extends BrowserTestBase {
       $this->drupalGet($path);
       $assert->statusCodeEquals(200);
       $assert->elementTextContains('css', self::BLOCK_WARNING, 'Stark ' . self::WARNING);
-      $assert->elementsCount('css', self::BLOCK_WARNING . ' a[href="' . self::CANVAS . '"]', 1);
-      $assert->elementTextEquals('css', self::BLOCK_WARNING . ' a[href="' . self::CANVAS . '"]', 'Edit the site frame');
+      $assert->elementsCount('css', self::BLOCK_WARNING . ' a[href="' . $this->canvas . '"]', 1);
+      $assert->elementTextEquals('css', self::BLOCK_WARNING . ' a[href="' . $this->canvas . '"]', 'Edit the site frame');
     }
 
     // Block layout of the unframed theme: no warning, no link.

@@ -75,6 +75,15 @@ final class FileLaneTest extends KernelTestBase {
   private FileLane $lane;
 
   /**
+   * This test's own temporary directory, the lane's spool.
+   *
+   * The refusal test compares the spool before and after; the OS temp dir
+   * is shared with every other process (drupal.org's runner runs classes
+   * concurrently), so the lane spools to a directory nothing else writes.
+   */
+  private string $tempDirectory;
+
+  /**
    * {@inheritdoc}
    */
   protected function setUp(): void {
@@ -92,7 +101,20 @@ final class FileLaneTest extends KernelTestBase {
     $source_field = FieldConfig::load('media.document.' . $any->getSource()->getSourceFieldDefinition($any)->getName());
     $source_field->setSetting('file_extensions', '')->save();
 
+    $this->tempDirectory = sys_get_temp_dir() . '/daedalus-file-lane-' . $this->databasePrefix;
+    mkdir($this->tempDirectory, 0777, TRUE);
+    $this->setSetting('file_temp_path', $this->tempDirectory);
+
     $this->lane = $this->container->get('daedalus_ui.file_lane');
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  protected function tearDown(): void {
+    array_map('unlink', glob($this->tempDirectory . '/*') ?: []);
+    rmdir($this->tempDirectory);
+    parent::tearDown();
   }
 
   /**

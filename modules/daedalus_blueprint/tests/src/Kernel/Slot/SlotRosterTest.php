@@ -89,7 +89,7 @@ class SlotRosterTest extends BlueprintKernelTestBase {
   }
 
   /**
-   * The deriver reads the roster: one slot block per id, the label its own.
+   * The deriver reads the roster: one slot block per id, named "<label> slot".
    */
   public function testDeriverReadsTheRoster(): void {
     $this->enableModules(['block']);
@@ -98,7 +98,7 @@ class SlotRosterTest extends BlueprintKernelTestBase {
     foreach (self::ROSTER as $id => $entry) {
       $plugin_id = SlotBlock::PLUGIN_ID . ':' . $id;
       $this->assertArrayHasKey($plugin_id, $definitions, "A slot block derives for $id whatever its tier.");
-      $this->assertSame($entry['label'], (string) $definitions[$plugin_id]['admin_label']);
+      $this->assertSame($entry['label'] . ' slot', (string) $definitions[$plugin_id]['admin_label'], 'The block list names the slot by its roster label.');
     }
     $this->assertArrayNotHasKey(SlotBlock::PLUGIN_ID . ':aside', $definitions, 'No block for an id the roster does not name.');
   }
