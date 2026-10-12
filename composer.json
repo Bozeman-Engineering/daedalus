@@ -19,7 +19,7 @@
         "drupal/core": ">=11.3 <11.5",
         "drupal/field_sample_value": "^1.0",
         "drupal/twig_events": "^1.0",
-        "enshrined/svg-sanitize": "^0.22"
+        "enshrined/svg-sanitize": "^1.0"
     },
     "require-dev": {
         "drupal/daedalus_recipe": "^1.0"

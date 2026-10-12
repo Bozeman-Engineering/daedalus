@@ -3057,6 +3057,12 @@ class CodeModeBehaviorTest extends WebDriverTestBase {
         }
       })();
       JS);
+    // The paste leg left the band's root island live. Retire it here on
+    // purpose: on plain http the "Copy key" menu above closed it as a side
+    // effect, and a secure origin skips that leg, so without this the
+    // bounce below would carry a live editor and the "no editor live"
+    // claim would hold on one origin only.
+    $session->executeScript('document.activeElement.blur();');
     $session->executeScript("Drupal.Daedalus.Selection.select('$p2_key');");
     $this->assertJsCondition(
       "window.__st.scope() === 'element' && JSON.stringify(window.__st.rows()) === " . json_encode(json_encode([$p2_key])),
